@@ -1,0 +1,48 @@
+package com.tsix.immocrm.dto.prospection;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Detail shape for {@code GET /api/prospections/{id}}.
+ *
+ * NOTE: field naming is not yet backed by a shared API spec doc
+ * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
+ * directly from {@code ComProspection}. Adjust once a spec is available.
+ */
+public record ProspectionDetailDto(
+        UUID id,
+        String code,
+        LocalDateTime dateDocument,
+        UUID prospectId,
+        String prospectNom,
+        UUID commercialId,
+        String commercialNom,
+        UUID proposeurId,
+        String proposeurNom,
+        UUID origineId,
+        String origine,
+        UUID origineSupportId,
+        String origineSupport,
+        UUID etapeId,
+        String etape,
+        String notes,
+        BigDecimal surface,
+        BigDecimal surfaceJusqua,
+        BigDecimal prix,
+        BigDecimal prixJusqua,
+        BigDecimal avance,
+        BigDecimal financementFondsPropres,
+        BigDecimal financementCredit,
+        BigDecimal financementAutre,
+        Boolean fermee,
+        LocalDateTime dateFermeture,
+        UUID raisonFermetureId,
+        String raisonFermeture,
+        String raisonFermetureTexte,
+        Boolean ancienClient,
+        UUID trancheId,
+        UUID articleId
+) {
+}
