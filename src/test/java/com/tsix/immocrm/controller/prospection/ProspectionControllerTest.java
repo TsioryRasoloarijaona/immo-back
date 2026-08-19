@@ -64,8 +64,8 @@ class ProspectionControllerTest {
 
         mockMvc.perform(get("/api/prospections"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + full.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + pre.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + full.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + pre.getId() + "')]").doesNotExist());
     }
 
     @Test
@@ -84,8 +84,8 @@ class ProspectionControllerTest {
 
         mockMvc.perform(get("/api/pre-prospections"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + pre.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + full.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + pre.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + full.getId() + "')]").doesNotExist());
     }
 
     @Test
@@ -111,8 +111,8 @@ class ProspectionControllerTest {
 
         mockMvc.perform(get("/api/prospections").param("etape", "ETAPE-TEST-1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + withKind.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + withoutKind.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + withKind.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withoutKind.getId() + "')]").doesNotExist());
     }
 
     @Test

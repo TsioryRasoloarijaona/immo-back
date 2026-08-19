@@ -1,6 +1,8 @@
 package com.tsix.immocrm.repositories.stk;
 
 import com.tsix.immocrm.entities.stk.StkItem;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -13,7 +15,11 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID> {
 
     List<StkItem> findByStkHierarchyIdAndComFolderIdIsNull(UUID trancheId);
 
+    Page<StkItem> findByStkHierarchyIdAndComFolderIdIsNull(UUID trancheId, Pageable pageable);
+
     List<StkItem> findByStkHierarchyIdAndComFolderIdIsNotNull(UUID trancheId);
+
+    Page<StkItem> findByStkHierarchyIdAndComFolderIdIsNotNull(UUID trancheId, Pageable pageable);
 
     // Sub-lots (e.g. cave/parking annexed to a main lot) via StkItem.parent (ParentId).
     List<StkItem> findByParentId(UUID parentId);

@@ -9,6 +9,8 @@ import java.util.UUID;
  * NOTE: field naming is not yet backed by a shared API spec doc
  * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
  * directly from {@code CfgTier}. Adjust once a spec is available.
+ *
+ * GAP-05: extended with the Omran "Général" tab identity fields (read side).
  */
 public record ProspectDetailDto(
         UUID id,
@@ -40,6 +42,30 @@ public record ProspectDetailDto(
         UUID kindId,
         String kind,
         UUID commercialId,
-        String commercialNom
+        String commercialNom,
+        UUID titreId,
+        String titre,
+        UUID sexeId,
+        String sexe,
+        UUID paysResidenceId,
+        String paysResidence,
+        UUID paysId,
+        String pays,
+        UUID nationaliteId,
+        String nationalite,
+        UUID situationFamilialeId,
+        String situationFamiliale,
+        UUID typeResidenceId,
+        String typeResidence,
+        UUID regimeMatrimonialId,
+        String regimeMatrimonial,
+        UUID professionId,
+        UUID salaireId,
+        String salaire,
+        String employeur,
+        Integer anciennete,
+        String filsDe,
+        String etDe,
+        PieceIdentiteDto pieceIdentite
 ) {
 }

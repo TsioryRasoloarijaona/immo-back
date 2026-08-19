@@ -15,6 +15,7 @@ public record ProspectionListItemDto(
         UUID id,
         String code,
         LocalDateTime dateDocument,
+        String tempDescription,
         UUID prospectId,
         String prospectNom,
         UUID commercialId,

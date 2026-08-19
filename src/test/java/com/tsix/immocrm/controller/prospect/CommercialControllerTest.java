@@ -58,7 +58,7 @@ class CommercialControllerTest {
 
         mockMvc.perform(get("/api/commerciaux"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + commercial.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + fournisseur.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + commercial.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + fournisseur.getId() + "')]").doesNotExist());
     }
 }

@@ -1,12 +1,19 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -52,6 +59,21 @@ class DossierCreateTest {
 
     @Autowired
     private StkVocationRepository stkVocationRepository;
+
+    @Autowired
+    private ComPaymentMethodRepository paymentMethodRepository;
+
+    @Autowired
+    private CfgProjectRepository projectRepository;
+
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+
+    @Autowired
+    private ComFolderRepository folderRepository;
+
+    @Autowired
+    private com.tsix.immocrm.repositories.str.StrStatusRepository strStatusRepository;
 
     private StkItemType itemType;
     private StkItemCategory itemCategory;
@@ -104,14 +126,134 @@ class DossierCreateTest {
         StkItem main = newAvailableItem("LOT-CREATE-MAIN");
         StkItem annexe = newAvailableItem("LOT-CREATE-ANNEXE");
 
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-TEST");
+        paymentMethodRepository.save(modePaie);
+
         String body = """
-                {"prospectionId":"%s","articleIds":["%s","%s"]}
-                """.formatted(prospection.getId(), main.getId(), annexe.getId());
+                {"prospectionId":"%s","articleIds":["%s","%s"],"modePaieId":"%s","cin":"101112131415"}
+                """.formatted(prospection.getId(), main.getId(), annexe.getId(), modePaie.getId());
 
         mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.articles.length()").value(2))
                 .andExpect(jsonPath("$.clientId").value(prospection.getCfgProspect().getId().toString()));
+
+        String prospectJson = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                                "/api/prospects/{id}", prospection.getCfgProspect().getId()))
+                .andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(
+                        com.jayway.jsonpath.JsonPath.<String>read(prospectJson, "$.pieceIdentite.numero"))
+                .isEqualTo("101112131415");
+    }
+
+    @Test
+    void create_setsInitialStatusToReservation() throws Exception {
+        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
+        reservation.setId(UUID.randomUUID());
+        reservation.setCode("RESERVATION");
+        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
+        strStatusRepository.save(reservation);
+
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-STATUT-INIT-TEST");
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-STATUT-INIT-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-STATUT-INIT"}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        String json = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statut").value("RESERVATION"))
+                .andReturn().getResponse().getContentAsString();
+
+        // Also traceable in the history (see DossierHistoriqueTest for the endpoint itself).
+        String dossierId = com.jayway.jsonpath.JsonPath.read(json, "$.id");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/dossiers/{id}/historique", dossierId))
+                .andExpect(jsonPath("$.content[0].type").value("STATUT"))
+                .andExpect(jsonPath("$.content[0].description").value("Statut changé vers RESERVATION"));
+    }
+
+    @Test
+    void create_setsDocDateAndGeneratesCodeFromProjectAndSequence() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-CODE-TEST");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-CODE-TEST");
+        tranche.setCfgProject(project);
+        trancheRepository.save(tranche);
+
+        StkItem item = newAvailableItem("LOT-CODE-TEST");
+        item.setStkHierarchy(tranche);
+        stkItemRepository.save(item);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-CODE-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-CODE-TEST"}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dateDocument").exists())
+                // "PRJ-CODE-TEST 2026/00001" — project code, current year, zero-padded sequence.
+                .andExpect(jsonPath("$.code").value(org.hamcrest.Matchers.matchesPattern(
+                        "PRJ-CODE-TEST \\d{4}/\\d{5}")));
+
+        // ComFolder.StkItemId (main article back-link) must be set — was missing entirely before
+        // this fix, leaving folder.getStkItem() always null (broke FicheReservationService etc.).
+        com.tsix.immocrm.entities.com.ComFolder saved = folderRepository.findAll().stream()
+                .filter(f -> "LOT-CODE-TEST".equals(f.getStkItem() != null ? f.getStkItem().getCode() : null))
+                .findFirst().orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(saved.getStkItem().getCode()).isEqualTo("LOT-CODE-TEST");
+    }
+
+    @Test
+    void create_missingModePaie_returns400() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-CREATE-NOMODEPAIE");
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"cin":"999"}
+                """.formatted(prospection.getId(), item.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_missingCin_returns400() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-CREATE-NOCIN");
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("ESPECES-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s"}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

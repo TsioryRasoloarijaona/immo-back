@@ -8,10 +8,11 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,10 +27,8 @@ public class ProjetService {
         this.trancheRepository = trancheRepository;
     }
 
-    public List<ProjetListItemDto> findAll() {
-        return projectRepository.findAll().stream()
-                .map(ProjetService::toListItem)
-                .toList();
+    public Page<ProjetListItemDto> findAll(Pageable pageable) {
+        return projectRepository.findAll(pageable).map(ProjetService::toListItem);
     }
 
     public ProjetDetailDto findById(UUID id) {
@@ -38,13 +37,11 @@ public class ProjetService {
                 .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable: " + id));
     }
 
-    public List<TrancheListItemDto> findTranches(UUID projetId) {
+    public Page<TrancheListItemDto> findTranches(UUID projetId, Pageable pageable) {
         if (!projectRepository.existsById(projetId)) {
             throw new ResourceNotFoundException("Projet introuvable: " + projetId);
         }
-        return trancheRepository.findByCfgProjectId(projetId).stream()
-                .map(ProjetService::toTrancheListItem)
-                .toList();
+        return trancheRepository.findByCfgProjectId(projetId, pageable).map(ProjetService::toTrancheListItem);
     }
 
     private static ProjetListItemDto toListItem(CfgProject project) {

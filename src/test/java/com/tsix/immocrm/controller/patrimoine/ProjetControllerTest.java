@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,7 +40,8 @@ class ProjetControllerTest {
 
         mockMvc.perform(get("/api/projets"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + project.getId() + "')]", hasSize(1)));
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.content[?(@.id=='" + project.getId() + "')]", hasSize(1)));
     }
 
     @Test
@@ -76,13 +78,42 @@ class ProjetControllerTest {
 
         mockMvc.perform(get("/api/projets/{id}/tranches", project.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + tranche.getId() + "')]", hasSize(1)));
+                .andExpect(jsonPath("$.content[?(@.id=='" + tranche.getId() + "')]", hasSize(1)));
     }
 
     @Test
     void findTranches_unknownProjetId_returns404() throws Exception {
         mockMvc.perform(get("/api/projets/{id}/tranches", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void findAll_defaultsToPageSize10() throws Exception {
+        mockMvc.perform(get("/api/projets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.content", hasSize(lessThanOrEqualTo(10))));
+    }
+
+    @Test
+    void findAll_paginatesAcrossTwoPages() throws Exception {
+        for (int i = 0; i < 12; i++) {
+            projectRepository.save(newProject("PRJ-PAGE-" + i, "Projet pagination " + i));
+        }
+
+        mockMvc.perform(get("/api/projets").param("size", "5").param("page", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.content", hasSize(5)))
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(12)))
+                .andExpect(jsonPath("$.totalPages").value(org.hamcrest.Matchers.greaterThanOrEqualTo(3)));
+
+        mockMvc.perform(get("/api/projets").param("size", "5").param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.content", hasSize(5)));
     }
 
     private static CfgProject newProject(String code, String description) {

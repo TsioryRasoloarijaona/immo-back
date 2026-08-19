@@ -5,23 +5,40 @@ import com.tsix.immocrm.dto.prospection.ArchiverProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ChangerEtapeRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
+import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComAction;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComProspectionClosingReason;
 import com.tsix.immocrm.entities.com.ComProspectionKind;
+import com.tsix.immocrm.entities.com.ComProspectionOrigin;
+import com.tsix.immocrm.entities.com.ComProspectionOriginSupport;
+import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
+import com.tsix.immocrm.repositories.com.ComActionRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionClosingReasonRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionOriginSupportRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,17 +59,38 @@ public class ProspectionService {
     private final ComProspectionKindRepository prospectionKindRepository;
     private final ComProspectionClosingReasonRepository closingReasonRepository;
     private final ComActionMessageRepository actionMessageRepository;
+    private final ComProspectionOriginRepository prospectionOriginRepository;
+    private final ComProspectionOriginSupportRepository prospectionOriginSupportRepository;
+    private final StkVocationRepository vocationRepository;
+    private final ComActionMessageTypeRepository actionMessageTypeRepository;
+    private final ComActionRepository actionRepository;
+    private final CfgTrancheRepository trancheRepository;
+    private final StkItemRepository stkItemRepository;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
                                ComProspectionClosingReasonRepository closingReasonRepository,
-                               ComActionMessageRepository actionMessageRepository) {
+                               ComActionMessageRepository actionMessageRepository,
+                               ComProspectionOriginRepository prospectionOriginRepository,
+                               ComProspectionOriginSupportRepository prospectionOriginSupportRepository,
+                               StkVocationRepository vocationRepository,
+                               ComActionMessageTypeRepository actionMessageTypeRepository,
+                               ComActionRepository actionRepository,
+                               CfgTrancheRepository trancheRepository,
+                               StkItemRepository stkItemRepository) {
         this.prospectionRepository = prospectionRepository;
         this.prospectService = prospectService;
         this.tierRepository = tierRepository;
         this.prospectionKindRepository = prospectionKindRepository;
         this.closingReasonRepository = closingReasonRepository;
         this.actionMessageRepository = actionMessageRepository;
+        this.prospectionOriginRepository = prospectionOriginRepository;
+        this.prospectionOriginSupportRepository = prospectionOriginSupportRepository;
+        this.vocationRepository = vocationRepository;
+        this.actionMessageTypeRepository = actionMessageTypeRepository;
+        this.actionRepository = actionRepository;
+        this.trancheRepository = trancheRepository;
+        this.stkItemRepository = stkItemRepository;
     }
 
     /**
@@ -66,7 +104,8 @@ public class ProspectionService {
      * @param search     free-text match on code/prospect name/temp contact fields
      * @param ouvertes   when true, only non-closed (IsClosed = false) prospections
      */
-    public List<ProspectionListItemDto> findAll(String etape, String origine, UUID commercial, String search, Boolean ouvertes) {
+    public Page<ProspectionListItemDto> findAll(String etape, String origine, UUID commercial, String search,
+                                                 Boolean ouvertes, Pageable pageable) {
         Specification<ComProspection> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.or(
@@ -96,14 +135,13 @@ public class ProspectionService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return prospectionRepository.findAll(spec).stream().map(ProspectionService::toListItem).toList();
+        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
     }
 
     /** {@code GET /api/pre-prospections}: CfgProspectId IS NULL AND CfgCommercialId IS NULL. */
-    public List<ProspectionListItemDto> findPreProspections() {
-        return prospectionRepository.findByCfgProspectIsNullAndCfgCommercialIsNull().stream()
-                .map(ProspectionService::toListItem)
-                .toList();
+    public Page<ProspectionListItemDto> findPreProspections(Pageable pageable) {
+        return prospectionRepository.findByCfgProspectIsNullAndCfgCommercialIsNull(pageable)
+                .map(ProspectionService::toListItem);
     }
 
     public ProspectionDetailDto findById(UUID id) {
@@ -178,6 +216,64 @@ public class ProspectionService {
         return toDetail(prospectionRepository.save(prospection));
     }
 
+    /**
+     * {@code PATCH /api/prospections/{id}}: edits qualification fields (origine, vocation,
+     * budget, tranche/article, notes...). Partial update — {@code null} fields are left
+     * unchanged, same convention as {@link com.tsix.immocrm.services.prospect.ProspectService#update}.
+     */
+    @Transactional
+    public ProspectionDetailDto modifierProspection(UUID id, ModifierProspectionRequest request) {
+        ComProspection prospection = prospectionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+
+        if (request.origineId() != null) {
+            ComProspectionOrigin origine = prospectionOriginRepository.findById(request.origineId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId()));
+            prospection.setComProspectionOrigin(origine);
+        }
+        if (request.origineSupportId() != null) {
+            ComProspectionOriginSupport support = prospectionOriginSupportRepository.findById(request.origineSupportId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId()));
+            prospection.setComProspectionOriginSupport(support);
+        }
+        if (request.vocationId() != null) {
+            StkVocation vocation = vocationRepository.findById(request.vocationId())
+                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId()));
+            prospection.setStkVocation(vocation);
+        }
+        if (request.typeContactId() != null) {
+            ComActionMessageType typeContact = actionMessageTypeRepository.findById(request.typeContactId())
+                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId()));
+            prospection.setComActionMessageType(typeContact);
+        }
+        if (request.actionCommercialeId() != null) {
+            ComAction action = actionRepository.findById(request.actionCommercialeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId()));
+            prospection.setComAction(action);
+        }
+        if (request.surface() != null) prospection.setArea(request.surface());
+        if (request.surfaceJusqua() != null) prospection.setAreaTo(request.surfaceJusqua());
+        if (request.prix() != null) prospection.setPrice(request.prix());
+        if (request.prixJusqua() != null) prospection.setPriceTo(request.prixJusqua());
+        if (request.avance() != null) prospection.setAdvanceAmount(request.avance());
+        if (request.financementFondsPropres() != null) prospection.setFundingOwnBase(request.financementFondsPropres());
+        if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
+        if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
+        if (request.notes() != null) prospection.setNotes(request.notes());
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            prospection.setStkHierarchy(tranche);
+        }
+        if (request.articleId() != null) {
+            StkItem article = stkItemRepository.findById(request.articleId())
+                    .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+            prospection.setStkItem(article);
+        }
+
+        return toDetail(prospectionRepository.save(prospection));
+    }
+
     /** {@code PATCH /api/prospections/{id}/archiver}: closes the prospection with a reason. */
     @Transactional
     public ProspectionDetailDto archiver(UUID id, ArchiverProspectionRequest request) {
@@ -203,13 +299,12 @@ public class ProspectionService {
     }
 
     /** {@code GET /api/prospections/{id}/interactions}: journal, most recent first. */
-    public List<InteractionDto> findInteractions(UUID prospectionId) {
+    public Page<InteractionDto> findInteractions(UUID prospectionId, Pageable pageable) {
         if (!prospectionRepository.existsById(prospectionId)) {
             throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
         }
-        return actionMessageRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId).stream()
-                .map(ProspectionService::toInteractionDto)
-                .toList();
+        return actionMessageRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId, pageable)
+                .map(ProspectionService::toInteractionDto);
     }
 
     /** {@code POST /api/prospections/{id}/interactions}. */
@@ -251,6 +346,7 @@ public class ProspectionService {
                 p.getId(),
                 p.getCode(),
                 p.getDocDate(),
+                p.getTempDescription(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
                 nomTier(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
@@ -268,6 +364,9 @@ public class ProspectionService {
                 p.getId(),
                 p.getCode(),
                 p.getDocDate(),
+                p.getTempDescription(),
+                p.getTempTel(),
+                p.getTempEMail(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
                 nomTier(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
@@ -280,6 +379,12 @@ public class ProspectionService {
                 p.getComProspectionOriginSupport() != null ? p.getComProspectionOriginSupport().getDescription() : null,
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getId() : null,
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getDescription() : null,
+                p.getStkVocation() != null ? p.getStkVocation().getId() : null,
+                p.getStkVocation() != null ? p.getStkVocation().getDescription() : null,
+                p.getComActionMessageType() != null ? p.getComActionMessageType().getId() : null,
+                p.getComActionMessageType() != null ? p.getComActionMessageType().getDescription() : null,
+                p.getComAction() != null ? p.getComAction().getId() : null,
+                p.getComAction() != null ? p.getComAction().getDescription() : null,
                 p.getNotes(),
                 p.getArea(),
                 p.getAreaTo(),

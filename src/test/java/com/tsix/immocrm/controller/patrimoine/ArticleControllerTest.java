@@ -108,8 +108,8 @@ class ArticleControllerTest {
 
         mockMvc.perform(get("/api/tranches/{id}/articles", tranche.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + disponible.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + occupe.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + disponible.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + occupe.getId() + "')]").doesNotExist());
     }
 
     @Test
@@ -121,8 +121,8 @@ class ArticleControllerTest {
 
         mockMvc.perform(get("/api/tranches/{id}/articles", tranche.getId()).param("statut", "OCCUPE"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + occupe.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + disponible.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + occupe.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + disponible.getId() + "')]").doesNotExist());
     }
 
     @Test

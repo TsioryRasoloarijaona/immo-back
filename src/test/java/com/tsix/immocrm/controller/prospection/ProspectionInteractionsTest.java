@@ -55,7 +55,7 @@ class ProspectionInteractionsTest {
 
         mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + message.getId() + "')]").exists());
+                .andExpect(jsonPath("$.content[?(@.id=='" + message.getId() + "')]").exists());
     }
 
     @Test

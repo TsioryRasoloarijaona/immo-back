@@ -3,6 +3,7 @@ package com.tsix.immocrm.web;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,5 +31,17 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setProperty("transitionsAutorisees", ex.getTransitionsAutorisees());
         return problem;
+    }
+
+    /**
+     * Thrown when a {@code ?sort=} query param on a paginated {@code GET} names a property that
+     * doesn't exist on the underlying JPA entity — e.g. {@code sort=dateDocument} instead of the
+     * real {@code ComFolder} column {@code docDate} (a DTO field name, not the entity's). Without
+     * this handler it surfaces as an unhandled 500; the real problem is a bad request param.
+     */
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ProblemDetail handleInvalidSortProperty(PropertyReferenceException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Propriété de tri invalide: '" + ex.getPropertyName() + "' — vérifiez le paramètre 'sort'.");
     }
 }

@@ -1,6 +1,8 @@
 package com.tsix.immocrm.repositories.com;
 
 import com.tsix.immocrm.entities.com.ComFolder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -20,4 +22,14 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
             "c.socialReason, c.firstName, c.lastName " +
             "FROM ComFolder f LEFT JOIN f.strStatus s LEFT JOIN f.cfgCustomer c")
     List<Object[]> findDashboardProjection();
+
+    /** {@code GET /api/prospects/{id}/dossiers} (GAP-06). */
+    Page<ComFolder> findByCfgCustomerId(UUID customerId, Pageable pageable);
+
+    /**
+     * Dossier count per client — used by {@code GET /api/clients} (server-side aggregate).
+     * Tuple: [cfgCustomerId, nbDossiers].
+     */
+    @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f WHERE f.cfgCustomer.id IN :clientIds GROUP BY f.cfgCustomer.id")
+    List<Object[]> countGroupedByClientId(List<UUID> clientIds);
 }

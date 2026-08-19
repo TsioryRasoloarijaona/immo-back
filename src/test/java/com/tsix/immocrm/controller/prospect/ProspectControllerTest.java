@@ -46,7 +46,7 @@ class ProspectControllerTest {
 
         mockMvc.perform(get("/api/prospects"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + prospect.getId() + "')]").exists());
+                .andExpect(jsonPath("$.content[?(@.id=='" + prospect.getId() + "')]").exists());
     }
 
     @Test
@@ -58,8 +58,8 @@ class ProspectControllerTest {
 
         mockMvc.perform(get("/api/prospects").param("search", "UNIQUE"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + match.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + noMatch.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + match.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + noMatch.getId() + "')]").doesNotExist());
     }
 
     @Test

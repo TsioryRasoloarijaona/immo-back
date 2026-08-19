@@ -77,9 +77,16 @@ public class ComDocument {
     @Column(name = "Notes", length = 1000)
     private String notes;
 
+    // NOT the "Catégorie" shown on the échéancier (Omran "Schéma de financement" tab) — that's
+    // ComSettlementCategoryId below. StlSettlementTypeId is NULL on every real échéance row;
+    // StlSettlementType is the payment-method lookup used by StlSettlement, not ComDocument.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlSettlementTypeId")
     private StlSettlementType stlSettlementType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComSettlementCategoryId")
+    private ComSettlementCategory comSettlementCategory;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgContactId")

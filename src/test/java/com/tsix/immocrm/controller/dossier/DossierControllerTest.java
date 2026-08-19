@@ -111,7 +111,7 @@ class DossierControllerTest {
 
         mockMvc.perform(get("/api/dossiers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + folder.getId() + "')]").exists());
+                .andExpect(jsonPath("$.content[?(@.id=='" + folder.getId() + "')]").exists());
     }
 
     @Test
@@ -136,8 +136,8 @@ class DossierControllerTest {
 
         mockMvc.perform(get("/api/dossiers").param("statut", "RESERVATION-TEST"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + withStatut.getId() + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + withoutStatut.getId() + "')]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.id=='" + withStatut.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withoutStatut.getId() + "')]").doesNotExist());
     }
 
     @Test

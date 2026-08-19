@@ -7,6 +7,8 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,15 +30,15 @@ public class ArticleService {
     /**
      * @param statut filter; defaults to {@link StatutArticle#DISPONIBLE} when {@code null}
      */
-    public List<ArticleListItemDto> findByTranche(UUID trancheId, StatutArticle statut) {
+    public Page<ArticleListItemDto> findByTranche(UUID trancheId, StatutArticle statut, Pageable pageable) {
         if (!trancheRepository.existsById(trancheId)) {
             throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
         }
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;
-        List<StkItem> items = effectiveStatut == StatutArticle.DISPONIBLE
-                ? stkItemRepository.findByStkHierarchyIdAndComFolderIdIsNull(trancheId)
-                : stkItemRepository.findByStkHierarchyIdAndComFolderIdIsNotNull(trancheId);
-        return items.stream().map(ArticleService::toListItem).toList();
+        Page<StkItem> items = effectiveStatut == StatutArticle.DISPONIBLE
+                ? stkItemRepository.findByStkHierarchyIdAndComFolderIdIsNull(trancheId, pageable)
+                : stkItemRepository.findByStkHierarchyIdAndComFolderIdIsNotNull(trancheId, pageable);
+        return items.map(ArticleService::toListItem);
     }
 
     public ArticleDetailDto findById(UUID id) {

@@ -8,6 +8,7 @@ import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
@@ -16,9 +17,12 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,18 +41,21 @@ public class EcheancierService {
     private final StlSettlementRepository settlementRepository;
     private final StlSettlementLineRepository settlementLineRepository;
     private final CfgTierRepository tierRepository;
+    private final ComSettlementCategoryRepository settlementCategoryRepository;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
                               StlSettlementRepository settlementRepository,
                               StlSettlementLineRepository settlementLineRepository,
-                              CfgTierRepository tierRepository) {
+                              CfgTierRepository tierRepository,
+                              ComSettlementCategoryRepository settlementCategoryRepository) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.settlementTypeRepository = settlementTypeRepository;
         this.settlementRepository = settlementRepository;
         this.settlementLineRepository = settlementLineRepository;
         this.tierRepository = tierRepository;
+        this.settlementCategoryRepository = settlementCategoryRepository;
     }
 
     private ComDocument findEcheanceOf(UUID dossierId, UUID echeanceId) {
@@ -109,13 +116,11 @@ public class EcheancierService {
         );
     }
 
-    public List<EcheanceDto> findEcheances(UUID dossierId) {
+    public Page<EcheanceDto> findEcheances(UUID dossierId, Pageable pageable) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
         }
-        return documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).stream()
-                .map(this::toDto)
-                .toList();
+        return documentRepository.findByComFolderIdOrderByDocDateDesc(dossierId, pageable).map(this::toDto);
     }
 
     @Transactional
@@ -159,9 +164,9 @@ public class EcheancierService {
         if (exclureDuPrix != null) document.setExcludeFromPrice(exclureDuPrix);
         if (notes != null) document.setNotes(notes);
         if (categorieId != null) {
-            StlSettlementType type = settlementTypeRepository.findById(categorieId)
-                    .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + categorieId));
-            document.setStlSettlementType(type);
+            ComSettlementCategory categorie = settlementCategoryRepository.findById(categorieId)
+                    .orElseThrow(() -> new InvalidRequestException("ComSettlementCategory introuvable: " + categorieId));
+            document.setComSettlementCategory(categorie);
         }
     }
 
@@ -194,8 +199,8 @@ public class EcheancierService {
                 d.getAmountTTC(),
                 d.getVATRatio(),
                 d.getDescription(),
-                d.getStlSettlementType() != null ? d.getStlSettlementType().getId() : null,
-                d.getStlSettlementType() != null ? d.getStlSettlementType().getCode() : null,
+                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getId() : null,
+                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getCode() : null,
                 d.getExcludeFromPrice(),
                 d.getNotes(),
                 regle,

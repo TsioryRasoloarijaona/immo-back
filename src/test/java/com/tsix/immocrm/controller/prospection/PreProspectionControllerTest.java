@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,7 +44,31 @@ class PreProspectionControllerTest {
 
         mockMvc.perform(get("/api/pre-prospections"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + pre.getId() + "')]").exists());
+                .andExpect(jsonPath("$.content[?(@.id=='" + pre.getId() + "')]").exists());
+    }
+
+    @Test
+    void findAll_and_findById_exposeTempFieldsForUnqualifiedLead() throws Exception {
+        ComProspection pre = new ComProspection();
+        pre.setId(UUID.randomUUID());
+        pre.setCode("PRE-TEMP-1");
+        pre.setTempDescription("Jean Doe (lead brut)");
+        pre.setTempTel("0341234567");
+        pre.setTempEMail("jean.doe@example.com");
+        prospectionRepository.save(pre);
+
+        String listJson = mockMvc.perform(get("/api/pre-prospections"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        net.minidev.json.JSONArray matches = JsonPath.parse(listJson)
+                .read("$.content[?(@.id=='" + pre.getId() + "')].tempDescription");
+        assertThat(matches).containsExactly("Jean Doe (lead brut)");
+
+        mockMvc.perform(get("/api/prospections/{id}", pre.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tempDescription").value("Jean Doe (lead brut)"))
+                .andExpect(jsonPath("$.tempTel").value("0341234567"))
+                .andExpect(jsonPath("$.tempEmail").value("jean.doe@example.com"));
     }
 
     @Test

@@ -249,7 +249,11 @@ public class ComFolder {
     @Column(name = "loanCompanyDecisionDate")
     private LocalDateTime loanCompanyDecisionDate;
 
-    @JdbcTypeCode(SqlTypes.LONGNVARCHAR)
+    // DB column is legacy SQL Server "text" (ANSI), not "ntext" — LONGVARCHAR (not
+    // LONGNVARCHAR/@Nationalized) matches it. Using the Unicode variant makes the driver try to
+    // read/bind it as NVARCHAR, which SQL Server rejects with "La conversion de text en NCHAR
+    // n'est pas prise en charge" on any query touching ComFolder (e.g. GET /api/dossiers).
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "ComDocumentDetail")
     private String comDocumentDetail;
 
