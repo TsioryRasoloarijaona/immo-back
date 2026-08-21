@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import jakarta.persistence.*;
@@ -110,5 +111,34 @@ public class ComActionMessage {
     @Column(name = "IsSent")
     private Boolean isSent;
 
+    // -- "Action"/"Résultat"/"Date du rendez-vous" fields (hotline & prospection interactions) --
+
+    /** "Action" — nature of the interaction (Note, Visite, Téléphone entrant, Mail Sortant...). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComActionMessageTypeId")
+    private ComActionMessageType comActionMessageType;
+
+    /**
+     * Business context of the interaction (Prospection, Dossier de vente, Réclamation...).
+     * Always derived from {@link #comActionMessageSubCategory}'s own category when one is set —
+     * never set independently by client code.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComActionMessageCategoryId")
+    private ComActionMessageCategory comActionMessageCategory;
+
+    /** "Résultat" — outcome of the interaction (Rendez vous pris, Hors Budget, RDV reporté...). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComActionMessageSubCategoryId")
+    private ComActionMessageSubCategory comActionMessageSubCategory;
+
+    /**
+     * The appointment created when {@link #comActionMessageSubCategory} is "Rendez vous pris",
+     * "RDV reporté" or "Le prospect veut faire une visite du projet" — {@code admEvent.startHour}
+     * is the "Date du rendez-vous"/visite, listed by {@code GET /api/calendrier/evenements}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmEventId")
+    private AdmEvent admEvent;
 
 }

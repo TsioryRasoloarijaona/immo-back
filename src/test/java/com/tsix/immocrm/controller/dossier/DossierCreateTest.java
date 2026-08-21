@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class DossierCreateTest {
 
     @Autowired
@@ -189,13 +191,17 @@ class DossierCreateTest {
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-CODE-TEST");
-        projectRepository.save(project);
+        // Manually-assigned id => Spring Data's save() sees a non-null id and calls merge(),
+        // which returns a NEW managed instance rather than attaching this one — must reassign
+        // and use the returned reference for any further association, or a later flush treats it
+        // as a transient/unsaved instance (Hibernate TransientPropertyValueException).
+        project = projectRepository.save(project);
 
         CfgTranche tranche = new CfgTranche();
         tranche.setId(UUID.randomUUID());
         tranche.setCode("TR-CODE-TEST");
         tranche.setCfgProject(project);
-        trancheRepository.save(tranche);
+        tranche = trancheRepository.save(tranche);
 
         StkItem item = newAvailableItem("LOT-CODE-TEST");
         item.setStkHierarchy(tranche);

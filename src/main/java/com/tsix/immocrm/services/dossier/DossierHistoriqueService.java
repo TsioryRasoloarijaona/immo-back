@@ -68,8 +68,11 @@ public class DossierHistoriqueService {
                 .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
                 .forEach(a -> evenements.add(toPieceJointeEvent(a)));
 
+        // Most recent first, events with no date (e.g. a pièce jointe with no UserCreateDateTime)
+        // sorted last. NOT `comparing(..., nullsLast(naturalOrder())).reversed()` — .reversed()
+        // flips the whole comparator, including null placement, so nulls would sort FIRST instead.
         evenements.sort(Comparator.comparing(HistoriqueEvenementDto::date,
-                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+                Comparator.nullsLast(Comparator.reverseOrder())));
 
         int debut = Math.min((int) pageable.getOffset(), evenements.size());
         int fin = Math.min(debut + pageable.getPageSize(), evenements.size());

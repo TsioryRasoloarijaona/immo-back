@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class DossierFinancingSchemaTest {
 
     @Autowired
@@ -162,12 +164,12 @@ class DossierFinancingSchemaTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        Number avance = JsonPath.read(echeancierJson,
-                "$.content[?(@.categorie=='AVANCE')].montant[0]");
-        Number autoFinancement = JsonPath.read(echeancierJson,
-                "$.content[?(@.categorie=='AUTO-FINANCEMENT')].montant[0]");
-        Number fraisSyndic = JsonPath.read(echeancierJson,
-                "$.content[?(@.categorie=='FRAIS SYNDIC')].montant[0]");
+        Number avance = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='AVANCE')].montant").get(0);
+        Number autoFinancement = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='AUTO-FINANCEMENT')].montant").get(0);
+        Number fraisSyndic = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='FRAIS SYNDIC')].montant").get(0);
         Boolean fraisExclu = (Boolean) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
                 "$.content[?(@.categorie=='FRAIS SYNDIC')].exclureDuPrix").get(0);
 

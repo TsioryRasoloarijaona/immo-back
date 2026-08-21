@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.referentiel.PaysDto;
 import com.tsix.immocrm.dto.referentiel.ProfilCategorieDto;
 import com.tsix.immocrm.dto.referentiel.ProfilDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import com.tsix.immocrm.dto.referentiel.ResultatInteractionDto;
 import com.tsix.immocrm.dto.referentiel.TitreDto;
 import com.tsix.immocrm.dto.referentiel.VilleDto;
 import com.tsix.immocrm.entities.adm.AdmCity;
@@ -23,6 +24,7 @@ import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.com.ComAction;
+import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
@@ -47,6 +49,7 @@ import com.tsix.immocrm.repositories.adm.AdmTierTitleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgRelationTypeRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComActionRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
@@ -70,6 +73,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /** Backs the {@code /api/referentiels/*} lookup endpoints (GAP-02). */
@@ -77,11 +81,23 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ReferentielService {
 
+    /**
+     * {@code ComActionMessageSubCategory.Code} values that require a "Date du rendez-vous" (RDV
+     * ou visite planifiée) on the interaction they're attached to — mirrors
+     * {@code ProspectionService.RESULTATS_AVEC_DATE_PLANIFIEE}, confirmed empirically.
+     */
+    private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
+            "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
+
+    /** {@code ComActionMessageCategory.Code} the "Résultat" dropdown is scoped to. */
+    private static final String CATEGORIE_RESULTAT_INTERACTION = "Prospection";
+
     private final ComProspectionKindRepository prospectionKindRepository;
     private final ComProspectionOriginRepository prospectionOriginRepository;
     private final ComProspectionOriginSupportRepository prospectionOriginSupportRepository;
     private final ComProspectionClosingReasonRepository closingReasonRepository;
     private final ComActionMessageTypeRepository actionMessageTypeRepository;
+    private final ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository;
     private final ComActionRepository actionRepository;
     private final StkVocationRepository vocationRepository;
     private final CfgTierTypeRepository tierTypeRepository;
@@ -110,6 +126,7 @@ public class ReferentielService {
                                ComProspectionOriginSupportRepository prospectionOriginSupportRepository,
                                ComProspectionClosingReasonRepository closingReasonRepository,
                                ComActionMessageTypeRepository actionMessageTypeRepository,
+                               ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository,
                                ComActionRepository actionRepository,
                                StkVocationRepository vocationRepository,
                                CfgTierTypeRepository tierTypeRepository,
@@ -137,6 +154,7 @@ public class ReferentielService {
         this.prospectionOriginSupportRepository = prospectionOriginSupportRepository;
         this.closingReasonRepository = closingReasonRepository;
         this.actionMessageTypeRepository = actionMessageTypeRepository;
+        this.actionMessageSubCategoryRepository = actionMessageSubCategoryRepository;
         this.actionRepository = actionRepository;
         this.vocationRepository = vocationRepository;
         this.tierTypeRepository = tierTypeRepository;
@@ -185,6 +203,28 @@ public class ReferentielService {
     public List<ReferentielItemDto> typesContactProspection() {
         return actionMessageTypeRepository.findAll().stream().map(t -> new ReferentielItemDto(
                 t.getId(), t.getCode(), t.getDescription(), null)).toList();
+    }
+
+    /**
+     * {@code GET /api/referentiels/resultats-interaction} — the "Résultat" dropdown for
+     * {@code POST /api/prospections/{id}/interactions}. See {@link ResultatInteractionDto}.
+     */
+    public List<ResultatInteractionDto> resultatsInteraction() {
+        return actionMessageSubCategoryRepository
+                .findByComActionMessageCategoryCodeOrderByDescriptionAsc(CATEGORIE_RESULTAT_INTERACTION)
+                .stream()
+                .map(ReferentielService::toResultatInteractionDto)
+                .toList();
+    }
+
+    private static ResultatInteractionDto toResultatInteractionDto(ComActionMessageSubCategory s) {
+        return new ResultatInteractionDto(
+                s.getId(),
+                s.getCode(),
+                s.getDescription(),
+                RESULTATS_AVEC_DATE_PLANIFIEE.contains(s.getCode()),
+                Boolean.TRUE.equals(s.getIsRevivalMandatory())
+        );
     }
 
     public List<ReferentielItemDto> actionsCommerciales() {

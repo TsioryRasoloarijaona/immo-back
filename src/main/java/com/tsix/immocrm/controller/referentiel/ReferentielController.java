@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.referentiel.OrigineProspectionDto;
 import com.tsix.immocrm.dto.referentiel.PaysDto;
 import com.tsix.immocrm.dto.referentiel.ProfilCategorieDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import com.tsix.immocrm.dto.referentiel.ResultatInteractionDto;
 import com.tsix.immocrm.dto.referentiel.TitreDto;
 import com.tsix.immocrm.dto.referentiel.VilleDto;
 import com.tsix.immocrm.services.referentiel.ReferentielService;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
 
 import java.util.List;
 import java.util.UUID;
@@ -55,6 +57,19 @@ public class ReferentielController {
     @GetMapping("/types-contact-prospection")
     public List<ReferentielItemDto> getTypesContactProspection() {
         return referentielService.typesContactProspection();
+    }
+
+    @GetMapping("/resultats-interaction")
+    @Operation(
+            summary = "Résultats possibles pour une interaction (dropdown \"Résultat\")",
+            description = "Liste les résultats utilisables comme `resultatId` dans "
+                    + "`POST /api/prospections/{id}/interactions` (ex: \"Rendez vous pris\", "
+                    + "\"Hors Budget\", \"Client injoignable ou Boite vocale\"...). Chaque entrée "
+                    + "indique via `necessiteDateRdv`/`alerteRecommandee` comment adapter le "
+                    + "formulaire, sans avoir à coder les libellés en dur côté front."
+    )
+    public List<ResultatInteractionDto> getResultatsInteraction() {
+        return referentielService.resultatsInteraction();
     }
 
     @GetMapping("/actions-commerciales")

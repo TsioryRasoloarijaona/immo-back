@@ -19,11 +19,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 On Windows use `mvnw.cmd` instead of `./mvnw`.
 
-The app requires a running SQL Server instance and three environment variables (no defaults are set):
+The app requires a running SQL Server instance and these environment variables (no defaults are set):
 ```
-DB_HOST, DB_NAME, DB_USER, DB_PWD
+DB_HOST, DB_NAME, DB_USER, DB_PWD, JWT_SECRET
 ```
-`ImmoCrmApplicationTests` boots the full Spring context (`@SpringBootTest`), so these must be set (or a local SQL Server reachable) even to run tests. Note `spring.jpa.hibernate.ddl-auto` differs between `src/main/resources/application.properties` (`validate` — the schema is owned by the DB) and `src/test/resources/application.properties` (`update`).
+`ImmoCrmApplicationTests` boots the full Spring context (`@SpringBootTest`), so these must be set (or a local SQL Server reachable) even to run tests. `spring.jpa.hibernate.ddl-auto=none` in both `src/main/resources/application.properties` and `src/test/resources/application.properties` — the schema is owned by the DB on both sides; new app-only tables (e.g. `AppUserCredential`) are created by hand-written SQL scripts, not by Hibernate.
 
 ## Architecture
 
@@ -58,3 +58,11 @@ This repo is mid-way through building out a REST API (~27 endpoints across Prosp
 7. `GET /api/commerciaux`'s data source (`CfgTier` filtered by `CfgTierKind`, vs. some `Adm*` table) is an **open question** — stop and confirm before implementing it.
 8. `GET /api/dossiers/{id}/montants` is always computed server-side, never stored; when implementing it, group by category and exclude `FRAIS` from the amount subject to the TTC price rule.
 9. DTOs are `record`s; field names should follow `API-endpoints-vente-prospection-patrimoine.md` (not present in the repo yet — if it's still missing when you need it, ask rather than inventing field names) rather than being reinvented ad hoc.
+10. **Every endpoint must be documented for OpenAPI/Swagger (`springdoc-openapi`, already on the classpath), not just implemented.** The goal is that a frontend dev can understand and consume an endpoint from `/swagger-ui.html` alone, without reading the Java. Concretely, for every new (or edited) controller/DTO:
+    - `@Tag(name = ..., description = ...)` on the controller class, describing the resource/domain it covers.
+    - `@Operation(summary = ..., description = ...)` on every handler method — `summary` is a short label, `description` explains what it does, any non-obvious business rules it enforces (e.g. transition validation, computed fields, exclusions), and what an empty/absent result means.
+    - `@Parameter(description = ..., example = ...)` on every `@RequestParam`/`@PathVariable` that isn't self-evident from its name alone.
+    - `@ApiResponses`/`@ApiResponse` documenting at least the non-200 cases (404, 400, 409...) with what triggers them.
+    - `@Schema(description = ...)` on every DTO `record` and on its individual components — explain what the field represents and where it comes from (e.g. "computed server-side", "null if not yet reached"), not just repeat the field name.
+    - Write descriptions in French, matching the DTO/API layer's existing business language (see the "Naming mismatch" note above).
+    This applies going forward to all endpoints, not only new ones — retrofit an existing endpoint's docs if you're touching it substantially anyway, but don't go out of scope to backfill unrelated ones.

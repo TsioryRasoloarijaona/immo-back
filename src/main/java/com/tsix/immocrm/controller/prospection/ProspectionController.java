@@ -24,6 +24,10 @@ import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.services.prospection.DevisService;
 import com.tsix.immocrm.services.prospection.ProspectionQualificationService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -96,13 +100,43 @@ public class ProspectionController {
     }
 
     @GetMapping("/{id}/interactions")
-    public PageDto<InteractionDto> findInteractions(@PathVariable UUID id,
-                                                      @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+    @Operation(
+            summary = "Journal des interactions d'une prospection",
+            description = "Historique des interactions (appels, messages, notes, visites...) "
+                    + "loggées sur cette prospection, les plus récentes en premier."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page d'interactions (peut être vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public PageDto<InteractionDto> findInteractions(
+            @Parameter(description = "Id de la prospection.") @PathVariable UUID id,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(prospectionService.findInteractions(id, pageable));
     }
 
     @PostMapping("/{id}/interactions")
-    public ResponseEntity<InteractionDto> addInteraction(@PathVariable UUID id, @RequestBody CreerInteractionRequest request) {
+    @Operation(
+            summary = "Ajoute une interaction à une prospection",
+            description = "Journalise un appel/message/visite/note sur cette prospection. "
+                    + "`actionTypeId` (\"Action\") et `resultatId` (\"Résultat\") sont "
+                    + "optionnels mais recommandés pour un suivi exploitable — voir "
+                    + "GET /api/referentiels/types-contact-prospection et "
+                    + "GET /api/referentiels/resultats-interaction. Si le résultat choisi est "
+                    + "\"Rendez vous pris\", \"RDV reporté\" ou \"Le prospect veut faire une "
+                    + "visite du projet\", `dateRdv` devient obligatoire et une entrée "
+                    + "calendrier est créée, visible ensuite via GET /api/calendrier/evenements."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Interaction créée."),
+            @ApiResponse(responseCode = "400", description = "`description` manquante, "
+                    + "`actionTypeId`/`resultatId` inconnu, ou `dateRdv` manquante alors que le "
+                    + "résultat choisi l'exige."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public ResponseEntity<InteractionDto> addInteraction(
+            @Parameter(description = "Id de la prospection.") @PathVariable UUID id,
+            @RequestBody CreerInteractionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.addInteraction(id, request));
     }
 

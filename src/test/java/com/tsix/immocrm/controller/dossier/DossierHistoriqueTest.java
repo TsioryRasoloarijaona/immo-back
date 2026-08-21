@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class DossierHistoriqueTest {
 
     @Autowired
@@ -150,7 +152,10 @@ class DossierHistoriqueTest {
         reservation.setId(UUID.randomUUID());
         reservation.setCode("RESERVATION");
         reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
+        // Manually-assigned id => save() calls merge() (sees a non-null id), which returns a NEW
+        // managed instance — must reassign or a later flush treats the original as an
+        // unsaved/transient reference (Hibernate TransientPropertyValueException).
+        reservation = strStatusRepository.save(reservation);
         folder.setStrStatus(reservation);
         folderRepository.save(folder);
 

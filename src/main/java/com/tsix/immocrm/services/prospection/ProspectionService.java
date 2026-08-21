@@ -9,10 +9,12 @@ import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
+import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComAction;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComProspectionClosingReason;
@@ -23,9 +25,11 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComActionRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionClosingReasonRepository;
@@ -47,11 +51,23 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
 public class ProspectionService {
+
+    /**
+     * {@code ComActionMessageSubCategory.Code} values (under the "Prospection" category) that
+     * require a "Date du rendez-vous" and create a calendar entry ({@link AdmEvent}) — confirmed
+     * empirically against real data. Covers both actual rendez-vous ("Rendez vous pris"/"RDV
+     * reporté") and planned site visits ("Le prospect veut faire une visite du projet", 5708 real
+     * uses) — same underlying mechanism, distinguished on the calendar by
+     * {@code AdmEvent.comActionMessageSubCategory}. See {@code GET /api/calendrier/evenements}.
+     */
+    private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
+            "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
     private final ComProspectionRepository prospectionRepository;
     private final ProspectService prospectService;
@@ -63,6 +79,8 @@ public class ProspectionService {
     private final ComProspectionOriginSupportRepository prospectionOriginSupportRepository;
     private final StkVocationRepository vocationRepository;
     private final ComActionMessageTypeRepository actionMessageTypeRepository;
+    private final ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository;
+    private final AdmEventRepository admEventRepository;
     private final ComActionRepository actionRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository stkItemRepository;
@@ -75,6 +93,8 @@ public class ProspectionService {
                                ComProspectionOriginSupportRepository prospectionOriginSupportRepository,
                                StkVocationRepository vocationRepository,
                                ComActionMessageTypeRepository actionMessageTypeRepository,
+                               ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository,
+                               AdmEventRepository admEventRepository,
                                ComActionRepository actionRepository,
                                CfgTrancheRepository trancheRepository,
                                StkItemRepository stkItemRepository) {
@@ -88,6 +108,8 @@ public class ProspectionService {
         this.prospectionOriginSupportRepository = prospectionOriginSupportRepository;
         this.vocationRepository = vocationRepository;
         this.actionMessageTypeRepository = actionMessageTypeRepository;
+        this.actionMessageSubCategoryRepository = actionMessageSubCategoryRepository;
+        this.admEventRepository = admEventRepository;
         this.actionRepository = actionRepository;
         this.trancheRepository = trancheRepository;
         this.stkItemRepository = stkItemRepository;
@@ -323,6 +345,37 @@ public class ProspectionService {
         message.setDocDate(LocalDateTime.now());
         message.setDescription(request.description());
         message.setIsIn(request.entrante() != null ? request.entrante() : true);
+        message.setAlertValidityDate(request.dateAlerte());
+
+        if (request.actionTypeId() != null) {
+            ComActionMessageType actionType = actionMessageTypeRepository.findById(request.actionTypeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.actionTypeId()));
+            message.setComActionMessageType(actionType);
+        }
+
+        if (request.resultatId() != null) {
+            ComActionMessageSubCategory resultat = actionMessageSubCategoryRepository.findById(request.resultatId())
+                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageSubCategory introuvable: " + request.resultatId()));
+            message.setComActionMessageSubCategory(resultat);
+            // The category is never client-supplied — always derived from the chosen résultat.
+            message.setComActionMessageCategory(resultat.getComActionMessageCategory());
+
+            if (RESULTATS_AVEC_DATE_PLANIFIEE.contains(resultat.getCode())) {
+                if (request.dateRdv() == null) {
+                    throw new InvalidRequestException(
+                            "dateRdv est requise lorsque le résultat est \"" + resultat.getCode() + "\"");
+                }
+                AdmEvent evenement = new AdmEvent();
+                evenement.setId(UUID.randomUUID());
+                evenement.setSubject(request.description());
+                evenement.setStartHour(request.dateRdv());
+                evenement.setComActionMessageSubCategory(resultat);
+                message.setAdmEvent(admEventRepository.save(evenement));
+            }
+        } else if (request.dateRdv() != null) {
+            throw new InvalidRequestException("dateRdv nécessite un resultatId (\"Rendez vous pris\", "
+                    + "\"RDV reporté\" ou \"Le prospect veut faire une visite du projet\")");
+        }
 
         return toInteractionDto(actionMessageRepository.save(message));
     }
@@ -337,7 +390,13 @@ public class ProspectionService {
                 m.getCfgEmployee() != null
                         ? ((m.getCfgEmployee().getFirstName() != null ? m.getCfgEmployee().getFirstName() + " " : "")
                         + (m.getCfgEmployee().getLastName() != null ? m.getCfgEmployee().getLastName() : "")).trim()
-                        : null
+                        : null,
+                m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
+                m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,
+                m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,
+                m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getDescription() : null,
+                m.getAlertValidityDate(),
+                m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null
         );
     }
 
