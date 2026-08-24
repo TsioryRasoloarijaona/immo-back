@@ -28,9 +28,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,11 +45,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
+@Tag(name = "Prospections", description = "Prospections (ComProspection) — pipeline commercial, "
+        + "qualification, interactions, devis.")
 @RestController
 @RequestMapping("/api/prospections")
 public class ProspectionController {
@@ -65,13 +70,39 @@ public class ProspectionController {
     }
 
     @GetMapping
-    public PageDto<ProspectionListItemDto> findAll(@RequestParam(required = false) String etape,
-            @RequestParam(required = false) String origine,
-            @RequestParam(required = false) UUID commercial,
+    @Operation(
+            summary = "Liste paginée des prospections",
+            description = "Filtre optionnellement par étape/origine/commercial (multi-sélection, "
+                    + "une valeur pour un seul choix se comporte comme avant), tranche(s) visée(s), "
+                    + "plage de dates sur la date du document, et recherche libre. Exclut les "
+                    + "pré-prospections (voir GET /api/pre-prospections). Voir "
+                    + "instructions/filtres-avances.md pour le détail des filtres avancés."
+    )
+    public PageDto<ProspectionListItemDto> findAll(
+            @Parameter(description = "Code(s) ComProspectionKind (\"Nature\"/étape) à filtrer. "
+                    + "Répéter le paramètre pour plusieurs étapes. Absent = toutes les étapes.",
+                    example = "3 QUALIFIÉ")
+            @RequestParam(required = false) List<String> etape,
+            @Parameter(description = "Code(s) ComProspectionOrigin à filtrer. Répéter le "
+                    + "paramètre pour plusieurs origines.", example = "FACEBOOK")
+            @RequestParam(required = false) List<String> origine,
+            @Parameter(description = "Id(s) du commercial (CfgTier.id, cfgCommercial). Répéter "
+                    + "le paramètre pour plusieurs commerciaux.")
+            @RequestParam(required = false) List<UUID> commercial,
+            @Parameter(description = "Id(s) de tranche visée (CfgTranche.id, "
+                    + "ComProspection.stkHierarchy). Répéter le paramètre pour plusieurs tranches.")
+            @RequestParam(required = false) List<UUID> trancheId,
+            @Parameter(description = "Borne inférieure (incluse) sur la date du document, "
+                    + "format ISO-8601.", example = "2026-01-01T00:00:00")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @Parameter(description = "Borne supérieure (incluse) sur la date du document, "
+                    + "format ISO-8601.", example = "2026-12-31T23:59:59")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean ouvertes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(prospectionService.findAll(etape, origine, commercial, search, ouvertes, pageable));
+        return PageDto.of(prospectionService.findAll(etape, origine, commercial, trancheId, dateDebut, dateFin,
+                search, ouvertes, pageable));
     }
 
     @GetMapping("/{id}")

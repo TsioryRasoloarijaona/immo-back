@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
@@ -26,9 +27,13 @@ import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -42,6 +47,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,6 +55,8 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
+@Tag(name = "Dossiers", description = "Dossiers de vente (ComFolder) — cycle de vie, échéancier, "
+        + "pièces jointes et génération de documents.")
 @RestController
 @RequestMapping("/api/dossiers")
 public class DossierController {
@@ -98,12 +106,42 @@ public class DossierController {
     }
 
     @GetMapping
-    public PageDto<DossierListItemDto> findAll(@RequestParam(required = false) String statut,
+    @Operation(
+            summary = "Liste paginée des dossiers de vente",
+            description = "Filtre optionnellement par statut (multi-sélection, une valeur pour "
+                    + "un seul statut se comporte comme avant), commercial, entité (projet), "
+                    + "tranche(s), plage de dates sur un jalon au choix, et recherche libre sur "
+                    + "le code. Voir instructions/filtres-avances.md pour le détail des filtres "
+                    + "avancés."
+    )
+    public PageDto<DossierListItemDto> findAll(
+            @Parameter(description = "Code(s) StrStatus à filtrer. Répéter le paramètre pour "
+                    + "sélectionner plusieurs statuts (?statut=Réservation&statut=Concrétisation). "
+                    + "Absent = tous les statuts.", example = "Réservation")
+            @RequestParam(required = false) List<String> statut,
+            @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")
             @RequestParam(required = false) UUID commercial,
+            @Parameter(description = "Id de l'entité/projet (CfgProject.id), matché via l'article "
+                    + "principal du dossier.")
             @RequestParam(required = false) UUID projet,
+            @Parameter(description = "Id(s) de tranche (CfgTranche.id, StkItem.stkHierarchy). "
+                    + "Répéter le paramètre pour plusieurs tranches. Renvoie les dossiers dont au "
+                    + "moins un article appartient à une des tranches demandées.")
+            @RequestParam(required = false) List<UUID> trancheId,
+            @Parameter(description = "Jalon sur lequel appliquer dateDebut/dateFin. Ignoré si "
+                    + "aucun des deux n'est fourni. Défaut : RESERVATION (= date de création du "
+                    + "dossier).", example = "CONCRETISATION")
+            @RequestParam(required = false) ChampDateDossier champDate,
+            @Parameter(description = "Borne inférieure (incluse) de la plage sur champDate, "
+                    + "format ISO-8601.", example = "2026-01-01T00:00:00")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @Parameter(description = "Borne supérieure (incluse) de la plage sur champDate, "
+                    + "format ISO-8601.", example = "2026-12-31T23:59:59")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @Parameter(description = "Recherche libre sur le code du dossier.")
             @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(dossierService.findAll(statut, commercial, projet, search, pageable));
+        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate, dateDebut, dateFin, search, pageable));
     }
 
     @GetMapping("/{id}")

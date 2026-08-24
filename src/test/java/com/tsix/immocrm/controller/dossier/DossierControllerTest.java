@@ -1,6 +1,7 @@
 package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
@@ -8,6 +9,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -59,6 +61,9 @@ class DossierControllerTest {
     @Autowired
     private CfgTierRepository tierRepository;
 
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+
     private StkItemType itemType;
     private StkItemCategory itemCategory;
     private StkVocation vocation;
@@ -90,6 +95,10 @@ class DossierControllerTest {
     }
 
     private StkItem newItem(String code, ComFolder folder) {
+        return newItem(code, folder, null);
+    }
+
+    private StkItem newItem(String code, ComFolder folder, CfgTranche tranche) {
         StkItem item = new StkItem();
         item.setId(UUID.randomUUID());
         item.setCode(code);
@@ -98,6 +107,7 @@ class DossierControllerTest {
         item.setStkItemCategory(itemCategory);
         item.setStkVocation(vocation);
         item.setComFolderId(folder.getId());
+        item.setStkHierarchy(tranche);
         return stkItemRepository.save(item);
     }
 
@@ -140,6 +150,135 @@ class DossierControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id=='" + withStatut.getId() + "')]").exists())
                 .andExpect(jsonPath("$.content[?(@.id=='" + withoutStatut.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_filterByMultipleStatuts() throws Exception {
+        StrStatus statutA = new StrStatus();
+        statutA.setId(UUID.randomUUID());
+        statutA.setCode("RESERVATION-MULTI-A");
+        strStatusRepository.save(statutA);
+
+        StrStatus statutB = new StrStatus();
+        statutB.setId(UUID.randomUUID());
+        statutB.setCode("RESERVATION-MULTI-B");
+        strStatusRepository.save(statutB);
+
+        StrStatus statutC = new StrStatus();
+        statutC.setId(UUID.randomUUID());
+        statutC.setCode("RESERVATION-MULTI-C");
+        strStatusRepository.save(statutC);
+
+        ComFolder withA = new ComFolder();
+        withA.setId(UUID.randomUUID());
+        withA.setCode("DOS-MULTI-A");
+        withA.setStkVocation(vocation);
+        withA.setStrStatus(statutA);
+        folderRepository.save(withA);
+
+        ComFolder withB = new ComFolder();
+        withB.setId(UUID.randomUUID());
+        withB.setCode("DOS-MULTI-B");
+        withB.setStkVocation(vocation);
+        withB.setStrStatus(statutB);
+        folderRepository.save(withB);
+
+        ComFolder withC = new ComFolder();
+        withC.setId(UUID.randomUUID());
+        withC.setCode("DOS-MULTI-C");
+        withC.setStkVocation(vocation);
+        withC.setStrStatus(statutC);
+        folderRepository.save(withC);
+
+        mockMvc.perform(get("/api/dossiers")
+                        .param("statut", "RESERVATION-MULTI-A", "RESERVATION-MULTI-B"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withB.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withC.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_filterByTrancheId() throws Exception {
+        CfgTranche trancheA = new CfgTranche();
+        trancheA.setId(UUID.randomUUID());
+        trancheA.setCode("TR-DOS-FILTER-A");
+        trancheRepository.save(trancheA);
+
+        CfgTranche trancheB = new CfgTranche();
+        trancheB.setId(UUID.randomUUID());
+        trancheB.setCode("TR-DOS-FILTER-B");
+        trancheRepository.save(trancheB);
+
+        ComFolder folderA = new ComFolder();
+        folderA.setId(UUID.randomUUID());
+        folderA.setCode("DOS-TRANCHE-A");
+        folderA.setStkVocation(vocation);
+        folderRepository.save(folderA);
+        newItem("LOT-TRANCHE-A", folderA, trancheA);
+
+        ComFolder folderB = new ComFolder();
+        folderB.setId(UUID.randomUUID());
+        folderB.setCode("DOS-TRANCHE-B");
+        folderB.setStkVocation(vocation);
+        folderRepository.save(folderB);
+        newItem("LOT-TRANCHE-B", folderB, trancheB);
+
+        mockMvc.perform(get("/api/dossiers").param("trancheId", trancheA.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + folderA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + folderB.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_filterByPeriode_defaultChampDate_usesDocDate() throws Exception {
+        ComFolder inRange = new ComFolder();
+        inRange.setId(UUID.randomUUID());
+        inRange.setCode("DOS-PERIODE-IN");
+        inRange.setStkVocation(vocation);
+        inRange.setDocDate(java.time.LocalDateTime.of(2026, 3, 15, 0, 0));
+        folderRepository.save(inRange);
+
+        ComFolder outOfRange = new ComFolder();
+        outOfRange.setId(UUID.randomUUID());
+        outOfRange.setCode("DOS-PERIODE-OUT");
+        outOfRange.setStkVocation(vocation);
+        outOfRange.setDocDate(java.time.LocalDateTime.of(2025, 1, 1, 0, 0));
+        folderRepository.save(outOfRange);
+
+        mockMvc.perform(get("/api/dossiers")
+                        .param("dateDebut", "2026-01-01T00:00:00")
+                        .param("dateFin", "2026-12-31T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + inRange.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + outOfRange.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_filterByPeriode_champDateConcretisation() throws Exception {
+        ComFolder concretiseEnRange = new ComFolder();
+        concretiseEnRange.setId(UUID.randomUUID());
+        concretiseEnRange.setCode("DOS-PERIODE-CONCR-IN");
+        concretiseEnRange.setStkVocation(vocation);
+        // docDate volontairement hors plage pour prouver que champDate=CONCRETISATION est bien pris en compte
+        concretiseEnRange.setDocDate(java.time.LocalDateTime.of(2020, 1, 1, 0, 0));
+        concretiseEnRange.setAdvanceDate(java.time.LocalDateTime.of(2026, 6, 1, 0, 0));
+        folderRepository.save(concretiseEnRange);
+
+        ComFolder concretiseHorsRange = new ComFolder();
+        concretiseHorsRange.setId(UUID.randomUUID());
+        concretiseHorsRange.setCode("DOS-PERIODE-CONCR-OUT");
+        concretiseHorsRange.setStkVocation(vocation);
+        concretiseHorsRange.setAdvanceDate(java.time.LocalDateTime.of(2019, 6, 1, 0, 0));
+        folderRepository.save(concretiseHorsRange);
+
+        mockMvc.perform(get("/api/dossiers")
+                        .param("champDate", "CONCRETISATION")
+                        .param("dateDebut", "2026-01-01T00:00:00")
+                        .param("dateFin", "2026-12-31T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + concretiseEnRange.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + concretiseHorsRange.getId() + "')]").doesNotExist());
     }
 
     @Test

@@ -65,4 +65,46 @@ class TrancheControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
+
+    @Test
+    void findAll_filterByProjetId() throws Exception {
+        CfgProject projetA = new CfgProject();
+        projetA.setId(UUID.randomUUID());
+        projetA.setCode("PRJ-TR-FLAT-A");
+        projectRepository.save(projetA);
+
+        CfgProject projetB = new CfgProject();
+        projetB.setId(UUID.randomUUID());
+        projetB.setCode("PRJ-TR-FLAT-B");
+        projectRepository.save(projetB);
+
+        CfgTranche trancheA = new CfgTranche();
+        trancheA.setId(UUID.randomUUID());
+        trancheA.setCode("TR-FLAT-A");
+        trancheA.setCfgProject(projetA);
+        trancheRepository.save(trancheA);
+
+        CfgTranche trancheB = new CfgTranche();
+        trancheB.setId(UUID.randomUUID());
+        trancheB.setCode("TR-FLAT-B");
+        trancheB.setCfgProject(projetB);
+        trancheRepository.save(trancheB);
+
+        mockMvc.perform(get("/api/tranches").param("projetId", projetA.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + trancheA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + trancheB.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_noFilter_returnsAllTranches() throws Exception {
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-FLAT-ALL");
+        trancheRepository.save(tranche);
+
+        mockMvc.perform(get("/api/tranches"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+    }
 }

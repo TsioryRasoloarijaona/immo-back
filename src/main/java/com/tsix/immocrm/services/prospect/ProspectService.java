@@ -94,9 +94,12 @@ public class ProspectService {
 
     /**
      * @param search free-text match on code/nom/prenom/raisonSociale/email
-     * @param type   {@code CfgTierType.code} to filter by
+     * @param types  {@code CfgTierType.code} filter — OR-match, repeated query param
+     *               ({@code ?type=a&type=b}), same convention as
+     *               {@code DossierService.findAll}'s {@code statuts}: 0 values means no filter, 1
+     *               value behaves exactly like the pre-multi-select single-value filter.
      */
-    public Page<ProspectListItemDto> findAll(String search, String type, Pageable pageable) {
+    public Page<ProspectListItemDto> findAll(String search, List<String> types, Pageable pageable) {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isTrue(root.get("isProspect")));
@@ -110,8 +113,9 @@ public class ProspectService {
                         cb.like(cb.lower(root.get("eMail")), pattern)
                 ));
             }
-            if (StringUtils.hasText(type)) {
-                predicates.add(cb.equal(cb.lower(root.get("cfgTierType").get("code")), type.toLowerCase()));
+            if (types != null && !types.isEmpty()) {
+                List<String> typesLower = types.stream().map(String::toLowerCase).toList();
+                predicates.add(cb.lower(root.get("cfgTierType").get("code")).in(typesLower));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };

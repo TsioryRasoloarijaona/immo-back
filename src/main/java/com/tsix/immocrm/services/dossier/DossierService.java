@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
@@ -133,24 +134,62 @@ public class DossierService {
     }
 
     /**
-     * @param statut     {@code StrStatus.code} filter
+     * @param statuts    {@code StrStatus.code} filter — 0 values means no filter, 1 value
+     *                   behaves exactly like the pre-multi-select single-value filter, 2+
+     *                   values match any of them (OR). Repeated query param
+     *                   ({@code ?statut=a&statut=b}), see {@code instructions/filtres-avances.md}.
      * @param commercial {@code CfgTier.id} (cfgCommercial) filter
      * @param projet     {@code CfgProject.id} filter, matched via the folder's primary
      *                   article's project ({@code ComFolder.stkItem.cfgProject}) — a folder's
      *                   linked articles are assumed to share one project.
+     * @param trancheIds {@code CfgTranche.id} filter — matches a dossier if at least one of its
+     *                   linked articles ({@code StkItem.comFolderId}) belongs to one of these
+     *                   tranches ({@code StkItem.stkHierarchy}). A dossier can have several
+     *                   articles (main lot + annexes) possibly spanning tranches, hence the
+     *                   {@code EXISTS} subquery rather than a direct join. See
+     *                   {@code instructions/filtres-avances.md} point 2.
+     * @param champDate  which {@code ComFolder} milestone column {@code dateDebut}/{@code dateFin}
+     *                   apply to (defaults to {@link ChampDateDossier#RESERVATION} — i.e.
+     *                   {@code docDate} — if a range is given without an explicit field). Ignored
+     *                   if neither {@code dateDebut} nor {@code dateFin} is given. See
+     *                   {@code instructions/filtres-avances.md} point 3.
+     * @param dateDebut  inclusive lower bound on {@code champDate}'s column
+     * @param dateFin    inclusive upper bound on {@code champDate}'s column
      * @param search     free-text match on code
      */
-    public Page<DossierListItemDto> findAll(String statut, UUID commercial, UUID projet, String search, Pageable pageable) {
+    public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
+            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Pageable pageable) {
         Specification<ComFolder> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (StringUtils.hasText(statut)) {
-                predicates.add(cb.equal(cb.lower(root.get("strStatus").get("code")), statut.toLowerCase()));
+            if (statuts != null && !statuts.isEmpty()) {
+                List<String> statutsLower = statuts.stream().map(String::toLowerCase).toList();
+                predicates.add(cb.lower(root.get("strStatus").get("code")).in(statutsLower));
             }
             if (commercial != null) {
                 predicates.add(cb.equal(root.get("cfgCommercial").get("id"), commercial));
             }
             if (projet != null) {
                 predicates.add(cb.equal(root.get("stkItem").get("cfgProject").get("id"), projet));
+            }
+            if (trancheIds != null && !trancheIds.isEmpty()) {
+                jakarta.persistence.criteria.Subquery<UUID> subquery = query.subquery(UUID.class);
+                jakarta.persistence.criteria.Root<StkItem> article = subquery.from(StkItem.class);
+                subquery.select(article.get("id"))
+                        .where(cb.and(
+                                cb.equal(article.get("comFolderId"), root.get("id")),
+                                article.get("stkHierarchy").get("id").in(trancheIds)));
+                predicates.add(cb.exists(subquery));
+            }
+            if (dateDebut != null || dateFin != null) {
+                String champ = (champDate != null ? champDate : ChampDateDossier.RESERVATION).getChampEntite();
+                jakarta.persistence.criteria.Path<LocalDateTime> colonne = root.get(champ);
+                if (dateDebut != null) {
+                    predicates.add(cb.greaterThanOrEqualTo(colonne, dateDebut));
+                }
+                if (dateFin != null) {
+                    predicates.add(cb.lessThanOrEqualTo(colonne, dateFin));
+                }
             }
             if (StringUtils.hasText(search)) {
                 predicates.add(cb.like(cb.lower(root.get("code")), "%" + search.toLowerCase() + "%"));
@@ -523,7 +562,8 @@ public class DossierService {
                 f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
                 nomTier(f.getCfgCommercial()),
                 f.getPrice(),
-                f.getTotalToPay()
+                f.getTotalToPay(),
+                f.getAdvanceDate()
         );
     }
 

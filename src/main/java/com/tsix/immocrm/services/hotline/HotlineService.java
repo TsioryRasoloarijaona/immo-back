@@ -118,7 +118,8 @@ public class HotlineService {
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
                 p.getPrice(),
-                p.getArea()
+                p.getArea(),
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null
         );
     }
 

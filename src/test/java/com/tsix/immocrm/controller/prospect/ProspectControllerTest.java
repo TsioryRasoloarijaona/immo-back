@@ -1,7 +1,9 @@
 package com.tsix.immocrm.controller.prospect;
 
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +32,9 @@ class ProspectControllerTest {
 
     @Autowired
     private CfgTierRepository tierRepository;
+
+    @Autowired
+    private CfgTierTypeRepository tierTypeRepository;
 
     private CfgTier newProspect(String firstName, String lastName, String code) {
         CfgTier tier = new CfgTier();
@@ -62,6 +67,42 @@ class ProspectControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id=='" + match.getId() + "')]").exists())
                 .andExpect(jsonPath("$.content[?(@.id=='" + noMatch.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_filterByMultipleTypes() throws Exception {
+        CfgTierType typeA = new CfgTierType();
+        typeA.setId(UUID.randomUUID());
+        typeA.setCode("TYPE-MULTI-A");
+        tierTypeRepository.save(typeA);
+
+        CfgTierType typeB = new CfgTierType();
+        typeB.setId(UUID.randomUUID());
+        typeB.setCode("TYPE-MULTI-B");
+        tierTypeRepository.save(typeB);
+
+        CfgTierType typeC = new CfgTierType();
+        typeC.setId(UUID.randomUUID());
+        typeC.setCode("TYPE-MULTI-C");
+        tierTypeRepository.save(typeC);
+
+        CfgTier withA = newProspect("With", "TypeA", "PROS-TYPE-A");
+        withA.setCfgTierType(typeA);
+        tierRepository.save(withA);
+
+        CfgTier withB = newProspect("With", "TypeB", "PROS-TYPE-B");
+        withB.setCfgTierType(typeB);
+        tierRepository.save(withB);
+
+        CfgTier withC = newProspect("With", "TypeC", "PROS-TYPE-C");
+        withC.setCfgTierType(typeC);
+        tierRepository.save(withC);
+
+        mockMvc.perform(get("/api/prospects").param("type", "TYPE-MULTI-A", "TYPE-MULTI-B"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withB.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + withC.getId() + "')]").doesNotExist());
     }
 
     @Test

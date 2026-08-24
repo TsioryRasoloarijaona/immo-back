@@ -1,9 +1,12 @@
 package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.dto.patrimoine.TrancheDetailDto;
+import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +20,29 @@ public class TrancheService {
 
     public TrancheService(CfgTrancheRepository trancheRepository) {
         this.trancheRepository = trancheRepository;
+    }
+
+    /**
+     * {@code GET /api/tranches}: flat, paginated list of tranches, optionally scoped to one
+     * projet (Entité). Lets the front populate a Tranche checklist without the {@code GET
+     * /api/projets} + {@code GET /api/projets/{id}/tranches} N+1 workaround — see
+     * {@code instructions/filtres-avances.md} point 2.
+     */
+    public Page<TrancheListItemDto> findAll(UUID projetId, Pageable pageable) {
+        Page<CfgTranche> page = projetId != null
+                ? trancheRepository.findByCfgProjectId(projetId, pageable)
+                : trancheRepository.findAll(pageable);
+        return page.map(TrancheService::toListItem);
+    }
+
+    private static TrancheListItemDto toListItem(CfgTranche tranche) {
+        return new TrancheListItemDto(
+                tranche.getId(),
+                tranche.getCode(),
+                tranche.getDescription(),
+                tranche.getCity(),
+                tranche.getDeliveryDate()
+        );
     }
 
     public TrancheDetailDto findById(UUID id) {

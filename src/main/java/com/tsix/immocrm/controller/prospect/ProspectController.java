@@ -47,7 +47,7 @@ public class ProspectController {
 
     @GetMapping
     public PageDto<ProspectListItemDto> findAll(@RequestParam(required = false) String search,
-            @RequestParam(required = false) String type,
+            @RequestParam(required = false) List<String> type,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(prospectService.findAll(search, type, pageable));
     }

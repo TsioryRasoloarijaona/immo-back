@@ -24,6 +24,7 @@ public record ProspectionListItemDto(
         String etape,
         Boolean fermee,
         BigDecimal prix,
-        BigDecimal surface
+        BigDecimal surface,
+        UUID trancheId
 ) {
 }

@@ -117,31 +117,77 @@ public class ProspectionService {
 
     /**
      * {@code GET /api/prospections}. Excludes pré-prospections (CfgProspectId IS NULL AND
-     * CfgCommercialId IS NULL) — those are exposed separately by {@link #findPreProspections()}
+     * CfgCommercialId IS NULL) — those are exposed separately by
+     * {@link #findPreProspections(List, List, List, List, LocalDateTime, LocalDateTime, String, Boolean, Pageable)}
      * to avoid the two endpoints returning overlapping rows.
      *
-     * @param etape      {@code ComProspectionKind.code} filter ("Nature")
-     * @param origine    {@code ComProspectionOrigin.code} filter
-     * @param commercial {@code CfgTier.id} (commercial) filter
+     * @param etapes     {@code ComProspectionKind.code} filter ("Nature") — OR-match, repeated
+     *                   query param, 0/1/2+ values behave like {@code DossierService.findAll}'s
+     *                   {@code statuts}. See {@code instructions/filtres-avances.md}.
+     * @param origines   {@code ComProspectionOrigin.code} filter — same OR-match convention.
+     * @param commerciaux {@code CfgTier.id} (commercial) filter — same OR-match convention.
+     * @param trancheIds {@code CfgTranche.id} filter ({@code ComProspection.stkHierarchy} — the
+     *                   tranche visée), OR-match. Unlike Dossier, this is a direct FK on
+     *                   {@code ComProspection}, no EXISTS subquery needed.
+     * @param dateDebut  inclusive lower bound on {@code docDate} (only date field exposed by
+     *                   {@link ProspectionListItemDto} today).
+     * @param dateFin    inclusive upper bound on {@code docDate}.
      * @param search     free-text match on code/prospect name/temp contact fields
      * @param ouvertes   when true, only non-closed (IsClosed = false) prospections
      */
-    public Page<ProspectionListItemDto> findAll(String etape, String origine, UUID commercial, String search,
-                                                 Boolean ouvertes, Pageable pageable) {
-        Specification<ComProspection> spec = (root, query, cb) -> {
+    public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
+            List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
+            Boolean ouvertes, Pageable pageable) {
+        Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
+                search, ouvertes)
+                .and((root, query, cb) -> cb.or(
+                        cb.isNotNull(root.get("cfgProspect")),
+                        cb.isNotNull(root.get("cfgCommercial"))
+                ));
+        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
+    }
+
+    /**
+     * {@code GET /api/pre-prospections}: CfgProspectId IS NULL AND CfgCommercialId IS NULL. Same
+     * filter set as {@link #findAll} — see {@code instructions/filtres-avances.md} point 5.
+     */
+    public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes, Pageable pageable) {
+        Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
+                search, ouvertes)
+                .and((root, query, cb) -> cb.and(
+                        cb.isNull(root.get("cfgProspect")),
+                        cb.isNull(root.get("cfgCommercial"))
+                ));
+        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
+    }
+
+    /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
+    private static Specification<ComProspection> buildSpec(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes) {
+        return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            predicates.add(cb.or(
-                    cb.isNotNull(root.get("cfgProspect")),
-                    cb.isNotNull(root.get("cfgCommercial"))
-            ));
-            if (StringUtils.hasText(etape)) {
-                predicates.add(cb.equal(cb.lower(root.get("comProspectionKind").get("code")), etape.toLowerCase()));
+            if (etapes != null && !etapes.isEmpty()) {
+                List<String> etapesLower = etapes.stream().map(String::toLowerCase).toList();
+                predicates.add(cb.lower(root.get("comProspectionKind").get("code")).in(etapesLower));
             }
-            if (StringUtils.hasText(origine)) {
-                predicates.add(cb.equal(cb.lower(root.get("comProspectionOrigin").get("code")), origine.toLowerCase()));
+            if (origines != null && !origines.isEmpty()) {
+                List<String> originesLower = origines.stream().map(String::toLowerCase).toList();
+                predicates.add(cb.lower(root.get("comProspectionOrigin").get("code")).in(originesLower));
             }
-            if (commercial != null) {
-                predicates.add(cb.equal(root.get("cfgCommercial").get("id"), commercial));
+            if (commerciaux != null && !commerciaux.isEmpty()) {
+                predicates.add(root.get("cfgCommercial").get("id").in(commerciaux));
+            }
+            if (trancheIds != null && !trancheIds.isEmpty()) {
+                predicates.add(root.get("stkHierarchy").get("id").in(trancheIds));
+            }
+            if (dateDebut != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), dateDebut));
+            }
+            if (dateFin != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("docDate"), dateFin));
             }
             if (StringUtils.hasText(search)) {
                 String pattern = "%" + search.toLowerCase() + "%";
@@ -157,13 +203,6 @@ public class ProspectionService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
-    }
-
-    /** {@code GET /api/pre-prospections}: CfgProspectId IS NULL AND CfgCommercialId IS NULL. */
-    public Page<ProspectionListItemDto> findPreProspections(Pageable pageable) {
-        return prospectionRepository.findByCfgProspectIsNullAndCfgCommercialIsNull(pageable)
-                .map(ProspectionService::toListItem);
     }
 
     public ProspectionDetailDto findById(UUID id) {
@@ -414,7 +453,8 @@ public class ProspectionService {
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
                 p.getPrice(),
-                p.getArea()
+                p.getArea(),
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null
         );
     }
 

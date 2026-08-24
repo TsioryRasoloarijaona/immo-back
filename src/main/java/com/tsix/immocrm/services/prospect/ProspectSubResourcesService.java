@@ -185,7 +185,8 @@ public class ProspectSubResourcesService {
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
                 p.getPrice(),
-                p.getArea()
+                p.getArea(),
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null
         );
     }
 
@@ -200,7 +201,8 @@ public class ProspectSubResourcesService {
                 f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
                 nomTier(f.getCfgCommercial()),
                 f.getPrice(),
-                f.getTotalToPay()
+                f.getTotalToPay(),
+                f.getAdvanceDate()
         );
     }
 

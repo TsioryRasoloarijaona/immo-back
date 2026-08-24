@@ -1,5 +1,7 @@
 package com.tsix.immocrm.controller.auth;
 
+import com.tsix.immocrm.dto.auth.CreerEmployeRequest;
+import com.tsix.immocrm.dto.auth.CreerEmployeResponse;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
 import com.tsix.immocrm.services.auth.UtilisateurAdminService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -7,9 +9,13 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,5 +53,29 @@ public class UtilisateurAdminController {
     public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(
             @Parameter(description = "Id de l'AdmUser à réinitialiser.") @PathVariable UUID admUserId) {
         return utilisateurAdminService.reinitialiserMotDePasse(admUserId);
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('Administrateur')")
+    @Operation(
+            summary = "Crée un nouvel employé",
+            description = "Crée en une seule opération la fiche personne (CfgTier), le compte de "
+                    + "connexion (AdmUser) qui lui est lié, les rôles demandés (AdmUserRole), et "
+                    + "génère un mot de passe temporaire renvoyé une seule fois dans la réponse "
+                    + "(à communiquer par un canal hors-bande — jamais stocké en clair). Le "
+                    + "compte devra changer ce mot de passe et compléter son profil à sa première "
+                    + "connexion (mustChangePassword=true, profileCompleted=false — voir "
+                    + "GET /api/mon-compte). Réservé au rôle Administrateur."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Employé créé."),
+            @ApiResponse(responseCode = "400", description = "Champ requis manquant, ou "
+                    + "typeEmployeCode/rôle référençant un code inconnu en base."),
+            @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
+            @ApiResponse(responseCode = "409", description = "L'identifiant demandé est déjà utilisé "
+                    + "par un autre compte.")
+    })
+    public ResponseEntity<CreerEmployeResponse> creerEmploye(@Valid @RequestBody CreerEmployeRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(utilisateurAdminService.creerEmploye(request));
     }
 }

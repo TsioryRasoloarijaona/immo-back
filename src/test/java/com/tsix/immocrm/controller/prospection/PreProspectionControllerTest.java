@@ -2,8 +2,10 @@ package com.tsix.immocrm.controller.prospection;
 
 import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,39 @@ class PreProspectionControllerTest {
 
     @Autowired
     private CfgTierRepository tierRepository;
+
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+
+    @Test
+    void findAll_filterByTrancheId_appliesToPreProspectionsToo() throws Exception {
+        CfgTranche trancheA = new CfgTranche();
+        trancheA.setId(UUID.randomUUID());
+        trancheA.setCode("TR-PRE-FILTER-A");
+        trancheRepository.save(trancheA);
+
+        CfgTranche trancheB = new CfgTranche();
+        trancheB.setId(UUID.randomUUID());
+        trancheB.setCode("TR-PRE-FILTER-B");
+        trancheRepository.save(trancheB);
+
+        ComProspection preA = new ComProspection();
+        preA.setId(UUID.randomUUID());
+        preA.setCode("PRE-TRANCHE-A");
+        preA.setStkHierarchy(trancheA);
+        prospectionRepository.save(preA);
+
+        ComProspection preB = new ComProspection();
+        preB.setId(UUID.randomUUID());
+        preB.setCode("PRE-TRANCHE-B");
+        preB.setStkHierarchy(trancheB);
+        prospectionRepository.save(preB);
+
+        mockMvc.perform(get("/api/pre-prospections").param("trancheId", trancheA.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + preA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + preB.getId() + "')]").doesNotExist());
+    }
 
     @Test
     void findAll_returnsUnassignedProspection() throws Exception {

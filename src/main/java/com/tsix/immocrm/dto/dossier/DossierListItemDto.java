@@ -21,6 +21,14 @@ public record DossierListItemDto(
         UUID commercialId,
         String commercialNom,
         BigDecimal prix,
-        BigDecimal totalAPayer
+        BigDecimal totalAPayer,
+        /**
+         * Jalon "Concrétisation" ({@code ComFolder.advanceDate}) — exposé en plus de
+         * {@code dateDocument} (qui sert de proxy pour "Date de réservation", voir
+         * {@code ChampDateDossier}) pour le filtre par période, point 3 de
+         * {@code instructions/filtres-avances.md}. Null tant que le dossier n'a pas atteint ce
+         * statut.
+         */
+        LocalDateTime dateConcretisation
 ) {
 }
