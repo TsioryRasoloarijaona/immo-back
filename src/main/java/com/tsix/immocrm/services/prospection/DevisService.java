@@ -21,8 +21,10 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,6 +32,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -100,6 +103,44 @@ public class DevisService {
         String prefixe = sequence.getSeqPrefix() != null ? sequence.getSeqPrefix() : "";
         String suffixe = sequence.getSeqSuffix() != null ? sequence.getSeqSuffix() : "";
         return prefixe + anneeFormatee + separateur + numero + suffixe;
+    }
+
+    /**
+     * {@code GET /api/devis} — liste globale des offres tous prospections confondues, symétrique
+     * de {@code GET /api/dossiers} (vs {@code GET /api/clients/{id}/dossiers} déjà existant pour
+     * une seule prospection: {@link #findByProspection}). Mêmes conventions de filtre que
+     * {@code DossierService.findAll}: {@code trancheId} répétable (OR), {@code search} en
+     * LIKE insensible à la casse sur le code de l'offre.
+     *
+     * @param search      recherche libre sur {@code StlQuote.code}
+     * @param trancheIds  {@code CfgTranche.id} — répétable, matche si l'offre porte une de ces
+     *                    tranches
+     * @param commercial  {@code CfgTier.id} (cfgCommercial) — filtre exact, une seule valeur
+     * @param dateDebut   borne inférieure (incluse) sur {@code docDate}
+     * @param dateFin     borne supérieure (incluse) sur {@code docDate}
+     */
+    public Page<DevisDto> findAll(String search, List<UUID> trancheIds, UUID commercial,
+                                   LocalDateTime dateDebut, LocalDateTime dateFin, Pageable pageable) {
+        Specification<StlQuote> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(search)) {
+                predicates.add(cb.like(cb.lower(root.get("code")), "%" + search.toLowerCase() + "%"));
+            }
+            if (trancheIds != null && !trancheIds.isEmpty()) {
+                predicates.add(root.get("cfgTranche").get("id").in(trancheIds));
+            }
+            if (commercial != null) {
+                predicates.add(cb.equal(root.get("cfgCommercial").get("id"), commercial));
+            }
+            if (dateDebut != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), dateDebut));
+            }
+            if (dateFin != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("docDate"), dateFin));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        return quoteRepository.findAll(spec, pageable).map(DevisService::toDto);
     }
 
     public Page<DevisDto> findByProspection(UUID prospectionId, Pageable pageable) {
@@ -393,10 +434,13 @@ public class DevisService {
     private static DevisDto toDto(StlQuote q) {
         StkItem article = q.getStkItem();
         CfgTranche tranche = q.getCfgTranche();
+        ComProspection prospection = q.getComProspection();
         return new DevisDto(
                 q.getId(),
                 q.getCode(),
                 q.getDocDate(),
+                prospection != null ? prospection.getId() : null,
+                prospection != null ? prospection.getCode() : null,
                 tranche != null ? tranche.getId() : null,
                 tranche != null ? tranche.getCode() : null,
                 tranche != null ? tranche.getDescription() : null,

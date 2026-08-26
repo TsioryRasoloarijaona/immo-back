@@ -1,6 +1,7 @@
 package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -8,6 +9,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
@@ -66,6 +68,9 @@ class DevisTest {
 
     @Autowired
     private StkVocationRepository stkVocationRepository;
+
+    @Autowired
+    private CfgTierRepository tierRepository;
 
     private CfgTranche creerTranche(String code) {
         CfgProject project = new CfgProject();
@@ -362,5 +367,95 @@ class DevisTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(anneeCourante + "/" + String.format("%05d", premierNumero + 1)));
+    }
+
+    /** {@code GET /api/devis} — liste globale, symétrique de {@code GET /api/dossiers}. */
+    @Test
+    void findAllDevis_listeGlobale_toutesProspectionsConfondues_avecProspectionIdEtCode() throws Exception {
+        ComProspection prospectionA = new ComProspection();
+        prospectionA.setId(UUID.randomUUID());
+        prospectionA.setCode("PSN-DEVIS-10-A");
+        prospectionRepository.save(prospectionA);
+
+        ComProspection prospectionB = new ComProspection();
+        prospectionB.setId(UUID.randomUUID());
+        prospectionB.setCode("PSN-DEVIS-10-B");
+        prospectionRepository.save(prospectionB);
+
+        CfgTranche tranche = creerTranche("TR-DEVIS-10");
+
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospectionA.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":100000}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospectionB.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":200000}"))
+                .andExpect(status().isOk());
+
+        // Liste globale (/api/devis, pas /api/prospections/{id}/devis) : les deux offres, malgré
+        // des prospections différentes, avec prospectionId/prospectionCode renseignés pour
+        // chacune (colonne "Prospection" côté frontend).
+        mockMvc.perform(get("/api/devis"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.prospectionId=='" + prospectionA.getId() + "')].prospectionCode")
+                        .value("PSN-DEVIS-10-A"))
+                .andExpect(jsonPath("$.content[?(@.prospectionId=='" + prospectionB.getId() + "')].prospectionCode")
+                        .value("PSN-DEVIS-10-B"));
+    }
+
+    /**
+     * Filtres trancheId (répétable) et commercial (unique) sur {@code GET /api/devis}, plus
+     * sommePrixVenteTTCPage: la somme des prixVenteTTC des offres réellement renvoyées dans la
+     * page (pas un total plein-filtre indépendant de la pagination).
+     */
+    @Test
+    void findAllDevis_filtreParTrancheIdEtCommercial_etSommePageCourante() throws Exception {
+        CfgTier commercial = new CfgTier();
+        commercial.setId(UUID.randomUUID());
+        commercial.setCode("COM-DEVIS-11");
+        commercial.setLastName("Commercial 11");
+        tierRepository.save(commercial);
+
+        CfgTier autreCommercial = new CfgTier();
+        autreCommercial.setId(UUID.randomUUID());
+        autreCommercial.setCode("COM-DEVIS-11-AUTRE");
+        autreCommercial.setLastName("Autre commercial");
+        tierRepository.save(autreCommercial);
+
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-DEVIS-11");
+        prospectionRepository.save(prospection);
+
+        CfgTranche trancheCiblee = creerTranche("TR-DEVIS-11-A");
+        CfgTranche autreTranche = creerTranche("TR-DEVIS-11-B");
+
+        // Offre attendue: bonne tranche + bon commercial, prix 100 000.
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + trancheCiblee.getId() + "\",\"commercialId\":\""
+                                + commercial.getId() + "\",\"prix\":100000}"))
+                .andExpect(status().isOk());
+        // Écartée par le filtre trancheId.
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + autreTranche.getId() + "\",\"commercialId\":\""
+                                + commercial.getId() + "\",\"prix\":999999}"))
+                .andExpect(status().isOk());
+        // Écartée par le filtre commercial.
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + trancheCiblee.getId() + "\",\"commercialId\":\""
+                                + autreCommercial.getId() + "\",\"prix\":888888}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/devis")
+                        .param("trancheId", trancheCiblee.getId().toString())
+                        .param("commercial", commercial.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].montants.prixVenteTTC").value(100000))
+                .andExpect(jsonPath("$.sommePrixVenteTTCPage").value(100000));
     }
 }
