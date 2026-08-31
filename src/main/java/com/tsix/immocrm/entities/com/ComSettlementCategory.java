@@ -56,6 +56,21 @@ public class ComSettlementCategory {
     @Column(name = "IsSaleAutoFinancment")
     private Boolean isSaleAutoFinancment;
 
+    // NOT the same as isCredit above (a generic accounting credit/debit flag, unrelated here) —
+    // this is the "Crédit" (bank loan) bucket of the Fiche Dossier de Vente MONTANTS box, part of
+    // the IsSale* family alongside isSaleExpense/isSaleAdvance/isSaleAutoFinancment/... below.
+    @Column(name = "IsSaleCredit")
+    private Boolean isSaleCredit;
+
+    @Column(name = "IsSaleModification")
+    private Boolean isSaleModification;
+
+    @Column(name = "IsSalePenality")
+    private Boolean isSalePenality;
+
+    @Column(name = "IsSaleResiliation")
+    private Boolean isSaleResiliation;
+
     @Column(name = "IsSyndic")
     private Boolean isSyndic;
 

@@ -33,11 +33,14 @@ public class ActeReservationDocxRenderer {
             addHeader(document, data);
             blank(document);
 
+            String entreprise = vide(data.entrepriseNom());
+
             addSection(document, "1-");
-            addBody(document, "Le réservataire s'engage par la présente à acquérir auprès de la société ADMOD le "
-                    + "bien ci-après désigné, il s'engage ainsi à payer le prix selon les modalités ci-dessous. Le "
-                    + "présent contrat de réservation ne peut en aucun cas valoir contrat de vente, ce dernier est "
-                    + "à signer pardevant notaire.");
+            addBody(document, "Le réservataire s'engage par la présente à acquérir auprès de la société " + entreprise
+                    + " le bien ci-après désigné, il s'engage ainsi à payer le prix selon les modalités ci-dessous. Le "
+                    + "présent contrat de réservation ne peut en aucun cas valoir contrat de vente, ce dernier est à "
+                    + "signer par-devant notaire après " + (data.estTerrain() ? "" : "achèvement des travaux et ")
+                    + "éclatement des titres fonciers.");
             blank(document);
 
             addSection(document, "2- DÉSIGNATION");
@@ -65,8 +68,8 @@ public class ActeReservationDocxRenderer {
 
             addSection(document, "6- CONDITIONS SUSPENSIVES");
             addBody(document, "En cas de fausse déclaration ou de non-respect des conditions du présent acte, la "
-                    + "société ADMOD se réserve le droit de considérer la présente réservation comme résiliée et "
-                    + "retiendra sur le montant de l'acquisition une indemnité contractuelle de "
+                    + "société " + entreprise + " se réserve le droit de considérer la présente réservation comme "
+                    + "résiliée et retiendra sur le montant de l'acquisition une indemnité contractuelle de "
                     + pourcentage(data.penaliteResiliationPct()) + " du prix de vente global TTC.");
             blank(document);
 
@@ -77,22 +80,25 @@ public class ActeReservationDocxRenderer {
                     + " - Client* : " + pourcentage(data.transfertClientPct()) + " du prix de vente.");
             blank(document);
 
-            addSection(document, "8- SERVICE APRES VENTE - ASSURANCE - SYNDIC");
-            addBody(document, savText(data));
+            if (!data.estTerrain()) {
+                addSection(document, "8- SERVICE APRES VENTE - ASSURANCE - SYNDIC");
+                addBody(document, savText(data));
+                blank(document);
+            }
+            int n = data.estTerrain() ? 8 : 9;
+
+            addSection(document, n + "- PROTECTION DES DONNEES PERSONNELLES");
+            addBody(document, entreprise + " (Groupe AYAD Developpement) s'engage à ce que la collecte et le "
+                    + "traitement d'informations personnelles soient effectués conformément à la loi n°09-08 du 18 "
+                    + "février 2009 relative à la protection des personnes physiques.");
             blank(document);
 
-            addSection(document, "9- PROTECTION DES DONNEES PERSONNELLES");
-            addBody(document, "ADMOD (Groupe AYAD Developpement) s'engage à ce que la collecte et le traitement "
-                    + "d'informations personnelles soient effectués conformément à la loi n°09-08 du 18 février "
-                    + "2009 relative à la protection des personnes physiques.");
-            blank(document);
-
-            addSection(document, "10- ELECTION DE DOMICILE");
+            addSection(document, (n + 1) + "- ELECTION DE DOMICILE");
             addBody(document, "Le réservataire fait élection de domicile en son lieu respectif sus indiqué et doit "
-                    + "aviser la société ADMOD de tout changement d'adresse postale.");
+                    + "aviser la société " + entreprise + " de tout changement d'adresse postale.");
             blank(document);
 
-            addSection(document, "11- ATTRIBUTION DE COMPÉTENCE");
+            addSection(document, (n + 2) + "- ATTRIBUTION DE COMPÉTENCE");
             addBody(document, "Toute contestation doit être réglée à l'amiable, à défaut compétence est donnée aux "
                     + "Tribunaux de " + vide(data.tribunalCompetent()) + ".");
             blank(document);
@@ -112,7 +118,7 @@ public class ActeReservationDocxRenderer {
 
             XWPFParagraph societe = document.createParagraph();
             XWPFRun societeLabel = societe.createRun();
-            societeLabel.setText("Pour la société ADMOD");
+            societeLabel.setText("Pour la société " + entreprise);
             societeLabel.setBold(true);
             societeLabel.addBreak();
             societeLabel.setText(vide(data.signataireNom()));
@@ -174,9 +180,11 @@ public class ActeReservationDocxRenderer {
             sb.append(", ").append(data.projetAdresse());
         }
         sb.append(", consistant en un ").append(vide(data.articleCategorie()))
-                .append(" portant le numéro ").append(vide(data.articleCode()))
-                .append(", situé au ").append(vide(data.etage())).append(" de l'Immeuble ").append(vide(data.immeubleCode()))
-                .append(", d'une superficie de ").append(surface(data.superficie())).append(" m²");
+                .append(" portant le numéro ").append(vide(data.articleCode()));
+        if (!data.estTerrain()) {
+            sb.append(", situé au ").append(vide(data.etage())).append(" de l'Immeuble ").append(vide(data.immeubleCode()));
+        }
+        sb.append(", d'une superficie de ").append(surface(data.superficie())).append(" m²");
         for (SousArticle sous : data.sousArticles()) {
             sb.append(" et un ").append(vide(sous.typeLabel()));
             if (sous.superficie() != null) {

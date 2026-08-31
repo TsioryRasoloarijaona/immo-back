@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.EntitesJuridiquesActives;
 import com.tsix.immocrm.dto.patrimoine.ProjetDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetListItemDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
@@ -27,8 +28,13 @@ public class ProjetService {
         this.trancheRepository = trancheRepository;
     }
 
+    /**
+     * {@code GET /api/projets}: restreint aux entités juridiques réellement en exploitation, voir
+     * {@link EntitesJuridiquesActives}.
+     */
     public Page<ProjetListItemDto> findAll(Pageable pageable) {
-        return projectRepository.findAll(pageable).map(ProjetService::toListItem);
+        return projectRepository.findByCfgCompany_CodeIn(EntitesJuridiquesActives.CODES, pageable)
+                .map(ProjetService::toListItem);
     }
 
     public ProjetDetailDto findById(UUID id) {

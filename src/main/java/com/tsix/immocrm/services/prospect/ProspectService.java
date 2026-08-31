@@ -50,6 +50,17 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ProspectService {
 
+    /**
+     * Codes {@code CfgTierType} qui définissent un "prospect" dans Omran — confirmé sur données
+     * réelles: {@code CfgTierType.Code = "PRO"} porte 13 567 tiers (contre seulement 13 avec
+     * {@code CfgTier.IsProspect = true}, un flag app-only quasi jamais renseigné côté legacy) et
+     * {@code "PRORNT"} ("PROSPECT LOCATION") 4 de plus — cohérent avec les ~13 730 tiers
+     * distincts réellement liés à une {@code ComProspection}. {@link #findAll} filtre dessus par
+     * défaut; {@link #createEntity} y défaut le type d'un nouveau prospect si non précisé.
+     */
+    private static final List<String> CODES_TYPE_PROSPECT = List.of("pro", "prornt");
+    private static final String CODE_TYPE_PROSPECT_PAR_DEFAUT = "PRO";
+
     private final CfgTierRepository tierRepository;
     private final CfgTierTypeRepository tierTypeRepository;
     private final CfgTierKindRepository tierKindRepository;
@@ -95,14 +106,22 @@ public class ProspectService {
     /**
      * @param search free-text match on code/nom/prenom/raisonSociale/email
      * @param types  {@code CfgTierType.code} filter — OR-match, repeated query param
-     *               ({@code ?type=a&type=b}), same convention as
-     *               {@code DossierService.findAll}'s {@code statuts}: 0 values means no filter, 1
-     *               value behaves exactly like the pre-multi-select single-value filter.
+     *               ({@code ?type=a&type=b}). When provided, replaces the default "is a
+     *               prospect" restriction entirely (the caller is deliberately narrowing to
+     *               specific type codes). When absent, defaults to {@link #CODES_TYPE_PROSPECT}
+     *               — same classification Omran itself uses ({@code CfgTierType.Code = "PRO"},
+     *               confirmed on real data: 13 567 tiers, vs. only 13 with the app-only
+     *               {@code CfgTier.IsProspect} flag this endpoint filtered on before).
      */
     public Page<ProspectListItemDto> findAll(String search, List<String> types, Pageable pageable) {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            predicates.add(cb.isTrue(root.get("isProspect")));
+            if (types != null && !types.isEmpty()) {
+                List<String> typesLower = types.stream().map(String::toLowerCase).toList();
+                predicates.add(cb.lower(root.get("cfgTierType").get("code")).in(typesLower));
+            } else {
+                predicates.add(cb.lower(root.get("cfgTierType").get("code")).in(CODES_TYPE_PROSPECT));
+            }
             if (StringUtils.hasText(search)) {
                 String pattern = "%" + search.toLowerCase() + "%";
                 predicates.add(cb.or(
@@ -112,10 +131,6 @@ public class ProspectService {
                         cb.like(cb.lower(root.get("socialReason")), pattern),
                         cb.like(cb.lower(root.get("eMail")), pattern)
                 ));
-            }
-            if (types != null && !types.isEmpty()) {
-                List<String> typesLower = types.stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("cfgTierType").get("code")).in(typesLower));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -155,8 +170,30 @@ public class ProspectService {
                 request.typeResidenceId(), request.regimeMatrimonialId(), request.professionId(), request.salaireId(),
                 request.employeur(), request.anciennete(), request.filsDe(), request.etDe(), request.adresse2(),
                 request.adresse3(), request.pieceIdentite());
+        // Sans typeId explicite, défaut sur CfgTierType "PRO" — le type sur lequel GET
+        // /api/prospects filtre désormais par défaut (voir CODES_TYPE_PROSPECT). Sans ça, un
+        // prospect créé sans typeId n'apparaîtrait plus dans sa propre liste.
+        if (request.typeId() == null) {
+            tier.setCfgTierType(resolveTypeProspectParDefaut());
+        }
 
         return tierRepository.save(tier);
+    }
+
+    /**
+     * Type "PRO" par défaut des nouveaux prospects créés sans {@code typeId} explicite.
+     * Auto-répare si la ligne de référence venait à manquer (ex. base de test fraîche) plutôt que
+     * de bloquer toute création de prospect — même convention que
+     * {@code DossierService.genererCodeDossier}.
+     */
+    private CfgTierType resolveTypeProspectParDefaut() {
+        return tierTypeRepository.findByCode(CODE_TYPE_PROSPECT_PAR_DEFAUT).orElseGet(() -> {
+            CfgTierType type = new CfgTierType();
+            type.setId(UUID.randomUUID());
+            type.setCode(CODE_TYPE_PROSPECT_PAR_DEFAUT);
+            type.setDescription("PROSPECT");
+            return tierTypeRepository.save(type);
+        });
     }
 
     @Transactional
@@ -278,6 +315,15 @@ public class ProspectService {
             if (pieceIdentite.lieuDelivrance() != null) tier.setIDPlace(pieceIdentite.lieuDelivrance());
             if (pieceIdentite.valideJusquau() != null) tier.setIDValidateDate(pieceIdentite.valideJusquau());
             if (pieceIdentite.lieuValidite() != null) tier.setIDValidatePlace(pieceIdentite.lieuValidite());
+        }
+        // CfgTier.Description est le champ d'affichage canonique côté legacy (lu directement par
+        // les rapports/vues SQL et les templates Stimulsoft, ex. ComSaleFicheTropPercu.yes) —
+        // confirmé en base que ce n'était jamais renseigné à la création/mise à jour via cette
+        // API (contrairement aux données legacy), ce qui le laissait vide même quand
+        // prenom/nom/raisonSociale étaient fournis. Recalculé à chaque fois plutôt que seulement
+        // à la création, pour rester en phase si le nom change ensuite via PATCH.
+        if (prenom != null || nom != null || raisonSociale != null) {
+            tier.setDescription(com.tsix.immocrm.utils.TierNomFormatter.nom(tier));
         }
     }
 

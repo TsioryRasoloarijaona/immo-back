@@ -1,7 +1,9 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkFloor;
@@ -11,8 +13,10 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkBuildingRepository;
 import com.tsix.immocrm.repositories.stk.StkFloorRepository;
@@ -23,6 +27,8 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import org.junit.jupiter.api.Test;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -67,6 +73,10 @@ class FicheReservationTest {
     @Autowired
     private CfgProjectRepository projectRepository;
     @Autowired
+    private CfgTrancheRepository trancheRepository;
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+    @Autowired
     private CfgTierRepository tierRepository;
     @Autowired
     private ComFolderRepository folderRepository;
@@ -105,13 +115,29 @@ class FicheReservationTest {
         floor.setDescription("Rez de chaussée");
         floorRepository.save(floor);
 
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        company.setCode("CIE-FR-" + suffix);
+        company.setDescription("MAYLINE");
+        companyRepository.save(company);
+
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-FR-" + suffix);
         project.setDescription("AYAD PRIVATE FERME BRETONE");
         project.setAddress("62 Impasse Abderrahim Bouabid");
         project.setCity("Casablanca");
+        project.setCfgCompany(company);
         projectRepository.save(project);
+
+        // FicheReservationService reads the project via the article's tranche
+        // (StkHierarchyId -> CfgTranche.CfgProjectId) — StkItem.CfgProjectId is never populated
+        // in real data (see the service's javadoc comment).
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-FR-" + suffix);
+        tranche.setCfgProject(project);
+        trancheRepository.save(tranche);
 
         StkItem article = new StkItem();
         article.setId(UUID.randomUUID());
@@ -124,6 +150,7 @@ class FicheReservationTest {
         article.setStkBuilding(building);
         article.setStkFloor(floor);
         article.setCfgProject(project);
+        article.setStkHierarchy(tranche);
         itemRepository.save(article);
 
         CfgTier client = new CfgTier();
@@ -195,6 +222,21 @@ class FicheReservationTest {
         // DOCX is a ZIP archive — starts with the "PK" local file header signature.
         assertThat(docx[0]).isEqualTo((byte) 'P');
         assertThat(docx[1]).isEqualTo((byte) 'K');
+    }
+
+    @Test
+    void getFicheReservation_pdf_usesProjectCompanyNotHardcoded() throws Exception {
+        UUID dossierId = setUpDossier("CIE");
+
+        byte[] pdf = mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-reservation", dossierId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text;
+        try (PdfReader reader = new PdfReader(pdf)) {
+            text = new PdfTextExtractor(reader).getTextFromPage(1);
+        }
+        assertThat(text).contains("SOCIETE MAYLINE").doesNotContain("ADMOD");
     }
 
     @Test

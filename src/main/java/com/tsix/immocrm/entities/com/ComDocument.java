@@ -95,6 +95,15 @@ public class ComDocument {
     @Column(name = "PaymentAuthorizationDate")
     private LocalDateTime paymentAuthorizationDate;
 
+    // Compte destinataire du versement — confirmé colonne réelle (INFORMATION_SCHEMA), mais quasi
+    // jamais renseigné en données réelles (2 lignes sur toute la base) contrairement à son
+    // équivalent StlSettlement.StlAccountId (76% renseigné) — c'est ce dernier qui alimente le RIB
+    // sur l'Autorisation d'Encaissement (voir AutorisationVersementService), pas ce champ-ci.
+    // Laissé mappé (colonne réelle) même si non lu ailleurs pour l'instant.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StlAccountId")
+    private com.tsix.immocrm.entities.stl.StlAccount stlAccount;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgDebtCollectorId")
     private CfgTier cfgDebtCollector;

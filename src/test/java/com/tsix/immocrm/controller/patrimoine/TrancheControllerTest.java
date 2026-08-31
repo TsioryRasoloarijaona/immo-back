@@ -1,7 +1,9 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,18 @@ class TrancheControllerTest {
 
     @Autowired
     private CfgTrancheRepository trancheRepository;
+
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+
+    /** Entité juridique active, voir com.tsix.immocrm.domain.EntitesJuridiquesActives. */
+    private CfgCompany newActiveCompany() {
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        company.setCode("ADMOD");
+        company.setDescription("ADMOD");
+        return companyRepository.save(company);
+    }
 
     @Test
     void findById_returnsDetailWithPenaltiesAndDelays() throws Exception {
@@ -71,6 +85,7 @@ class TrancheControllerTest {
         CfgProject projetA = new CfgProject();
         projetA.setId(UUID.randomUUID());
         projetA.setCode("PRJ-TR-FLAT-A");
+        projetA.setCfgCompany(newActiveCompany());
         projectRepository.save(projetA);
 
         CfgProject projetB = new CfgProject();

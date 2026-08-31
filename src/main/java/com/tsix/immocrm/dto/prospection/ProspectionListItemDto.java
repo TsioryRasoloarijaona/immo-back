@@ -25,6 +25,10 @@ public record ProspectionListItemDto(
         Boolean fermee,
         BigDecimal prix,
         BigDecimal surface,
-        UUID trancheId
+        UUID trancheId,
+        // -- Libellé de la tranche principale (CfgTranche.Code/Description), pour affichage sans
+        // second appel à GET /api/tranches/{trancheId}.
+        String trancheCode,
+        String trancheDescription
 ) {
 }

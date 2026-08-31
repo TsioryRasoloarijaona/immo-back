@@ -61,6 +61,13 @@ public class SecurityConfig {
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Générateurs de documents (PDF/Word) ouverts sans authentification pour
+                        // permettre les tests manuels — TEMPORAIRE, à retirer avant mise en prod
+                        // (voir SESSION_MEMORY.md). Ne couvre que les endpoints de génération, pas
+                        // le reste de /api/dossiers ou /api/prospections.
+                        .requestMatchers("/api/dossiers/*/documents/**").permitAll()
+                        .requestMatchers("/api/prospections/*/documents/**").permitAll()
+                        .requestMatchers("/api/prospections/*/devis/*/document").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(onboardingGateFilter, JwtAuthenticationFilter.class);

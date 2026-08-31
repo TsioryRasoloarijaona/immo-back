@@ -531,4 +531,14 @@ public class StkItem {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkFloorId")
     private StkFloor stkFloor;
+
+    /** Physical nature (e.g. "TER" for terrain/land) — see {@link StkKind}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkKindId")
+    private StkKind stkKind;
+
+    /** "Type Présentation" (legacy "Articles" grid) — see {@link StkPresentationType}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkPresentationTypeId")
+    private StkPresentationType stkPresentationType;
 }

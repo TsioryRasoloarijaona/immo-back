@@ -2,7 +2,10 @@ package com.tsix.immocrm.entities.adm;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -22,15 +25,17 @@ import java.util.UUID;
  * <p><b>Linkage confirmed against real data</b>: there is no declared foreign key from this
  * table to anything (verified via {@code sp_help} — "Aucune clé étrangère ne fait référence à
  * la table 'AdmAttachedFile'"). The legacy app instead reuses {@code CategoryId} as a generic
- * polymorphic parent reference: for Dossier attachments, {@code CategoryId = ComFolder.PKey}
- * (confirmed: 745 rows match exactly, all carrying a {@code Category} label starting with
- * "Dossier de vente"). This table also stores attachments for other object types (e.g.
- * {@code Category} "Yes.Stl.Debit.Invoice"), so {@code CategoryId} is NOT scoped to
- * {@code ComFolder} alone — always filter by it together with the "Dossier de vente" prefix
- * when querying, which {@link com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository}
- * does not currently enforce (acceptable since a UUID collision with a differently-typed
- * object's PKey is astronomically unlikely, consistent with how {@code StrHistory}/
- * {@code AdmWebHistorics}' own {@code ObjectId} columns are used elsewhere in this codebase).
+ * polymorphic parent reference: for Dossier attachments, {@code CategoryId = ComFolder.PKey}.
+ * This table also stores attachments for other object types, so {@code CategoryId} is NOT
+ * scoped to {@code ComFolder} alone in the abstract — but real data disproved the original
+ * assumption that Dossier attachments all carry a {@code Category} starting with "Dossier de
+ * vente": a real dossier was found with 5 of its 6 attachments categorized
+ * "Yes.Com.Sales.Sale" (chèques, contrats...) instead, so
+ * {@link com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository#findByDossierId}
+ * now matches on {@code CategoryId} alone, with no {@code Category} prefix filter — acceptable
+ * since a UUID collision with a differently-typed object's PKey is astronomically unlikely,
+ * consistent with how {@code StrHistory}/{@code AdmWebHistorics}' own {@code ObjectId} columns
+ * are used elsewhere in this codebase.
  */
 @Getter
 @Setter
@@ -58,6 +63,11 @@ public class AdmAttachedFileSummary {
 
     @Column(name = "CategoryId")
     private UUID categoryId;
+
+    /** Type de document (ex. "PIECE D'IDENTITE", "CONTRAT"...) — voir {@link AdmAttachedFileType}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmAttachedFileTypeId")
+    private AdmAttachedFileType type;
 
     @Column(name = "UserCreateDateTime")
     private LocalDateTime userCreateDateTime;

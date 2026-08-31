@@ -1,7 +1,9 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,9 @@ class ProjetControllerTest {
 
     @Autowired
     private CfgTrancheRepository trancheRepository;
+
+    @Autowired
+    private CfgCompanyRepository companyRepository;
 
     @Test
     void findAll_returnsCreatedProjet() throws Exception {
@@ -118,11 +123,20 @@ class ProjetControllerTest {
                 .andExpect(jsonPath("$.content", hasSize(5)));
     }
 
-    private static CfgProject newProject(String code, String description) {
+    private CfgProject newProject(String code, String description) {
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        // GET /api/projets ne renvoie que les entités juridiques actives, voir
+        // com.tsix.immocrm.domain.EntitesJuridiquesActives.
+        company.setCode("ADMOD");
+        company.setDescription("ADMOD");
+        companyRepository.save(company);
+
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode(code);
         project.setDescription(description);
+        project.setCfgCompany(company);
         return project;
     }
 }

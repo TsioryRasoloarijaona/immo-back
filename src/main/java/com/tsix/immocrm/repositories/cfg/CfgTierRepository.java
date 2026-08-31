@@ -26,4 +26,10 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
             + "OR right(replace(replace(replace(replace(replace(replace(coalesce(t.phone2, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone "
             + "OR right(replace(replace(replace(replace(replace(replace(coalesce(t.mobile, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone")
     List<CfgTier> findByNormalizedPhone(@Param("normalizedPhone") String normalizedPhone);
+
+    /**
+     * {@code GET /api/referentiels/banques} — {@code CfgTier} filtré sur {@code CfgTierType.Code}
+     * ("BAN", confirmé sur données réelles : 21 tiers) pour peupler {@code CreerReglementRequest.banqueId}.
+     */
+    List<CfgTier> findByCfgTierType_CodeOrderByDescriptionAsc(String code);
 }

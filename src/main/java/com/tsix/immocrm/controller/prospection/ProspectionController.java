@@ -1,6 +1,7 @@
 package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.AjouterAutreTrancheRequest;
 import com.tsix.immocrm.dto.prospection.AjouterCategorieRequest;
 import com.tsix.immocrm.dto.prospection.AjouterProfilRequest;
@@ -10,9 +11,14 @@ import com.tsix.immocrm.dto.prospection.ArchiverProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ChangerEtapeRequest;
 import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
+import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
+import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.dto.prospection.NdaData;
+import com.tsix.immocrm.dto.prospection.OffreDevisData;
+import com.tsix.immocrm.dto.prospection.ProspectionFicheData;
 import com.tsix.immocrm.dto.prospection.ProspectionAutreTrancheDto;
 import com.tsix.immocrm.dto.prospection.ProspectionCategorieDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
@@ -22,8 +28,14 @@ import com.tsix.immocrm.dto.prospection.ProspectionTypeBienDto;
 import com.tsix.immocrm.dto.prospection.ProspectionVilleDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.services.prospection.DevisService;
+import com.tsix.immocrm.services.prospection.NdaService;
+import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
 import com.tsix.immocrm.services.prospection.ProspectionQualificationService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
+import com.tsix.immocrm.services.prospection.ProspectionFicheService;
+import com.tsix.immocrm.services.prospection.document.NdaPdfRenderer;
+import com.tsix.immocrm.services.prospection.document.OffreDevisPdfRenderer;
+import com.tsix.immocrm.services.prospection.document.ProspectionFichePdfRenderer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,7 +45,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,7 +66,26 @@ import java.util.UUID;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
 @Tag(name = "Prospections", description = "Prospections (ComProspection) — pipeline commercial, "
-        + "qualification, interactions, devis.")
+        + "qualification, interactions, devis.\n\n"
+        + "**Guide d'implémentation front — tranche/article principal vs. \"Autres tranches\"**\n"
+        + "Une prospection porte DEUX notions distinctes de tranche/article, à ne pas confondre "
+        + "côté UI :\n"
+        + "1. **Tranche/article principal** (`ProspectionDetailDto.trancheId`/`articleId`, + leurs "
+        + "`...Code`/`...Description` pour l'affichage) — LE couple sur lequel porte la "
+        + "prospection. Modifié exclusivement via `PATCH /api/prospections/{id}/tranche-principale` "
+        + "(jamais via le PATCH générique `PATCH /api/prospections/{id}`, qui ne touche plus à ces "
+        + "deux champs). Cet endpoint garantit que l'article appartient bien à la tranche fournie "
+        + "(400 sinon) — avant ce garde-fou, un mauvais appel avait déjà pu créer une incohérence "
+        + "réelle en base (article d'une tranche assigné alors que la tranche principale en "
+        + "pointait une autre).\n"
+        + "2. **Autres tranches** (`GET/POST/DELETE /api/prospections/{id}/autres-tranches`, "
+        + "`ComProspectionProject`) — des intérêts SECONDAIRES et indépendants, sur d'autres "
+        + "tranches/articles que la tranche principale (ex. le prospect est aussi intéressé par un "
+        + "autre programme). N'affecte jamais `trancheId`/`articleId` de la prospection. Chaque "
+        + "entrée porte elle aussi `trancheDescription`/`articleDescription` pour l'affichage.\n"
+        + "**Côté front** : le champ \"Tranche\"/\"Article\" principal du formulaire de "
+        + "qualification doit appeler l'endpoint (1) ; l'onglet \"Autres tranches\" doit appeler "
+        + "l'endpoint (2). Ce sont deux actions utilisateur différentes, jamais interchangeables.")
 @RestController
 @RequestMapping("/api/prospections")
 public class ProspectionController {
@@ -60,13 +93,31 @@ public class ProspectionController {
     private final ProspectionService prospectionService;
     private final ProspectionQualificationService qualificationService;
     private final DevisService devisService;
+    private final OffreDevisDocumentService offreDevisDocumentService;
+    private final OffreDevisPdfRenderer offreDevisPdfRenderer;
+    private final NdaService ndaService;
+    private final NdaPdfRenderer ndaPdfRenderer;
+    private final ProspectionFicheService prospectionFicheService;
+    private final ProspectionFichePdfRenderer prospectionFichePdfRenderer;
 
     public ProspectionController(ProspectionService prospectionService,
                                   ProspectionQualificationService qualificationService,
-                                  DevisService devisService) {
+                                  DevisService devisService,
+                                  OffreDevisDocumentService offreDevisDocumentService,
+                                  OffreDevisPdfRenderer offreDevisPdfRenderer,
+                                  NdaService ndaService,
+                                  NdaPdfRenderer ndaPdfRenderer,
+                                  ProspectionFicheService prospectionFicheService,
+                                  ProspectionFichePdfRenderer prospectionFichePdfRenderer) {
         this.prospectionService = prospectionService;
         this.qualificationService = qualificationService;
         this.devisService = devisService;
+        this.offreDevisDocumentService = offreDevisDocumentService;
+        this.offreDevisPdfRenderer = offreDevisPdfRenderer;
+        this.ndaService = ndaService;
+        this.ndaPdfRenderer = ndaPdfRenderer;
+        this.prospectionFicheService = prospectionFicheService;
+        this.prospectionFichePdfRenderer = prospectionFichePdfRenderer;
     }
 
     @GetMapping
@@ -110,9 +161,91 @@ public class ProspectionController {
         return prospectionService.findById(id);
     }
 
+    @PostMapping
+    @Operation(
+            summary = "Crée une prospection qualifiée pour un prospect existant",
+            description = "instructions/from_front.md demande #9 — le point d'entrée du bouton "
+                    + "\"Nouvelle prospection\", pour le cas où le prospect existe déjà (créé au "
+                    + "préalable via `POST /api/prospects`, déjà câblé côté front). `prospectId` "
+                    + "est **obligatoire** ; tous les autres champs sont optionnels et suivent la "
+                    + "même sémantique que `PATCH /api/prospections/{id}` (mise à jour uniquement "
+                    + "des champs fournis). `code` est toujours généré serveur (compteur "
+                    + "`AdmSequence` \"Prospection\", format \"AA/NNNNN\"), jamais fourni par le "
+                    + "client. `commercialId` peut être fourni directement ici pour obtenir une "
+                    + "prospection immédiatement complète en un seul appel — sinon "
+                    + "`POST /api/prospections/{id}/transformer` peut l'assigner ensuite. "
+                    + "`trancheId`/`articleId` suivent la même validation croisée que "
+                    + "`PATCH .../tranche-principale` (l'article doit appartenir à la tranche "
+                    + "fournie). Pour un lead brut/non identifié (walk-in, appel entrant sans "
+                    + "prospect connu), voir plutôt le flux pré-prospection "
+                    + "(`GET /api/pre-prospections` + `POST .../creer-prospect` + "
+                    + "`POST .../transformer`) — non couvert par cet endpoint."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Prospection créée."),
+            @ApiResponse(responseCode = "400", description = "`prospectId` manquant, ou un id "
+                    + "fourni (prospect/commercial/tranche/article/origine/...) est introuvable, "
+                    + "ou l'article fourni n'appartient pas à la tranche fournie.")
+    })
+    public ResponseEntity<ProspectionDetailDto> creerProspection(@RequestBody CreerProspectionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerProspection(request));
+    }
+
+    @GetMapping("/{id}/historique")
+    @Operation(
+            summary = "Historique complet du parcours d'une prospection",
+            description = "Piste d'audit paginée (plus récent en premier) des transitions "
+                    + "pré-prospect → prospect → prospection tracées par cette API : \"Prospect "
+                    + "créé et lié\" (POST /api/pre-prospections/{id}/creer-prospect) et "
+                    + "\"Transformée en prospection\" (POST /api/prospections/{id}/transformer). "
+                    + "Comble une lacune constatée sur données réelles : Omran ne trace nulle part "
+                    + "ces deux transitions (ComProspection.UserUpdateDateTime reste toujours NULL "
+                    + "même sur des lignes déjà transformées, la même ligne étant mutée en place). "
+                    + "La date de création du pré-prospect reste disponible séparément via "
+                    + "ProspectionDetailDto.dateDocument (pas dupliquée ici). Le stade \"Dossier de "
+                    + "vente\" a son propre historique, voir GET /api/dossiers/{id}/historique."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "404", description = "Prospection introuvable.")
+    })
+    public PageDto<HistoriqueDto> historique(@PathVariable UUID id,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+        return PageDto.of(prospectionService.historique(id, pageable));
+    }
+
     @PatchMapping("/{id}")
+    @Operation(
+            summary = "Modifie les champs de qualification d'une prospection",
+            description = "Mise à jour partielle (`null` = inchangé) : origine, vocation, budget, "
+                    + "notes... **Ne modifie plus la tranche/l'article principal** — utiliser "
+                    + "`PATCH /api/prospections/{id}/tranche-principale` pour ça (voir le guide "
+                    + "dans la description du tag \"Prospections\")."
+    )
     public ProspectionDetailDto modifierProspection(@PathVariable UUID id, @RequestBody ModifierProspectionRequest request) {
         return prospectionService.modifierProspection(id, request);
+    }
+
+    @PatchMapping("/{id}/tranche-principale")
+    @Operation(
+            summary = "Remplace la tranche/l'article principal",
+            description = "Seul endpoint qui modifie `trancheId`/`articleId` d'une prospection. "
+                    + "`trancheId` est obligatoire ; `articleId` est optionnel mais, s'il est "
+                    + "fourni, DOIT appartenir à `trancheId` (l'API renvoie 400 sinon — un article "
+                    + "d'une autre tranche ne peut pas devenir article principal). Si `articleId` "
+                    + "est omis et que l'article actuellement assigné n'appartient plus à la "
+                    + "nouvelle tranche, il est automatiquement désassigné (jamais laissé dans un "
+                    + "état incohérent). Distinct de `POST /api/prospections/{id}/autres-tranches` "
+                    + "(intérêts secondaires, indépendants) — voir le guide sur le tag."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tranche/article principal mis à jour."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` manquant, tranche/article "
+                    + "introuvable, ou l'article fourni n'appartient pas à la tranche fournie."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public ProspectionDetailDto modifierTranchePrincipale(@PathVariable UUID id,
+            @RequestBody ModifierTranchePrincipaleRequest request) {
+        return prospectionService.modifierTranchePrincipale(id, request);
     }
 
     @PostMapping("/{id}/transformer")
@@ -238,11 +371,29 @@ public class ProspectionController {
     }
 
     @GetMapping("/{id}/autres-tranches")
+    @Operation(
+            summary = "Liste les \"autres tranches\" (intérêts secondaires)",
+            description = "Indépendant de la tranche/l'article principal (`ProspectionDetailDto."
+                    + "trancheId`/`articleId`) — voir le guide dans la description du tag "
+                    + "\"Prospections\" pour la distinction."
+    )
     public List<ProspectionAutreTrancheDto> getAutresTranches(@PathVariable UUID id) {
         return qualificationService.autresTranches(id);
     }
 
     @PostMapping("/{id}/autres-tranches")
+    @Operation(
+            summary = "Ajoute un intérêt secondaire sur une autre tranche",
+            description = "N'affecte jamais la tranche/l'article principal — utiliser "
+                    + "`PATCH /api/prospections/{id}/tranche-principale` pour ça. `articleId`, "
+                    + "s'il est fourni, doit appartenir à `trancheId` (400 sinon)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Intérêt secondaire ajouté."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` manquant/introuvable, ou "
+                    + "l'article fourni n'appartient pas à la tranche fournie."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
     public ProspectionAutreTrancheDto ajouterAutreTranche(@PathVariable UUID id, @RequestBody AjouterAutreTrancheRequest request) {
         return qualificationService.ajouterAutreTranche(id, request);
     }
@@ -256,13 +407,126 @@ public class ProspectionController {
     // -- GAP-07 (low priority): devis --
 
     @GetMapping("/{id}/devis")
+    @Operation(
+            summary = "Liste les offres (devis) d'une prospection",
+            description = "Chaque offre inclut son détail HT/TTC complet (voir `montants`), "
+                    + "reproduisant l'onglet \"Montants\" du formulaire Offre legacy."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page d'offres (peut être vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
     public PageDto<DevisDto> getDevis(@PathVariable UUID id,
                                        @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(devisService.findByProspection(id, pageable));
     }
 
+    @GetMapping("/{id}/devis/{devisId}")
+    @Operation(
+            summary = "Détail d'une offre (devis)",
+            description = "Détail complet d'une offre, y compris le HT/TTC de l'onglet "
+                    + "\"Montants\" (`montants`)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "L'offre."),
+            @ApiResponse(responseCode = "404", description = "Aucune offre avec cet id sur cette prospection.")
+    })
+    public DevisDto getDevisById(@PathVariable UUID id, @PathVariable UUID devisId) {
+        return devisService.findById(id, devisId);
+    }
+
     @PostMapping("/{id}/devis")
+    @Operation(
+            summary = "Crée une offre (devis) sur une prospection",
+            description = "Si `articleId` est fourni, les montants HT/TTC/TVA/prix au m² sont "
+                    + "calculés à partir du prix commercial de l'article (`ComSalePrice(HT)`, "
+                    + "`Vat`) et, s'ils sont fournis, des `sousArticleIds` — voir `CreerDevisRequest` "
+                    + "pour le détail du calcul et des remplacements possibles (`prix`, "
+                    + "`remisePercent`). Sans `articleId`, l'offre est \"libre\": `prix` devient "
+                    + "directement le prix de vente TTC, sans ventilation HT/m²/sous-articles."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Offre créée."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` manquant/introuvable, "
+                    + "`prix` manquant alors qu'aucun `articleId` n'est fourni, ou un id "
+                    + "(article/sous-article/prospect/commercial/mode de paiement) est introuvable."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
     public DevisDto creerDevis(@PathVariable UUID id, @RequestBody CreerDevisRequest request) {
         return devisService.creerDevis(id, request);
+    }
+
+    @GetMapping("/{id}/devis/{devisId}/document")
+    @Operation(
+            summary = "Génère la \"Fiche Offre vente\" (PDF) d'une offre",
+            description = "Reproduit exactement le formulaire Offre legacy (entête, onglet "
+                    + "\"Montants\" HT/TTC, tableau des sous-articles avec leur propre remise) — "
+                    + "voir `instructions/templates/priceOffer/OFFRE DE PRIX.pdf`. Le tableau "
+                    + "\"SOUS ARTICLES\" n'apparaît que si l'offre a été créée avec des "
+                    + "`sousArticleIds`."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Le PDF de la fiche offre vente."),
+            @ApiResponse(responseCode = "404", description = "Aucune offre avec cet id sur cette prospection.")
+    })
+    public ResponseEntity<byte[]> getDevisDocument(@PathVariable UUID id, @PathVariable UUID devisId) {
+        OffreDevisData data = offreDevisDocumentService.collect(id, devisId);
+        byte[] pdf = offreDevisPdfRenderer.render(data);
+        String nomFichier = "offre-" + (data.code() != null ? data.code().replace('/', '-') : devisId) + ".pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(nomFichier).build().toString())
+                .body(pdf);
+    }
+
+    @GetMapping("/{id}/documents/nda")
+    @Operation(
+            summary = "Génère la \"NDA AYAD PRIVATE\" (PDF) du prospect de la prospection",
+            description = "Formulaire \"Expression of Interest Form / Non-Disclosure Agreement\" "
+                    + "(en anglais, reproduisant le formulaire legacy tel quel) — état civil et "
+                    + "coordonnées du prospect lié à la prospection (`ComProspection.cfgProspect`). "
+                    + "L'en-tête/pied de page AYAD Private est fixe (même contenu quel que soit le "
+                    + "projet visé par la prospection — le NDA se signe en amont du choix d'un "
+                    + "programme)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF généré."),
+            @ApiResponse(responseCode = "404", description = "Prospection introuvable.")
+    })
+    public ResponseEntity<byte[]> getNda(@PathVariable UUID id) {
+        NdaData data = ndaService.collect(id);
+        byte[] pdf = ndaPdfRenderer.render(data);
+        String nomFichier = "nda-" + id + ".pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(nomFichier).build().toString())
+                .body(pdf);
+    }
+
+    @GetMapping("/{id}/documents/fiche")
+    @Operation(
+            summary = "Génère la \"Fiche Prospection\" (PDF)",
+            description = "Modélisé sur le template legacy \"FICHE\" (prospection) — récapitulatif "
+                    + "imprimable reprenant les mêmes champs que `GET /api/prospections/{id}` "
+                    + "(entête, budget/superficie recherchés, financement, alerte, notes) plus les "
+                    + "15 dernières actions journalisées (`GET /api/prospections/{id}/interactions`). "
+                    + "La section \"PROFIL\" (catégorie/type/profil de prospection) du template "
+                    + "legacy n'est pas reproduite ici — hors périmètre de cette itération."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF généré."),
+            @ApiResponse(responseCode = "404", description = "Prospection introuvable.")
+    })
+    public ResponseEntity<byte[]> getFiche(@PathVariable UUID id) {
+        ProspectionFicheData data = prospectionFicheService.collect(id);
+        byte[] pdf = prospectionFichePdfRenderer.render(data);
+        String nomFichier = "fiche-prospection-" + (data.code() != null ? data.code().replace('/', '-') : id) + ".pdf";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(nomFichier).build().toString())
+                .body(pdf);
     }
 }

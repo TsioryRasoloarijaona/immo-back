@@ -2,10 +2,12 @@ package com.tsix.immocrm.controller.auth;
 
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.adm.AdmUserRole;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
+import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,6 +53,9 @@ class UtilisateurAdminControllerTest {
 
     @Autowired
     private AdmRoleRepository roleRepository;
+
+    @Autowired
+    private AdmUserRoleRepository userRoleRepository;
 
     private CfgTierKind newTierKind(String code) {
         CfgTierKind kind = new CfgTierKind();
@@ -207,6 +213,65 @@ class UtilisateurAdminControllerTest {
                 UUID.randomUUID());
 
         mockMvc.perform(post("/api/utilisateurs").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "Administrateur")
+    void findAll_returnsUserWithDetailsAndRoles() throws Exception {
+        String username = "test.admin-list." + UUID.randomUUID();
+        AdmUser user = newUser(username);
+        user.setDescription("Jean Rakoto");
+        user.setEmail("jean.rakoto@example.com");
+        user.setMobile("0600000001");
+        userRepository.save(user);
+
+        AdmRole role = newRole("Comptabilite-" + UUID.randomUUID());
+        AdmUserRole userRole = new AdmUserRole();
+        userRole.setId(UUID.randomUUID());
+        userRole.setAdmUser(user);
+        userRole.setAdmRole(role);
+        userRoleRepository.save(userRole);
+
+        AppUserCredential credential = new AppUserCredential();
+        credential.setId(UUID.randomUUID());
+        credential.setAdmUser(user);
+        credential.setPasswordHash(passwordEncoder.encode("Passw0rd123"));
+        credential.setMustChangePassword(true);
+        credential.setProfileCompleted(false);
+        credential.setTokenVersion(0);
+        credential.setUserCreateDateTime(LocalDateTime.now());
+        credentialRepository.save(credential);
+
+        mockMvc.perform(get("/api/utilisateurs").param("search", username))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value(username))
+                .andExpect(jsonPath("$.content[0].email").value("jean.rakoto@example.com"))
+                .andExpect(jsonPath("$.content[0].disabled").value(false))
+                .andExpect(jsonPath("$.content[0].roles[0]").value(role.getCode()))
+                .andExpect(jsonPath("$.content[0].compteWebInitialise").value(true))
+                .andExpect(jsonPath("$.content[0].mustChangePassword").value(true))
+                .andExpect(jsonPath("$.content[0].profileCompleted").value(false));
+    }
+
+    @Test
+    @WithMockUser(roles = "Administrateur")
+    void findAll_userWithNoCredentialYet_reportsCompteWebInitialiseFalse() throws Exception {
+        String username = "test.admin-list.nocred." + UUID.randomUUID();
+        newUser(username);
+
+        mockMvc.perform(get("/api/utilisateurs").param("search", username))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].compteWebInitialise").value(false))
+                .andExpect(jsonPath("$.content[0].mustChangePassword").value(false))
+                .andExpect(jsonPath("$.content[0].roles").isEmpty());
+    }
+
+    @Test
+    @WithMockUser // default role USER — not Administrateur
+    void findAll_withoutAdminRole_returns403() throws Exception {
+        mockMvc.perform(get("/api/utilisateurs"))
                 .andExpect(status().isForbidden());
     }
 }

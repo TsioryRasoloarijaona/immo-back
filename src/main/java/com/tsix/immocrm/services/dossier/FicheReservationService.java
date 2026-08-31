@@ -61,6 +61,7 @@ public class FicheReservationService {
                 article != null ? article.getArea() : null,
                 projet != null ? projet.getDescription() : null,
                 projet != null ? projetAdresse(projet) : null,
+                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
                 reservation != null ? reservation.getDescription() : null,
                 reservation != null ? reservation.getAmount() : null,
                 reservation != null && reservation.getTier() != null ? clientNom(reservation.getTier()) : null,

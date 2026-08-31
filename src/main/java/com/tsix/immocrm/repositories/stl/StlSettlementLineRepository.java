@@ -15,6 +15,13 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     BigDecimal sumAmountByComDocumentId(UUID echeanceId);
 
     /**
+     * Sum of a {@code StlSettlement}'s amount already affected to (any) échéance(s) — used by
+     * {@code GET /api/encaissements} to compute "Montant brut restant" ({@code Amount} minus this).
+     */
+    @Query("SELECT COALESCE(SUM(l.amount), 0) FROM StlSettlementLine l WHERE l.stlSettlement.id = :settlementId")
+    BigDecimal sumAmountByStlSettlementId(UUID settlementId);
+
+    /**
      * Per-échéance règlement totals for every échéance of a Dossier, in one round trip.
      * Tuple: [comDocumentId, sommeReglee]. Only échéances with at least one règlement appear.
      */
@@ -58,4 +65,32 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     @Query("SELECT d.comFolder.cfgCustomer.id, COALESCE(SUM(l.amount), 0) FROM StlSettlementLine l JOIN l.comDocument d " +
             "WHERE d.comFolder.cfgCustomer.id IN :clientIds GROUP BY d.comFolder.cfgCustomer.id")
     List<Object[]> sumAmountGroupedByClientId(List<UUID> clientIds);
+
+    /**
+     * Tous les règlements de ce dossier, triés par date de règlement (StlSettlement.docDate)
+     * croissante — c'est le tri utilisé par le tableau "FolderLines" de la Fiche Trop Perçu
+     * legacy (ComSaleFicheTropPercu.yes), contrairement à findByDossierIdOrderByEcheanceDateAsc
+     * qui trie par date d'échéance.
+     */
+    @Query("SELECT l FROM StlSettlementLine l JOIN l.comDocument d " +
+            "WHERE d.comFolder.id = :dossierId " +
+            "ORDER BY l.stlSettlement.docDate ASC")
+    List<StlSettlementLine> findByDossierIdOrderByStlSettlementDocDateAsc(UUID dossierId);
+
+    /**
+     * Historique complet des règlements d'une seule échéance ({@code ComDocument}), plus récent
+     * d'abord — backs {@code GET /api/dossiers/{id}/echeancier/{echeanceId}/reglements}.
+     */
+    List<StlSettlementLine> findByComDocumentIdOrderByStlSettlement_DocDateDesc(UUID echeanceId);
+
+    /**
+     * La/les ligne(s) rattachant un {@code StlSettlement} donné à ce Dossier précis — un même
+     * règlement peut en théorie couvrir plusieurs échéances/dossiers, d'où une liste plutôt qu'un
+     * singleton. Utilisé par {@code RecuReglementService} pour retrouver le montant réglé
+     * spécifique à ce dossier ({@code StlSettlementLine.Amount}) — jamais {@code StlSettlement.Amount}
+     * qui peut couvrir d'autres dossiers.
+     */
+    @Query("SELECT l FROM StlSettlementLine l JOIN l.comDocument d " +
+            "WHERE l.stlSettlement.id = :settlementId AND d.comFolder.id = :dossierId")
+    List<StlSettlementLine> findBySettlementIdAndDossierId(UUID settlementId, UUID dossierId);
 }

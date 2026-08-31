@@ -119,7 +119,9 @@ public class HotlineService {
                 p.getIsClosed(),
                 p.getPrice(),
                 p.getArea(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null
         );
     }
 
@@ -141,10 +143,6 @@ public class HotlineService {
     }
 
     private static String nomTier(CfgTier tier) {
-        if (tier == null) return null;
-        if (StringUtils.hasText(tier.getSocialReason())) return tier.getSocialReason();
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
-        return (prenom + " " + nom).trim();
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

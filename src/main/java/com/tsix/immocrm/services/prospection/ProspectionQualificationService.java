@@ -277,6 +277,10 @@ public class ProspectionQualificationService {
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())
                     .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+            if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                throw new InvalidRequestException(
+                        "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+            }
             link.setStkItem(article);
         }
         return toAutreTrancheDto(projectLinkRepository.save(link));
@@ -293,8 +297,10 @@ public class ProspectionQualificationService {
                 link.getId(),
                 link.getStkHierarchy() != null ? link.getStkHierarchy().getId() : null,
                 link.getStkHierarchy() != null ? link.getStkHierarchy().getCode() : null,
+                link.getStkHierarchy() != null ? link.getStkHierarchy().getDescription() : null,
                 link.getStkItem() != null ? link.getStkItem().getId() : null,
-                link.getStkItem() != null ? link.getStkItem().getCode() : null
+                link.getStkItem() != null ? link.getStkItem().getCode() : null,
+                link.getStkItem() != null ? link.getStkItem().getDescription() : null
         );
     }
 }

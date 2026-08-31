@@ -20,6 +20,9 @@ public record FicheReservationData(
         BigDecimal superficie,
         String projetNom,
         String projetAdresse,
+        /** Legal entity the project is sold under (CfgProject.cfgCompany.description) — never
+         * hardcode a company name in a renderer, it's per-project (e.g. "ADMOD", "MAYLINE"). */
+        String entrepriseNom,
         String modePaiement,
         BigDecimal montant,
         String reglePar,

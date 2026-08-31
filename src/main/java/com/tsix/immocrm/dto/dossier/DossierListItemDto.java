@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.dossier;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -29,6 +31,10 @@ public record DossierListItemDto(
          * {@code instructions/filtres-avances.md}. Null tant que le dossier n'a pas atteint ce
          * statut.
          */
-        LocalDateTime dateConcretisation
+        LocalDateTime dateConcretisation,
+        @Schema(description = "Identifiant de la prospection à l'origine du dossier (ComFolder.ComProspectionId).")
+        UUID prospectionId,
+        @Schema(description = "Code de la prospection à l'origine du dossier — pour le lien cliquable vers la prospection depuis le dossier (`GET /api/prospections/{prospectionId}`).")
+        String prospectionCode
 ) {
 }

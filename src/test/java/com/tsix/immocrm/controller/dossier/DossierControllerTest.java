@@ -231,6 +231,44 @@ class DossierControllerTest {
     }
 
     @Test
+    void findAll_search_matchesClientNomInAdditionToCode() throws Exception {
+        CfgTier client = newTier("CLI-SEARCH-1");
+        client.setLastName("Randrianasolo");
+        tierRepository.save(client);
+
+        ComFolder matching = new ComFolder();
+        matching.setId(UUID.randomUUID());
+        matching.setCode("DOS-SEARCH-MATCH");
+        matching.setStkVocation(vocation);
+        matching.setCfgCustomer(client);
+        folderRepository.save(matching);
+
+        ComFolder other = new ComFolder();
+        other.setId(UUID.randomUUID());
+        other.setCode("DOS-SEARCH-OTHER");
+        other.setStkVocation(vocation);
+        folderRepository.save(other);
+
+        mockMvc.perform(get("/api/dossiers").param("search", "randrian"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + matching.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + other.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_search_stillMatchesCode_forFolderWithoutClient() throws Exception {
+        ComFolder noClient = new ComFolder();
+        noClient.setId(UUID.randomUUID());
+        noClient.setCode("DOS-SEARCH-NOCLIENT");
+        noClient.setStkVocation(vocation);
+        folderRepository.save(noClient);
+
+        mockMvc.perform(get("/api/dossiers").param("search", "search-nocl"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + noClient.getId() + "')]").exists());
+    }
+
+    @Test
     void findAll_filterByPeriode_defaultChampDate_usesDocDate() throws Exception {
         ComFolder inRange = new ComFolder();
         inRange.setId(UUID.randomUUID());

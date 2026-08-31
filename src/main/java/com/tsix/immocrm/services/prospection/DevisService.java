@@ -1,5 +1,7 @@
 package com.tsix.immocrm.services.prospection;
 
+import com.tsix.immocrm.domain.SchemaFinancementCalculator;
+import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
 import com.tsix.immocrm.dto.prospection.MontantsOffreDto;
@@ -18,6 +20,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
@@ -52,11 +55,13 @@ public class DevisService {
     private final CfgTierRepository tierRepository;
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final AdmSequenceRepository sequenceRepository;
+    private final ComSettlementCategoryRepository settlementCategoryRepository;
 
     public DevisService(ComProspectionRepository prospectionRepository, StlQuoteRepository quoteRepository,
                          StlQuoteItemRepository quoteItemRepository, CfgTrancheRepository trancheRepository,
                          StkItemRepository stkItemRepository, CfgTierRepository tierRepository,
-                         ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository) {
+                         ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository,
+                         ComSettlementCategoryRepository settlementCategoryRepository) {
         this.prospectionRepository = prospectionRepository;
         this.quoteRepository = quoteRepository;
         this.quoteItemRepository = quoteItemRepository;
@@ -65,6 +70,7 @@ public class DevisService {
         this.tierRepository = tierRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.sequenceRepository = sequenceRepository;
+        this.settlementCategoryRepository = settlementCategoryRepository;
     }
 
     /**
@@ -140,7 +146,7 @@ public class DevisService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return quoteRepository.findAll(spec, pageable).map(DevisService::toDto);
+        return quoteRepository.findAll(spec, pageable).map(this::toDto);
     }
 
     public Page<DevisDto> findByProspection(UUID prospectionId, Pageable pageable) {
@@ -148,7 +154,7 @@ public class DevisService {
             throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
         }
         return quoteRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId, pageable)
-                .map(DevisService::toDto);
+                .map(this::toDto);
     }
 
     public DevisDto findById(UUID prospectionId, UUID devisId) {
@@ -427,11 +433,12 @@ public class DevisService {
                 q.getUnitCostAfterDiscountHT(), q.getUnitCostAfterDiscount(),
                 q.getItemPriceAfterDiscountHT(), q.getItemPriceAfterDiscount(),
                 q.getUnderItemsPriceAfterDiscountHT(), q.getUnderItemsPriceAfterDiscount(),
-                q.getPriceAfterDiscountHT(), q.getPriceAfterDiscount()
+                q.getPriceAfterDiscountHT(), q.getPriceAfterDiscount(),
+                q.getCommissionRate()
         );
     }
 
-    private static DevisDto toDto(StlQuote q) {
+    private DevisDto toDto(StlQuote q) {
         StkItem article = q.getStkItem();
         CfgTranche tranche = q.getCfgTranche();
         ComProspection prospection = q.getComProspection();
@@ -457,15 +464,43 @@ public class DevisService {
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getId() : null,
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getDescription() : null,
                 toMontantsDto(q),
+                calculerSchemaFinancement(q),
                 q.getNotes()
         );
     }
 
+    /**
+     * Plan de financement (AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC) de l'offre, calculé sur son
+     * prix de vente TTC après remise — même règle métier que {@code
+     * DossierService#simulerSchemaFinancement} ({@link SchemaFinancementCalculator}, partagé pour
+     * ne jamais afficher des montants différents entre l'offre et le futur Dossier). Vide si
+     * l'offre n'a pas de prix. La catégorie ({@code ComSettlementCategory}) est résolue via la
+     * vocation de l'article principal quand il y en a un; sans article (offre libre), on ne peut
+     * pas la résoudre et {@code exclureDuPrix} retombe sur la convention observée en base
+     * (seule FRAIS SYNDIC est exclue du TTC soumis à la règle de prix).
+     */
+    List<LigneSchemaFinancementDto> calculerSchemaFinancement(StlQuote q) {
+        BigDecimal prix = q.getPriceAfterDiscount();
+        if (prix == null) {
+            return List.of();
+        }
+        StkItem article = q.getStkItem();
+        UUID vocationId = article != null && article.getStkVocation() != null
+                ? article.getStkVocation().getId() : null;
+
+        return SchemaFinancementCalculator.calculer(q.getCfgTranche(), prix).stream()
+                .map(ligne -> {
+                    Boolean exclureDuPrix = vocationId != null
+                            ? settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
+                                    .map(categorie -> categorie.getExcludeFromPrice())
+                                    .orElse("FRAIS SYNDIC".equals(ligne.categorieCode()))
+                            : "FRAIS SYNDIC".equals(ligne.categorieCode());
+                    return new LigneSchemaFinancementDto(ligne.categorieCode(), ligne.montant(), exclureDuPrix);
+                })
+                .toList();
+    }
+
     private static String nomTier(CfgTier tier) {
-        if (tier == null) return null;
-        if (StringUtils.hasText(tier.getSocialReason())) return tier.getSocialReason();
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
-        return (prenom + " " + nom).trim();
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

@@ -16,8 +16,12 @@ import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
+import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
 import org.junit.jupiter.api.Test;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -72,6 +76,9 @@ class DevisTest {
     @Autowired
     private CfgTierRepository tierRepository;
 
+    @Autowired
+    private StlQuoteRepository quoteRepository;
+
     private CfgTranche creerTranche(String code) {
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
@@ -107,6 +114,43 @@ class DevisTest {
         mockMvc.perform(get("/api/prospections/{id}/devis", prospection.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.trancheId=='" + tranche.getId() + "')]").exists());
+    }
+
+    /**
+     * {@code StlQuote.CommissionRate} — confirmed against the real legacy "Offre de prix"
+     * Stimulsoft template (field "Commission" on the MONTANTS table). Not settable via the
+     * create request yet (no legacy UI equivalent found), but the PDF must surface it when the
+     * value is already present on the row.
+     */
+    @Test
+    void getDevisDocument_avecCommission_afficheLaLigneCommissionDansLePdf() throws Exception {
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-DEVIS-13");
+        prospectionRepository.save(prospection);
+
+        CfgTranche tranche = creerTranche("TR-DEVIS-13");
+
+        String body = "{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":300000,\"notes\":\"Offre initiale\"}";
+        String responseJson = mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        UUID devisId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(responseJson, "$.id").toString());
+
+        StlQuote quote = quoteRepository.findById(devisId).orElseThrow();
+        quote.setCommissionRate(new BigDecimal("0.03"));
+        quoteRepository.save(quote);
+
+        byte[] pdf = mockMvc.perform(get("/api/prospections/{id}/devis/{devisId}/document", prospection.getId(), devisId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text;
+        try (PdfReader reader = new PdfReader(pdf)) {
+            text = new PdfTextExtractor(reader).getTextFromPage(1);
+        }
+        org.assertj.core.api.Assertions.assertThat(text).contains("Commission").contains("3.00");
     }
 
     @Test
@@ -192,6 +236,30 @@ class DevisTest {
                 .andExpect(jsonPath("$.montants.remisePercent").value(10))
                 .andExpect(jsonPath("$.montants.remiseTTC").value(12000))
                 .andExpect(jsonPath("$.montants.prixVenteTTC").value(108000));
+    }
+
+    /**
+     * Quand l'offre a un prix, le "Schéma de financement" (AUTO-FINANCEMENT / AVANCE) doit être
+     * calculé et renvoyé — même règle que {@code POST /api/dossiers/simulation-financement}.
+     */
+    @Test
+    void creerDevis_avecPrix_rajouteLeSchemaDeFinancement() throws Exception {
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-DEVIS-12");
+        prospectionRepository.save(prospection);
+
+        CfgTranche tranche = creerTranche("TR-DEVIS-12");
+        tranche.setAdvancePercent(new BigDecimal("0.300000"));
+        trancheRepository.save(tranche);
+
+        String body = "{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":300000}";
+
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.schemaFinancement[?(@.categorie=='AVANCE')].montant").value(90000.0))
+                .andExpect(jsonPath("$.schemaFinancement[?(@.categorie=='AUTO-FINANCEMENT')].montant").value(210000.0));
     }
 
     @Test

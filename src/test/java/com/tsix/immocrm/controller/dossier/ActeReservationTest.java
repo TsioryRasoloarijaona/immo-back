@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -9,7 +10,9 @@ import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -19,8 +22,11 @@ import com.tsix.immocrm.repositories.stk.StkFloorRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
+import com.tsix.immocrm.repositories.stk.StkKindRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import org.junit.jupiter.api.Test;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -70,8 +76,16 @@ class ActeReservationTest {
     private CfgTierRepository tierRepository;
     @Autowired
     private ComFolderRepository folderRepository;
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+    @Autowired
+    private StkKindRepository kindRepository;
 
     private UUID setUpDossier(String suffix) {
+        return setUpDossier(suffix, false);
+    }
+
+    private UUID setUpDossier(String suffix, boolean terrain) {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
         vocation.setCode("VOC-AR-" + suffix);
@@ -98,11 +112,18 @@ class ActeReservationTest {
         floor.setDescription("Rez de chaussée");
         floorRepository.save(floor);
 
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        company.setCode("CIE-AR-" + suffix);
+        company.setDescription("MAYLINE");
+        companyRepository.save(company);
+
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-AR-" + suffix);
         project.setDescription("AYAD PRIVATE FERME BRETONE");
         project.setCity("Casablanca");
+        project.setCfgCompany(company);
         projectRepository.save(project);
 
         CfgTranche tranche = new CfgTranche();
@@ -113,6 +134,7 @@ class ActeReservationTest {
         tranche.setWarrantyDelay(12);
         tranche.setSyndicAmount(new BigDecimal("700.00"));
         tranche.setSyndicPeriod(24);
+        tranche.setCfgProject(project);
         trancheRepository.save(tranche);
 
         StkItem article = new StkItem();
@@ -127,6 +149,13 @@ class ActeReservationTest {
         article.setStkFloor(floor);
         article.setCfgProject(project);
         article.setStkHierarchy(tranche);
+        if (terrain) {
+            StkKind kind = new StkKind();
+            kind.setId(UUID.randomUUID());
+            kind.setCode("TER");
+            kindRepository.save(kind);
+            article.setStkKind(kind);
+        }
         itemRepository.save(article);
 
         CfgTier client = new CfgTier();
@@ -185,6 +214,45 @@ class ActeReservationTest {
         assertThat(docx).isNotEmpty();
         assertThat(docx[0]).isEqualTo((byte) 'P');
         assertThat(docx[1]).isEqualTo((byte) 'K');
+    }
+
+    @Test
+    void getActeReservation_pdf_usesProjectCompanyNotHardcoded() throws Exception {
+        UUID dossierId = setUpDossier("CIE");
+
+        byte[] pdf = mockMvc.perform(get("/api/dossiers/{id}/documents/acte-reservation", dossierId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text = extractText(pdf);
+        assertThat(text).contains("MAYLINE").doesNotContain("ADMOD");
+    }
+
+    @Test
+    void getActeReservation_pdf_terrainArticle_omitsSavSectionAndFloorMention() throws Exception {
+        UUID dossierId = setUpDossier("TER", true);
+
+        byte[] pdf = mockMvc.perform(get("/api/dossiers/{id}/documents/acte-reservation", dossierId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text = extractText(pdf);
+        assertThat(text).doesNotContain("SERVICE APRES VENTE")
+                .doesNotContain("Rez de chaussée")
+                .contains("8- PROTECTION DES DONNEES PERSONNELLES")
+                .contains("9- ELECTION DE DOMICILE")
+                .contains("10- ATTRIBUTION DE COMPÉTENCE");
+    }
+
+    private static String extractText(byte[] pdf) throws Exception {
+        try (PdfReader reader = new PdfReader(pdf)) {
+            PdfTextExtractor extractor = new PdfTextExtractor(reader);
+            StringBuilder sb = new StringBuilder();
+            for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+                sb.append(extractor.getTextFromPage(page));
+            }
+            return sb.toString();
+        }
     }
 
     @Test

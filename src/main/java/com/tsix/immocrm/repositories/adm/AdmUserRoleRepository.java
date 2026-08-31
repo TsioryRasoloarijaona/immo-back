@@ -10,4 +10,7 @@ public interface AdmUserRoleRepository extends JpaRepository<AdmUserRole, UUID> 
 
     /** All roles assigned to a user — drives the JWT's {@code roles} claim. */
     List<AdmUserRole> findByAdmUserId(UUID admUserId);
+
+    /** Batch variant of {@link #findByAdmUserId} — avoids N+1 when listing several users at once. */
+    List<AdmUserRole> findByAdmUserIdIn(List<UUID> admUserIds);
 }

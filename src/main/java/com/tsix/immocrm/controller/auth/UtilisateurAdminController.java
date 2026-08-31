@@ -3,6 +3,8 @@ package com.tsix.immocrm.controller.auth;
 import com.tsix.immocrm.dto.auth.CreerEmployeRequest;
 import com.tsix.immocrm.dto.auth.CreerEmployeResponse;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
+import com.tsix.immocrm.dto.auth.UtilisateurListItemDto;
+import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.services.auth.UtilisateurAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,16 +12,23 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+
+import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
 @Tag(name = "Utilisateurs (admin)", description = "Actions administratives sur les comptes "
         + "AdmUser — réservées au rôle Administrateur.")
@@ -31,6 +40,31 @@ public class UtilisateurAdminController {
 
     public UtilisateurAdminController(UtilisateurAdminService utilisateurAdminService) {
         this.utilisateurAdminService = utilisateurAdminService;
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('Administrateur')")
+    @Operation(
+            summary = "Liste les comptes utilisateurs",
+            description = "Tous les comptes (AdmUser) avec leurs informations (identifiant, "
+                    + "coordonnées, statut activé/désactivé), la fiche employé (CfgTier) liée "
+                    + "et les rôles (AdmRole) assignés — écran d'administration des comptes. "
+                    + "`search` filtre (insensible à la casse, sous-chaîne) sur "
+                    + "identifiant/description/email. `disabled` filtre sur le statut activé/"
+                    + "désactivé ; absent = tous les comptes. Réservé au rôle Administrateur."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste (éventuellement vide) des comptes."),
+            @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur.")
+    })
+    public PageDto<UtilisateurListItemDto> findAll(
+            @Parameter(description = "Recherche sous-chaîne sur identifiant/description/email.")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Filtre sur le statut désactivé. Absent = tous les comptes.")
+            @RequestParam(required = false) Boolean disabled,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "description", direction = Sort.Direction.ASC)
+            Pageable pageable) {
+        return PageDto.of(utilisateurAdminService.findAll(search, disabled, pageable));
     }
 
     @PostMapping("/{admUserId}/reinitialiser-mot-de-passe")

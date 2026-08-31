@@ -49,7 +49,7 @@ public class FicheReservationPdfRenderer {
 
             document.add(titleBox(data.dossierCode()));
             document.add(spacer());
-            document.add(introParagraph());
+            document.add(introParagraph(data));
             document.add(spacer());
             document.add(fieldsTable(data));
             document.add(spacer());
@@ -101,11 +101,11 @@ public class FicheReservationPdfRenderer {
         return table;
     }
 
-    private static Paragraph introParagraph() {
+    private static Paragraph introParagraph(FicheReservationData data) {
         Paragraph p = new Paragraph(
-                "Nous soussignés, la Société dite « SOCIETE ADMOD (groupe AYAD DEVELOPPEMENT) », société à "
-                        + "Responsabilité limitée, sise à Casablanca, 100 Boulvard Zerktouni, représentées par l'un des "
-                        + "mandataires dûment habilité à cet effet.\n"
+                "Nous soussignés, la Société dite « SOCIETE " + vide(data.entrepriseNom()) + " (groupe AYAD "
+                        + "DEVELOPPEMENT) », société à Responsabilité limitée, sise à Casablanca, 100 Boulvard "
+                        + "Zerktouni, représentées par l'un des mandataires dûment habilité à cet effet.\n"
                         + "Agissant en notre qualité de promoteur immobilier, reconnaissons sous réserve des conditions "
                         + "ci-dessous avoir reçu de :",
                 NORMAL);

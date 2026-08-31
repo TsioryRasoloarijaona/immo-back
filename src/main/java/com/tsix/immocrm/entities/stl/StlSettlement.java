@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.stl;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
@@ -195,5 +196,18 @@ public class StlSettlement {
     @Column(name = "BuySettlementId_old")
     private UUID buysettlementidOld;
 
+    /** "Entité" — l'entité juridique (voir {@code EntitesJuridiquesActives}) sur laquelle le règlement a été saisi. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
 
+    /** "Compte" — le compte bancaire de destination. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StlAccountId")
+    private StlAccount stlAccount;
+
+    /** "Dépôt" — la catégorie de dépôt (FOURNISSEUR/CLIENT/BANQUE). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StlDepositId")
+    private StlDeposit stlDeposit;
 }

@@ -88,6 +88,8 @@ public class ActeReservationService {
                 client != null ? (client.getMobile() != null ? client.getMobile() : client.getPhone()) : null,
                 projet != null ? projet.getDescription() : null,
                 projet != null ? adresse(projet.getAddress(), projet.getAddress2(), projet.getAddress3(), projet.getCity()) : null,
+                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
+                article != null && article.getStkKind() != null && "TER".equalsIgnoreCase(article.getStkKind().getCode()),
                 article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
                 article != null ? article.getCode() : null,
                 article != null && article.getStkBuilding() != null ? article.getStkBuilding().getCode() : null,
@@ -138,14 +140,7 @@ public class ActeReservationService {
     }
 
     private static String nomTier(CfgTier tier) {
-        if (tier == null) return null;
-        if (tier.getDescription() != null && !tier.getDescription().isBlank()) {
-            return tier.getDescription();
-        }
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
-        String full = (prenom + " " + nom).trim();
-        return full.isEmpty() ? null : full;
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 
     private static String adresse(String a1, String a2, String a3, String ville) {

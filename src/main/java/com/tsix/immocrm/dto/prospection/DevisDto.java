@@ -1,8 +1,10 @@
 package com.tsix.immocrm.dto.prospection;
 
+import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -57,6 +59,11 @@ public record DevisDto(
 
         @Schema(description = "Détail HT/TTC complet de l'offre — voir MontantsOffreDto.")
         MontantsOffreDto montants,
+
+        @Schema(description = "Plan de financement (AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC) "
+                + "calculé sur le prix de vente TTC après remise de l'offre, même calcul que "
+                + "POST /api/dossiers/simulation-financement. Vide si l'offre n'a pas de prix.")
+        List<LigneSchemaFinancementDto> schemaFinancement,
 
         String notes
 ) {

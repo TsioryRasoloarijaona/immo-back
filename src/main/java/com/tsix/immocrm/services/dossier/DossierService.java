@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
+import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
@@ -8,7 +9,10 @@ import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
+import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
+import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
+import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -52,14 +56,6 @@ import java.util.UUID;
 @Service
 @Transactional(readOnly = true)
 public class DossierService {
-
-    /**
-     * Fallback advance ratio when the tranche has no {@code AdvancePercent} configured — per
-     * business decision ("l'avance c'est 1/3 par défaut"). Real tranches carry their own
-     * {@code AdvancePercent} (e.g. 0.30 confirmed on tranches APF/ARS), which always wins.
-     */
-    private static final BigDecimal DEFAULT_ADVANCE_PERCENT =
-            BigDecimal.ONE.divide(BigDecimal.valueOf(3), 6, RoundingMode.HALF_UP);
 
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
@@ -155,7 +151,11 @@ public class DossierService {
      *                   {@code instructions/filtres-avances.md} point 3.
      * @param dateDebut  inclusive lower bound on {@code champDate}'s column
      * @param dateFin    inclusive upper bound on {@code champDate}'s column
-     * @param search     free-text match on code
+     * @param search     free-text match on {@code code} OR the linked client's
+     *                   nom/prénom/raison sociale ({@code CfgTier} via {@code ComFolder.cfgCustomer}
+     *                   — LEFT JOIN, so folders without a linked client still match on
+     *                   {@code code} alone). Same OR-across-fields convention as
+     *                   {@code ProspectService.findAll}. See {@code instructions/from_front.md} #6.
      */
     public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
@@ -192,7 +192,15 @@ public class DossierService {
                 }
             }
             if (StringUtils.hasText(search)) {
-                predicates.add(cb.like(cb.lower(root.get("code")), "%" + search.toLowerCase() + "%"));
+                String pattern = "%" + search.toLowerCase() + "%";
+                jakarta.persistence.criteria.Join<ComFolder, CfgTier> client = root.join("cfgCustomer",
+                        jakarta.persistence.criteria.JoinType.LEFT);
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("code")), pattern),
+                        cb.like(cb.lower(client.get("lastName")), pattern),
+                        cb.like(cb.lower(client.get("firstName")), pattern),
+                        cb.like(cb.lower(client.get("socialReason")), pattern)
+                ));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -275,7 +283,6 @@ public class DossierService {
         folder.setCfgCustomer(client);
         folder.setCfgCommercial(prospection.getCfgCommercial());
         folder.setComProspection(prospection);
-        folder.setPrice(request.prix());
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
         // Initial status: confirmed 100% of real dossiers (359/359 with history) start at
@@ -284,6 +291,17 @@ public class DossierService {
         StrStatus statutInitial = strStatusRepository.findByStrConfigEntityIdAndCode(
                 StatutDossier.CONFIG_ENTITY_ID, StatutDossier.RESERVATION.getCode());
         folder.setStrStatus(statutInitial);
+
+        CfgTranche tranche = articles.get(0).getStkHierarchy();
+        if (request.prix() != null) {
+            List<StkItem> annexes = articles.size() > 1 ? articles.subList(1, articles.size()) : List.of();
+            BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
+                    .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
+                    .map(SchemaFinancementCalculator.Ligne::montant)
+                    .findFirst().orElse(BigDecimal.ZERO);
+            appliquerMontants(folder, articles.get(0), annexes, request.prix(), fraisSyndic);
+        }
+
         folder = folderRepository.save(folder);
         if (statutInitial != null) {
             enregistrerHistoriqueStatut(folder, statutInitial, null);
@@ -295,7 +313,7 @@ public class DossierService {
         }
 
         if (request.prix() != null) {
-            genererSchemaFinancement(folder, articles.get(0).getStkHierarchy(), request.prix());
+            genererSchemaFinancement(folder, tranche, request.prix());
         }
 
         List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
@@ -303,55 +321,164 @@ public class DossierService {
     }
 
     /**
-     * Auto-generates the 3-line "Schéma de financement" on Dossier creation — confirmed against
-     * real data (Omran "Schéma de financement" tab):
+     * Calcule et pose la ventilation HT/TTC/remise du dossier à la création — même logique que
+     * {@code DevisService#calculerMontants} (l'onglet "Montants" de l'Offre : prix commercial de
+     * l'article, {@code ComSalePrice(HT)}/{@code Vat}, HT dérivé du taux de TVA), mais avec deux
+     * différences volontaires par rapport à l'Offre :
      * <ul>
-     *   <li>{@code AVANCE} = prix × {@code CfgTranche.AdvancePercent} (e.g. 0.30 on real
-     *       tranches APF/ARS; falls back to 1/3 if the tranche has none configured)</li>
-     *   <li>{@code AUTO-FINANCEMENT} = prix − avance</li>
-     *   <li>{@code FRAIS SYNDIC} = {@code CfgTranche.SyndicAmount} × {@code SyndicPeriod}
-     *       (confirmed: 700.00 × 24 = 16 800.00 matches a real dossier exactly) — only created
-     *       if the tranche has both configured; skipped otherwise (no syndic fee applies)</li>
+     *   <li>Pas de {@code remisePercent} distinct en entrée (le Dossier n'a qu'un seul prix
+     *       négocié) — la remise est donc dérivée de l'écart entre le prix commercial de
+     *       l'article ({@code priceBeforeDiscount}) et {@code prixNegocie} (= {@code CreerDossierRequest.prix},
+     *       devient {@code priceAfterDiscount}), plutôt que fournie explicitement.</li>
+     *   <li>{@code TotalToPay} (exposé sur {@code DossierListItemDto}/{@code DossierDetailDto} et
+     *       agrégé par {@code DashboardService} pour la "valeur du pipeline" — colonne réelle,
+     *       jamais posée avant ce correctif) = {@code priceAfterDiscount} (TTC) + Frais Syndic
+     *       ({@link SchemaFinancementCalculator}, jamais inclus dans le total d'une Offre).</li>
      * </ul>
-     * Each category is looked up by exact {@code Code} scoped to the folder's
-     * {@code StkVocation} (confirmed: AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC all share the same
-     * "VENTE" vocation in real data, and other categories reuse the same boolean flags, so code
-     * text — not the flags — is what disambiguates them). {@code ExcludeFromPrice} on the
-     * generated line mirrors the category's own default (true for FRAIS SYNDIC, confirmed).
+     * {@code annexes} (articles secondaires liés au même dossier, ex. parking/cave) jouent le
+     * rôle des sous-articles côté Offre — leur {@code ComSalePrice(HT)} alimente
+     * {@code underItemsPrice(HT)}.
+     */
+    // Package-private (not private) so DossierMontantsBackfill (one-off migration, src/test) can
+    // reuse this exact logic to fill TotalToPay on legacy dossiers that predate this computation.
+    static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
+                                           BigDecimal prixNegocie, BigDecimal fraisSyndic) {
+        BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
+
+        BigDecimal itemPrice = principal.getComSalePrice() != null ? principal.getComSalePrice() : prixNegocie;
+        BigDecimal itemPriceHT = principal.getComSalePriceHT() != null
+                ? principal.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
+
+        BigDecimal underItemsPrice = BigDecimal.ZERO;
+        BigDecimal underItemsPriceHT = BigDecimal.ZERO;
+        for (StkItem annexe : annexes) {
+            BigDecimal prixAnnexe = annexe.getComSalePrice() != null ? annexe.getComSalePrice() : BigDecimal.ZERO;
+            BigDecimal prixAnnexeHT = annexe.getComSalePriceHT() != null
+                    ? annexe.getComSalePriceHT() : diviserParTaux(prixAnnexe, vatRatio);
+            underItemsPrice = underItemsPrice.add(prixAnnexe);
+            underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
+        }
+
+        BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
+        BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
+
+        BigDecimal priceAfterDiscount = prixNegocie;
+        BigDecimal priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
+        BigDecimal discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
+        BigDecimal discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
+        BigDecimal discountPercent = priceBeforeDiscount.signum() != 0
+                ? discountAmount.multiply(BigDecimal.valueOf(100)).divide(priceBeforeDiscount, 6, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        // Répartit la remise au prorata entre article principal et annexes pour la ventilation
+        // "après remise" — même principe que DevisService#calculerMontants.
+        BigDecimal partPrincipal = priceBeforeDiscountHT.signum() != 0
+                ? itemPriceHT.divide(priceBeforeDiscountHT, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
+        BigDecimal itemPriceAfterHT = itemPriceHT.subtract(discountAmountHT.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal itemPriceAfter = itemPrice.subtract(discountAmount.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal underItemsPriceAfterHT = underItemsPriceHT
+                .subtract(discountAmountHT.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal underItemsPriceAfter = underItemsPrice
+                .subtract(discountAmount.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
+
+        folder.setVATRatio(vatRatio);
+        folder.setItemPrice(itemPrice);
+        folder.setItemPriceHT(itemPriceHT);
+        folder.setUnderItemsPrice(underItemsPrice);
+        folder.setUnderItemsPriceHT(underItemsPriceHT);
+        folder.setPriceBeforeDiscount(priceBeforeDiscount);
+        folder.setPriceBeforeDiscountHT(priceBeforeDiscountHT);
+        folder.setDiscount(discountPercent);
+        folder.setDiscountAmount(discountAmount);
+        folder.setPriceAfterDiscount(priceAfterDiscount);
+        folder.setPriceAfterDiscountHT(priceAfterDiscountHT);
+        folder.setItemPriceAfter(itemPriceAfter);
+        folder.setItemPriceAfterHT(itemPriceAfterHT);
+        folder.setUnderItemsPriceAfter(underItemsPriceAfter);
+        folder.setUnderItemsPriceAfterHT(underItemsPriceAfterHT);
+        folder.setPrice(priceAfterDiscount);
+        folder.setPriceHT(priceAfterDiscountHT);
+
+        BigDecimal syndic = fraisSyndic != null ? fraisSyndic : BigDecimal.ZERO;
+        folder.setTotalToPay(priceAfterDiscount.add(syndic));
+    }
+
+    /** HT = TTC / (1 + taux). Renvoie TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
+    private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
+        if (vatRatio == null || vatRatio.signum() == 0) {
+            return montantTTC;
+        }
+        return montantTTC.divide(BigDecimal.ONE.add(vatRatio), 6, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Auto-generates the "Schéma de financement" on Dossier creation, persisting each line as a
+     * {@code ComDocument} échéance. Each category is looked up by exact {@code Code} scoped to
+     * the folder's {@code StkVocation} (confirmed: AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC all share
+     * the same "VENTE" vocation in real data) — a line whose category doesn't exist for that
+     * vocation is silently skipped (matches the pre-existing behaviour, never blocks creation).
      */
     private void genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
         UUID vocationId = folder.getStkVocation().getId();
-        BigDecimal advancePercent = tranche != null && tranche.getAdvancePercent() != null
-                ? tranche.getAdvancePercent()
-                : DEFAULT_ADVANCE_PERCENT;
-
-        BigDecimal avance = prix.multiply(advancePercent).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal autoFinancement = prix.subtract(avance);
-
-        creerLigneSchema(folder, "AUTO-FINANCEMENT", vocationId, autoFinancement);
-        creerLigneSchema(folder, "AVANCE", vocationId, avance);
-
-        if (tranche != null && tranche.getSyndicAmount() != null && tranche.getSyndicPeriod() != null
-                && tranche.getSyndicPeriod() > 0) {
-            BigDecimal fraisSyndic = tranche.getSyndicAmount()
-                    .multiply(BigDecimal.valueOf(tranche.getSyndicPeriod()))
-                    .setScale(2, RoundingMode.HALF_UP);
-            creerLigneSchema(folder, "FRAIS SYNDIC", vocationId, fraisSyndic);
+        for (SchemaFinancementCalculator.Ligne ligne : SchemaFinancementCalculator.calculer(tranche, prix)) {
+            settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
+                    .ifPresent(categorie -> {
+                        ComDocument document = new ComDocument();
+                        document.setId(UUID.randomUUID());
+                        document.setComFolder(folder);
+                        document.setDocDate(LocalDateTime.now());
+                        document.setAmount(ligne.montant());
+                        document.setComSettlementCategory(categorie);
+                        document.setExcludeFromPrice(categorie.getExcludeFromPrice());
+                        document.setDescription(categorie.getDescription());
+                        documentRepository.save(document);
+                    });
         }
     }
 
-    private void creerLigneSchema(ComFolder folder, String categorieCode, UUID vocationId, BigDecimal montant) {
-        settlementCategoryRepository.findByCodeAndStkVocationId(categorieCode, vocationId).ifPresent(categorie -> {
-            ComDocument document = new ComDocument();
-            document.setId(UUID.randomUUID());
-            document.setComFolder(folder);
-            document.setDocDate(LocalDateTime.now());
-            document.setAmount(montant);
-            document.setComSettlementCategory(categorie);
-            document.setExcludeFromPrice(categorie.getExcludeFromPrice());
-            document.setDescription(categorie.getDescription());
-            documentRepository.save(document);
-        });
+    /**
+     * {@code POST /api/dossiers/simulation-financement}: étape de prévisualisation AVANT création
+     * du dossier — calcule le même "Schéma de financement" que {@link #create} générerait
+     * ({@link SchemaFinancementCalculator#calculer}, la même méthode partagée), mais ne persiste rien (aucun
+     * {@code ComFolder}/{@code ComDocument} créé). Le premier article de {@code articleIds} fait
+     * foi pour la tranche (barème AVANCE/SYNDIC) et la vocation (catégorie d'échéance) — même
+     * convention que {@link #create}. Contrairement à la création réelle, les articles n'ont pas
+     * besoin d'être DISPONIBLE ici : c'est une simulation, rien n'est réservé.
+     */
+    public SchemaFinancementDto simulerSchemaFinancement(SimulerSchemaFinancementRequest request) {
+        if (request.articleIds() == null || request.articleIds().isEmpty()) {
+            throw new InvalidRequestException("articleIds est requis et ne peut pas être vide");
+        }
+        if (request.prix() == null) {
+            throw new InvalidRequestException("prix est requis");
+        }
+
+        StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
+                .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleIds().get(0)));
+        // Valide aussi les articles suivants (mêmes erreurs qu'à la création réelle), même s'ils
+        // n'entrent pas dans le calcul — évite de prévisualiser un schéma pour une sélection
+        // d'articles dont une partie n'existe pas.
+        for (UUID articleId : request.articleIds().subList(1, request.articleIds().size())) {
+            if (!stkItemRepository.existsById(articleId)) {
+                throw new InvalidRequestException("Article introuvable: " + articleId);
+            }
+        }
+
+        UUID vocationId = premierArticle.getStkVocation().getId();
+        CfgTranche tranche = premierArticle.getStkHierarchy();
+
+        List<LigneSchemaFinancementDto> lignes = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
+                .map(ligne -> settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
+                        .map(categorie -> new LigneSchemaFinancementDto(
+                                ligne.categorieCode(), ligne.montant(), categorie.getExcludeFromPrice())))
+                .flatMap(java.util.Optional::stream)
+                .toList();
+
+        BigDecimal totalGeneral = lignes.stream()
+                .map(LigneSchemaFinancementDto::montant)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new SchemaFinancementDto(lignes, totalGeneral);
     }
 
     /**
@@ -563,7 +690,9 @@ public class DossierService {
                 nomTier(f.getCfgCommercial()),
                 f.getPrice(),
                 f.getTotalToPay(),
-                f.getAdvanceDate()
+                f.getAdvanceDate(),
+                f.getComProspection() != null ? f.getComProspection().getId() : null,
+                f.getComProspection() != null ? f.getComProspection().getCode() : null
         );
     }
 
@@ -590,7 +719,9 @@ public class DossierService {
                 f.getTotalToPay(),
                 f.getNotes(),
                 f.getProbabilityOfFinalisation(),
-                f.getComPaymentMethod() != null ? f.getComPaymentMethod().getCode() : null
+                f.getComPaymentMethod() != null ? f.getComPaymentMethod().getCode() : null,
+                f.getComProspection() != null ? f.getComProspection().getId() : null,
+                f.getComProspection() != null ? f.getComProspection().getCode() : null
         );
     }
 
@@ -599,10 +730,6 @@ public class DossierService {
     }
 
     private static String nomTier(CfgTier tier) {
-        if (tier == null) return null;
-        if (StringUtils.hasText(tier.getSocialReason())) return tier.getSocialReason();
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
-        return (prenom + " " + nom).trim();
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

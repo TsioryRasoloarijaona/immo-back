@@ -49,12 +49,15 @@ public class ActeReservationPdfRenderer {
             document.add(headerParagraph(data));
             document.add(spacer());
 
+            String entreprise = vide(data.entrepriseNom());
+
             document.add(section("1-"));
             document.add(bodyParagraph(
-                    "Le réservataire s'engage par la présente à acquérir auprès de la société ADMOD le bien "
+                    "Le réservataire s'engage par la présente à acquérir auprès de la société " + entreprise + " le bien "
                             + "ci-après désigné, il s'engage ainsi à payer le prix selon les modalités ci-dessous.\n"
                             + "Le présent contrat de réservation ne peut en aucun cas valoir contrat de vente, ce "
-                            + "dernier est à signer pardevant notaire."));
+                            + "dernier est à signer par-devant notaire après "
+                            + (data.estTerrain() ? "" : "achèvement des travaux et ") + "éclatement des titres fonciers."));
             document.add(spacer());
 
             document.add(section("2- DÉSIGNATION"));
@@ -84,8 +87,8 @@ public class ActeReservationPdfRenderer {
                             + "Il est bien entendu que le contrat définitif de vente et le compromis de vente devront "
                             + "être signés par devant notaire, au plus tard dans un délai d'un mois suivant la "
                             + "légalisation du contrat de réservation par le réservataire. Tout retard dépassant un "
-                            + "mois après notification donnera à la société ADMOD tout le droit d'annuler la présente "
-                            + "réservation et de disposer du bien réservé sans avoir recours à la justice."));
+                            + "mois après notification donnera à la société " + entreprise + " tout le droit d'annuler "
+                            + "la présente réservation et de disposer du bien réservé sans avoir recours à la justice."));
             document.add(spacer());
 
             document.add(section("6- CONDITIONS SUSPENSIVES"));
@@ -94,10 +97,11 @@ public class ActeReservationPdfRenderer {
                             + "même qu'en cas de non-respect des conditions du présent acte et notamment des délais "
                             + "de paiement, ou en cas de non réalisation de l'acte définitif de vente du fait du "
                             + "réservataire et à défaut d'une régularisation de cette situation après quinze jours à "
-                            + "compter de la notification d'une mise en demeure, la société ADMOD se réserve le droit "
-                            + "de considérer la présente réservation comme résiliée et sans effet tel que prévu par "
-                            + "l'article 260 du DOC. En conséquence, la société ADMOD retiendra sur le montant de "
-                            + "l'acquisition une indemnité contractuelle de " + pourcentage(data.penaliteResiliationPct())
+                            + "compter de la notification d'une mise en demeure, la société " + entreprise + " se "
+                            + "réserve le droit de considérer la présente réservation comme résiliée et sans effet "
+                            + "tel que prévu par l'article 260 du DOC. En conséquence, la société " + entreprise
+                            + " retiendra sur le montant de l'acquisition une indemnité contractuelle de "
+                            + pourcentage(data.penaliteResiliationPct())
                             + " du prix de vente global TTC et restituera le solde au réservataire."));
             document.add(spacer());
 
@@ -111,27 +115,32 @@ public class ActeReservationPdfRenderer {
                             + "descendant, du conjoint ou d'un membre de la famille jusqu'au 3ème degré."));
             document.add(spacer());
 
-            document.add(section("8- SERVICE APRES VENTE - ASSURANCE - SYNDIC"));
-            document.add(bodyParagraph(savParagraph(data)));
-            document.add(spacer());
+            // Land (TER) lots have no keys/syndic to manage — the legacy template drops this
+            // whole section for them and renumbers everything after it down by one.
+            if (!data.estTerrain()) {
+                document.add(section("8- SERVICE APRES VENTE - ASSURANCE - SYNDIC"));
+                document.add(bodyParagraph(savParagraph(data)));
+                document.add(spacer());
+            }
+            int n = data.estTerrain() ? 8 : 9;
 
-            document.add(section("9- PROTECTION DES DONNEES PERSONNELLES"));
+            document.add(section(n + "- PROTECTION DES DONNEES PERSONNELLES"));
             document.add(bodyParagraph(
-                    "ADMOD (Groupe AYAD Developpement) s'engage à ce que la collecte et le traitement "
+                    entreprise + " (Groupe AYAD Developpement) s'engage à ce que la collecte et le traitement "
                             + "d'informations personnelles soient effectués conformément à la loi n°09-08 du 18 "
                             + "février 2009 relative à la protection des personnes physiques à l'égard du traitement "
                             + "des données à caractère personnel. Aucune information personnelle n'est cédée à des "
                             + "tiers."));
             document.add(spacer());
 
-            document.add(section("10- ELECTION DE DOMICILE"));
+            document.add(section((n + 1) + "- ELECTION DE DOMICILE"));
             document.add(bodyParagraph(
                     "Pour l'exécution des présentes et leurs suites, le réservataire fait élection de domicile en "
                             + "son lieu respectif sus indiqué : le réservataire doit sous peine d'inopposabilité, "
-                            + "aviser la société ADMOD de tout changement d'adresse postale."));
+                            + "aviser la société " + entreprise + " de tout changement d'adresse postale."));
             document.add(spacer());
 
-            document.add(section("11- ATTRIBUTION DE COMPÉTENCE"));
+            document.add(section((n + 2) + "- ATTRIBUTION DE COMPÉTENCE"));
             document.add(bodyParagraph(
                     "Toute contestation liée à l'interprétation ou à l'exécution des présentes doit être réglée à "
                             + "l'amiable, à défaut compétence est donnée aux Tribunaux de " + vide(data.tribunalCompetent()) + "."));
@@ -151,7 +160,7 @@ public class ActeReservationPdfRenderer {
             document.add(spacer());
 
             Paragraph signatureSociete = new Paragraph();
-            signatureSociete.add(new Chunk("Pour la société ADMOD", BOLD));
+            signatureSociete.add(new Chunk("Pour la société " + entreprise, BOLD));
             signatureSociete.add(Chunk.NEWLINE);
             signatureSociete.add(new Chunk(vide(data.signataireNom()), NORMAL));
             signatureSociete.add(Chunk.NEWLINE);
@@ -203,9 +212,11 @@ public class ActeReservationPdfRenderer {
             sb.append(", ").append(data.projetAdresse());
         }
         sb.append(", consistant en un ").append(vide(data.articleCategorie()))
-                .append(" portant le numéro ").append(vide(data.articleCode()))
-                .append(", situé au ").append(vide(data.etage())).append(" de l'Immeuble ").append(vide(data.immeubleCode()))
-                .append(", d'une superficie de ").append(surface(data.superficie())).append(" m²");
+                .append(" portant le numéro ").append(vide(data.articleCode()));
+        if (!data.estTerrain()) {
+            sb.append(", situé au ").append(vide(data.etage())).append(" de l'Immeuble ").append(vide(data.immeubleCode()));
+        }
+        sb.append(", d'une superficie de ").append(surface(data.superficie())).append(" m²");
         for (SousArticle sous : data.sousArticles()) {
             sb.append(" et un ").append(vide(sous.typeLabel()));
             if (sous.superficie() != null) {
@@ -247,8 +258,8 @@ public class ActeReservationPdfRenderer {
                 + "durée minimum d'une année et remettre la fiche de visite technique et la synthèse des "
                 + "obligations légalisées.\n");
         if (data.syndicDureeMois() != null) {
-            sb.append("Pour la gestion des parties communes, la société ADMOD s'est chargée d'organiser la gestion "
-                    + "de la copropriété pendant ").append(data.syndicDureeMois())
+            sb.append("Pour la gestion des parties communes, la société ").append(vide(data.entrepriseNom()))
+                    .append(" s'est chargée d'organiser la gestion de la copropriété pendant ").append(data.syndicDureeMois())
                     .append(" mois à partir de la création des titres fonciers.\n");
         }
         if (data.syndicMontantMensuel() != null && data.syndicDureeMois() != null) {

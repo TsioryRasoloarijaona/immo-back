@@ -36,6 +36,23 @@ class ProspectControllerTest {
     @Autowired
     private CfgTierTypeRepository tierTypeRepository;
 
+    private CfgTierType typeProspect;
+
+    /**
+     * {@code GET /api/prospects} filtre désormais sur {@code CfgTierType.Code = "PRO"} (comme
+     * Omran, voir {@code ProspectService.CODES_TYPE_PROSPECT}) — chaque fixture doit donc porter
+     * ce type pour apparaître dans la liste par défaut.
+     */
+    private CfgTierType typeProspect() {
+        if (typeProspect == null) {
+            typeProspect = new CfgTierType();
+            typeProspect.setId(UUID.randomUUID());
+            typeProspect.setCode("PRO");
+            typeProspect = tierTypeRepository.save(typeProspect);
+        }
+        return typeProspect;
+    }
+
     private CfgTier newProspect(String firstName, String lastName, String code) {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
@@ -43,6 +60,7 @@ class ProspectControllerTest {
         tier.setFirstName(firstName);
         tier.setLastName(lastName);
         tier.setIsProspect(true);
+        tier.setCfgTierType(typeProspect());
         return tier;
     }
 
@@ -135,6 +153,41 @@ class ProspectControllerTest {
                 .andExpect(jsonPath("$.prenom").value("Luc"))
                 .andExpect(jsonPath("$.nom").value("Andria"))
                 .andExpect(jsonPath("$.id").exists());
+    }
+
+    /**
+     * Régression : {@code CfgTier.Description} (le champ d'affichage canonique côté legacy — lu
+     * directement par les rapports/templates, ex. {@code ComSaleFicheTropPercu.yes}) n'était
+     * jamais renseigné à la création, contrairement aux données legacy — confirmé en base sur des
+     * dossiers réels (client "Halima Soulb" sans Description). Corrigé dans
+     * {@code ProspectService.applyFields}.
+     */
+    @Test
+    void create_populatesDescriptionColumn() throws Exception {
+        String body = """
+                {"prenom":"Luc","nom":"Andria"}""";
+
+        String response = mockMvc.perform(post("/api/prospects").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(response, "$.id").toString());
+
+        CfgTier saved = tierRepository.findById(id).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(saved.getDescription()).isEqualTo("Luc Andria");
+    }
+
+    @Test
+    void create_raisonSociale_usedAsDescription() throws Exception {
+        String body = """
+                {"raisonSociale":"ACME SARL"}""";
+
+        String response = mockMvc.perform(post("/api/prospects").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(response, "$.id").toString());
+
+        CfgTier saved = tierRepository.findById(id).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(saved.getDescription()).isEqualTo("ACME SARL");
     }
 
     @Test

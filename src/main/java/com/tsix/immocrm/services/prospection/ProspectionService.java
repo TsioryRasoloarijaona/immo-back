@@ -1,11 +1,14 @@
 package com.tsix.immocrm.services.prospection;
 
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
+import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.ArchiverProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ChangerEtapeRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
+import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
+import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
@@ -23,9 +26,12 @@ import com.tsix.immocrm.entities.com.ComProspectionOrigin;
 import com.tsix.immocrm.entities.com.ComProspectionOriginSupport;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
+import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -39,6 +45,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionOriginSupportRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -84,6 +91,8 @@ public class ProspectionService {
     private final ComActionRepository actionRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository stkItemRepository;
+    private final StrHistoryRepository historyRepository;
+    private final AdmSequenceRepository sequenceRepository;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -97,7 +106,9 @@ public class ProspectionService {
                                AdmEventRepository admEventRepository,
                                ComActionRepository actionRepository,
                                CfgTrancheRepository trancheRepository,
-                               StkItemRepository stkItemRepository) {
+                               StkItemRepository stkItemRepository,
+                               StrHistoryRepository historyRepository,
+                               AdmSequenceRepository sequenceRepository) {
         this.prospectionRepository = prospectionRepository;
         this.prospectService = prospectService;
         this.tierRepository = tierRepository;
@@ -113,6 +124,8 @@ public class ProspectionService {
         this.actionRepository = actionRepository;
         this.trancheRepository = trancheRepository;
         this.stkItemRepository = stkItemRepository;
+        this.historyRepository = historyRepository;
+        this.sequenceRepository = sequenceRepository;
     }
 
     /**
@@ -212,6 +225,179 @@ public class ProspectionService {
     }
 
     /**
+     * {@code GET /api/prospections/{id}/historique}: piste d'audit complète du parcours d'un lead
+     * — {@code StrHistory} filtré par {@code ObjectId = prospectionId}, même mécanisme que
+     * {@code GET /api/prospects/{id}/historique} et {@code GET /api/dossiers/{id}/historique}.
+     * Comble une lacune constatée: avant cet endpoint, rien ne traçait les dates de "devenu
+     * prospect" ({@link #creerProspect}) ni "devenu prospection" ({@link #transformer}) — la même
+     * ligne {@code ComProspection} était mutée en place sans horodatage, y compris côté Omran
+     * (confirmé: {@code ComProspection.UserUpdateDateTime} reste toujours {@code NULL} en base
+     * réelle, même sur des lignes déjà transformées). La date de création du pré-prospect reste
+     * disponible via {@code ProspectionDetailDto.dateDocument} (pas de doublon ici, aucun
+     * endpoint ne permettant de créer une {@code ComProspection} pour intercepter cet évènement).
+     * Le stade "Dossier de vente" a son propre historique — voir
+     * {@code GET /api/dossiers/{id}/historique}.
+     */
+    public Page<HistoriqueDto> historique(UUID prospectionId, Pageable pageable) {
+        if (!prospectionRepository.existsById(prospectionId)) {
+            throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
+        }
+        return historyRepository.findByObjectIdOrderByDocDateDesc(prospectionId, pageable)
+                .map(ProspectionService::toHistoriqueDto);
+    }
+
+    private static HistoriqueDto toHistoriqueDto(StrHistory h) {
+        return new HistoriqueDto(
+                h.getId(),
+                h.getDocDate(),
+                h.getDescription(),
+                h.getAdmUserDescription(),
+                h.getStrWorkflowDescription(),
+                h.getStrStatusDescription()
+        );
+    }
+
+    /**
+     * Écrit une ligne {@code StrHistory} pour une transition du parcours pré-prospect → prospect
+     * → prospection, consultable via {@link #historique}. Voir {@link #creerProspect} et
+     * {@link #transformer}.
+     */
+    private void enregistrerHistorique(UUID prospectionId, String description) {
+        StrHistory historique = new StrHistory();
+        historique.setId(UUID.randomUUID());
+        historique.setDocDate(LocalDateTime.now());
+        historique.setObjectId(prospectionId);
+        historique.setDescription(description);
+        historyRepository.save(historique);
+    }
+
+    /**
+     * {@code POST /api/prospections}: creates a fully-qualified prospection in one call, for a
+     * prospect that already exists — see {@link CreerProspectionRequest}'s javadoc for how this
+     * differs from the pré-prospection flow. {@code prospectId} is required; every other field is
+     * optional and validated for existence only when provided, same convention as
+     * {@link #modifierProspection}.
+     */
+    @Transactional
+    public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
+        if (request.prospectId() == null) {
+            throw new InvalidRequestException("prospectId est requis");
+        }
+        CfgTier prospect = tierRepository.findById(request.prospectId())
+                .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
+
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode(genererCodeProspection());
+        prospection.setDocDate(LocalDateTime.now());
+        prospection.setCfgProspect(prospect);
+
+        if (request.commercialId() != null) {
+            CfgTier commercial = tierRepository.findById(request.commercialId())
+                    .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
+            prospection.setCfgCommercial(commercial);
+        }
+        if (request.origineId() != null) {
+            ComProspectionOrigin origine = prospectionOriginRepository.findById(request.origineId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId()));
+            prospection.setComProspectionOrigin(origine);
+        }
+        if (request.origineSupportId() != null) {
+            ComProspectionOriginSupport support = prospectionOriginSupportRepository.findById(request.origineSupportId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId()));
+            prospection.setComProspectionOriginSupport(support);
+        }
+        if (request.vocationId() != null) {
+            StkVocation vocation = vocationRepository.findById(request.vocationId())
+                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId()));
+            prospection.setStkVocation(vocation);
+        }
+        if (request.typeContactId() != null) {
+            ComActionMessageType typeContact = actionMessageTypeRepository.findById(request.typeContactId())
+                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId()));
+            prospection.setComActionMessageType(typeContact);
+        }
+        if (request.actionCommercialeId() != null) {
+            ComAction action = actionRepository.findById(request.actionCommercialeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId()));
+            prospection.setComAction(action);
+        }
+        if (request.etapeId() != null) {
+            ComProspectionKind kind = prospectionKindRepository.findById(request.etapeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId()));
+            prospection.setComProspectionKind(kind);
+        }
+
+        // trancheId/articleId: même validation croisée que modifierTranchePrincipale (l'article
+        // doit appartenir à la tranche fournie) — voir sa doc pour le raisonnement.
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            if (request.articleId() != null) {
+                StkItem article = stkItemRepository.findById(request.articleId())
+                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                    throw new InvalidRequestException(
+                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+                }
+                prospection.setStkItem(article);
+            }
+            prospection.setStkHierarchy(tranche);
+        } else if (request.articleId() != null) {
+            throw new InvalidRequestException("articleId nécessite trancheId");
+        }
+
+        if (request.surface() != null) prospection.setArea(request.surface());
+        if (request.surfaceJusqua() != null) prospection.setAreaTo(request.surfaceJusqua());
+        if (request.prix() != null) prospection.setPrice(request.prix());
+        if (request.prixJusqua() != null) prospection.setPriceTo(request.prixJusqua());
+        if (request.avance() != null) prospection.setAdvanceAmount(request.avance());
+        if (request.financementFondsPropres() != null) prospection.setFundingOwnBase(request.financementFondsPropres());
+        if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
+        if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
+        if (request.ancienClient() != null) prospection.setIsOldCustomer(request.ancienClient());
+        if (request.notes() != null) prospection.setNotes(request.notes());
+
+        prospection = prospectionRepository.save(prospection);
+        enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + nomTier(prospect));
+        return toDetail(prospection);
+    }
+
+    /**
+     * Numbers a new Prospection the same way the legacy app does — confirmed against real data:
+     * {@code AdmSequence} (row {@code Code = "Prospection"}) holds the live counter
+     * ({@code SeqValue = 5932} at time of writing), format
+     * {@code "{année sur 2 chiffres}/{numéro sur 5 chiffres}"} (e.g. "26/05932" — real examples
+     * confirmed on {@code ComProspection.Code}). Same mechanism as
+     * {@code DossierService#genererCodeDossier}, but with no per-project prefix (a single global
+     * counter, no "APF"/"ART"-style prefix on Prospection codes).
+     */
+    private String genererCodeProspection() {
+        AdmSequence sequence = sequenceRepository.findByCode("Prospection").orElseGet(() -> {
+            // Self-heals if the seed row is ever missing (e.g. a fresh test database) — bootstraps
+            // at 0 rather than blocking Prospection creation entirely.
+            AdmSequence nouvelle = new AdmSequence();
+            nouvelle.setId(UUID.randomUUID());
+            nouvelle.setCode("Prospection");
+            nouvelle.setSeqValue(0);
+            nouvelle.setSeqValueNumber(5);
+            nouvelle.setSeqYearNumber(2);
+            nouvelle.setBasedOnSystemYear(true);
+            return nouvelle;
+        });
+        int prochain = (sequence.getSeqValue() != null ? sequence.getSeqValue() : 0) + 1;
+        sequence.setSeqValue(prochain);
+        sequenceRepository.save(sequence);
+
+        int largeurAnnee = sequence.getSeqYearNumber() != null ? sequence.getSeqYearNumber() : 2;
+        int largeurNumero = sequence.getSeqValueNumber() != null ? sequence.getSeqValueNumber() : 5;
+        int annee = LocalDateTime.now().getYear() % (int) Math.pow(10, largeurAnnee);
+        String anneeFormatee = String.format("%0" + largeurAnnee + "d", annee);
+        String numero = String.format("%0" + largeurNumero + "d", prochain);
+        return anneeFormatee + "/" + numero;
+    }
+
+    /**
      * {@code POST /api/pre-prospections/{id}/creer-prospect}: creates a {@code CfgTier} and
      * links it as the prospection's {@code CfgProspectId}. Only valid on a pré-prospection
      * (CfgProspectId IS NULL) — 400 if the prospection already has a prospect.
@@ -227,7 +413,9 @@ public class ProspectionService {
 
         CfgTier tier = prospectService.createEntity(request);
         prospection.setCfgProspect(tier);
-        return toDetail(prospectionRepository.save(prospection));
+        prospection = prospectionRepository.save(prospection);
+        enregistrerHistorique(prospectionId, "Prospect créé et lié : " + nomTier(tier));
+        return toDetail(prospection);
     }
 
     /**
@@ -252,7 +440,9 @@ public class ProspectionService {
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
 
         prospection.setCfgCommercial(commercial);
-        return toDetail(prospectionRepository.save(prospection));
+        prospection = prospectionRepository.save(prospection);
+        enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + nomTier(commercial));
+        return toDetail(prospection);
     }
 
     /**
@@ -321,17 +511,52 @@ public class ProspectionService {
         if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
         if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
         if (request.notes() != null) prospection.setNotes(request.notes());
-        if (request.trancheId() != null) {
-            CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
-            prospection.setStkHierarchy(tranche);
+
+        return toDetail(prospectionRepository.save(prospection));
+    }
+
+    /**
+     * {@code PATCH /api/prospections/{id}/tranche-principale}: remplace la tranche/l'article
+     * principaux en une opération atomique et cohérente — distinct du PATCH générique
+     * ({@link #modifierProspection}) et des "autres tranches" ({@code ComProspectionProject},
+     * intérêts secondaires indépendants gérés par {@code ProspectionQualificationService}).
+     * <p>
+     * Contrairement à l'ancien comportement (tranche/article modifiables séparément et sans
+     * validation croisée via le PATCH générique), {@code articleId} doit obligatoirement
+     * appartenir à {@code trancheId} — confirmé empiriquement: 100% des prospections en base avec
+     * un article principal ont une tranche principale qui correspond à celle de l'article
+     * (aucune exception sur 807 lignes). Si {@code articleId} est omis et que l'article
+     * actuellement assigné n'appartient plus à la nouvelle tranche, il est désassigné
+     * automatiquement plutôt que laissé incohérent.
+     */
+    @Transactional
+    public ProspectionDetailDto modifierTranchePrincipale(UUID id, ModifierTranchePrincipaleRequest request) {
+        ComProspection prospection = prospectionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+
+        if (request.trancheId() == null) {
+            throw new InvalidRequestException("trancheId est requis");
         }
+        CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())
                     .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+            if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                throw new InvalidRequestException(
+                        "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+            }
             prospection.setStkItem(article);
+        } else if (prospection.getStkItem() != null
+                && (prospection.getStkItem().getStkHierarchy() == null
+                    || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
+            // L'article actuellement assigné appartient à l'ancienne tranche : on le désassigne
+            // plutôt que de laisser trancheId/articleId incohérents (voir doc de la méthode).
+            prospection.setStkItem(null);
         }
 
+        prospection.setStkHierarchy(tranche);
         return toDetail(prospectionRepository.save(prospection));
     }
 
@@ -454,7 +679,9 @@ public class ProspectionService {
                 p.getIsClosed(),
                 p.getPrice(),
                 p.getArea(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null
         );
     }
 
@@ -500,15 +727,15 @@ public class ProspectionService {
                 p.getClosingReasonText(),
                 p.getIsOldCustomer(),
                 p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
-                p.getStkItem() != null ? p.getStkItem().getId() : null
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null,
+                p.getStkItem() != null ? p.getStkItem().getId() : null,
+                p.getStkItem() != null ? p.getStkItem().getCode() : null,
+                p.getStkItem() != null ? p.getStkItem().getDescription() : null
         );
     }
 
     private static String nomTier(com.tsix.immocrm.entities.cfg.CfgTier tier) {
-        if (tier == null) return null;
-        if (StringUtils.hasText(tier.getSocialReason())) return tier.getSocialReason();
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
-        return (prenom + " " + nom).trim();
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -59,9 +61,51 @@ public class TrancheController {
     }
 
     @GetMapping("/{id}/articles")
-    public PageDto<ArticleListItemDto> findArticles(@PathVariable UUID id,
+    @Operation(
+            summary = "Articles et sous-articles d'une tranche",
+            description = "Liste paginée, mélangeant articles racine et sous-articles de la "
+                    + "tranche (chacun porte `sousArticle`/`lotParentId` pour les distinguer). "
+                    + "Filtrable sur la disponibilité (`statut`, défaut DISPONIBLE), la catégorie "
+                    + "(`categorieId`, StkItemCategory — ex. \"APPARTEMENT\") et le type "
+                    + "(`typeId`, StkItemType — ex. \"1 CHAMBRES + SALON\"), à cocher "
+                    + "indépendamment comme dans le formulaire de qualification Tranche → "
+                    + "Catégorie → Type → Article. Les listes de choix viennent de "
+                    + "`GET /api/referentiels/categories-bien` / `GET /api/referentiels/types-bien`. "
+                    + "Filtres de parité avec la grille legacy \"Articles\" (instructions/"
+                    + "from_front.md #4) : `entiteId` (CfgCompany, voir "
+                    + "`GET /api/referentiels/entites`), `natureId` (StkKind, voir "
+                    + "`GET /api/referentiels/natures`), `vocationId` (StkVocation, voir "
+                    + "`GET /api/referentiels/vocations`), `etageId` (StkFloor, voir "
+                    + "`GET /api/referentiels/etages`), et les plages `prixDe`/`prixA` "
+                    + "(sur `comSalePrice`) et `surfaceDe`/`surfaceA` (sur `area`), bornes "
+                    + "inclusives et indépendamment optionnelles."
+    )
+    public PageDto<ArticleListItemDto> findArticles(
+            @PathVariable UUID id,
+            @Parameter(description = "Filtre sur la disponibilité. Absent = DISPONIBLE.")
             @RequestParam(required = false) StatutArticle statut,
+            @Parameter(description = "Id(s) de StkItemCategory. Répétable, correspondance OR. Absent = toutes.")
+            @RequestParam(required = false) List<UUID> categorieId,
+            @Parameter(description = "Id(s) de StkItemType. Répétable, correspondance OR. Absent = tous.")
+            @RequestParam(required = false) List<UUID> typeId,
+            @Parameter(description = "Id de CfgCompany (entité juridique). Absent = toutes.")
+            @RequestParam(required = false) UUID entiteId,
+            @Parameter(description = "Id de StkKind (nature du bien). Absent = toutes.")
+            @RequestParam(required = false) UUID natureId,
+            @Parameter(description = "Id de StkVocation. Absent = toutes.")
+            @RequestParam(required = false) UUID vocationId,
+            @Parameter(description = "Id de StkFloor (étage). Absent = tous.")
+            @RequestParam(required = false) UUID etageId,
+            @Parameter(description = "Borne basse (incluse) sur le prix de vente (StkItem.ComSalePrice).")
+            @RequestParam(required = false) BigDecimal prixDe,
+            @Parameter(description = "Borne haute (incluse) sur le prix de vente (StkItem.ComSalePrice).")
+            @RequestParam(required = false) BigDecimal prixA,
+            @Parameter(description = "Borne basse (incluse) sur la superficie (StkItem.Area).")
+            @RequestParam(required = false) BigDecimal surfaceDe,
+            @Parameter(description = "Borne haute (incluse) sur la superficie (StkItem.Area).")
+            @RequestParam(required = false) BigDecimal surfaceA,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(articleService.findByTranche(id, statut, pageable));
+        return PageDto.of(articleService.findByTranche(id, statut, categorieId, typeId,
+                entiteId, natureId, vocationId, etageId, prixDe, prixA, surfaceDe, surfaceA, pageable));
     }
 }

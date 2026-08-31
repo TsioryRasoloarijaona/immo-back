@@ -300,6 +300,52 @@ class DossierCreateTest {
     }
 
     @Test
+    void create_avecPrixEtTranche_calculeMontantsHTTTCEtTotalAPayerAvecSyndic() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-MONTANTS-TEST");
+        project = projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-MONTANTS-TEST");
+        tranche.setCfgProject(project);
+        tranche.setSyndicAmount(new java.math.BigDecimal("700.00"));
+        tranche.setSyndicPeriod(24); // 700 x 24 = 16 800.00 DH de frais syndic
+        tranche = trancheRepository.save(tranche);
+
+        StkItem item = newAvailableItem("LOT-MONTANTS-TEST");
+        item.setStkHierarchy(tranche);
+        item.setVat(new java.math.BigDecimal("0.20"));
+        item.setComSalePrice(new java.math.BigDecimal("1000000.00")); // prix commercial (liste) TTC
+        item.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
+        stkItemRepository.save(item);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-MONTANTS-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        // Prix négocié 900 000 (< 1 000 000 commercial) => remise de 100 000 (10 %).
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-MONTANTS-TEST","prix":900000.00}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1000000.00))
+                .andExpect(jsonPath("$.remise").value(10.0))
+                .andExpect(jsonPath("$.remiseMontant").value(100000.00))
+                .andExpect(jsonPath("$.prixApresRemise").value(900000.00))
+                .andExpect(jsonPath("$.prix").value(900000.00))
+                // Total à payer = prix négocié (900 000, TTC) + Frais Syndic (16 800) — contrairement
+                // à une Offre, dont le total n'inclut jamais le syndic.
+                .andExpect(jsonPath("$.totalAPayer").value(916800.00));
+    }
+
+    @Test
     void create_articleAlreadyOccupied_returns400() throws Exception {
         ComProspection prospection = newProspectionWithProspect();
         StkItem occupied = newAvailableItem("LOT-OCCUPIED");

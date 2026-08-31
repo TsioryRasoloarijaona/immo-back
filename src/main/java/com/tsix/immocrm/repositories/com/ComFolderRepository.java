@@ -32,4 +32,14 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
      */
     @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f WHERE f.cfgCustomer.id IN :clientIds GROUP BY f.cfgCustomer.id")
     List<Object[]> countGroupedByClientId(List<UUID> clientIds);
+
+    /**
+     * Batch lookup for the Article → Dossier reverse link ({@code StkItem.ComFolderId}), demande
+     * #5 de {@code instructions/from_front.md} — used by {@code ArticleService} to avoid an N+1
+     * query per article on a paginated listing. Join-fetches {@code strStatus}/{@code cfgCustomer}
+     * so callers can read {@code getCode()}/{@code getStrStatus()}/{@code getCfgCustomer()}
+     * without a further lazy-load.
+     */
+    @Query("SELECT f FROM ComFolder f LEFT JOIN FETCH f.strStatus LEFT JOIN FETCH f.cfgCustomer WHERE f.id IN :ids")
+    List<ComFolder> findWithStatusAndCustomerByIdIn(List<UUID> ids);
 }

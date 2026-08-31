@@ -18,6 +18,13 @@ public record ActeReservationData(
         String clientTelephone,
         String projetNom,
         String projetAdresse,
+        /** Legal entity the project is sold under (CfgProject.cfgCompany.description) — never
+         * hardcode a company name in a renderer, it's per-project (e.g. "ADMOD", "MAYLINE"). */
+        String entrepriseNom,
+        /** true when the article is a terrain/land lot (StkItem.stkKind.code == "TER") — the
+         * legacy template then omits floor/building and the "achèvement des travaux" mention,
+         * and skips the SAV/Assurance/Syndic section (renumbering the following ones). */
+        boolean estTerrain,
         String articleCategorie,
         String articleCode,
         String immeubleCode,

@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.auth;
 import com.tsix.immocrm.dto.auth.CreerEmployeRequest;
 import com.tsix.immocrm.dto.auth.CreerEmployeResponse;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
+import com.tsix.immocrm.dto.auth.UtilisateurListItemDto;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
@@ -18,6 +19,10 @@ import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +30,9 @@ import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -62,6 +69,71 @@ public class UtilisateurAdminService {
         this.tierKindRepository = tierKindRepository;
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
+    }
+
+    /**
+     * {@code GET /api/utilisateurs} — every account (AdmUser) with its details, linked employee
+     * (CfgTier) info and assigned roles (AdmRole), for the admin user-management screen.
+     * {@code search} matches (case-insensitive, substring) username/description/email; disabled
+     * accounts are included unless {@code disabled=false} is passed explicitly.
+     */
+    public Page<UtilisateurListItemDto> findAll(String search, Boolean disabled, Pageable pageable) {
+        Specification<AdmUser> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(search)) {
+                // code/email are mapped @Lob (CLOB) — Hibernate's lower() rejects CLOB arguments,
+                // so these two rely on SQL Server's default case-insensitive collation instead.
+                String pattern = "%" + search + "%";
+                predicates.add(cb.or(
+                        cb.like(root.get("code"), pattern),
+                        cb.like(cb.lower(root.get("description")), pattern.toLowerCase()),
+                        cb.like(root.get("email"), pattern)
+                ));
+            }
+            if (disabled != null) {
+                predicates.add(cb.equal(cb.coalesce(root.get("disabled"), false), disabled));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<AdmUser> page = userRepository.findAll(spec, pageable);
+        List<UUID> userIds = page.getContent().stream().map(AdmUser::getId).toList();
+
+        Map<UUID, List<String>> rolesByUserId = userRoleRepository.findByAdmUserIdIn(userIds).stream()
+                .filter(ur -> ur.getAdmUser() != null && ur.getAdmRole() != null)
+                .collect(Collectors.groupingBy(ur -> ur.getAdmUser().getId(),
+                        Collectors.mapping(ur -> ur.getAdmRole().getCode(), Collectors.toList())));
+
+        Map<UUID, AppUserCredential> credentialByUserId = credentialRepository.findByAdmUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(c -> c.getAdmUser().getId(), c -> c));
+
+        return page.map(user -> toListItem(user,
+                rolesByUserId.getOrDefault(user.getId(), List.of()),
+                credentialByUserId.get(user.getId())));
+    }
+
+    private static UtilisateurListItemDto toListItem(AdmUser user, List<String> roles, AppUserCredential credential) {
+        CfgTier employee = user.getCfgEmployee();
+        CfgTierKind employeeKind = employee != null ? employee.getCfgTierKind() : null;
+        return new UtilisateurListItemDto(
+                user.getId(),
+                user.getCode(),
+                user.getDescription(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getMobile(),
+                Boolean.TRUE.equals(user.getDisabled()),
+                employee != null ? employee.getId() : null,
+                employee != null ? employee.getFirstName() : null,
+                employee != null ? employee.getLastName() : null,
+                employeeKind != null ? employeeKind.getCode() : null,
+                employeeKind != null ? employeeKind.getDescription() : null,
+                roles,
+                credential != null,
+                credential != null && Boolean.TRUE.equals(credential.getMustChangePassword()),
+                credential != null && Boolean.TRUE.equals(credential.getProfileCompleted()),
+                user.getUserCreateDateTime()
+        );
     }
 
     /**

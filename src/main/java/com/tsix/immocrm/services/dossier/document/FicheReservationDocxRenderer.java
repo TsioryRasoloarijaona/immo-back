@@ -34,7 +34,7 @@ public class FicheReservationDocxRenderer {
         try (XWPFDocument document = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             addTitleBox(document, data.dossierCode());
             blank(document);
-            addIntro(document);
+            addIntro(document, data);
             blank(document);
             addFieldsTable(document, data);
             blank(document);
@@ -88,13 +88,13 @@ public class FicheReservationDocxRenderer {
         value.setBold(true);
     }
 
-    private static void addIntro(XWPFDocument document) {
+    private static void addIntro(XWPFDocument document, FicheReservationData data) {
         XWPFParagraph p = document.createParagraph();
         p.setAlignment(ParagraphAlignment.BOTH);
         XWPFRun r = p.createRun();
-        r.setText("Nous soussignés, la Société dite « SOCIETE ADMOD (groupe AYAD DEVELOPPEMENT) », société à "
-                + "Responsabilité limitée, sise à Casablanca, 100 Boulvard Zerktouni, représentées par l'un des "
-                + "mandataires dûment habilité à cet effet.");
+        r.setText("Nous soussignés, la Société dite « SOCIETE " + vide(data.entrepriseNom()) + " (groupe AYAD "
+                + "DEVELOPPEMENT) », société à Responsabilité limitée, sise à Casablanca, 100 Boulvard Zerktouni, "
+                + "représentées par l'un des mandataires dûment habilité à cet effet.");
         r.addBreak();
         r.setText("Agissant en notre qualité de promoteur immobilier, reconnaissons sous réserve des conditions "
                 + "ci-dessous avoir reçu de :");
