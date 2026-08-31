@@ -56,12 +56,15 @@ public class DevisService {
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
+    private final com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService;
 
     public DevisService(ComProspectionRepository prospectionRepository, StlQuoteRepository quoteRepository,
                          StlQuoteItemRepository quoteItemRepository, CfgTrancheRepository trancheRepository,
                          StkItemRepository stkItemRepository, CfgTierRepository tierRepository,
                          ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository,
-                         ComSettlementCategoryRepository settlementCategoryRepository) {
+                         ComSettlementCategoryRepository settlementCategoryRepository,
+                         com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
         this.quoteRepository = quoteRepository;
         this.quoteItemRepository = quoteItemRepository;
@@ -146,7 +149,11 @@ public class DevisService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return quoteRepository.findAll(spec, pageable).map(this::toDto);
+        // Périmètre commercial (§9bis.2) : cette liste globale porte tranche, commercial, montants
+        // et pointe vers la prospection d'origine — elle exposait donc le pipeline de tous les
+        // projets sous un préfixe d'URL que PerimetreInterceptor ne couvre pas. Prédicat neutre si
+        // l'appelant n'est pas restreint.
+        return quoteRepository.findAll(spec.and(perimetreService.filtreDevis()), pageable).map(this::toDto);
     }
 
     public Page<DevisDto> findByProspection(UUID prospectionId, Pageable pageable) {

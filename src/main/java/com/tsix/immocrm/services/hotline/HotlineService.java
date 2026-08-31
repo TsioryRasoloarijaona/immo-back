@@ -7,6 +7,8 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -50,12 +52,15 @@ public class HotlineService {
     private final ComActionMessageRepository actionMessageRepository;
     private final ProspectService prospectService;
     private final ProspectSubResourcesService subResourcesService;
+    private final com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService;
 
     public HotlineService(CfgTierRepository tierRepository,
                            ComProspectionRepository prospectionRepository,
                            ComActionMessageRepository actionMessageRepository,
                            ProspectService prospectService,
-                           ProspectSubResourcesService subResourcesService) {
+                           ProspectSubResourcesService subResourcesService,
+                           com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
         this.actionMessageRepository = actionMessageRepository;
@@ -78,9 +83,15 @@ public class HotlineService {
 
         Set<UUID> tierIds = tiers.stream().map(CfgTier::getId).collect(Collectors.toSet());
         Pageable preProspectionsPage = PageRequest.of(0, HISTORIQUE_LIMIT);
-        List<ProspectionListItemDto> appelsSansFiche = prospectionRepository
-                .findByNormalizedTempTel(normalise, preProspectionsPage)
-                .stream()
+        // Périmètre commercial : le filtre est appliqué DANS la requête, avant le plafond de 50 —
+        // filtrer la page déjà chargée reviendrait à évincer les lignes du périmètre au profit de
+        // celles qui l'ont saturée (voir §9ter.2 et la doc du repository).
+        Page<ComProspection> correspondances = perimetreService.perimetreCourant()
+                .map(projetIds -> prospectionRepository.findByNormalizedTempTelDansPerimetre(
+                        normalise, projetIds, preProspectionsPage))
+                .orElseGet(() -> prospectionRepository.findByNormalizedTempTel(normalise, preProspectionsPage));
+
+        List<ProspectionListItemDto> appelsSansFiche = correspondances.stream()
                 // A TempTel match can, on messy legacy data, already belong to a prospection
                 // that's since been linked to one of the tiers above — don't show it twice.
                 .filter(p -> p.getCfgProspect() == null || !tierIds.contains(p.getCfgProspect().getId()))
@@ -90,16 +101,32 @@ public class HotlineService {
         return new HotlineResultDto(telephoneBrut, normalise, !fiches.isEmpty(), fiches, appelsSansFiche);
     }
 
+    /**
+     * Chaque bloc de la fiche est plafonné à {@link #HISTORIQUE_LIMIT} lignes. Le périmètre
+     * commercial doit donc être appliqué <b>dans chaque requête</b>, jamais sur le résultat :
+     * filtrer après coup une page déjà plafonnée évince les lignes du périmètre (celles hors
+     * périmètre ayant consommé la page) au lieu d'évincer celles hors périmètre — un tiers avec 50
+     * interactions récentes sur un autre projet et une seule sur le mien renvoyait une liste vide.
+     * Les prospections / dossiers / règlements passent par {@code ProspectSubResourcesService}, déjà
+     * filtré par {@code Specification} ; les interactions sont filtrées ici par
+     * {@code filtreInteractions()}, qui résout le projet par la prospection <i>puis</i> par le
+     * dossier.
+     */
     private HotlineFicheDto toFiche(UUID tierId) {
         Pageable recentSorted = PageRequest.of(0, HISTORIQUE_LIMIT, Sort.by(Sort.Direction.DESC, "docDate"));
         Pageable recent = PageRequest.of(0, HISTORIQUE_LIMIT);
+
+        Specification<ComActionMessage> interactionsDuTier = Specification
+                .<ComActionMessage>where((root, query, cb) -> cb.equal(root.get("cfgTier").get("id"), tierId))
+                .and(perimetreService.filtreInteractions());
+
         return new HotlineFicheDto(
                 prospectService.findById(tierId),
                 subResourcesService.prospections(tierId, recentSorted).getContent(),
                 subResourcesService.dossiers(tierId, recentSorted).getContent(),
                 subResourcesService.reglements(tierId, recent).getContent(),
-                actionMessageRepository.findByCfgTierIdOrderByDocDateDesc(tierId, recent)
-                        .map(HotlineService::toInteractionDto).getContent(),
+                actionMessageRepository.findAll(interactionsDuTier, recentSorted).stream()
+                        .map(HotlineService::toInteractionDto).toList(),
                 subResourcesService.historique(tierId, recent).getContent()
         );
     }

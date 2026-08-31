@@ -13,6 +13,10 @@ import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -68,22 +72,68 @@ public class ProspectController {
     }
 
     // -- GAP-06: prospect fiche sub-resources --
+    //
+    // Les trois listes ci-dessous renvoient exactement les mêmes DTO que GET /api/prospections,
+    // GET /api/dossiers et GET /api/encaissements : elles sont donc filtrées par le périmètre
+    // commercial au même titre, bien qu'elles vivent sous /api/prospects. Le prospect lui-même
+    // n'est pas filtré (voir §9bis.2 de instructions/FEATURE-perimetre-commercial.md).
 
     @GetMapping("/{id}/prospections")
-    public PageDto<ProspectionListItemDto> getProspections(@PathVariable UUID id,
+    @Operation(
+            summary = "Prospections d'un prospect",
+            description = "Mêmes `ProspectionListItemDto` que GET /api/prospections.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint, seules les "
+                    + "prospections de ses projets affectés sont renvoyées. Le prospect, lui, "
+                    + "n'est pas filtré — sa fiche reste accessible et la liste peut simplement "
+                    + "revenir vide ou partielle. `totalElements` reflète le nombre filtré."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospections du prospect (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
+    public PageDto<ProspectionListItemDto> getProspections(
+            @Parameter(description = "Identifiant du prospect (CfgTier.PKey).")
+            @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(subResourcesService.prospections(id, pageable));
     }
 
     @GetMapping("/{id}/dossiers")
-    public PageDto<DossierListItemDto> getDossiers(@PathVariable UUID id,
+    @Operation(
+            summary = "Dossiers de vente d'un prospect",
+            description = "Mêmes `DossierListItemDto` que GET /api/dossiers.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint, seuls les dossiers "
+                    + "de ses projets affectés sont renvoyés ; le prospect lui-même n'est pas "
+                    + "filtré. `totalElements` reflète le nombre filtré."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Dossiers du prospect (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
+    public PageDto<DossierListItemDto> getDossiers(
+            @Parameter(description = "Identifiant du prospect (CfgTier.PKey).")
+            @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(subResourcesService.dossiers(id, pageable));
     }
 
     @GetMapping("/{id}/reglements")
-    public PageDto<ReglementProspectDto> getReglements(@PathVariable UUID id,
-                                                         @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+    @Operation(
+            summary = "Règlements d'un prospect, tous dossiers confondus",
+            description = "Triés par date de pièce décroissante par défaut.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint, seuls les "
+                    + "règlements rattachés à un dossier de ses projets affectés sont renvoyés "
+                    + "(plus ceux dont aucune ligne ne résout de projet) ; le prospect lui-même "
+                    + "n'est pas filtré. `totalElements` reflète le nombre filtré."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Règlements du prospect (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
+    public PageDto<ReglementProspectDto> getReglements(
+            @Parameter(description = "Identifiant du prospect (CfgTier.PKey).")
+            @PathVariable UUID id,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(subResourcesService.reglements(id, pageable));
     }
 

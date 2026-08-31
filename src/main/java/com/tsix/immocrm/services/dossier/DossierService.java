@@ -36,6 +36,7 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -68,6 +69,7 @@ public class DossierService {
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository;
     private final com.tsix.immocrm.repositories.adm.AdmSequenceRepository sequenceRepository;
+    private final PerimetreCommercialService perimetreService;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -75,7 +77,9 @@ public class DossierService {
                            ComPaymentMethodRepository paymentMethodRepository, CfgTierRepository tierRepository,
                            ComSettlementCategoryRepository settlementCategoryRepository,
                            com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository,
-                           com.tsix.immocrm.repositories.adm.AdmSequenceRepository sequenceRepository) {
+                           com.tsix.immocrm.repositories.adm.AdmSequenceRepository sequenceRepository,
+                           PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
         this.prospectionRepository = prospectionRepository;
@@ -204,7 +208,11 @@ public class DossierService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return folderRepository.findAll(spec, pageable).map(DossierService::toListItem);
+        // Périmètre commercial : ne renvoie que les dossiers des projets affectés à l'appelant.
+        // Prédicat neutre (aucune requête supplémentaire) tant qu'aucun projet ne lui est affecté
+        // ou s'il porte un rôle d'exemption — voir PerimetreCommercialService#filtreDossiers.
+        return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
+                .map(DossierService::toListItem);
     }
 
     public DossierDetailDto findById(UUID id) {
@@ -264,6 +272,20 @@ public class DossierService {
                 throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + articleId);
             }
             articles.add(item);
+        }
+
+        // Périmètre commercial : créer un dossier sur un projet non affecté est refusé (403).
+        // Ici l'appelant a lui-même désigné les articles, donc les projets — il n'y a rien à
+        // cacher, contrairement à une lecture hors périmètre (404). Sans ce contrôle, la frontière
+        // posée sur les listes et les détails serait purement décorative.
+        //
+        // TOUS les articles sont contrôlés, pas seulement le principal : la boucle plus bas pose
+        // StkItem.ComFolderId sur chacun d'eux. Ne valider que articles.get(0) laissait passer
+        // [lotDuProjetA, annexeDuProjetB] en 201 et marquait vendu un lot d'un projet que
+        // l'appelant ne peut même pas lire — une écriture transverse au périmètre.
+        for (StkItem article : articles) {
+            perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
+                    "Création de dossier sur l'article " + article.getCode());
         }
 
         CfgTier client = prospection.getCfgProspect();

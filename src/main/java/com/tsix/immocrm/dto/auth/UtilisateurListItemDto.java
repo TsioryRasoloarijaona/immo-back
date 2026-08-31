@@ -64,6 +64,15 @@ public record UtilisateurListItemDto(
         boolean profileCompleted,
 
         @Schema(description = "Date de création du compte (AdmUser.UserCreateDateTime).")
-        LocalDateTime dateCreation
+        LocalDateTime dateCreation,
+
+        @Schema(description = "Nombre de projets affectés à ce compte (périmètre commercial), pour "
+                + "afficher l'état d'affectation directement dans la liste d'administration sans "
+                + "un appel par ligne. 0 = aucune restriction : ce compte voit tout (un périmètre "
+                + "vide signifie \"pas de restriction\", jamais \"ne voit rien\"). Le détail des "
+                + "projets s'obtient par GET /api/utilisateurs/{admUserId}/projets. À noter : ce "
+                + "compteur ne tient pas compte des rôles d'exemption — un Administrateur affecté "
+                + "à 2 projets affiche 2 mais n'est de fait jamais filtré.", example = "2")
+        int nombreProjets
 ) {
 }

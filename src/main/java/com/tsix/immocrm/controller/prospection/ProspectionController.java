@@ -85,7 +85,13 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         + "entrée porte elle aussi `trancheDescription`/`articleDescription` pour l'affichage.\n"
         + "**Côté front** : le champ \"Tranche\"/\"Article\" principal du formulaire de "
         + "qualification doit appeler l'endpoint (1) ; l'onglet \"Autres tranches\" doit appeler "
-        + "l'endpoint (2). Ce sont deux actions utilisateur différentes, jamais interchangeables.")
+        + "l'endpoint (2). Ce sont deux actions utilisateur différentes, jamais interchangeables.\n\n"
+        + "Collection soumise au périmètre commercial : sur **toutes** les routes portant un "
+        + "identifiant de prospection — y compris les routes imbriquées (interactions, devis, "
+        + "qualification, documents) — une prospection hors du périmètre de l'appelant renvoie 404 "
+        + "(jamais 403 — un 403 confirmerait son existence), et un identifiant qui n'est pas un "
+        + "UUID valide renvoie 404 lui aussi, plutôt que le 400 habituel : il est refusé avant "
+        + "d'atteindre le contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.")
 @RestController
 @RequestMapping("/api/prospections")
 public class ProspectionController {
@@ -127,7 +133,12 @@ public class ProspectionController {
                     + "une valeur pour un seul choix se comporte comme avant), tranche(s) visée(s), "
                     + "plage de dates sur la date du document, et recherche libre. Exclut les "
                     + "pré-prospections (voir GET /api/pre-prospections). Voir "
-                    + "instructions/filtres-avances.md pour le détail des filtres avancés."
+                    + "instructions/filtres-avances.md pour le détail des filtres avancés.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), cette liste ne "
+                    + "contient que les prospections de ses projets affectés — filtrage côté "
+                    + "serveur, en plus des filtres ci-dessus. Le projet d'une prospection est "
+                    + "celui de sa tranche visée ; celles sans tranche restent visibles de tous."
     )
     public PageDto<ProspectionListItemDto> findAll(
             @Parameter(description = "Code(s) ComProspectionKind (\"Nature\"/étape) à filtrer. "
@@ -157,7 +168,26 @@ public class ProspectionController {
     }
 
     @GetMapping("/{id}")
-    public ProspectionDetailDto findById(@PathVariable UUID id) {
+    @Operation(
+            summary = "Détail d'une prospection (ou d'une pré-prospection)",
+            description = "Sert aussi bien une prospection qualifiée qu'une pré-prospection : "
+                    + "`GET /api/pre-prospections` n'expose pas de route de détail propre, les "
+                    + "deux partagent cette fiche.\n\n"
+                    + "**Périmètre commercial** : une prospection hors du périmètre de l'appelant "
+                    + "renvoie **404**, et non 403 — un 403 confirmerait son existence et "
+                    + "permettrait d'énumérer les identifiants. Même règle pour toutes les routes "
+                    + "imbriquées (interactions, devis, qualification, documents)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospection trouvée."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
+                    + "prospection hors du périmètre commercial de l'appelant — les deux cas sont "
+                    + "volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque "
+                    + "l'identifiant fourni n'est pas un UUID valide.")
+    })
+    public ProspectionDetailDto findById(
+            @Parameter(description = "Identifiant de la prospection (ComProspection.PKey).")
+            @PathVariable UUID id) {
         return prospectionService.findById(id);
     }
 
@@ -185,7 +215,10 @@ public class ProspectionController {
             @ApiResponse(responseCode = "201", description = "Prospection créée."),
             @ApiResponse(responseCode = "400", description = "`prospectId` manquant, ou un id "
                     + "fourni (prospect/commercial/tranche/article/origine/...) est introuvable, "
-                    + "ou l'article fourni n'appartient pas à la tranche fournie.")
+                    + "ou l'article fourni n'appartient pas à la tranche fournie."),
+            @ApiResponse(responseCode = "403", description = "Le projet de la `trancheId` fournie "
+                    + "n'est pas dans le périmètre commercial de l'appelant (403 et non 404 : "
+                    + "c'est l'appelant qui a nommé la tranche).")
     })
     public ResponseEntity<ProspectionDetailDto> creerProspection(@RequestBody CreerProspectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerProspection(request));
@@ -235,13 +268,19 @@ public class ProspectionController {
                     + "est omis et que l'article actuellement assigné n'appartient plus à la "
                     + "nouvelle tranche, il est automatiquement désassigné (jamais laissé dans un "
                     + "état incohérent). Distinct de `POST /api/prospections/{id}/autres-tranches` "
-                    + "(intérêts secondaires, indépendants) — voir le guide sur le tag."
+                    + "(intérêts secondaires, indépendants) — voir le guide sur le tag.\n\n"
+                    + "**Périmètre commercial** : rattacher la prospection à une tranche dont le "
+                    + "projet n'est pas affecté à l'appelant renvoie **403** — sans quoi le "
+                    + "périmètre se contournerait en déplaçant la ressource hors de son projet."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Tranche/article principal mis à jour."),
             @ApiResponse(responseCode = "400", description = "`trancheId` manquant, tranche/article "
                     + "introuvable, ou l'article fourni n'appartient pas à la tranche fournie."),
-            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+            @ApiResponse(responseCode = "403", description = "Le projet de la tranche cible n'est "
+                    + "pas dans le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
+                    + "prospection hors du périmètre commercial de l'appelant.")
     })
     public ProspectionDetailDto modifierTranchePrincipale(@PathVariable UUID id,
             @RequestBody ModifierTranchePrincipaleRequest request) {

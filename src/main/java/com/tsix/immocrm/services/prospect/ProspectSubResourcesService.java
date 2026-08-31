@@ -23,8 +23,12 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -48,6 +52,7 @@ public class ProspectSubResourcesService {
     private final StrHistoryRepository historyRepository;
     private final CfgTierContactRepository tierContactRepository;
     private final CfgRelationTypeRepository relationTypeRepository;
+    private final PerimetreCommercialService perimetreService;
 
     public ProspectSubResourcesService(CfgTierRepository tierRepository,
                                         ComProspectionRepository prospectionRepository,
@@ -56,7 +61,9 @@ public class ProspectSubResourcesService {
                                         StlSettlementLineRepository settlementLineRepository,
                                         StrHistoryRepository historyRepository,
                                         CfgTierContactRepository tierContactRepository,
-                                        CfgRelationTypeRepository relationTypeRepository) {
+                                        CfgRelationTypeRepository relationTypeRepository,
+                                        PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
         this.folderRepository = folderRepository;
@@ -73,22 +80,70 @@ public class ProspectSubResourcesService {
         }
     }
 
+    /**
+     * {@code GET /api/prospects/{id}/prospections}, et — via {@code HotlineService} — le bloc
+     * "prospections" de {@code GET /api/hotline/recherche}.
+     *
+     * <p><b>Périmètre commercial (§9bis.2)</b> : ces trois sous-ressources renvoient exactement les
+     * mêmes DTO que {@code GET /api/prospections}, {@code GET /api/dossiers} et
+     * {@code GET /api/encaissements}, mais sous un préfixe d'URL que {@code PerimetreInterceptor}
+     * ne couvre pas — le tier, lui, reste hors périmètre. Sans filtre ici, il suffisait d'énumérer
+     * {@code GET /api/prospects} (non filtré, et qui doit le rester) pour reconstituer le pipeline
+     * de tous les projets, sans même deviner un id : la frontière posée sur les listes principales
+     * était contournable de bout en bout.
+     *
+     * <p>Le filtre masque les <b>lignes</b> hors périmètre ; il ne masque ni le prospect, ni le
+     * client, ni la fiche hotline eux-mêmes.
+     */
     public Page<ProspectionListItemDto> prospections(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
-        return prospectionRepository.findByCfgProspectId(prospectId, pageable)
+        Specification<ComProspection> spec = Specification
+                .<ComProspection>where((root, query, cb) -> cb.equal(root.get("cfgProspect").get("id"), prospectId))
+                .and(perimetreService.filtreProspections());
+        return prospectionRepository.findAll(spec, pageable)
                 .map(ProspectSubResourcesService::toProspectionListItem);
     }
 
+    /**
+     * {@code GET /api/prospects/{id}/dossiers} <b>et</b> {@code GET /api/clients/{id}/dossiers}
+     * (même service, voir {@code ClientController}), plus le bloc "dossiers" de la hotline.
+     * Filtré par le périmètre commercial — voir {@link #prospections}.
+     */
     public Page<DossierListItemDto> dossiers(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
-        return folderRepository.findByCfgCustomerId(prospectId, pageable)
+        Specification<ComFolder> spec = Specification
+                .<ComFolder>where((root, query, cb) -> cb.equal(root.get("cfgCustomer").get("id"), prospectId))
+                .and(perimetreService.filtreDossiers());
+        return folderRepository.findAll(spec, pageable)
                 .map(ProspectSubResourcesService::toDossierListItem);
     }
 
+    /**
+     * {@code GET /api/prospects/{id}/reglements} — tous dossiers confondus. Filtré par le périmètre
+     * commercial (voir {@link #prospections}) : un règlement n'est visible que s'il porte au moins
+     * une ligne rattachée à un dossier d'un projet du périmètre, ou si aucune de ses lignes ne
+     * résout de projet.
+     *
+     * <p>Le tri {@code docDate} décroissant, auparavant porté par le nom de la méthode de
+     * repository, est désormais appliqué explicitement lorsque l'appelant n'en fournit pas —
+     * passer à un {@code Specification} fait perdre le {@code OrderBy} dérivé.
+     */
     public Page<ReglementProspectDto> reglements(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
-        return settlementRepository.findByTierIdOrderByDocDateDesc(prospectId, pageable)
+        Specification<StlSettlement> spec = Specification
+                .<StlSettlement>where((root, query, cb) -> cb.equal(root.get("tier").get("id"), prospectId))
+                .and(perimetreService.filtreEncaissements());
+        return settlementRepository.findAll(spec, parDefautPlusRecentDabord(pageable))
                 .map(this::toReglementDto);
+    }
+
+    /** Conserve le tri historique (docDate DESC) quand l'appelant ne demande pas de tri explicite. */
+    private static Pageable parDefautPlusRecentDabord(Pageable pageable) {
+        if (pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "docDate"));
     }
 
     public Page<HistoriqueDto> historique(UUID prospectId, Pageable pageable) {

@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.dashboard.EtapeCountDto;
 import com.tsix.immocrm.dto.dashboard.RelanceDto;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -26,14 +28,30 @@ public class DashboardService {
 
     private final ComFolderRepository folderRepository;
     private final ComProspectionRepository prospectionRepository;
+    private final PerimetreCommercialService perimetreService;
 
-    public DashboardService(ComFolderRepository folderRepository, ComProspectionRepository prospectionRepository) {
+    public DashboardService(ComFolderRepository folderRepository, ComProspectionRepository prospectionRepository,
+                             PerimetreCommercialService perimetreService) {
         this.folderRepository = folderRepository;
         this.prospectionRepository = prospectionRepository;
+        this.perimetreService = perimetreService;
     }
 
+    /**
+     * {@code GET /api/dashboard}. Contrairement à {@code DossierService}/{@code ProspectionService}/
+     * {@code EncaissementService}, ce service n'utilise pas de {@code Specification} : le périmètre
+     * commercial doit donc être appliqué <b>explicitement à chaque agrégat</b>, ce qui en fait le
+     * point de fuite le plus probable de la feature. Un KPI resté global afficherait à un commercial
+     * restreint un chiffre d'affaires qu'il ne peut pas détailler — exactement la donnée que le
+     * périmètre prétend masquer. Les quatre agrégats (valeur du pipeline + panier moyen, dossiers
+     * par étape, relances en retard, compteurs de prospections) dérivent tous des deux requêtes
+     * ci-dessous, filtrées ensemble.
+     */
     public DashboardDto get() {
-        List<Object[]> rows = folderRepository.findDashboardProjection();
+        Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
+        List<Object[]> rows = perimetre
+                .map(folderRepository::findDashboardProjectionDansPerimetre)
+                .orElseGet(folderRepository::findDashboardProjection);
         LocalDateTime now = LocalDateTime.now();
 
         Map<String, Long> parEtape = new LinkedHashMap<>();
@@ -77,8 +95,12 @@ public class DashboardService {
                 .map(e -> new EtapeCountDto(e.getKey(), e.getValue()))
                 .toList();
 
-        long prospectionsOuvertes = prospectionRepository.countOpenExcludingPreProspections();
-        long prospectionsTotal = prospectionRepository.countExcludingPreProspections();
+        long prospectionsOuvertes = perimetre
+                .map(prospectionRepository::countOpenExcludingPreProspectionsDansPerimetre)
+                .orElseGet(prospectionRepository::countOpenExcludingPreProspections);
+        long prospectionsTotal = perimetre
+                .map(prospectionRepository::countExcludingPreProspectionsDansPerimetre)
+                .orElseGet(prospectionRepository::countExcludingPreProspections);
 
         return new DashboardDto(valeurPipeline, panierMoyen, dossiersParEtape, relancesEnRetard,
                 prospectionsOuvertes, prospectionsTotal);

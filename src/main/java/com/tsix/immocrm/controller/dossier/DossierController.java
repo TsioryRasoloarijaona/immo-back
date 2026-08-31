@@ -82,7 +82,14 @@ import java.util.UUID;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
 @Tag(name = "Dossiers", description = "Dossiers de vente (ComFolder) — cycle de vie, échéancier, "
-        + "pièces jointes et génération de documents.")
+        + "pièces jointes et génération de documents.\n\n"
+        + "Collection soumise au périmètre commercial : sur **toutes** les routes portant un "
+        + "identifiant de dossier — y compris les routes imbriquées (échéancier, règlements, pièces "
+        + "jointes, historique, générateurs de documents) — un dossier hors du périmètre de "
+        + "l'appelant renvoie 404 (jamais 403 — un 403 confirmerait son existence), et un "
+        + "identifiant qui n'est pas un UUID valide renvoie 404 lui aussi, plutôt que le 400 "
+        + "habituel : il est refusé avant d'atteindre le contrôleur. Voir `perimetreRestreint` sur "
+        + "GET /api/mon-compte.")
 @RestController
 @RequestMapping("/api/dossiers")
 public class DossierController {
@@ -164,7 +171,13 @@ public class DossierController {
                     + "un seul statut se comporte comme avant), commercial, entité (projet), "
                     + "tranche(s), plage de dates sur un jalon au choix, et recherche libre sur "
                     + "le code du dossier OU le nom/prénom/raison sociale du client lié. Voir "
-                    + "instructions/filtres-avances.md pour le détail des filtres avancés."
+                    + "instructions/filtres-avances.md pour le détail des filtres avancés.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), cette liste ne "
+                    + "contient que les dossiers de ses projets affectés — filtrage côté serveur, "
+                    + "appliqué en plus des filtres ci-dessus. Le front ne doit pas refiltrer par "
+                    + "projet lui-même. Les dossiers dont le projet ne se résout pas restent "
+                    + "visibles de tous."
     )
     public PageDto<DossierListItemDto> findAll(
             @Parameter(description = "Code(s) StrStatus à filtrer. Répéter le paramètre pour "
@@ -198,7 +211,29 @@ public class DossierController {
     }
 
     @GetMapping("/{id}")
-    public DossierDetailDto findById(@PathVariable UUID id) {
+    @Operation(
+            summary = "Détail d'un dossier de vente",
+            description = "Fiche complète du dossier : statut courant et étapes atteignables, "
+                    + "client/commercial/notaire, articles liés, ventilation des montants et "
+                    + "prospection d'origine.\n\n"
+                    + "**Périmètre commercial** : un dossier hors du périmètre de l'appelant "
+                    + "renvoie **404**, et non 403 — un 403 confirmerait son existence et "
+                    + "permettrait d'énumérer les identifiants. La même règle s'applique à *toutes* "
+                    + "les routes imbriquées de ce dossier (échéancier, règlements, pièces jointes, "
+                    + "historique, générateurs de documents)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Dossier trouvé."),
+            @ApiResponse(responseCode = "404", description = "Aucun dossier avec cet id, ou dossier "
+                    + "hors du périmètre commercial de l'appelant — les deux cas sont "
+                    + "volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque "
+                    + "l'identifiant fourni n'est pas un UUID valide : sur les collections soumises "
+                    + "au périmètre, un identifiant non résoluble est refusé sans être transmis au "
+                    + "contrôleur.")
+    })
+    public DossierDetailDto findById(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id) {
         return dossierService.findById(id);
     }
 
@@ -236,8 +271,20 @@ public class DossierController {
                     + "utilisés), et la ventilation HT/TTC/remise du dossier est calculée comme "
                     + "sur l'onglet \"Montants\" d'une Offre (prix commercial de l'article, taux "
                     + "de TVA) — sauf que le total du dossier (`totalToPay`) inclut en plus les "
-                    + "Frais Syndic de la tranche, contrairement au total d'une Offre."
+                    + "Frais Syndic de la tranche, contrairement au total d'une Offre.\n\n"
+                    + "**Périmètre commercial** : créer un dossier sur un article dont le projet "
+                    + "n'est pas affecté à l'appelant renvoie **403** (et non 404 : ici c'est "
+                    + "l'appelant qui a nommé l'article, il n'y a rien à cacher). Le projet est "
+                    + "déduit du premier article via sa tranche."
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Dossier créé."),
+            @ApiResponse(responseCode = "400", description = "Prospection/article/mode de paiement "
+                    + "introuvable, prospection sans prospect lié, article déjà occupé, ou "
+                    + "`modePaieId`/`cin` manquant."),
+            @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
+                    + "le périmètre commercial de l'appelant.")
+    })
     public ResponseEntity<DossierDetailDto> create(@RequestBody CreerDossierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.create(request));
     }
