@@ -20,6 +20,13 @@ import org.springframework.web.cors.CorsUtils;
  * {@code /api/auth/**} (login itself) and the Swagger/OpenAPI doc endpoints. See
  * {@link OnboardingGateFilter} for the extra "première connexion" gate layered on top.
  * <p>
+ * Il n'y a plus <b>aucune</b> exception applicative à {@code authenticated()} : le trou
+ * {@code permitAll} qui laissait passer les générateurs de documents a été refermé avec le
+ * périmètre commercial. Ce point est structurant pour l'autorisation et pas seulement pour
+ * l'authentification — {@code PerimetreCommercialService} déduit le périmètre du principal, donc
+ * toute route accessible sans principal est, par construction, une route sans périmètre.
+ * N'y rajoutez pas d'exception pour du confort de test manuel.
+ * <p>
  * Phase 3 adds {@link EnableMethodSecurity} so {@code @PreAuthorize("hasRole(...)")} works on
  * individual endpoints — {@code UtilisateurAdminController} is the first (and, until another
  * endpoint needs one, only) place in the app that checks a specific role rather than just
@@ -61,13 +68,13 @@ public class SecurityConfig {
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // Générateurs de documents (PDF/Word) ouverts sans authentification pour
-                        // permettre les tests manuels — TEMPORAIRE, à retirer avant mise en prod
-                        // (voir SESSION_MEMORY.md). Ne couvre que les endpoints de génération, pas
-                        // le reste de /api/dossiers ou /api/prospections.
-                        .requestMatchers("/api/dossiers/*/documents/**").permitAll()
-                        .requestMatchers("/api/prospections/*/documents/**").permitAll()
-                        .requestMatchers("/api/prospections/*/devis/*/document").permitAll()
+                        // Les générateurs de documents (PDF/Word) étaient ouverts en permitAll pour
+                        // permettre des tests manuels, marqué TEMPORAIRE. Refermé avec le périmètre
+                        // commercial : sans authentification il n'y a pas de principal, donc pas de
+                        // périmètre — n'importe quel PDF de dossier (client, prix, échéancier)
+                        // était téléchargeable sans le moindre cookie, ce qui vidait la feature de
+                        // son sens pour tout document généré. Le front envoie déjà
+                        // credentials:'include' partout, l'impact UI est nul.
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(onboardingGateFilter, JwtAuthenticationFilter.class);

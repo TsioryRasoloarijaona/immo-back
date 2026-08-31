@@ -27,6 +27,35 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
             "AND (p.isClosed IS NULL OR p.isClosed = false)")
     long countOpenExcludingPreProspections();
 
+    /**
+     * Variante de {@link #countExcludingPreProspections()} restreinte au périmètre commercial.
+     * Le projet d'une prospection se résout <b>directement</b> par sa tranche
+     * ({@code ComProspection.StkHierarchyId} → {@code CfgTranche.CfgProjectId}), sans passer par
+     * {@code StkItem} : cette colonne n'est renseignée que sur 4,61 % des lignes et n'apporte
+     * aucune ligne supplémentaire (mesuré). {@code pr.id IS NULL} reste inclus — une prospection
+     * sans projet résoluble n'est masquée à personne (§6.4).
+     */
+    @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    long countExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
+
+    /** Variante de {@link #countOpenExcludingPreProspections()} restreinte au périmètre commercial. */
+    @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "AND (p.isClosed IS NULL OR p.isClosed = false) "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    long countOpenExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Point de contrôle unique du périmètre sur le chargement d'une prospection (ou
+     * pré-prospection) par id — voir {@code PerimetreInterceptor}. Hors périmètre ⇒ traitée comme
+     * inexistante (404), jamais 403.
+     */
+    @Query("SELECT COUNT(p) > 0 FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "WHERE p.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
+
     /** {@code GET /api/prospects/{id}/prospections} (GAP-06). */
     Page<ComProspection> findByCfgProspectId(UUID prospectId, Pageable pageable);
 
@@ -39,4 +68,19 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     @Query("SELECT p FROM ComProspection p WHERE "
             + "right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone")
     Page<ComProspection> findByNormalizedTempTel(@Param("normalizedPhone") String normalizedPhone, Pageable pageable);
+
+    /**
+     * Variante de {@link #findByNormalizedTempTel} restreinte au périmètre commercial.
+     * <p>
+     * Le filtrage doit impérativement être <b>dans la requête</b> et non appliqué après coup sur la
+     * page renvoyée : {@code HotlineService} plafonne cette liste à 50 lignes, et filtrer ces 50
+     * lignes en Java évincerait les lignes <em>du</em> périmètre — celles hors périmètre ayant déjà
+     * consommé la page — au lieu d'évincer celles hors périmètre. Voir §9ter.2.
+     */
+    @Query("SELECT p FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr WHERE "
+            + "right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    Page<ComProspection> findByNormalizedTempTelDansPerimetre(@Param("normalizedPhone") String normalizedPhone,
+                                                               @Param("projetIds") List<UUID> projetIds,
+                                                               Pageable pageable);
 }

@@ -46,6 +46,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -93,6 +94,7 @@ public class ProspectionService {
     private final StkItemRepository stkItemRepository;
     private final StrHistoryRepository historyRepository;
     private final AdmSequenceRepository sequenceRepository;
+    private final PerimetreCommercialService perimetreService;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -108,7 +110,9 @@ public class ProspectionService {
                                CfgTrancheRepository trancheRepository,
                                StkItemRepository stkItemRepository,
                                StrHistoryRepository historyRepository,
-                               AdmSequenceRepository sequenceRepository) {
+                               AdmSequenceRepository sequenceRepository,
+                               PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
         this.prospectService = prospectService;
         this.tierRepository = tierRepository;
@@ -156,7 +160,9 @@ public class ProspectionService {
                 .and((root, query, cb) -> cb.or(
                         cb.isNotNull(root.get("cfgProspect")),
                         cb.isNotNull(root.get("cfgCommercial"))
-                ));
+                ))
+                // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
+                .and(perimetreService.filtreProspections());
         return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
     }
 
@@ -172,7 +178,10 @@ public class ProspectionService {
                 .and((root, query, cb) -> cb.and(
                         cb.isNull(root.get("cfgProspect")),
                         cb.isNull(root.get("cfgCommercial"))
-                ));
+                ))
+                // Périmètre commercial : une pré-prospection a par construction un commercial NULL
+                // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
+                .and(perimetreService.filtreProspections());
         return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
     }
 
@@ -333,6 +342,9 @@ public class ProspectionService {
         if (request.trancheId() != null) {
             CfgTranche tranche = trancheRepository.findById(request.trancheId())
                     .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            // Périmètre commercial : créer une prospection sur un projet non affecté est refusé (403).
+            perimetreService.verifierEcritureSurTranche(tranche,
+                    "Création de prospection sur la tranche " + tranche.getCode());
             if (request.articleId() != null) {
                 StkItem article = stkItemRepository.findById(request.articleId())
                         .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
@@ -539,6 +551,10 @@ public class ProspectionService {
         }
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+        // Périmètre commercial : déplacer une prospection vers un projet non affecté est refusé
+        // (403) — sinon le périmètre se contournerait en sortant la ressource de son projet.
+        perimetreService.verifierEcritureSurTranche(tranche,
+                "Rattachement de prospection à la tranche " + tranche.getCode());
 
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())

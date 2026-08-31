@@ -4,12 +4,14 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-public interface ComActionMessageRepository extends JpaRepository<ComActionMessage, UUID> {
+public interface ComActionMessageRepository extends JpaRepository<ComActionMessage, UUID>,
+        JpaSpecificationExecutor<ComActionMessage> {
 
     List<ComActionMessage> findByComProspectionIdOrderByDocDateDesc(UUID prospectionId);
 

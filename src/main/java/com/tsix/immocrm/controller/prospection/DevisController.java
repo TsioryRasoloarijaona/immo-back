@@ -46,7 +46,14 @@ public class DevisController {
                     + "(dateDocument). Chaque ligne porte prospectionId/prospectionCode pour la "
                     + "colonne \"Prospection\" et le lien cliquable vers la prospection d'origine. "
                     + "sommePrixVenteTTCPage est calculé uniquement sur la page renvoyée, pas sur "
-                    + "l'ensemble des résultats filtrés — voir la description du champ."
+                    + "l'ensemble des résultats filtrés — voir la description du champ.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), seules les offres "
+                    + "portant une tranche d'un de ses projets affectés sont renvoyées (plus "
+                    + "celles sans tranche, dont le projet ne se résout pas). Ce filtre s'ajoute "
+                    + "aux filtres ci-dessus : demander explicitement une `trancheId` hors "
+                    + "périmètre renvoie une page vide, pas une erreur. `sommePrixVenteTTCPage` "
+                    + "porte donc sur les seules lignes visibles."
     )
     public DevisPageDto findAll(
             @Parameter(description = "Recherche libre sur le code de l'offre.")

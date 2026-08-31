@@ -19,6 +19,7 @@ import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -57,11 +58,14 @@ public class UtilisateurAdminService {
     private final CfgTierKindRepository tierKindRepository;
     private final AdmRoleRepository roleRepository;
     private final AdmUserRoleRepository userRoleRepository;
+    private final PerimetreCommercialService perimetreService;
 
     public UtilisateurAdminService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                                     PasswordEncoder passwordEncoder, CfgTierRepository tierRepository,
                                     CfgTierKindRepository tierKindRepository, AdmRoleRepository roleRepository,
-                                    AdmUserRoleRepository userRoleRepository) {
+                                    AdmUserRoleRepository userRoleRepository,
+                                    PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.passwordEncoder = passwordEncoder;
@@ -107,12 +111,17 @@ public class UtilisateurAdminService {
         Map<UUID, AppUserCredential> credentialByUserId = credentialRepository.findByAdmUserIdIn(userIds).stream()
                 .collect(Collectors.toMap(c -> c.getAdmUser().getId(), c -> c));
 
+        // Périmètre commercial : un seul agrégat pour toute la page, pas une requête par ligne.
+        Map<UUID, Integer> projetsByUserId = perimetreService.nombreProjetsParUtilisateur(userIds);
+
         return page.map(user -> toListItem(user,
                 rolesByUserId.getOrDefault(user.getId(), List.of()),
-                credentialByUserId.get(user.getId())));
+                credentialByUserId.get(user.getId()),
+                projetsByUserId.getOrDefault(user.getId(), 0)));
     }
 
-    private static UtilisateurListItemDto toListItem(AdmUser user, List<String> roles, AppUserCredential credential) {
+    private static UtilisateurListItemDto toListItem(AdmUser user, List<String> roles, AppUserCredential credential,
+                                                      int nombreProjets) {
         CfgTier employee = user.getCfgEmployee();
         CfgTierKind employeeKind = employee != null ? employee.getCfgTierKind() : null;
         return new UtilisateurListItemDto(
@@ -132,7 +141,8 @@ public class UtilisateurAdminService {
                 credential != null,
                 credential != null && Boolean.TRUE.equals(credential.getMustChangePassword()),
                 credential != null && Boolean.TRUE.equals(credential.getProfileCompleted()),
-                user.getUserCreateDateTime()
+                user.getUserCreateDateTime(),
+                nombreProjets
         );
     }
 

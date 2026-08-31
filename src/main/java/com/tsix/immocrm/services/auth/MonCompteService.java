@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.auth;
 import com.tsix.immocrm.dto.auth.ChangerMotDePasseRequest;
 import com.tsix.immocrm.dto.auth.CompleterProfilRequest;
 import com.tsix.immocrm.dto.auth.UtilisateurCourantDto;
+import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -14,6 +15,7 @@ import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.JwtService;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +40,13 @@ public class MonCompteService {
     private final CfgTierRepository tierRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final PerimetreCommercialService perimetreService;
 
     public MonCompteService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                              AdmUserRoleRepository userRoleRepository, CfgTierRepository tierRepository,
-                             PasswordEncoder passwordEncoder, JwtService jwtService) {
+                             PasswordEncoder passwordEncoder, JwtService jwtService,
+                             PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
@@ -146,7 +151,13 @@ public class MonCompteService {
                 .toList();
     }
 
-    private static UtilisateurCourantDto toDto(AdmUser user, List<String> roles, AppUserCredential credential) {
+    /**
+     * Le périmètre commercial est relu en base à chaque appel — jamais depuis le JWT : c'est
+     * précisément ce qui permet à {@code GET /api/mon-compte} de refléter immédiatement une
+     * affectation modifiée par un administrateur, sans reconnexion.
+     */
+    private UtilisateurCourantDto toDto(AdmUser user, List<String> roles, AppUserCredential credential) {
+        List<ProjetPerimetreDto> projets = perimetreService.projetsDuPerimetre(user.getId());
         return new UtilisateurCourantDto(
                 user.getId(),
                 user.getCode(),
@@ -155,7 +166,9 @@ public class MonCompteService {
                 user.getCfgEmployee() != null ? user.getCfgEmployee().getId() : null,
                 roles,
                 Boolean.TRUE.equals(credential.getMustChangePassword()),
-                Boolean.TRUE.equals(credential.getProfileCompleted())
+                Boolean.TRUE.equals(credential.getProfileCompleted()),
+                !projets.isEmpty(),
+                projets
         );
     }
 }

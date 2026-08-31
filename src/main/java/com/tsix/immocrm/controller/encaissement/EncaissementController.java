@@ -32,7 +32,12 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         + "`GET /api/dossiers/{id}/echeancier/{echeanceId}/reglements`, endpoint plus léger et "
         + "déjà scopé à un dossier — celui-ci est la vue transverse \"tous les encaissements\" "
         + "avec les mêmes filtres que le tableau legacy (entité, type, état, période, compte, "
-        + "dépôt...).")
+        + "dépôt...).\n\n"
+        + "Collection soumise au périmètre commercial : sur **toutes** les routes portant un "
+        + "identifiant, un encaissement hors du périmètre de l'appelant renvoie 404 (jamais 403 — "
+        + "un 403 confirmerait son existence), et un identifiant qui n'est pas un UUID valide "
+        + "renvoie 404 lui aussi, plutôt que le 400 habituel : il est refusé avant d'atteindre le "
+        + "contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.")
 @RestController
 @RequestMapping("/api/encaissements")
 public class EncaissementController {
@@ -55,7 +60,12 @@ public class EncaissementController {
                     + "POINTED, CANCELED) — l'écran legacy propose aussi \"Impayé(e)\"/\"Perdu(e)\" "
                     + "comme filtres mais aucune ligne réelle ne les porte à ce jour ; passés tel "
                     + "quel (comparaison insensible à la casse), donc utilisables dès qu'un vrai "
-                    + "code sera confirmé, sans changement d'API."
+                    + "code sera confirmé, sans changement d'API.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), cette liste ne "
+                    + "contient que les règlements portant au moins une ligne rattachée à un "
+                    + "dossier d'un de ses projets affectés. Les règlements dont aucune ligne ne "
+                    + "résout de projet restent visibles de tous."
     )
     public PageDto<EncaissementDto> findAll(
             @Parameter(description = "Id(s) d'entité juridique (CfgCompany). Répétable, OR. Absent = toutes.")
@@ -100,11 +110,17 @@ public class EncaissementController {
             description = "Même forme que les lignes de `GET /api/encaissements` — alimente le "
                     + "panneau détail \"Pièce de règlement\" côté front (`EncaissementDetail.tsx`). "
                     + "`montantBrutRestant` et `montantNet` sont recalculés côté serveur, jamais "
-                    + "stockés, comme sur la liste."
+                    + "stockés, comme sur la liste.\n\n"
+                    + "**Périmètre commercial** : un encaissement hors du périmètre de l'appelant "
+                    + "renvoie **404**, et non 403 — un 403 confirmerait son existence et "
+                    + "permettrait d'énumérer les identifiants."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Encaissement trouvé."),
-            @ApiResponse(responseCode = "404", description = "Aucun StlSettlement pour cet id.")
+            @ApiResponse(responseCode = "404", description = "Aucun StlSettlement pour cet id, ou "
+                    + "encaissement hors du périmètre commercial de l'appelant — les deux cas sont "
+                    + "volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque "
+                    + "l'identifiant fourni n'est pas un UUID valide.")
     })
     public EncaissementDto findById(
             @Parameter(description = "Id du règlement (StlSettlement.id).")

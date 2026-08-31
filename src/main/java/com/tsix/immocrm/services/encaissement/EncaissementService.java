@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
@@ -42,11 +43,14 @@ public class EncaissementService {
 
     private final StlSettlementRepository settlementRepository;
     private final StlSettlementLineRepository settlementLineRepository;
+    private final PerimetreCommercialService perimetreService;
 
     public EncaissementService(StlSettlementRepository settlementRepository,
-                                StlSettlementLineRepository settlementLineRepository) {
+                                StlSettlementLineRepository settlementLineRepository,
+                                PerimetreCommercialService perimetreService) {
         this.settlementRepository = settlementRepository;
         this.settlementLineRepository = settlementLineRepository;
+        this.perimetreService = perimetreService;
     }
 
     public Page<EncaissementDto> findAll(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
@@ -134,7 +138,11 @@ public class EncaissementService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        return settlementRepository.findAll(spec, pageable).map(this::toDto);
+        // Périmètre commercial : ne renvoie que les règlements rattachés à un dossier d'un projet
+        // affecté (plus ceux qu'aucun projet ne résout — §6.4). Prédicat neutre si l'appelant
+        // n'est pas restreint.
+        return settlementRepository.findAll(spec.and(perimetreService.filtreEncaissements()), pageable)
+                .map(this::toDto);
     }
 
     /**

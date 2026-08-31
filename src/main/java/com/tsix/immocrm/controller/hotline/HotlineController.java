@@ -50,7 +50,15 @@ public class HotlineController {
                     + "pays : \"+212 6 12 34 56 78\", \"212612345678\" et \"0612345678\" sont "
                     + "considérés comme le même numéro. Ne renvoie jamais 404 : si personne ne "
                     + "correspond, `connu` vaut `false` et les listes sont vides — c'est au "
-                    + "front de proposer la création d'une nouvelle fiche dans ce cas."
+                    + "front de proposer la création d'une nouvelle fiche dans ce cas.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), les listes imbriquées "
+                    + "de chaque fiche (prospections, dossiers, règlements, interactions) ainsi "
+                    + "que `appelsSansFiche` ne contiennent que les lignes de ses projets "
+                    + "affectés. La **fiche elle-même n'est pas masquée** : le tier reste "
+                    + "identifiable — c'est le but de cet écran, un agent doit pouvoir dire qui "
+                    + "appelle — mais son activité sur les autres projets ne lui est pas montrée. "
+                    + "Un appelant peut donc apparaître `connu` avec des listes vides."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Recherche effectuée (que quelqu'un "

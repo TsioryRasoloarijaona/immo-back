@@ -7,6 +7,10 @@ import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
 import com.tsix.immocrm.services.client.ClientService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -55,7 +59,23 @@ public class ClientController {
     }
 
     @GetMapping("/{id}/dossiers")
-    public PageDto<DossierListItemDto> getDossiers(@PathVariable UUID id,
+    @Operation(
+            summary = "Dossiers de vente d'un client",
+            description = "Les dossiers dont ce tier est l'acquéreur — mêmes `DossierListItemDto` "
+                    + "que GET /api/dossiers.\n\n"
+                    + "**Périmètre commercial** : si l'appelant est restreint "
+                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), seuls les dossiers de "
+                    + "ses projets affectés sont renvoyés. Le **client**, lui, n'est pas filtré : "
+                    + "sa fiche reste accessible, la liste peut simplement revenir vide ou "
+                    + "partielle. `totalElements` reflète le nombre filtré, pas le total réel."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Dossiers du client (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucun tier avec cet id.")
+    })
+    public PageDto<DossierListItemDto> getDossiers(
+            @Parameter(description = "Identifiant du client (CfgTier.PKey).")
+            @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(subResourcesService.dossiers(id, pageable));
     }

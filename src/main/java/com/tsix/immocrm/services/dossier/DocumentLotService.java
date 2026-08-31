@@ -8,6 +8,7 @@ import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.PdfMerger;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class DocumentLotService {
     private final FicheTropPercuService ficheTropPercuService;
     private final FicheTropPercuPdfRenderer ficheTropPercuPdfRenderer;
     private final PdfMerger pdfMerger;
+    private final PerimetreCommercialService perimetreService;
 
     public DocumentLotService(FicheReservationService ficheReservationService,
                                FicheReservationPdfRenderer ficheReservationPdfRenderer,
@@ -55,7 +57,9 @@ public class DocumentLotService {
                                FicheDossierVentePdfRenderer ficheDossierVentePdfRenderer,
                                FicheTropPercuService ficheTropPercuService,
                                FicheTropPercuPdfRenderer ficheTropPercuPdfRenderer,
-                               PdfMerger pdfMerger) {
+                               PdfMerger pdfMerger,
+                               PerimetreCommercialService perimetreService) {
+        this.perimetreService = perimetreService;
         this.ficheReservationService = ficheReservationService;
         this.ficheReservationPdfRenderer = ficheReservationPdfRenderer;
         this.acteReservationService = acteReservationService;
@@ -99,6 +103,11 @@ public class DocumentLotService {
      * Fails on the first unknown/invalid dossier id (via the underlying {@code xxxService.collect}'s
      * own {@code ResourceNotFoundException}) rather than silently skipping it — a batch print run
      * with a missing dossier should be reported, not quietly short one page group.
+     *
+     * <p>Périmètre commercial : ces endpoints reçoivent leurs ids dans le <b>corps</b> de la requête,
+     * hors de portée de {@code PerimetreInterceptor} (qui ne lit que l'URL) — c'est le seul endroit
+     * de l'application où la vérification d'accès par id doit être appelée à la main. Un dossier hors
+     * périmètre y est traité comme inexistant (404), exactement comme sur le endpoint unitaire.
      */
     private byte[] genererLot(List<UUID> dossierIds, Function<UUID, byte[]> genererUnDocument) {
         if (dossierIds == null || dossierIds.isEmpty()) {
@@ -106,6 +115,7 @@ public class DocumentLotService {
         }
         List<byte[]> documents = new ArrayList<>(dossierIds.size());
         for (UUID dossierId : dossierIds) {
+            perimetreService.verifierAccesDossier(dossierId);
             documents.add(genererUnDocument.apply(dossierId));
         }
         return pdfMerger.merge(documents);

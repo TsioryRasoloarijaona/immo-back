@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.auth;
 
 import com.tsix.immocrm.dto.auth.UtilisateurCourantDto;
+import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
@@ -8,6 +9,7 @@ import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.security.JwtService;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,15 +30,17 @@ public class AuthService {
     private final AdmUserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final PerimetreCommercialService perimetreService;
 
     public AuthService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                         AdmUserRoleRepository userRoleRepository, PasswordEncoder passwordEncoder,
-                        JwtService jwtService) {
+                        JwtService jwtService, PerimetreCommercialService perimetreService) {
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.perimetreService = perimetreService;
     }
 
     /**
@@ -76,8 +80,14 @@ public class AuthService {
         return new LoginResult(token, toUtilisateurCourantDto(user, roles, mustChangePassword, profileCompleted));
     }
 
-    private static UtilisateurCourantDto toUtilisateurCourantDto(AdmUser user, List<String> roles,
-                                                                   boolean mustChangePassword, boolean profileCompleted) {
+    /**
+     * Le périmètre est résolu <b>par requête</b> à chaque connexion, jamais embarqué dans le JWT :
+     * un token survit à une modification d'affectation par l'administrateur, l'y stocker servirait
+     * un périmètre périmé. Voir {@link PerimetreCommercialService}.
+     */
+    private UtilisateurCourantDto toUtilisateurCourantDto(AdmUser user, List<String> roles,
+                                                           boolean mustChangePassword, boolean profileCompleted) {
+        List<ProjetPerimetreDto> projets = perimetreService.projetsDuPerimetre(user.getId());
         return new UtilisateurCourantDto(
                 user.getId(),
                 user.getCode(),
@@ -86,7 +96,9 @@ public class AuthService {
                 user.getCfgEmployee() != null ? user.getCfgEmployee().getId() : null,
                 roles,
                 mustChangePassword,
-                profileCompleted
+                profileCompleted,
+                !projets.isEmpty(),
+                projets
         );
     }
 

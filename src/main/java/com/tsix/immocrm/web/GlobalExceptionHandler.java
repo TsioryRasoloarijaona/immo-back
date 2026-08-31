@@ -1,6 +1,7 @@
 package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -31,6 +32,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedException.class)
     public ProblemDetail handleUnauthorized(UnauthorizedException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    /**
+     * Écriture refusée sur une ressource explicitement nommée par l'appelant (typiquement un projet
+     * hors de son périmètre commercial). Les <em>lectures</em> hors périmètre passent au contraire
+     * par {@link ResourceNotFoundException} (404) — voir {@link ForbiddenException}.
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail handleForbidden(ForbiddenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)
