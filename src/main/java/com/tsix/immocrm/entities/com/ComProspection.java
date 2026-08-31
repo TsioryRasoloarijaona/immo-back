@@ -62,6 +62,10 @@ public class ComProspection {
     @JoinColumn(name = "ComProspectionKindId")
     private ComProspectionKind comProspectionKind;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComActionMessageTypeId")
+    private ComActionMessageType comActionMessageType;
+
     @Column(name = "FundingOwnBase", precision = 26, scale = 6)
     private BigDecimal fundingOwnBase;
 

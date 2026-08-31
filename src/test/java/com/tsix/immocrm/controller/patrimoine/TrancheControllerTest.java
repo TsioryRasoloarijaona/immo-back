@@ -1,13 +1,16 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class TrancheControllerTest {
 
     @Autowired
@@ -31,6 +35,18 @@ class TrancheControllerTest {
 
     @Autowired
     private CfgTrancheRepository trancheRepository;
+
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+
+    /** Entité juridique active, voir com.tsix.immocrm.domain.EntitesJuridiquesActives. */
+    private CfgCompany newActiveCompany() {
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        company.setCode("ADMOD");
+        company.setDescription("ADMOD");
+        return companyRepository.save(company);
+    }
 
     @Test
     void findById_returnsDetailWithPenaltiesAndDelays() throws Exception {
@@ -62,5 +78,48 @@ class TrancheControllerTest {
         mockMvc.perform(get("/api/tranches/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void findAll_filterByProjetId() throws Exception {
+        CfgProject projetA = new CfgProject();
+        projetA.setId(UUID.randomUUID());
+        projetA.setCode("PRJ-TR-FLAT-A");
+        projetA.setCfgCompany(newActiveCompany());
+        projectRepository.save(projetA);
+
+        CfgProject projetB = new CfgProject();
+        projetB.setId(UUID.randomUUID());
+        projetB.setCode("PRJ-TR-FLAT-B");
+        projectRepository.save(projetB);
+
+        CfgTranche trancheA = new CfgTranche();
+        trancheA.setId(UUID.randomUUID());
+        trancheA.setCode("TR-FLAT-A");
+        trancheA.setCfgProject(projetA);
+        trancheRepository.save(trancheA);
+
+        CfgTranche trancheB = new CfgTranche();
+        trancheB.setId(UUID.randomUUID());
+        trancheB.setCode("TR-FLAT-B");
+        trancheB.setCfgProject(projetB);
+        trancheRepository.save(trancheB);
+
+        mockMvc.perform(get("/api/tranches").param("projetId", projetA.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + trancheA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + trancheB.getId() + "')]").doesNotExist());
+    }
+
+    @Test
+    void findAll_noFilter_returnsAllTranches() throws Exception {
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-FLAT-ALL");
+        trancheRepository.save(tranche);
+
+        mockMvc.perform(get("/api/tranches"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
     }
 }

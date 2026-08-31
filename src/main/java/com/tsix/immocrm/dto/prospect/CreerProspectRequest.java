@@ -11,6 +11,12 @@ import java.util.UUID;
  * directly from {@code CfgTier}. Adjust once a spec is available. No fields are marked
  * required at the bean-validation level since none of the underlying CfgTier columns are
  * NOT NULL; the service only requires at least one of nom/raisonSociale to identify the tier.
+ *
+ * GAP-05: extended with the Omran "Général" tab identity fields that were missing
+ * (titre/sexe/pays/nationalite/situationFamiliale/typeResidence/regimeMatrimonial/profession/
+ * salaire/employeur/anciennete/filsDe/etDe/adresse2/adresse3/pieceIdentite), plus
+ * lieuNaissance/nombreEnfants which were read-only on {@link ProspectDetailDto} but had no
+ * write path.
  */
 public record CreerProspectRequest(
         String prenom,
@@ -23,8 +29,27 @@ public record CreerProspectRequest(
         String ville,
         String codePostal,
         LocalDateTime dateNaissance,
+        String lieuNaissance,
+        Integer nombreEnfants,
         UUID typeId,
         UUID kindId,
-        UUID commercialId
+        UUID commercialId,
+        UUID titreId,
+        UUID sexeId,
+        UUID paysResidenceId,
+        UUID paysId,
+        UUID nationaliteId,
+        UUID situationFamilialeId,
+        UUID typeResidenceId,
+        UUID regimeMatrimonialId,
+        UUID professionId,
+        UUID salaireId,
+        String employeur,
+        Integer anciennete,
+        String filsDe,
+        String etDe,
+        String adresse2,
+        String adresse3,
+        PieceIdentiteRequest pieceIdentite
 ) {
 }

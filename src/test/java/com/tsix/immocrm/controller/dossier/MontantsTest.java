@@ -2,16 +2,17 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkVocation;
-import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
-import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class MontantsTest {
 
     @Autowired
@@ -40,7 +42,7 @@ class MontantsTest {
     private StkVocationRepository stkVocationRepository;
 
     @Autowired
-    private StlSettlementTypeRepository settlementTypeRepository;
+    private ComSettlementCategoryRepository settlementCategoryRepository;
 
     private ComFolder newFolder(String code) {
         StkVocation vocation = new StkVocation();
@@ -55,18 +57,18 @@ class MontantsTest {
         return folderRepository.save(folder);
     }
 
-    private StlSettlementType newType(String code) {
-        StlSettlementType type = new StlSettlementType();
-        type.setId(UUID.randomUUID());
-        type.setCode(code);
-        return settlementTypeRepository.save(type);
+    private ComSettlementCategory newCategory(String code) {
+        ComSettlementCategory categorie = new ComSettlementCategory();
+        categorie.setId(UUID.randomUUID());
+        categorie.setCode(code);
+        return settlementCategoryRepository.save(categorie);
     }
 
-    private void newLine(ComFolder folder, StlSettlementType type, BigDecimal montant, boolean excludeFromPrice) {
+    private void newLine(ComFolder folder, ComSettlementCategory categorie, BigDecimal montant, boolean excludeFromPrice) {
         ComDocument doc = new ComDocument();
         doc.setId(UUID.randomUUID());
         doc.setComFolder(folder);
-        doc.setStlSettlementType(type);
+        doc.setComSettlementCategory(categorie);
         doc.setAmount(montant);
         doc.setExcludeFromPrice(excludeFromPrice);
         documentRepository.save(doc);
@@ -75,8 +77,8 @@ class MontantsTest {
     @Test
     void montants_groupsByCategoryAndExcludesFraisFromTtcTotal() throws Exception {
         ComFolder folder = newFolder("DOS-MONT-1");
-        StlSettlementType avance = newType("AVANCE-TEST");
-        StlSettlementType frais = newType("FRAIS-TEST");
+        ComSettlementCategory avance = newCategory("AVANCE-TEST");
+        ComSettlementCategory frais = newCategory("FRAIS-TEST");
 
         newLine(folder, avance, new BigDecimal("500000"), false);
         newLine(folder, avance, new BigDecimal("200000"), false);

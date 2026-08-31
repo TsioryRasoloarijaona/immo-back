@@ -331,5 +331,49 @@ public class CfgTier {
     @Column(name = "PaymentDelay")
     private Integer paymentDelay;
 
+    // -- GAP-05: Omran "Général" tab identity fields --
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmTierTitleId")
+    private com.tsix.immocrm.entities.adm.AdmTierTitle admTierTitle;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmSexTypeId")
+    private com.tsix.immocrm.entities.adm.AdmSexType admSexType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private com.tsix.immocrm.entities.adm.AdmCountry admCountry;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryResidenceId")
+    private com.tsix.immocrm.entities.adm.AdmCountry admCountryResidence;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmNationalityId")
+    private com.tsix.immocrm.entities.adm.AdmNationality admNationality;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmFamilySituationId")
+    private com.tsix.immocrm.entities.adm.AdmFamilySituation admFamilySituation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmResidenceTypeId")
+    private com.tsix.immocrm.entities.adm.AdmResidenceType admResidenceType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmMatrimonialRegimeId")
+    private com.tsix.immocrm.entities.adm.AdmMatrimonialRegime admMatrimonialRegime;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmProfessionId")
+    private com.tsix.immocrm.entities.adm.AdmProfession admProfession;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmSalaryId")
+    private com.tsix.immocrm.entities.adm.AdmSalary admSalary;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmIdentityDocumentTypeId")
+    private com.tsix.immocrm.entities.adm.AdmIdentityDocumentType admIdentityDocumentType;
 }

@@ -129,5 +129,8 @@ public class CfgProject {
     @Column(name = "DescriptionLong", length = 500)
     private String descriptionLong;
 
-
+    /** The legal entity this project is sold under (e.g. "ADMOD", "MAYLINE") — see {@link CfgCompany}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
 }

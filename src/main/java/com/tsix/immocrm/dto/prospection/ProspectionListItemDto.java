@@ -15,6 +15,7 @@ public record ProspectionListItemDto(
         UUID id,
         String code,
         LocalDateTime dateDocument,
+        String tempDescription,
         UUID prospectId,
         String prospectNom,
         UUID commercialId,
@@ -23,6 +24,11 @@ public record ProspectionListItemDto(
         String etape,
         Boolean fermee,
         BigDecimal prix,
-        BigDecimal surface
+        BigDecimal surface,
+        UUID trancheId,
+        // -- Libellé de la tranche principale (CfgTranche.Code/Description), pour affichage sans
+        // second appel à GET /api/tranches/{trancheId}.
+        String trancheCode,
+        String trancheDescription
 ) {
 }

@@ -15,6 +15,9 @@ public record ProspectionDetailDto(
         UUID id,
         String code,
         LocalDateTime dateDocument,
+        String tempDescription,
+        String tempTel,
+        String tempEmail,
         UUID prospectId,
         String prospectNom,
         UUID commercialId,
@@ -27,6 +30,12 @@ public record ProspectionDetailDto(
         String origineSupport,
         UUID etapeId,
         String etape,
+        UUID vocationId,
+        String vocation,
+        UUID typeContactId,
+        String typeContact,
+        UUID actionCommercialeId,
+        String actionCommerciale,
         String notes,
         BigDecimal surface,
         BigDecimal surfaceJusqua,
@@ -42,7 +51,17 @@ public record ProspectionDetailDto(
         String raisonFermeture,
         String raisonFermetureTexte,
         Boolean ancienClient,
+        // -- Tranche principale et article principal (ComProspection.StkHierarchyId/StkItemId).
+        // Toujours cohérents entre eux quand articleId est renseigné (l'article appartient
+        // forcément à trancheId) — garanti par PATCH /api/prospections/{id}/tranche-principale,
+        // le seul endpoint qui les modifie. Ne pas confondre avec les "autres tranches"
+        // (GET/POST /api/prospections/{id}/autres-tranches) qui sont des intérêts secondaires
+        // indépendants, sur d'autres tranches/articles.
         UUID trancheId,
-        UUID articleId
+        String trancheCode,
+        String trancheDescription,
+        UUID articleId,
+        String articleCode,
+        String articleDescription
 ) {
 }

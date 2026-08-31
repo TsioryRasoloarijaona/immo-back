@@ -1,0 +1,404 @@
+package com.tsix.immocrm.controller.referentiel;
+
+import com.tsix.immocrm.domain.StatutArticle;
+import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.referentiel.OrigineProspectionDto;
+import com.tsix.immocrm.dto.referentiel.PaysDto;
+import com.tsix.immocrm.dto.referentiel.ProfilCategorieDto;
+import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import com.tsix.immocrm.dto.referentiel.ResultatInteractionDto;
+import com.tsix.immocrm.dto.referentiel.TitreDto;
+import com.tsix.immocrm.dto.referentiel.TypeReglementDto;
+import com.tsix.immocrm.dto.referentiel.VilleDto;
+import com.tsix.immocrm.services.referentiel.ReferentielService;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import java.util.List;
+import java.util.UUID;
+
+import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
+
+/** GAP-02 — read-only lookup tables backing the Prospect/Prospection qualification forms. */
+@Tag(name = "Référentiels", description = "Listes de référence pour peupler les dropdowns/cases "
+        + "à cocher des formulaires (Prospection, Dossier, Patrimoine...).\n\n"
+        + "**Guide d'implémentation front — sélection Article/Sous-article par Catégorie + Type**\n"
+        + "Reproduit le formulaire legacy \"Tranche → Catégorie → Type → Article\" : l'utilisateur "
+        + "coche une catégorie (ex. \"APPARTEMENT\") et un type (ex. \"2 CHAMBRES + SALON\"), et "
+        + "voit apparaître les codes d'articles disponibles pour cette combinaison — pas l'inverse "
+        + "(on ne choisit jamais un article directement par son code dans une longue liste).\n"
+        + "1. `GET /api/referentiels/tranches?projetId=` → dropdown Tranche (ou "
+        + "`GET /api/referentiels/projets` d'abord si le Projet n'est pas encore choisi).\n"
+        + "2. `GET /api/referentiels/categories-bien` et `GET /api/referentiels/types-bien` → "
+        + "cases à cocher \"Catégorie\"/\"Type\", indépendantes de la tranche (affichées une fois "
+        + "pour toutes, pas rechargées à chaque tranche).\n"
+        + "3. `GET /api/referentiels/articles?trancheId=&categorieId=&typeId=` (les deux derniers "
+        + "répétables si plusieurs cases cochées) → la liste d'articles qui en résulte, chaque "
+        + "entrée exposant `code`, `description` (le nom), `statut` (DISPONIBLE/OCCUPE) et déjà "
+        + "sa catégorie/son type (`categorieLibelle`/`typeLibelle`) pour affichage sans appel "
+        + "supplémentaire. L'utilisateur choisit l'article dans **cette** liste filtrée, pas dans "
+        + "un dropdown de tous les articles de la tranche.\n"
+        + "4. Une fois l'article choisi, `GET /api/articles/{id}` donne le détail complet "
+        + "(tranche, catégorie/type, prix, `sousLots`). Si l'article a des sous-articles et que "
+        + "l'utilisateur doit en choisir un, `GET /api/referentiels/sous-articles?articleId=` "
+        + "(mêmes filtres `categorieId`/`typeId` optionnels) rejoue exactement la même mécanique "
+        + "à l'étage du dessous — chaque sous-article y est identifié par son `description` (son "
+        + "nom, ex. \"Place de parking sous-sol n°3\"), jamais par son seul `code`.\n"
+        + "Tous ces appels par défaut ne renvoient que les éléments DISPONIBLE — passer "
+        + "`statut=OCCUPE` explicitement pour voir les indisponibles.")
+@RestController
+@RequestMapping("/api/referentiels")
+public class ReferentielController {
+
+    private final ReferentielService referentielService;
+
+    public ReferentielController(ReferentielService referentielService) {
+        this.referentielService = referentielService;
+    }
+
+    @GetMapping("/roles")
+    @Operation(
+            summary = "Liste des rôles applicatifs (AdmRole)",
+            description = "Rôles pouvant être assignés à un compte utilisateur — alimente le "
+                    + "choix (cases à cocher) \"roles\" de POST /api/utilisateurs lors de la "
+                    + "création d'un employé. Chaque code (ex. \"Commercial\", \"Administrateur\") "
+                    + "pilote aussi les autorisations d'accès (hasRole(...)) sur les endpoints "
+                    + "réservés."
+    )
+    public List<ReferentielItemDto> getRoles() {
+        return referentielService.roles();
+    }
+
+    @GetMapping("/etapes-prospection")
+    public List<ReferentielItemDto> getEtapesProspection() {
+        return referentielService.etapesProspection();
+    }
+
+    @GetMapping("/origines-prospection")
+    public List<OrigineProspectionDto> getOriginesProspection() {
+        return referentielService.originesProspection();
+    }
+
+    @GetMapping("/origines-prospection/{origineId}/supports")
+    public List<ReferentielItemDto> getSupportsForOrigine(@PathVariable UUID origineId) {
+        return referentielService.supportsForOrigine(origineId);
+    }
+
+    @GetMapping("/raisons-cloture")
+    public List<ReferentielItemDto> getRaisonsCloture() {
+        return referentielService.raisonsCloture();
+    }
+
+    @GetMapping("/types-contact-prospection")
+    public List<ReferentielItemDto> getTypesContactProspection() {
+        return referentielService.typesContactProspection();
+    }
+
+    @GetMapping("/resultats-interaction")
+    @Operation(
+            summary = "Résultats possibles pour une interaction (dropdown \"Résultat\")",
+            description = "Liste les résultats utilisables comme `resultatId` dans "
+                    + "`POST /api/prospections/{id}/interactions` (ex: \"Rendez vous pris\", "
+                    + "\"Hors Budget\", \"Client injoignable ou Boite vocale\"...). Chaque entrée "
+                    + "indique via `necessiteDateRdv`/`alerteRecommandee` comment adapter le "
+                    + "formulaire, sans avoir à coder les libellés en dur côté front."
+    )
+    public List<ResultatInteractionDto> getResultatsInteraction() {
+        return referentielService.resultatsInteraction();
+    }
+
+    @GetMapping("/actions-commerciales")
+    public List<ReferentielItemDto> getActionsCommerciales() {
+        return referentielService.actionsCommerciales();
+    }
+
+    @GetMapping("/vocations")
+    public List<ReferentielItemDto> getVocations() {
+        return referentielService.vocations();
+    }
+
+    @GetMapping("/natures")
+    @Operation(
+            summary = "Dropdown \"Nature\" pour le filtre natureId des endpoints Article",
+            description = "Alimente `natureId` sur `GET /api/articles`/`GET /api/tranches/{id}/articles` "
+                    + "(instructions/from_front.md #4) — `StkKind`, référentiel de la nature physique "
+                    + "du bien (ex. \"TER\" pour terrain), distinct de Catégorie/Type."
+    )
+    public List<ReferentielItemDto> getNatures() {
+        return referentielService.natures();
+    }
+
+    @GetMapping("/etages")
+    @Operation(
+            summary = "Dropdown \"Étage\" pour le filtre etageId des endpoints Article",
+            description = "Alimente `etageId` sur `GET /api/articles`/`GET /api/tranches/{id}/articles` "
+                    + "(instructions/from_front.md #4) — `StkFloor` (ex. code \"RDC\")."
+    )
+    public List<ReferentielItemDto> getEtages() {
+        return referentielService.etages();
+    }
+
+    @GetMapping("/tier-types")
+    public List<ReferentielItemDto> getTierTypes() {
+        return referentielService.tierTypes();
+    }
+
+    @GetMapping("/tier-types/{typeId}/kinds")
+    public List<ReferentielItemDto> getTierKindsForType(@PathVariable UUID typeId) {
+        return referentielService.tierKindsForType(typeId);
+    }
+
+    @GetMapping("/types-employe")
+    @Operation(
+            summary = "Types d'employé (CfgTierKind) assignables à un compte",
+            description = "Codes CfgTierKind valides pour `typeEmployeCode` de "
+                    + "`POST /api/utilisateurs` lors de la création d'un employé (ex. \"COM\" "
+                    + "pour commercial) — équivalent de `GET /api/referentiels/tier-types/{typeId}/"
+                    + "kinds` déjà filtré sur le CfgTierType \"EMP\", pour ne pas obliger le front "
+                    + "à connaître son id."
+    )
+    public List<ReferentielItemDto> getTypesEmploye() {
+        return referentielService.typesEmploye();
+    }
+
+    @GetMapping("/titres")
+    public List<TitreDto> getTitres() {
+        return referentielService.titres();
+    }
+
+    @GetMapping("/sexes")
+    public List<ReferentielItemDto> getSexes() {
+        return referentielService.sexes();
+    }
+
+    @GetMapping("/pays")
+    public List<PaysDto> getPays() {
+        return referentielService.pays();
+    }
+
+    @GetMapping("/nationalites")
+    public List<ReferentielItemDto> getNationalites() {
+        return referentielService.nationalites();
+    }
+
+    @GetMapping("/situations-familiales")
+    public List<ReferentielItemDto> getSituationsFamiliales() {
+        return referentielService.situationsFamiliales();
+    }
+
+    @GetMapping("/types-residence")
+    public List<ReferentielItemDto> getTypesResidence() {
+        return referentielService.typesResidence();
+    }
+
+    @GetMapping("/regimes-matrimoniaux")
+    public List<ReferentielItemDto> getRegimesMatrimoniaux() {
+        return referentielService.regimesMatrimoniaux();
+    }
+
+    @GetMapping("/types-piece-identite")
+    public List<ReferentielItemDto> getTypesPieceIdentite() {
+        return referentielService.typesPieceIdentite();
+    }
+
+    @GetMapping("/types-piece-jointe")
+    @Operation(
+            summary = "Types de pièce jointe disponibles",
+            description = "Liste le référentiel `AdmAttachedFileType` (ex. \"PIECE D'IDENTITE\", "
+                    + "\"CONTRAT\", \"FICHE PERMISSION REMISE DES CLES\"...), triée par "
+                    + "description. À utiliser pour peupler le sélecteur de type lors du dépôt "
+                    + "d'une pièce jointe de dossier (`POST /api/dossiers/{id}/pieces-jointes`, "
+                    + "paramètre `typeId`)."
+    )
+    public List<ReferentielItemDto> getTypesPieceJointe() {
+        return referentielService.typesPieceJointe();
+    }
+
+    @GetMapping("/professions")
+    public List<ReferentielItemDto> getProfessions() {
+        return referentielService.professions();
+    }
+
+    @GetMapping("/salaires")
+    public List<ReferentielItemDto> getSalaires() {
+        return referentielService.salaires();
+    }
+
+    @GetMapping("/categories-bien")
+    public List<ReferentielItemDto> getCategoriesBien() {
+        return referentielService.categoriesBien();
+    }
+
+    @GetMapping("/types-bien")
+    public List<ReferentielItemDto> getTypesBien() {
+        return referentielService.typesBien();
+    }
+
+    @GetMapping("/types-relation-contact")
+    public List<ReferentielItemDto> getTypesRelationContact() {
+        return referentielService.typesRelationContact();
+    }
+
+    @GetMapping("/villes")
+    public PageDto<VilleDto> getVilles(@RequestParam(required = false) UUID paysId,
+                                        @RequestParam(required = false) String search,
+                                        @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+        return PageDto.of(referentielService.villes(paysId, search, pageable));
+    }
+
+    @GetMapping("/modes-paiement")
+    public List<ReferentielItemDto> getModesPaiement() {
+        return referentielService.modesPaiement();
+    }
+
+    @GetMapping("/types-reglement")
+    @Operation(
+            summary = "Dropdown \"Type\" pour l'ajout d'un règlement",
+            description = "Alimente `CreerReglementRequest.typeId` (`POST "
+                    + ".../echeancier/{echeanceId}/reglements`) — table `StlSettlementType`, "
+                    + "**distincte** de `GET /api/referentiels/modes-paiement` (qui alimente "
+                    + "`CreerDossierRequest.modePaieId`, un champ différent utilisé uniquement à la "
+                    + "création du dossier). Chaque entrée porte `banqueObligatoire` : quand vrai "
+                    + "(ex. CHÈQUE, VIREMENT), le formulaire doit aussi demander une banque via "
+                    + "`GET /api/referentiels/banques` ; quand faux (ex. ESPÈCES), ce champ n'a pas "
+                    + "de sens et doit être masqué. Porte aussi `referenceObligatoire` : quand vrai "
+                    + "(ex. CHÈQUE, EFFET), le formulaire doit demander une référence "
+                    + "(`CreerReglementRequest.reference`) — **enforcé côté serveur** (400 si "
+                    + "absente à la création), contrairement à `banqueObligatoire` qui reste "
+                    + "indicatif."
+    )
+    public List<TypeReglementDto> getTypesReglement() {
+        return referentielService.typesReglement();
+    }
+
+    @GetMapping("/banques")
+    @Operation(
+            summary = "Dropdown \"Banque\" pour l'ajout d'un règlement",
+            description = "Alimente `CreerReglementRequest.banqueId` — `CfgTier` de type \"BAN\". "
+                    + "N'a de sens que lorsque le type de règlement choisi "
+                    + "(`GET /api/referentiels/types-reglement`) a `banqueObligatoire=true`."
+    )
+    public List<ReferentielItemDto> getBanques() {
+        return referentielService.banques();
+    }
+
+    @GetMapping("/entites")
+    @Operation(
+            summary = "Dropdown \"Entité\" pour GET /api/encaissements",
+            description = "Entités juridiques actives (CfgCompany, ADMOD/GHRIZA) — mêmes valeurs "
+                    + "que le filtre \"Entité\" de l'écran legacy \"Encaissements Vente\"."
+    )
+    public List<ReferentielItemDto> getEntites() {
+        return referentielService.entites();
+    }
+
+    @GetMapping("/comptes")
+    @Operation(
+            summary = "Dropdown \"Compte\" pour GET /api/encaissements",
+            description = "Comptes bancaires (StlAccount) — un compte par entité juridique en "
+                    + "données réelles."
+    )
+    public List<ReferentielItemDto> getComptes() {
+        return referentielService.comptes();
+    }
+
+    @GetMapping("/depots")
+    @Operation(
+            summary = "Dropdown \"Dépôt\" pour GET /api/encaissements",
+            description = "Catégories de dépôt (StlDeposit) — 3 lignes en données réelles : "
+                    + "FOURNISSEUR/CLIENT/BANQUE."
+    )
+    public List<ReferentielItemDto> getDepots() {
+        return referentielService.depots();
+    }
+
+    @GetMapping("/categories-echeance")
+    public List<ReferentielItemDto> getCategoriesEcheance() {
+        return referentielService.categoriesEcheance();
+    }
+
+    @GetMapping("/profils-prospection")
+    public List<ProfilCategorieDto> getProfilsProspection() {
+        return referentielService.profilsProspection();
+    }
+
+    @GetMapping("/projets")
+    @Operation(
+            summary = "Dropdown \"Projet\"",
+            description = "Tous les projets (CfgProject), pour peupler un sélecteur par nom/code "
+                    + "plutôt que par id — premier maillon de la cascade Projet → Tranche → Article."
+    )
+    public List<ReferentielItemDto> getProjets() {
+        return referentielService.projets();
+    }
+
+    @GetMapping("/tranches")
+    @Operation(
+            summary = "Dropdown \"Tranche\"",
+            description = "Toutes les tranches (CfgTranche), ou uniquement celles du projet "
+                    + "`projetId` si fourni — deuxième maillon de la cascade Projet → Tranche → "
+                    + "Article. Contrairement à `GET /api/tranches`, cette liste n'est pas paginée : "
+                    + "elle est prévue pour peupler un `<select>` directement."
+    )
+    public List<ReferentielItemDto> getTranches(
+            @Parameter(description = "Id du projet (CfgProject.id) pour restreindre les tranches. Absent = toutes.")
+            @RequestParam(required = false) UUID projetId) {
+        return referentielService.tranches(projetId);
+    }
+
+    @GetMapping("/articles")
+    @Operation(
+            summary = "Dropdown \"Article\" d'une tranche",
+            description = "Articles racine (hors sous-articles) de la tranche `trancheId` "
+                    + "(obligatoire), filtrés par disponibilité (défaut: DISPONIBLE) et "
+                    + "optionnellement par catégorie (`categorieId`, ex. \"APPARTEMENT\") et type "
+                    + "(`typeId`, ex. \"1 CHAMBRES + SALON\") — reproduit la cascade de cases à "
+                    + "cocher \"Catégorie\"/\"Type\" du formulaire de qualification legacy avant de "
+                    + "choisir l'article. Chaque entrée expose son `code` ET sa `description` "
+                    + "(le nom de l'article), plus l'id/code/libellé de sa catégorie et de son "
+                    + "type, pour peupler ces cases à cocher sans appel séparé. Dernier maillon de "
+                    + "la cascade Projet → Tranche → Article avant sélection d'un sous-article "
+                    + "éventuel via `GET /api/referentiels/sous-articles`."
+    )
+    public List<ArticleListItemDto> getArticles(
+            @Parameter(description = "Id de la tranche (CfgTranche.id). Obligatoire.")
+            @RequestParam UUID trancheId,
+            @Parameter(description = "Filtre sur la disponibilité. Absent = DISPONIBLE.")
+            @RequestParam(required = false) StatutArticle statut,
+            @Parameter(description = "Id(s) de StkItemCategory. Répétable, correspondance OR. Absent = toutes.")
+            @RequestParam(required = false) List<UUID> categorieId,
+            @Parameter(description = "Id(s) de StkItemType. Répétable, correspondance OR. Absent = tous.")
+            @RequestParam(required = false) List<UUID> typeId) {
+        return referentielService.articles(trancheId, statut, categorieId, typeId);
+    }
+
+    @GetMapping("/sous-articles")
+    @Operation(
+            summary = "Dropdown \"Sous-article\" d'un article",
+            description = "Sous-articles (StkItem.ParentId) de l'article `articleId` (obligatoire), "
+                    + "filtrés par disponibilité (défaut: DISPONIBLE) et optionnellement par "
+                    + "catégorie/type comme `GET /api/referentiels/articles` — ex. sélectionner une "
+                    + "place de parking annexée au lot déjà choisi. Chaque entrée expose son "
+                    + "`description` (son nom), pas seulement son `code`."
+    )
+    public List<ArticleListItemDto> getSousArticles(
+            @Parameter(description = "Id de l'article parent (StkItem.id). Obligatoire.")
+            @RequestParam UUID articleId,
+            @Parameter(description = "Id(s) de StkItemCategory. Répétable, correspondance OR. Absent = toutes.")
+            @RequestParam(required = false) List<UUID> categorieId,
+            @Parameter(description = "Id(s) de StkItemType. Répétable, correspondance OR. Absent = tous.")
+            @RequestParam(required = false) List<UUID> typeId,
+            @Parameter(description = "Filtre sur la disponibilité. Absent = DISPONIBLE.")
+            @RequestParam(required = false) StatutArticle statut) {
+        return referentielService.sousArticles(articleId, statut, categorieId, typeId);
+    }
+}

@@ -8,6 +8,7 @@ import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
@@ -16,11 +17,15 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,18 +42,21 @@ public class EcheancierService {
     private final StlSettlementRepository settlementRepository;
     private final StlSettlementLineRepository settlementLineRepository;
     private final CfgTierRepository tierRepository;
+    private final ComSettlementCategoryRepository settlementCategoryRepository;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
                               StlSettlementRepository settlementRepository,
                               StlSettlementLineRepository settlementLineRepository,
-                              CfgTierRepository tierRepository) {
+                              CfgTierRepository tierRepository,
+                              ComSettlementCategoryRepository settlementCategoryRepository) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.settlementTypeRepository = settlementTypeRepository;
         this.settlementRepository = settlementRepository;
         this.settlementLineRepository = settlementLineRepository;
         this.tierRepository = tierRepository;
+        this.settlementCategoryRepository = settlementCategoryRepository;
     }
 
     private ComDocument findEcheanceOf(UUID dossierId, UUID echeanceId) {
@@ -69,21 +77,49 @@ public class EcheancierService {
             throw new InvalidRequestException("montant est requis");
         }
 
+        StlSettlementType type = null;
+        if (request.typeId() != null) {
+            type = settlementTypeRepository.findById(request.typeId())
+                    .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + request.typeId()));
+        }
+        // IsReferenceMandatory varie par type (confirmé sur données réelles : vrai pour
+        // CHÈQUE/CHEQUE NOTAIRE/SYNDIC/BANQUE/CERTIFIÉ/EFFET, référence renseignée sur >99% des
+        // lignes réelles de ces types) — enforcé ici, contrairement à IsBankMandatory qui reste
+        // purement indicatif côté front (voir TypeReglementDto.banqueObligatoire).
+        if (type != null && Boolean.TRUE.equals(type.getIsReferenceMandatory())
+                && !StringUtils.hasText(request.reference())) {
+            throw new InvalidRequestException("reference est requise pour le type de règlement " + type.getCode());
+        }
+
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setDocDate(LocalDateTime.now());
+        // EcheanceDate = "date d'échéance" du règlement, renseignée sur la quasi-totalité des
+        // règlements réels (voir CreerReglementRequest) — défaut à maintenant si absente, pour ne
+        // pas laisser cette colonne quasi-toujours-peuplée vide sur les règlements créés via l'API.
+        settlement.setEcheanceDate(request.dateEcheance() != null ? request.dateEcheance() : LocalDateTime.now());
+        // SettlementDate = "date de règlement effectif" (ChampDateEncaissement.DATE_REGLEMENT) —
+        // renseignée a posteriori, confirmée quasi jamais connue à la saisie (14 lignes/~3260 en
+        // données réelles) : aucun défaut, laissée telle quelle (null si absente).
         settlement.setSettlementDate(request.dateReglement());
         settlement.setAmount(request.montant());
+        settlement.setCode(request.reference());
         settlement.setNotes(request.notes());
-        if (request.typeId() != null) {
-            StlSettlementType type = settlementTypeRepository.findById(request.typeId())
-                    .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + request.typeId()));
+        if (type != null) {
             settlement.setStlSettlementType(type);
         }
         if (request.banqueId() != null) {
             CfgTier banque = tierRepository.findById(request.banqueId())
                     .orElseThrow(() -> new InvalidRequestException("Banque (CfgTier) introuvable: " + request.banqueId()));
             settlement.setCfgBank(banque);
+        }
+        // TierId ("réglé par") — déjà exposé en lecture (ReglementDto.payeurId/payeurNom, résolu
+        // via StlSettlement.getTier()) mais jamais posable à la création ; confirmé quasi toujours
+        // renseigné en données réelles (3232/3240 lignes, 99,75%).
+        if (request.payeurId() != null) {
+            CfgTier payeur = tierRepository.findById(request.payeurId())
+                    .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + request.payeurId()));
+            settlement.setTier(payeur);
         }
         settlement = settlementRepository.save(settlement);
 
@@ -92,30 +128,72 @@ public class EcheancierService {
         line.setStlSettlement(settlement);
         line.setComDocument(echeance);
         line.setAmount(request.montant());
-        settlementLineRepository.save(line);
+        line = settlementLineRepository.save(line);
 
-        return toReglementDto(settlement, echeanceId);
+        return toReglementDto(line, echeanceId);
     }
 
-    private static ReglementDto toReglementDto(StlSettlement s, UUID echeanceId) {
+    /**
+     * {@code GET /api/dossiers/{id}/echeancier/{echeanceId}/reglements}: historique complet des
+     * règlements d'une échéance — contrepartie en lecture du {@code POST} ci-dessus, plus récent
+     * d'abord. Chaque entrée porte le détail complet (type, banque, réglé par, référence) plutôt
+     * que juste le montant, pour afficher un historique exploitable côté front sans appel
+     * supplémentaire par règlement.
+     */
+    public List<ReglementDto> findReglements(UUID dossierId, UUID echeanceId) {
+        if (!folderRepository.existsById(dossierId)) {
+            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+        }
+        findEcheanceOf(dossierId, echeanceId);
+        return settlementLineRepository.findByComDocumentIdOrderByStlSettlement_DocDateDesc(echeanceId).stream()
+                .map(line -> toReglementDto(line, echeanceId))
+                .toList();
+    }
+
+    /**
+     * {@code line} carries both the {@code StlSettlement} (règlement) and the specific
+     * {@code StlSettlementLine} tying it to this échéance. {@code ReglementDto.id} must be the
+     * {@code StlSettlement.PKey} — it's what {@code GET .../documents/recu} expects as
+     * {@code reglementId} — never the line's own id, which is a different table/PK entirely
+     * (was the cause of "Règlement introuvable" 404s on an id copied straight from this DTO).
+     * Likewise {@code montant} must be this line's share ({@code line.getAmount()}), not the
+     * settlement's total ({@code s.getAmount()}) — a règlement split across several échéances
+     * (e.g. frais dossier + frais syndic) would otherwise show the full total on every line.
+     */
+    private static ReglementDto toReglementDto(StlSettlementLine line, UUID echeanceId) {
+        StlSettlement s = line.getStlSettlement();
+        StlSettlementType type = s.getStlSettlementType();
+        CfgTier banque = s.getCfgBank();
+        CfgTier payeur = s.getTier();
         return new ReglementDto(
                 s.getId(),
                 echeanceId,
+                s.getCode(),
                 s.getDocDate(),
+                s.getEcheanceDate(),
                 s.getSettlementDate(),
-                s.getAmount(),
-                s.getStlSettlementType() != null ? s.getStlSettlementType().getCode() : null,
+                line.getAmount(),
+                type != null ? type.getId() : null,
+                type != null ? type.getCode() : null,
+                type != null ? type.getDescription() : null,
+                banque != null ? banque.getId() : null,
+                banque != null ? nomTier(banque) : null,
+                payeur != null ? payeur.getId() : null,
+                payeur != null ? nomTier(payeur) : null,
                 s.getNotes()
         );
     }
 
-    public List<EcheanceDto> findEcheances(UUID dossierId) {
+    /** Même logique que {@code FicheBancaireService}/{@code FicheTropPercuService} — préfère la raison sociale/description, sinon prénom+nom. */
+    private static String nomTier(CfgTier tier) {
+        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
+    }
+
+    public Page<EcheanceDto> findEcheances(UUID dossierId, Pageable pageable) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
         }
-        return documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).stream()
-                .map(this::toDto)
-                .toList();
+        return documentRepository.findByComFolderIdOrderByDocDateDesc(dossierId, pageable).map(this::toDto);
     }
 
     @Transactional
@@ -159,9 +237,9 @@ public class EcheancierService {
         if (exclureDuPrix != null) document.setExcludeFromPrice(exclureDuPrix);
         if (notes != null) document.setNotes(notes);
         if (categorieId != null) {
-            StlSettlementType type = settlementTypeRepository.findById(categorieId)
-                    .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + categorieId));
-            document.setStlSettlementType(type);
+            ComSettlementCategory categorie = settlementCategoryRepository.findById(categorieId)
+                    .orElseThrow(() -> new InvalidRequestException("ComSettlementCategory introuvable: " + categorieId));
+            document.setComSettlementCategory(categorie);
         }
     }
 
@@ -194,8 +272,8 @@ public class EcheancierService {
                 d.getAmountTTC(),
                 d.getVATRatio(),
                 d.getDescription(),
-                d.getStlSettlementType() != null ? d.getStlSettlementType().getId() : null,
-                d.getStlSettlementType() != null ? d.getStlSettlementType().getCode() : null,
+                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getId() : null,
+                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getCode() : null,
                 d.getExcludeFromPrice(),
                 d.getNotes(),
                 regle,

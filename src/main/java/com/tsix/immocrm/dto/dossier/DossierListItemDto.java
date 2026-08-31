@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.dossier;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -21,6 +23,18 @@ public record DossierListItemDto(
         UUID commercialId,
         String commercialNom,
         BigDecimal prix,
-        BigDecimal totalAPayer
+        BigDecimal totalAPayer,
+        /**
+         * Jalon "Concrétisation" ({@code ComFolder.advanceDate}) — exposé en plus de
+         * {@code dateDocument} (qui sert de proxy pour "Date de réservation", voir
+         * {@code ChampDateDossier}) pour le filtre par période, point 3 de
+         * {@code instructions/filtres-avances.md}. Null tant que le dossier n'a pas atteint ce
+         * statut.
+         */
+        LocalDateTime dateConcretisation,
+        @Schema(description = "Identifiant de la prospection à l'origine du dossier (ComFolder.ComProspectionId).")
+        UUID prospectionId,
+        @Schema(description = "Code de la prospection à l'origine du dossier — pour le lien cliquable vers la prospection depuis le dossier (`GET /api/prospections/{prospectionId}`).")
+        String prospectionCode
 ) {
 }

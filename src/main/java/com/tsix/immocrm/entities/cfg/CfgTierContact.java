@@ -29,8 +29,9 @@ public class CfgTierContact {
     @JoinColumn(name = "CfgContactId")
     private CfgTier cfgContact;
 
-    @Column(name = "CfgRelationTypeId")
-    private UUID cfgRelationTypeId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgRelationTypeId")
+    private CfgRelationType cfgRelationType;
 
     @Size(max = 255)
     @Nationalized

@@ -10,6 +10,8 @@ import java.util.UUID;
  * NOTE: field naming is not yet backed by a shared API spec doc
  * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
  * directly from {@code CfgTier}. Adjust once a spec is available.
+ *
+ * GAP-05: same new fields as {@link CreerProspectRequest} — see its doc-comment.
  */
 public record ModifierProspectRequest(
         String prenom,
@@ -22,8 +24,27 @@ public record ModifierProspectRequest(
         String ville,
         String codePostal,
         LocalDateTime dateNaissance,
+        String lieuNaissance,
+        Integer nombreEnfants,
         UUID typeId,
         UUID kindId,
-        UUID commercialId
+        UUID commercialId,
+        UUID titreId,
+        UUID sexeId,
+        UUID paysResidenceId,
+        UUID paysId,
+        UUID nationaliteId,
+        UUID situationFamilialeId,
+        UUID typeResidenceId,
+        UUID regimeMatrimonialId,
+        UUID professionId,
+        UUID salaireId,
+        String employeur,
+        Integer anciennete,
+        String filsDe,
+        String etDe,
+        String adresse2,
+        String adresse3,
+        PieceIdentiteRequest pieceIdentite
 ) {
 }

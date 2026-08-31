@@ -1,0 +1,229 @@
+package com.tsix.immocrm.controller.dossier;
+
+import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
+import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
+import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
+import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
+import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * {@code POST /api/dossiers/simulation-financement} — prévisualisation du schéma de financement
+ * avant création du dossier, sans rien persister.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
+@WithMockUser
+class DossierSimulationFinancementTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private CfgProjectRepository projectRepository;
+
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+
+    @Autowired
+    private StkItemRepository stkItemRepository;
+
+    @Autowired
+    private StkItemTypeRepository stkItemTypeRepository;
+
+    @Autowired
+    private StkItemCategoryRepository stkItemCategoryRepository;
+
+    @Autowired
+    private StkVocationRepository stkVocationRepository;
+
+    @Autowired
+    private ComSettlementCategoryRepository settlementCategoryRepository;
+
+    @Autowired
+    private ComFolderRepository folderRepository;
+
+    private ComSettlementCategory newCategory(String code, StkVocation vocation, Boolean excludeFromPrice) {
+        ComSettlementCategory categorie = new ComSettlementCategory();
+        categorie.setId(UUID.randomUUID());
+        categorie.setCode(code);
+        categorie.setDescription(code);
+        categorie.setStkVocation(vocation);
+        categorie.setExcludeFromPrice(excludeFromPrice);
+        return settlementCategoryRepository.save(categorie);
+    }
+
+    @Test
+    void simuler_avecPrixEtTrancheConfig_calculeLesMemesMontantsQueLaCreationReelle() throws Exception {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SIM-TEST");
+        stkVocationRepository.save(vocation);
+
+        newCategory("AUTO-FINANCEMENT", vocation, false);
+        newCategory("AVANCE", vocation, false);
+        newCategory("FRAIS SYNDIC", vocation, true);
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-SIM-TEST");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-SIM-TEST");
+        tranche.setCfgProject(project);
+        tranche.setAdvancePercent(new BigDecimal("0.300000"));
+        tranche.setSyndicAmount(new BigDecimal("700.000000"));
+        tranche.setSyndicPeriod(24);
+        trancheRepository.save(tranche);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SIM-TEST");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SIM-TEST");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SIM-TEST");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        article.setStkHierarchy(tranche);
+        stkItemRepository.save(article);
+
+        long dossiersAvant = folderRepository.count();
+
+        String body = """
+                {"articleIds":["%s"],"prix":1548000}""".formatted(article.getId());
+
+        // 1 548 000 * 0.30 = 464 400 ; auto-financement = 1 548 000 - 464 400 = 1 083 600
+        // frais syndic = 700 * 24 = 16 800 — mêmes montants que la création réelle (DossierFinancingSchemaTest).
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='AVANCE')].montant").value(464400.0))
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='AUTO-FINANCEMENT')].montant").value(1083600.0))
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='FRAIS SYNDIC')].montant").value(16800.0))
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='FRAIS SYNDIC')].exclureDuPrix").value(true))
+                .andExpect(jsonPath("$.totalGeneral").value(1548000.0 + 16800.0));
+
+        // Rien n'a été persisté : ni dossier créé, ni article réservé.
+        org.assertj.core.api.Assertions.assertThat(folderRepository.count()).isEqualTo(dossiersAvant);
+        org.assertj.core.api.Assertions.assertThat(
+                stkItemRepository.findById(article.getId()).orElseThrow().getComFolderId()).isNull();
+    }
+
+    @Test
+    void simuler_articleOccupe_fonctionneQuandMeme() throws Exception {
+        // Contrairement à la création réelle, la simulation n'exige pas que l'article soit
+        // DISPONIBLE — c'est un aperçu, rien n'est réservé.
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SIM-OCCUPE");
+        stkVocationRepository.save(vocation);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SIM-OCCUPE");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SIM-OCCUPE");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SIM-OCCUPE");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        article.setComFolderId(UUID.randomUUID());
+        stkItemRepository.save(article);
+
+        String body = """
+                {"articleIds":["%s"],"prix":900000}""".formatted(article.getId());
+
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void simuler_sansPrix_returns400() throws Exception {
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SIM-NOPRIX");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SIM-NOPRIX");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SIM-NOPRIX");
+        stkVocationRepository.save(vocation);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SIM-NOPRIX");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        stkItemRepository.save(article);
+
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleIds\":[\"" + article.getId() + "\"]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void simuler_articleIdsVide_returns400() throws Exception {
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleIds\":[],\"prix\":100000}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void simuler_articleInconnu_returns400() throws Exception {
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleIds\":[\"" + UUID.randomUUID() + "\"],\"prix\":100000}"))
+                .andExpect(status().isBadRequest());
+    }
+}

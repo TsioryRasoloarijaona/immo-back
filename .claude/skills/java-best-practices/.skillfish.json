@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "java-best-practices",
+  "owner": "rbarcante",
+  "repo": "claude-conductor",
+  "path": "skills/java-best-practices",
+  "branch": "master",
+  "sha": "6b0e7cada6060276c5f0685594eb94910909d753",
+  "source": "manual"
+}

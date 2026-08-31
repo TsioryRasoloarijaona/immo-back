@@ -1,6 +1,8 @@
 package com.tsix.immocrm.repositories.com;
 
 import com.tsix.immocrm.entities.com.ComFolder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -20,4 +22,24 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
             "c.socialReason, c.firstName, c.lastName " +
             "FROM ComFolder f LEFT JOIN f.strStatus s LEFT JOIN f.cfgCustomer c")
     List<Object[]> findDashboardProjection();
+
+    /** {@code GET /api/prospects/{id}/dossiers} (GAP-06). */
+    Page<ComFolder> findByCfgCustomerId(UUID customerId, Pageable pageable);
+
+    /**
+     * Dossier count per client — used by {@code GET /api/clients} (server-side aggregate).
+     * Tuple: [cfgCustomerId, nbDossiers].
+     */
+    @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f WHERE f.cfgCustomer.id IN :clientIds GROUP BY f.cfgCustomer.id")
+    List<Object[]> countGroupedByClientId(List<UUID> clientIds);
+
+    /**
+     * Batch lookup for the Article → Dossier reverse link ({@code StkItem.ComFolderId}), demande
+     * #5 de {@code instructions/from_front.md} — used by {@code ArticleService} to avoid an N+1
+     * query per article on a paginated listing. Join-fetches {@code strStatus}/{@code cfgCustomer}
+     * so callers can read {@code getCode()}/{@code getStrStatus()}/{@code getCfgCustomer()}
+     * without a further lazy-load.
+     */
+    @Query("SELECT f FROM ComFolder f LEFT JOIN FETCH f.strStatus LEFT JOIN FETCH f.cfgCustomer WHERE f.id IN :ids")
+    List<ComFolder> findWithStatusAndCustomerByIdIn(List<UUID> ids);
 }

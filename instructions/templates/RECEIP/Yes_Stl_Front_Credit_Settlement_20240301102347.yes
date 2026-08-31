@@ -1,0 +1,3240 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<StiSerializer version="1.02" type="Net" application="StiReport">
+  <Dictionary Ref="1" type="Dictionary" isKey="true">
+    <BusinessObjects isList="true" count="0" />
+    <Databases isList="true" count="1">
+      <Connection Ref="2" type="Stimulsoft.Report.Dictionary.StiOleDbDatabase" isKey="true">
+        <Alias>Connection</Alias>
+        <ConnectionStringEncrypted>4EBlAktoksVrCGWsYQTkm8J42Q1XSkL5b235xE4cIvvDXNFISF27XWta8YTqgLE/w1r1qlVMe4HvYZyAez3ju994l0jFfJPF+Um19OlJ4HOBKs3LRV8x2XxE/YTqGK1jwlSBiddRSvlGEyXMZ3wlO9UU9c9PdNnFclycpf1MZRfoEvXjYVdC3WJGvYXD</ConnectionStringEncrypted>
+        <Name>Connection</Name>
+      </Connection>
+    </Databases>
+    <DataSources isList="true" count="20">
+      <AdmParamsView Ref="3" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>AdmParamsView</Alias>
+        <Columns isList="true" count="3">
+          <value>CurrencyDecimalDigits,System.Int32</value>
+          <value>CurrencyFraction,System.String</value>
+          <value>CurrencyLabel,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>df0ef672a52e408cb03bd2a34c4662b2</Key>
+        <Name>AdmParamsView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>select * from AdmParamsView</SqlCommand>
+      </AdmParamsView>
+      <AmountWithoutFees Ref="4" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>AmountWithoutFees</Alias>
+        <Columns isList="true" count="2">
+          <value>StlSettlementIsCredit,System.Boolean</value>
+          <value>StlSettlementLineAmount,System.Decimal</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>40bf6087833141b09674e0ec67021c37</Key>
+        <Name>AmountWithoutFees</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT        
+	StlSettlementLine.Amount AS StlSettlementLineAmount
+	, StlSettlement.IsCredit AS StlSettlementIsCredit
+	FROM StlSettlementLine INNER JOIN
+	StlSettlement ON StlSettlementLine.StlSettlementId = StlSettlement.PKey INNER JOIN
+ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey INNER JOIN 
+ComSettlementCategory ON ComSettlementCategory.PKey = ComDocument.ComSettlementCategoryId
+WHERE ComDocument.ComFolderId IN(SELECT         ComDocument.ComFolderId
+	FROM StlSettlementLine  INNER JOIN
+	ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey
+WHERE StlSettlementLine.StlSettlementId=?)
+</SqlCommand>
+      </AmountWithoutFees>
+      <CfgTier1 Ref="5" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CfgTier1</Alias>
+        <Columns isList="true" count="93">
+          <value>Address,System.String</value>
+          <value>Address2,System.String</value>
+          <value>Address3,System.String</value>
+          <value>AdmCountryDescription,System.String</value>
+          <value>AdmCountryId,System.Guid</value>
+          <value>AdmCountryResidenceId,System.Guid</value>
+          <value>AdmFamilySituationDescription,System.String</value>
+          <value>AdmFamilySituationId,System.Guid</value>
+          <value>AdmIdentityDocumentTypeCode,System.String</value>
+          <value>AdmIdentityDocumentTypeId,System.Guid</value>
+          <value>AdmLiabilityId,System.Guid</value>
+          <value>AdmMatrimonialRegimeId,System.Guid</value>
+          <value>AdmNationalityId,System.Guid</value>
+          <value>AdmProfessionDescription,System.String</value>
+          <value>AdmProfessionId,System.Guid</value>
+          <value>AdmResidenceTypeId,System.Guid</value>
+          <value>AdmSalaryId,System.Guid</value>
+          <value>AdmSexTypeId,System.Guid</value>
+          <value>AdmSocialFormId,System.Guid</value>
+          <value>AdmTierTitleId,System.Guid</value>
+          <value>Antiquity,System.Int32</value>
+          <value>Asset,System.Decimal</value>
+          <value>Bank,System.String</value>
+          <value>BankAgency,System.String</value>
+          <value>BirthDate,System.DateTime</value>
+          <value>BirthPlace,System.String</value>
+          <value>CfgBankId,System.Guid</value>
+          <value>CfgCommercialId,System.Guid</value>
+          <value>CfgContactId,System.Guid</value>
+          <value>CfgTierKindId,System.Guid</value>
+          <value>CfgTierTypeId,System.Guid</value>
+          <value>City,System.String</value>
+          <value>Code,System.String</value>
+          <value>CodeCountable,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>Commercial,System.String</value>
+          <value>Contact,System.String</value>
+          <value>Country,System.String</value>
+          <value>CountryResidence,System.String</value>
+          <value>Description,System.String</value>
+          <value>EMail,System.String</value>
+          <value>Employer,System.String</value>
+          <value>FamilySituation,System.String</value>
+          <value>FatherName,System.String</value>
+          <value>Fax,System.String</value>
+          <value>FaxIndicatif,System.String</value>
+          <value>FirstName,System.String</value>
+          <value>FiscalCode,System.String</value>
+          <value>FiscalDouane,System.String</value>
+          <value>FiscalRegistry,System.String</value>
+          <value>Iban,System.String</value>
+          <value>IDDate,System.DateTime</value>
+          <value>IdentityDocumentType,System.String</value>
+          <value>IDNumber,System.String</value>
+          <value>IDPlace,System.String</value>
+          <value>IDValidateDate,System.DateTime</value>
+          <value>IDValidatePlace,System.String</value>
+          <value>IsProspect,System.Boolean</value>
+          <value>Kind,System.String</value>
+          <value>LastName,System.String</value>
+          <value>Liability,System.String</value>
+          <value>MatrimonialRegime,System.String</value>
+          <value>Mobile,System.String</value>
+          <value>MobileIndicatif,System.String</value>
+          <value>MotherName,System.String</value>
+          <value>Nationality,System.String</value>
+          <value>NbrChildren,System.Int32</value>
+          <value>Notes,System.String</value>
+          <value>PartPercent,System.Decimal</value>
+          <value>Phone,System.String</value>
+          <value>Phone1,System.String</value>
+          <value>Phone1Indicatif,System.String</value>
+          <value>Phone2,System.String</value>
+          <value>Phone2Indicatif,System.String</value>
+          <value>PhoneIndicatif,System.String</value>
+          <value>PKey,System.Guid</value>
+          <value>Profession,System.String</value>
+          <value>Quality,System.String</value>
+          <value>ResidenceType,System.String</value>
+          <value>Rib,System.String</value>
+          <value>RowNum,System.Int64</value>
+          <value>Salary,System.String</value>
+          <value>Sex,System.String</value>
+          <value>SocialForm,System.String</value>
+          <value>SocialReason,System.String</value>
+          <value>Title,System.String</value>
+          <value>Type,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>WebSite,System.String</value>
+          <value>ZipCode,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>465b1350ab9945e8bb8a71ffbf27ca76</Key>
+        <Name>CfgTier1</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT * FROM (
+SELECT 
+	ROW_NUMBER() OVER ( ORDER BY TT1.PKey ) AS RowNum
+, TT1.* 
+FROM (
+SELECT Distinct
+	CfgTierView.*
+	, ComFolderCustomer.PartPercent
+, ComFolder.PKey AS ComFolderId
+FROM ComDocument INNER JOIN
+StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId INNER JOIN
+ComFolder ON ComDocument.ComFolderId = ComFolder.PKey INNER JOIN
+ComFolderCustomer ON ComFolder.PKey = ComFolderCustomer.ComFolderId INNER JOIN
+CfgTierView ON ComFolderCustomer.CfgTierId = CfgTierView.PKey
+WHERE StlSettlementLine.StlSettlementId=?
+)AS TT1
+) AS TT
+WHERE TT.RowNum=1
+ORDER BY RowNum</SqlCommand>
+      </CfgTier1>
+      <CfgTier2 Ref="6" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CfgTier2</Alias>
+        <Columns isList="true" count="93">
+          <value>Address,System.String</value>
+          <value>Address2,System.String</value>
+          <value>Address3,System.String</value>
+          <value>AdmCountryDescription,System.String</value>
+          <value>AdmCountryId,System.Guid</value>
+          <value>AdmCountryResidenceId,System.Guid</value>
+          <value>AdmFamilySituationDescription,System.String</value>
+          <value>AdmFamilySituationId,System.Guid</value>
+          <value>AdmIdentityDocumentTypeCode,System.String</value>
+          <value>AdmIdentityDocumentTypeId,System.Guid</value>
+          <value>AdmLiabilityId,System.Guid</value>
+          <value>AdmMatrimonialRegimeId,System.Guid</value>
+          <value>AdmNationalityId,System.Guid</value>
+          <value>AdmProfessionDescription,System.String</value>
+          <value>AdmProfessionId,System.Guid</value>
+          <value>AdmResidenceTypeId,System.Guid</value>
+          <value>AdmSalaryId,System.Guid</value>
+          <value>AdmSexTypeId,System.Guid</value>
+          <value>AdmSocialFormId,System.Guid</value>
+          <value>AdmTierTitleId,System.Guid</value>
+          <value>Antiquity,System.Int32</value>
+          <value>Asset,System.Decimal</value>
+          <value>Bank,System.String</value>
+          <value>BankAgency,System.String</value>
+          <value>BirthDate,System.DateTime</value>
+          <value>BirthPlace,System.String</value>
+          <value>CfgBankId,System.Guid</value>
+          <value>CfgCommercialId,System.Guid</value>
+          <value>CfgContactId,System.Guid</value>
+          <value>CfgTierKindId,System.Guid</value>
+          <value>CfgTierTypeId,System.Guid</value>
+          <value>City,System.String</value>
+          <value>Code,System.String</value>
+          <value>CodeCountable,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>Commercial,System.String</value>
+          <value>Contact,System.String</value>
+          <value>Country,System.String</value>
+          <value>CountryResidence,System.String</value>
+          <value>Description,System.String</value>
+          <value>EMail,System.String</value>
+          <value>Employer,System.String</value>
+          <value>FamilySituation,System.String</value>
+          <value>FatherName,System.String</value>
+          <value>Fax,System.String</value>
+          <value>FaxIndicatif,System.String</value>
+          <value>FirstName,System.String</value>
+          <value>FiscalCode,System.String</value>
+          <value>FiscalDouane,System.String</value>
+          <value>FiscalRegistry,System.String</value>
+          <value>Iban,System.String</value>
+          <value>IDDate,System.DateTime</value>
+          <value>IdentityDocumentType,System.String</value>
+          <value>IDNumber,System.String</value>
+          <value>IDPlace,System.String</value>
+          <value>IDValidateDate,System.DateTime</value>
+          <value>IDValidatePlace,System.String</value>
+          <value>IsProspect,System.Boolean</value>
+          <value>Kind,System.String</value>
+          <value>LastName,System.String</value>
+          <value>Liability,System.String</value>
+          <value>MatrimonialRegime,System.String</value>
+          <value>Mobile,System.String</value>
+          <value>MobileIndicatif,System.String</value>
+          <value>MotherName,System.String</value>
+          <value>Nationality,System.String</value>
+          <value>NbrChildren,System.Int32</value>
+          <value>Notes,System.String</value>
+          <value>PartPercent,System.Decimal</value>
+          <value>Phone,System.String</value>
+          <value>Phone1,System.String</value>
+          <value>Phone1Indicatif,System.String</value>
+          <value>Phone2,System.String</value>
+          <value>Phone2Indicatif,System.String</value>
+          <value>PhoneIndicatif,System.String</value>
+          <value>PKey,System.Guid</value>
+          <value>Profession,System.String</value>
+          <value>Quality,System.String</value>
+          <value>ResidenceType,System.String</value>
+          <value>Rib,System.String</value>
+          <value>RowNum,System.Int64</value>
+          <value>Salary,System.String</value>
+          <value>Sex,System.String</value>
+          <value>SocialForm,System.String</value>
+          <value>SocialReason,System.String</value>
+          <value>Title,System.String</value>
+          <value>Type,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>WebSite,System.String</value>
+          <value>ZipCode,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>e12ae96340a3498aafb497bb47637d2f</Key>
+        <Name>CfgTier2</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT * FROM (
+SELECT 
+	ROW_NUMBER() OVER ( ORDER BY TT1.PKey ) AS RowNum
+, TT1.* 
+FROM (
+SELECT Distinct
+	CfgTierView.*
+	, ComFolderCustomer.PartPercent
+, ComFolder.PKey AS ComFolderId
+FROM ComDocument INNER JOIN
+StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId  INNER JOIN
+ComFolder ON ComDocument.ComFolderId = ComFolder.PKey INNER JOIN
+ComFolderCustomer ON ComFolder.PKey = ComFolderCustomer.ComFolderId INNER JOIN
+CfgTierView ON ComFolderCustomer.CfgTierId = CfgTierView.PKey
+WHERE StlSettlementLine.StlSettlementId=?
+)AS TT1
+) AS TT
+WHERE TT.RowNum=2
+ORDER BY RowNum</SqlCommand>
+      </CfgTier2>
+      <CfgTierView Ref="7" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CfgTierView</Alias>
+        <Columns isList="true" count="58">
+          <value>Address,System.String</value>
+          <value>AdmCountryId,System.Guid</value>
+          <value>AdmCountryResidenceId,System.Guid</value>
+          <value>AdmFamilySituationId,System.Guid</value>
+          <value>AdmIdentityDocumentTypeId,System.Guid</value>
+          <value>AdmLiabilityId,System.Guid</value>
+          <value>AdmMatrimonialRegimeId,System.Guid</value>
+          <value>AdmNationalityId,System.Guid</value>
+          <value>AdmProfessionId,System.Guid</value>
+          <value>AdmResidenceTypeId,System.Guid</value>
+          <value>AdmSalaryId,System.Guid</value>
+          <value>AdmSexTypeId,System.Guid</value>
+          <value>AdmSocialFormId,System.Guid</value>
+          <value>AdmTierTitleId,System.Guid</value>
+          <value>Bank,System.String</value>
+          <value>BankAgency,System.String</value>
+          <value>CfgBankId,System.Guid</value>
+          <value>CfgCommercialId,System.Guid</value>
+          <value>CfgContactId,System.Guid</value>
+          <value>CfgTierKindId,System.Guid</value>
+          <value>CfgTierTypeId,System.Guid</value>
+          <value>City,System.String</value>
+          <value>Code,System.String</value>
+          <value>Commercial,System.String</value>
+          <value>Contact,System.String</value>
+          <value>Country,System.String</value>
+          <value>CountryResidence,System.String</value>
+          <value>Description,System.String</value>
+          <value>EMail,System.String</value>
+          <value>Employer,System.String</value>
+          <value>FamilySituation,System.String</value>
+          <value>FatherName,System.String</value>
+          <value>Fax,System.String</value>
+          <value>IdentityDocumentType,System.String</value>
+          <value>IDNumber,System.String</value>
+          <value>Kind,System.String</value>
+          <value>Liability,System.String</value>
+          <value>MatrimonialRegime,System.String</value>
+          <value>Mobile,System.String</value>
+          <value>MotherName,System.String</value>
+          <value>Nationality,System.String</value>
+          <value>Notes,System.String</value>
+          <value>Phone,System.String</value>
+          <value>Phone1,System.String</value>
+          <value>Phone2,System.String</value>
+          <value>PKey,System.Guid</value>
+          <value>Profession,System.String</value>
+          <value>ResidenceType,System.String</value>
+          <value>Salary,System.String</value>
+          <value>Sex,System.String</value>
+          <value>SocialForm,System.String</value>
+          <value>Title,System.String</value>
+          <value>Type,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>WebSite,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>35b9a2ba54ac43769083d5b73599c260</Key>
+        <Name>CfgTierView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>SELECT * FROM CfgTierView</SqlCommand>
+      </CfgTierView>
+      <CfgTranche Ref="8" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CfgTranche</Alias>
+        <Columns isList="true" count="1">
+          <value>SyndicPeriod,System.Int32</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>39895f542ebf4ed19b8923191cd779b2</Key>
+        <Name>CfgTranche</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>select CfgTranche.SyndicPeriod from CfgTranche INNER JOIN
+	StkItem ON StkItem.StkHierarchyId = CfgTranche.PKey INNER JOIN
+ComFolder ON ComFolder.StkItemId = StkItem.PKey INNER JOIN
+ComDocument ON ComFolder.PKey = ComDocument.ComFolderId INNER JOIN
+StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId
+WHERE StlSettlementLine.StlSettlementId = ?</SqlCommand>
+      </CfgTranche>
+      <ComDocumentExpenses Ref="9" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>ComDocumentExpenses</Alias>
+        <Columns isList="true" count="6">
+          <value>Amount,System.Decimal</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>ComSettlementCategoryCode,System.String</value>
+          <value>ComSettlementCategoryDescription,System.String</value>
+          <value>DocDate,System.DateTime</value>
+          <value>PKey,System.Guid</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>7c2d3d48bd594b48a790beed4071fe2a</Key>
+        <Name>ComDocumentExpenses</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>select 
+	ComDocument.PKey
+	, ComDocument.DocDate
+	, ComDocument.ComFolderId
+	, ComDocument.Amount 
+	, ComSettlementCategory.Code AS ComSettlementCategoryCode
+	, ComSettlementCategory.Description AS ComSettlementCategoryDescription
+	from ComDocument
+	INNER JOIN ComSettlementCategory ON ComDocument.ComSettlementCategoryId = ComSettlementCategory.PKey
+WHERE 
+ComSettlementCategory.IsSaleExpense = 1 
+AND ComSettlementCategory.IsCredit = 1
+AND ComDocument.ComFolderId 
+IN(
+SELECT ComDocument.ComFolderId
+	FROM StlSettlementLine 
+	INNER JOIN ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey
+	WHERE StlSettlementLine.StlSettlementId=?
+)</SqlCommand>
+      </ComDocumentExpenses>
+      <ComFolder Ref="10" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>ComFolder</Alias>
+        <Columns isList="true" count="95">
+          <value>Advance,System.Decimal</value>
+          <value>AdvanceAmount,System.Decimal</value>
+          <value>AdvanceDate,System.DateTime</value>
+          <value>AgreementAmount,System.Decimal</value>
+          <value>AgreementDate,System.DateTime</value>
+          <value>AgreementPrice,System.Decimal</value>
+          <value>AgreementSavingDate,System.DateTime</value>
+          <value>AmountToPay,System.Decimal</value>
+          <value>Area,System.Decimal</value>
+          <value>AugmentationBeginDate,System.DateTime</value>
+          <value>AugmentationFrequency,System.Int32</value>
+          <value>AugmentationRate,System.Decimal</value>
+          <value>BankRecordDate,System.DateTime</value>
+          <value>CancelAmount,System.Decimal</value>
+          <value>CancelDate,System.DateTime</value>
+          <value>CancelDescription,System.String</value>
+          <value>CfgCommercialId,System.Guid</value>
+          <value>CfgCustomerId,System.Guid</value>
+          <value>CfgLawyerId,System.Guid</value>
+          <value>Code,System.String</value>
+          <value>ComProspectionId,System.Guid</value>
+          <value>Contact,System.String</value>
+          <value>ContractBeginDate,System.DateTime</value>
+          <value>CreditAgency,System.String</value>
+          <value>CreditAmount,System.Decimal</value>
+          <value>CreditApprovalDate,System.DateTime</value>
+          <value>CreditBankId,System.Guid</value>
+          <value>CreditPossessionDate,System.DateTime</value>
+          <value>DeliveryAmount,System.Decimal</value>
+          <value>DeliveryDate,System.DateTime</value>
+          <value>DeliveryDateReal,System.DateTime</value>
+          <value>DeliveryMaxNumber,System.Int32</value>
+          <value>DeliveryNumber,System.Int32</value>
+          <value>DeliveryRatio,System.Decimal</value>
+          <value>Description,System.String</value>
+          <value>Discount,System.Decimal</value>
+          <value>DiscountAmount,System.Decimal</value>
+          <value>DocDate,System.DateTime</value>
+          <value>ExpenseAmount,System.Decimal</value>
+          <value>GracePeriodEndDate,System.DateTime</value>
+          <value>GracePeriodNumber,System.Int32</value>
+          <value>HasLines,System.Boolean</value>
+          <value>InsuranceDate,System.DateTime</value>
+          <value>InterventionDate,System.DateTime</value>
+          <value>ItemPrice,System.Decimal</value>
+          <value>ModificationsAmount,System.Decimal</value>
+          <value>Notes,System.String</value>
+          <value>OwnershipCertificateDate,System.DateTime</value>
+          <value>PartPercent,System.Decimal</value>
+          <value>PenalityAmount,System.Decimal</value>
+          <value>PenalityDescription,System.String</value>
+          <value>Periodicity,System.String</value>
+          <value>PeriodicityAmountToPayNext,System.Decimal</value>
+          <value>PeriodicityBeginDate,System.DateTime</value>
+          <value>PeriodicityEndDate,System.DateTime</value>
+          <value>PeriodicityMonthlyAmount,System.Decimal</value>
+          <value>PeriodicityNumber,System.Int32</value>
+          <value>PeriodicityReconduction,System.String</value>
+          <value>PeriodicityReconductionHistory,System.String</value>
+          <value>PeriodicityReconductionRatio,System.Decimal</value>
+          <value>PeriodicityYearlyAmount,System.Decimal</value>
+          <value>PKey,System.Guid</value>
+          <value>Price,System.Decimal</value>
+          <value>PriceAfterDiscount,System.Decimal</value>
+          <value>PriceBeforeDiscount,System.Decimal</value>
+          <value>PriceHT,System.Decimal</value>
+          <value>PriceWithModification,System.Boolean</value>
+          <value>ReceptionDate,System.DateTime</value>
+          <value>ReconductionId,System.Guid</value>
+          <value>Revival1,System.DateTime</value>
+          <value>Revival1ValidityDate,System.DateTime</value>
+          <value>Revival2,System.DateTime</value>
+          <value>Revival2ValidityDate,System.DateTime</value>
+          <value>RSRatio,System.Decimal</value>
+          <value>RVATRatio,System.Decimal</value>
+          <value>SelfFinancingAmount,System.Decimal</value>
+          <value>StatusValidityDate,System.DateTime</value>
+          <value>StkItemId,System.Guid</value>
+          <value>StkVocationId,System.Guid</value>
+          <value>StrStatusId,System.Guid</value>
+          <value>SyndicOriginId,System.Guid</value>
+          <value>TotalHT,System.Decimal</value>
+          <value>TotalRentAmount,System.Decimal</value>
+          <value>TotalRS,System.Decimal</value>
+          <value>TotalToPay,System.Decimal</value>
+          <value>TotalTTC,System.Decimal</value>
+          <value>UnderItemsPrice,System.Decimal</value>
+          <value>UnitCost,System.Decimal</value>
+          <value>Usage,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>VATRatio,System.Decimal</value>
+          <value>WithSyndic,System.Boolean</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>3a64966739894ec8b056b54b8444ed52</Key>
+        <Name>ComFolder</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT ComFolder.*
+	FROM ComFolder INNER JOIN
+ComDocument ON ComFolder.PKey = ComDocument.ComFolderId INNER JOIN
+StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId 
+WHERE StlSettlementLine.StlSettlementId = ?</SqlCommand>
+      </ComFolder>
+      <ComSaleFolderView Ref="11" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>ComSaleFolderView</Alias>
+        <Columns isList="true" count="188">
+          <value>Advance,System.Decimal</value>
+          <value>AdvanceAmount,System.Decimal</value>
+          <value>AdvanceDate,System.DateTime</value>
+          <value>AdvanceRest,System.Decimal</value>
+          <value>AdvanceSettled,System.Decimal</value>
+          <value>AgreementAmount,System.Decimal</value>
+          <value>AgreementDate,System.DateTime</value>
+          <value>AgreementDatePrevisionel,System.DateTime</value>
+          <value>AgreementPrice,System.Decimal</value>
+          <value>AgreementRatio,System.Decimal</value>
+          <value>AgreementSavingDate,System.DateTime</value>
+          <value>AmountSettledIN,System.Decimal</value>
+          <value>AmountToPay,System.Decimal</value>
+          <value>Area,System.Decimal</value>
+          <value>AugmentationBeginDate,System.DateTime</value>
+          <value>AugmentationFrequency,System.Int32</value>
+          <value>AugmentationRate,System.Decimal</value>
+          <value>BankRecordDate,System.DateTime</value>
+          <value>CancelAmount,System.Decimal</value>
+          <value>CancelDate,System.DateTime</value>
+          <value>CancelDescription,System.String</value>
+          <value>CancelRest,System.Decimal</value>
+          <value>CancelSettled,System.Decimal</value>
+          <value>CfgCommercialDescription,System.String</value>
+          <value>CfgCommercialId,System.Guid</value>
+          <value>CfgCompanyCode,System.String</value>
+          <value>CfgCompanyDescription,System.String</value>
+          <value>CfgCompanyId,System.Guid</value>
+          <value>CfgCreditBankDescription,System.String</value>
+          <value>CfgCustomerId,System.Guid</value>
+          <value>CfgLawyerDescription,System.String</value>
+          <value>CfgLawyerId,System.Guid</value>
+          <value>CfgProjectCode,System.String</value>
+          <value>CfgProjectDescription,System.String</value>
+          <value>CfgProjectId,System.Guid</value>
+          <value>CfgTierDescription,System.String</value>
+          <value>CfgTrancheCode,System.String</value>
+          <value>CfgTrancheDescription,System.String</value>
+          <value>CfgTrancheId,System.Guid</value>
+          <value>Code,System.String</value>
+          <value>ComActionCode,System.String</value>
+          <value>ComActionDescription,System.String</value>
+          <value>ComActionId,System.Guid</value>
+          <value>ComLoanCompanyDecisionDescription,System.String</value>
+          <value>ComLoanCompanyDecisionId,System.Guid</value>
+          <value>ComProspectionCode,System.String</value>
+          <value>ComProspectionDocDate,System.DateTime</value>
+          <value>ComProspectionId,System.Guid</value>
+          <value>ComProspectionKindCode,System.String</value>
+          <value>ComProspectionKindDescription,System.String</value>
+          <value>ComProspectionKindId,System.Guid</value>
+          <value>ComProspectionOriginCode,System.String</value>
+          <value>ComProspectionOriginDescription,System.String</value>
+          <value>ComProspectionOriginId,System.Guid</value>
+          <value>ComProspectionOriginSupportCode,System.String</value>
+          <value>ComProspectionOriginSupportDescription,System.String</value>
+          <value>ComProspectionOriginSupportId,System.Guid</value>
+          <value>Contact,System.String</value>
+          <value>ContractBeginDate,System.DateTime</value>
+          <value>CreditAgency,System.String</value>
+          <value>CreditAmount,System.Decimal</value>
+          <value>CreditApprovalDate,System.DateTime</value>
+          <value>CreditBankId,System.Guid</value>
+          <value>CreditPossessionDate,System.DateTime</value>
+          <value>CreditRest,System.Decimal</value>
+          <value>CreditSettled,System.Decimal</value>
+          <value>DeliveryAmount,System.Decimal</value>
+          <value>DeliveryDate,System.DateTime</value>
+          <value>DeliveryDateReal,System.DateTime</value>
+          <value>DeliveryMaxNumber,System.Int32</value>
+          <value>DeliveryNumber,System.Int32</value>
+          <value>DeliveryRatio,System.Decimal</value>
+          <value>Description,System.String</value>
+          <value>Discount,System.Decimal</value>
+          <value>DiscountAmount,System.Decimal</value>
+          <value>DocDate,System.DateTime</value>
+          <value>ExpenseAmount,System.Decimal</value>
+          <value>ExpenseFolder,System.Decimal</value>
+          <value>ExpenseFolderRest,System.Decimal</value>
+          <value>ExpenseFolderSettled,System.Decimal</value>
+          <value>ExpenseRest,System.Decimal</value>
+          <value>ExpenseSettled,System.Decimal</value>
+          <value>ExpenseSyndic,System.Decimal</value>
+          <value>ExpenseSyndicRest,System.Decimal</value>
+          <value>ExpenseSyndicSettled,System.Decimal</value>
+          <value>GracePeriodEndDate,System.DateTime</value>
+          <value>GracePeriodNumber,System.Int32</value>
+          <value>HasLines,System.Boolean</value>
+          <value>InsuranceDate,System.DateTime</value>
+          <value>InterventionDate,System.DateTime</value>
+          <value>IsCancellation,System.Int32</value>
+          <value>IsConfirmedAgreementDate,System.Boolean</value>
+          <value>IsOldCustomer,System.Boolean</value>
+          <value>ItemPrice,System.Decimal</value>
+          <value>LoanCompanyDecisionDate,System.DateTime</value>
+          <value>LoanCompanySendDate,System.DateTime</value>
+          <value>ModificationsAmount,System.Decimal</value>
+          <value>ModificationsRest,System.Decimal</value>
+          <value>ModificationsSettled,System.Decimal</value>
+          <value>Notes,System.String</value>
+          <value>OwnershipCertificateDate,System.DateTime</value>
+          <value>PartPercent,System.Decimal</value>
+          <value>PenalityAmount,System.Decimal</value>
+          <value>PenalityDescription,System.String</value>
+          <value>PenalityRest,System.Decimal</value>
+          <value>PenalitySettled,System.Decimal</value>
+          <value>Periodicity,System.String</value>
+          <value>PeriodicityAmountToPayNext,System.Decimal</value>
+          <value>PeriodicityBeginDate,System.DateTime</value>
+          <value>PeriodicityEndDate,System.DateTime</value>
+          <value>PeriodicityMonthlyAmount,System.Decimal</value>
+          <value>PeriodicityNumber,System.Int32</value>
+          <value>PeriodicityReconduction,System.String</value>
+          <value>PeriodicityReconductionHistory,System.String</value>
+          <value>PeriodicityReconductionRatio,System.Decimal</value>
+          <value>PeriodicityYearlyAmount,System.Decimal</value>
+          <value>PKey,System.Guid</value>
+          <value>Price,System.Decimal</value>
+          <value>PriceAfterDiscount,System.Decimal</value>
+          <value>PriceBeforeDiscount,System.Decimal</value>
+          <value>PriceHT,System.Decimal</value>
+          <value>PriceRest,System.Decimal</value>
+          <value>PriceSettled,System.Decimal</value>
+          <value>PriceWithModification,System.Boolean</value>
+          <value>ReceptionDate,System.DateTime</value>
+          <value>ReconductionId,System.Guid</value>
+          <value>Revival1,System.DateTime</value>
+          <value>Revival1ValidityDate,System.DateTime</value>
+          <value>Revival2,System.DateTime</value>
+          <value>Revival2ValidityDate,System.DateTime</value>
+          <value>RSRatio,System.Decimal</value>
+          <value>RVATRatio,System.Decimal</value>
+          <value>SelfFinancingAmount,System.Decimal</value>
+          <value>SelfFinancingRest,System.Decimal</value>
+          <value>SelfFinancingSettled,System.Decimal</value>
+          <value>StatusValidityDate,System.DateTime</value>
+          <value>StkBuildingCode,System.String</value>
+          <value>StkBuildingDescription,System.String</value>
+          <value>StkBuildingId,System.Guid</value>
+          <value>StkFloorCode,System.String</value>
+          <value>StkFloorDescription,System.String</value>
+          <value>StkFlooreId,System.Guid</value>
+          <value>StkFloorSorting,System.Int32</value>
+          <value>StkItemCategoryCode,System.String</value>
+          <value>StkItemCategoryDescription,System.String</value>
+          <value>StkItemCategoryId,System.Guid</value>
+          <value>StkItemCode,System.String</value>
+          <value>StkItemDescription,System.String</value>
+          <value>StkItemId,System.Guid</value>
+          <value>StkItemOccupancyPermitsDate,System.DateTime</value>
+          <value>StkItemTitleNumber,System.String</value>
+          <value>StkItemTypeCode,System.String</value>
+          <value>StkItemTypeDescription,System.String</value>
+          <value>StkItemTypeId,System.Guid</value>
+          <value>StkPresentationTypeCode,System.String</value>
+          <value>StkPresentationTypeDescription,System.String</value>
+          <value>StkPresentationTypeId,System.Guid</value>
+          <value>StkVocationCode,System.String</value>
+          <value>StkVocationDecsription,System.String</value>
+          <value>StkVocationId,System.Guid</value>
+          <value>StrStatusCfgImageId,System.Guid</value>
+          <value>StrStatusCode,System.String</value>
+          <value>StrStatusDescription,System.String</value>
+          <value>StrStatusId,System.Guid</value>
+          <value>SyndicOriginId,System.Guid</value>
+          <value>Total,System.Decimal</value>
+          <value>TotalHT,System.Decimal</value>
+          <value>TotalRentAmount,System.Decimal</value>
+          <value>TotalRest,System.Decimal</value>
+          <value>TotalRS,System.Decimal</value>
+          <value>TotalSettled,System.Decimal</value>
+          <value>TotalToPay,System.Decimal</value>
+          <value>TotalTTC,System.Decimal</value>
+          <value>TropPercu,System.Decimal</value>
+          <value>TropPercuRest,System.Decimal</value>
+          <value>TropPercuRestCalculated,System.Decimal</value>
+          <value>TropPercuSettled,System.Decimal</value>
+          <value>TropPercuSettledCalculated,System.Decimal</value>
+          <value>UnderItemsPrice,System.Decimal</value>
+          <value>UnitCost,System.Decimal</value>
+          <value>Usage,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>VATRatio,System.Decimal</value>
+          <value>WithCredit,System.Int32</value>
+          <value>WithSyndic,System.Boolean</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>6ce3aaf2657d4725a781efdb26e2dd6c</Key>
+        <Name>ComSaleFolderView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT ComSaleFolderView.*
+	FROM ComSaleFolderView
+WHERE ComSaleFolderView.PKey IN
+(SELECT ComFolder.PKey
+	FROM ComFolder INNER JOIN
+	ComDocument ON ComFolder.PKey = ComDocument.ComFolderId INNER JOIN
+StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId 
+WHERE StlSettlementLine.StlSettlementId = ?)</SqlCommand>
+      </ComSaleFolderView>
+      <ComSaleMonitoringView Ref="12" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>ComSaleMonitoringView</Alias>
+        <Columns isList="true" count="3">
+          <value>ComFolderId,System.Guid</value>
+          <value>TotalToPay,System.Decimal</value>
+          <value>TotalToPayRest,System.Decimal</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>23d438f6b54a4b2682f1aa2ccebc3d43</Key>
+        <Name>ComSaleMonitoringView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>SELECT 
+dbo.ComSaleMonitoringView.ComFolderId
+, dbo.ComSaleMonitoringView.TotalToPay
+, dbo.ComSaleMonitoringView.TotalToPayRest
+FROM dbo.ComSaleMonitoringView</SqlCommand>
+      </ComSaleMonitoringView>
+      <ComSettlementFolder Ref="13" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>ComSettlementFolder</Alias>
+        <Columns isList="true" count="14">
+          <value>Amount,System.Decimal</value>
+          <value>CfgBankId,System.Guid</value>
+          <value>Code,System.String</value>
+          <value>ComFolderCode,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>Description,System.String</value>
+          <value>DocDate,System.DateTime</value>
+          <value>EcheanceDate,System.DateTime</value>
+          <value>PKey,System.Guid</value>
+          <value>ReceiptCode,System.String</value>
+          <value>SettlementDate,System.DateTime</value>
+          <value>StlSettlementId,System.Guid</value>
+          <value>StlSettlementTypeId,System.Guid</value>
+          <value>TierId,System.Guid</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>a0e53bdefae244f08d6d90ff4a19cb9b</Key>
+        <Name>ComSettlementFolder</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT DISTINCT
+	StlSettlement.PKey
+	, StlSettlement.DocDate
+	, StlSettlement.EcheanceDate
+	, StlSettlement.SettlementDate
+	, StlSettlement.Code
+	, StlSettlement.Description
+	, StlSettlement.ReceiptCode
+	, StlSettlement.CfgBankId
+	, StlSettlement.Amount
+	, StlSettlement.StlSettlementTypeId
+	, StlSettlement.TierId
+	, StlSettlement.PKey AS StlSettlementId
+	, ComFolder.PKey AS ComFolderId
+	, ComFolder.Code AS ComFolderCode
+	FROM ComDocument 
+	INNER JOIN StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId 
+INNER JOIN ComFolder ON ComDocument.ComFolderId = ComFolder.PKey 
+INNER JOIN StlSettlement ON StlSettlementLine.StlSettlementId = StlSettlement.PKey 
+WHERE StlSettlement.PKey = ?</SqlCommand>
+      </ComSettlementFolder>
+      <CurrencyFraction Ref="14" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CurrencyFraction</Alias>
+        <Columns isList="true" count="1">
+          <value>CodeValue,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>c9137b642e2d40829114780fbc509aaf</Key>
+        <Name>CurrencyFraction</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>select * from AdmParamsString Where Code ='CurrencyFraction'</SqlCommand>
+      </CurrencyFraction>
+      <CurrencyLabel Ref="15" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>CurrencyLabel</Alias>
+        <Columns isList="true" count="1">
+          <value>CodeValue,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>22d06cdd90ef4eb6850088066420b18f</Key>
+        <Name>CurrencyLabel</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>select CodeValue from AdmParamsString where Code ='CurrencyLabel'</SqlCommand>
+      </CurrencyLabel>
+      <FolderLines Ref="16" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>FolderLines</Alias>
+        <Columns isList="true" count="8">
+          <value>Amount,System.Decimal</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>Description,System.String</value>
+          <value>DocDate,System.DateTime</value>
+          <value>Status,System.String</value>
+          <value>StlSettlementId,System.Guid</value>
+          <value>StlSettlementIsCredit,System.Boolean</value>
+          <value>StlSettlementLineAmount,System.Decimal</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>4080c16220e24c4d862ad3f2a6819764</Key>
+        <Name>FolderLines</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT        
+	StlSettlement.DocDate
+	, StlSettlement.Description
+	, StlSettlement.Amount
+	, StlSettlementLine.Amount AS StlSettlementLineAmount
+	, StlSettlement.PKey AS StlSettlementId
+	, StlSettlement.IsCredit AS StlSettlementIsCredit
+	, StlSettlement.Status
+	, ComDocument.ComFolderId
+	FROM StlSettlementLine  INNER JOIN
+	StlSettlement ON StlSettlementLine.StlSettlementId = StlSettlement.PKey INNER JOIN
+ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey
+WHERE ComDocument.ComFolderId IN
+(SELECT ComDocument.ComFolderId
+	FROM StlSettlementLine
+	INNER JOIN ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey
+WHERE StlSettlementLine.StlSettlementId=?)</SqlCommand>
+      </FolderLines>
+      <RntDocumentView Ref="17" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>RntDocumentView</Alias>
+        <Columns isList="true" count="7">
+          <value>AmountSettled,System.Decimal</value>
+          <value>AmountToPay,System.Decimal</value>
+          <value>CfgTierDescription,System.String</value>
+          <value>Code,System.String</value>
+          <value>PeriodDescription,System.String</value>
+          <value>PKey,System.Guid</value>
+          <value>StkItemCode,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>78d2389cca02499aa8ad66c18c04f81f</Key>
+        <Name>RntDocumentView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="2">
+          <value>Parameter1,MainID,72,0</value>
+          <value>Parameter2,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>select
+	RntDocumentView.PKey
+	, RntDocumentView.CfgTierDescription
+	, RntDocumentView.StkItemCode
+	, RntDocumentView.PeriodDescription
+	, RntDocumentView.AmountToPay
+	, StlSettlementLine.Amount as AmountSettled
+	, '' as Code
+	from
+	RntDocumentView
+	inner join StlSettlementLine on StlSettlementLine.RntDocumentId = RntDocumentView.PKey
+where StlSettlementLine.StlSettlementId = ?
+
+union all
+
+select
+	RntDocumentView.PKey
+	, RntDocumentView.CfgTierDescription
+	, RntDocumentView.StkItemCode
+	, RntDocumentView.PeriodDescription
+	, RntDocumentView.AmountToPay
+	, IIF(StlDocument.AmountTTC=0, 0, (StlSettlementLine.Amount * (StlDocumentLine.TotalTTC / StlDocument.AmountTTC))) as AmountSettled
+	, StlDocument.Code
+	from
+	RntDocumentView
+	inner join StlDocumentLine on StlDocumentLine.RntDocumentId = RntDocumentView.PKey
+inner join StlDocument ON StlDocumentLine.StlDocumentId = StlDocument.PKey
+inner join StlSettlementLine on StlSettlementLine.StlDocumentId = StlDocument.PKey
+where StlSettlementLine.StlSettlementId = ?
+</SqlCommand>
+      </RntDocumentView>
+      <StkItemTitle Ref="18" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>StkItemTitle</Alias>
+        <Columns isList="true" count="75">
+          <value>Address,System.String</value>
+          <value>AlinmentStop,System.Int32</value>
+          <value>AlwaysAffected,System.Boolean</value>
+          <value>AmountHT,System.Decimal</value>
+          <value>Anomalies,System.String</value>
+          <value>Area,System.Decimal</value>
+          <value>AreaFloor,System.Decimal</value>
+          <value>AreaNet,System.Decimal</value>
+          <value>CautionNumber,System.Int32</value>
+          <value>CfgCompanyId,System.Guid</value>
+          <value>CfgProjectId,System.Guid</value>
+          <value>CfgSupplierId,System.Guid</value>
+          <value>Code,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>ComSaleMinAdvance,System.Decimal</value>
+          <value>ComSalePrice,System.Decimal</value>
+          <value>ComSaleUnitCost,System.Decimal</value>
+          <value>Contenance,System.String</value>
+          <value>Cos,System.Decimal</value>
+          <value>Cuf,System.Decimal</value>
+          <value>DeliveryDate,System.DateTime</value>
+          <value>Description,System.String</value>
+          <value>DividedPart,System.Decimal</value>
+          <value>DocDate,System.DateTime</value>
+          <value>ElectricityMeter,System.String</value>
+          <value>ElectricityMeterIndex,System.String</value>
+          <value>ElectricityMeterPolice,System.String</value>
+          <value>ElectricityRef,System.String</value>
+          <value>FractionDivided,System.String</value>
+          <value>GasMeter,System.String</value>
+          <value>GasMeterIndex,System.String</value>
+          <value>GasMeterPolice,System.String</value>
+          <value>GasRef,System.String</value>
+          <value>ImmatriculationCPF,System.String</value>
+          <value>ImmatriculationDate,System.DateTime</value>
+          <value>IsUnderItem,System.Boolean</value>
+          <value>MaxHeight,System.Int32</value>
+          <value>NeighborStop,System.Int32</value>
+          <value>Notes,System.String</value>
+          <value>OccupancyPermitsDate,System.DateTime</value>
+          <value>ParentId,System.Guid</value>
+          <value>PKey,System.Guid</value>
+          <value>PropertyCalled,System.String</value>
+          <value>PurchaseCost,System.Decimal</value>
+          <value>PurchaseDate,System.DateTime</value>
+          <value>PurchaseUnitCost,System.Decimal</value>
+          <value>RegistryDate,System.DateTime</value>
+          <value>RegistryNumber,System.String</value>
+          <value>RegistryPlace,System.String</value>
+          <value>SalePrice,System.Decimal</value>
+          <value>StkBuildingId,System.Guid</value>
+          <value>StkCostCategoryId,System.Guid</value>
+          <value>StkFloorId,System.Guid</value>
+          <value>StkHierarchyId,System.Guid</value>
+          <value>StkItemCategoryId,System.Guid</value>
+          <value>StkItemTypeId,System.Guid</value>
+          <value>StkKindId,System.Guid</value>
+          <value>StkOrientationId,System.Guid</value>
+          <value>StkPresentationTypeId,System.Guid</value>
+          <value>StkVocationId,System.Guid</value>
+          <value>TitleDate,System.DateTime</value>
+          <value>TitleName,System.String</value>
+          <value>TitleNotes,System.String</value>
+          <value>TitleNumber,System.String</value>
+          <value>TitleNumberMother,System.String</value>
+          <value>UndividedPart,System.Decimal</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+          <value>Vat,System.Decimal</value>
+          <value>WaterMeter,System.String</value>
+          <value>WaterMeterIndex,System.String</value>
+          <value>WaterMeterPolice,System.String</value>
+          <value>WaterRef,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>0952397ea4cc4f0e8e7622132fe46ee1</Key>
+        <Name>StkItemTitle</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>SELECT * FROM StkItem</SqlCommand>
+      </StkItemTitle>
+      <StkItemView Ref="19" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>StkItemView</Alias>
+        <Columns isList="true" count="41">
+          <value>Area,System.Decimal</value>
+          <value>CfgCompanyCode,System.String</value>
+          <value>CfgCompanyDescription,System.String</value>
+          <value>CfgCompanyId,System.Guid</value>
+          <value>CfgProjectCode,System.String</value>
+          <value>CfgProjectDescription,System.String</value>
+          <value>CfgProjectId,System.Guid</value>
+          <value>CfgTrancheCode,System.String</value>
+          <value>CfgTrancheDescription,System.String</value>
+          <value>CfgTrancheId,System.Guid</value>
+          <value>Code,System.String</value>
+          <value>ComSalePrice,System.Decimal</value>
+          <value>IsUnderItem,System.Boolean</value>
+          <value>PKey,System.Guid</value>
+          <value>SalePrice,System.Decimal</value>
+          <value>StkBuildingCode,System.String</value>
+          <value>StkBuildingDescription,System.String</value>
+          <value>StkBuildingId,System.Guid</value>
+          <value>StkBuildingSorting,System.Int32</value>
+          <value>StkFloorCode,System.String</value>
+          <value>StkFloorDescription,System.String</value>
+          <value>StkFloorId,System.Guid</value>
+          <value>StkFloorSorting,System.Int32</value>
+          <value>StkItemCategoryCode,System.String</value>
+          <value>StkItemCategoryDescription,System.String</value>
+          <value>StkItemCategoryId,System.Guid</value>
+          <value>StkItemTypeCode,System.String</value>
+          <value>StkItemTypeDescription,System.String</value>
+          <value>StkItemTypeId,System.Guid</value>
+          <value>StkKindCode,System.String</value>
+          <value>StkKindDescription,System.String</value>
+          <value>StkKindId,System.Guid</value>
+          <value>StkOrientationCode,System.String</value>
+          <value>StkOrientationDescription,System.String</value>
+          <value>StkOrientationId,System.Guid</value>
+          <value>StkPresentationTypeCode,System.String</value>
+          <value>StkPresentationTypeDescription,System.String</value>
+          <value>StkPresentationTypeId,System.Guid</value>
+          <value>StkVocationCode,System.String</value>
+          <value>StkVocationDescription,System.String</value>
+          <value>StkVocationId,System.Guid</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>13005ea7c6db4e37aaad2bd4a63dc022</Key>
+        <Name>StkItemView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="0" />
+        <SqlCommand>SELECT * FROM StkItemView</SqlCommand>
+      </StkItemView>
+      <StlSettlementLine Ref="20" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>StlSettlementLine</Alias>
+        <Columns isList="true" count="6">
+          <value>Amount,System.Decimal</value>
+          <value>CfgCustomerDescription,System.String</value>
+          <value>CfgCustomerIdentityDocumentType,System.String</value>
+          <value>CfgCustomerIDNumber,System.String</value>
+          <value>CfgCustomerTierTitle,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>9586b83a590f4ca39d49232d0718f082</Key>
+        <Name>StlSettlementLine</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT DISTINCT
+	SUM(StlSettlementLine.Amount) AS Amount
+	,ComDocument.ComFolderId
+	, CfgTier.Description AS CfgCustomerDescription
+	, CfgTier.IDNumber AS CfgCustomerIDNumber
+	, AdmIdentityDocumentType.Description AS CfgCustomerIdentityDocumentType
+	, AdmTierTitle.Description as CfgCustomerTierTitle
+	FROM StlSettlementLine 
+	INNER JOIN StlSettlement ON StlSettlementLine.StlSettlementId = StlSettlement.PKey 
+INNER JOIN ComDocument ON StlSettlementLine.ComDocumentId = ComDocument.PKey
+INNER JOIN ComFolder ON ComFolder.PKey = ComDocument.ComFolderId 
+LEFT OUTER JOIN CfgTier ON ComFolder.CfgCustomerId = CfgTier.PKey
+LEFT OUTER JOIN AdmIdentityDocumentType on CfgTier.AdmIdentityDocumentTypeId = AdmIdentityDocumentType.PKey
+LEFT OUTER JOIN AdmTierTitle ON CfgTier.AdmTierTitleId = AdmTierTitle.PKey
+WHERE StlSettlement.PKey=?
+Group by 
+ComDocument.ComFolderId,CfgTier.Description,CfgTier.IDNumber,AdmIdentityDocumentType.Description,AdmTierTitle.Description
+
+</SqlCommand>
+      </StlSettlementLine>
+      <StlSettlementView Ref="21" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>StlSettlementView</Alias>
+        <Columns isList="true" count="149">
+          <value>AccountingDate,System.DateTime</value>
+          <value>AdmModuleCode,System.String</value>
+          <value>AdmModuleDescription,System.String</value>
+          <value>AdmModuleId,System.Guid</value>
+          <value>AffectCount,System.Int32</value>
+          <value>Amount,System.Decimal</value>
+          <value>AmountBase,System.Decimal</value>
+          <value>AmountBaseConverted,System.Decimal</value>
+          <value>AmountRS,System.Decimal</value>
+          <value>AmountStamp,System.Decimal</value>
+          <value>BuyLoanCode,System.String</value>
+          <value>BuyLoanDescription,System.String</value>
+          <value>BuyLoanId,System.Guid</value>
+          <value>BuyLoanScheduleDescription,System.String</value>
+          <value>BuyLoanScheduleId,System.Guid</value>
+          <value>BuySettlementId_old,System.Guid</value>
+          <value>BuySubLoanDescription,System.String</value>
+          <value>BuySubLoanId,System.Guid</value>
+          <value>Category,System.String</value>
+          <value>CategoryDescription,System.String</value>
+          <value>CategoryId,System.Guid</value>
+          <value>CfgBankId,System.Guid</value>
+          <value>CfgCompanyAddress,System.String</value>
+          <value>CfgCompanyAddress2,System.String</value>
+          <value>CfgCompanyAddress3,System.String</value>
+          <value>CfgCompanyCity,System.String</value>
+          <value>CfgCompanyCode,System.String</value>
+          <value>CfgCompanyDescription,System.String</value>
+          <value>CfgCompanyFax,System.String</value>
+          <value>CfgCompanyFiscalNumber,System.String</value>
+          <value>CfgCompanyId,System.Guid</value>
+          <value>CfgCompanyLogo,System.Byte[]</value>
+          <value>CfgCompanyPhone,System.String</value>
+          <value>CfgComPanySignatureCity,System.String</value>
+          <value>CfgComPanyViewAddress,System.String</value>
+          <value>CfgComPanyViewLegalForm,System.String</value>
+          <value>CfgCompanyZipCode,System.String</value>
+          <value>CfgLawyerId,System.Guid</value>
+          <value>CfgPayerAddress,System.String</value>
+          <value>CfgPayerBirthDate,System.DateTime</value>
+          <value>CfgPayerBirthPlace,System.String</value>
+          <value>CfgPayerDescription,System.String</value>
+          <value>CfgPayerFiscalCode,System.String</value>
+          <value>CfgPayerFiscalRegistry,System.String</value>
+          <value>CfgPayerId,System.Guid</value>
+          <value>CfgPayerIDDate,System.DateTime</value>
+          <value>CfgPayerIDDescription,System.String</value>
+          <value>CfgPayerIDNumber,System.String</value>
+          <value>CfgPayerIDType,System.String</value>
+          <value>CfgPayerIsPerson,System.Boolean</value>
+          <value>CfgPayerNationality,System.String</value>
+          <value>CfgPayerTitle,System.String</value>
+          <value>CfgTierAddress,System.String</value>
+          <value>CfgTierBankCode,System.String</value>
+          <value>CfgTierBankDescription,System.String</value>
+          <value>CfgTierBirthDate,System.DateTime</value>
+          <value>CfgTierBirthPlace,System.String</value>
+          <value>CfgTierCode,System.String</value>
+          <value>CfgTierDescription,System.String</value>
+          <value>CfgTierFiscalCode,System.String</value>
+          <value>CfgTierFiscalRegistry,System.String</value>
+          <value>CfgTierId,System.Guid</value>
+          <value>CfgTierIDDate,System.DateTime</value>
+          <value>CfgTierIDDescription,System.String</value>
+          <value>CfgTierIDNumber,System.String</value>
+          <value>CfgTierIDType,System.String</value>
+          <value>CfgTierIsPerson,System.Boolean</value>
+          <value>CfgTierLawyerCode,System.String</value>
+          <value>CfgTierLawyerDescription,System.String</value>
+          <value>CfgTierNationality,System.String</value>
+          <value>CfgTierOtherCode,System.String</value>
+          <value>CfgTierOtherDescription,System.String</value>
+          <value>CfgTierOtherId,System.Guid</value>
+          <value>CfgTierPayerCode,System.String</value>
+          <value>CfgTierPayerDescription,System.String</value>
+          <value>CfgTierTitle,System.String</value>
+          <value>Code,System.String</value>
+          <value>ConvertUnit,System.Int32</value>
+          <value>ConvertValue,System.Decimal</value>
+          <value>DeliveredToCenterDate,System.DateTime</value>
+          <value>Description,System.String</value>
+          <value>DocDate,System.DateTime</value>
+          <value>EcheanceDate,System.DateTime</value>
+          <value>Group1Label,System.String</value>
+          <value>Group2Label,System.String</value>
+          <value>Group3Label,System.String</value>
+          <value>IdentityDocumentType,System.String</value>
+          <value>IDNumber,System.String</value>
+          <value>IsAccounted,System.Boolean</value>
+          <value>IsCredit,System.Boolean</value>
+          <value>IsDcoumentDeliveredToCenter,System.Boolean</value>
+          <value>IsNotContabilized,System.Boolean</value>
+          <value>ItemNumber,System.String</value>
+          <value>MotionDate,System.DateTime</value>
+          <value>MotionMonth,System.Int32</value>
+          <value>MotionOriginDate,System.DateTime</value>
+          <value>MotionReported,System.Boolean</value>
+          <value>MotionYear,System.Int32</value>
+          <value>Notes,System.String</value>
+          <value>ObjectDescription,System.String</value>
+          <value>ObjectId,System.Guid</value>
+          <value>ObjectNameSpace,System.String</value>
+          <value>PKey,System.Guid</value>
+          <value>ProjectDescription,System.String</value>
+          <value>PropositionSheetCode,System.String</value>
+          <value>ReceiptCode,System.String</value>
+          <value>RestAmount,System.Decimal</value>
+          <value>RSAmountSettled,System.Boolean</value>
+          <value>RsRatio,System.Decimal</value>
+          <value>RSSettlementDate,System.DateTime</value>
+          <value>RSSheetCode,System.String</value>
+          <value>SettlementDate,System.DateTime</value>
+          <value>SlipCode,System.String</value>
+          <value>SlipDate,System.DateTime</value>
+          <value>Status,System.String</value>
+          <value>StkItemDescription,System.String</value>
+          <value>StlAccountCode,System.String</value>
+          <value>StlAccountDescription,System.String</value>
+          <value>StlAccountId,System.Guid</value>
+          <value>StlAccountPositionDate,System.DateTime</value>
+          <value>StlAccountPositionId,System.Guid</value>
+          <value>StlAcountDepositId,System.Guid</value>
+          <value>StlCategoryId,System.Guid</value>
+          <value>StlCurrencyAffectationId,System.Guid</value>
+          <value>StlCurrencyCode,System.String</value>
+          <value>StlCurrencyDescription,System.String</value>
+          <value>StlCurrencyId,System.Guid</value>
+          <value>StlDepositCode,System.String</value>
+          <value>StlDepositDescription,System.String</value>
+          <value>StlDepositId,System.Guid</value>
+          <value>StlInternalTransferCode,System.String</value>
+          <value>StlInternalTransferDescription,System.String</value>
+          <value>StlInternalTransferId,System.Guid</value>
+          <value>StlSettlementTypeCode,System.String</value>
+          <value>StlSettlementTypeDescription,System.String</value>
+          <value>StlSettlementTypeId,System.Guid</value>
+          <value>StlSettlementTypeIsAccount,System.Boolean</value>
+          <value>StlSettlementTypeIsDeposit,System.Boolean</value>
+          <value>StlSlipId,System.Guid</value>
+          <value>StrEntityId,System.Guid</value>
+          <value>TierId,System.Guid</value>
+          <value>TierPayerId,System.Guid</value>
+          <value>TierType,System.String</value>
+          <value>Title,System.String</value>
+          <value>TrancheDescription,System.String</value>
+          <value>UserCreate,System.String</value>
+          <value>UserCreateDateTime,System.DateTime</value>
+          <value>UserUpdate,System.String</value>
+          <value>UserUpdateDateTime,System.DateTime</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>182dc9c9b49b47758dacbb8e6ce39b3b</Key>
+        <Name>StlSettlementView</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Parameter,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>select 
+	StlSettlementView.*
+
+	, CfgComPanyView.LegalForm AS CfgComPanyViewLegalForm
+, CfgComPanyView.MainAddress AS CfgComPanyViewAddress
+, CfgComPanyView.SignatureCity AS CfgComPanySignatureCity
+, CfgComPanyView.Address AS CfgCompanyAddress
+, CfgComPanyView.Address2 AS CfgCompanyAddress2
+, CfgComPanyView.Address3 AS CfgCompanyAddress3
+, CfgComPanyView.City AS CfgCompanyCity
+, CfgComPanyView.ZipCode AS CfgCompanyZipCode
+, CfgComPanyView.FiscalNumber AS CfgCompanyFiscalNumber
+, CfgComPanyView.Phone AS CfgCompanyPhone
+, CfgComPanyView.Fax AS CfgCompanyFax
+, (select AdmAttachedFile.AttachedFile from AdmAttachedFile
+	INNER JOIN AdmAttachedFileType ON AdmAttachedFile.AdmAttachedFileTypeId = AdmAttachedFileType.PKey
+	WHERE AdmAttachedFileType.Code='LOGO' AND AdmAttachedFile.CategoryId=CfgComPanyView.PKey
+	) AS CfgCompanyLogo
+
+, ISNULL(CfgTier.Title,'') AS Title
+, ISNULL(CfgTier.IdentityDocumentType,'') AS IdentityDocumentType
+, ISNULL(CfgTier.IDNumber,'') AS IDNumber
+
+, StlSettlementView.TierId AS CfgTierId
+, ISNULL(CfgTier.Title,'') AS CfgTierTitle
+, ISNULL(CfgTier.Address,'') AS CfgTierAddress
+, CfgTier.BirthDate AS CfgTierBirthDate
+, ISNULL(CfgTier.BirthPlace,'') AS CfgTierBirthPlace
+, ISNULL(CfgTier.Nationality,'') AS CfgTierNationality
+, ISNULL(CfgTier.IDDescription,'') AS CfgTierIDDescription
+, ISNULL(CfgTier.IdentityDocumentType,'') AS CfgTierIDType
+, ISNULL(CfgTier.IDNumber,'') AS CfgTierIDNumber
+, CfgTier.IDDate AS CfgTierIDDate
+, CfgTier.SocialFormIsPerson AS CfgTierIsPerson
+, ISNULL(CfgTier.FiscalCode,'') AS CfgTierFiscalCode
+, ISNULL(CfgTier.FiscalRegistry,'') AS CfgTierFiscalRegistry
+, StlSettlementView.TierPayerId AS CfgPayerId
+, ISNULL(CfgPayer.Title,'') AS CfgPayerTitle
+, ISNULL(CfgPayer.Description,'') AS CfgPayerDescription
+, ISNULL(CfgPayer.Address,'') AS CfgPayerAddress
+, CfgPayer.BirthDate AS CfgPayerBirthDate
+, ISNULL(CfgPayer.BirthPlace,'') AS CfgPayerBirthPlace
+, ISNULL(CfgPayer.Nationality,'') AS CfgPayerNationality
+, ISNULL(CfgPayer.IDDescription,'') AS CfgPayerIDDescription
+, ISNULL(CfgPayer.IdentityDocumentType,'') AS CfgPayerIDType
+, ISNULL(CfgPayer.IDNumber,'') AS CfgPayerIDNumber
+, CfgPayer.IDDate AS CfgPayerIDDate
+, CfgPayer.SocialFormIsPerson AS CfgPayerIsPerson
+, ISNULL(CfgPayer.FiscalCode,'') AS CfgPayerFiscalCode
+, ISNULL(CfgPayer.FiscalRegistry,'') AS CfgPayerFiscalRegistry
+
+,LTRIM(RTRIM(ISNULL((SELECT STUFF((SELECT DISTINCT + ', ' + Description
+	FROM (
+select StlSettlementAffectationView.StlCategoryDescription AS Description from StlSettlementAffectationView
+	WHERE StlSettlementAffectationView.StlSettlementId = StlSettlementView.PKey
+	)AS Test FOR XML PATH ('')),1,1,'')), ''))) AS CategoryDescription
+
+,LTRIM(RTRIM(ISNULL((SELECT STUFF((SELECT DISTINCT + ', ' + Description
+	FROM (
+select StlSettlementAffectationView.StkItemDescription AS Description from StlSettlementAffectationView
+	WHERE StlSettlementAffectationView.StlSettlementId = StlSettlementView.PKey
+	)AS Test FOR XML PATH ('')),1,1,'')), ''))) AS StkItemDescription
+
+,LTRIM(RTRIM(ISNULL((SELECT STUFF((SELECT DISTINCT + ', ' + Description
+	FROM (
+select StlSettlementAffectationView.CfgProjectDescription AS Description from StlSettlementAffectationView
+	WHERE StlSettlementAffectationView.StlSettlementId = StlSettlementView.PKey
+	)AS Test FOR XML PATH ('')),1,1,'')), ''))) AS ProjectDescription
+
+,LTRIM(RTRIM(ISNULL((SELECT STUFF((SELECT DISTINCT + ', ' + Description
+	FROM (
+select StlSettlementAffectationView.CfgTrancheDescription AS Description from StlSettlementAffectationView
+	WHERE StlSettlementAffectationView.StlSettlementId = StlSettlementView.PKey
+	)AS Test FOR XML PATH ('')),1,1,'')), ''))) AS TrancheDescription
+
+from StlSettlementView
+INNER JOIN CfgCompanyView ON StlSettlementView.CfgCompanyId = CfgCompanyView.PKey
+LEFT OUTER JOIN CfgTierView AS CfgTier  ON StlSettlementView.TierId = CfgTier.PKey
+LEFT OUTER JOIN CfgTierView AS CfgPayer ON StlSettlementView.TierPayerId = CfgPayer.PKey
+WHERE StlSettlementView.PKey = ?</SqlCommand>
+      </StlSettlementView>
+      <UnderItems Ref="22" type="Stimulsoft.Report.Dictionary.StiOleDbSource" isKey="true">
+        <Alias>UnderItems</Alias>
+        <Columns isList="true" count="7">
+          <value>Area,System.Decimal</value>
+          <value>Code,System.String</value>
+          <value>ComFolderId,System.Guid</value>
+          <value>ComSettlementId,System.Guid</value>
+          <value>Price,System.Decimal</value>
+          <value>StkItemCategoryCode,System.String</value>
+          <value>StkItemCategoryDescription,System.String</value>
+        </Columns>
+        <CommandTimeout>30</CommandTimeout>
+        <Dictionary isRef="1" />
+        <Key>54fb269783ab46cda76e8946bd5c122d</Key>
+        <Name>UnderItems</Name>
+        <NameInSource>Connection</NameInSource>
+        <Parameters isList="true" count="1">
+          <value>Paramètre,MainID,72,0</value>
+        </Parameters>
+        <SqlCommand>SELECT DISTINCT   
+	StlSettlementLine.StlSettlementId 
+	, StkItem.Code
+	, ComFolderItem.Area
+	, ComFolderItem.ComFolderId
+	, StkItemCategory.Code AS StkItemCategoryCode
+	, StkItemCategory.Description AS StkItemCategoryDescription
+	, ComFolderItem.Price
+	FROM ComFolderItem 
+	INNER JOIN StkItem ON ComFolderItem.StkItemId = StkItem.PKey 
+INNER JOIN StkItemCategory ON ComFolderItem.StkItemCategoryId = StkItemCategory.PKey 
+INNER JOIN ComFolder ON ComFolderItem.ComFolderId = ComFolder.PKey 
+INNER JOIN ComDocument ON ComFolder.PKey = ComDocument.ComFolderId 
+INNER JOIN StlSettlementLine ON ComDocument.PKey = StlSettlementLine.ComDocumentId
+WHERE StlSettlementLine.StlSettlementId = ?</SqlCommand>
+      </UnderItems>
+    </DataSources>
+    <Relations isList="true" count="13">
+      <Folder Ref="23" type="DataRelation" isKey="true">
+        <Alias>Folder</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="13" />
+        <Dictionary isRef="1" />
+        <Name>Folder</Name>
+        <NameInSource>Relation</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="10" />
+      </Folder>
+      <Customer Ref="24" type="DataRelation" isKey="true">
+        <Alias>Customer</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>TierId</value>
+        </ChildColumns>
+        <ChildSource isRef="13" />
+        <Dictionary isRef="1" />
+        <Name>Customer</Name>
+        <NameInSource>Relation2</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="7" />
+      </Customer>
+      <Item Ref="25" type="DataRelation" isKey="true">
+        <Alias>Item</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>StkItemId</value>
+        </ChildColumns>
+        <ChildSource isRef="10" />
+        <Dictionary isRef="1" />
+        <Name>Item</Name>
+        <NameInSource>Relation3</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="19" />
+      </Item>
+      <ItemTitle Ref="26" type="DataRelation" isKey="true">
+        <Alias>ItemTitle</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>StkItemId</value>
+        </ChildColumns>
+        <ChildSource isRef="10" />
+        <Dictionary isRef="1" />
+        <Name>ItemTitle</Name>
+        <NameInSource>Relation5</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="18" />
+      </ItemTitle>
+      <Nom Ref="27" type="DataRelation" isKey="true">
+        <Alias>Nom</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="20" />
+        <Dictionary isRef="1" />
+        <Name>Nom</Name>
+        <NameInSource>Relation6</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="13" />
+      </Nom>
+      <Monitoring Ref="28" type="DataRelation" isKey="true">
+        <Alias>Monitoring</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>PKey</value>
+        </ChildColumns>
+        <ChildSource isRef="10" />
+        <Dictionary isRef="1" />
+        <Name>Monitoring</Name>
+        <NameInSource>Relation7</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="12" />
+      </Monitoring>
+      <Customer1 Ref="29" type="DataRelation" isKey="true">
+        <Alias>Customer1</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>PKey</value>
+        </ChildColumns>
+        <ChildSource isRef="10" />
+        <Dictionary isRef="1" />
+        <Name>Customer1</Name>
+        <NameInSource>Customer1</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="5" />
+      </Customer1>
+      <Customer2 Ref="30" type="DataRelation" isKey="true">
+        <Alias>Customer2</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>PKey</value>
+        </ChildColumns>
+        <ChildSource isRef="10" />
+        <Dictionary isRef="1" />
+        <Name>Customer2</Name>
+        <NameInSource>Customer2</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="6" />
+      </Customer2>
+      <FolderUnderItems Ref="31" type="DataRelation" isKey="true">
+        <Alias>FolderUnderItems</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="22" />
+        <Dictionary isRef="1" />
+        <Name>FolderUnderItems</Name>
+        <NameInSource>FolderUnderItems</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="20" />
+      </FolderUnderItems>
+      <Folder Ref="32" type="DataRelation" isKey="true">
+        <Alias>Folder</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="20" />
+        <Dictionary isRef="1" />
+        <Name>Folder</Name>
+        <NameInSource>LineFolder</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="10" />
+      </Folder>
+      <MainLine Ref="33" type="DataRelation" isKey="true">
+        <Alias>MainLine</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="16" />
+        <Dictionary isRef="1" />
+        <Name>MainLine</Name>
+        <NameInSource>Relation4</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="20" />
+      </MainLine>
+      <MainLine1 Ref="34" type="DataRelation" isKey="true">
+        <Alias>MainLine1</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ChildColumns>
+        <ChildSource isRef="9" />
+        <Dictionary isRef="1" />
+        <Name>MainLine1</Name>
+        <NameInSource>MainLine1</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>ComFolderId</value>
+        </ParentColumns>
+        <ParentSource isRef="20" />
+      </MainLine1>
+      <Nom Ref="35" type="DataRelation" isKey="true">
+        <Alias>Nom</Alias>
+        <ChildColumns isList="true" count="1">
+          <value>PKey</value>
+        </ChildColumns>
+        <ChildSource isRef="11" />
+        <Dictionary isRef="1" />
+        <Name>Nom</Name>
+        <NameInSource>Relation8</NameInSource>
+        <ParentColumns isList="true" count="1">
+          <value>PKey</value>
+        </ParentColumns>
+        <ParentSource isRef="10" />
+      </Nom>
+    </Relations>
+    <Report isRef="0" />
+    <Resources isList="true" count="0" />
+    <Variables isList="true" count="4">
+      <value>,OtherCustomersLabel,OtherCustomersLabel,OtherCustomersLabel,System.String,,False,False,False,False</value>
+      <value>,MainID,MainID,,System.Guid,_x0037_968113B-FB21-4010-953A-DC32A5C74F02,False,False,False,False</value>
+      <value>,MainYEAR,MainYEAR,,System.Int32,_x0032_026,False,False,False,False</value>
+      <value>,SessionID,SessionID,,System.Guid,_x0039_49945ED-A22D-4060-A41C-566BCFEFBBEA,False,False,False,False</value>
+    </Variables>
+  </Dictionary>
+  <EngineVersion>EngineV2</EngineVersion>
+  <GlobalizationStrings isList="true" count="0" />
+  <Key>0fba801ebeb74feea698211572a66b29</Key>
+  <MetaTags isList="true" count="0" />
+  <Pages isList="true" count="2">
+    <Page1 Ref="36" type="Page" isKey="true">
+      <Border>None;Black;2;Solid;False;4;Black</Border>
+      <Brush>Transparent</Brush>
+      <Components isList="true" count="16">
+        <PageFooterBand1 Ref="37" type="PageFooterBand" isKey="true">
+          <Border>All;Black;1;Solid;False;4;Black</Border>
+          <Brush>Transparent</Brush>
+          <ClientRectangle>0,106.8,19,0</ClientRectangle>
+          <Components isList="true" count="0" />
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Name>PageFooterBand1</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+        </PageFooterBand1>
+        <GroupHeaderBand2 Ref="38" type="GroupHeaderBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,0.4,19,6</ClientRectangle>
+          <Components isList="true" count="4">
+            <Text1 Ref="39" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>0,2,19,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,14,Bold</Font>
+              <Guid>15f9d8275844460b98d2650f78ed109b</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text1</Name>
+              <Page isRef="36" />
+              <Parent isRef="38" />
+              <Text>ATTESTATION DE RÉCEPTION CHEQUE N° {StlSettlementLine.Folder.Code}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text1>
+            <Text2 Ref="40" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>0,3.2,19,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,14,Bold</Font>
+              <Guid>d90e7e93b0f0459a864cf9ef7992e872</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text2</Name>
+              <Page isRef="36" />
+              <Parent isRef="38" />
+              <Text>RECU_{StlSettlementView.ReceiptCode}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text2>
+            <Text3 Ref="41" type="Text" isKey="true">
+              <AllowHtmlTags>True</AllowHtmlTags>
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>1.4,4.8,16.6,1</ClientRectangle>
+              <Conditions isList="true" count="1">
+                <value>StlSettlementView.IsCredit,EqualTo,false,,Boolean,Black,Transparent,Century_x0020_Gothic_x002C_11.25,False,False,,,None</value>
+              </Conditions>
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>3268d0b975334f43a6c6382757d623eb</Guid>
+              <HorAlignment>Width</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text3</Name>
+              <Page isRef="36" />
+              <Parent isRef="38" />
+              <Text>Nous soussignés socièté {StlSettlementView.CfgCompanyDescription} {StlSettlementView.CfgComPanyViewLegalForm} dont le siège social est à {StlSettlementView.CfgComPanyViewAddress}, reconnaissons avoir reçu de {StlSettlementLine.CfgCustomerTierTitle} {StlSettlementLine.CfgCustomerDescription} , {StlSettlementLine.CfgCustomerIdentityDocumentType} N° {StlSettlementLine.CfgCustomerIDNumber}{IIF(string.IsNullOrEmpty(ComSettlementFolder.Folder.Customer1.Description),""," et de " + ComSettlementFolder.Folder.Customer1.Title + " " + ComSettlementFolder.Folder.Customer1.Description + ", " + ComSettlementFolder.Folder.Customer1.IdentityDocumentType + " N° " + ComSettlementFolder.Folder.Customer1.IDNumber)}{IIF(string.IsNullOrEmpty(ComSettlementFolder.Folder.Customer2.Description),""," et de " + ComSettlementFolder.Folder.Customer2.Title + " " + ComSettlementFolder.Folder.Customer2.Description + ", " + ComSettlementFolder.Folder.Customer2.IdentityDocumentType + " N° " + ComSettlementFolder.Folder.Customer2.IDNumber)}, la somme de {Format("{0:C}", StlSettlementLine.Amount)} ({DecimalToLiteral(StlSettlementLine.Amount,CurrencyLabel.CodeValue,CurrencyFraction.CodeValue)}) par {StlSettlementView.Description} représentant un versement sur l'acquisition de :</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <TextQuality>Wysiwyg</TextQuality>
+              <Type>Expression</Type>
+            </Text3>
+            <Text4 Ref="42" type="Text" isKey="true">
+              <AllowHtmlTags>True</AllowHtmlTags>
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>1.4,4.8,16.8,1</ClientRectangle>
+              <Conditions isList="true" count="1">
+                <value>StlSettlementView.IsCredit,EqualTo,true,,Boolean,Black,Transparent,Century_x0020_Gothic_x002C_11.25,False,False,,,None</value>
+              </Conditions>
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>10e63c23e4a64975b8d9b2d170eef493</Guid>
+              <HorAlignment>Width</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text4</Name>
+              <Page isRef="36" />
+              <Parent isRef="38" />
+              <Text>Nous soussignés {StlSettlementView.Title} {StlSettlementView.CfgTierDescription} , {StlSettlementView.IdentityDocumentType} N° {StlSettlementView.IDNumber}{IIF(string.IsNullOrEmpty(ComSettlementFolder.Folder.Customer1.Description),""," et " + ComSettlementFolder.Folder.Customer1.Title + " " + ComSettlementFolder.Folder.Customer1.Description + ", " + ComSettlementFolder.Folder.Customer1.IdentityDocumentType + " N° " + ComSettlementFolder.Folder.Customer1.IDNumber)}{IIF(string.IsNullOrEmpty(ComSettlementFolder.Folder.Customer2.Description),""," et " + ComSettlementFolder.Folder.Customer2.Title + " " + ComSettlementFolder.Folder.Customer2.Description + ", " + ComSettlementFolder.Folder.Customer2.IdentityDocumentType + " N° " + ComSettlementFolder.Folder.Customer2.IDNumber)}, reconnaissons avoir reçu de la socièté {StlSettlementView.CfgCompanyDescription} {StlSettlementView.CfgComPanyViewLegalForm} dont le siège social est à {StlSettlementView.CfgComPanyViewAddress}, la somme de {Format("{0:C}", StlSettlementLine.Amount)} ({DecimalToLiteral(StlSettlementLine.Amount,CurrencyLabel.CodeValue,CurrencyFraction.CodeValue)}) par {StlSettlementView.Description} représentant un rembourssement sur l'acquisition de :</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <TextQuality>Wysiwyg</TextQuality>
+              <Type>Expression</Type>
+            </Text4>
+          </Components>
+          <Condition>{StlSettlementLine.ComFolderId}</Condition>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Name>GroupHeaderBand2</Name>
+          <NewPageBefore>True</NewPageBefore>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+        </GroupHeaderBand2>
+        <Lines Ref="43" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CalcInvisible>True</CalcInvisible>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,7.2,19,0</ClientRectangle>
+          <Components isList="true" count="0" />
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation6</DataRelationName>
+          <DataSourceName>StlSettlementLine</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>bd9641bc41914ac1bbcc83a1f28cb6a1</Guid>
+          <Name>Lines</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="2">
+            <value>ASC</value>
+            <value>DocDate</value>
+          </Sort>
+        </Lines>
+        <DataBand3 Ref="44" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,8,19,0.8</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text34 Ref="45" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>1.4,0.2,16.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>113b2e6ae7124395b3a5bd607194cc55</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text34</Name>
+              <Page isRef="36" />
+              <Parent isRef="44" />
+              <ProcessingDuplicates>Merge</ProcessingDuplicates>
+              <Text>{StlSettlementLine.Folder.Item.StkItemCategoryDescription} n° {StlSettlementLine.Folder.Item.Code}, situé dans le projet {ComSettlementFolder.Folder.Item.CfgProjectDescription}, comprenant :</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text34>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>6ce9f35951be4fde8a791d7384927cbf</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand3</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand3>
+        <DataBand4 Ref="46" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,9.6,19,0.6</ClientRectangle>
+          <Components isList="true" count="2">
+            <Text40 Ref="47" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>1.4,0,7.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>68936461fdc1463b95c1ac1b1997a6a3</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text40</Name>
+              <Page isRef="36" />
+              <Parent isRef="46" />
+              <Text>Type</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text40>
+            <Text41 Ref="48" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>9,0,9,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>b3c3d1a54fa642469d90caaea70b771b</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text41</Name>
+              <Page isRef="36" />
+              <Parent isRef="46" />
+              <Text> : {StlSettlementLine.Folder.Item.StkPresentationTypeDescription}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text41>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>ed7bf9ff0817408193bcee753ce94a00</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand4</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand4>
+        <DataBand5 Ref="49" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,11,19,0.6</ClientRectangle>
+          <Components isList="true" count="2">
+            <Text47 Ref="50" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>1.4,0,7.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>5dc7bc82508d46608d130b8f4dfb25fb</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text47</Name>
+              <Page isRef="36" />
+              <Parent isRef="49" />
+              <Text>Superficie {(StlSettlementLine.Folder.ItemTitle.TitleNumber==string.Empty)? "approximative" : ""}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text47>
+            <Text48 Ref="51" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>9,0,9,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>80feaecc7a67419b93a27c28594a1826</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text48</Name>
+              <Page isRef="36" />
+              <Parent isRef="49" />
+              <Text> : {Format("{0:N}", StlSettlementLine.Folder.Item.Area)} m²</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text48>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>2b561c8035354dfbbaf3365734fc7f04</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand5</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand5>
+        <DataBand6 Ref="52" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,12.4,19,0.6</ClientRectangle>
+          <Components isList="true" count="2">
+            <Text35 Ref="53" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>1.4,0,7.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>d68be06eaf934d45a489b306c451383b</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text35</Name>
+              <Page isRef="36" />
+              <Parent isRef="52" />
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text35>
+            <Text36 Ref="54" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>9,0,9,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>c799b522192b4f06a748068f0e63edfd</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text36</Name>
+              <Page isRef="36" />
+              <Parent isRef="52" />
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text36>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>FolderUnderItems</DataRelationName>
+          <DataSourceName>UnderItems</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>ecd333d8f86b4ab686b38881060e8e07</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand6</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="2">
+            <value>DESC</value>
+            <value>StkItemCategoryDescription</value>
+          </Sort>
+        </DataBand6>
+        <DataBand9 Ref="55" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,13.8,19,0.8</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text39 Ref="56" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>1.2,0.2,16.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>ae061830b4ec4770b2a083420701701b</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text39</Name>
+              <Page isRef="36" />
+              <Parent isRef="55" />
+              <Text>Prix {StlSettlementLine.Folder.Item.StkItemCategoryDescription} : {Format("{0:C}", StlSettlementLine.Folder.PriceAfterDiscount)}{(StlSettlementLine.Folder.ItemTitle.TitleNumber==string.Empty)? "*" : ""}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text39>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>94e00f4688a34b6d82e0ac45872d0453</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand9</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand9>
+        <DataBand2 Ref="57" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,15.4,19,1</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text9 Ref="58" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>1.4,0.2,16.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>692dd82d0c8c463e9b759e786662753a</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text9</Name>
+              <Page isRef="36" />
+              <Parent isRef="57" />
+              <Text>Nous vous rappelons ci-après la situation des chèques reçus :</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <TextQuality>Wysiwyg</TextQuality>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text9>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>5d63800a4ab542e6add5ff98b7040139</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBand2</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand2>
+        <HeaderBand1 Ref="59" type="HeaderBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,17.2,19,0.6</ClientRectangle>
+          <Components isList="true" count="4">
+            <Text44 Ref="60" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>2.6,0,2.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10,Bold</Font>
+              <Guid>892cf464a8d0405b8e303ea88d99e604</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text44</Name>
+              <Page isRef="36" />
+              <Parent isRef="59" />
+              <Text>Date</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text44>
+            <Text45 Ref="61" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>4.8,0,2.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10,Bold</Font>
+              <Guid>5ccb52d516f94852b2f5252737436173</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text45</Name>
+              <Page isRef="36" />
+              <Parent isRef="59" />
+              <Text>Montant</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text45>
+            <Text46 Ref="62" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>7.4,0,10.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10,Bold</Font>
+              <Guid>baff207fdd3546f8afd7b820a7cc77f1</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text46</Name>
+              <Page isRef="36" />
+              <Parent isRef="59" />
+              <Text>Mode</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text46>
+            <Text49 Ref="63" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>1.2,0,1.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10,Bold</Font>
+              <Guid>9031489c2d95487fbf3cca104772ad36</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text49</Name>
+              <Page isRef="36" />
+              <Parent isRef="59" />
+              <Text>N° Vers </Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text49>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Guid>584141cb873b4bcda81b10843794e4de</Guid>
+          <Name>HeaderBand1</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <PrintOnAllPages>False</PrintOnAllPages>
+        </HeaderBand1>
+        <DataBandFolderLines Ref="64" type="DataBand" isKey="true">
+          <BreakIfLessThan>23</BreakIfLessThan>
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CalcInvisible>True</CalcInvisible>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,18.6,19,0.6</ClientRectangle>
+          <Components isList="true" count="5">
+            <Text50 Ref="65" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>2.6,0,2.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>d0ac6046905048bf9011c59407728444</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text50</Name>
+              <Page isRef="36" />
+              <Parent isRef="64" />
+              <Text>{FolderLines.DocDate}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextFormat Ref="66" type="CustomFormat" isKey="true">
+                <StringFormat>d</StringFormat>
+              </TextFormat>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text50>
+            <Text51 Ref="67" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>4.8,0,2.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>c7141e1f27f04b2eafb3673ede432351</Guid>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text51</Name>
+              <Page isRef="36" />
+              <Parent isRef="64" />
+              <Text>{FolderLines.StlSettlementLineAmount *(FolderLines.StlSettlementIsCredit?1:-1)}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextFormat Ref="68" type="CustomFormat" isKey="true">
+                <StringFormat>c</StringFormat>
+              </TextFormat>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text51>
+            <Text52 Ref="69" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>7.4,0,10.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>5edd1967c64a4bed9a72f77d66a41cc4</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text52</Name>
+              <Page isRef="36" />
+              <Parent isRef="64" />
+              <Text>{FolderLines.Description}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text52>
+            <Text53 Ref="70" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>1.2,0,1.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="1">
+                <value>FolderLines.Status,EqualTo,POINTED,,String,Black,Transparent,Century_x0020_Gothic_x002C_9.75_x002C_Bold_x007C__x0020_Underline,True,False,,,All</value>
+              </Conditions>
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,10</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>a1209d355bd1412ab3ab00e048fc8eec</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text53</Name>
+              <Page isRef="36" />
+              <Parent isRef="64" />
+              <Text>{Line}</Text>
+              <TextBrush>Black</TextBrush>
+              <VertAlignment>Center</VertAlignment>
+            </Text53>
+            <HorizontalLinePrimitive3 Ref="71" type="HorizontalLinePrimitive" isKey="true">
+              <ClientRectangle>1.2,0,16.6,0.0254</ClientRectangle>
+              <Color>Black</Color>
+              <Conditions isList="true" count="0" />
+              <EndCap Ref="72" type="Cap" isKey="true">
+                <Color>Black</Color>
+              </EndCap>
+              <Expressions isList="true" count="0" />
+              <Guid>c8416a66548b4bba8fc7c6ffc8720be2</Guid>
+              <Name>HorizontalLinePrimitive3</Name>
+              <Page isRef="36" />
+              <Parent isRef="64" />
+              <StartCap Ref="73" type="Cap" isKey="true">
+                <Color>Black</Color>
+              </StartCap>
+            </HorizontalLinePrimitive3>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation4</DataRelationName>
+          <DataSourceName>FolderLines</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>525c7ccc7fd24a92b5fc254dad7ea947</Guid>
+          <MasterComponent isRef="43" />
+          <Name>DataBandFolderLines</Name>
+          <NewPageBefore>True</NewPageBefore>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="2">
+            <value>ASC</value>
+            <value>DocDate</value>
+          </Sort>
+          <StartNewPageIfLessThan>23</StartNewPageIfLessThan>
+        </DataBandFolderLines>
+        <FooterBand1 Ref="74" type="FooterBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,20,19,1.4</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text54 Ref="75" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>1.4,0.2,16.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11,Bold</Font>
+              <Guid>04db4c19ed64401f9176c4c10937d573</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text54</Name>
+              <Page isRef="36" />
+              <Parent isRef="74" />
+              <Text>Reste à payer : {Format("{0:C}", ComSaleFolderView.PriceRest)}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text54>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Guid>cde7fe8d588447e089b1b5ea13af648d</Guid>
+          <KeepFooterTogether>False</KeepFooterTogether>
+          <Name>FooterBand1</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+        </FooterBand1>
+        <DataBand8 Ref="76" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,22.2,19,1.2</ClientRectangle>
+          <Components isList="true" count="1">
+            <RichText2 Ref="77" type="Stimulsoft.Report.Components.StiRichText" isKey="true">
+              <BackColor>Transparent</BackColor>
+              <ClientRectangle>1.4,0.2,16.6,1</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <DataColumn />
+              <Expressions isList="true" count="0" />
+              <Margins>0,0,0,0</Margins>
+              <Name>RichText2</Name>
+              <Page isRef="36" />
+              <Parent isRef="76" />
+              <Text>__LP___x005C_rtf1_x005C_ansi_x005C_ansicpg1252_x005C_deff0_x005C_nouicompat_x005C_deflang1036__LP___x005C_fonttbl__LP___x005C_f0_x005C_fnil_x005C_fcharset0_x0020_Microsoft_x0020_Sans_x0020_Serif_x003B___RP____RP___x000D__x000A___LP___x005C__x002A__x005C_generator_x0020_Riched20_x0020_10.0.19041__RP___x005C_viewkind4_x005C_uc1_x0020__x000D__x000A__x005C_pard_x005C_f0_x005C_fs24_x0020_En_x0020_foi_x0020_de_x0020_quoi_x0020_la_x0020_pr_x005C__x0027_e9sente_x0020_est_x0020_d_x005C__x0027_e9livr_x005C__x0027_e9e_x0020_pour_x0020_servir_x0020_et_x0020_valoir_x0020_ce_x0020_que_x0020_de_x0020_droit._x0020__x005C_b_x0020_Cette_x0020_attestation_x0020_n_x0027_est_x0020_valide_x0020_qu_x0027_apr_x005C__x0027_e8s_x0020_l_x0027_encaissement_x0020_du_x0020_montant_x0020_mentionn_x005C__x0027_e9._x005C_b0_x005C_par_x000D__x000A___RP___x000D__x000A_</Text>
+            </RichText2>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName>Relation</DataRelationName>
+          <DataSourceName>ComSettlementFolder</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>736654961e5f465abb8fdabe7d5d6eee</Guid>
+          <Name>DataBand8</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <Sort isList="true" count="0" />
+        </DataBand8>
+        <FooterBand2 Ref="78" type="FooterBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanGrow>False</CanGrow>
+          <ClientRectangle>0,24.2,19,3</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text38 Ref="79" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>0,0.2,17.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Century Gothic,11</Font>
+              <Guid>8d15c12f08144bf3b55debc8ffd4082d</Guid>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text38</Name>
+              <Page isRef="36" />
+              <Parent isRef="78" />
+              <ProcessingDuplicates>Merge</ProcessingDuplicates>
+              <Text>{StlSettlementView.CfgComPanySignatureCity} le, {Format("{0:d}", ComSettlementFolder.DocDate)}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text38>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <KeepFooterTogether>False</KeepFooterTogether>
+          <Name>FooterBand2</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <PrintAtBottom>True</PrintAtBottom>
+        </FooterBand2>
+        <FooterBand3 Ref="80" type="FooterBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanGrow>False</CanGrow>
+          <ClientRectangle>0,28,19,0.8</ClientRectangle>
+          <Components isList="true" count="1">
+            <Text13 Ref="81" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,0.1,17.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Microsoft Sans Serif,10</Font>
+              <Guid>bd28ccf5a0d848ef90deff2425a0bea8</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text13</Name>
+              <Page isRef="36" />
+              <Parent isRef="80" />
+              <Text>{(ComSettlementFolder.Folder.ItemTitle.TitleNumber==string.Empty) ? "* La superficie étant approximative, le prix définitif sera arrêté dès la création des titres fonciers." : ""} </Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text13>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <KeepFooterTogether>False</KeepFooterTogether>
+          <Name>FooterBand3</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <PrintAtBottom>True</PrintAtBottom>
+        </FooterBand3>
+        <GroupFooterBand2 Ref="82" type="GroupFooterBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanBreak>True</CanBreak>
+          <CanShrink>True</CanShrink>
+          <ClientRectangle>0,29.6,19,0</ClientRectangle>
+          <Components isList="true" count="0" />
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <KeepGroupFooterTogether>False</KeepGroupFooterTogether>
+          <Name>GroupFooterBand2</Name>
+          <Page isRef="36" />
+          <Parent isRef="36" />
+          <SkipFirst>False</SkipFirst>
+        </GroupFooterBand2>
+      </Components>
+      <Conditions isList="true" count="1">
+        <value>StlSettlementView.AdmModuleCode,NotEqualTo,COM,,String,Red,Transparent,Arial_x002C_8,False,False,,,None,None</value>
+      </Conditions>
+      <Expressions isList="true" count="0" />
+      <Guid>5094f7cd28bb4dbd8359c7b1ada327fa</Guid>
+      <LargeHeight>True</LargeHeight>
+      <Margins>1,1,1,2</Margins>
+      <Name>Page1</Name>
+      <PageHeight>29.7</PageHeight>
+      <PageWidth>21</PageWidth>
+      <Report isRef="0" />
+    </Page1>
+    <Page2 Ref="83" type="Page" isKey="true">
+      <Border>None;Black;2;Solid;False;4;Black</Border>
+      <Brush>Transparent</Brush>
+      <Components isList="true" count="6">
+        <PageHeaderBand1 Ref="84" type="PageHeaderBand" isKey="true">
+          <BeforePrintEvent>OtherCustomersLabel = "";</BeforePrintEvent>
+          <Brush>Transparent</Brush>
+          <ClientRectangle>0,0.4,19,7.8</ClientRectangle>
+          <Components isList="true" count="13">
+            <Text7 Ref="85" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>0,5.6,19,0.8</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,16,Bold</Font>
+              <Guid>ca988be603784116894e1f716934ed35</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text7</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>Reçu N° {StlSettlementView.ReceiptCode}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text7>
+            <Text11 Ref="86" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>13.2,0.6,5.8,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12</Font>
+              <Guid>0aa53aa138094a1b990744a83af58419</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text11</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <ProcessingDuplicates>Merge</ProcessingDuplicates>
+              <Text>{StlSettlementView.CfgCompanyCity} le, {Format("{0:d}", StlSettlementView.DocDate)}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text11>
+            <Text10 Ref="87" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,1.8,8.8,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>2ef1b2d2621a40e58882ec2daffde1e6</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text10</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyAddress}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text10>
+            <Text12 Ref="88" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,2.2,8.8,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>ea326a58cc9341559721fd363fc953de</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text12</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyAddress2}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text12>
+            <Text15 Ref="89" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,2.6,8.8,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>d9a67ce2565b439a97d60e84de69b4a5</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text15</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyAddress3}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text15>
+            <Text16 Ref="90" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>2.6,3,6.2,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>42377b08295e49158110bb3f5912ccf7</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text16</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyFiscalNumber}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text16>
+            <Text17 Ref="91" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>2.6,3.4,6.2,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>91130aaba7194b41a1ac44297055652f</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text17</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyPhone}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text17>
+            <Text8 Ref="92" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,3.4,2.6,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>d7df18a32e104be69c19e5e706e77c3f</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text8</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>N° téléphone</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text8>
+            <Text14 Ref="93" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>2.6,3.8,6.2,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>baf3af846e50435689414a18fe5e8c3d</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text14</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyFax}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text14>
+            <Text18 Ref="94" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,3.8,2.6,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>cc7ca408ffa7425da22b44a2685cbd1c</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text18</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>N° télécopie</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text18>
+            <Text19 Ref="95" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,3,2.6,0.4</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <Guid>16ecaf5018514822af75975b34628478</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text19</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>Matricule Fiscale : </Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text19>
+            <Text20 Ref="96" type="Text" isKey="true">
+              <Brush>White</Brush>
+              <ClientRectangle>0,0.6,12.6,0.8</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,16,Bold</Font>
+              <Guid>99bd5f3bbafe4fc88c0e57180a9872f2</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text20</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>{StlSettlementView.CfgCompanyDescription}</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text20>
+            <Text21 Ref="97" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>9.4,3.6,9.6,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <Guid>01b49466416b4b4c95bb0333bfc860dd</Guid>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text21</Name>
+              <Page isRef="83" />
+              <Parent isRef="84" />
+              <Text>#{Format("{0:C}",StlSettlementView.Amount)}#</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text21>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Name>PageHeaderBand1</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+        </PageHeaderBand1>
+        <PageFooterBand2 Ref="98" type="PageFooterBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <CanGrow>False</CanGrow>
+          <ClientRectangle>0,26.5,19,1.2</ClientRectangle>
+          <Components isList="true" count="0" />
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Name>PageFooterBand2</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+        </PageFooterBand2>
+        <DataStlSettlementView Ref="99" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <ClientRectangle>0,9,19,0.8</ClientRectangle>
+          <Components isList="true" count="2">
+            <Text28 Ref="100" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,0,4.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text28</Name>
+              <Page isRef="83" />
+              <Parent isRef="99" />
+              <Text>Client :</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text28>
+            <Text29 Ref="101" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>4.4,0,14.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12</Font>
+              <Guid>48038de2573f436188397ace2f4675b3</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text29</Name>
+              <Page isRef="83" />
+              <Parent isRef="99" />
+              <Text>{ToUpperCase(StlSettlementView.TrancheDescription)} {ToUpperCase(StlSettlementView.CfgTierDescription)}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text29>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataSourceName>StlSettlementView</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Name>DataStlSettlementView</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+          <Sort isList="true" count="0" />
+        </DataStlSettlementView>
+        <HeaderRntDocumentView Ref="102" type="HeaderBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <ClientRectangle>0,10.6,19,0.6</ClientRectangle>
+          <Components isList="true" count="6">
+            <HeaderRntDocumentView_CfgTierDescription Ref="103" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,0,4.8,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>HeaderRntDocumentView_CfgTierDescription</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>Locataire</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </HeaderRntDocumentView_CfgTierDescription>
+            <HeaderRntDocumentView_StkItemCode Ref="104" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>4.8,0,2.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>HeaderRntDocumentView_StkItemCode</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>Num. Local</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </HeaderRntDocumentView_StkItemCode>
+            <HeaderRntDocumentView_PeriodDescription Ref="105" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>10.2,0,2.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>HeaderRntDocumentView_PeriodDescription</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>N° Quittance</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </HeaderRntDocumentView_PeriodDescription>
+            <HeaderRntDocumentView_AmountToPay Ref="106" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>12.6,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>HeaderRntDocumentView_AmountToPay</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>Montant Quittance</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </HeaderRntDocumentView_AmountToPay>
+            <HeaderRntDocumentView_AmountSettled Ref="107" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>15.8,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>HeaderRntDocumentView_AmountSettled</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>Montant Réglé</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </HeaderRntDocumentView_AmountSettled>
+            <Text22 Ref="108" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <ClientRectangle>7,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,10,Bold</Font>
+              <Guid>ac977348cb2449718a1eb3666dd8319a</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text22</Name>
+              <Page isRef="83" />
+              <Parent isRef="102" />
+              <Text>Echéance</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text22>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <Expressions isList="true" count="0" />
+          <Name>HeaderRntDocumentView</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+        </HeaderRntDocumentView>
+        <DataRntDocumentView Ref="109" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <ClientRectangle>0,12,19,0.6</ClientRectangle>
+          <Components isList="true" count="6">
+            <DataRntDocumentView_CfgTierDescription Ref="110" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>0,0,4.8,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Margins>0,0,0,0</Margins>
+              <Name>DataRntDocumentView_CfgTierDescription</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.CfgTierDescription}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <VertAlignment>Center</VertAlignment>
+            </DataRntDocumentView_CfgTierDescription>
+            <DataRntDocumentView_StkItemCode Ref="111" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>4.8,0,2.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Margins>0,0,0,0</Margins>
+              <Name>DataRntDocumentView_StkItemCode</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.StkItemCode}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <VertAlignment>Center</VertAlignment>
+            </DataRntDocumentView_StkItemCode>
+            <DataRntDocumentView_PeriodDescription Ref="112" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>7,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Margins>0,0,0,0</Margins>
+              <Name>DataRntDocumentView_PeriodDescription</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.PeriodDescription}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <VertAlignment>Center</VertAlignment>
+            </DataRntDocumentView_PeriodDescription>
+            <DataRntDocumentView_AmountToPay Ref="113" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>12.6,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>DataRntDocumentView_AmountToPay</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.AmountToPay}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextFormat Ref="114" type="CustomFormat" isKey="true">
+                <StringFormat>c</StringFormat>
+              </TextFormat>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <VertAlignment>Center</VertAlignment>
+            </DataRntDocumentView_AmountToPay>
+            <DataRntDocumentView_AmountSettled Ref="115" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>15.8,0,3.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>DataRntDocumentView_AmountSettled</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.AmountSettled}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextFormat Ref="116" type="CustomFormat" isKey="true">
+                <StringFormat>c</StringFormat>
+              </TextFormat>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <VertAlignment>Center</VertAlignment>
+            </DataRntDocumentView_AmountSettled>
+            <Text23 Ref="117" type="Text" isKey="true">
+              <Border>All;Black;1;Solid;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <ClientRectangle>10.2,0,2.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Arial,8</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>7d2320a06b2d4c8898ff8beec1308f3f</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text23</Name>
+              <Page isRef="83" />
+              <Parent isRef="109" />
+              <Text>{RntDocumentView.Code}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>DataColumn</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text23>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataRelationName isNull="true" />
+          <DataSourceName>RntDocumentView</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Name>DataRntDocumentView</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+          <Sort isList="true" count="6">
+            <value>ASC</value>
+            <value>CfgTierDescription</value>
+            <value>ASC</value>
+            <value>StkItemCode</value>
+            <value>ASC</value>
+            <value>Code</value>
+          </Sort>
+        </DataRntDocumentView>
+        <DataBand1 Ref="118" type="DataBand" isKey="true">
+          <Brush>Transparent</Brush>
+          <BusinessObjectGuid isNull="true" />
+          <ClientRectangle>0,13.4,19,3.2</ClientRectangle>
+          <Components isList="true" count="6">
+            <Text30 Ref="119" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,0.2,4.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <Guid>53a28c5331e6488298f586c15b8c82ee</Guid>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text30</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>Montant :</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text30>
+            <Text27 Ref="120" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <ClientRectangle>0,1,4.2,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <Guid>3e887a5238d24b5693fca099f24633ec</Guid>
+              <HorAlignment>Right</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text27</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>Modalité de paiement :</Text>
+              <TextBrush>Black</TextBrush>
+              <Type>Expression</Type>
+            </Text27>
+            <Text31 Ref="121" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>4.4,0.2,14.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12</Font>
+              <Guid>e8eeea99d6b644db9717adf3eb9013e5</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text31</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>{ToUpperCase(DecimalToLiteral(StlSettlementView.Amount,AdmParamsView.CurrencyLabel,AdmParamsView.CurrencyFraction, AdmParamsView.CurrencyDecimalDigits))}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text31>
+            <Text24 Ref="122" type="Text" isKey="true">
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>4.4,1,14.4,0.6</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12</Font>
+              <Guid>be68acf2c4284efbb8baff5c1da62f6f</Guid>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text24</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>{ToUpperCase(StlSettlementView.Description)}</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+            </Text24>
+            <Text25 Ref="123" type="Text" isKey="true">
+              <Border>None;Black;1;Dot;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>6.4,2.2,6,0.8</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>ddc22db4877549acb712e498887ac8c7</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text25</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>Service Financier</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text25>
+            <Text26 Ref="124" type="Text" isKey="true">
+              <Border>None;Black;1;Dot;False;4;Black</Border>
+              <Brush>Transparent</Brush>
+              <CanGrow>True</CanGrow>
+              <CanShrink>True</CanShrink>
+              <ClientRectangle>12.8,2.2,6,0.8</ClientRectangle>
+              <Conditions isList="true" count="0" />
+              <Expressions isList="true" count="0" />
+              <Font>Times New Roman,12,Bold</Font>
+              <GrowToHeight>True</GrowToHeight>
+              <Guid>56409e83ab16442d8bc7702a00d29c9b</Guid>
+              <HorAlignment>Center</HorAlignment>
+              <Margins>0,0,0,0</Margins>
+              <Name>Text26</Name>
+              <Page isRef="83" />
+              <Parent isRef="118" />
+              <Text>Service Comptabilité</Text>
+              <TextBrush>Black</TextBrush>
+              <TextOptions>,,,,WordWrap=True,A=0</TextOptions>
+              <Type>Expression</Type>
+              <VertAlignment>Center</VertAlignment>
+            </Text26>
+          </Components>
+          <Conditions isList="true" count="0" />
+          <DataSourceName>StlSettlementView</DataSourceName>
+          <Expressions isList="true" count="0" />
+          <Filters isList="true" count="0" />
+          <Guid>52645853faea445d8f3ae6c0bfae2931</Guid>
+          <Name>DataBand1</Name>
+          <Page isRef="83" />
+          <Parent isRef="83" />
+          <Sort isList="true" count="0" />
+        </DataBand1>
+      </Components>
+      <Conditions isList="true" count="1">
+        <value>StlSettlementView.AdmModuleCode,EqualTo,COM,,String,Red,Transparent,Arial_x002C_8,False,False,,,None,None</value>
+      </Conditions>
+      <Expressions isList="true" count="0" />
+      <Guid>17447921929748e58a16d62572192c21</Guid>
+      <Margins>1,1,1,1</Margins>
+      <Name>Page2</Name>
+      <PageHeight>29.7</PageHeight>
+      <PageWidth>21</PageWidth>
+      <Report isRef="0" />
+    </Page2>
+  </Pages>
+  <ReferencedAssemblies isList="true" count="8">
+    <value>System.Dll</value>
+    <value>System.Drawing.Dll</value>
+    <value>System.Windows.Forms.Dll</value>
+    <value>System.Data.Dll</value>
+    <value>System.Xml.Dll</value>
+    <value>Stimulsoft.Controls.Dll</value>
+    <value>Stimulsoft.Base.Dll</value>
+    <value>Stimulsoft.Report.Dll</value>
+  </ReferencedAssemblies>
+  <ReportAlias>ComSaleSettlementReceipt</ReportAlias>
+  <ReportChanged>3/1/2024 12:27:51 PM</ReportChanged>
+  <ReportCreated>4/28/2014 5:12:39 PM</ReportCreated>
+  <ReportGuid>fe3a4cd785b246e19f55597ee1b82fec</ReportGuid>
+  <ReportName>ComSaleSettlementReceipt</ReportName>
+  <ReportUnit>Centimeters</ReportUnit>
+  <ReportVersion>2021.3.4.0</ReportVersion>
+  <Script>using System;
+using System.Drawing;
+using System.Windows.Forms;
+using System.Data;
+using Stimulsoft.Controls;
+using Stimulsoft.Base.Drawing;
+using Stimulsoft.Report;
+using Stimulsoft.Report.Dialogs;
+using Stimulsoft.Report.Components;
+
+namespace Reports
+{
+    public class Yes_Com_Receipt : Stimulsoft.Report.StiReport
+    {
+		public const string frZero="zéro";
+		public const string frOne = "un";
+		public static string[] unite = {
+			frZero, frOne,"deux","trois","quatre","cinq","six","sept","huit","neuf",
+			"dix","onze","douze","treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf",
+			"vingt","vingt et un","vingt deux","vingt trois","vingt quatre","vingt cinq","vingt six","vingt sept","vingt huit","vingt neuf",
+			"trente","trente et un","trente deux","trente trois","trente quatre","trente cinq","trente six","trente sept","trente huit","trente neuf",
+			"quarante","quarante et un","quarante deux","quarante trois","quarante quatre","quarante cinq","quarante six","quarante sept","quarante huit","quarante neuf",
+			"cinquante","cinquante et un","cinquante deux","cinquante trois","cinquante quatre","cinquante cinq","cinquante six","cinquante sept","cinquante huit","cinquante neuf",
+			"soixante","soixante et un","soixante deux","soixante trois","soixante quatre","soixante cinq","soixante six","soixante sept","soixante huit","soixante neuf",
+			"soixante-dix","soixante-onze","soixante-douze","soixante-treize","soixante-quatorze","soixante-quinze","soixante-seize","soixante-dix-sept","soixante-dix-huit","soixante-dix-neuf",
+			"quatre-vingts","quatre-vingt et un","quatre-vingt deux","quatre-vingt trois","quatre-vingt quatre","quatre-vingt cinq","quatre-vingt six","quatre-vingt sept","quatre-vingt huit","quatre-vingt neuf",
+			"quatre-vingt-dix","quatre-vingt-onze","quatre-vingt-douze","quatre-vingt-treize","quatre-vingt-quatorze","quatre-vingt-quinze","quatre-vingt-seize","quatre-vingt-dix-sept","quatre-vingt-dix-huit","quatre-vingt-dix-neuf"
+			};
+		
+        public Yes_Com_Receipt()        {
+            this.InitializeComponent();
+        }
+
+		public static string DecimalToLiteral(decimal imputDecimal,string currencyLabel,string currencyFraction, int currencyDigits)
+		{
+			string returnString;
+			string returnSubString;
+			imputDecimal=decimal.Round(imputDecimal,currencyDigits);
+			returnString = IntegerToLiteral(decimal.ToInt64(imputDecimal));
+			returnSubString = IntegerToLiteral(decimal.ToInt64((imputDecimal%1M)*1000));
+			// Cas de l'existance de la partie décimale
+			if(imputDecimal%1M!=0M)
+			{
+				returnString = returnString.Trim() + " " + ((returnString == frOne || returnString == frZero) ? currencyLabel : currencyLabel+"s")
+					+ " " + returnSubString.Trim() + " " + ((returnString == frOne || returnString == frZero) ? currencyFraction : currencyFraction+"s");
+			}
+				// Cas de d'abscence de la partie décimale
+			else
+			{
+				returnString = returnString.Trim() + " " + ((returnString == frOne) ? currencyLabel : currencyLabel + "s");
+			}	
+			return(returnString);
+		}
+
+		public static string DecimalToLiteral(decimal imputDecimal,string currencyLabel,string currencyFraction)
+		{
+			string returnString;
+			string returnSubString;
+			imputDecimal=decimal.Round(imputDecimal,2);
+			returnString = IntegerToLiteral(decimal.ToInt64(imputDecimal));
+			returnSubString = IntegerToLiteral(decimal.ToInt64((imputDecimal%1M)*100));
+			// Cas de l'existance de la partie décimale
+			if(imputDecimal%1M!=0M)
+			{
+				returnString = returnString.Trim() + " " + ((returnString == frOne || returnString == frZero) ? currencyLabel : currencyLabel+"s")
+					+ " " + returnSubString.Trim() + " " + ((returnString == frOne || returnString == frZero) ? currencyFraction : currencyFraction+"s");
+			}
+				// Cas de d'abscence de la partie décimale
+			else
+			{
+				returnString = returnString.Trim() + " " + ((returnString == frOne) ? currencyLabel : currencyLabel + "s");
+			}	
+			return(returnString);
+		}
+
+		public static string IntegerToLiteral(long inputInteger)
+		{
+			string returnString=string.Empty;
+			
+			if (inputInteger==0){return frZero;}
+
+			long les_centaines=decimal.ToInt64(inputInteger/100);
+			//long les_dizaines=decimal.ToInt64((inputInteger-les_centaines*100)/10);
+			//long lunite=decimal.ToInt64(inputInteger-les_centaines*100-les_dizaines*10);
+			long lunite=decimal.ToInt64(inputInteger-les_centaines*100);
+
+			// Calcul
+			if(inputInteger&lt;1000) 
+			{
+				returnString+=unite[lunite];
+				// pour les centaines :
+				if (les_centaines&gt;1) 
+				{
+					// cas des centaines tout rond
+					if (returnString==frZero)
+					{
+						returnString=unite[les_centaines]+" cents ";
+					} 
+					else 
+					{
+						returnString=unite[les_centaines]+" cent "+returnString;
+					}
+				} 
+				else if (les_centaines==1) 
+				{
+					if (returnString==frZero)
+					{
+						returnString=string.Empty;
+					}
+					returnString="cent "+returnString;
+				}
+			} 
+			else if (inputInteger&lt;1000000000000000) 
+			{
+				// Cela couvre largement les nombres classiques. 
+				System.Collections.ArrayList bloc = new System.Collections.ArrayList();
+				while(inputInteger&gt;0) 
+				{
+					long milliers=Decimal.ToInt64(inputInteger/1000);
+					long mille=inputInteger-milliers*1000;
+					bloc.Add(mille);
+					inputInteger=Decimal.ToInt64((inputInteger-mille)/1000);
+				}
+				string[] titres={string.Empty, "mille","million","milliard","billion","trillion"};
+				long i=0;
+				foreach(long b in bloc) 
+				{
+					string s="s";
+					string rc = IntegerToLiteral(b);
+					string t = titres[i];
+					if (rc!=frZero) 
+					{
+						if(rc==frOne) 
+						{
+							if(t=="mille")
+							{
+								rc=string.Empty;
+							} 
+						}
+						if((t==string.Empty || t=="mille") || (rc==frOne))
+						{
+							s=string.Empty;
+						} 
+						returnString=rc+" "+t+s+" "+returnString;
+					}
+					i++;
+				}
+			}	
+			return returnString;
+		}
+        #region StiReport Designer generated code - do not modify
+		#endregion StiReport Designer generated code - do not modify
+    }
+	
+
+}
+</Script>
+  <ScriptLanguage>CSharp</ScriptLanguage>
+  <Styles isList="true" count="0" />
+</StiSerializer>

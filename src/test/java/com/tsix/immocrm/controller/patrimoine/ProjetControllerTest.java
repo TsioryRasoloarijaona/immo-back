@@ -1,19 +1,23 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class ProjetControllerTest {
 
     @Autowired
@@ -32,6 +37,9 @@ class ProjetControllerTest {
     @Autowired
     private CfgTrancheRepository trancheRepository;
 
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+
     @Test
     void findAll_returnsCreatedProjet() throws Exception {
         CfgProject project = newProject("PRJ-TEST-1", "Projet de test");
@@ -39,7 +47,8 @@ class ProjetControllerTest {
 
         mockMvc.perform(get("/api/projets"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + project.getId() + "')]", hasSize(1)));
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.content[?(@.id=='" + project.getId() + "')]", hasSize(1)));
     }
 
     @Test
@@ -76,7 +85,7 @@ class ProjetControllerTest {
 
         mockMvc.perform(get("/api/projets/{id}/tranches", project.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + tranche.getId() + "')]", hasSize(1)));
+                .andExpect(jsonPath("$.content[?(@.id=='" + tranche.getId() + "')]", hasSize(1)));
     }
 
     @Test
@@ -85,11 +94,49 @@ class ProjetControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    private static CfgProject newProject(String code, String description) {
+    @Test
+    void findAll_defaultsToPageSize10() throws Exception {
+        mockMvc.perform(get("/api/projets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.content", hasSize(lessThanOrEqualTo(10))));
+    }
+
+    @Test
+    void findAll_paginatesAcrossTwoPages() throws Exception {
+        for (int i = 0; i < 12; i++) {
+            projectRepository.save(newProject("PRJ-PAGE-" + i, "Projet pagination " + i));
+        }
+
+        mockMvc.perform(get("/api/projets").param("size", "5").param("page", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.content", hasSize(5)))
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(12)))
+                .andExpect(jsonPath("$.totalPages").value(org.hamcrest.Matchers.greaterThanOrEqualTo(3)));
+
+        mockMvc.perform(get("/api/projets").param("size", "5").param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.content", hasSize(5)));
+    }
+
+    private CfgProject newProject(String code, String description) {
+        CfgCompany company = new CfgCompany();
+        company.setId(UUID.randomUUID());
+        // GET /api/projets ne renvoie que les entités juridiques actives, voir
+        // com.tsix.immocrm.domain.EntitesJuridiquesActives.
+        company.setCode("ADMOD");
+        company.setDescription("ADMOD");
+        companyRepository.save(company);
+
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode(code);
         project.setDescription(description);
+        project.setCfgCompany(company);
         return project;
     }
 }
