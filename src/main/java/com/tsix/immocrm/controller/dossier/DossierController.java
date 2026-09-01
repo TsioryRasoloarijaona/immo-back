@@ -14,6 +14,7 @@ import com.tsix.immocrm.dto.dossier.GenererDocumentsLotRequest;
 import com.tsix.immocrm.dto.dossier.ModifierEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
+import com.tsix.immocrm.dto.dossier.ModifierStatutReglementRequest;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
@@ -38,6 +39,8 @@ import com.tsix.immocrm.services.dossier.FicheDossierVenteService;
 import com.tsix.immocrm.services.dossier.FicheReservationService;
 import com.tsix.immocrm.services.dossier.FicheTropPercuService;
 import com.tsix.immocrm.services.dossier.RecuReglementService;
+import com.tsix.immocrm.services.dossier.ReglementPieceJointeService;
+import com.tsix.immocrm.services.dossier.ReglementStatutService;
 import com.tsix.immocrm.services.dossier.FicheVisiteTechniqueService;
 import com.tsix.immocrm.services.dossier.PieceJointeService;
 import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
@@ -117,6 +120,8 @@ public class DossierController {
     private final AutorisationVersementPdfRenderer autorisationVersementPdfRenderer;
     private final DossierHistoriqueService historiqueService;
     private final DocumentLotService documentLotService;
+    private final ReglementStatutService reglementStatutService;
+    private final ReglementPieceJointeService reglementPieceJointeService;
 
     public DossierController(DossierService dossierService, EcheancierService echeancierService,
                               PieceJointeService pieceJointeService, FicheReservationService ficheReservationService,
@@ -138,7 +143,9 @@ public class DossierController {
                               AutorisationVersementService autorisationVersementService,
                               AutorisationVersementPdfRenderer autorisationVersementPdfRenderer,
                               DossierHistoriqueService historiqueService,
-                              DocumentLotService documentLotService) {
+                              DocumentLotService documentLotService,
+                              ReglementStatutService reglementStatutService,
+                              ReglementPieceJointeService reglementPieceJointeService) {
         this.dossierService = dossierService;
         this.echeancierService = echeancierService;
         this.pieceJointeService = pieceJointeService;
@@ -162,6 +169,8 @@ public class DossierController {
         this.autorisationVersementPdfRenderer = autorisationVersementPdfRenderer;
         this.historiqueService = historiqueService;
         this.documentLotService = documentLotService;
+        this.reglementStatutService = reglementStatutService;
+        this.reglementPieceJointeService = reglementPieceJointeService;
     }
 
     @GetMapping
@@ -349,26 +358,39 @@ public class DossierController {
     @Operation(
             summary = "Enregistre un règlement sur une échéance",
             description = "Crée un `StlSettlement` + sa `StlSettlementLine` de rattachement à "
-                    + "l'échéance `echeanceId`. `montant` est requis (400 sinon). Porte deux dates "
-                    + "distinctes, confirmées sur données réelles — voir `CreerReglementRequest` : "
-                    + "`dateEcheance` (\"date d'échéance\", quasi toujours renseignée, défaut à "
-                    + "maintenant si absente) et `dateReglement` (\"date de règlement effectif\", "
-                    + "encaissement réel — optionnelle, aucun défaut, quasi jamais connue à la "
-                    + "saisie). `reference` (n° de chèque...) est requise dès que le type de "
-                    + "règlement choisi a `TypeReglementDto.referenceObligatoire=true` (ex. "
-                    + "CHÈQUE, EFFET) — 400 sinon. `payeurId` (\"réglé par\", peut différer de "
-                    + "l'acquéreur principal) est optionnel, sans valeur par défaut."
+                    + "l'échéance `echeanceId`. Le règlement naît toujours au statut `IN_WORK`.\n\n"
+                    + "**Saisie complète obligatoire** (400 sur chaque manquement) : `montant` "
+                    + "(strictement positif et au plus égal au reste à payer de l'échéance), "
+                    + "`dateEcheance`, `typeId` et `payeurId`. `reference` (n° de chèque...) est "
+                    + "requise dès que le type choisi a `TypeReglementDto.referenceObligatoire=true` "
+                    + "(CHÈQUE, EFFET...) ; `banqueId` est requise dès que "
+                    + "`TypeReglementDto.banqueObligatoire=true` — ce flag était annoncé mais pas "
+                    + "appliqué jusqu'ici.\n\n"
+                    + "`typeId` et `payeurId` sont exigés parce qu'ils alimentent le « Mode de "
+                    + "versement » et le « Versement effectué par » de l'**autorisation "
+                    + "d'encaissement**, à ouvrir juste après création via "
+                    + "`GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement` "
+                    + "(le `reglementId` est l'`id` renvoyé ici).\n\n"
+                    + "`dateReglement` et `statut=POINTED` sont **refusés** (400) : pointer un "
+                    + "règlement exige une preuve de paiement, impossible à fournir avant que le "
+                    + "règlement existe. Pour saisir un règlement déjà encaissé, enchaîner : ce "
+                    + "`POST`, puis `POST .../reglements/{reglementId}/pieces-jointes`, puis "
+                    + "`PATCH .../reglements/{reglementId}/statut`."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Règlement enregistré."),
-            @ApiResponse(responseCode = "400", description = "`montant` absent, ou `reference` "
-                    + "absente alors que le type de règlement la requiert."),
+            @ApiResponse(responseCode = "201", description = "Règlement enregistré, au statut `IN_WORK`."),
+            @ApiResponse(responseCode = "400", description = "Champ obligatoire absent (`montant`, "
+                    + "`dateEcheance`, `typeId`, `payeurId`), montant négatif/nul ou dépassant le "
+                    + "reste à payer, `reference`/`banqueId` absente alors que le type la requiert, "
+                    + "ou `dateReglement`/`statut=POINTED` fournis."),
             @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable "
                     + "(ou l'échéance n'appartient pas à ce dossier).")
     })
     public ResponseEntity<ReglementDto> addReglement(@PathVariable UUID id, @PathVariable UUID echeanceId,
-                                                       @RequestBody CreerReglementRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(echeancierService.addReglement(id, echeanceId, request));
+                                                       @RequestBody CreerReglementRequest request,
+                                                       @AuthenticationPrincipal AuthenticatedUser principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(echeancierService.addReglement(id, echeanceId, request, principal));
     }
 
     @GetMapping("/{id}/echeancier/{echeanceId}/reglements")
@@ -463,6 +485,116 @@ public class DossierController {
         String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
         MediaType contentType = com.tsix.immocrm.web.ContentTypeParExtension.resolve(extension);
         String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "piece-jointe") + extension;
+
+        return ResponseEntity.ok()
+                .contentType(contentType)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(nomFichier).build().toString())
+                .body(fichier.getAttachedFile());
+    }
+
+    // -- Règlements : statut + preuves de paiement (voir ReglementStatutService) --
+
+    @PatchMapping("/{id}/reglements/{reglementId}/statut")
+    @Operation(
+            summary = "Change le statut d'un règlement (pointage / annulation)",
+            description = "Fait évoluer `StlSettlement.Status`. Transitions autorisées : "
+                    + "`IN_WORK → POINTED` et `IN_WORK → CANCELED` — les deux cibles sont "
+                    + "terminales, donc toute transition partant de `POINTED` ou `CANCELED` "
+                    + "renvoie 409 avec la liste `transitionsAutorisees`.\n\n"
+                    + "**Pointer exige une preuve de paiement** : au moins une pièce jointe doit "
+                    + "être présente sur le règlement (409 sinon). Déposez-la d'abord via "
+                    + "`POST /api/dossiers/{id}/reglements/{reglementId}/pieces-jointes`. Cette "
+                    + "règle ne s'applique qu'**au moment de la transition** : les règlements "
+                    + "legacy déjà pointés sans pièce jointe restent lisibles, et retirer une "
+                    + "pièce jointe ne dépointe rien.\n\n"
+                    + "`dateReglement` est **requise** pour `POINTED` (400 sinon) et écrit "
+                    + "`StlSettlement.SettlementDate` : statut et date d'encaissement sont deux "
+                    + "encodages du même fait et n'ont jamais divergé sur les 3 244 règlements "
+                    + "réels. `CANCELED` laisse cette date à `null`."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Statut modifié ; le règlement à jour est renvoyé."),
+            @ApiResponse(responseCode = "400", description = "`statut` absent ou inconnu, ou "
+                    + "`dateReglement` absente alors que la cible est `POINTED`."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, ou "
+                    + "règlement non rattaché à ce dossier."),
+            @ApiResponse(responseCode = "409", description = "Transition interdite (corps : "
+                    + "`transitionsAutorisees`), ou passage à `POINTED` sans aucune pièce jointe.")
+    })
+    public ReglementDto modifierStatutReglement(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id,
+            @Parameter(description = "Identifiant du règlement (StlSettlement.PKey), tel que renvoyé par `ReglementDto.id`.")
+            @PathVariable UUID reglementId,
+            @RequestBody ModifierStatutReglementRequest request) {
+        return reglementStatutService.modifierStatut(id, reglementId, request);
+    }
+
+    @GetMapping("/{id}/reglements/{reglementId}/pieces-jointes")
+    @Operation(
+            summary = "Liste les preuves de paiement d'un règlement",
+            description = "Pièces jointes rattachées au règlement (`AdmAttachedFile.CategoryId = "
+                    + "StlSettlement.PKey`), plus récente d'abord. Ce sont les justificatifs "
+                    + "d'encaissement — chèques scannés, avis de virement, reçus : 452 règlements "
+                    + "réels en portent déjà. C'est leur présence qui autorise le passage à "
+                    + "`POINTED`. Liste vide si aucune pièce jointe."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste des pièces jointes (peut être vide)."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, ou règlement non rattaché à ce dossier.")
+    })
+    public List<PieceJointeDto> getPiecesJointesReglement(@PathVariable UUID id, @PathVariable UUID reglementId) {
+        return reglementPieceJointeService.findByReglement(id, reglementId);
+    }
+
+    @PostMapping(value = "/{id}/reglements/{reglementId}/pieces-jointes", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Dépose une preuve de paiement sur un règlement",
+            description = "Téléverse un justificatif (multipart/form-data) et l'associe au "
+                    + "règlement. `description` est une légende libre (ex. \"Chèque BMCE n° 123\", "
+                    + "\"Avis de virement\") ; si absente, le nom de fichier original est utilisé. "
+                    + "`typeId` est facultatif et vaut `null` par défaut — les preuves de paiement "
+                    + "réelles n'en portent aucune. `creePar` est déduit du token, jamais demandé "
+                    + "au front.\n\nUne fois au moins une pièce déposée, le règlement peut passer "
+                    + "à `POINTED` via `PATCH .../reglements/{reglementId}/statut`."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Pièce jointe créée."),
+            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, règlement "
+                    + "non rattaché à ce dossier, ou `typeId` inconnu.")
+    })
+    public ResponseEntity<PieceJointeDto> uploadPieceJointeReglement(
+            @PathVariable UUID id,
+            @PathVariable UUID reglementId,
+            @Parameter(description = "Contenu du fichier à déposer.")
+            @RequestParam("fichier") MultipartFile fichier,
+            @Parameter(description = "Légende libre. Absent = nom de fichier original.")
+            @RequestParam(required = false) String description,
+            @Parameter(description = "Type de document (AdmAttachedFileType.PKey). Absent = non renseigné, cas normal ici.")
+            @RequestParam(required = false) UUID typeId,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        PieceJointeDto piece = reglementPieceJointeService.create(id, reglementId, fichier, description, typeId, principal);
+        return ResponseEntity.status(HttpStatus.CREATED).body(piece);
+    }
+
+    @GetMapping("/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}/fichier")
+    @Operation(
+            summary = "Télécharge une preuve de paiement",
+            description = "Renvoie le contenu binaire de la pièce jointe, avec le `Content-Type` "
+                    + "déduit de son extension (PDF et images en pratique)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contenu du fichier."),
+            @ApiResponse(responseCode = "404", description = "Pièce jointe introuvable pour ce règlement, ou sans fichier attaché.")
+    })
+    public ResponseEntity<byte[]> getFichierReglement(@PathVariable UUID id, @PathVariable UUID reglementId,
+                                                       @PathVariable UUID pieceId) {
+        AdmAttachedFile fichier = reglementPieceJointeService.findFichier(id, reglementId, pieceId);
+        String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
+        MediaType contentType = com.tsix.immocrm.web.ContentTypeParExtension.resolve(extension);
+        String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "preuve-paiement") + extension;
 
         return ResponseEntity.ok()
                 .contentType(contentType)

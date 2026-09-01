@@ -87,19 +87,59 @@ class ReglementTest {
         return documentRepository.save(doc);
     }
 
+    private StlSettlementType newType(String code) {
+        return newType(code, false, false);
+    }
+
+    private StlSettlementType newType(String code, boolean referenceObligatoire, boolean banqueObligatoire) {
+        StlSettlementType type = new StlSettlementType();
+        type.setId(UUID.randomUUID());
+        type.setCode(code);
+        type.setDescription(code);
+        type.setIsReferenceMandatory(referenceObligatoire);
+        type.setIsBankMandatory(banqueObligatoire);
+        return settlementTypeRepository.save(type);
+    }
+
+    private CfgTier newPayeur(String code, String nom) {
+        CfgTier payeur = new CfgTier();
+        payeur.setId(UUID.randomUUID());
+        payeur.setCode(code);
+        payeur.setDescription(nom);
+        return tierRepository.save(payeur);
+    }
+
+    /**
+     * Corps de création complet. Depuis FEATURE-reglement-statut-preuve, {@code montant},
+     * {@code dateEcheance}, {@code typeId} et {@code payeurId} sont tous obligatoires : un test
+     * qui n'en omet qu'un seul teste bien ce champ-là, alors qu'un corps minimal renverrait 400
+     * pour la première raison venue. {@code extra} ajoute les champs propres au test.
+     */
+    private String corpsComplet(String montant, StlSettlementType type, CfgTier payeur, String extra) {
+        return "{\"montant\":" + montant + ",\"dateEcheance\":\"2026-09-01T10:00:00\""
+                + ",\"typeId\":\"" + type.getId() + "\",\"payeurId\":\"" + payeur.getId() + "\""
+                + (extra != null && !extra.isEmpty() ? "," + extra : "") + "}";
+    }
+
     @Test
     void addReglement_happyPath_returns201() throws Exception {
         ComFolder folder = newFolder("DOS-REG-1");
         ComDocument echeance = newEcheance(folder);
-
-        String body = "{\"montant\":100000.00}";
+        StlSettlementType type = newType("VIREMENT-REG-1");
+        CfgTier payeur = newPayeur("PAYEUR-REG-1", "Karim ALAMI");
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsComplet("100000.00", type, payeur, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.montant").value(100000.00))
                 .andExpect(jsonPath("$.echeanceId").value(echeance.getId().toString()))
-                .andExpect(jsonPath("$.id").exists());
+                .andExpect(jsonPath("$.id").exists())
+                // Status n'était jamais écrit par l'API avant cette feature : la colonne restait
+                // NULL alors que les 3 218 règlements legacy saisis portent IN_WORK.
+                .andExpect(jsonPath("$.statut").value("IN_WORK"))
+                // Invariant : pas de SettlementDate tant que le règlement n'est pas pointé.
+                .andExpect(jsonPath("$.dateReglement").doesNotExist());
     }
 
     @Test
@@ -140,20 +180,24 @@ class ReglementTest {
     }
 
     @Test
-    void addReglement_setsReferenceAndDefaultsDateEcheanceToNow() throws Exception {
+    void addReglement_setsReferenceEtDateEcheance() throws Exception {
         // from_front.md gap: `reference` (StlSettlement.Code) was exposed on ReglementDto but
         // never settable on creation; `dateEcheance` (StlSettlement.EcheanceDate) wasn't exposed
         // at all despite being populated on >99% of real règlements — see CreerReglementRequest.
+        // Le défaut silencieux de dateEcheance à now() a été retiré : le champ est désormais
+        // requis, et c'est bien la valeur envoyée qui est relue (voir aussi
+        // addReglement_dateEcheanceManquante_returns400).
         ComFolder folder = newFolder("DOS-REG-10");
         ComDocument echeance = newEcheance(folder);
-
-        String body = "{\"montant\":100000.00,\"reference\":\"CHQ-REG-10\"}";
+        StlSettlementType type = newType("VIREMENT-REG-10");
+        CfgTier payeur = newPayeur("PAYEUR-REG-10", "Samir TAZI");
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsComplet("100000.00", type, payeur, "\"reference\":\"CHQ-REG-10\"")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reference").value("CHQ-REG-10"))
-                .andExpect(jsonPath("$.dateEcheance").exists());
+                .andExpect(jsonPath("$.dateEcheance").value("2026-09-01T10:00:00"));
     }
 
     @Test
@@ -161,17 +205,14 @@ class ReglementTest {
         ComFolder folder = newFolder("DOS-REG-11");
         ComDocument echeance = newEcheance(folder);
 
-        StlSettlementType type = new StlSettlementType();
-        type.setId(UUID.randomUUID());
-        type.setCode("CHEQUE-TEST");
-        type.setDescription("CHEQUE TEST");
-        type.setIsReferenceMandatory(true);
-        settlementTypeRepository.save(type);
+        StlSettlementType type = newType("CHEQUE-TEST", true, false);
+        CfgTier payeur = newPayeur("PAYEUR-REG-11", "Yassine BERRADA");
 
-        String body = "{\"montant\":100000.00,\"typeId\":\"" + type.getId() + "\"}";
-
+        // Corps complet SAUF la référence : sans cela le 400 tomberait pour un champ obligatoire
+        // manquant et ne prouverait rien sur referenceObligatoire.
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsComplet("100000.00", type, payeur, null)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -183,16 +224,12 @@ class ReglementTest {
         ComFolder folder = newFolder("DOS-REG-13");
         ComDocument echeance = newEcheance(folder);
 
-        CfgTier payeur = new CfgTier();
-        payeur.setId(UUID.randomUUID());
-        payeur.setCode("PAYEUR-REG-13");
-        payeur.setDescription("Nadia BENJELLOUN");
-        tierRepository.save(payeur);
-
-        String body = "{\"montant\":100000.00,\"payeurId\":\"" + payeur.getId() + "\"}";
+        CfgTier payeur = newPayeur("PAYEUR-REG-13", "Nadia BENJELLOUN");
+        StlSettlementType type = newType("VIREMENT-REG-13");
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsComplet("100000.00", type, payeur, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.payeurId").value(payeur.getId().toString()))
                 .andExpect(jsonPath("$.payeurNom").value("Nadia BENJELLOUN"));
@@ -203,7 +240,10 @@ class ReglementTest {
         ComFolder folder = newFolder("DOS-REG-14");
         ComDocument echeance = newEcheance(folder);
 
-        String body = "{\"montant\":100000.00,\"payeurId\":\"" + UUID.randomUUID() + "\"}";
+        StlSettlementType type = newType("VIREMENT-REG-14");
+
+        String body = "{\"montant\":100000.00,\"dateEcheance\":\"2026-09-01T10:00:00\""
+                + ",\"typeId\":\"" + type.getId() + "\",\"payeurId\":\"" + UUID.randomUUID() + "\"}";
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -215,17 +255,12 @@ class ReglementTest {
         ComFolder folder = newFolder("DOS-REG-12");
         ComDocument echeance = newEcheance(folder);
 
-        StlSettlementType type = new StlSettlementType();
-        type.setId(UUID.randomUUID());
-        type.setCode("CHEQUE-TEST-2");
-        type.setDescription("CHEQUE TEST 2");
-        type.setIsReferenceMandatory(true);
-        settlementTypeRepository.save(type);
-
-        String body = "{\"montant\":100000.00,\"typeId\":\"" + type.getId() + "\",\"reference\":\"CHQ-REG-12\"}";
+        StlSettlementType type = newType("CHEQUE-TEST-2", true, false);
+        CfgTier payeur = newPayeur("PAYEUR-REG-12", "Hicham OUAZZANI");
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsComplet("100000.00", type, payeur, "\"reference\":\"CHQ-REG-12\"")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reference").value("CHQ-REG-12"));
     }
