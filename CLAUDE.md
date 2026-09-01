@@ -6,6 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `immo-crm` (internally "AyadERP") is a Spring Boot 4.1.0 (Java 21) backend for a real-estate CRM — sales folders/dossiers, prospection, prospects/clients, patrimoine (projects/tranches/lots), settlements. It connects to an existing Microsoft SQL Server database; the entity layer mirrors a pre-existing legacy schema rather than one generated from the code.
 
+## Scope: backend only (hard boundary)
+
+**Never touch the frontend.** A session working in this repo is a backend agent. Do not edit
+any file in `../crm-prototype/`, do not create a branch there, do not run its build or
+`npm run docs:update`, and do not include frontend work in a plan or offer to do it.
+
+This is a boundary, not a preference — the two repos are separate GitHub remotes with
+separate PRs, and the frontend is a different lane.
+
+**When a backend change breaks the API contract the frontend depends on** (a field becoming
+required, an endpoint being re-scoped, a response shape changing), the job ends at *reporting*
+it:
+
+- state it precisely in the `instructions/FEATURE-*.md` spec — endpoint, changed fields, what
+  now returns 400 — under an "Impact front" heading;
+- make sure the springdoc annotations say the same thing, since `/api-docs` is the frontend's
+  only source of truth (see rule 10 below);
+- say it plainly in the final report to the user.
+
+Then stop. Do not offer to fix it, do not ask whether you should also do the frontend, do not
+cut a branch "in both repos". The spec and the OpenAPI snapshot are the handoff — a report to
+the user is not.
+
 ## Build & run
 
 
