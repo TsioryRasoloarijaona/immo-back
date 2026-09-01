@@ -145,6 +145,96 @@ class DossierSimulationFinancementTest {
     }
 
     @Test
+    void simuler_avecRemisePercent_calculeSurLePrixApresRemise() throws Exception {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SIM-REMISE");
+        stkVocationRepository.save(vocation);
+
+        newCategory("AUTO-FINANCEMENT", vocation, false);
+        newCategory("AVANCE", vocation, false);
+        newCategory("FRAIS SYNDIC", vocation, true);
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-SIM-REMISE");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-SIM-REMISE");
+        tranche.setCfgProject(project);
+        tranche.setAdvancePercent(new BigDecimal("0.300000"));
+        tranche.setSyndicAmount(new BigDecimal("700.000000"));
+        tranche.setSyndicPeriod(24);
+        trancheRepository.save(tranche);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SIM-REMISE");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SIM-REMISE");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SIM-REMISE");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        article.setStkHierarchy(tranche);
+        stkItemRepository.save(article);
+
+        String body = """
+                {"articleIds":["%s"],"prix":1548000,"remisePercent":10}""".formatted(article.getId());
+
+        // Mêmes montants que la création réelle avec les mêmes paramètres
+        // (DossierFinancingSchemaTest#create_withRemisePercent_schemaCalculeSurLePrixApresRemise) :
+        // prix dû 1 393 200 => AVANCE 417 960, AUTO-FINANCEMENT 975 240, syndic inchangé.
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='AVANCE')].montant").value(417960.0))
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='AUTO-FINANCEMENT')].montant").value(975240.0))
+                .andExpect(jsonPath("$.lignes[?(@.categorie=='FRAIS SYNDIC')].montant").value(16800.0))
+                .andExpect(jsonPath("$.totalGeneral").value(1393200.0 + 16800.0));
+    }
+
+    @Test
+    void simuler_remisePercentHorsBornes_returns400() throws Exception {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SIM-REMISE-KO");
+        stkVocationRepository.save(vocation);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SIM-REMISE-KO");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SIM-REMISE-KO");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SIM-REMISE-KO");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        stkItemRepository.save(article);
+
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleIds\":[\"" + article.getId() + "\"],\"prix\":100000,\"remisePercent\":150}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void simuler_articleOccupe_fonctionneQuandMeme() throws Exception {
         // Contrairement à la création réelle, la simulation n'exige pas que l'article soit
         // DISPONIBLE — c'est un aperçu, rien n'est réservé.

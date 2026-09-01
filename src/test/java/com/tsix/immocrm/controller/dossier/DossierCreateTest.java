@@ -346,6 +346,144 @@ class DossierCreateTest {
     }
 
     @Test
+    void create_avecRemisePercent_appliqueLaRemiseSaisieParLeCommercial() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-REMISE-TEST");
+        project = projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-REMISE-TEST");
+        tranche.setCfgProject(project);
+        tranche.setSyndicAmount(new java.math.BigDecimal("700.00"));
+        tranche.setSyndicPeriod(24); // 700 x 24 = 16 800.00 DH de frais syndic
+        tranche = trancheRepository.save(tranche);
+
+        StkItem item = newAvailableItem("LOT-REMISE-TEST");
+        item.setStkHierarchy(tranche);
+        item.setVat(new java.math.BigDecimal("0.20"));
+        item.setComSalePrice(new java.math.BigDecimal("1000000.00"));
+        item.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
+        stkItemRepository.save(item);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-REMISE-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        // Le commercial saisit 10 % de remise sur un prix avant remise de 1 000 000
+        // => remise 100 000, prix dû 900 000, total à payer 900 000 + 16 800 de syndic.
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REMISE-TEST","prix":1000000.00,"remisePercent":10}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1000000.00))
+                .andExpect(jsonPath("$.remise").value(10))
+                .andExpect(jsonPath("$.remiseMontant").value(100000.00))
+                .andExpect(jsonPath("$.prixApresRemise").value(900000.00))
+                .andExpect(jsonPath("$.prix").value(900000.00))
+                .andExpect(jsonPath("$.totalAPayer").value(916800.00));
+    }
+
+    @Test
+    void create_avecRemisePercentEtAnnexe_remiseSurLeTotalPrincipalPlusAnnexes() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+
+        StkItem principal = newAvailableItem("LOT-REMISE-PRINCIPAL");
+        principal.setVat(new java.math.BigDecimal("0.20"));
+        principal.setComSalePrice(new java.math.BigDecimal("1000000.00"));
+        principal.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
+        stkItemRepository.save(principal);
+
+        StkItem annexe = newAvailableItem("LOT-REMISE-ANNEXE");
+        annexe.setComSalePrice(new java.math.BigDecimal("200000.00"));
+        annexe.setComSalePriceHT(new java.math.BigDecimal("166666.666667"));
+        stkItemRepository.save(annexe);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-REMISE-ANNEXE");
+        paymentMethodRepository.save(modePaie);
+
+        // Prix avant remise = 1 000 000 (principal, saisi) + 200 000 (annexe) = 1 200 000
+        // Remise 5 % => 60 000 ; prix dû 1 140 000. Pas de tranche configurée => pas de syndic.
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s","%s"],"modePaieId":"%s","cin":"CIN-REMISE-ANNEXE","prix":1000000.00,"remisePercent":5}
+                """.formatted(prospection.getId(), principal.getId(), annexe.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1200000.00))
+                .andExpect(jsonPath("$.remise").value(5))
+                .andExpect(jsonPath("$.remiseMontant").value(60000.00))
+                .andExpect(jsonPath("$.prixApresRemise").value(1140000.00))
+                .andExpect(jsonPath("$.totalAPayer").value(1140000.00));
+    }
+
+    @Test
+    void create_remisePercentZero_prixDuEgalPrixSaisi() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+
+        StkItem item = newAvailableItem("LOT-REMISE-ZERO");
+        item.setVat(new java.math.BigDecimal("0.20"));
+        item.setComSalePrice(new java.math.BigDecimal("1000000.00"));
+        item.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
+        stkItemRepository.save(item);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-REMISE-ZERO");
+        paymentMethodRepository.save(modePaie);
+
+        // Remise explicite à 0 : le prix saisi est le prix avant ET après remise — à ne pas
+        // confondre avec `remisePercent` absent, qui déduirait une remise de l'écart avec le
+        // prix commercial de l'article.
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REMISE-ZERO","prix":950000.00,"remisePercent":0}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prixAvantRemise").value(950000.00))
+                .andExpect(jsonPath("$.remise").value(0))
+                .andExpect(jsonPath("$.remiseMontant").value(0))
+                .andExpect(jsonPath("$.prixApresRemise").value(950000.00));
+    }
+
+    @Test
+    void create_remisePercentNegative_returns400() throws Exception {
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsAvecRemise("NEG", "-5")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_remisePercentSuperieureA100_returns400() throws Exception {
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsAvecRemise("SUP", "110")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Requête de création valide en tout point sauf la remise — isole le motif du 400. */
+    private String corpsAvecRemise(String suffixe, String remisePercent) {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-REMISE-" + suffixe);
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-REMISE-" + suffixe);
+        paymentMethodRepository.save(modePaie);
+
+        return """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REMISE-%s","prix":1000000.00,"remisePercent":%s}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId(), suffixe, remisePercent);
+    }
+
+    @Test
     void create_articleAlreadyOccupied_returns400() throws Exception {
         ComProspection prospection = newProspectionWithProspect();
         StkItem occupied = newAvailableItem("LOT-OCCUPIED");

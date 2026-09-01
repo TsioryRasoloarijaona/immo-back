@@ -182,6 +182,95 @@ class DossierFinancingSchemaTest {
     }
 
     @Test
+    void create_withRemisePercent_schemaCalculeSurLePrixApresRemise() throws Exception {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SCHEMA-REMISE");
+        stkVocationRepository.save(vocation);
+
+        newCategory("AUTO-FINANCEMENT", vocation, false);
+        newCategory("AVANCE", vocation, false);
+        newCategory("FRAIS SYNDIC", vocation, true);
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-SCHEMA-REMISE");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-SCHEMA-REMISE");
+        tranche.setCfgProject(project);
+        tranche.setAdvancePercent(new BigDecimal("0.300000"));
+        tranche.setSyndicAmount(new BigDecimal("700.000000"));
+        tranche.setSyndicPeriod(24);
+        trancheRepository.save(tranche);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-SCHEMA-REMISE");
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-SCHEMA-REMISE");
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("LOT-SCHEMA-REMISE");
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        article.setStkHierarchy(tranche);
+        stkItemRepository.save(article);
+
+        CfgTier prospect = new CfgTier();
+        prospect.setId(UUID.randomUUID());
+        prospect.setCode("CLI-SCHEMA-REMISE");
+        tierRepository.save(prospect);
+
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-SCHEMA-REMISE");
+        prospection.setCfgProspect(prospect);
+        prospectionRepository.save(prospection);
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-SCHEMA-REMISE");
+        paymentMethodRepository.save(modePaie);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"prix":1548000,"remisePercent":10,"modePaieId":"%s","cin":"CIN-SCHEMA-REMISE"}
+                """.formatted(prospection.getId(), article.getId(), modePaie.getId());
+
+        String createdJson = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String dossierId = JsonPath.read(createdJson, "$.id").toString();
+
+        String echeancierJson = mockMvc.perform(get("/api/dossiers/{id}/echeancier", dossierId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Number avance = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='AVANCE')].montant").get(0);
+        Number autoFinancement = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='AUTO-FINANCEMENT')].montant").get(0);
+        Number fraisSyndic = (Number) JsonPath.<net.minidev.json.JSONArray>read(echeancierJson,
+                "$.content[?(@.categorie=='FRAIS SYNDIC')].montant").get(0);
+
+        // Prix avant remise 1 548 000, remise 10 % => prix dû 1 393 200.
+        // AVANCE   = 1 393 200 * 0.30 = 417 960  (et non 464 400 : la remise se répercute)
+        // AUTO-FIN = 1 393 200 - 417 960 = 975 240
+        // FRAIS SYNDIC = 700 * 24 = 16 800 — barème de la tranche, jamais remisé.
+        assertThat(avance.doubleValue()).isEqualTo(417960.0);
+        assertThat(autoFinancement.doubleValue()).isEqualTo(975240.0);
+        assertThat(fraisSyndic.doubleValue()).isEqualTo(16800.0);
+    }
+
+    @Test
     void create_withoutPrix_generatesNoSchemaLines() throws Exception {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());

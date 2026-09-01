@@ -248,14 +248,19 @@ public class DossierController {
                     + "validation finale via `POST /api/dossiers`. `articleIds` accepte le même "
                     + "format que la création réelle (le premier article détermine la tranche — "
                     + "barème AVANCE/SYNDIC — et la vocation — catégorie d'échéance). Les articles "
-                    + "n'ont pas besoin d'être DISPONIBLE ici : rien n'est réservé."
+                    + "n'ont pas besoin d'être DISPONIBLE ici : rien n'est réservé. Si "
+                    + "`remisePercent` est fourni, AVANCE et AUTO-FINANCEMENT sont calculés sur le "
+                    + "prix **après** remise (`prix` étant alors le prix avant remise, articles "
+                    + "suivants comptés comme annexes) — mêmes montants que ceux que "
+                    + "`POST /api/dossiers` persistera pour les mêmes paramètres. FRAIS SYNDIC ne "
+                    + "dépend pas du prix (barème de la tranche) et n'est donc jamais remisé."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Schéma calculé. `lignes` peut être "
                     + "vide si aucune catégorie AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC n'existe pour "
                     + "la vocation de l'article (cas très inhabituel — même règle qu'à la création)."),
             @ApiResponse(responseCode = "400", description = "`articleIds` manquant/vide, `prix` "
-                    + "manquant, ou un des articles est introuvable.")
+                    + "manquant, `remisePercent` hors de [0 ; 100], ou un des articles est introuvable.")
     })
     public SchemaFinancementDto simulerSchemaFinancement(@RequestBody SimulerSchemaFinancementRequest request) {
         return dossierService.simulerSchemaFinancement(request);
@@ -275,13 +280,26 @@ public class DossierController {
                     + "**Périmètre commercial** : créer un dossier sur un article dont le projet "
                     + "n'est pas affecté à l'appelant renvoie **403** (et non 404 : ici c'est "
                     + "l'appelant qui a nommé l'article, il n'y a rien à cacher). Le projet est "
-                    + "déduit du premier article via sa tranche."
+                    + "déduit du premier article via sa tranche.\n\n"
+                    + "**Remise commerciale** — deux modes, selon `remisePercent` :\n"
+                    + "- `remisePercent` **fourni** (écran de création où le commercial saisit la "
+                    + "remise) : `prix` est le prix **avant** remise et sert de base à la place du "
+                    + "prix commercial de l'article ; les annexes (articles suivants de "
+                    + "`articleIds`) s'y ajoutent ; la remise est appliquée sur ce total et se "
+                    + "répercute sur `prixApresRemise`, `prix`, `totalAPayer` **et** sur le schéma "
+                    + "de financement (AVANCE / AUTO-FINANCEMENT calculés sur le prix après "
+                    + "remise). Les FRAIS SYNDIC viennent du barème de la tranche et ne sont "
+                    + "jamais remisés.\n"
+                    + "- `remisePercent` **absent** (comportement historique, inchangé) : `prix` "
+                    + "est le prix négocié **après** remise, et `remise`/`remiseMontant` sont "
+                    + "déduits de l'écart avec le prix commercial de l'article."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Dossier créé."),
-            @ApiResponse(responseCode = "400", description = "Prospection/article/mode de paiement "
-                    + "introuvable, prospection sans prospect lié, article déjà occupé, ou "
-                    + "`modePaieId`/`cin` manquant."),
+            @ApiResponse(responseCode = "400", description = "Champ requis manquant "
+                    + "(`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/"
+                    + "mode de paiement introuvable, prospection sans prospect lié, article déjà "
+                    + "occupé, ou `remisePercent` hors de [0 ; 100]."),
             @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
                     + "le périmètre commercial de l'appelant.")
     })

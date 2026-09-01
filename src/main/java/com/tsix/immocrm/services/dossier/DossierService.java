@@ -261,6 +261,9 @@ public class DossierService {
         if (!StringUtils.hasText(request.cin())) {
             throw new InvalidRequestException("cin est requis");
         }
+        // Validée avant toute écriture (y compris sans `prix`, où la remise serait sans effet):
+        // une remise aberrante doit être refusée, pas silencieusement ignorée.
+        validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
 
@@ -321,7 +324,7 @@ public class DossierService {
                     .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
                     .map(SchemaFinancementCalculator.Ligne::montant)
                     .findFirst().orElse(BigDecimal.ZERO);
-            appliquerMontants(folder, articles.get(0), annexes, request.prix(), fraisSyndic);
+            appliquerMontants(folder, articles.get(0), annexes, request.prix(), request.remisePercent(), fraisSyndic);
         }
 
         folder = folderRepository.save(folder);
@@ -335,7 +338,11 @@ public class DossierService {
         }
 
         if (request.prix() != null) {
-            genererSchemaFinancement(folder, tranche, request.prix());
+            // Base du schéma = prix APRÈS remise (posé par appliquerMontants juste au-dessus), pas
+            // le `prix` brut de la requête : sans remise explicite les deux sont égaux (comportement
+            // historique inchangé), avec une remise saisie par le commercial l'AVANCE et
+            // l'AUTO-FINANCEMENT doivent porter sur le prix réellement dû.
+            genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
         }
 
         List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
@@ -348,10 +355,21 @@ public class DossierService {
      * l'article, {@code ComSalePrice(HT)}/{@code Vat}, HT dérivé du taux de TVA), mais avec deux
      * différences volontaires par rapport à l'Offre :
      * <ul>
-     *   <li>Pas de {@code remisePercent} distinct en entrée (le Dossier n'a qu'un seul prix
-     *       négocié) — la remise est donc dérivée de l'écart entre le prix commercial de
-     *       l'article ({@code priceBeforeDiscount}) et {@code prixNegocie} (= {@code CreerDossierRequest.prix},
-     *       devient {@code priceAfterDiscount}), plutôt que fournie explicitement.</li>
+     *   <li>Deux modes de remise, selon que {@code remisePercent} est fourni ou non :
+     *     <ul>
+     *       <li><b>Remise explicite</b> ({@code remisePercent != null}) — le commercial saisit la
+     *           remise sur l'écran de création. {@code prixNegocie} devient alors le prix
+     *           <b>avant</b> remise et remplace le prix commercial de l'article comme base (même
+     *           rôle que {@code prixOverride} dans {@code DevisService#calculerMontants}), la
+     *           remise est appliquée dessus : {@code priceAfterDiscount = priceBeforeDiscount ×
+     *           (1 − remise/100)}. C'est ce prix après remise qui alimente {@code TotalToPay}
+     *           <i>et</i> le schéma de financement (AVANCE / AUTO-FINANCEMENT).</li>
+     *       <li><b>Remise dérivée</b> ({@code remisePercent == null}, comportement historique
+     *           conservé pour ne rien casser côté front) — {@code prixNegocie} est le prix
+     *           <b>après</b> remise, le prix avant remise vient du prix commercial de l'article,
+     *           et le pourcentage de remise est déduit de l'écart entre les deux.</li>
+     *     </ul>
+     *   </li>
      *   <li>{@code TotalToPay} (exposé sur {@code DossierListItemDto}/{@code DossierDetailDto} et
      *       agrégé par {@code DashboardService} pour la "valeur du pipeline" — colonne réelle,
      *       jamais posée avant ce correctif) = {@code priceAfterDiscount} (TTC) + Frais Syndic
@@ -359,17 +377,30 @@ public class DossierService {
      * </ul>
      * {@code annexes} (articles secondaires liés au même dossier, ex. parking/cave) jouent le
      * rôle des sous-articles côté Offre — leur {@code ComSalePrice(HT)} alimente
-     * {@code underItemsPrice(HT)}.
+     * {@code underItemsPrice(HT)}, et la remise explicite porte sur le total (principal + annexes),
+     * répartie au prorata comme côté Offre.
      */
     // Package-private (not private) so DossierMontantsBackfill (one-off migration, src/test) can
     // reuse this exact logic to fill TotalToPay on legacy dossiers that predate this computation.
     static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
-                                           BigDecimal prixNegocie, BigDecimal fraisSyndic) {
+                                           BigDecimal prixNegocie, BigDecimal remisePercent,
+                                           BigDecimal fraisSyndic) {
+        boolean remiseExplicite = remisePercent != null;
         BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
 
-        BigDecimal itemPrice = principal.getComSalePrice() != null ? principal.getComSalePrice() : prixNegocie;
-        BigDecimal itemPriceHT = principal.getComSalePriceHT() != null
-                ? principal.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
+        BigDecimal itemPrice;
+        BigDecimal itemPriceHT;
+        if (remiseExplicite && prixNegocie != null) {
+            // Prix saisi = prix avant remise de l'article principal (peut être le prix commercial
+            // pré-rempli par le front, ou une valeur ajustée) — le HT est redérivé du taux de TVA.
+            itemPrice = prixNegocie;
+            itemPriceHT = diviserParTaux(itemPrice, vatRatio);
+        } else {
+            itemPrice = principal.getComSalePrice() != null ? principal.getComSalePrice()
+                    : prixNegocie != null ? prixNegocie : BigDecimal.ZERO;
+            itemPriceHT = principal.getComSalePriceHT() != null
+                    ? principal.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
+        }
 
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
@@ -384,13 +415,28 @@ public class DossierService {
         BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
         BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
 
-        BigDecimal priceAfterDiscount = prixNegocie;
-        BigDecimal priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
-        BigDecimal discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
-        BigDecimal discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
-        BigDecimal discountPercent = priceBeforeDiscount.signum() != 0
-                ? discountAmount.multiply(BigDecimal.valueOf(100)).divide(priceBeforeDiscount, 6, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+        BigDecimal discountPercent;
+        BigDecimal discountAmount;
+        BigDecimal discountAmountHT;
+        BigDecimal priceAfterDiscount;
+        BigDecimal priceAfterDiscountHT;
+        if (remiseExplicite) {
+            discountPercent = remisePercent;
+            discountAmount = priceBeforeDiscount.multiply(remisePercent)
+                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+            discountAmountHT = priceBeforeDiscountHT.multiply(remisePercent)
+                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+            priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
+            priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
+        } else {
+            priceAfterDiscount = prixNegocie;
+            priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
+            discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
+            discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
+            discountPercent = priceBeforeDiscount.signum() != 0
+                    ? discountAmount.multiply(BigDecimal.valueOf(100)).divide(priceBeforeDiscount, 6, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+        }
 
         // Répartit la remise au prorata entre article principal et annexes pour la ventilation
         // "après remise" — même principe que DevisService#calculerMontants.
@@ -423,6 +469,20 @@ public class DossierService {
 
         BigDecimal syndic = fraisSyndic != null ? fraisSyndic : BigDecimal.ZERO;
         folder.setTotalToPay(priceAfterDiscount.add(syndic));
+    }
+
+    /**
+     * Une remise saisie hors de [0 ; 100] est refusée en 400 : négative elle gonflerait le prix,
+     * au-delà de 100 elle donnerait un prix après remise négatif (et un schéma de financement
+     * négatif derrière). Absente ⇒ mode historique, aucune validation.
+     */
+    private static void validerRemisePercent(BigDecimal remisePercent) {
+        if (remisePercent == null) {
+            return;
+        }
+        if (remisePercent.signum() < 0 || remisePercent.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new InvalidRequestException("remisePercent doit être compris entre 0 et 100: " + remisePercent);
+        }
     }
 
     /** HT = TTC / (1 + taux). Renvoie TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
@@ -466,6 +526,10 @@ public class DossierService {
      * foi pour la tranche (barème AVANCE/SYNDIC) et la vocation (catégorie d'échéance) — même
      * convention que {@link #create}. Contrairement à la création réelle, les articles n'ont pas
      * besoin d'être DISPONIBLE ici : c'est une simulation, rien n'est réservé.
+     *
+     * {@code remisePercent} suit exactement la même sémantique qu'à la création (voir
+     * {@link #appliquerMontants}) : fourni, le schéma porte sur le prix APRÈS remise, et les
+     * articles suivants comptent alors comme annexes dans le prix avant remise.
      */
     public SchemaFinancementDto simulerSchemaFinancement(SimulerSchemaFinancementRequest request) {
         if (request.articleIds() == null || request.articleIds().isEmpty()) {
@@ -474,22 +538,29 @@ public class DossierService {
         if (request.prix() == null) {
             throw new InvalidRequestException("prix est requis");
         }
+        validerRemisePercent(request.remisePercent());
 
         StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
                 .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleIds().get(0)));
-        // Valide aussi les articles suivants (mêmes erreurs qu'à la création réelle), même s'ils
-        // n'entrent pas dans le calcul — évite de prévisualiser un schéma pour une sélection
-        // d'articles dont une partie n'existe pas.
+        // Charge aussi les articles suivants (mêmes erreurs qu'à la création réelle) : ils servent
+        // d'annexes dans le calcul de la remise explicite, exactement comme à la création.
+        List<StkItem> annexes = new ArrayList<>();
         for (UUID articleId : request.articleIds().subList(1, request.articleIds().size())) {
-            if (!stkItemRepository.existsById(articleId)) {
-                throw new InvalidRequestException("Article introuvable: " + articleId);
-            }
+            annexes.add(stkItemRepository.findById(articleId)
+                    .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + articleId)));
         }
 
         UUID vocationId = premierArticle.getStkVocation().getId();
         CfgTranche tranche = premierArticle.getStkHierarchy();
 
-        List<LigneSchemaFinancementDto> lignes = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
+        // Le schéma se calcule sur le prix APRÈS remise. Plutôt que de dupliquer la formule, on
+        // réutilise appliquerMontants sur un ComFolder jetable, jamais persisté : la simulation ne peut
+        // donc pas diverger de ce que POST /api/dossiers produira pour les mêmes paramètres.
+        ComFolder apercu = new ComFolder();
+        appliquerMontants(apercu, premierArticle, annexes, request.prix(), request.remisePercent(), BigDecimal.ZERO);
+        BigDecimal prixApresRemise = apercu.getPriceAfterDiscount();
+
+        List<LigneSchemaFinancementDto> lignes = SchemaFinancementCalculator.calculer(tranche, prixApresRemise).stream()
                 .map(ligne -> settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
                         .map(categorie -> new LigneSchemaFinancementDto(
                                 ligne.categorieCode(), ligne.montant(), categorie.getExcludeFromPrice())))
