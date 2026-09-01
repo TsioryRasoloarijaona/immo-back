@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.dossier.EcheanceDto;
 import com.tsix.immocrm.dto.dossier.GenererDocumentsLotRequest;
 import com.tsix.immocrm.dto.dossier.ModifierEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
+import com.tsix.immocrm.dto.dossier.PayeurDto;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
 import com.tsix.immocrm.dto.dossier.ModifierStatutReglementRequest;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
@@ -42,6 +43,7 @@ import com.tsix.immocrm.services.dossier.RecuReglementService;
 import com.tsix.immocrm.services.dossier.ReglementPieceJointeService;
 import com.tsix.immocrm.services.dossier.ReglementStatutService;
 import com.tsix.immocrm.services.dossier.FicheVisiteTechniqueService;
+import com.tsix.immocrm.services.dossier.PayeurService;
 import com.tsix.immocrm.services.dossier.PieceJointeService;
 import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
@@ -122,6 +124,7 @@ public class DossierController {
     private final DocumentLotService documentLotService;
     private final ReglementStatutService reglementStatutService;
     private final ReglementPieceJointeService reglementPieceJointeService;
+    private final PayeurService payeurService;
 
     public DossierController(DossierService dossierService, EcheancierService echeancierService,
                               PieceJointeService pieceJointeService, FicheReservationService ficheReservationService,
@@ -145,7 +148,8 @@ public class DossierController {
                               DossierHistoriqueService historiqueService,
                               DocumentLotService documentLotService,
                               ReglementStatutService reglementStatutService,
-                              ReglementPieceJointeService reglementPieceJointeService) {
+                              ReglementPieceJointeService reglementPieceJointeService,
+                              PayeurService payeurService) {
         this.dossierService = dossierService;
         this.echeancierService = echeancierService;
         this.pieceJointeService = pieceJointeService;
@@ -171,6 +175,7 @@ public class DossierController {
         this.documentLotService = documentLotService;
         this.reglementStatutService = reglementStatutService;
         this.reglementPieceJointeService = reglementPieceJointeService;
+        this.payeurService = payeurService;
     }
 
     @GetMapping
@@ -491,6 +496,31 @@ public class DossierController {
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename(nomFichier).build().toString())
                 .body(fichier.getAttachedFile());
+    }
+
+    @GetMapping("/{id}/payeurs")
+    @Operation(
+            summary = "Payeurs possibles d'un règlement de ce dossier",
+            description = "Alimente le champ « Réglé par » (`CreerReglementRequest.payeurId`, "
+                    + "obligatoire) : l'acquéreur principal du dossier (`ComFolder.CfgCustomerId`, "
+                    + "rôle `ACQUEREUR_PRINCIPAL`) suivi de ses co-acquéreurs "
+                    + "(`ComFolderCustomer`, rôle `CO_ACQUEREUR`, avec leur quote-part). C'est la "
+                    + "même liste que le bloc « Nom et prénom des clients » de l'autorisation "
+                    + "d'encaissement.\n\n"
+                    + "**Liste indicative, pas fermée** : sur 654 règlements réels portant un "
+                    + "payeur, 651 sont l'acquéreur principal, 1 un co-acquéreur et 2 ni l'un ni "
+                    + "l'autre (tiers payeur). La création n'exige donc pas que `payeurId` "
+                    + "appartienne à cette liste, seulement que le tiers existe.\n\n"
+                    + "Liste vide si le dossier n'a aucun acquéreur rattaché."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Payeurs possibles (peut être vide)."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
+    public List<PayeurDto> getPayeurs(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id) {
+        return payeurService.findByDossier(id);
     }
 
     // -- Règlements : statut + preuves de paiement (voir ReglementStatutService) --

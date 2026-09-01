@@ -94,6 +94,34 @@ Style manuel du dépôt : `InvalidRequestException` → 400 via `GlobalException
 **Ne pas** introduire `@Valid` : il n'existe aucun handler `MethodArgumentNotValidException`, les
 violations sortiraient donc hors du format `ProblemDetail` du projet.
 
+### 4.5 Référentiels alimentant le formulaire
+
+Rendre un champ obligatoire n'a de sens que si le front peut le peupler. État des lieux :
+
+| Champ requis | Source | État |
+|---|---|---|
+| `typeId` | `GET /api/referentiels/types-reglement` | existait — 14 types, expose déjà `banqueObligatoire`/`referenceObligatoire` pour piloter les règles conditionnelles côté formulaire |
+| `banqueId` | `GET /api/referentiels/banques` | existait — 21 banques (`CfgTier` type `BAN`) ; 9 des 14 types la rendent obligatoire |
+| `typeId` (pièce jointe) | `GET /api/referentiels/types-piece-jointe` | existait, et facultatif ici de toute façon |
+| `payeurId` | **`GET /api/dossiers/{id}/payeurs`** | **manquait — ajouté par cette feature** |
+
+**Le trou : `payeurId`.** Aucun endpoint ne listait les payeurs possibles. `DossierDetailDto`
+n'expose que l'acquéreur principal (`clientId`/`clientNom`) et les co-acquéreurs
+(`ComFolderCustomer`) n'étaient lus que par les générateurs de PDF. Rendre le champ obligatoire
+sans cette liste aurait forcé le front à deviner.
+
+`GET /api/dossiers/{id}/payeurs` renvoie l'acquéreur principal (`ACQUEREUR_PRINCIPAL`) puis les
+co-acquéreurs (`CO_ACQUEREUR`, avec leur `quotePart`), chacun avec sa pièce d'identité **au format
+imprimé sur l'autorisation d'encaissement** (`CIN: E400556`) — pour que la liste déroulante et le
+document désignent la personne de la même façon. Un tiers à la fois acquéreur et co-acquéreur n'est
+proposé qu'une fois.
+
+**Liste indicative, pas contrainte d'intégrité.** Sur 654 règlements réels portant un payeur :
+**651 sont l'acquéreur principal, 1 est un co-acquéreur, 2 ne sont ni l'un ni l'autre** (vrai tiers
+payeur). La création ne vérifie donc pas l'appartenance à cette liste, seulement l'existence du
+`CfgTier`. Le cas du tiers payeur intégral reste non couvert côté saisie : il demanderait une
+recherche de tiers générale, hors périmètre de cette branche (voir §11).
+
 ## 5. Pièces jointes du règlement
 
 Stockage déjà en place et **polymorphe** : `AdmAttachedFile.CategoryId` = PKey du porteur, sans FK
@@ -209,3 +237,13 @@ Chaque endpoint nouveau ou modifié : `@Operation` (résumé + règles métier a
 `typeId`, `payeurId`, `dateEcheance` deviennent obligatoires sur un endpoint que `crm-prototype`
 appelle déjà : **rupture de contrat assumée**. Le front devra suivre dans sa propre branche et sa
 propre PR, après `npm run docs:update` et diff de `docs/api-docsV4.json`.
+
+## 11. Reste ouvert
+
+- **Tiers payeur intégral** : 2 règlements réels sur 654 sont réglés par quelqu'un qui n'est ni
+  l'acquéreur ni un co-acquéreur du dossier. `GET /api/dossiers/{id}/payeurs` ne les couvre pas ;
+  il faudrait une recherche de tiers générale (à la `GET /api/prospects`) pour les saisir. Non
+  implémenté : 0,3 % des cas, et le choix de conception mérite sa propre décision.
+- **RIB de l'autorisation d'encaissement** : reste vide tant que `StlSettlement.StlAccountId` n'est
+  pas renseigné par l'API (décision explicite, cf. §7). Le rouvrir voudrait dire ajouter un champ
+  `compteId` (9 comptes, `GET /api/referentiels/comptes` existe déjà).
