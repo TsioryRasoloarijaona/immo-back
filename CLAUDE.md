@@ -45,6 +45,14 @@ DB_HOST, DB_NAME, DB_USER, DB_PWD, JWT_SECRET
   - Reserved-word columns are quoted in the `name` attribute (e.g. `@Column(name = "\"Usage\"")`).
 - **Naming mismatch to keep in mind**: the DTO/API layer uses French business names (`Dossier`, `Prospect`, `Article`, `Contact`) that map onto differently-named JPA entities (`ComFolder`, `CfgTier`, `StkItem`, `CfgTierContact` respectively) — don't rename the entities to match, translate at the DTO/mapping boundary.
 
+## Git workflow (mandatory)
+
+1. **Always branch from `main`.** Before starting a new feature, `git checkout main && git pull`, then create the branch from that up-to-date `main`. Never branch from another feature branch, and never start work directly on `main`.
+2. **Ask before creating a branch.** Propose the branch name and wait for the user's go-ahead — don't create it unilaterally.
+3. **Commit and push after every validated feature.** "Validated" = the feature is implemented *and* its tests run green (`./mvnw.cmd test -Dtest=...`, then the full suite when relevant). One coherent feature = one commit; push it immediately, don't let work pile up uncommitted across sessions.
+4. **The user merges on GitHub.** After the push, stop — the user opens/merges the PR into `main` themselves. Don't merge, don't push to `main` directly.
+5. **After the merge, pull `main` again** before starting the next feature, so the next branch is cut from the merged state.
+
 ## Endpoint implementation workflow (`instructions/CLAUDE-CODE-endpoints-implementation.md`)
 
 This repo is mid-way through building out a REST API (~27 endpoints across Prospection, Prospect, Dossier, Patrimoine, Dashboard) on top of the entity layer. Rules that apply for the whole duration of that effort:
