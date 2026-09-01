@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CreerEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
 import com.tsix.immocrm.dto.dossier.EcheanceDto;
@@ -21,12 +22,15 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
+import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -43,13 +47,15 @@ public class EcheancierService {
     private final StlSettlementLineRepository settlementLineRepository;
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
+    private final UtilisateurAffiche utilisateurAffiche;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
                               StlSettlementRepository settlementRepository,
                               StlSettlementLineRepository settlementLineRepository,
                               CfgTierRepository tierRepository,
-                              ComSettlementCategoryRepository settlementCategoryRepository) {
+                              ComSettlementCategoryRepository settlementCategoryRepository,
+                              UtilisateurAffiche utilisateurAffiche) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.settlementTypeRepository = settlementTypeRepository;
@@ -57,6 +63,7 @@ public class EcheancierService {
         this.settlementLineRepository = settlementLineRepository;
         this.tierRepository = tierRepository;
         this.settlementCategoryRepository = settlementCategoryRepository;
+        this.utilisateurAffiche = utilisateurAffiche;
     }
 
     private ComDocument findEcheanceOf(UUID dossierId, UUID echeanceId) {
@@ -65,62 +72,113 @@ public class EcheancierService {
                 .orElseThrow(() -> new ResourceNotFoundException("Échéance introuvable pour ce dossier: " + echeanceId));
     }
 
-    /** {@code POST /api/dossiers/{id}/echeancier/{echeanceId}/reglements}. */
+    /**
+     * {@code POST /api/dossiers/{id}/echeancier/{echeanceId}/reglements}.
+     *
+     * <p><b>Saisie complète obligatoire.</b> Un règlement incomplet produisait une « Autorisation
+     * d'encaissement » trouée (Mode de versement et Versement effectué par vides) ; montant, date
+     * d'échéance, type et payeur sont donc requis, la banque et la référence dès que le type les
+     * impose.
+     *
+     * <p>Écrit aussi trois colonnes que l'API laissait vides jusqu'ici :
+     * {@code Status = IN_WORK} (les 3 218 lignes legacy saisies portent cette valeur, les nôtres
+     * portaient {@code NULL}), {@code IsCredit = true} (encaissement client — détermine aussi la
+     * {@code Category} des pièces jointes du règlement), et {@code UserCreate}/
+     * {@code UserCreateDateTime}, dont l'absence reléguait les règlements créés par l'API en bas
+     * de l'historique du dossier ({@code DossierHistoriqueService} trie là-dessus, nulls en
+     * dernier).
+     */
     @Transactional
-    public ReglementDto addReglement(UUID dossierId, UUID echeanceId, CreerReglementRequest request) {
+    public ReglementDto addReglement(UUID dossierId, UUID echeanceId, CreerReglementRequest request,
+                                      AuthenticatedUser principal) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
         }
         ComDocument echeance = findEcheanceOf(dossierId, echeanceId);
 
+        // dateReglement (SettlementDate) n'appartient qu'au passage à POINTED : sur 3 244 règlements
+        // réels elle n'est renseignée que sur les 14 lignes pointées, sur aucune des 3 218 en cours.
+        // L'accepter ici créerait la première ligne IN_WORK datée de l'historique de cette base.
+        if (request.dateReglement() != null) {
+            throw new InvalidRequestException("dateReglement ne peut pas être fournie à la création : "
+                    + "elle se renseigne au passage à POINTED, via PATCH /api/dossiers/" + dossierId
+                    + "/reglements/{reglementId}/statut");
+        }
+        // Aucune pièce jointe ne peut exister avant que le règlement existe, donc aucun règlement
+        // ne peut naître POINTED (la preuve de paiement serait impossible à fournir).
+        if (StringUtils.hasText(request.statut())
+                && !StatutReglement.INITIAL.name().equalsIgnoreCase(request.statut().trim())) {
+            throw new InvalidRequestException("Un règlement est toujours créé en "
+                    + StatutReglement.INITIAL + " : pour le pointer, déposez d'abord la preuve de "
+                    + "paiement puis appelez PATCH .../reglements/{reglementId}/statut");
+        }
+
         if (request.montant() == null) {
             throw new InvalidRequestException("montant est requis");
         }
-
-        StlSettlementType type = null;
-        if (request.typeId() != null) {
-            type = settlementTypeRepository.findById(request.typeId())
-                    .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + request.typeId()));
+        if (request.montant().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidRequestException("montant doit être strictement positif");
         }
+        if (request.dateEcheance() == null) {
+            throw new InvalidRequestException("dateEcheance est requise");
+        }
+        if (request.typeId() == null) {
+            throw new InvalidRequestException("typeId est requis");
+        }
+        if (request.payeurId() == null) {
+            throw new InvalidRequestException("payeurId est requis");
+        }
+
+        StlSettlementType type = settlementTypeRepository.findById(request.typeId())
+                .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + request.typeId()));
+
         // IsReferenceMandatory varie par type (confirmé sur données réelles : vrai pour
         // CHÈQUE/CHEQUE NOTAIRE/SYNDIC/BANQUE/CERTIFIÉ/EFFET, référence renseignée sur >99% des
-        // lignes réelles de ces types) — enforcé ici, contrairement à IsBankMandatory qui reste
-        // purement indicatif côté front (voir TypeReglementDto.banqueObligatoire).
-        if (type != null && Boolean.TRUE.equals(type.getIsReferenceMandatory())
-                && !StringUtils.hasText(request.reference())) {
+        // lignes réelles de ces types).
+        if (Boolean.TRUE.equals(type.getIsReferenceMandatory()) && !StringUtils.hasText(request.reference())) {
             throw new InvalidRequestException("reference est requise pour le type de règlement " + type.getCode());
+        }
+        // IsBankMandatory était jusqu'ici purement indicatif : annoncé au front via
+        // TypeReglementDto.banqueObligatoire mais jamais appliqué côté serveur, si bien qu'un
+        // chèque sans banque passait en 201. Le flag est désormais enforcé.
+        if (Boolean.TRUE.equals(type.getIsBankMandatory()) && request.banqueId() == null) {
+            throw new InvalidRequestException("banqueId est requise pour le type de règlement " + type.getCode());
+        }
+
+        // Reste à payer de l'échéance — même calcul que buildDto (montant de l'échéance moins la
+        // somme déjà réglée). Sans ce contrôle un sur-paiement passait silencieusement et donnait
+        // un reste négatif affiché avec le statut calculé "PAYE".
+        BigDecimal montantEcheance = echeance.getAmount() != null ? echeance.getAmount() : BigDecimal.ZERO;
+        BigDecimal dejaRegle = settlementLineRepository.sumAmountByComDocumentId(echeanceId);
+        BigDecimal reste = montantEcheance.subtract(dejaRegle != null ? dejaRegle : BigDecimal.ZERO);
+        if (request.montant().compareTo(reste) > 0) {
+            throw new InvalidRequestException("montant (" + request.montant() + ") dépasse le reste à payer "
+                    + "de cette échéance (" + reste + ")");
         }
 
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setDocDate(LocalDateTime.now());
-        // EcheanceDate = "date d'échéance" du règlement, renseignée sur la quasi-totalité des
-        // règlements réels (voir CreerReglementRequest) — défaut à maintenant si absente, pour ne
-        // pas laisser cette colonne quasi-toujours-peuplée vide sur les règlements créés via l'API.
-        settlement.setEcheanceDate(request.dateEcheance() != null ? request.dateEcheance() : LocalDateTime.now());
-        // SettlementDate = "date de règlement effectif" (ChampDateEncaissement.DATE_REGLEMENT) —
-        // renseignée a posteriori, confirmée quasi jamais connue à la saisie (14 lignes/~3260 en
-        // données réelles) : aucun défaut, laissée telle quelle (null si absente).
-        settlement.setSettlementDate(request.dateReglement());
+        settlement.setEcheanceDate(request.dateEcheance());
+        settlement.setSettlementDate(null);
         settlement.setAmount(request.montant());
         settlement.setCode(request.reference());
         settlement.setNotes(request.notes());
-        if (type != null) {
-            settlement.setStlSettlementType(type);
-        }
+        settlement.setStatus(StatutReglement.INITIAL.name());
+        settlement.setIsCredit(Boolean.TRUE);
+        settlement.setUserCreate(utilisateurAffiche.nom(principal));
+        settlement.setUserCreateDateTime(LocalDateTime.now());
+        settlement.setStlSettlementType(type);
         if (request.banqueId() != null) {
             CfgTier banque = tierRepository.findById(request.banqueId())
                     .orElseThrow(() -> new InvalidRequestException("Banque (CfgTier) introuvable: " + request.banqueId()));
             settlement.setCfgBank(banque);
         }
-        // TierId ("réglé par") — déjà exposé en lecture (ReglementDto.payeurId/payeurNom, résolu
-        // via StlSettlement.getTier()) mais jamais posable à la création ; confirmé quasi toujours
-        // renseigné en données réelles (3232/3240 lignes, 99,75%).
-        if (request.payeurId() != null) {
-            CfgTier payeur = tierRepository.findById(request.payeurId())
-                    .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + request.payeurId()));
-            settlement.setTier(payeur);
-        }
+        // TierId ("réglé par") — alimente le bloc « Versement effectué par » de l'autorisation
+        // d'encaissement ; confirmé renseigné sur 3232/3240 lignes réelles (99,75%).
+        CfgTier payeur = tierRepository.findById(request.payeurId())
+                .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + request.payeurId()));
+        settlement.setTier(payeur);
         settlement = settlementRepository.save(settlement);
 
         StlSettlementLine line = new StlSettlementLine();
@@ -160,7 +218,7 @@ public class EcheancierService {
      * settlement's total ({@code s.getAmount()}) — a règlement split across several échéances
      * (e.g. frais dossier + frais syndic) would otherwise show the full total on every line.
      */
-    private static ReglementDto toReglementDto(StlSettlementLine line, UUID echeanceId) {
+    static ReglementDto toReglementDto(StlSettlementLine line, UUID echeanceId) {
         StlSettlement s = line.getStlSettlement();
         StlSettlementType type = s.getStlSettlementType();
         CfgTier banque = s.getCfgBank();
@@ -180,7 +238,8 @@ public class EcheancierService {
                 banque != null ? nomTier(banque) : null,
                 payeur != null ? payeur.getId() : null,
                 payeur != null ? nomTier(payeur) : null,
-                s.getNotes()
+                s.getNotes(),
+                s.getStatus()
         );
     }
 

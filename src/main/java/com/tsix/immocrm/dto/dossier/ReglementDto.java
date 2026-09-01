@@ -18,7 +18,9 @@ public record ReglementDto(
         LocalDateTime dateDocument,
         /** {@code StlSettlement.EcheanceDate} — "date d'échéance" du règlement (voir {@code CreerReglementRequest}). */
         LocalDateTime dateEcheance,
-        /** {@code StlSettlement.SettlementDate} — "date de règlement effectif" (encaissement réel), souvent absente. */
+        /** {@code StlSettlement.SettlementDate} — "date de règlement effectif" (encaissement réel).
+         * Renseignée si et seulement si {@code statut} vaut {@code POINTED} : les deux champs sont
+         * deux encodages du même fait et n'ont jamais divergé sur les 3 244 règlements réels. */
         LocalDateTime dateReglement,
         /** Part de ce règlement affectée à cette échéance ({@code StlSettlementLine.Amount}) — peut être
          * inférieur au montant total du règlement si celui-ci est réparti sur plusieurs échéances. */
@@ -32,6 +34,11 @@ public record ReglementDto(
         /** {@code StlSettlement.TierId} — le tiers qui a effectivement réglé ("réglé par", même terme que la Fiche de réservation), peut différer de l'acquéreur principal (co-acquéreur, tiers payeur...). */
         UUID payeurId,
         String payeurNom,
-        String notes
+        String notes,
+        /** {@code StlSettlement.Status} — {@code IN_WORK} (saisi, pas encore encaissé), {@code POINTED}
+         * (encaissement constaté) ou {@code CANCELED}. {@code null} sur d'anciennes lignes legacy dont
+         * la colonne n'a jamais été renseignée ; tout règlement créé par cette API naît {@code IN_WORK}.
+         * Se modifie via {@code PATCH /api/dossiers/{id}/reglements/{reglementId}/statut}. */
+        String statut
 ) {
 }
