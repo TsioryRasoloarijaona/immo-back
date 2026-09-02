@@ -97,3 +97,34 @@ This repo is mid-way through building out a REST API (~27 endpoints across Prosp
     - `@Schema(description = ...)` on every DTO `record` and on its individual components — explain what the field represents and where it comes from (e.g. "computed server-side", "null if not yet reached"), not just repeat the field name.
     - Write descriptions in French, matching the DTO/API layer's existing business language (see the "Naming mismatch" note above).
     This applies going forward to all endpoints, not only new ones — retrofit an existing endpoint's docs if you're touching it substantially anyway, but don't go out of scope to backfill unrelated ones.
+
+## Knowledge graph (graphify)
+
+`graphify-out/` holds a generated knowledge graph of this repo — `graph.json`,
+`GRAPH_REPORT.md` (community map, god nodes, audit trail) and an interactive `graph.html`.
+It is **gitignored and rebuilt automatically**: a `post-commit` hook re-runs AST extraction
+on the files each commit touched, and a `post-checkout` hook rebuilds after a branch switch.
+
+**The hooks only cover code.** After editing `instructions/**` or `instructions/templates/**`
+(specs, legacy `.pdf`/`.html` report templates), run `/graphify . --update` by hand — those
+go through LLM extraction, which the hook deliberately skips.
+
+Reach for the graph when the question is **structural**:
+
+- **Blast radius before a refactor** — `graphify explain "<Symbol>"` lists everything that
+  references a type before you change it. (`CfgTier` carries 215 edges across 39 communities;
+  that is worth knowing before touching it.)
+- **Questions that span artifact kinds** — code ↔ `instructions/FEATURE-*.md` ↔ the legacy
+  `instructions/templates/*.pdf|.html`. Grep cannot span those; the graph can.
+- **Orienting in an unfamiliar area** — the community map in `GRAPH_REPORT.md`.
+- **Coupling or duplication you have no name for yet** — god nodes and surprising connections.
+
+Do **not** reach for it when:
+
+- You already know the symbol or file — use Grep/Glob. Faster, exact, never stale.
+- You are locating a feature by screen or business action — that is `../FEATURES.md`.
+- You need the definitive list of files to edit. **Always confirm with Grep before editing.**
+  The graph collapses repeated references into one edge and carries dangling edges to
+  unresolved third-party symbols, so its counts are a lower bound, not an inventory.
+
+In short: **the graph decides *what* to touch, Grep decides *which lines* to open.**

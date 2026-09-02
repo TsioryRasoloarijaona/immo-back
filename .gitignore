@@ -32,3 +32,7 @@ build/
 ### VS Code ###
 .vscode/
 src/test/resources/application.properties
+
+### graphify ###
+# Generated knowledge graph — rebuilt by the post-commit hook, never committed.
+graphify-out/
