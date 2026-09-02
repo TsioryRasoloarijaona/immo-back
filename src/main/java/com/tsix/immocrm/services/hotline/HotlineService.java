@@ -7,18 +7,20 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
-import org.springframework.data.domain.Page;
-import org.springframework.data.jpa.domain.Specification;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
+import com.tsix.immocrm.utils.TierNomFormatter;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,14 +54,14 @@ public class HotlineService {
     private final ComActionMessageRepository actionMessageRepository;
     private final ProspectService prospectService;
     private final ProspectSubResourcesService subResourcesService;
-    private final com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService;
+    private final PerimetreCommercialService perimetreService;
 
     public HotlineService(CfgTierRepository tierRepository,
                            ComProspectionRepository prospectionRepository,
                            ComActionMessageRepository actionMessageRepository,
                            ProspectService prospectService,
                            ProspectSubResourcesService subResourcesService,
-                           com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService) {
+                           PerimetreCommercialService perimetreService) {
         this.perimetreService = perimetreService;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
@@ -138,9 +140,9 @@ public class HotlineService {
                 p.getDocDate(),
                 p.getTempDescription(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                nomTier(p.getCfgProspect()),
+                TierNomFormatter.nom(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                nomTier(p.getCfgCommercial()),
+                TierNomFormatter.nom(p.getCfgCommercial()),
                 p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
@@ -159,7 +161,7 @@ public class HotlineService {
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
-                nomTier(m.getCfgEmployee()),
+                TierNomFormatter.nom(m.getCfgEmployee()),
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,
@@ -167,9 +169,5 @@ public class HotlineService {
                 m.getAlertValidityDate(),
                 m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null
         );
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

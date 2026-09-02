@@ -1,7 +1,8 @@
 package com.tsix.immocrm.entities.com;
 
-import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.stl.StlAccount;
+import com.tsix.immocrm.entities.stl.StlSettlementType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -102,7 +103,7 @@ public class ComDocument {
     // Laissé mappé (colonne réelle) même si non lu ailleurs pour l'instant.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")
-    private com.tsix.immocrm.entities.stl.StlAccount stlAccount;
+    private StlAccount stlAccount;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgDebtCollectorId")

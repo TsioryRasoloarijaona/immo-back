@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmEvent;
+import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComAction;
@@ -29,7 +30,6 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -48,6 +48,8 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
+import com.tsix.immocrm.utils.Requis;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -289,9 +291,7 @@ public class ProspectionService {
      */
     @Transactional
     public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
-        if (request.prospectId() == null) {
-            throw new InvalidRequestException("prospectId est requis");
-        }
+        Requis.champ(request.prospectId(), "prospectId est requis");
         CfgTier prospect = tierRepository.findById(request.prospectId())
                 .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
 
@@ -371,7 +371,7 @@ public class ProspectionService {
         if (request.notes() != null) prospection.setNotes(request.notes());
 
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + nomTier(prospect));
+        enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + TierNomFormatter.nom(prospect));
         return toDetail(prospection);
     }
 
@@ -426,7 +426,7 @@ public class ProspectionService {
         CfgTier tier = prospectService.createEntity(request);
         prospection.setCfgProspect(tier);
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(prospectionId, "Prospect créé et lié : " + nomTier(tier));
+        enregistrerHistorique(prospectionId, "Prospect créé et lié : " + TierNomFormatter.nom(tier));
         return toDetail(prospection);
     }
 
@@ -444,16 +444,14 @@ public class ProspectionService {
             throw new InvalidRequestException(
                     "Un prospect doit être créé (POST /api/pre-prospections/{id}/creer-prospect) avant de transformer: " + id);
         }
-        if (request.commercialId() == null) {
-            throw new InvalidRequestException("commercialId est requis");
-        }
+        Requis.champ(request.commercialId(), "commercialId est requis");
 
         CfgTier commercial = tierRepository.findById(request.commercialId())
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
 
         prospection.setCfgCommercial(commercial);
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + nomTier(commercial));
+        enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + TierNomFormatter.nom(commercial));
         return toDetail(prospection);
     }
 
@@ -466,9 +464,7 @@ public class ProspectionService {
         ComProspection prospection = prospectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
 
-        if (request.etapeId() == null) {
-            throw new InvalidRequestException("etapeId est requis");
-        }
+        Requis.champ(request.etapeId(), "etapeId est requis");
         ComProspectionKind kind = prospectionKindRepository.findById(request.etapeId())
                 .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId()));
 
@@ -546,9 +542,7 @@ public class ProspectionService {
         ComProspection prospection = prospectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
 
-        if (request.trancheId() == null) {
-            throw new InvalidRequestException("trancheId est requis");
-        }
+        Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
         // Périmètre commercial : déplacer une prospection vers un projet non affecté est refusé
@@ -687,9 +681,9 @@ public class ProspectionService {
                 p.getDocDate(),
                 p.getTempDescription(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                nomTier(p.getCfgProspect()),
+                TierNomFormatter.nom(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                nomTier(p.getCfgCommercial()),
+                TierNomFormatter.nom(p.getCfgCommercial()),
                 p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
@@ -710,11 +704,11 @@ public class ProspectionService {
                 p.getTempTel(),
                 p.getTempEMail(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                nomTier(p.getCfgProspect()),
+                TierNomFormatter.nom(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                nomTier(p.getCfgCommercial()),
+                TierNomFormatter.nom(p.getCfgCommercial()),
                 p.getCfgProposer() != null ? p.getCfgProposer().getId() : null,
-                nomTier(p.getCfgProposer()),
+                TierNomFormatter.nom(p.getCfgProposer()),
                 p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getId() : null,
                 p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getDescription() : null,
                 p.getComProspectionOriginSupport() != null ? p.getComProspectionOriginSupport().getId() : null,
@@ -749,9 +743,5 @@ public class ProspectionService {
                 p.getStkItem() != null ? p.getStkItem().getCode() : null,
                 p.getStkItem() != null ? p.getStkItem().getDescription() : null
         );
-    }
-
-    private static String nomTier(com.tsix.immocrm.entities.cfg.CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

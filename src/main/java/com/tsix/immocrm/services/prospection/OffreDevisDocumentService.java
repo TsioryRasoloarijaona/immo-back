@@ -6,11 +6,15 @@ import com.tsix.immocrm.dto.prospection.OffreDevisData.SousArticleLigne;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.entities.stl.StlQuoteItem;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,13 +56,13 @@ public class OffreDevisDocumentService {
         return new OffreDevisData(
                 quote.getCode(),
                 quote.getDocDate() != null ? quote.getDocDate().toLocalDate() : null,
-                nomTier(quote.getCfgProspect()),
-                tranche != null ? tranche.getDescription() : null,
-                article != null ? article.getCode() : null,
-                article != null ? article.getArea() : null,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null && article.getStkItemType() != null ? article.getStkItemType().getDescription() : null,
-                nomTier(quote.getCfgCommercial()),
+                TierNomFormatter.nom(quote.getCfgProspect()),
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getArea),
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
+                TierNomFormatter.nom(quote.getCfgCommercial()),
                 quote.getComPaymentMethod() != null ? quote.getComPaymentMethod().getDescription() : null,
                 toMontantsDto(quote),
                 lignes.stream().map(OffreDevisDocumentService::toLigne).toList(),
@@ -93,9 +97,5 @@ public class OffreDevisDocumentService {
                 item.getDiscountAmount(),
                 item.getPriceAfterDiscount()
         );
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

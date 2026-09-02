@@ -1,5 +1,15 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.adm.AdmFamilySituation;
+import com.tsix.immocrm.entities.adm.AdmIdentityDocumentType;
+import com.tsix.immocrm.entities.adm.AdmMatrimonialRegime;
+import com.tsix.immocrm.entities.adm.AdmNationality;
+import com.tsix.immocrm.entities.adm.AdmProfession;
+import com.tsix.immocrm.entities.adm.AdmResidenceType;
+import com.tsix.immocrm.entities.adm.AdmSalary;
+import com.tsix.immocrm.entities.adm.AdmSexType;
+import com.tsix.immocrm.entities.adm.AdmTierTitle;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -8,7 +18,6 @@ import org.hibernate.annotations.Nationalized;
 import org.springframework.cglib.core.Local;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -335,45 +344,45 @@ public class CfgTier {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmTierTitleId")
-    private com.tsix.immocrm.entities.adm.AdmTierTitle admTierTitle;
+    private AdmTierTitle admTierTitle;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmSexTypeId")
-    private com.tsix.immocrm.entities.adm.AdmSexType admSexType;
+    private AdmSexType admSexType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmCountryId")
-    private com.tsix.immocrm.entities.adm.AdmCountry admCountry;
+    private AdmCountry admCountry;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmCountryResidenceId")
-    private com.tsix.immocrm.entities.adm.AdmCountry admCountryResidence;
+    private AdmCountry admCountryResidence;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmNationalityId")
-    private com.tsix.immocrm.entities.adm.AdmNationality admNationality;
+    private AdmNationality admNationality;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmFamilySituationId")
-    private com.tsix.immocrm.entities.adm.AdmFamilySituation admFamilySituation;
+    private AdmFamilySituation admFamilySituation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmResidenceTypeId")
-    private com.tsix.immocrm.entities.adm.AdmResidenceType admResidenceType;
+    private AdmResidenceType admResidenceType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmMatrimonialRegimeId")
-    private com.tsix.immocrm.entities.adm.AdmMatrimonialRegime admMatrimonialRegime;
+    private AdmMatrimonialRegime admMatrimonialRegime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmProfessionId")
-    private com.tsix.immocrm.entities.adm.AdmProfession admProfession;
+    private AdmProfession admProfession;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmSalaryId")
-    private com.tsix.immocrm.entities.adm.AdmSalary admSalary;
+    private AdmSalary admSalary;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmIdentityDocumentTypeId")
-    private com.tsix.immocrm.entities.adm.AdmIdentityDocumentType admIdentityDocumentType;
+    private AdmIdentityDocumentType admIdentityDocumentType;
 }

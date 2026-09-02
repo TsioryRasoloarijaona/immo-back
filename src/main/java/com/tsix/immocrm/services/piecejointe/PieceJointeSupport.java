@@ -11,6 +11,7 @@ import com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -141,12 +142,12 @@ public class PieceJointeSupport {
         entity = fileRepository.save(entity);
 
         return new PieceJointeDto(entity.getId(), entity.getDescription(), entity.getCategory(),
-                type != null ? type.getDescription() : null, entity.getExtension(),
+                Champs.de(type, AdmAttachedFileType::getDescription), entity.getExtension(),
                 entity.getUserCreateDateTime(), entity.getUserCreate());
     }
 
     public static PieceJointeDto toDto(AdmAttachedFileSummary a) {
-        String type = a.getType() != null ? a.getType().getDescription() : null;
+        String type = Champs.de(a.getType(), AdmAttachedFileType::getDescription);
         return new PieceJointeDto(a.getId(), a.getDescription(), a.getCategory(), type, a.getExtension(),
                 a.getUserCreateDateTime(), a.getUserCreate());
     }

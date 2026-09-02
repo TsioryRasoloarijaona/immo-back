@@ -9,6 +9,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +47,7 @@ public class FicheVisiteTechniqueService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
 
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
 
         List<String> clientNoms = new ArrayList<>();
         if (folder.getCfgCustomer() != null) {
@@ -60,10 +61,10 @@ public class FicheVisiteTechniqueService {
                 folder.getCode(),
                 folder.getReceptionDate(),
                 clientNoms,
-                article != null ? article.getCode() : null,
-                tranche != null ? tranche.getSavAddress() : null,
+                Champs.de(article, StkItem::getCode),
+                Champs.de(tranche, CfgTranche::getSavAddress),
                 tranche != null ? contactSav(tranche) : null,
-                tranche != null ? tranche.getWarrantyDelay() : null
+                Champs.de(tranche, CfgTranche::getWarrantyDelay)
         );
     }
 

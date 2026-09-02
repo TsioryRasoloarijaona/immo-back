@@ -1,14 +1,20 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.dto.dossier.FicheReservationData;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkBuilding;
+import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,28 +49,27 @@ public class FicheReservationService {
         // StkItem.CfgProjectId is never populated in real data — the confirmed path is via the
         // article's tranche (StkHierarchyId -> CfgTranche.CfgProjectId). Same fix applied in
         // ActeReservationService and DossierService#genererCodeDossier.
-        com.tsix.immocrm.entities.cfg.CfgProject projet = article != null && article.getStkHierarchy() != null
-                ? article.getStkHierarchy().getCfgProject() : null;
+        CfgProject projet = Champs.de(article, StkItem::getStkHierarchy, CfgTranche::getCfgProject);
 
         StlSettlementLine reservationLine = findReservationLine(dossierId);
-        StlSettlement reservation = reservationLine != null ? reservationLine.getStlSettlement() : null;
+        StlSettlement reservation = Champs.de(reservationLine, StlSettlementLine::getStlSettlement);
 
         return new FicheReservationData(
                 folder.getCode(),
-                client != null ? clientNom(client) : null,
-                client != null ? clientAdresse(client) : null,
-                client != null ? client.getIDNumber() : null,
-                article != null && article.getStkBuilding() != null ? article.getStkBuilding().getCode() : null,
-                article != null ? article.getCode() : null,
-                article != null ? article.getDescription() : null,
-                article != null && article.getStkFloor() != null ? article.getStkFloor().getDescription() : null,
-                article != null ? article.getArea() : null,
-                projet != null ? projet.getDescription() : null,
-                projet != null ? projetAdresse(projet) : null,
-                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
-                reservation != null ? reservation.getDescription() : null,
-                reservation != null ? reservation.getAmount() : null,
-                reservation != null && reservation.getTier() != null ? clientNom(reservation.getTier()) : null,
+                Champs.de(client, FicheReservationService::clientNom),
+                Champs.de(client, FicheReservationService::clientAdresse),
+                Champs.de(client, CfgTier::getIDNumber),
+                Champs.de(article, StkItem::getStkBuilding, StkBuilding::getCode),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getDescription),
+                Champs.de(article, StkItem::getStkFloor, StkFloor::getDescription),
+                Champs.de(article, StkItem::getArea),
+                Champs.de(projet, CfgProject::getDescription),
+                Champs.de(projet, FicheReservationService::projetAdresse),
+                Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
+                Champs.de(reservation, StlSettlement::getDescription),
+                Champs.de(reservation, StlSettlement::getAmount),
+                Champs.de(reservation, StlSettlement::getTier, FicheReservationService::clientNom),
                 folder.getPrice(),
                 LocalDate.now()
         );
@@ -99,7 +104,7 @@ public class FicheReservationService {
         return sb.isEmpty() ? null : sb.toString();
     }
 
-    private static String projetAdresse(com.tsix.immocrm.entities.cfg.CfgProject projet) {
+    private static String projetAdresse(CfgProject projet) {
         StringBuilder sb = new StringBuilder();
         appendPart(sb, projet.getAddress());
         appendPart(sb, projet.getAddress2());

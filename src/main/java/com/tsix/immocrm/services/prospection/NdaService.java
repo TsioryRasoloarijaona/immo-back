@@ -1,14 +1,20 @@
 package com.tsix.immocrm.services.prospection;
 
 import com.tsix.immocrm.dto.prospection.NdaData;
+import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.adm.AdmNationality;
+import com.tsix.immocrm.entities.adm.AdmProfession;
+import com.tsix.immocrm.entities.adm.AdmSexType;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -32,20 +38,20 @@ public class NdaService {
         CfgTier prospect = prospection.getCfgProspect();
 
         return new NdaData(
-                prospect != null ? prospect.getLastName() : null,
-                prospect != null ? prospect.getFirstName() : null,
-                prospect != null && prospect.getAdmNationality() != null ? prospect.getAdmNationality().getDescription() : null,
-                prospect != null && prospect.getAdmProfession() != null ? prospect.getAdmProfession().getDescription() : null,
-                prospect != null && prospect.getBirthDate() != null ? prospect.getBirthDate().toLocalDate() : null,
-                prospect != null ? prospect.getBirthPlace() : null,
-                prospect != null && prospect.getAdmSexType() != null ? prospect.getAdmSexType().getCode() : null,
+                Champs.de(prospect, CfgTier::getLastName),
+                Champs.de(prospect, CfgTier::getFirstName),
+                Champs.de(prospect, CfgTier::getAdmNationality, AdmNationality::getDescription),
+                Champs.de(prospect, CfgTier::getAdmProfession, AdmProfession::getDescription),
+                Champs.de(prospect, CfgTier::getBirthDate, LocalDateTime::toLocalDate),
+                Champs.de(prospect, CfgTier::getBirthPlace),
+                Champs.de(prospect, CfgTier::getAdmSexType, AdmSexType::getCode),
                 prospect != null ? adresse(prospect) : null,
-                prospect != null ? prospect.getZipCode() : null,
-                prospect != null ? prospect.getCity() : null,
-                prospect != null && prospect.getAdmCountry() != null ? prospect.getAdmCountry().getDescription() : null,
-                prospect != null ? prospect.getMobile() : null,
-                prospect != null ? prospect.getPhone1() : null,
-                prospect != null ? prospect.getEMail() : null,
+                Champs.de(prospect, CfgTier::getZipCode),
+                Champs.de(prospect, CfgTier::getCity),
+                Champs.de(prospect, CfgTier::getAdmCountry, AdmCountry::getDescription),
+                Champs.de(prospect, CfgTier::getMobile),
+                Champs.de(prospect, CfgTier::getPhone1),
+                Champs.de(prospect, CfgTier::getEMail),
                 LocalDate.now()
         );
     }

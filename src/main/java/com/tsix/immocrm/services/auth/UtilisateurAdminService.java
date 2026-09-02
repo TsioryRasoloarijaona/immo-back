@@ -20,6 +20,7 @@ import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -123,7 +124,7 @@ public class UtilisateurAdminService {
     private static UtilisateurListItemDto toListItem(AdmUser user, List<String> roles, AppUserCredential credential,
                                                       int nombreProjets) {
         CfgTier employee = user.getCfgEmployee();
-        CfgTierKind employeeKind = employee != null ? employee.getCfgTierKind() : null;
+        CfgTierKind employeeKind = Champs.de(employee, CfgTier::getCfgTierKind);
         return new UtilisateurListItemDto(
                 user.getId(),
                 user.getCode(),
@@ -132,11 +133,11 @@ public class UtilisateurAdminService {
                 user.getPhone(),
                 user.getMobile(),
                 Boolean.TRUE.equals(user.getDisabled()),
-                employee != null ? employee.getId() : null,
-                employee != null ? employee.getFirstName() : null,
-                employee != null ? employee.getLastName() : null,
-                employeeKind != null ? employeeKind.getCode() : null,
-                employeeKind != null ? employeeKind.getDescription() : null,
+                Champs.de(employee, CfgTier::getId),
+                Champs.de(employee, CfgTier::getFirstName),
+                Champs.de(employee, CfgTier::getLastName),
+                Champs.de(employeeKind, CfgTierKind::getCode),
+                Champs.de(employeeKind, CfgTierKind::getDescription),
                 roles,
                 credential != null,
                 credential != null && Boolean.TRUE.equals(credential.getMustChangePassword()),

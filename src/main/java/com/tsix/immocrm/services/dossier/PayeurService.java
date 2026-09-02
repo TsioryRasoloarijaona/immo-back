@@ -11,6 +11,7 @@ import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -73,7 +74,7 @@ public class PayeurService {
         return payeurs;
     }
 
-    private static PayeurDto toDto(CfgTier tier, String role, java.math.BigDecimal quotePart) {
+    private static PayeurDto toDto(CfgTier tier, String role, BigDecimal quotePart) {
         return new PayeurDto(tier.getId(), TierNomFormatter.nom(tier), role, pieceIdentite(tier), quotePart);
     }
 

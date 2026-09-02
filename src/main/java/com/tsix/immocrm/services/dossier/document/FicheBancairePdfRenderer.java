@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.util.List;
 
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montant;
@@ -104,7 +105,7 @@ public class FicheBancairePdfRenderer {
         return p;
     }
 
-    private static PdfPTable acquereursTable(java.util.List<Acquereur> acquereurs) {
+    private static PdfPTable acquereursTable(List<Acquereur> acquereurs) {
         PdfPTable table = new PdfPTable(2 + Math.max(acquereurs.size(), 1));
         table.setWidthPercentage(100);
 
@@ -129,7 +130,7 @@ public class FicheBancairePdfRenderer {
         return table;
     }
 
-    private static void addAcquereurRow(PdfPTable table, String label, java.util.List<Acquereur> acquereurs,
+    private static void addAcquereurRow(PdfPTable table, String label, List<Acquereur> acquereurs,
                                          java.util.function.Function<Acquereur, String> extractor) {
         table.addCell(labelCell(label));
         int cols = Math.max(acquereurs.size(), 1);

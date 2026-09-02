@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.dossier;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData.ClientAutorisation;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData.Payeur;
+import com.tsix.immocrm.entities.adm.AdmTierTitle;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -17,6 +18,7 @@ import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,9 +72,9 @@ public class AutorisationVersementService {
         StkItem article = folder.getStkItem();
         // Même chemin confirmé (StkItem.CfgProjectId n'est jamais peuplé) que RecuReglementService/
         // FicheTropPercuService/FicheBancaireService : StkItem -> StkHierarchy (tranche) -> CfgProject.
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
-        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
-        CfgCompany entreprise = projet != null ? projet.getCfgCompany() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
+        CfgCompany entreprise = Champs.de(projet, CfgProject::getCfgCompany);
 
         List<ClientAutorisation> clients = new ArrayList<>();
         if (folder.getCfgCustomer() != null) {
@@ -86,7 +88,7 @@ public class AutorisationVersementService {
 
         StlAccount compte = settlement.getStlAccount();
         String rib = compte != null ? rib(compte) : null;
-        String banqueNom = compte != null && compte.getCfgBank() != null ? TierNomFormatter.nom(compte.getCfgBank()) : null;
+        String banqueNom = Champs.de(compte, StlAccount::getCfgBank, TierNomFormatter::nom);
 
         CfgTier commercial = folder.getCfgCommercial();
         CfgTier payeurTier = settlement.getTier();
@@ -94,8 +96,8 @@ public class AutorisationVersementService {
         return new AutorisationVersementData(
                 folder.getCode(),
                 settlement.getCode(),
-                tranche != null ? tranche.getDescription() : null,
-                article != null ? article.getCode() : null,
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(article, StkItem::getCode),
                 folder.getPrice(),
                 settlement.getStlSettlementType() != null ? settlement.getStlSettlementType().getDescription() : null,
                 clients,
@@ -107,10 +109,10 @@ public class AutorisationVersementService {
                 settlement.getDocDate(),
                 rib,
                 banqueNom,
-                tranche != null ? tranche.getWithdrawalDelay() : null,
-                commercial != null && commercial.getAdmTierTitle() != null ? commercial.getAdmTierTitle().getCode() : null,
+                Champs.de(tranche, CfgTranche::getWithdrawalDelay),
+                Champs.de(commercial, CfgTier::getAdmTierTitle, AdmTierTitle::getCode),
                 TierNomFormatter.nom(commercial),
-                entreprise != null ? entreprise.getDescription() : null,
+                Champs.de(entreprise, CfgCompany::getDescription),
                 payeurTier != null ? toPayeur(payeurTier) : null
         );
     }

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutEcheance;
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CreerEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
@@ -24,6 +25,9 @@ import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.Requis;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,6 +38,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import static java.util.Objects.requireNonNullElse;
 
 /** Échéancier (payment schedule) sub-resource of a Dossier, backed by {@code ComDocument}. */
 @Service
@@ -113,24 +119,16 @@ public class EcheancierService {
                     + "paiement puis appelez PATCH .../reglements/{reglementId}/statut");
         }
 
-        if (request.montant() == null) {
-            throw new InvalidRequestException("montant est requis");
-        }
-        if (request.montant().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal montant = Requis.champ(request.montant(), "montant est requis");
+        if (montant.compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidRequestException("montant doit être strictement positif");
         }
-        if (request.dateEcheance() == null) {
-            throw new InvalidRequestException("dateEcheance est requise");
-        }
-        if (request.typeId() == null) {
-            throw new InvalidRequestException("typeId est requis");
-        }
-        if (request.payeurId() == null) {
-            throw new InvalidRequestException("payeurId est requis");
-        }
+        LocalDateTime dateEcheance = Requis.champ(request.dateEcheance(), "dateEcheance est requise");
+        UUID typeId = Requis.champ(request.typeId(), "typeId est requis");
+        UUID payeurId = Requis.champ(request.payeurId(), "payeurId est requis");
 
-        StlSettlementType type = settlementTypeRepository.findById(request.typeId())
-                .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + request.typeId()));
+        StlSettlementType type = settlementTypeRepository.findById(typeId)
+                .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + typeId));
 
         // IsReferenceMandatory varie par type (confirmé sur données réelles : vrai pour
         // CHÈQUE/CHEQUE NOTAIRE/SYNDIC/BANQUE/CERTIFIÉ/EFFET, référence renseignée sur >99% des
@@ -148,20 +146,21 @@ public class EcheancierService {
         // Reste à payer de l'échéance — même calcul que buildDto (montant de l'échéance moins la
         // somme déjà réglée). Sans ce contrôle un sur-paiement passait silencieusement et donnait
         // un reste négatif affiché avec le statut calculé "PAYE".
-        BigDecimal montantEcheance = echeance.getAmount() != null ? echeance.getAmount() : BigDecimal.ZERO;
-        BigDecimal dejaRegle = settlementLineRepository.sumAmountByComDocumentId(echeanceId);
-        BigDecimal reste = montantEcheance.subtract(dejaRegle != null ? dejaRegle : BigDecimal.ZERO);
-        if (request.montant().compareTo(reste) > 0) {
-            throw new InvalidRequestException("montant (" + request.montant() + ") dépasse le reste à payer "
+        BigDecimal montantEcheance = requireNonNullElse(echeance.getAmount(), BigDecimal.ZERO);
+        BigDecimal dejaRegle = requireNonNullElse(
+                settlementLineRepository.sumAmountByComDocumentId(echeanceId), BigDecimal.ZERO);
+        BigDecimal reste = montantEcheance.subtract(dejaRegle);
+        if (montant.compareTo(reste) > 0) {
+            throw new InvalidRequestException("montant (" + montant + ") dépasse le reste à payer "
                     + "de cette échéance (" + reste + ")");
         }
 
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setDocDate(LocalDateTime.now());
-        settlement.setEcheanceDate(request.dateEcheance());
+        settlement.setEcheanceDate(dateEcheance);
         settlement.setSettlementDate(null);
-        settlement.setAmount(request.montant());
+        settlement.setAmount(montant);
         settlement.setCode(request.reference());
         settlement.setNotes(request.notes());
         settlement.setStatus(StatutReglement.INITIAL.name());
@@ -176,8 +175,8 @@ public class EcheancierService {
         }
         // TierId ("réglé par") — alimente le bloc « Versement effectué par » de l'autorisation
         // d'encaissement ; confirmé renseigné sur 3232/3240 lignes réelles (99,75%).
-        CfgTier payeur = tierRepository.findById(request.payeurId())
-                .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + request.payeurId()));
+        CfgTier payeur = tierRepository.findById(payeurId)
+                .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + payeurId));
         settlement.setTier(payeur);
         settlement = settlementRepository.save(settlement);
 
@@ -185,7 +184,7 @@ public class EcheancierService {
         line.setId(UUID.randomUUID());
         line.setStlSettlement(settlement);
         line.setComDocument(echeance);
-        line.setAmount(request.montant());
+        line.setAmount(montant);
         line = settlementLineRepository.save(line);
 
         return toReglementDto(line, echeanceId);
@@ -231,21 +230,16 @@ public class EcheancierService {
                 s.getEcheanceDate(),
                 s.getSettlementDate(),
                 line.getAmount(),
-                type != null ? type.getId() : null,
-                type != null ? type.getCode() : null,
-                type != null ? type.getDescription() : null,
-                banque != null ? banque.getId() : null,
-                banque != null ? nomTier(banque) : null,
-                payeur != null ? payeur.getId() : null,
-                payeur != null ? nomTier(payeur) : null,
+                Champs.de(type, StlSettlementType::getId),
+                Champs.de(type, StlSettlementType::getCode),
+                Champs.de(type, StlSettlementType::getDescription),
+                Champs.de(banque, CfgTier::getId),
+                Champs.de(banque, TierNomFormatter::nom),
+                Champs.de(payeur, CfgTier::getId),
+                Champs.de(payeur, TierNomFormatter::nom),
                 s.getNotes(),
                 s.getStatus()
         );
-    }
-
-    /** Même logique que {@code FicheBancaireService}/{@code FicheTropPercuService} — préfère la raison sociale/description, sinon prénom+nom. */
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 
     public Page<EcheanceDto> findEcheances(UUID dossierId, Pageable pageable) {
@@ -278,9 +272,7 @@ public class EcheancierService {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
         }
-        ComDocument document = documentRepository.findById(echeanceId)
-                .filter(d -> d.getComFolder() != null && dossierId.equals(d.getComFolder().getId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Échéance introuvable pour ce dossier: " + echeanceId));
+        ComDocument document = findEcheanceOf(dossierId, echeanceId);
 
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
@@ -288,7 +280,7 @@ public class EcheancierService {
         return toDto(documentRepository.save(document));
     }
 
-    private void applyFields(ComDocument document, java.time.LocalDateTime dateEcheance, java.math.BigDecimal montant,
+    private void applyFields(ComDocument document, LocalDateTime dateEcheance, BigDecimal montant,
                               String description, UUID categorieId, Boolean exclureDuPrix, String notes) {
         if (dateEcheance != null) document.setDocDate(dateEcheance);
         if (montant != null) document.setAmount(montant);
@@ -306,21 +298,12 @@ public class EcheancierService {
      * Builds the DTO given an already-known règlement total, so callers computing totals in
      * bulk (e.g. {@link DossierService#montants}) don't issue one query per échéance.
      */
-    static EcheanceDto buildDto(ComDocument d, java.math.BigDecimal montantRegle) {
-        java.math.BigDecimal montant = d.getAmount() != null ? d.getAmount() : java.math.BigDecimal.ZERO;
-        java.math.BigDecimal regle = montantRegle != null ? montantRegle : java.math.BigDecimal.ZERO;
-        java.math.BigDecimal reste = montant.subtract(regle);
-
-        String statutCalcule;
-        if (reste.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-            statutCalcule = "PAYE";
-        } else if (regle.compareTo(java.math.BigDecimal.ZERO) > 0) {
-            statutCalcule = "PARTIEL";
-        } else if (d.getDocDate() != null && d.getDocDate().isBefore(LocalDateTime.now())) {
-            statutCalcule = "EN_RETARD";
-        } else {
-            statutCalcule = "A_VENIR";
-        }
+    static EcheanceDto buildDto(ComDocument d, BigDecimal montantRegle) {
+        BigDecimal montant = requireNonNullElse(d.getAmount(), BigDecimal.ZERO);
+        BigDecimal regle = requireNonNullElse(montantRegle, BigDecimal.ZERO);
+        BigDecimal reste = montant.subtract(regle);
+        StatutEcheance statutCalcule =
+                StatutEcheance.calculer(montant, regle, d.getDocDate(), LocalDateTime.now());
 
         return new EcheanceDto(
                 d.getId(),
@@ -331,13 +314,13 @@ public class EcheancierService {
                 d.getAmountTTC(),
                 d.getVATRatio(),
                 d.getDescription(),
-                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getId() : null,
-                d.getComSettlementCategory() != null ? d.getComSettlementCategory().getCode() : null,
+                Champs.de(d.getComSettlementCategory(), ComSettlementCategory::getId),
+                Champs.de(d.getComSettlementCategory(), ComSettlementCategory::getCode),
                 d.getExcludeFromPrice(),
                 d.getNotes(),
                 regle,
                 reste,
-                statutCalcule
+                statutCalcule.name()
         );
     }
 }

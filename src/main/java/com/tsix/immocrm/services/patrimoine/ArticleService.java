@@ -13,10 +13,12 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
+import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,14 +27,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static java.util.Objects.requireNonNullElse;
 
 @Service
 @Transactional(readOnly = true)
@@ -68,7 +72,7 @@ public class ArticleService {
         if (!trancheRepository.existsById(trancheId)) {
             throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
         }
-        StatutArticle effectiveStatut = Optional.ofNullable(statut).orElse(StatutArticle.DISPONIBLE);
+        StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(List.of(trancheId), null, false, effectiveStatut, categorieIds, typeIds,
                 null, false, entiteId, natureId, vocationId, etageId, prixDe, prixA, surfaceDe, surfaceA);
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
@@ -121,7 +125,7 @@ public class ArticleService {
         var nature = item.getStkKind();
         var presentationType = item.getStkPresentationType();
         ComFolder dossier = item.getComFolderId() != null ? dossiers.get(item.getComFolderId()) : null;
-        CfgTier client = dossier != null ? dossier.getCfgCustomer() : null;
+        CfgTier client = Champs.de(dossier, ComFolder::getCfgCustomer);
 
         return new ArticleDetailDto(
                 item.getId(),
@@ -134,38 +138,38 @@ public class ArticleService {
                 item.getSalePriceFloor(),
                 item.getComSalePriceFloor(),
                 statutOf(item),
-                orNull(tranche, CfgTranche::getId).orElse(null),
-                orNull(tranche, CfgTranche::getCode).orElse(null),
-                orNull(tranche, CfgTranche::getDescription).orElse(null),
-                orNull(parent, StkItem::getId).orElse(null),
-                orNull(parent, StkItem::getCode).orElse(null),
-                orNull(parent, StkItem::getDescription).orElse(null),
+                Champs.de(tranche, CfgTranche::getId),
+                Champs.de(tranche, CfgTranche::getCode),
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(parent, StkItem::getId),
+                Champs.de(parent, StkItem::getCode),
+                Champs.de(parent, StkItem::getDescription),
                 sousLots,
                 item.getTitleNumber(),
-                orNull(categorie, StkItemCategory::getId).orElse(null),
-                orNull(categorie, StkItemCategory::getCode).orElse(null),
-                orNull(categorie, StkItemCategory::getDescription).orElse(null),
-                orNull(type, StkItemType::getId).orElse(null),
-                orNull(type, StkItemType::getCode).orElse(null),
-                orNull(type, StkItemType::getDescription).orElse(null),
-                orNull(dossier, ComFolder::getId).orElse(null),
-                orNull(dossier, ComFolder::getCode).orElse(null),
-                dossier != null && dossier.getStrStatus() != null ? dossier.getStrStatus().getCode() : null,
-                orNull(client, CfgTier::getId).orElse(null),
+                Champs.de(categorie, StkItemCategory::getId),
+                Champs.de(categorie, StkItemCategory::getCode),
+                Champs.de(categorie, StkItemCategory::getDescription),
+                Champs.de(type, StkItemType::getId),
+                Champs.de(type, StkItemType::getCode),
+                Champs.de(type, StkItemType::getDescription),
+                Champs.de(dossier, ComFolder::getId),
+                Champs.de(dossier, ComFolder::getCode),
+                Champs.de(dossier, ComFolder::getStrStatus, StrStatus::getCode),
+                Champs.de(client, CfgTier::getId),
                 TierNomFormatter.nom(client),
-                orNull(immeuble, StkBuilding::getId).orElse(null),
-                orNull(immeuble, StkBuilding::getCode).orElse(null),
-                orNull(immeuble, StkBuilding::getDescription).orElse(null),
-                orNull(etage, StkFloor::getId).orElse(null),
-                orNull(etage, StkFloor::getCode).orElse(null),
-                orNull(etage, StkFloor::getDescription).orElse(null),
-                orNull(nature, StkKind::getId).orElse(null),
-                orNull(nature, StkKind::getCode).orElse(null),
-                orNull(nature, StkKind::getDescription).orElse(null),
+                Champs.de(immeuble, StkBuilding::getId),
+                Champs.de(immeuble, StkBuilding::getCode),
+                Champs.de(immeuble, StkBuilding::getDescription),
+                Champs.de(etage, StkFloor::getId),
+                Champs.de(etage, StkFloor::getCode),
+                Champs.de(etage, StkFloor::getDescription),
+                Champs.de(nature, StkKind::getId),
+                Champs.de(nature, StkKind::getCode),
+                Champs.de(nature, StkKind::getDescription),
                 item.getVat(),
-                orNull(presentationType, StkPresentationType::getId).orElse(null),
-                orNull(presentationType, StkPresentationType::getCode).orElse(null),
-                orNull(presentationType, StkPresentationType::getDescription).orElse(null),
+                Champs.de(presentationType, StkPresentationType::getId),
+                Champs.de(presentationType, StkPresentationType::getCode),
+                Champs.de(presentationType, StkPresentationType::getDescription),
                 superficieSousArticles
         );
     }
@@ -180,7 +184,7 @@ public class ArticleService {
         if (!stkItemRepository.existsById(articleId)) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
         }
-        StatutArticle effectiveStatut = Optional.ofNullable(statut).orElse(StatutArticle.DISPONIBLE);
+        StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds);
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
@@ -220,7 +224,7 @@ public class ArticleService {
         if (ids.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<UUID, BigDecimal> result = new java.util.HashMap<>();
+        Map<UUID, BigDecimal> result = new HashMap<>();
         for (Object[] row : stkItemRepository.sumAreaGroupedByParentIdIn(ids)) {
             result.put((UUID) row[0], (BigDecimal) row[1]);
         }
@@ -242,7 +246,7 @@ public class ArticleService {
         var immeuble = item.getStkBuilding();
         var presentationType = item.getStkPresentationType();
         ComFolder dossier = item.getComFolderId() != null ? dossiersParFolderId.get(item.getComFolderId()) : null;
-        CfgTier client = dossier != null ? dossier.getCfgCustomer() : null;
+        CfgTier client = Champs.de(dossier, ComFolder::getCfgCustomer);
         BigDecimal superficieSousArticles = superficiesSousArticlesParArticleId.getOrDefault(item.getId(), BigDecimal.ZERO);
 
         return new ArticleListItemDto(
@@ -256,33 +260,33 @@ public class ArticleService {
                 item.getComSalePriceFloor(),
                 statutOf(item),
                 item.getTitleNumber(),
-                orNull(categorie, StkItemCategory::getId).orElse(null),
-                orNull(categorie, StkItemCategory::getCode).orElse(null),
-                orNull(categorie, StkItemCategory::getDescription).orElse(null),
-                orNull(type, StkItemType::getId).orElse(null),
-                orNull(type, StkItemType::getCode).orElse(null),
-                orNull(type, StkItemType::getDescription).orElse(null),
+                Champs.de(categorie, StkItemCategory::getId),
+                Champs.de(categorie, StkItemCategory::getCode),
+                Champs.de(categorie, StkItemCategory::getDescription),
+                Champs.de(type, StkItemType::getId),
+                Champs.de(type, StkItemType::getCode),
+                Champs.de(type, StkItemType::getDescription),
                 parent != null,
-                orNull(parent, StkItem::getId).orElse(null),
-                orNull(dossier, ComFolder::getId).orElse(null),
-                orNull(dossier, ComFolder::getCode).orElse(null),
-                dossier != null && dossier.getStrStatus() != null ? dossier.getStrStatus().getCode() : null,
-                orNull(client, CfgTier::getId).orElse(null),
+                Champs.de(parent, StkItem::getId),
+                Champs.de(dossier, ComFolder::getId),
+                Champs.de(dossier, ComFolder::getCode),
+                Champs.de(dossier, ComFolder::getStrStatus, StrStatus::getCode),
+                Champs.de(client, CfgTier::getId),
                 TierNomFormatter.nom(client),
                 item.getVat(),
-                orNull(presentationType, StkPresentationType::getId).orElse(null),
-                orNull(presentationType, StkPresentationType::getCode).orElse(null),
-                orNull(presentationType, StkPresentationType::getDescription).orElse(null),
+                Champs.de(presentationType, StkPresentationType::getId),
+                Champs.de(presentationType, StkPresentationType::getCode),
+                Champs.de(presentationType, StkPresentationType::getDescription),
                 superficieSousArticles,
-                orNull(nature, StkKind::getId).orElse(null),
-                orNull(nature, StkKind::getCode).orElse(null),
-                orNull(nature, StkKind::getDescription).orElse(null),
-                orNull(etage, StkFloor::getId).orElse(null),
-                orNull(etage, StkFloor::getCode).orElse(null),
-                orNull(etage, StkFloor::getDescription).orElse(null),
-                orNull(immeuble, StkBuilding::getId).orElse(null),
-                orNull(immeuble, StkBuilding::getCode).orElse(null),
-                orNull(immeuble, StkBuilding::getDescription).orElse(null)
+                Champs.de(nature, StkKind::getId),
+                Champs.de(nature, StkKind::getCode),
+                Champs.de(nature, StkKind::getDescription),
+                Champs.de(etage, StkFloor::getId),
+                Champs.de(etage, StkFloor::getCode),
+                Champs.de(etage, StkFloor::getDescription),
+                Champs.de(immeuble, StkBuilding::getId),
+                Champs.de(immeuble, StkBuilding::getCode),
+                Champs.de(immeuble, StkBuilding::getDescription)
         );
     }
 
@@ -290,15 +294,4 @@ public class ArticleService {
         return item.getComFolderId() == null ? StatutArticle.DISPONIBLE : StatutArticle.OCCUPE;
     }
 
-    /**
-     * {@code Optional}-based transformation for a possibly-null {@code @ManyToOne} association
-     * (StkHierarchy/parent/StkItemCategory/StkItemType are all optional FKs on some entities,
-     * mandatory on others depending on the caller) — avoids repeating {@code x != null ? x.getY() :
-     * null} at every call site. Returns {@code Optional} rather than the raw nullable value so the
-     * call site stays explicit about the possible absence; DTO fields themselves stay plain
-     * nullable types (records must never hold an {@code Optional} field/component).
-     */
-    private static <T, R> Optional<R> orNull(T entity, Function<T, R> getter) {
-        return Optional.ofNullable(entity).map(getter);
-    }
 }

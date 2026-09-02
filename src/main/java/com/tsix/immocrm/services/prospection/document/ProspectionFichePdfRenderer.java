@@ -18,6 +18,7 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.montant;
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.vide;
@@ -132,7 +133,7 @@ public class ProspectionFichePdfRenderer {
         table.addCell(tableCell(value2));
     }
 
-    private static PdfPTable actionsTable(java.util.List<Action> actions) {
+    private static PdfPTable actionsTable(List<Action> actions) {
         PdfPTable table = new PdfPTable(4);
         table.setWidthPercentage(100);
         try {

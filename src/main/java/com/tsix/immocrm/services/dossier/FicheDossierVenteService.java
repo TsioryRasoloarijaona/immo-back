@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.DetailReglement;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.LigneEcheance;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.MontantsFiche;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.SousArticleDossier;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -15,6 +16,8 @@ import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -23,16 +26,20 @@ import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -75,15 +82,15 @@ public class FicheDossierVenteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
 
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
-        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         List<Acquereur> acquereurs = new ArrayList<>();
         if (folder.getCfgCustomer() != null) {
-            acquereurs.add(new Acquereur(nomTier(folder.getCfgCustomer()), folder.getPartPercent()));
+            acquereurs.add(new Acquereur(TierNomFormatter.nom(folder.getCfgCustomer()), folder.getPartPercent()));
         }
         for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            acquereurs.add(new Acquereur(nomTier(coAcquereur.getCfgTier()), coAcquereur.getPartPercent()));
+            acquereurs.add(new Acquereur(TierNomFormatter.nom(coAcquereur.getCfgTier()), coAcquereur.getPartPercent()));
         }
 
         List<ComFolderItem> folderItems = folderItemRepository.findByComFolderId(dossierId);
@@ -116,16 +123,16 @@ public class FicheDossierVenteService {
         return new FicheDossierVenteData(
                 folder.getCode(),
                 folder.getStrStatus() != null ? folder.getStrStatus().getDescription() : null,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null && article.getStkItemType() != null ? article.getStkItemType().getDescription() : null,
-                article != null ? article.getCode() : null,
-                article != null ? article.getArea() : null,
-                nomTier(folder.getCfgCustomer()),
-                nomTier(folder.getCfgCommercial()),
-                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
-                projet != null ? projet.getDescription() : null,
-                tranche != null ? tranche.getDescription() : null,
-                article != null ? article.getTitleNumber() : null,
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getArea),
+                TierNomFormatter.nom(folder.getCfgCustomer()),
+                TierNomFormatter.nom(folder.getCfgCommercial()),
+                Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
+                Champs.de(projet, CfgProject::getDescription),
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(article, StkItem::getTitleNumber),
                 folder.getComProspection() != null ? folder.getComProspection().getCode() : null,
                 folder.getDocDate(),
                 folder.getPartPercent(),
@@ -153,15 +160,15 @@ public class FicheDossierVenteService {
                 folder.getInterventionDate(),
                 folder.getInsuranceDate(),
                 folder.getOwnershipCertificateDate(),
-                tranche != null ? tranche.getDeliveryDate() : null,
+                Champs.de(tranche, CfgTranche::getDeliveryDate),
                 folder.getDeliveryDateReal(),
                 folder.getCancelDate(),
                 folder.getCancelDescription(),
 
                 folder.getVATRatio(),
                 folder.getCreditBank() != null || (folder.getCreditAgency() != null && !folder.getCreditAgency().isBlank()),
-                nomTier(folder.getCfgLawyer()),
-                nomTier(folder.getCreditBank()),
+                TierNomFormatter.nom(folder.getCfgLawyer()),
+                TierNomFormatter.nom(folder.getCreditBank()),
                 folder.getCreditAgency(),
                 folder.getIsOldCustomer(),
                 folder.getIsWithGiftChoiceLater(),
@@ -194,7 +201,7 @@ public class FicheDossierVenteService {
         BigDecimal montantPrixVente = zeroSiNull(folder.getPriceAfterDiscount());
         BigDecimal reglePrixVente = avance[1].add(credit[1]).add(autoFinancement[1]);
         BigDecimal ratioAvance = montantPrixVente.signum() != 0
-                ? avance[0].divide(montantPrixVente, 4, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                ? avance[0].divide(montantPrixVente, 4, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         BigDecimal montantNetAPayer = frais[0].add(modification[0]).add(montantPrixVente)
                 .add(penalite[0]).add(resiliation[0]);
@@ -237,7 +244,7 @@ public class FicheDossierVenteService {
 
     private static LigneEcheance toLigneEcheance(ComDocument d, List<StlSettlementLine> reglements) {
         BigDecimal regle = reglements.stream().map(StlSettlementLine::getAmount)
-                .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal montant = zeroSiNull(d.getAmount());
         List<DetailReglement> details = reglements.stream().map(FicheDossierVenteService::toDetailReglement).toList();
         return new LigneEcheance(
@@ -269,9 +276,5 @@ public class FicheDossierVenteService {
             }
         }
         return new DetailReglement(libelle.toString(), ligne.getAmount());
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

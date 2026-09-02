@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
@@ -10,24 +11,26 @@ import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.EcheanceDto;
-import com.tsix.immocrm.dto.dossier.GenererDocumentsLotRequest;
-import com.tsix.immocrm.dto.dossier.ModifierEcheanceRequest;
-import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
-import com.tsix.immocrm.dto.dossier.PayeurDto;
-import com.tsix.immocrm.dto.dossier.PieceJointeDto;
-import com.tsix.immocrm.dto.dossier.ModifierStatutReglementRequest;
-import com.tsix.immocrm.dto.dossier.ReglementDto;
-import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
-import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
-import com.tsix.immocrm.dto.dossier.ActeReservationData;
+import com.tsix.immocrm.dto.dossier.EtapeSuivanteDto;
 import com.tsix.immocrm.dto.dossier.FicheBancaireData;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData;
 import com.tsix.immocrm.dto.dossier.FicheReservationData;
 import com.tsix.immocrm.dto.dossier.FicheTropPercuData;
-import com.tsix.immocrm.dto.dossier.RecuReglementData;
 import com.tsix.immocrm.dto.dossier.FicheVisiteTechniqueData;
+import com.tsix.immocrm.dto.dossier.GenererDocumentsLotRequest;
 import com.tsix.immocrm.dto.dossier.HistoriqueEvenementDto;
+import com.tsix.immocrm.dto.dossier.ModifierEcheanceRequest;
+import com.tsix.immocrm.dto.dossier.ModifierStatutReglementRequest;
+import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
+import com.tsix.immocrm.dto.dossier.PayeurDto;
+import com.tsix.immocrm.dto.dossier.PieceJointeDto;
+import com.tsix.immocrm.dto.dossier.RecuReglementData;
+import com.tsix.immocrm.dto.dossier.ReglementDto;
+import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
+import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
 import com.tsix.immocrm.entities.adm.AdmAttachedFile;
+import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.dossier.ActeReservationService;
 import com.tsix.immocrm.services.dossier.AutorisationVersementService;
@@ -39,12 +42,12 @@ import com.tsix.immocrm.services.dossier.FicheBancaireService;
 import com.tsix.immocrm.services.dossier.FicheDossierVenteService;
 import com.tsix.immocrm.services.dossier.FicheReservationService;
 import com.tsix.immocrm.services.dossier.FicheTropPercuService;
-import com.tsix.immocrm.services.dossier.RecuReglementService;
-import com.tsix.immocrm.services.dossier.ReglementPieceJointeService;
-import com.tsix.immocrm.services.dossier.ReglementStatutService;
 import com.tsix.immocrm.services.dossier.FicheVisiteTechniqueService;
 import com.tsix.immocrm.services.dossier.PayeurService;
 import com.tsix.immocrm.services.dossier.PieceJointeService;
+import com.tsix.immocrm.services.dossier.RecuReglementService;
+import com.tsix.immocrm.services.dossier.ReglementPieceJointeService;
+import com.tsix.immocrm.services.dossier.ReglementStatutService;
 import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.AutorisationVersementPdfRenderer;
@@ -53,8 +56,9 @@ import com.tsix.immocrm.services.dossier.document.FicheDossierVentePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
-import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
+import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
+import com.tsix.immocrm.web.ContentTypeParExtension;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -327,7 +331,7 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/statut/etapes-suivantes")
-    public List<com.tsix.immocrm.dto.dossier.EtapeSuivanteDto> getEtapesSuivantes(@PathVariable UUID id) {
+    public List<EtapeSuivanteDto> getEtapesSuivantes(@PathVariable UUID id) {
         return dossierService.etapesSuivantes(id);
     }
 
@@ -488,7 +492,7 @@ public class DossierController {
     public ResponseEntity<byte[]> getFichier(@PathVariable UUID id, @PathVariable UUID pieceId) {
         AdmAttachedFile fichier = pieceJointeService.findFichier(id, pieceId);
         String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
-        MediaType contentType = com.tsix.immocrm.web.ContentTypeParExtension.resolve(extension);
+        MediaType contentType = ContentTypeParExtension.resolve(extension);
         String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "piece-jointe") + extension;
 
         return ResponseEntity.ok()
@@ -623,7 +627,7 @@ public class DossierController {
                                                        @PathVariable UUID pieceId) {
         AdmAttachedFile fichier = reglementPieceJointeService.findFichier(id, reglementId, pieceId);
         String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
-        MediaType contentType = com.tsix.immocrm.web.ContentTypeParExtension.resolve(extension);
+        MediaType contentType = ContentTypeParExtension.resolve(extension);
         String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "preuve-paiement") + extension;
 
         return ResponseEntity.ok()
@@ -956,7 +960,7 @@ public class DossierController {
                     .body(docxSupplier.get());
         }
         if (!"pdf".equalsIgnoreCase(format)) {
-            throw new com.tsix.immocrm.exceptions.InvalidRequestException(
+            throw new InvalidRequestException(
                     "format doit être 'pdf' ou 'docx' (reçu: " + format + ")");
         }
         return ResponseEntity.ok()
