@@ -24,6 +24,7 @@ import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -219,7 +220,7 @@ public class ProspectSubResourcesService {
         return new ContactProspectDto(
                 link.getId(),
                 link.getCfgContact() != null ? link.getCfgContact().getId() : null,
-                nomTier(link.getCfgContact()),
+                TierNomFormatter.nom(link.getCfgContact()),
                 link.getCfgContact() != null ? link.getCfgContact().getPhone() : null,
                 link.getCfgRelationType() != null ? link.getCfgRelationType().getId() : null,
                 link.getCfgRelationType() != null ? link.getCfgRelationType().getDescription() : null
@@ -233,9 +234,9 @@ public class ProspectSubResourcesService {
                 p.getDocDate(),
                 p.getTempDescription(),
                 p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                nomTier(p.getCfgProspect()),
+                TierNomFormatter.nom(p.getCfgProspect()),
                 p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                nomTier(p.getCfgCommercial()),
+                TierNomFormatter.nom(p.getCfgCommercial()),
                 p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
                 p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
                 p.getIsClosed(),
@@ -254,18 +255,14 @@ public class ProspectSubResourcesService {
                 f.getDocDate(),
                 f.getStrStatus() != null ? f.getStrStatus().getCode() : null,
                 f.getCfgCustomer() != null ? f.getCfgCustomer().getId() : null,
-                nomTier(f.getCfgCustomer()),
+                TierNomFormatter.nom(f.getCfgCustomer()),
                 f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
-                nomTier(f.getCfgCommercial()),
+                TierNomFormatter.nom(f.getCfgCommercial()),
                 f.getPrice(),
                 f.getTotalToPay(),
                 f.getAdvanceDate(),
                 f.getComProspection() != null ? f.getComProspection().getId() : null,
                 f.getComProspection() != null ? f.getComProspection().getCode() : null
         );
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

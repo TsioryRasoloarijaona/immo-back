@@ -6,18 +6,23 @@ import com.tsix.immocrm.dto.dossier.FicheTropPercuData.Acquereur;
 import com.tsix.immocrm.dto.dossier.FicheTropPercuData.LigneReglement;
 import com.tsix.immocrm.dto.dossier.FicheTropPercuData.SousArticle;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,10 +66,10 @@ public class FicheTropPercuService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
 
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         // Chemin confirmé (même que ActeReservationService/FicheReservationService/FicheBancaireService) :
         // StkItem.CfgProjectId n'est jamais peuplé en données réelles.
-        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         List<Acquereur> acquereurs = new ArrayList<>();
         if (folder.getCfgCustomer() != null) {
@@ -111,16 +116,16 @@ public class FicheTropPercuService {
         return new FicheTropPercuData(
                 folder.getCode(),
                 folder.getDocDate() != null ? folder.getDocDate().toLocalDate() : null,
-                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
+                Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
                 projet != null ? adresse(projet.getAddress(), projet.getAddress2(), projet.getAddress3(), projet.getCity()) : null,
-                projet != null ? projet.getSignatureCity() : null,
+                Champs.de(projet, CfgProject::getSignatureCity),
                 acquereurs,
                 montantTropPercu,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null ? article.getCode() : null,
-                projet != null ? projet.getDescription() : null,
-                article != null && article.getStkItemType() != null ? article.getStkItemType().getDescription() : null,
-                article != null ? article.getArea() : null,
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(projet, CfgProject::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
+                Champs.de(article, StkItem::getArea),
                 superficieApproximative,
                 sousArticles,
                 prixApresRemise,
@@ -133,10 +138,10 @@ public class FicheTropPercuService {
     }
 
     private static SousArticle toSousArticle(StkItem item) {
-        var categorie = item.getStkItemCategory();
+        StkItemCategory categorie = item.getStkItemCategory();
         return new SousArticle(
-                categorie != null ? categorie.getDescription() : null,
-                categorie != null ? categorie.getCode() : null,
+                Champs.de(categorie, StkItemCategory::getDescription),
+                Champs.de(categorie, StkItemCategory::getCode),
                 item.getCode(),
                 item.getArea()
         );
@@ -145,7 +150,7 @@ public class FicheTropPercuService {
     private static Acquereur toAcquereur(CfgTier tier) {
         return new Acquereur(
                 tier.getAdmTierTitle() != null ? tier.getAdmTierTitle().getDescription() : null,
-                nomTier(tier),
+                TierNomFormatter.nom(tier),
                 pieceIdentite(tier)
         );
     }
@@ -164,10 +169,6 @@ public class FicheTropPercuService {
             sb.append(tier.getIDNumber());
         }
         return sb.toString();
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 
     private static String adresse(String a1, String a2, String a3, String ville) {

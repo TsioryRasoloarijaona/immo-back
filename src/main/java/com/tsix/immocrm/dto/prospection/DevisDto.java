@@ -3,6 +3,7 @@ package com.tsix.immocrm.dto.prospection;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -37,7 +38,7 @@ public record DevisDto(
         @Schema(description = "Libellé (description) de l'article.")
         String articleDescription,
         @Schema(description = "Superficie de l'article, en m². null si l'offre n'a pas d'article.")
-        java.math.BigDecimal articleSuperficie,
+        BigDecimal articleSuperficie,
         @Schema(description = "Nature du bien (StkItemCategory), ex. \"APPARTEMENT\". null si "
                 + "l'offre n'a pas d'article.")
         String articleCategorie,

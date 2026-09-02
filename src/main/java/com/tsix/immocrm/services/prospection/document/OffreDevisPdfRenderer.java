@@ -22,6 +22,8 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.util.List;
 
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.montant;
@@ -208,14 +210,14 @@ public class OffreDevisPdfRenderer {
         return table;
     }
 
-    private static void montantRow(PdfPTable table, String label, java.math.BigDecimal ht, java.math.BigDecimal ttc, String note) {
+    private static void montantRow(PdfPTable table, String label, BigDecimal ht, BigDecimal ttc, String note) {
         table.addCell(labelCell(label));
         table.addCell(amountCell(montant(ht), NORMAL));
         table.addCell(amountCell(montant(ttc), NORMAL));
         table.addCell(amountCell(note, NORMAL));
     }
 
-    private static void montantRowBold(PdfPTable table, String label, java.math.BigDecimal ht, java.math.BigDecimal ttc, String note) {
+    private static void montantRowBold(PdfPTable table, String label, BigDecimal ht, BigDecimal ttc, String note) {
         table.addCell(labelCell(label));
         table.addCell(amountCell(montant(ht), BOLD));
         table.addCell(amountCell(montant(ttc), BOLD));
@@ -239,7 +241,7 @@ public class OffreDevisPdfRenderer {
 
     // -- SCHEMA DE FINANCEMENT ----------------------------------------------------------------
 
-    private static PdfPTable schemaFinancementTable(java.util.List<LigneSchemaFinancementDto> lignes) {
+    private static PdfPTable schemaFinancementTable(List<LigneSchemaFinancementDto> lignes) {
         PdfPTable table = new PdfPTable(2);
         table.setWidthPercentage(100);
         try {
@@ -251,7 +253,7 @@ public class OffreDevisPdfRenderer {
         table.addCell(headerCell("Catégorie"));
         table.addCell(headerCell("Montant"));
 
-        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        BigDecimal total = BigDecimal.ZERO;
         for (LigneSchemaFinancementDto ligne : lignes) {
             table.addCell(tableCell(vide(ligne.categorie()), Element.ALIGN_LEFT));
             table.addCell(amountCell(montant(ligne.montant()), TABLE_CELL));
@@ -266,7 +268,7 @@ public class OffreDevisPdfRenderer {
 
     // -- SOUS ARTICLES ------------------------------------------------------------------------
 
-    private static PdfPTable sousArticlesTable(java.util.List<SousArticleLigne> lignes) {
+    private static PdfPTable sousArticlesTable(List<SousArticleLigne> lignes) {
         PdfPTable table = new PdfPTable(8);
         table.setWidthPercentage(100);
         try {

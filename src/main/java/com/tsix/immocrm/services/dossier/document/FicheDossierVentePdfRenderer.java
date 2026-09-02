@@ -7,6 +7,7 @@ import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.LigneEcheance;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.MontantsFiche;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.SousArticleDossier;
 import com.tsix.immocrm.dto.dossier.HistoriqueEvenementDto;
+import com.tsix.immocrm.utils.Champs;
 import org.openpdf.text.Document;
 import org.openpdf.text.Element;
 import org.openpdf.text.Font;
@@ -127,7 +128,7 @@ public class FicheDossierVentePdfRenderer {
     }
 
     private static LocalDate toLocalDate(LocalDateTime dt) {
-        return dt != null ? dt.toLocalDate() : null;
+        return Champs.de(dt, LocalDateTime::toLocalDate);
     }
 
     private static String d(LocalDateTime dt) {

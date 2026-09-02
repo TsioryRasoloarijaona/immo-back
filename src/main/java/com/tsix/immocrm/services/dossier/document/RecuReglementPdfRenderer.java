@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.math.RoundingMode;
 import java.util.List;
 
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
@@ -173,7 +174,7 @@ public class RecuReglementPdfRenderer {
     private static String superficieLigne(RecuReglementData data) {
         String label = "Superficie" + (data.superficieApproximative() ? " approximative" : "");
         String valeur = data.superficie() != null
-                ? data.superficie().setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "";
+                ? data.superficie().setScale(2, RoundingMode.HALF_UP).toPlainString() : "";
         return label + " : " + valeur + " m²" + (data.superficieApproximative() ? " *" : "");
     }
 

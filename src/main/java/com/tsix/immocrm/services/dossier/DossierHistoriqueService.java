@@ -3,15 +3,16 @@ package com.tsix.immocrm.services.dossier;
 import com.tsix.immocrm.dto.dossier.HistoriqueEvenementDto;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import com.tsix.immocrm.entities.com.ComDocument;
-import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
-import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
+import com.tsix.immocrm.utils.Champs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -19,10 +20,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+
+import static java.util.Objects.requireNonNullElse;
 
 /**
  * {@code GET /api/dossiers/{id}/historique}: a single, chronological, traceable timeline merging
@@ -105,10 +110,15 @@ public class DossierHistoriqueService {
         if (s != null && s.getDescription() != null && !s.getDescription().isBlank()) {
             description += " — " + s.getDescription();
         }
-        return new HistoriqueEvenementDto(
-                s != null && s.getUserCreateDateTime() != null ? s.getUserCreateDateTime()
-                        : s != null ? s.getSettlementDate() : null,
-                HistoriqueEvenementDto.REGLEMENT, s != null ? s.getUserCreate() : null, description);
+        // Date de saisie de préférence ; à défaut la date d'encaissement (les règlements legacy
+        // n'ont pas de UserCreateDateTime — c'est ce que l'API ne posait pas avant la feature
+        // reglement-statut-preuve). Les deux peuvent manquer : l'événement est alors non daté.
+        LocalDateTime date = Champs.de(s, StlSettlement::getUserCreateDateTime);
+        if (date == null) {
+            date = Champs.de(s, StlSettlement::getSettlementDate);
+        }
+        return new HistoriqueEvenementDto(date, HistoriqueEvenementDto.REGLEMENT,
+                Champs.de(s, StlSettlement::getUserCreate), description);
     }
 
     private static HistoriqueEvenementDto toPieceJointeEvent(AdmAttachedFileSummary a) {
@@ -119,6 +129,6 @@ public class DossierHistoriqueService {
     }
 
     private static String montant(BigDecimal value) {
-        return (value != null ? value : BigDecimal.ZERO).setScale(2, java.math.RoundingMode.HALF_UP) + " DH";
+        return requireNonNullElse(value, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP) + " DH";
     }
 }

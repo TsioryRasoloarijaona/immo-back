@@ -34,6 +34,7 @@ import com.tsix.immocrm.repositories.adm.AdmTierTitleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -215,7 +217,7 @@ public class ProspectService {
 
     private void applyFields(CfgTier tier, String prenom, String nom, String raisonSociale, String telephone,
                               String mobile, String email, String adresse, String ville, String codePostal,
-                              java.time.LocalDateTime dateNaissance, String lieuNaissance, Integer nombreEnfants,
+                              LocalDateTime dateNaissance, String lieuNaissance, Integer nombreEnfants,
                               UUID typeId, UUID kindId, UUID commercialId, UUID titreId, UUID sexeId,
                               UUID paysResidenceId, UUID paysId, UUID nationaliteId, UUID situationFamilialeId,
                               UUID typeResidenceId, UUID regimeMatrimonialId, UUID professionId, UUID salaireId,
@@ -323,7 +325,7 @@ public class ProspectService {
         // prenom/nom/raisonSociale étaient fournis. Recalculé à chaque fois plutôt que seulement
         // à la création, pour rester en phase si le nom change ensuite via PATCH.
         if (prenom != null || nom != null || raisonSociale != null) {
-            tier.setDescription(com.tsix.immocrm.utils.TierNomFormatter.nom(tier));
+            tier.setDescription(TierNomFormatter.nom(tier));
         }
     }
 

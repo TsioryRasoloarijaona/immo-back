@@ -36,9 +36,12 @@ import com.tsix.immocrm.repositories.com.ComProspectionTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.Requis;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -105,9 +108,7 @@ public class ProspectionQualificationService {
     @Transactional
     public ProspectionVilleDto ajouterVille(UUID prospectionId, AjouterVilleRequest request) {
         ComProspection prospection = findProspection(prospectionId);
-        if (request.villeId() == null) {
-            throw new InvalidRequestException("villeId est requis");
-        }
+        Requis.champ(request.villeId(), "villeId est requis");
         AdmCity city = cityRepository.findById(request.villeId())
                 .orElseThrow(() -> new InvalidRequestException("AdmCity introuvable: " + request.villeId()));
 
@@ -143,9 +144,7 @@ public class ProspectionQualificationService {
     @Transactional
     public ProspectionCategorieDto ajouterCategorie(UUID prospectionId, AjouterCategorieRequest request) {
         ComProspection prospection = findProspection(prospectionId);
-        if (request.categorieId() == null) {
-            throw new InvalidRequestException("categorieId est requis");
-        }
+        Requis.champ(request.categorieId(), "categorieId est requis");
         StkItemCategory category = itemCategoryRepository.findById(request.categorieId())
                 .orElseThrow(() -> new InvalidRequestException("StkItemCategory introuvable: " + request.categorieId()));
 
@@ -181,9 +180,7 @@ public class ProspectionQualificationService {
     @Transactional
     public ProspectionTypeBienDto ajouterTypeBien(UUID prospectionId, AjouterTypeBienRequest request) {
         ComProspection prospection = findProspection(prospectionId);
-        if (request.typeBienId() == null) {
-            throw new InvalidRequestException("typeBienId est requis");
-        }
+        Requis.champ(request.typeBienId(), "typeBienId est requis");
         StkItemType type = itemTypeRepository.findById(request.typeBienId())
                 .orElseThrow(() -> new InvalidRequestException("StkItemType introuvable: " + request.typeBienId()));
 
@@ -219,9 +216,7 @@ public class ProspectionQualificationService {
     @Transactional
     public ProspectionProfilDto ajouterProfil(UUID prospectionId, AjouterProfilRequest request) {
         ComProspection prospection = findProspection(prospectionId);
-        if (request.profilId() == null) {
-            throw new InvalidRequestException("profilId est requis");
-        }
+        Requis.champ(request.profilId(), "profilId est requis");
         ComProspectionProfile profile = profileRepository.findById(request.profilId())
                 .orElseThrow(() -> new InvalidRequestException("ComProspectionProfile introuvable: " + request.profilId()));
 
@@ -229,7 +224,7 @@ public class ProspectionQualificationService {
         link.setId(UUID.randomUUID());
         link.setComProspection(prospection);
         link.setComProspectionProfile(profile);
-        link.setUserCreateDateTime(java.time.LocalDateTime.now());
+        link.setUserCreateDateTime(LocalDateTime.now());
         return toProfilDto(profileLinkRepository.save(link));
     }
 
@@ -243,8 +238,8 @@ public class ProspectionQualificationService {
         ComProspectionProfile profile = link.getComProspectionProfile();
         return new ProspectionProfilDto(
                 link.getId(),
-                profile != null ? profile.getId() : null,
-                profile != null ? profile.getDescription() : null,
+                Champs.de(profile, ComProspectionProfile::getId),
+                Champs.de(profile, ComProspectionProfile::getDescription),
                 profile != null && profile.getComProspectionProfileCategory() != null
                         ? profile.getComProspectionProfileCategory().getId() : null,
                 profile != null && profile.getComProspectionProfileCategory() != null
@@ -263,9 +258,7 @@ public class ProspectionQualificationService {
     @Transactional
     public ProspectionAutreTrancheDto ajouterAutreTranche(UUID prospectionId, AjouterAutreTrancheRequest request) {
         ComProspection prospection = findProspection(prospectionId);
-        if (request.trancheId() == null) {
-            throw new InvalidRequestException("trancheId est requis");
-        }
+        Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
 
@@ -273,7 +266,7 @@ public class ProspectionQualificationService {
         link.setId(UUID.randomUUID());
         link.setComProspection(prospection);
         link.setStkHierarchy(tranche);
-        link.setUserCreateDateTime(java.time.LocalDateTime.now());
+        link.setUserCreateDateTime(LocalDateTime.now());
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())
                     .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));

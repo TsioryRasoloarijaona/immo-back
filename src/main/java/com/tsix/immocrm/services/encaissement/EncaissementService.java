@@ -13,6 +13,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
@@ -189,23 +190,23 @@ public class EncaissementService {
                 s.getDocDate(),
                 s.getEcheanceDate(),
                 s.getSettlementDate(),
-                tier != null ? tier.getId() : null,
+                Champs.de(tier, CfgTier::getId),
                 tier != null ? TierNomFormatter.nom(tier) : null,
                 montantBrut,
                 montantBrutRestant,
                 montantNet,
                 s.getIsAccounted(),
-                type != null ? type.getId() : null,
-                type != null ? type.getCode() : null,
-                type != null ? type.getDescription() : null,
-                entite != null ? entite.getId() : null,
-                entite != null ? entite.getCode() : null,
-                entite != null ? entite.getDescription() : null,
-                compte != null ? compte.getId() : null,
-                compte != null ? compte.getCode() : null,
-                depot != null ? depot.getId() : null,
-                depot != null ? depot.getCode() : null,
-                banque != null ? banque.getId() : null,
+                Champs.de(type, StlSettlementType::getId),
+                Champs.de(type, StlSettlementType::getCode),
+                Champs.de(type, StlSettlementType::getDescription),
+                Champs.de(entite, CfgCompany::getId),
+                Champs.de(entite, CfgCompany::getCode),
+                Champs.de(entite, CfgCompany::getDescription),
+                Champs.de(compte, StlAccount::getId),
+                Champs.de(compte, StlAccount::getCode),
+                Champs.de(depot, StlDeposit::getId),
+                Champs.de(depot, StlDeposit::getCode),
+                Champs.de(banque, CfgTier::getId),
                 banque != null ? TierNomFormatter.nom(banque) : null,
                 s.getNotes()
         );

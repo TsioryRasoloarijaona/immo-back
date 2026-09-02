@@ -11,6 +11,8 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.entities.stl.StlQuoteItem;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -24,6 +26,10 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.Requis;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -56,14 +62,14 @@ public class DevisService {
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
-    private final com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService;
+    private final PerimetreCommercialService perimetreService;
 
     public DevisService(ComProspectionRepository prospectionRepository, StlQuoteRepository quoteRepository,
                          StlQuoteItemRepository quoteItemRepository, CfgTrancheRepository trancheRepository,
                          StkItemRepository stkItemRepository, CfgTierRepository tierRepository,
                          ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository,
                          ComSettlementCategoryRepository settlementCategoryRepository,
-                         com.tsix.immocrm.services.perimetre.PerimetreCommercialService perimetreService) {
+                         PerimetreCommercialService perimetreService) {
         this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
         this.quoteRepository = quoteRepository;
@@ -178,9 +184,7 @@ public class DevisService {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
 
-        if (request.trancheId() == null) {
-            throw new InvalidRequestException("trancheId est requis");
-        }
+        Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
 
@@ -453,21 +457,21 @@ public class DevisService {
                 q.getId(),
                 q.getCode(),
                 q.getDocDate(),
-                prospection != null ? prospection.getId() : null,
-                prospection != null ? prospection.getCode() : null,
-                tranche != null ? tranche.getId() : null,
-                tranche != null ? tranche.getCode() : null,
-                tranche != null ? tranche.getDescription() : null,
-                article != null ? article.getId() : null,
-                article != null ? article.getCode() : null,
-                article != null ? article.getDescription() : null,
-                article != null ? article.getArea() : null,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null && article.getStkItemType() != null ? article.getStkItemType().getDescription() : null,
+                Champs.de(prospection, ComProspection::getId),
+                Champs.de(prospection, ComProspection::getCode),
+                Champs.de(tranche, CfgTranche::getId),
+                Champs.de(tranche, CfgTranche::getCode),
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(article, StkItem::getId),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getDescription),
+                Champs.de(article, StkItem::getArea),
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
                 q.getCfgProspect() != null ? q.getCfgProspect().getId() : null,
-                nomTier(q.getCfgProspect()),
+                TierNomFormatter.nom(q.getCfgProspect()),
                 q.getCfgCommercial() != null ? q.getCfgCommercial().getId() : null,
-                nomTier(q.getCfgCommercial()),
+                TierNomFormatter.nom(q.getCfgCommercial()),
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getId() : null,
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getDescription() : null,
                 toMontantsDto(q),
@@ -505,9 +509,5 @@ public class DevisService {
                     return new LigneSchemaFinancementDto(ligne.categorieCode(), ligne.montant(), exclureDuPrix);
                 })
                 .toList();
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

@@ -3,15 +3,22 @@ package com.tsix.immocrm.services.dossier;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.ActeReservationData.LignePaiement;
 import com.tsix.immocrm.dto.dossier.ActeReservationData.SousArticle;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkBuilding;
+import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +27,8 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
+import static java.util.Objects.requireNonNullElse;
 
 /**
  * Gathers the data behind the "Acte de réservation" contract (see
@@ -50,10 +59,10 @@ public class ActeReservationService {
 
         CfgTier client = folder.getCfgCustomer();
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         // StkItem.CfgProjectId is never populated in real data — confirmed path is via the
         // tranche (StkHierarchyId -> CfgTranche.CfgProjectId). Same fix in FicheReservationService.
-        com.tsix.immocrm.entities.cfg.CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
         BigDecimal prixVente = folder.getPrice();
 
         List<SousArticle> sousArticles = article == null ? List.of() :
@@ -83,32 +92,32 @@ public class ActeReservationService {
                 folder.getCode(),
                 titre(client),
                 client != null ? nomClient(client) : null,
-                client != null ? client.getIDNumber() : null,
+                Champs.de(client, CfgTier::getIDNumber),
                 client != null ? adresse(client.getAddress(), client.getAddress2(), client.getAddress3(), client.getCity()) : null,
                 client != null ? (client.getMobile() != null ? client.getMobile() : client.getPhone()) : null,
-                projet != null ? projet.getDescription() : null,
-                projet != null ? adresse(projet.getAddress(), projet.getAddress2(), projet.getAddress3(), projet.getCity()) : null,
-                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
+                Champs.de(projet, CfgProject::getDescription),
+                Champs.de(projet, p -> adresse(p.getAddress(), p.getAddress2(), p.getAddress3(), p.getCity())),
+                Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
                 article != null && article.getStkKind() != null && "TER".equalsIgnoreCase(article.getStkKind().getCode()),
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null ? article.getCode() : null,
-                article != null && article.getStkBuilding() != null ? article.getStkBuilding().getCode() : null,
-                article != null && article.getStkFloor() != null ? article.getStkFloor().getDescription() : null,
-                article != null ? article.getArea() : null,
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getStkBuilding, StkBuilding::getCode),
+                Champs.de(article, StkItem::getStkFloor, StkFloor::getDescription),
+                Champs.de(article, StkItem::getArea),
                 sousArticles,
                 prixVente,
                 avanceMontant,
                 pourcentage(avanceMontant, prixVente),
                 lignesSolde,
-                tranche != null ? tranche.getCancellationPenalityPercent() : null,
-                tranche != null ? tranche.getArticleTransferPenality() : null,
-                tranche != null ? tranche.getSliceTransferPenality() : null,
-                tranche != null ? tranche.getCustomerTransferPenality() : null,
-                tranche != null ? tranche.getWarrantyDelay() : null,
-                tranche != null ? tranche.getSyndicAmount() : null,
-                tranche != null ? tranche.getSyndicPeriod() : null,
-                tranche != null && tranche.getCommerceTribunal() != null ? tranche.getCommerceTribunal() : "Casablanca",
-                nomTier(folder.getCfgCommercial()),
+                Champs.de(tranche, CfgTranche::getCancellationPenalityPercent),
+                Champs.de(tranche, CfgTranche::getArticleTransferPenality),
+                Champs.de(tranche, CfgTranche::getSliceTransferPenality),
+                Champs.de(tranche, CfgTranche::getCustomerTransferPenality),
+                Champs.de(tranche, CfgTranche::getWarrantyDelay),
+                Champs.de(tranche, CfgTranche::getSyndicAmount),
+                Champs.de(tranche, CfgTranche::getSyndicPeriod),
+                requireNonNullElse(Champs.de(tranche, CfgTranche::getCommerceTribunal), "Casablanca"),
+                TierNomFormatter.nom(folder.getCfgCommercial()),
                 LocalDate.now()
         );
     }
@@ -136,11 +145,7 @@ public class ActeReservationService {
     }
 
     private static String nomClient(CfgTier tier) {
-        return nomTier(tier);
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
+        return TierNomFormatter.nom(tier);
     }
 
     private static String adresse(String a1, String a2, String a3, String ville) {

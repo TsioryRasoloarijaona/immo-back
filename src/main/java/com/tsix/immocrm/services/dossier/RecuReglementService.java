@@ -12,6 +12,8 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -19,6 +21,7 @@ import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -73,14 +77,14 @@ public class RecuReglementService {
         }
         BigDecimal montantRegleDossier = lignesDeCeReglement.stream()
                 .map(StlSettlementLine::getAmount)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         // Chemin confirmé (même que FicheTropPercuService/FicheBancaireService) : StkItem.CfgProjectId
         // n'est jamais peuplé en données réelles.
-        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         CfgTier beneficiaireTier = settlement.getTier() != null ? settlement.getTier() : folder.getCfgCustomer();
         Beneficiaire beneficiaire = beneficiaireTier != null ? toBeneficiaire(beneficiaireTier) : null;
@@ -129,16 +133,16 @@ public class RecuReglementService {
                 settlement.getDescription(),
                 beneficiaire,
                 coAcquereurs,
-                entreprise != null ? entreprise.getDescription() : null,
-                entreprise != null ? entreprise.getLegalForm() : null,
+                Champs.de(entreprise, CfgCompany::getDescription),
+                Champs.de(entreprise, CfgCompany::getLegalForm),
                 entreprise != null ? adresse(entreprise.getAddress(), entreprise.getAddress2(), entreprise.getAddress3(), entreprise.getCity()) : null,
-                entreprise != null ? entreprise.getSignatureCity() : null,
+                Champs.de(entreprise, CfgCompany::getSignatureCity),
                 folder.getDocDate() != null ? folder.getDocDate().toLocalDate() : null,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null ? article.getCode() : null,
-                projet != null ? projet.getDescription() : null,
-                article != null && article.getStkItemType() != null ? article.getStkItemType().getDescription() : null,
-                article != null ? article.getArea() : null,
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(projet, CfgProject::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
+                Champs.de(article, StkItem::getArea),
                 superficieApproximative,
                 folder.getPriceAfterDiscount(),
                 lignesReglement,

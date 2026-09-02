@@ -1,14 +1,17 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
+import com.tsix.immocrm.domain.EtapeMilestone;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
+import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
+import com.tsix.immocrm.dto.dossier.EtapeSuivanteDto;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
@@ -21,12 +24,13 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
-import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
-import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
+import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -34,9 +38,12 @@ import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
-import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
+import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Requis;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -52,6 +59,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -67,8 +75,8 @@ public class DossierService {
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
-    private final com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository;
-    private final com.tsix.immocrm.repositories.adm.AdmSequenceRepository sequenceRepository;
+    private final StrFolderStatusHistoryRepository statusHistoryRepository;
+    private final AdmSequenceRepository sequenceRepository;
     private final PerimetreCommercialService perimetreService;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
@@ -76,8 +84,8 @@ public class DossierService {
                            ComDocumentRepository documentRepository, StlSettlementLineRepository settlementLineRepository,
                            ComPaymentMethodRepository paymentMethodRepository, CfgTierRepository tierRepository,
                            ComSettlementCategoryRepository settlementCategoryRepository,
-                           com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository,
-                           com.tsix.immocrm.repositories.adm.AdmSequenceRepository sequenceRepository,
+                           StrFolderStatusHistoryRepository statusHistoryRepository,
+                           AdmSequenceRepository sequenceRepository,
                            PerimetreCommercialService perimetreService) {
         this.perimetreService = perimetreService;
         this.folderRepository = folderRepository;
@@ -244,9 +252,7 @@ public class DossierService {
      */
     @Transactional
     public DossierDetailDto create(CreerDossierRequest request) {
-        if (request.prospectionId() == null) {
-            throw new InvalidRequestException("prospectionId est requis");
-        }
+        Requis.champ(request.prospectionId(), "prospectionId est requis");
         ComProspection prospection = prospectionRepository.findById(request.prospectionId())
                 .orElseThrow(() -> new InvalidRequestException("Prospection introuvable: " + request.prospectionId()));
         if (prospection.getCfgProspect() == null) {
@@ -255,9 +261,7 @@ public class DossierService {
         if (request.articleIds() == null || request.articleIds().isEmpty()) {
             throw new InvalidRequestException("articleIds est requis et ne peut pas être vide");
         }
-        if (request.modePaieId() == null) {
-            throw new InvalidRequestException("modePaieId est requis");
-        }
+        Requis.champ(request.modePaieId(), "modePaieId est requis");
         if (!StringUtils.hasText(request.cin())) {
             throw new InvalidRequestException("cin est requis");
         }
@@ -535,9 +539,7 @@ public class DossierService {
         if (request.articleIds() == null || request.articleIds().isEmpty()) {
             throw new InvalidRequestException("articleIds est requis et ne peut pas être vide");
         }
-        if (request.prix() == null) {
-            throw new InvalidRequestException("prix est requis");
-        }
+        Requis.champ(request.prix(), "prix est requis");
         validerRemisePercent(request.remisePercent());
 
         StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
@@ -564,7 +566,7 @@ public class DossierService {
                 .map(ligne -> settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
                         .map(categorie -> new LigneSchemaFinancementDto(
                                 ligne.categorieCode(), ligne.montant(), categorie.getExcludeFromPrice())))
-                .flatMap(java.util.Optional::stream)
+                .flatMap(Optional::stream)
                 .toList();
 
         BigDecimal totalGeneral = lignes.stream()
@@ -584,9 +586,7 @@ public class DossierService {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + id));
 
-        if (request.statut() == null) {
-            throw new InvalidRequestException("statut est requis");
-        }
+        Requis.champ(request.statut(), "statut est requis");
         StatutDossier cible;
         try {
             cible = StatutDossier.fromCode(request.statut());
@@ -635,7 +635,7 @@ public class DossierService {
      * matching real data usage (e.g. "ANNULATION AFFECTATION").
      */
     private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
-        com.tsix.immocrm.entities.str.StrFolderStatusHistory historique = new com.tsix.immocrm.entities.str.StrFolderStatusHistory();
+        StrFolderStatusHistory historique = new StrFolderStatusHistory();
         historique.setId(UUID.randomUUID());
         historique.setDocDate(LocalDateTime.now());
         historique.setComFolder(folder);
@@ -737,7 +737,7 @@ public class DossierService {
      * .../statut}'s {@code date} would be written to — lets the front-end know which date to ask
      * for, per {@link com.tsix.immocrm.domain.EtapeMilestone}.
      */
-    public List<com.tsix.immocrm.dto.dossier.EtapeSuivanteDto> etapesSuivantes(UUID id) {
+    public List<EtapeSuivanteDto> etapesSuivantes(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + id));
 
@@ -749,8 +749,8 @@ public class DossierService {
         }
         return TransitionsValidees.transitionsAutorisees(actuel).stream()
                 .map(statut -> {
-                    com.tsix.immocrm.domain.EtapeMilestone.Info info = com.tsix.immocrm.domain.EtapeMilestone.of(statut);
-                    return new com.tsix.immocrm.dto.dossier.EtapeSuivanteDto(
+                    EtapeMilestone.Info info = EtapeMilestone.of(statut);
+                    return new EtapeSuivanteDto(
                             statut.getCode(), info.champ(), info.libelle(), info.confiance().name());
                 })
                 .toList();
@@ -778,9 +778,9 @@ public class DossierService {
                 f.getDocDate(),
                 f.getStrStatus() != null ? f.getStrStatus().getCode() : null,
                 f.getCfgCustomer() != null ? f.getCfgCustomer().getId() : null,
-                nomTier(f.getCfgCustomer()),
+                TierNomFormatter.nom(f.getCfgCustomer()),
                 f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
-                nomTier(f.getCfgCommercial()),
+                TierNomFormatter.nom(f.getCfgCommercial()),
                 f.getPrice(),
                 f.getTotalToPay(),
                 f.getAdvanceDate(),
@@ -797,11 +797,11 @@ public class DossierService {
                 f.getStrStatus() != null ? f.getStrStatus().getCode() : null,
                 etapesAtteignables(f),
                 f.getCfgCustomer() != null ? f.getCfgCustomer().getId() : null,
-                nomTier(f.getCfgCustomer()),
+                TierNomFormatter.nom(f.getCfgCustomer()),
                 f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
-                nomTier(f.getCfgCommercial()),
+                TierNomFormatter.nom(f.getCfgCommercial()),
                 f.getCfgLawyer() != null ? f.getCfgLawyer().getId() : null,
-                nomTier(f.getCfgLawyer()),
+                TierNomFormatter.nom(f.getCfgLawyer()),
                 articles,
                 f.getPriceBeforeDiscount(),
                 f.getDiscount(),
@@ -820,9 +820,5 @@ public class DossierService {
 
     private static ArticleSummaryDto toArticleSummary(StkItem item) {
         return new ArticleSummaryDto(item.getId(), item.getCode(), item.getDescription(), item.getArea(), item.getSalePrice());
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 }

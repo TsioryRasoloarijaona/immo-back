@@ -4,16 +4,22 @@ import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.FicheBancaireData;
 import com.tsix.immocrm.dto.dossier.FicheBancaireData.Acquereur;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderCustomer;
+import com.tsix.immocrm.entities.stk.StkBuilding;
+import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -56,10 +63,10 @@ public class FicheBancaireService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
 
         StkItem article = folder.getStkItem();
-        CfgTranche tranche = article != null ? article.getStkHierarchy() : null;
+        CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         // Confirmed path (same as ActeReservationService/FicheReservationService):
         // StkItem.CfgProjectId is never populated in real data.
-        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         List<Acquereur> acquereurs = new ArrayList<>();
         if (folder.getCfgCustomer() != null) {
@@ -73,7 +80,7 @@ public class FicheBancaireService {
                 itemRepository.findByComFolderId(dossierId).stream()
                         .filter(it -> !it.getId().equals(article.getId()))
                         .map(StkItem::getArea)
-                        .filter(java.util.Objects::nonNull)
+                        .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         MontantsDossierDto montants = dossierService.montants(dossierId);
@@ -93,34 +100,34 @@ public class FicheBancaireService {
         return new FicheBancaireData(
                 folder.getCode(),
                 folder.getBankRecordDate() != null ? folder.getBankRecordDate().toLocalDate() : null,
-                projet != null && projet.getCfgCompany() != null ? projet.getCfgCompany().getDescription() : null,
-                projet != null ? projet.getDescription() : null,
+                Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
+                Champs.de(projet, CfgProject::getDescription),
                 projet != null ? adresse(projet.getAddress(), projet.getAddress2(), projet.getAddress3(), projet.getCity()) : null,
-                projet != null ? projet.getSignatureCity() : null,
+                Champs.de(projet, CfgProject::getSignatureCity),
                 acquereurs,
-                article != null && article.getStkItemCategory() != null ? article.getStkItemCategory().getDescription() : null,
-                article != null && article.getStkBuilding() != null ? article.getStkBuilding().getDescription() : null,
-                article != null && article.getStkFloor() != null ? article.getStkFloor().getDescription() : null,
-                article != null ? article.getCode() : null,
-                article != null ? article.getFractionDivided() : null,
-                article != null ? article.getPropertyCalled() : null,
-                article != null ? article.getContenance() : null,
-                article != null ? article.getArea() : null,
-                article != null ? article.getTitleNumberMother() : null,
-                article != null ? article.getTitleNumber() : null,
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getStkBuilding, StkBuilding::getDescription),
+                Champs.de(article, StkItem::getStkFloor, StkFloor::getDescription),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getFractionDivided),
+                Champs.de(article, StkItem::getPropertyCalled),
+                Champs.de(article, StkItem::getContenance),
+                Champs.de(article, StkItem::getArea),
+                Champs.de(article, StkItem::getTitleNumberMother),
+                Champs.de(article, StkItem::getTitleNumber),
                 article != null ? diviserSur10000(article.getDividedPart()) : null,
                 article != null ? diviserSur10000(article.getUndividedPart()) : null,
-                article != null ? article.getFractionDividedLand() : null,
+                Champs.de(article, StkItem::getFractionDividedLand),
                 superficieSousArticles,
                 folder.getPriceAfterDiscount(),
                 montantVerse,
                 reliquat,
-                fraisDossier != null ? fraisDossier.montant() : null,
-                fraisDossier != null ? fraisDossier.regle() : null,
-                fraisDossier != null ? fraisDossier.reste() : null,
-                fraisSyndic != null ? fraisSyndic.montant() : null,
-                fraisSyndic != null ? fraisSyndic.regle() : null,
-                fraisSyndic != null ? fraisSyndic.reste() : null
+                Champs.de(fraisDossier, CategorieMontantDto::montant),
+                Champs.de(fraisDossier, CategorieMontantDto::regle),
+                Champs.de(fraisDossier, CategorieMontantDto::reste),
+                Champs.de(fraisSyndic, CategorieMontantDto::montant),
+                Champs.de(fraisSyndic, CategorieMontantDto::regle),
+                Champs.de(fraisSyndic, CategorieMontantDto::reste)
         );
     }
 
@@ -138,7 +145,7 @@ public class FicheBancaireService {
 
     private static Acquereur toAcquereur(CfgTier tier, BigDecimal partPercent) {
         return new Acquereur(
-                nomTier(tier),
+                TierNomFormatter.nom(tier),
                 tier.getAdmProfession() != null ? tier.getAdmProfession().getDescription() : null,
                 adresse(tier.getAddress(), tier.getAddress2(), tier.getAddress3(), tier.getCity()),
                 tier.getBirthDate() != null ? tier.getBirthDate().toLocalDate() : null,
@@ -171,10 +178,6 @@ public class FicheBancaireService {
             sb.append(tier.getIDNumber());
         }
         return sb.toString();
-    }
-
-    private static String nomTier(CfgTier tier) {
-        return com.tsix.immocrm.utils.TierNomFormatter.nom(tier);
     }
 
     private static String adresse(String a1, String a2, String a3, String ville) {
