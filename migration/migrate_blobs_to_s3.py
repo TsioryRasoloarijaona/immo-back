@@ -519,6 +519,53 @@ def executer(ctx: Contexte, taches: list[Tache]) -> int:
 ENV_PAR_DEFAUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 
 
+def verifier_acces(ctx: Contexte) -> int:
+    """
+    Aller-retour complet sur un objet témoin : écriture avec ChecksumSHA256, relecture,
+    comparaison, suppression. Valide d'un coup l'endpoint, le TLS, les identifiants,
+    les droits d'écriture ET de lecture, et le support du checksum côté serveur — sans
+    toucher à la base ni dépendre du schéma applicatif.
+    """
+    cle = f"{ctx.args.prefix}/.preflight/temoin.txt"
+    contenu = b"migration immo-crm - objet temoin, supprimable sans risque.\n"
+    digest = hashlib.sha256(contenu).digest()
+    s3 = ctx.s3()
+
+    try:
+        s3.head_bucket(Bucket=ctx.args.bucket)
+        log.info("Bucket '%s' accessible.", ctx.args.bucket)
+
+        s3.put_object(Bucket=ctx.args.bucket, Key=cle, Body=contenu,
+                      ContentType="text/plain", ChecksumAlgorithm="SHA256",
+                      ChecksumSHA256=base64.b64encode(digest).decode("ascii"))
+        log.info("Écriture OK (checksum SHA-256 accepté et vérifié par le serveur).")
+
+        relu = s3.get_object(Bucket=ctx.args.bucket, Key=cle)["Body"].read()
+        if relu != contenu:
+            log.error("Relecture incohérente : %d octets écrits, %d relus.",
+                      len(contenu), len(relu))
+            return 1
+        log.info("Relecture OK (%d octets, contenu identique).", len(relu))
+
+        s3.delete_object(Bucket=ctx.args.bucket, Key=cle)
+        log.info("Suppression OK. Accès au stockage validé de bout en bout.")
+        return 0
+
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "?")
+        log.error("Refus du serveur (%s) : %s", code, exc)
+        if code in ("InvalidAccessKeyId", "SignatureDoesNotMatch"):
+            log.error("→ vérifier S3_ACCESS_KEY / S3_SECRET_KEY dans le .env.")
+        elif code in ("NoSuchBucket", "404"):
+            log.error("→ le bucket '%s' n'existe pas sur cet endpoint.", ctx.args.bucket)
+        elif code in ("AccessDenied", "403"):
+            log.error("→ identifiants valides mais droits insuffisants sur le bucket.")
+        return 1
+    except BotoCoreError as exc:
+        log.error("Endpoint injoignable (%s) : %s", type(exc).__name__, exc)
+        return 1
+
+
 def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Migration des pièces jointes binaires vers S3 / MinIO.",
@@ -531,7 +578,7 @@ def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--db-user", default=os.environ.get("DB_USER", "tsix"))
     p.add_argument("--driver", default=os.environ.get("ODBC_DRIVER", "ODBC Driver 17 for SQL Server"))
 
-    p.add_argument("--bucket", required=True)
+    p.add_argument("--bucket", default=os.environ.get("S3_BUCKET"))
     p.add_argument("--endpoint", default=os.environ.get("S3_ENDPOINT"),
                    help="URL MinIO, ex. https://minio.example.com. Omettre pour AWS S3.")
     p.add_argument("--region", default=os.environ.get("S3_REGION", "us-east-1"))
@@ -540,6 +587,9 @@ def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
                         "base de prod étant une restauration, les PKey sont identiques et "
                         "des clés sans préfixe distinct s'écraseraient entre elles.")
 
+    p.add_argument("--check", action="store_true",
+                   help="Vérifie l'accès au bucket (aller-retour d'un objet témoin, "
+                        "checksum compris) puis s'arrête. Ne touche pas à la base.")
     p.add_argument("--dry-run", action="store_true", help="Inventaire seul, aucun envoi.")
     p.add_argument("--limit", type=int, help="N plus petits fichiers seulement (échantillon).")
     p.add_argument("--workers", type=int, default=4)
@@ -600,11 +650,18 @@ def main(argv: Optional[list[str]] = None) -> int:
                   "(voir .env.example) ou les exporter dans l'environnement.", chemin_env)
         return 2
 
+    if not args.bucket and not args.dry_run:
+        log.error("Bucket non précisé : utiliser --bucket ou définir S3_BUCKET.")
+        return 2
+
     ctx = Contexte(args, db_password, access_key, secret_key)
 
     log.info("Base %s sur %s — bucket '%s' préfixe '%s'%s",
              args.db_name, args.db_host, args.bucket, args.prefix,
              f" via {args.endpoint}" if args.endpoint else " (AWS S3)")
+
+    if args.check:
+        return verifier_acces(ctx)
 
     taches = construire_liste(ctx)
     if not taches:

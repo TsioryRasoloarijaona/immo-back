@@ -81,23 +81,40 @@ l'environnement du processus, comme `DB_PWD` et `JWT_SECRET` aujourd'hui.
 
 ## Déroulé recommandé
 
+Avec un `.env` complet, tout vient de là — plus aucun paramètre de connexion à
+répéter :
+
 ```bash
 PY=./.venv/Scripts/python.exe
-COMMUN="--db-host localhost,49687 --db-name yesRems --db-user tsix \
-        --bucket immo-crm --endpoint https://minio.example.com"
 
-# 0. inventaire — aucun envoi, fonctionne même sans AppFileObject
-$PY migrate_blobs_to_s3.py $COMMUN --prefix test --dry-run
+# 0. accès au stockage : aller-retour d'un objet témoin, checksum compris.
+#    Ne touche pas à la base. À lancer en premier, ça coûte une seconde.
+$PY migrate_blobs_to_s3.py --prefix test --check
 
-# 1. échantillon : valide identifiants, bucket, TLS et checksum en quelques secondes
-$PY migrate_blobs_to_s3.py $COMMUN --prefix test --limit 50
+# 1. inventaire — aucun envoi, fonctionne même sans AppFileObject
+$PY migrate_blobs_to_s3.py --prefix test --dry-run
 
-# 2. passe complète
-$PY migrate_blobs_to_s3.py $COMMUN --prefix test --workers 6 --log-file migration.log
+# 2. échantillon
+$PY migrate_blobs_to_s3.py --prefix test --limit 50
+
+# 3. passe complète
+$PY migrate_blobs_to_s3.py --prefix test --workers 6 --log-file migration.log
 ```
 
 Les fichiers sont traités **du plus petit au plus grand** : une erreur de
 configuration se voit en quelques secondes, pas après un envoi de 35 Mo.
+
+`--check` distingue les causes de refus les plus fréquentes (clés invalides, bucket
+inexistant, droits insuffisants, endpoint injoignable) au lieu d'une trace boto3 brute.
+
+### Débit — exécuter la passe de production au bon endroit
+
+Mesuré depuis le poste de développement : **0,6 Mo/s**, soit environ **3 h 30** pour
+les 8 Go. C'est la liaison montante du poste, pas le script. La passe de production a
+tout intérêt à être lancée **depuis le serveur, à côté de la base**, où les mêmes
+8 Go passent en quelques minutes.
+
+Une coupure n'est de toute façon pas grave : voir « Reprise après coupure ».
 
 ## Reprise après coupure
 
