@@ -36,3 +36,8 @@ src/test/resources/application.properties
 ### graphify ###
 # Generated knowledge graph — rebuilt by the post-commit hook, never committed.
 graphify-out/
+
+### Migration S3 (outil ponctuel Python) ###
+migration/.venv/
+migration/__pycache__/
+migration/*.log
