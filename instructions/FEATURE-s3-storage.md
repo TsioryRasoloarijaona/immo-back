@@ -43,7 +43,7 @@ Le basculement est donc localisé, pas transversal.
 
 ## 2. Livré sur cette branche
 
-### `db/migration/` — schéma applicatif scripté
+### `../src/main/resources/db/migration/` — schéma applicatif scripté
 
 `spring.jpa.hibernate.ddl-auto=none` des deux côtés : **démarrer le backend ne crée
 rien**. Aucun `.sql` n'existait dans le dépôt ; `AppUserCredential` avait été créée à
@@ -55,7 +55,7 @@ serait cassée avant même d'arriver à la migration.
 - `002_AppFileObject.sql` — le pointeur S3, contrat entre le script et le backend
 - `003_AppFileMigrationFailure.sql` — journal d'échecs
 
-Idempotents, à exécuter dans l'ordre. Voir `db/migration/README.md` pour l'argumentaire
+Idempotents, à exécuter dans l'ordre. Voir `../src/main/resources/db/migration/README.md` pour l'argumentaire
 contre `ddl-auto=update` et pour le diff de schéma à faire avant la production.
 
 ### `migration/` — reprise des binaires (Python, ponctuel)

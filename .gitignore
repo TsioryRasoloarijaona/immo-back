@@ -41,3 +41,4 @@ graphify-out/
 migration/.venv/
 migration/__pycache__/
 migration/*.log
+migration/.env

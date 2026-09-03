@@ -18,7 +18,7 @@ d'identité d'un stockage sauvegardé (la base) à un stockage qui ne l'est pas.
 
 ## Prérequis
 
-1. Le schéma applicatif appliqué sur la base visée — voir `../db/migration/`.
+1. Le schéma applicatif appliqué sur la base visée — voir `../src/main/resources/db/migration/`.
    **Nécessite un compte disposant du droit `CREATE TABLE`** ; `tsix` ne l'a pas sur
    `yesRems`.
 2. `ODBC Driver 17 for SQL Server` (déjà présent sur le poste de dev).
@@ -30,15 +30,54 @@ python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 ```
 
-## Secrets
+## Où mettre les identifiants
 
-Jamais en argument de ligne de commande (ils resteraient dans l'historique du shell) :
+**Jamais en argument de ligne de commande** — ils resteraient dans l'historique du
+shell et dans la liste des processus. Jamais non plus dans un fichier suivi par git.
+
+### En développement — `migration/.env`
 
 ```bash
-export DB_PWD=...
-export S3_ACCESS_KEY=...
-export S3_SECRET_KEY=...
+cp .env.example .env     # puis renseigner les valeurs
 ```
+
+Le script le charge automatiquement au démarrage et annonce le nombre de variables
+lues. `.env` est ignoré par git (`.gitignore`), `.env.example` ne contient que des
+clés vides et sert de modèle.
+
+| Variable | Rôle |
+|---|---|
+| `DB_PWD` | mot de passe SQL Server |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | compte de service MinIO |
+
+### En production — variables d'environnement
+
+**Toute variable déjà présente dans l'environnement prime sur le fichier.** Sur le
+serveur, exporter les secrets suffit ; aucun `.env` à déposer :
+
+```bash
+export DB_PWD=...  S3_ACCESS_KEY=...  S3_SECRET_KEY=...
+```
+
+Un autre emplacement se donne avec `--env-file /chemin/vers/secrets`.
+
+### Le compte MinIO doit être dédié
+
+Ne pas utiliser `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`. Créer un compte de service
+limité au seul bucket de la migration :
+
+```bash
+mc admin user svcacct add local <utilisateur> --name migration-immo-crm
+```
+
+Un identifiant qui ne peut qu'écrire dans un bucket ne peut pas effacer les autres —
+et ces clés vont transiter par un `.env`, un historique shell et des journaux.
+
+### Côté backend Java, plus tard
+
+Mêmes variables, **jamais dans `application.properties`** (le fichier est suivi par
+git). Le fichier ne porte que le nom du bucket et l'endpoint ; les clés viennent de
+l'environnement du processus, comme `DB_PWD` et `JWT_SECRET` aujourd'hui.
 
 ## Déroulé recommandé
 

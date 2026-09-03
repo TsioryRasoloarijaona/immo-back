@@ -209,6 +209,33 @@ def content_disposition(description: Optional[str], extension: str) -> str:
 # Connexions (une par thread — ni pyodbc ni les sessions boto3 ne sont partageables)
 # --------------------------------------------------------------------------------------
 
+def charger_env(chemin: str) -> int:
+    """
+    Charge un fichier `.env` (KEY=VALUE) dans l'environnement du processus.
+
+    Les variables déjà définies dans l'environnement **gagnent** : sur le serveur de
+    production, on exporte les secrets sans avoir à supprimer le fichier.
+
+    Volontairement écrit à la main plutôt qu'avec `python-dotenv` : dix lignes contre
+    une dépendance de plus sur un outil ponctuel.
+    """
+    if not os.path.isfile(chemin):
+        return 0
+    charges = 0
+    with open(chemin, "r", encoding="utf-8") as fichier:
+        for ligne in fichier:
+            ligne = ligne.strip()
+            if not ligne or ligne.startswith("#") or "=" not in ligne:
+                continue
+            cle, _, valeur = ligne.partition("=")
+            cle = cle.strip()
+            valeur = valeur.strip().strip("'\"")
+            if cle and cle not in os.environ:
+                os.environ[cle] = valeur
+                charges += 1
+    return charges
+
+
 _local = threading.local()
 
 
@@ -489,6 +516,9 @@ def executer(ctx: Contexte, taches: list[Tache]) -> int:
     return 1 if etat["echecs"] else 0
 
 
+ENV_PAR_DEFAUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+
+
 def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Migration des pièces jointes binaires vers S3 / MinIO.",
@@ -514,12 +544,27 @@ def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--limit", type=int, help="N plus petits fichiers seulement (échantillon).")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--retries", type=int, default=3)
+    p.add_argument("--env-file", default=ENV_PAR_DEFAUT,
+                   help="Fichier de secrets au format KEY=VALUE. Par défaut "
+                        "migration/.env (ignoré par git). Les variables déjà "
+                        "présentes dans l'environnement priment.")
     p.add_argument("--log-file")
     p.add_argument("--verbose", action="store_true")
     return p.parse_args(argv)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # Le .env doit être chargé AVANT argparse, dont les valeurs par défaut lisent
+    # os.environ — d'où cette pré-lecture manuelle de --env-file.
+    chemin_env = ENV_PAR_DEFAUT
+    if "--env-file" in argv:
+        position = argv.index("--env-file")
+        if position + 1 < len(argv):
+            chemin_env = argv[position + 1]
+    charges = charger_env(chemin_env)
+
     args = analyser_arguments(argv)
 
     # La console Windows n'est pas en UTF-8 par défaut : sans cela les messages et les
@@ -539,15 +584,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         handlers=handlers,
     )
 
+    if charges:
+        log.info("%d variable(s) chargée(s) depuis %s", charges, chemin_env)
+
     db_password = os.environ.get("DB_PWD")
     if not db_password:
-        log.error("DB_PWD absent de l'environnement.")
+        log.error("DB_PWD absent. Le renseigner dans %s (voir .env.example) "
+                  "ou l'exporter dans l'environnement.", chemin_env)
         return 2
 
     access_key = os.environ.get("S3_ACCESS_KEY", "")
     secret_key = os.environ.get("S3_SECRET_KEY", "")
     if not args.dry_run and not (access_key and secret_key):
-        log.error("S3_ACCESS_KEY / S3_SECRET_KEY absents de l'environnement.")
+        log.error("S3_ACCESS_KEY / S3_SECRET_KEY absents. Les renseigner dans %s "
+                  "(voir .env.example) ou les exporter dans l'environnement.", chemin_env)
         return 2
 
     ctx = Contexte(args, db_password, access_key, secret_key)
