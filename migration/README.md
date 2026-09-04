@@ -10,11 +10,35 @@ du build Maven — il ne doit jamais partir dans le jar.
 |---|---|
 | Lit | `dbo.AdmAttachedFile.AttachedFile` — **lecture seule**, aucun `UPDATE` sur le schéma legacy |
 | Écrit | le bucket S3, `dbo.AppFileObject`, `dbo.AppFileMigrationFailure` |
-| Ne fait **pas** | vider `AdmAttachedFile.AttachedFile` (phase 3, script séparé, non écrit à ce stade) |
+| Ne fait **pas** | vider `AdmAttachedFile.AttachedFile` — c'est `purge_attached_file.sql`, séparé et explicitement confirmé |
 
-La phase 3 n'existe pas encore délibérément : tant qu'il n'y a pas de sauvegarde du
-bucket, vider les binaires ferait passer 8 Go de contrats, chèques et pièces
-d'identité d'un stockage sauvegardé (la base) à un stockage qui ne l'est pas.
+## Vérification et purge
+
+`--verify` compare, pour **chaque** objet, sa taille et son empreinte SHA-256 entre la
+base et le stockage. MinIO renvoyant le checksum enregistré à l'écriture, la couverture
+est totale par simples requêtes `HEAD` — **sans retélécharger les 8 Go**.
+
+Trois conditions doivent être réunies pour que la purge soit autorisée : aucun fichier
+restant à migrer, aucun échec journalisé, aucun écart de taille ou d'empreinte.
+
+```bash
+$PY migrate_blobs_to_s3.py --prefix prod --verify --workers 8     # doit sortir en 0
+
+sqlcmd -S "<hote>" -U <user> -P <pwd> -d yesRemsProd -C -b \
+       -v CONFIRMER=OUI -i purge_attached_file.sql
+```
+
+`purge_attached_file.sql` est **volontairement hors de
+`src/main/resources/db/migration/`** : ce répertoire suit la convention Flyway, et un
+script de purge qui s'y trouverait serait exécuté automatiquement au démarrage du
+backend le jour où Flyway serait adopté.
+
+Il refuse de s'exécuter sans `-v CONFIRMER=OUI`, et recontrôle les trois compteurs
+avant d'écrire quoi que ce soit.
+
+**Après la purge, le stockage objet est la seule copie de ces fichiers.** Ne la lancer
+que lorsqu'il existe une autre copie : sauvegarde du bucket, ou `.bak` d'origine
+conservé à part.
 
 ## Prérequis
 
@@ -99,6 +123,9 @@ $PY migrate_blobs_to_s3.py --prefix test --limit 50
 
 # 3. passe complète
 $PY migrate_blobs_to_s3.py --prefix test --workers 6 --log-file migration.log
+
+# 4. contrôle exhaustif avant toute purge
+$PY migrate_blobs_to_s3.py --prefix test --verify --workers 8
 ```
 
 Les fichiers sont traités **du plus petit au plus grand** : une erreur de

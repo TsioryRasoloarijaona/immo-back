@@ -566,6 +566,106 @@ def verifier_acces(ctx: Contexte) -> int:
         return 1
 
 
+SQL_A_VERIFIER = """
+SELECT o.AdmAttachedFileId, o.StorageKey, o.SizeBytes, o.Sha256,
+       DATALENGTH(a.AttachedFile) AS TailleSource
+FROM dbo.AppFileObject o
+LEFT JOIN dbo.AdmAttachedFile a ON a.PKey = o.AdmAttachedFileId
+WHERE o.DeletedAt IS NULL
+"""
+
+SQL_RESTANTS = """
+SELECT COUNT(*) FROM dbo.AdmAttachedFile a
+WHERE a.AttachedFile IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM dbo.AppFileObject o WHERE o.AdmAttachedFileId = a.PKey)
+"""
+
+
+def verifier_migration(ctx: Contexte) -> int:
+    """
+    Contrôle exhaustif avant purge des binaires.
+
+    Pour chaque ligne d'AppFileObject, un HEAD sur l'objet compare sa taille et son
+    empreinte SHA-256 à ce qu'annonce la base. MinIO renvoyant le checksum enregistré à
+    l'écriture, la couverture est totale **sans retélécharger les 8 Go** — 3 138 requêtes
+    HEAD au lieu de 8 Go de trafic.
+
+    Trois conditions doivent être réunies pour autoriser la purge :
+      1. aucun fichier restant à migrer ;
+      2. aucun échec non résolu ;
+      3. aucun écart de taille ou d'empreinte sur les objets déjà migrés.
+    """
+    curseur = ctx.db().cursor()
+    curseur.execute(SQL_RESTANTS)
+    restants = curseur.fetchone()[0]
+    curseur.execute("SELECT COUNT(*) FROM dbo.AppFileMigrationFailure")
+    echecs = curseur.fetchone()[0]
+    curseur.execute(SQL_A_VERIFIER)
+    lignes = curseur.fetchall()
+    curseur.close()
+
+    log.info("%d objets à vérifier — %d fichier(s) non migré(s), %d échec(s) journalisé(s)",
+             len(lignes), restants, echecs)
+
+    anomalies: list[str] = []
+    verrou = threading.Lock()
+    compteur = {"n": 0}
+
+    def controler(ligne) -> None:
+        file_id, cle, taille_db, sha_db, taille_source = ligne
+        try:
+            tete = ctx.s3().head_object(Bucket=ctx.args.bucket, Key=cle, ChecksumMode="ENABLED")
+        except ClientError as exc:
+            with verrou:
+                anomalies.append(f"{cle} — objet absent ou inaccessible ({exc.response.get('Error', {}).get('Code')})")
+            return
+
+        ecarts = []
+        if tete["ContentLength"] != taille_db:
+            ecarts.append(f"taille S3 {tete['ContentLength']} vs base {taille_db}")
+        if taille_source is not None and taille_source != taille_db:
+            ecarts.append(f"taille source {taille_source} vs base {taille_db}")
+        sha_s3 = tete.get("ChecksumSHA256")
+        if sha_s3 and sha_db:
+            if base64.b64decode(sha_s3).hex() != sha_db.lower():
+                ecarts.append("empreinte SHA-256 différente")
+        elif not sha_s3:
+            ecarts.append("aucun checksum enregistré côté serveur")
+        if ecarts:
+            with verrou:
+                anomalies.append(f"{cle} — " + " ; ".join(ecarts))
+
+        with verrou:
+            compteur["n"] += 1
+            if compteur["n"] % 500 == 0:
+                log.info("  %d/%d vérifiés", compteur["n"], len(lignes))
+
+    with ThreadPoolExecutor(max_workers=ctx.args.workers) as pool:
+        list(pool.map(controler, lignes))
+
+    log.info("=" * 72)
+    if anomalies:
+        log.error("%d ANOMALIE(S) :", len(anomalies))
+        for detail in anomalies[:20]:
+            log.error("    %s", detail)
+        if len(anomalies) > 20:
+            log.error("    … et %d autre(s)", len(anomalies) - 20)
+
+    pret = not anomalies and restants == 0 and echecs == 0
+    if pret:
+        log.info("VÉRIFICATION CONFORME — %d objets, taille et empreinte identiques "
+                 "en base et sur le stockage.", len(lignes))
+        log.info("La purge des binaires (migration/purge_attached_file.sql) peut être exécutée.")
+    else:
+        log.error("VÉRIFICATION NON CONFORME — NE PAS PURGER LES BINAIRES.")
+        if restants:
+            log.error("    %d fichier(s) restent à migrer : relancer une passe.", restants)
+        if echecs:
+            log.error("    %d échec(s) journalisé(s) dans AppFileMigrationFailure.", echecs)
+    log.info("=" * 72)
+    return 0 if pret else 1
+
+
 def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Migration des pièces jointes binaires vers S3 / MinIO.",
@@ -590,6 +690,10 @@ def analyser_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--check", action="store_true",
                    help="Vérifie l'accès au bucket (aller-retour d'un objet témoin, "
                         "checksum compris) puis s'arrête. Ne touche pas à la base.")
+    p.add_argument("--verify", action="store_true",
+                   help="Contrôle exhaustif avant purge : compare taille et empreinte "
+                        "SHA-256 de chaque objet à la base, par requêtes HEAD (sans "
+                        "retélécharger). Sortie 0 seulement si tout est conforme.")
     p.add_argument("--dry-run", action="store_true", help="Inventaire seul, aucun envoi.")
     p.add_argument("--limit", type=int, help="N plus petits fichiers seulement (échantillon).")
     p.add_argument("--workers", type=int, default=4)
@@ -662,6 +766,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.check:
         return verifier_acces(ctx)
+
+    if args.verify:
+        return verifier_migration(ctx)
 
     taches = construire_liste(ctx)
     if not taches:
