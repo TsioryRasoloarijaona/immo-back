@@ -303,6 +303,20 @@ ORDER BY DATALENGTH(a.AttachedFile) ASC
 """
 
 
+def colonne_existe(ctx: Contexte, table: str, colonne: str) -> bool:
+    """
+    Après `004_drop_attachedfile_filestream.sql`, `AdmAttachedFile.AttachedFile`
+    n'existe plus : la base ne stocke plus aucun binaire, tout est sur S3. Les requêtes
+    qui la nomment doivent donc être conditionnelles, sinon l'outil se casse sur la base
+    qu'il vient lui-même de faire migrer.
+    """
+    curseur = ctx.db().cursor()
+    curseur.execute("SELECT COL_LENGTH(?, ?)", f"dbo.{table}", colonne)
+    present = curseur.fetchone()[0] is not None
+    curseur.close()
+    return present
+
+
 def table_existe(ctx: Contexte, nom: str) -> bool:
     curseur = ctx.db().cursor()
     curseur.execute("SELECT OBJECT_ID(?, 'U')", f"dbo.{nom}")
@@ -312,6 +326,13 @@ def table_existe(ctx: Contexte, nom: str) -> bool:
 
 
 def construire_liste(ctx: Contexte) -> list[Tache]:
+    if not colonne_existe(ctx, "AdmAttachedFile", "AttachedFile"):
+        raise SystemExit(
+            "La colonne AdmAttachedFile.AttachedFile n'existe plus (script 004 applique) : "
+            "cette base ne contient plus aucun binaire a migrer. Utiliser --verify pour "
+            "controler la coherence base <-> stockage."
+        )
+
     if table_existe(ctx, "AppFileObject"):
         requete = SQL_LISTE_TRAVAIL
     elif ctx.args.dry_run:
@@ -574,6 +595,12 @@ LEFT JOIN dbo.AdmAttachedFile a ON a.PKey = o.AdmAttachedFileId
 WHERE o.DeletedAt IS NULL
 """
 
+SQL_A_VERIFIER_SANS_SOURCE = """
+SELECT o.AdmAttachedFileId, o.StorageKey, o.SizeBytes, o.Sha256, CAST(NULL AS BIGINT)
+FROM dbo.AppFileObject o
+WHERE o.DeletedAt IS NULL
+"""
+
 SQL_RESTANTS = """
 SELECT COUNT(*) FROM dbo.AdmAttachedFile a
 WHERE a.AttachedFile IS NOT NULL
@@ -595,15 +622,27 @@ def verifier_migration(ctx: Contexte) -> int:
       2. aucun échec non résolu ;
       3. aucun écart de taille ou d'empreinte sur les objets déjà migrés.
     """
+    binaires_en_base = colonne_existe(ctx, "AdmAttachedFile", "AttachedFile")
+
     curseur = ctx.db().cursor()
-    curseur.execute(SQL_RESTANTS)
-    restants = curseur.fetchone()[0]
+    if binaires_en_base:
+        curseur.execute(SQL_RESTANTS)
+        restants = curseur.fetchone()[0]
+        curseur.execute(SQL_A_VERIFIER)
+    else:
+        # Colonne supprimée (script 004) : plus rien ne peut rester à migrer, et il n'y
+        # a plus de taille source à confronter — le contrôle porte alors sur la seule
+        # cohérence base ↔ stockage, ce qui reste exactement ce qu'on veut vérifier
+        # après une restauration.
+        restants = 0
+        curseur.execute(SQL_A_VERIFIER_SANS_SOURCE)
+    lignes = curseur.fetchall()
     curseur.execute("SELECT COUNT(*) FROM dbo.AppFileMigrationFailure")
     echecs = curseur.fetchone()[0]
-    curseur.execute(SQL_A_VERIFIER)
-    lignes = curseur.fetchall()
     curseur.close()
 
+    if not binaires_en_base:
+        log.info("Colonne AttachedFile absente : base deja purgee, controle base ↔ stockage seul.")
     log.info("%d objets à vérifier — %d fichier(s) non migré(s), %d échec(s) journalisé(s)",
              len(lignes), restants, echecs)
 
@@ -655,7 +694,10 @@ def verifier_migration(ctx: Contexte) -> int:
     if pret:
         log.info("VÉRIFICATION CONFORME — %d objets, taille et empreinte identiques "
                  "en base et sur le stockage.", len(lignes))
-        log.info("La purge des binaires (migration/purge_attached_file.sql) peut être exécutée.")
+        if binaires_en_base:
+            log.info("La purge des binaires (migration/purge_attached_file.sql) peut être exécutée.")
+        else:
+            log.info("Base deja purgee et colonne supprimee : rien de plus à faire.")
     else:
         log.error("VÉRIFICATION NON CONFORME — NE PAS PURGER LES BINAIRES.")
         if restants:

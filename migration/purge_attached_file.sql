@@ -32,12 +32,18 @@
  *     sqlcmd -S "<hote>" -U <user> -P <pwd> -d yesRemsProd -C -b \
  *            -i migration/purge_attached_file.sql
  *
- * (Une précédente version attendait `-v CONFIRMER=OUI`. C'était une substitution
- * propre à sqlcmd : les clients graphiques passent `$(CONFIRMER)` tel quel, si bien
- * que la confirmation ne pouvait jamais aboutir. D'où ce drapeau en clair, qui a le
- * même effet et fonctionne partout.)
- *
  * PENSER À REMETTRE 'NON' APRÈS USAGE.
+ *
+ * ---------------------------------------------------------------------------------
+ * NOTE TECHNIQUE — pourquoi tout ce qui touche AttachedFile passe par du SQL dynamique
+ *
+ * SQL Server analyse un lot ENTIER avant de l'exécuter, et la résolution des noms de
+ * colonnes n'est pas différée (contrairement aux noms de tables). Un simple
+ * `IF COL_LENGTH(...) IS NULL RETURN;` en tête ne protège donc de rien : le lot est
+ * rejeté à la compilation avec « Nom de colonne non valide : AttachedFile » dès que la
+ * colonne a été supprimée par 004_drop_attachedfile_filestream.sql. D'où sp_executesql
+ * pour les quatre requêtes qui la nomment.
+ * ---------------------------------------------------------------------------------
  */
 
 SET NOCOUNT ON;
@@ -46,35 +52,49 @@ SET NOCOUNT ON;
 --  │  Mettre N'OUI' pour autoriser la purge. Toute autre valeur = simple etat.   │
 --  └────────────────────────────────────────────────────────────────────────────┘
 DECLARE @confirmation NVARCHAR(20) = N'NON';
-DECLARE @restants     INT;
-DECLARE @echecs       INT;
-DECLARE @ecarts       INT;
-DECLARE @aPurger      INT;
-DECLARE @octets       BIGINT;
+
+DECLARE @restants INT;
+DECLARE @echecs   INT;
+DECLARE @ecarts   INT;
+DECLARE @aPurger  INT;
+DECLARE @octets   BIGINT;
+DECLARE @vides    INT;
+
+IF COL_LENGTH('dbo.AdmAttachedFile', 'AttachedFile') IS NULL
+BEGIN
+    PRINT 'Colonne AdmAttachedFile.AttachedFile absente (004_drop_attachedfile_filestream.sql';
+    PRINT 'deja applique). Plus aucun binaire en base : rien a purger.';
+    RETURN;
+END
 
 -- 1. Tout fichier encore porteur d'un binaire doit avoir sa ligne AppFileObject.
-SELECT @restants = COUNT(*)
-FROM dbo.AdmAttachedFile a
-WHERE a.AttachedFile IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM dbo.AppFileObject o WHERE o.AdmAttachedFileId = a.PKey);
+EXEC sp_executesql N'
+    SELECT @n = COUNT(*)
+    FROM dbo.AdmAttachedFile a
+    WHERE a.AttachedFile IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM dbo.AppFileObject o WHERE o.AdmAttachedFileId = a.PKey)',
+    N'@n INT OUTPUT', @n = @restants OUTPUT;
 
 -- 2. Aucun échec de migration non résolu.
 SELECT @echecs = COUNT(*) FROM dbo.AppFileMigrationFailure;
 
 -- 3. Aucun écart de taille entre la source et ce qui a été enregistré.
-SELECT @ecarts = COUNT(*)
-FROM dbo.AppFileObject o
-JOIN dbo.AdmAttachedFile a ON a.PKey = o.AdmAttachedFileId
-WHERE a.AttachedFile IS NOT NULL
-  AND o.SizeBytes <> DATALENGTH(a.AttachedFile);
+EXEC sp_executesql N'
+    SELECT @n = COUNT(*)
+    FROM dbo.AppFileObject o
+    JOIN dbo.AdmAttachedFile a ON a.PKey = o.AdmAttachedFileId
+    WHERE a.AttachedFile IS NOT NULL
+      AND o.SizeBytes <> DATALENGTH(a.AttachedFile)',
+    N'@n INT OUTPUT', @n = @ecarts OUTPUT;
 
-SELECT @aPurger = COUNT(*),
-       @octets  = ISNULL(SUM(CAST(DATALENGTH(a.AttachedFile) AS BIGINT)), 0)
-FROM dbo.AdmAttachedFile a
-JOIN dbo.AppFileObject o ON o.AdmAttachedFileId = a.PKey
-WHERE a.AttachedFile IS NOT NULL
-  AND o.DeletedAt IS NULL
-  AND o.SizeBytes = DATALENGTH(a.AttachedFile);
+EXEC sp_executesql N'
+    SELECT @n = COUNT(*), @o = ISNULL(SUM(CAST(DATALENGTH(a.AttachedFile) AS BIGINT)), 0)
+    FROM dbo.AdmAttachedFile a
+    JOIN dbo.AppFileObject o ON o.AdmAttachedFileId = a.PKey
+    WHERE a.AttachedFile IS NOT NULL
+      AND o.DeletedAt IS NULL
+      AND o.SizeBytes = DATALENGTH(a.AttachedFile)',
+    N'@n INT OUTPUT, @o BIGINT OUTPUT', @n = @aPurger OUTPUT, @o = @octets OUTPUT;
 
 PRINT '--- Etat avant purge ---';
 PRINT '  fichiers non migres        : ' + CAST(@restants AS VARCHAR);
@@ -105,21 +125,20 @@ END
 
 BEGIN TRANSACTION;
 
-    UPDATE a
-    SET a.AttachedFile = NULL
-    FROM dbo.AdmAttachedFile a
-    JOIN dbo.AppFileObject o ON o.AdmAttachedFileId = a.PKey
-    WHERE a.AttachedFile IS NOT NULL
-      AND o.DeletedAt IS NULL
-      AND o.SizeBytes = DATALENGTH(a.AttachedFile);
+    EXEC sp_executesql N'
+        UPDATE a
+        SET a.AttachedFile = NULL
+        FROM dbo.AdmAttachedFile a
+        JOIN dbo.AppFileObject o ON o.AdmAttachedFileId = a.PKey
+        WHERE a.AttachedFile IS NOT NULL
+          AND o.DeletedAt IS NULL
+          AND o.SizeBytes = DATALENGTH(a.AttachedFile);
+        SELECT @n = @@ROWCOUNT;',
+        N'@n INT OUTPUT', @n = @vides OUTPUT;
 
-    PRINT '  binaires vides             : ' + CAST(@@ROWCOUNT AS VARCHAR);
+    PRINT '  binaires vides             : ' + CAST(@vides AS VARCHAR);
 
 COMMIT TRANSACTION;
-
-SELECT 'Restant avec binaire' AS Controle, COUNT(*) AS Valeur FROM dbo.AdmAttachedFile WHERE AttachedFile IS NOT NULL
-UNION ALL
-SELECT 'Lignes AppFileObject', COUNT(*) FROM dbo.AppFileObject;
 
 PRINT '';
 PRINT 'Purge terminee.';
@@ -138,4 +157,7 @@ PRINT '';
 PRINT 'Controle : sys.database_files doit afficher 0 Mo pour le fichier FILESTREAM.';
 PRINT 'En mode SIMPLE le ramasse-miettes suffit ; en FULL il faut d abord une';
 PRINT 'sauvegarde du journal.';
+PRINT '';
+PRINT 'Puis, pour une restauration sur SQL Server pour Linux (FILESTREAM non supporte) :';
+PRINT '    src/main/resources/db/migration/004_drop_attachedfile_filestream.sql';
 GO
