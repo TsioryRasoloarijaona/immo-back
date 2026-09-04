@@ -78,15 +78,20 @@ public class AdmAttachedFileSummary {
     private String userCreate;
 
     /**
-     * Computed, read-only ({@code @Formula}, evaluated server-side by SQL Server) — true when
-     * the row actually has a file attached. Real data confirmed rows where {@code Category}
-     * legitimately starts with "Dossier de vente" but {@code AttachedFile IS NULL}: these are
-     * {@code IsCheckedButNotAttached = 1} checklist placeholders ("document requis coché mais
-     * jamais téléversé"), not real attachments — excluded by
-     * {@link com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository#findByDossierId}.
-     * Using a formula (rather than mapping the blob itself) avoids loading any binary content
-     * just to check its presence.
+     * Calculé côté SQL Server ({@code @Formula}, lecture seule) — vrai quand la ligne porte un
+     * fichier réellement déposé. Les lignes sans fichier sont les cases de checklist
+     * {@code IsCheckedButNotAttached = 1} ("document requis coché mais jamais téléversé") :
+     * {@code CategoryId} correspond bien, mais rien n'a jamais été déposé. Elles sont exclues
+     * par {@link com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository#findByCategoryId}.
+     *
+     * <p><b>La formule interroge désormais {@code AppFileObject}, plus {@code AttachedFile}.</b>
+     * C'était le point de rupture silencieuse du basculement vers S3 : la colonne
+     * {@code AttachedFile} est supprimée par
+     * {@code 004_drop_attachedfile_filestream.sql}, et la formule précédente la nommait. Elle
+     * aurait fait échouer non pas les téléchargements, mais <b>toutes les requêtes de liste</b>
+     * ("Nom de colonne non valide"), puisqu'elle est évaluée à chaque chargement de cette entité.
      */
-    @Formula("(CASE WHEN AttachedFile IS NOT NULL THEN 1 ELSE 0 END)")
+    @Formula("(CASE WHEN EXISTS (SELECT 1 FROM AppFileObject afo "
+            + "WHERE afo.AdmAttachedFileId = PKey AND afo.DeletedAt IS NULL) THEN 1 ELSE 0 END)")
     private Boolean hasFile;
 }

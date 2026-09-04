@@ -4,24 +4,34 @@ import com.tsix.immocrm.dto.dossier.PieceJointeDto;
 import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
+import com.tsix.immocrm.entities.app.AppFileObject;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileRepository;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
+import com.tsix.immocrm.repositories.app.AppFileObjectRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.storage.CleStockage;
+import com.tsix.immocrm.storage.ObjetStocke;
+import com.tsix.immocrm.storage.PorteurPieceJointe;
+import com.tsix.immocrm.storage.StockageFichiers;
+import com.tsix.immocrm.storage.StockageProperties;
 import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.web.ContentTypeParExtension;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -29,16 +39,15 @@ import java.util.UUID;
  * Règlement…).
  *
  * <p>{@code AdmAttachedFile} est polymorphe : le rattachement se fait par
- * {@code CategoryId = <porteur>.PKey}, sans FK déclarée. Tout ce qui suit ce rattachement —
- * lecture de la liste, récupération du binaire, dépôt d'un fichier, conversion en DTO — est
- * strictement identique d'un porteur à l'autre. Seules diffèrent (a) la vérification d'existence
- * du porteur et (b) la chaîne {@code Category} écrite au dépôt, toutes deux laissées à l'appelant.
+ * {@code CategoryId = <porteur>.PKey}, sans FK déclarée. Tout ce qui suit ce rattachement est
+ * strictement identique d'un porteur à l'autre ; seules diffèrent (a) la vérification
+ * d'existence du porteur et (b) la chaîne {@code Category} écrite au dépôt, laissées à
+ * l'appelant.
  *
- * <p>Cette classe existe pour empêcher une 3ᵉ puis 4ᵉ copie : {@code PieceJointeService} (Dossier)
- * et {@code ArticlePieceJointeService} portaient déjà un {@code toDto} <b>identique au caractère
- * près</b>, un {@code findFichier} identique à la chaîne d'erreur près, et deux requêtes JPQL
- * identiques au nom de paramètre près. Même intention que {@code web.ContentTypeParExtension},
- * extrait précisément pour dédupliquer entre contrôleurs.
+ * <p><b>Les binaires ne sont plus en base.</b> Ils vivent sur S3/MinIO ; {@code AppFileObject}
+ * porte le pointeur, et {@code AdmAttachedFile} ne garde que les métadonnées. La lecture ne
+ * renvoie donc plus d'octets mais une URL présignée : le fichier transite directement entre le
+ * navigateur et le stockage, sans passer par le backend.
  */
 @Service
 @Transactional(readOnly = true)
@@ -47,15 +56,24 @@ public class PieceJointeSupport {
     private final AdmAttachedFileSummaryRepository summaryRepository;
     private final AdmAttachedFileRepository fileRepository;
     private final AdmAttachedFileTypeRepository typeRepository;
+    private final AppFileObjectRepository fileObjectRepository;
+    private final StockageFichiers stockage;
+    private final StockageProperties stockageProperties;
     private final UtilisateurAffiche utilisateurAffiche;
 
     public PieceJointeSupport(AdmAttachedFileSummaryRepository summaryRepository,
                               AdmAttachedFileRepository fileRepository,
                               AdmAttachedFileTypeRepository typeRepository,
+                              AppFileObjectRepository fileObjectRepository,
+                              StockageFichiers stockage,
+                              StockageProperties stockageProperties,
                               UtilisateurAffiche utilisateurAffiche) {
         this.summaryRepository = summaryRepository;
         this.fileRepository = fileRepository;
         this.typeRepository = typeRepository;
+        this.fileObjectRepository = fileObjectRepository;
+        this.stockage = stockage;
+        this.stockageProperties = stockageProperties;
         this.utilisateurAffiche = utilisateurAffiche;
     }
 
@@ -72,42 +90,54 @@ public class PieceJointeSupport {
                 .toList();
     }
 
-    /** {@code true} dès qu'au moins une pièce jointe réelle (binaire présent) porte cet id. */
+    /** {@code true} dès qu'au moins une pièce jointe réelle porte cet id. */
     public boolean auMoinsUnFichier(UUID porteurId) {
         return summaryRepository.findByCategoryId(porteurId).stream()
                 .anyMatch(a -> Boolean.TRUE.equals(a.getHasFile()));
     }
 
     /**
-     * Contenu binaire d'une pièce jointe, borné au porteur : un id de pièce appartenant à un autre
+     * URL présignée de téléchargement, bornée au porteur : un id de pièce appartenant à un autre
      * porteur donne 404, jamais le fichier d'autrui. {@code libellePorteur} n'entre que dans le
      * message d'erreur ("ce dossier", "ce règlement"…).
+     *
+     * <p>L'URL <b>vaut autorisation d'accès</b> pour sa durée de validité : quiconque l'obtient
+     * peut télécharger le fichier sans être authentifié. C'est pourquoi elle n'est délivrée
+     * qu'après le contrôle d'appartenance ci-dessous, et pourquoi sa durée de vie est courte
+     * ({@code app.stockage.presign-minutes}).
      */
-    public AdmAttachedFile fichier(UUID porteurId, UUID pieceId, String libellePorteur) {
-        AdmAttachedFile fichier = fileRepository.findByIdAndCategoryId(pieceId, porteurId)
+    public URI urlTelechargement(UUID porteurId, UUID pieceId, String libellePorteur) {
+        AdmAttachedFile piece = fileRepository.findByIdAndCategoryId(pieceId, porteurId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Pièce jointe introuvable pour " + libellePorteur + ": " + pieceId));
-        if (fichier.getAttachedFile() == null) {
-            throw new ResourceNotFoundException("Aucun fichier attaché pour cette pièce jointe: " + pieceId);
-        }
-        return fichier;
+
+        AppFileObject objet = fileObjectRepository
+                .findByAdmAttachedFileIdAndDeletedAtIsNull(pieceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucun fichier stocké pour cette pièce jointe: " + pieceId));
+
+        return stockage.urlTelechargement(objet.getStorageKey(),
+                nomTelechargement(piece.getDescription(), piece.getExtension()),
+                objet.getContentType());
     }
 
     /**
      * Dépose un fichier sur le porteur. L'appelant a déjà vérifié que le porteur existe et lui
-     * appartient ; il fournit la chaîne {@code category} à écrire (convention legacy propre à
-     * chaque type de porteur, purement cosmétique : la relecture ne filtre que sur
-     * {@code CategoryId}).
+     * appartient ; il fournit le {@link PorteurPieceJointe} (segment de clé) et la chaîne
+     * {@code category} à écrire (convention legacy propre à chaque type de porteur, purement
+     * cosmétique : la relecture ne filtre que sur {@code CategoryId}).
      *
-     * <p>{@code description} est une légende libre ; à défaut le nom de fichier original est
-     * utilisé. {@code typeId} référence un {@code AdmAttachedFileType} ({@code null} si non
-     * précisé, 404 si inconnu). {@code UserCreate} reçoit le nom affiché de l'utilisateur connecté
-     * ({@code AdmUser.Description}, convention legacy — ex. "Dounya SAFSAF"), jamais demandé au
-     * front et {@code null} si non authentifiable.
+     * <p><b>Ordre imposé : le stockage d'abord, la base ensuite.</b> S3 n'est pas dans la
+     * transaction. Dans cet ordre, la seule fuite possible en cas d'échec est un objet orphelin
+     * dans le bucket — un coût, sans conséquence fonctionnelle, et balayable. L'ordre inverse
+     * laisserait des lignes pointant vers le vide, c'est-à-dire des 500 au téléchargement. Le
+     * {@link TransactionSynchronization} enregistré ci-dessous supprime l'objet si la
+     * transaction est finalement annulée, ce qui rattrape le cas courant.
      */
     @Transactional
-    public PieceJointeDto deposer(UUID porteurId, String category, MultipartFile fichier, String description,
-                                  UUID typeId, AuthenticatedUser principal) {
+    public PieceJointeDto deposer(UUID porteurId, PorteurPieceJointe porteur, String category,
+                                  MultipartFile fichier, String description, UUID typeId,
+                                  AuthenticatedUser principal) {
         if (fichier == null || fichier.isEmpty()) {
             throw new InvalidRequestException("Le fichier est requis et ne peut pas être vide");
         }
@@ -120,13 +150,30 @@ public class PieceJointeSupport {
         String nomOriginal = fichier.getOriginalFilename();
         String extension = "";
         if (StringUtils.hasText(nomOriginal) && nomOriginal.contains(".")) {
-            extension = nomOriginal.substring(nomOriginal.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+            extension = CleStockage.normaliserExtension(
+                    nomOriginal.substring(nomOriginal.lastIndexOf('.')));
         }
         String legende = StringUtils.hasText(description) ? description
                 : (StringUtils.hasText(nomOriginal) ? nomOriginal : "Pièce jointe");
 
+        UUID pieceId = UUID.randomUUID();
+        String cle = CleStockage.construire(stockageProperties.getPrefix(), porteur, porteurId,
+                pieceId, extension);
+        String contentType = ContentTypeParExtension.resolve(extension).toString();
+
+        byte[] contenu;
+        try {
+            contenu = fichier.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Lecture du fichier échouée", e);
+        }
+
+        ObjetStocke stocke = stockage.deposer(cle, contenu, contentType,
+                nomTelechargement(legende, extension));
+        supprimerSiTransactionAnnulee(cle);
+
         AdmAttachedFile entity = new AdmAttachedFile();
-        entity.setId(UUID.randomUUID());
+        entity.setId(pieceId);
         entity.setCategory(category);
         entity.setCategoryId(porteurId);
         entity.setDescription(legende);
@@ -134,16 +181,49 @@ public class PieceJointeSupport {
         entity.setAdmAttachedFileTypeId(typeId);
         entity.setUserCreateDateTime(LocalDateTime.now());
         entity.setUserCreate(utilisateurAffiche.nom(principal));
-        try {
-            entity.setAttachedFile(fichier.getBytes());
-        } catch (IOException e) {
-            throw new UncheckedIOException("Lecture du fichier échouée", e);
-        }
         entity = fileRepository.save(entity);
+
+        AppFileObject objet = new AppFileObject();
+        objet.setAdmAttachedFileId(pieceId);
+        objet.setStorageKey(stocke.cle());
+        objet.setContentType(stocke.contentType());
+        objet.setSizeBytes(stocke.tailleOctets());
+        objet.setSha256(stocke.sha256());
+        objet.setUploadedAt(LocalDateTime.now());
+        objet.setUploadedBy(utilisateurAffiche.nom(principal));
+        fileObjectRepository.save(objet);
 
         return new PieceJointeDto(entity.getId(), entity.getDescription(), entity.getCategory(),
                 Champs.de(type, AdmAttachedFileType::getDescription), entity.getExtension(),
                 entity.getUserCreateDateTime(), entity.getUserCreate());
+    }
+
+    /**
+     * Supprime l'objet déposé si la transaction est annulée après coup — sans quoi un rollback
+     * (contrainte violée, erreur applicative plus loin) laisserait un fichier payant et jamais
+     * référencé dans le bucket.
+     */
+    private void supprimerSiTransactionAnnulee(String cle) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    stockage.supprimer(cle);
+                }
+            }
+        });
+    }
+
+    /** Nom proposé au navigateur : la description, suffixée de l'extension si elle manque. */
+    private static String nomTelechargement(String description, String extension) {
+        String base = StringUtils.hasText(description) ? description.trim() : "piece-jointe";
+        if (StringUtils.hasText(extension) && !base.toLowerCase().endsWith(extension)) {
+            base = base + extension;
+        }
+        return base;
     }
 
     public static PieceJointeDto toDto(AdmAttachedFileSummary a) {

@@ -28,7 +28,6 @@ import com.tsix.immocrm.dto.dossier.RecuReglementData;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
-import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.AuthenticatedUser;
@@ -58,7 +57,6 @@ import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
-import com.tsix.immocrm.web.ContentTypeParExtension;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -85,7 +83,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -489,17 +486,30 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/pieces-jointes/{pieceId}/fichier")
-    public ResponseEntity<byte[]> getFichier(@PathVariable UUID id, @PathVariable UUID pieceId) {
-        AdmAttachedFile fichier = pieceJointeService.findFichier(id, pieceId);
-        String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
-        MediaType contentType = ContentTypeParExtension.resolve(extension);
-        String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "piece-jointe") + extension;
-
-        return ResponseEntity.ok()
-                .contentType(contentType)
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(nomFichier).build().toString())
-                .body(fichier.getAttachedFile());
+    @Operation(
+            summary = "Affiche ou télécharge une pièce jointe du dossier",
+            description = "**Renvoie une redirection `302` vers une URL présignée**, pas le contenu "
+                    + "binaire : le fichier est stocké sur S3/MinIO et transite directement entre le "
+                    + "client et le stockage, sans passer par le backend.\n\n"
+                    + "L'en-tête `Location` porte une URL signée, valable quelques minutes "
+                    + "(`app.stockage.presign-minutes`), qui vaut autorisation d'accès : elle n'est "
+                    + "délivrée qu'après vérification que la pièce appartient bien à ce dossier, et "
+                    + "ne doit pas être journalisée ni partagée.\n\n"
+                    + "`Content-Type` et `Content-Disposition` sont portés par la réponse du stockage. "
+                    + "**La disposition est `inline`** : les PDF et les images s'affichent dans un "
+                    + "onglet ou une visionneuse sans être téléchargés ; les types que le navigateur "
+                    + "ne sait pas rendre (`.docx`, `.xlsx`) retombent d'eux-mêmes sur le "
+                    + "téléchargement. Le nom proposé reprend la description de la pièce."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "302", description = "Redirection vers l'URL présignée du fichier."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable, pièce jointe introuvable "
+                    + "pour ce dossier, ou aucun fichier stocké pour cette pièce.")
+    })
+    public ResponseEntity<Void> getFichier(@PathVariable UUID id, @PathVariable UUID pieceId) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(pieceJointeService.urlFichier(id, pieceId))
+                .build();
     }
 
     @GetMapping("/{id}/payeurs")
@@ -615,26 +625,27 @@ public class DossierController {
 
     @GetMapping("/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}/fichier")
     @Operation(
-            summary = "Télécharge une preuve de paiement",
-            description = "Renvoie le contenu binaire de la pièce jointe, avec le `Content-Type` "
-                    + "déduit de son extension (PDF et images en pratique)."
+            summary = "Affiche ou télécharge une preuve de paiement",
+            description = "**Renvoie une redirection `302` vers une URL présignée**, pas le contenu "
+                    + "binaire : le fichier est stocké sur S3/MinIO et transite directement entre le "
+                    + "client et le stockage, sans passer par le backend.\n\n"
+                    + "L'URL signée est valable quelques minutes et vaut autorisation d'accès ; elle "
+                    + "n'est délivrée qu'après vérification que le règlement appartient à ce dossier "
+                    + "et que la pièce appartient à ce règlement.\n\n"
+                    + "**La disposition est `inline`** : le chèque ou l'avis de virement s'affiche "
+                    + "dans un onglet ou une visionneuse sans être téléchargé. Le nom proposé reprend "
+                    + "la description de la pièce."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Contenu du fichier."),
-            @ApiResponse(responseCode = "404", description = "Pièce jointe introuvable pour ce règlement, ou sans fichier attaché.")
+            @ApiResponse(responseCode = "302", description = "Redirection vers l'URL présignée du fichier."),
+            @ApiResponse(responseCode = "404", description = "Règlement non rattaché à ce dossier, pièce "
+                    + "jointe introuvable pour ce règlement, ou aucun fichier stocké.")
     })
-    public ResponseEntity<byte[]> getFichierReglement(@PathVariable UUID id, @PathVariable UUID reglementId,
-                                                       @PathVariable UUID pieceId) {
-        AdmAttachedFile fichier = reglementPieceJointeService.findFichier(id, reglementId, pieceId);
-        String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
-        MediaType contentType = ContentTypeParExtension.resolve(extension);
-        String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "preuve-paiement") + extension;
-
-        return ResponseEntity.ok()
-                .contentType(contentType)
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(nomFichier).build().toString())
-                .body(fichier.getAttachedFile());
+    public ResponseEntity<Void> getFichierReglement(@PathVariable UUID id, @PathVariable UUID reglementId,
+                                                    @PathVariable UUID pieceId) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(reglementPieceJointeService.urlFichier(id, reglementId, pieceId))
+                .build();
     }
 
     // -- Génération de documents ("Fiche de réservation" pour l'instant — voir instructions/templates) --

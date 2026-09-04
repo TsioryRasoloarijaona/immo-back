@@ -1,7 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
-import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -9,10 +8,12 @@ import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
+import com.tsix.immocrm.storage.PorteurPieceJointe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -79,9 +80,10 @@ public class ReglementPieceJointeService {
         return support.lister(reglementId);
     }
 
-    public AdmAttachedFile findFichier(UUID dossierId, UUID reglementId, UUID pieceId) {
+    /** URL présignée de téléchargement — mêmes gardes que {@link #findByReglement}. */
+    public URI urlFichier(UUID dossierId, UUID reglementId, UUID pieceId) {
         reglementDuDossier(dossierId, reglementId);
-        return support.fichier(reglementId, pieceId, "ce règlement");
+        return support.urlTelechargement(reglementId, pieceId, "ce règlement");
     }
 
     /**
@@ -95,6 +97,7 @@ public class ReglementPieceJointeService {
                                   UUID typeId, AuthenticatedUser principal) {
         StlSettlement settlement = reglementDuDossier(dossierId, reglementId);
         String category = Boolean.FALSE.equals(settlement.getIsCredit()) ? CATEGORY_DEBIT : CATEGORY_CREDIT;
-        return support.deposer(reglementId, category, fichier, description, typeId, principal);
+        return support.deposer(reglementId, PorteurPieceJointe.REGLEMENT, category, fichier, description,
+                typeId, principal);
     }
 }

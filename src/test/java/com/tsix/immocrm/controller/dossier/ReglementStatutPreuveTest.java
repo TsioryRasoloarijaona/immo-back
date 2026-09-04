@@ -14,6 +14,9 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
+import com.tsix.immocrm.storage.CleStockage;
+import com.tsix.immocrm.storage.PorteurPieceJointe;
+import com.tsix.immocrm.storage.StockageMemoire;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -33,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,6 +59,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser
 class ReglementStatutPreuveTest {
+
+    @Autowired
+    private StockageMemoire stockageMemoire;
 
     @Autowired
     private MockMvc mockMvc;
@@ -359,8 +366,18 @@ class ReglementStatutPreuveTest {
                 .andExpect(status().isNotFound());
     }
 
+    /**
+     * Aller-retour complet dépôt → relecture, le seul du genre côté règlement.
+     *
+     * <p>Le dépôt passe par l'API, donc par la vraie chaîne : envoi sur le stockage, puis
+     * écriture d'{@code AdmAttachedFile} et d'{@code AppFileObject}. La relecture ne renvoie
+     * plus le binaire mais une redirection {@code 302} vers une URL présignée — on vérifie donc
+     * que la redirection vise bien l'objet de CETTE pièce, et que le contenu réellement stocké
+     * est celui qui a été envoyé. Sans ce second contrôle, une redirection vers un mauvais
+     * objet passerait le test.
+     */
     @Test
-    void getFichierPreuve_renvoieLeBinaireAvecLeBonContentType() throws Exception {
+    void getFichierPreuve_redirigeVersLObjetReellementDepose() throws Exception {
         ComFolder folder = newFolder("DOS-RSP-23");
         ComDocument echeance = newEcheance(folder, "100000");
         UUID reglementId = creerReglement(folder, echeance, "50000.00");
@@ -373,13 +390,16 @@ class ReglementStatutPreuveTest {
                 .andReturn().getResponse().getContentAsString();
         UUID pieceId = UUID.fromString(json.replaceAll("^.*?\"id\"\\s*:\\s*\"([^\"]+)\".*$", "$1"));
 
-        byte[] contenu = mockMvc.perform(get(
+        String cle = CleStockage.construire("test", PorteurPieceJointe.REGLEMENT, reglementId,
+                pieceId, ".pdf");
+
+        mockMvc.perform(get(
                         "/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}/fichier",
                         folder.getId(), reglementId, pieceId))
-                .andExpect(status().isOk())
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsByteArray();
-        assertThat(contenu).isEqualTo("PDF-BYTES".getBytes());
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(cle)));
+
+        assertThat(stockageMemoire.contenu(cle)).isEqualTo("PDF-BYTES".getBytes());
     }
 
     // ----------------------------------------------------------- transition de statut

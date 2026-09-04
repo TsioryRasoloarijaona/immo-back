@@ -1,0 +1,5 @@
+# Migration des pièces jointes binaires vers S3 / MinIO.
+# Outil ponctuel — volontairement hors du build Maven : il ne doit jamais partir dans
+# le jar de production.
+pyodbc>=5.1
+boto3>=1.35

@@ -19,6 +19,8 @@ import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.storage.FixturePieceJointe;
+import com.tsix.immocrm.storage.StockageMemoire;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +59,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser
 class DossierPiecesJointesTest {
+
+    @Autowired
+    private StockageMemoire stockageMemoire;
+
+    @Autowired
+    private FixturePieceJointe fixturePieceJointe;
 
     @Autowired
     private MockMvc mockMvc;
@@ -157,8 +165,7 @@ class DossierPiecesJointesTest {
         file.setCategory("Dossier de vente N° TEST du 01/01/2026 *");
         file.setDescription(description);
         file.setExtension(extension);
-        file.setAttachedFile(bytes);
-        return attachedFileRepository.save(file);
+        return fixturePieceJointe.deposer(file, bytes);
     }
 
     @Test
@@ -190,8 +197,7 @@ class DossierPiecesJointesTest {
         cheque.setCategory("Yes.Com.Sales.Sale");
         cheque.setDescription("CHQ 1700000DH TEST");
         cheque.setExtension(".pdf");
-        cheque.setAttachedFile("CHEQUE".getBytes(StandardCharsets.UTF_8));
-        attachedFileRepository.save(cheque);
+        fixturePieceJointe.deposer(cheque, "CHEQUE".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(get("/api/dossiers/{id}/pieces-jointes", folder.getId()))
                 .andExpect(status().isOk())
@@ -215,8 +221,7 @@ class DossierPiecesJointesTest {
         cin.setDescription("CIN client");
         cin.setExtension(".pdf");
         cin.setAdmAttachedFileTypeId(docType.getId());
-        cin.setAttachedFile("CIN".getBytes(StandardCharsets.UTF_8));
-        attachedFileRepository.save(cin);
+        fixturePieceJointe.deposer(cin, "CIN".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(get("/api/dossiers/{id}/pieces-jointes", folder.getId()))
                 .andExpect(status().isOk())
@@ -234,15 +239,22 @@ class DossierPiecesJointesTest {
     }
 
     @Test
-    void getFichier_returnsBytesWithResolvedContentType() throws Exception {
+    void getFichier_redirigeVersUrlPresigneeDuBonObjet() throws Exception {
         ComFolder folder = newFolder("DOS-PJ-3");
         byte[] contenu = "PDF-CONTENT".getBytes(StandardCharsets.UTF_8);
         AdmAttachedFile file = newDossierAttachment(folder.getId(), contenu, ".pdf", "Piece de test");
 
+        // Le binaire ne transite plus par le backend : l'endpoint redirige vers une URL
+        // presignee. On verifie que c'est bien l'objet de CETTE piece qui est vise, et que son
+        // contenu est celui depose — sans quoi une redirection vers le mauvais fichier
+        // passerait le test.
+        String cle = fixturePieceJointe.cleAttendue(file);
+
         mockMvc.perform(get("/api/dossiers/{id}/pieces-jointes/{pieceId}/fichier", folder.getId(), file.getId()))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Content-Type", MediaType.APPLICATION_PDF_VALUE))
-                .andExpect(content().bytes(contenu));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(cle)));
+
+        org.assertj.core.api.Assertions.assertThat(stockageMemoire.contenu(cle)).isEqualTo(contenu);
     }
 
     @Test
