@@ -1,56 +1,48 @@
 # Session Memory
-_Last updated: 2026-08-28T14:35:00+01:00_
-_Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\project\immo-crm_
+_Last updated: 2026-09-04T15:10:00+01:00_
+_Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
-Build out the immo-crm REST API (Spring Boot 4.1.0/Java 21) on the legacy `yesRems` SQL Server schema, driven by `instructions/from_front.md`. Prior session: rebuilt the Fiche Dossier de Vente PDF, added Article building/floor/nature fields + Article pièces-jointes (plans), implemented the blocking `POST /api/prospections` endpoint, added multi-dossier batch PDF generation ("génération en lot"), and made Dossier creation compute HT/TTC/remise + a real `totalToPay` (with syndic). This session: backfilled `TotalToPay` on legacy dossiers missing it, then implemented a new document type, "Autorisation d'Encaissement".
-
-## This session's additions (2026-08-28, second pass)
-- **Backfilled `ComFolder.TotalToPay`** on 12 real `yesRems` dossiers that had a `Price` but no computed breakdown (created before the `appliquerMontants` fix landed) — same formula as `POST /api/dossiers`. One-off migration test (`DossierMontantsBackfill`, `src/test/java/.../services/dossier/`), run once against `yesRems` (temporarily repointed `src/test/resources/application.properties`, reverted after), then **deleted** — not meant to stay in the suite. Left `DossierService.appliquerMontants` as package-private `static` (was `private`) so the script could reuse it — that visibility change is the only lasting artifact of the backfill.
-- **New document: "Autorisation d'Encaissement"** (`GET /api/dossiers/{id}/echeancier/{echeanceId}/documents/autorisation-versement`) — modeled on `instructions/templates/autorisation_virement/ComSaleDocumentAutorisationVersement.yes` + `Report.pdf`. Scoped to one échéance (`ComDocument`), not the whole dossier — same per-item scope as reçu de règlement. New: `AutorisationVersementData`/`Service`/`PdfRenderer`, test `AutorisationVersementTest` (4 tests, PDF text-extraction assertions like `RecuReglementTest`). Not added to `SecurityConfig`'s `permitAll()` doc-generator hole — same precedent as reçu de règlement (échéance/reglement-scoped docs stay authenticated; only the flat `/documents/**` ones are open).
-  - **Entity additions** (real DB columns, confirmed via `INFORMATION_SCHEMA.COLUMNS` first): `ComDocument.stlAccount` (`StlAccountId` FK, rarely populated — 2 rows in all of `yesRems` at the time of this check) and `StlAccount.accountKey` (`AccountKey`).
-  - **RIB is NOT a real column** — `StlAccountView.RIB` is a *computed* view column (`OBJECT_DEFINITION` returned NULL, no `VIEW DEFINITION` permission, but confirmed by comparing base-table vs. view sample data): `BankCode + " " + AgencyCode + " " + AccountNumber + " " + AccountKey`, space-joined, empty parts become `""`. Rebuilt in `AutorisationVersementService.rib()`, never mapped as a fake entity column.
-  - **"Responsable Commercial" = `ComFolder.CfgCommercialId`**, not the legacy `AdmWebSessions` (desktop logged-in user) — same REST-API substitution already established for every other renderer in this package (`ActeReservationService`, `FicheDossierVenteService`).
-  - **Two distinct client concepts** in the template, easy to conflate: `clients` (primary `ComFolder.cfgCustomer` + `ComFolderCustomer` co-acquéreurs — feeds "Nom et prénom des clients" top *and* "Nom et Prénom du client" in the bottom cadre) vs. `payeur` (`ComDocument.cfgContact` — the specific contact tied to *this* échéance, shown only in "Versement effectué par", often null in real data, can differ from `clients` e.g. a third party paying on the client's behalf).
-  - **Schema drift caught again**: `yesRemsTest` was missing `ComDocument.StlAccountId` entirely (real `yesRems` already had it) — added via `ALTER TABLE` on `yesRemsTest` (has DDL rights); `StlAccount.AccountKey` was already present on both.
-  - **`NombreEnLettresFr` quirk** (pre-existing, not touched): "quatre-vingt" never takes an 's' when followed by another number word (e.g. "quatre-vingt mille"), even though the legacy sample PDF shows "quatre-vingts mille" (arguably a legacy template bug) — test asserts the grammatically-correct output the shared utility already produces.
-  - **Layout fix (same session, user caught it)**: initial version spilled to 2 pages (should be 1, per `Report.pdf`) and the "Cadre réservé à la banque" box had a border on every internal row (should be a single unbroken outer rectangle, no internal grid lines). Fixed by: tighter margins/fonts/spacing to fit one page, and rebuilding the cadre as **one bordered `PdfPCell` holding stacked elements** (title/lines/mode-paiement/signatures sub-table, the latter with `border(0)`) instead of one bordered table row per line. Verified visually (rendered a sample PDF, read it back) and locked in with a `reader.getNumberOfPages() == 1` assertion in `AutorisationVersementTest`.
-  - **Scoping fix (same session, user caught it again)**: initial version was scoped to one échéance (`ComDocument`, path `.../echeancier/{echeanceId}/documents/...`), following the legacy `.yes` SQL literally (its `MainID` param does bind to `ComDocument.PKey`). **Wrong in practice** — confirmed via real-data counts that the fields which make the document useful live almost exclusively on `StlSettlement`, not `ComDocument`: `StlAccountId` 76%/`StlSettlementTypeId` 99.9%/`TierId` 99.7% populated on `StlSettlement`, versus 2/958, 1/958 on `ComDocument`. Rescoped to the règlement: new path `GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement` (mirrors `.../reglements/{reglementId}/documents/recu`'s existing convention), `AutorisationVersementService.collect(dossierId, reglementId)` now sources RIB/mode-de-versement/payeur from `StlSettlement` (via `settlementLineRepository.findBySettlementIdAndDossierId` for the ownership check, same pattern as `RecuReglementService`). `dateEmission` now reads `StlSettlement.DocDate` (no direct analogue of `ComDocument.PaymentAuthorizationDate` exists on `StlSettlement`). Test rewritten to build a `StlSettlement`/`StlSettlementLine` fixture (mirrors `ReglementTest`). `ComDocument.stlAccount` mapping left in place (real column) but now unused/dead — comment updated to say so. Full suite: **328/328 green** (net-zero test count, 4 replaced 4).
-- **Règlement creation refactor** (`POST /api/dossiers/{id}/echeancier/{echeanceId}/reglements`) — user asked to verify "reference"/"date"/"date expiration" against real data before changing anything. Findings, confirmed via `INFORMATION_SCHEMA` + real-data queries + the pre-existing `ChampDateEncaissement` enum (which already documents these exact two columns for `GET /api/encaissements`):
-  - **Two distinct dates on `StlSettlement`, do not conflate**: `EcheanceDate` ("date d'échéance", populated on >99% of all real règlements regardless of type, almost always equal to `DocDate`) vs. `SettlementDate` ("date de règlement effectif" — actual encashment/value date, confirmed **almost never** populated in real data — 14 rows out of ~3260 — with no consistent delta from `EcheanceDate`, ranging -2 to +129 days). **The bug wasn't a backwards mapping** (my first hypothesis) — `dateReglement`↔`SettlementDate` was already correct and consistent with `EncaissementDto`'s naming; `EcheanceDate` was simply **never exposed at all** on `CreerReglementRequest`/`ReglementDto`. Fixed by adding `dateEcheance` to both (defaults to `now()` on creation, matching the near-universal real-data pattern). Left `dateReglement`/`SettlementDate` optional with **no default** — real data doesn't support inventing one.
-  - **`reference` (`StlSettlement.Code`) was readable (`ReglementDto.reference`) but never settable** — `CreerReglementRequest` had no such field. Fixed: added `reference`, wired to `Code`.
-  - **`StlSettlementType.IsReferenceMandatory`/`IsReferenceUnique` exist** (mirrors the already-used `IsBankMandatory`/`banqueObligatoire` pattern) — confirmed on real data: true for CHÈQUE/CHEQUE NOTAIRE/SYNDIC/BANQUE/CERTIFIÉ/EFFET (reference present on >99% of those rows), false for VIREMENT/ESPÈCES/CMI/REGUL. Exposed as `TypeReglementDto.referenceObligatoire` **and, unlike `banqueObligatoire`, enforced server-side** (400 if missing when required) — `IsBankMandatory` stays front-only/indicative per existing precedent, deliberately not changed. **`IsReferenceUnique` is NOT enforced** — real `Code` values have heavy duplication (mostly junk placeholders like "HISTORIQUE"/"-"/"0"), so enforcing uniqueness would contradict real usage; left as an exposed-but-unenforced flag question for later if ever needed.
-  - Files: `CreerReglementRequest.java`, `ReglementDto.java`, `TypeReglementDto.java` (+`referenceObligatoire`), `EcheancierService.java` (`addReglement` validation + date/reference wiring, `toReglementDto` +`dateEcheance`), `ReferentielService.java` (+mapping), `DossierController.java` (added missing `@Operation`/`@ApiResponses` on `POST .../reglements` — had none before), `ReferentielController.java` (docs), `ReglementTest.java` (+3 tests), `ReferentielControllerTest.java` (extended existing test).
-  - **Follow-up same conversation**: user asked to also close the reverse gap — `payeurId` (`StlSettlement.TierId`, "réglé par") was already readable on `ReglementDto` but not settable on `CreerReglementRequest`. Confirmed populated on 3232/3240 real rows (99.75%) before adding. Added `payeurId` to `CreerReglementRequest`, wired in `EcheancierService.addReglement` (404-style `InvalidRequestException` if the tier id doesn't resolve, same pattern as `banqueId`/`typeId`), optional/no default (no implicit "acquéreur principal" fallback). +2 tests (`ReglementTest`). Full suite: **320/320 green**.
-- **Bug fix: `GET /api/articles/{id}` "doesn't return the price" on `ARS0804`** — user reported live via curl (logged in as `tsiory`/`securePassword123` against the dev server on :8080). Root cause confirmed via real-data query: `StkItem.SalePrice`/`ComSalePrice` are `0` for this article (never entered), but `StkItem.SalePriceFloor`/`ComSalePriceFloor` carry a real value (743 400.00 / 619 500.00 HT) — already mapped on the JPA entity but **never read or exposed anywhere in the app** (not just this endpoint — grepped Devis/Dossier price code too, none of it touches floor columns). Confirmed not an isolated case: 99 other "disponible" articles share the same zero-price-but-floor-set pattern (out of 636 disponible articles, 288 have `ComSalePrice=0`, only 99 of those have a floor price — the other 189 genuinely have no price anywhere).
-  - **Decision (asked, confirmed)**: expose `salePriceFloor`/`comSalePriceFloor` as **new, separate fields** on `ArticleDetailDto` only — `salePrice`/`comSalePrice` stay untouched (still raw `0` when that's the real DB value), no silent fallback baked into Devis/Dossier money math (`DevisService`, `DossierService.appliquerMontants` keep reading `getComSalePrice()` exactly as before). Front decides whether/when to display the floor price as a fallback.
-  - Files: `ArticleDetailDto.java` (+2 fields), `ArticleService.java` (wiring), `ArticleController.java` (docs), `ArticleControllerTest.java` (+1 regression test reproducing the exact ARS0804 shape). Full suite: **321/321 green**. Not re-verified live against the running dev server per user's choice (restart declined, not needed) — unit test reproduces the exact real-data scenario instead.
-- **Closed `instructions/from_front.md` #4 in full** (was the only "Demandes en cours" entry — user asked "check waiting feature"). Every sub-item resolved and moved to "Traitées":
-  - **"Type Présentation" mystery solved**: confirmed a real, previously-unmapped column `StkItem.StkPresentationTypeId` → new table `StkPresentationType` (single-letter codes F/C/D/H..., **scoped per tranche** via `StkHierarchyId`, not global). New entity + repository; exposed as `presentationTypeId/Code/Libelle` on both `ArticleListItemDto`/`ArticleDetailDto`.
-  - **`superficieSousArticles`** (sum of sous-articles' `Area`) added to both DTOs — new batch-aggregate query `StkItemRepository.sumAreaGroupedByParentIdIn` (one round trip per page, same precedent as the existing dossier batch-loading).
-  - **`tauxTVA`** (`StkItem.Vat`) added to both DTOs.
-  - **`salePriceFloor`/`comSalePriceFloor`** (added to `ArticleDetailDto` earlier this session for the ARS0804 fix) also added to `ArticleListItemDto`, closing the explicit follow-up ask.
-  - **`natureId`/`etageId`/`immeubleId`** (+ code/libellé) — already on `ArticleDetailDto`, now also on `ArticleListItemDto` (was "reste ouvert pour la colonne liste").
-  - **New filters on BOTH `GET /api/articles` and `GET /api/tranches/{id}/articles`**: `entiteId` (CfgCompany), `natureId` (StkKind), `vocationId` (StkVocation), `etageId` (StkFloor), `prixDe`/`prixA` (on `comSalePrice`), `surfaceDe`/`surfaceA` (on `area`) — naming mirrors `GET /api/encaissements`'s `montantDe`/`montantA` precedent, as the front explicitly suggested.
-  - **Two new referentiel endpoints** `GET /api/referentiels/natures` and `GET /api/referentiels/etages` — didn't exist at all before (unlike vocations/entites), needed so the new filters are actually usable by a front dropdown.
-  - **`StkItemSpecifications.build(...)`** (the shared 8-arg full form) extended to 16 args to carry the new filters — the short 6-arg tranche-scoped overload delegates with nulls, unaffected call sites (`ReferentielService`'s article/sous-article dropdowns) untouched.
-  - **`ArticleService.toListItem`** signature changed (added a `Map<UUID, BigDecimal> superficiesSousArticles` param) — both `ReferentielService` call sites updated to pass `Collections.emptyMap()`.
-  - **Schema drift caught again** on `yesRemsTest`: `StkItem.StkPresentationTypeId` column AND the whole `StkPresentationType` table were missing (real `yesRems` has both) — created both via DDL on the test DB (has DDL rights).
-  - Files touched: `entities/stk/StkPresentationType.java` (new), `entities/stk/StkItem.java` (+field), `repositories/stk/StkPresentationTypeRepository.java` (new), `repositories/stk/StkItemRepository.java` (+aggregate query), `services/patrimoine/StkItemSpecifications.java` (rewritten), `services/patrimoine/ArticleService.java` (rewritten), `services/referentiel/ReferentielService.java` (+2 methods, +2 repo deps), `dto/patrimoine/ArticleListItemDto.java`/`ArticleDetailDto.java` (rewritten), `controller/patrimoine/ArticleController.java`/`TrancheController.java` (+params, docs), `controller/referentiel/ReferentielController.java` (+2 endpoints), `ArticleControllerTest.java` (+6 tests), `ReferentielControllerTest.java` (+2 tests). `instructions/from_front.md` #4 moved to "Traitées" in full. Full suite: **328/328 green**.
+Sortir les 8 Go de pièces jointes binaires de SQL Server vers un stockage objet MinIO,
+puis basculer le backend dessus (dépôt → S3 + pointeur en base ; lecture → URL présignée),
+pour permettre un déploiement sur un VPS Linux. **Migration terminée et backend intégré ;
+reste à pousser la branche et à configurer l'environnement d'exécution.**
 
 ---
 
 ## ✅ What Worked
-- **`sqlcmd ... INFORMATION_SCHEMA.COLUMNS`** (see Environment) to verify a column exists on the real DB *before* mapping it into an entity — caught a bad assumption (guessed `ComFolder` amount columns from the legacy `.yes` template's exposed view columns) via a failing test rather than shipping it. **Standing practice now**: never trust a `.yes`/Stimulsoft-view column list as proof a base-table column exists.
-- Reusing an existing pure calculator (`SchemaFinancementCalculator`) and an existing calc pattern (`DevisService#calculerMontants`) rather than re-inventing money math — kept Dossier's new HT/TTC logic consistent with Offer's, as asked.
-- `PdfCopy`/`PdfReader` (OpenPDF) for merging independently-rendered PDFs page-by-page — one new `PdfMerger` component now backs 6 new batch endpoints without touching any of the 6 existing single-dossier renderers.
-- Mirroring an existing sibling feature's exact structure (Dossier pièces-jointes → Article pièces-jointes; single-dossier doc endpoint → batch doc endpoint) sped up implementation and kept conventions consistent.
-- Full `./mvnw.cmd test` suite kept green after every change this session (multiple full runs, exit 0 each time — one flaky unrelated test in `ProspectionHistoriqueTest`, confirmed flaky by re-running in isolation, not caused by any of this session's work).
+- **Inventaire avant tout** : `sys.columns ... is_filestream/varbinary/image` sur les tables de
+  base (vues exclues) → une seule table exploitée par le backend, `AdmAttachedFile`
+  (3 138 fichiers, 8 245 Mo). Les 45 Mo restants (`AdmReportData`, `CfgImage`…) sont propres au
+  poste Windows et laissés en place.
+- **Migration Python ponctuelle** (`migration/migrate_blobs_to_s3.py`), hors build Maven :
+  lecture seule sur le legacy, reprise par anti-jointure sur `AppFileObject`, SHA-256 transmis
+  en `ChecksumSHA256` (vérifié serveur), traitement du plus petit au plus grand fichier.
+  **3 138/3 138 en 14 min, 0 échec, 9,7 Mo/s.**
+- **Trois niveaux de vérification** : checksum serveur à l'écriture, `--verify` (HEAD sur les
+  3 138 objets, taille + empreinte vs base, sans retélécharger), et téléchargement réel
+  octet-pour-octet sur les 6 plus gros fichiers (34,8 → 24,4 Mo). Tous conformes.
+- **`--check`** (aller-retour d'un objet témoin) pour valider endpoint/TLS/identifiants/checksum
+  en une seconde avant toute passe.
+- **Purge + ramasse-miettes FILESTREAM** : base passée de ~10 Go à 1,8 Go.
+- **Suite complète verte : 463/463.**
 
 ## ❌ What Failed
-- Assuming `ComFolder` had `ExpenseAmount/Advance/AdvanceAmount/CreditAmount/SelfFinancingAmount/PenalityAmount/CancelAmount/WithCredit` columns because they're exposed by the legacy `ComSaleFolderView` — **wrong**, none exist on the base table (`INFORMATION_SCHEMA.COLUMNS` check after a failing test). Reverted; montants are computed dynamically from `ComSettlementCategory` boolean flags instead (see Key Points).
+- `ddl-auto=update` **écarté** — Hibernate compare *toutes* les entités et émettrait des `ALTER`
+  sur le schéma legacy. Précédent réel : les 8 colonnes fictives de `ComFolder` auraient été
+  créées au lieu de lever `Invalid column name`.
+- **Confirmation de purge via `$(CONFIRMER)`** → substitution propre à sqlcmd ; DataGrip passe la
+  chaîne telle quelle, la confirmation ne pouvait jamais aboutir. Remplacé par un drapeau
+  `@confirmation` édité dans le fichier.
+- **Garde `IF COL_LENGTH(...) IS NULL RETURN;`** → inopérant : SQL Server résout les noms de
+  colonnes à la **compilation du lot entier**. Toutes les requêtes nommant `AttachedFile` sont
+  passées en `sp_executesql`.
+- **`S3Client.Builder`** n'existe pas dans le SDK AWS v2 → `S3ClientBuilder` (type racine).
+- **Suite lancée contre `yesRemsProd`** → 4 échecs de dérive de schéma (`StkItemType.StkKindId`
+  `NOT NULL` là-bas, nullable dans `yesRemsTest`). Abandonné au profit de l'application des
+  scripts DDL sur `yesRemsTest`.
 
 ---
 
@@ -58,67 +50,131 @@ Build out the immo-crm REST API (Spring Boot 4.1.0/Java 21) on the legacy `yesRe
 
 | # | Error / Bug | Status | Fix applied |
 |---|-------------|--------|-------------|
-| 1 | `Invalid column name 'Advance'` querying `ComFolder` in test | Fixed | Removed the 8 fictional columns from `ComFolder.java`; montants computed dynamically from `ComSettlementCategory` flags via échéancier |
-| 2 | **Live, still unresolved**: `GET /api/dossiers` → 401 on the running dev server, even after login returns 200 | Root cause identified, **not fixed per user's explicit instruction** ("forget the dev profile part just come back with no profile") | Login sets `access_token` with `Secure` flag (server has no active profile ⇒ `app.jwt.cookie-secure=true` default); over plain HTTP the browser silently drops it. Same root cause as a prior session's #7. Fix (`application-dev.properties`) exists but user declined applying it — **do not restart the server or push the dev profile without being asked again.** |
-| 3 | `TotalToPay` (and the whole HT/TTC/remise price breakdown) on `ComFolder` was already read/exposed (`DossierListItemDto`/`DossierDetailDto.totalAPayer`, `DashboardService` pipeline value) but **never written anywhere** — always `null` for API-created dossiers | Fixed | `DossierService.appliquerMontants` now computes and persists the full breakdown at creation time (see Key Points) |
+| 1 | `Autorisation CREATE TABLE refusée` sur `yesRems` | Fixed | L'utilisateur a ajouté `tsix` à `db_ddladmin` |
+| 2 | Purge : `$(CONFIRMER)` inutilisable hors sqlcmd | Fixed | Drapeau `@confirmation` en clair dans le fichier |
+| 3 | `Le fichier 'YesRems_FILESTREAM' n'est pas vide` malgré GC à 0 | Fixed | La **table** gardait sa clause `FILESTREAM_ON` → `ALTER TABLE ... SET (FILESTREAM_ON = "NULL")` |
+| 4 | `Nom de colonne non valide : AttachedFile` après le drop | Fixed | `sp_executesql` (résolution à la compilation du lot) |
+| 5 | `cannot find symbol: class Builder` (S3Client) | Fixed | `S3ClientBuilder` |
+| 6 | 25 erreurs « Unable to find @SpringBootConfiguration » | Fixed | Cascade d'un **seul** échec (302 vs 200) : le seuil d'échec de contexte franchi fait renoncer Spring à le recharger |
+| 7 | `sqlcmd -i /tmp/x.sql` → `opening file C: Access denied` | Fixed | Conversion de chemin MSYS — utiliser un chemin relatif |
+| 8 | Connexion `localhost,1433` en timeout | Fixed | C'est un **tunnel SSH** vers le VPS — ajouter `-l 60` |
 
 ---
 
 ## 🔑 Key Points to Remember
-- **New standard practice**: before mapping any column onto an entity from a legacy `.yes` Stimulsoft template or its bound SQL view, verify it exists on the real base table via `sqlcmd ... INFORMATION_SCHEMA.COLUMNS` first (see Environment for the exact command). The `.yes` files describe report *views*, which can compute/join far more than the base table stores.
-- **`ComSettlementCategory`** has 4 newly-mapped boolean flags beyond the pre-existing ones: `isSaleCredit`, `isSaleModification`, `isSalePenality`, `isSaleResiliation` (all confirmed real DB columns `IsSaleCredit/IsSaleModification/IsSalePenality/IsSaleResiliation`). The `IsSale*` family is for Fiche-Dossier-de-Vente/montants — the bare `IsCredit` on the same table is an unrelated generic accounting flag (used elsewhere via `StlSettlement`).
-- **Fiche Dossier de Vente MONTANTS box** (9 fixed rows: Frais/Modification/Prix de vente/Avance/Crédit/Auto-financement/Pénalité/Résiliation/Net à payer) is entirely recomputed from the échéancier via those `IsSale*` flags — never stored snapshot amounts, except "Prix de vente" (`ComFolder.PriceAfterDiscount`, now actually populated at creation, see below).
-- **Article `ComFolderItem`** (not `StkItem`) holds per-dossier price/discount/`AlwaysAffected` — used for the SOUS ARTICLES table on Fiche Dossier de Vente.
-- **Article building/floor/nature**: `StkBuilding` (immeuble), `StkFloor` (étage — confirmed a real lookup table, NOT a free column as `from_front.md` #4 suspected), `StkKind` (nature — confirmed distinct from Catégorie/Type, resolves another #4 open question). All three now exposed on `ArticleDetailDto` only (not the list DTO/filters yet — that's still open in #4).
-- **Article plans exist in real DB**: `AdmAttachedFile` rows with `AdmAttachedFileType.Code` = `PLAN`/`PLAN_ARCHITECTE`/`PLAN_ETAGE` (471 real files), `Category = "Yes.Stk.Building.Item"`, `CategoryId = StkItem.PKey` — same polymorphic-parent-no-FK convention as Dossier pièces-jointes. Now exposed read-only via `GET /api/articles/{id}/pieces-jointes[/...]`.
-- **`POST /api/prospections`** (from_front.md #9, was blocking) is for a prospect that **already exists** (front already calls `POST /api/prospects` first) — `prospectId` required. Distinct from the untouched pré-prospection flow (`POST /api/pre-prospections/{id}/creer-prospect` + `.../transformer`), which stays for raw/unidentified leads. Code generated via `AdmSequence` row `Code = "Prospection"` (confirmed real format `"AA/NNNNN"` — 2-digit year, unlike Dossier's 4-digit-year+project-prefix).
-- **Batch document generation** (`POST /api/dossiers/documents/{type}`, body `{"dossierIds":[...]}`) exists for all 6 dossier-scoped PDF generators (fiche-reservation, acte-reservation, fiche-bancaire, fiche-visite-technique, fiche-dossier-vente, fiche-trop-percu) — **not** for reçu-de-règlement (scoped to one règlement, not one dossier) and **PDF-only** (no batch Word/docx). `PdfMerger` (new, OpenPDF `PdfCopy`) concatenates each dossier's already-rendered PDF; fails loud (404) on the first unknown dossier id in the batch rather than silently skipping it.
-- **`DossierService.appliquerMontants`** (new, mirrors `DevisService#calculerMontants`): on `POST /api/dossiers` with `prix` given, computes HT from the main article's `ComSalePrice(HT)`/`Vat`, treats the request's `prix` as the **post-remise** TTC price (remise = gap vs. the article's commercial price — Dossier has no separate `remisePercent` input unlike Devis), and sets `TotalToPay = priceAfterDiscount (TTC) + Frais Syndic` (`SchemaFinancementCalculator`, tranche's `SyndicAmount × SyndicPeriod`) — the one deliberate difference from an Offer's total, which never includes syndic. Skipped entirely if `prix` is omitted, same guard as the pre-existing schema-financement generation.
-- Carried over: `yesRemsTest` (test DB) schema can drift from real `yesRems`. `ddl-auto=none` on both; only `yesRemsTest` has DDL rights. `sqlcmd` at `/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn` (add to PATH each Bash session). Test env: `DB_HOST="localhost,49687" DB_NAME=yesRemsTest DB_USER=tsix DB_PWD=securePassword123 JWT_SECRET=testsecret` with `./mvnw.cmd test -Dtest=...` (needs the `,49687` port suffix). Never modify `pom.xml` without asking.
+- **`AdmAttachedFile.AttachedFile` était une colonne FILESTREAM**, pas un `varbinary(max)`
+  ordinaire : contenu dans un groupe de fichiers séparé, embarqué par `BACKUP DATABASE`, et un
+  `NULL` ne fait que *marquer* les fichiers. Sans `CHECKPOINT` +
+  `sp_filestream_force_garbage_collection`, les 8 Go restent sur disque **et dans le .bak**.
+- **SQL Server pour Linux refuse toute base DÉCLARANT un groupe FILESTREAM**, même vide — c'est
+  la déclaration qui est rejetée. D'où `004`, sans quoi le RESTORE sur le VPS échoue.
+- **Supprimer la colonne ne détache pas la table** du groupe de fichiers (`FILESTREAM_ON`
+  subsiste dans `sys.tables.filestream_data_space_id`) ; le message d'erreur « n'est pas vide »
+  est trompeur.
+- **`AppFileObject.StorageKey` stocke la clé EN ENTIER** et n'est jamais recalculée pour un
+  fichier existant. Une divergence de forme entre clés de migration et clés de nouveaux dépôts
+  est donc sans conséquence.
+- **`hasFile` était le point de rupture silencieuse** : sa `@Formula` nommait `AttachedFile` et
+  est évaluée à *chaque* chargement d'`AdmAttachedFileSummary` — elle aurait cassé **toutes les
+  listes**, pas seulement les téléchargements. Elle interroge désormais `AppFileObject`.
+- **Ordre d'écriture imposé : stockage d'abord, base ensuite**, + `TransactionSynchronization`
+  qui supprime l'objet au rollback. Seule fuite possible : un objet orphelin (coût, sans
+  conséquence). L'ordre inverse donnerait des 500 au téléchargement.
+- **`Category` est inexploitable comme discriminant** (texte partiellement libre : ~110 libellés
+  « Dossier de vente N° … », 11 lignes vides) → énumération `PorteurPieceJointe`.
+- **Les 11 lignes non cartographiables ont `CategoryId IS NULL`** — de vrais orphelins, migrés
+  sous `orphelin/`.
+- **`facture` = 1 622 fichiers / 5,5 Go (67 % du volume) et n'a aucun endpoint backend** —
+  migré quand même.
+- **Autorités = `ROLE_` + `AdmRole.Code`** (pas `Description`). `hasRole('Administrateur')`
+  exige donc `Code = 'Administrateur'`.
+- **RUPTURE DE CONTRAT FRONT** : les 3 endpoints `/fichier` renvoient `302` + `Location` au lieu
+  du binaire. `<a href>`, `window.open`, `fetch` continuent de marcher, **mais MinIO doit
+  autoriser l'origine du front en CORS** — sinon échec CORS après une redirection réussie.
+  Documenté dans `instructions/FEATURE-s3-storage.md` §4. Frontend **non touché** (frontière du
+  dépôt).
+- Reporté volontairement : **pas de `PUT` présigné** pour le dépôt (chantier séparé, endpoint
+  distinct) ; **pas d'upload d'article** (lecture seule, non demandé).
 
 ---
 
-## 📁 Important Files & Paths (this session, all uncommitted)
+## 📁 Important Files & Paths
 
-**Autorisation d'Encaissement** (second pass, 2026-08-28): `entities/com/ComDocument.java` (+`stlAccount`), `entities/stl/StlAccount.java` (+`accountKey`), `dto/dossier/AutorisationVersementData.java` (new), `services/dossier/AutorisationVersementService.java` (new), `services/dossier/document/AutorisationVersementPdfRenderer.java` (new), `DossierController.java` (+endpoint, docs), `AutorisationVersementTest.java` (new, 4 tests). `DossierService.java`'s `appliquerMontants` widened to package-private (leftover from the backfill script, since deleted).
+**Schéma applicatif** — `src/main/resources/db/migration/` (chemin Flyway ; idempotents) :
+`001_AppUserCredential.sql` (rétro-ingéniérie, n'existait dans aucun fichier du dépôt),
+`002_AppFileObject.sql`, `003_AppFileMigrationFailure.sql`,
+`004_drop_attachedfile_filestream.sql`, `README.md`.
 
+**Migration** — `migration/` : `migrate_blobs_to_s3.py` (`--check`/`--dry-run`/`--limit`/
+`--verify`), `purge_attached_file.sql` (**délibérément hors de `db/migration/`** : Flyway
+l'exécuterait au démarrage), `requirements.txt`, `.env.example`, `README.md`.
+`.env` et `.venv` sont gitignorés.
 
-**Fiche Dossier de Vente rewrite**: `ComSettlementCategory.java` (+4 flags), `ComFolderItemRepository.java` (+query), `FicheDossierVenteData.java`/`Service.java`/`PdfRenderer.java` (fully rewritten), `DossierController.java` (docs), `FicheDossierVenteTest.java` (rewritten).
+**Stockage (backend)** — `src/main/java/com/tsix/immocrm/storage/` : `StockageFichiers` (port),
+`StockageS3`, `StockageConfig` (`pathStyleAccessEnabled(true)` **obligatoire** pour MinIO, sur le
+client *et* le signataire), `StockageProperties`, `CleStockage`, `PorteurPieceJointe`,
+`ObjetStocke`. + `entities/app/AppFileObject`, `repositories/app/AppFileObjectRepository`.
 
-**Article building/floor/nature**: `ArticleDetailDto.java`, `ArticleService.java`, `ArticleController.java` (docs), `ArticleControllerTest.java` (+2 tests).
+**Modifiés** : `services/piecejointe/PieceJointeSupport` (seul chemin de lecture et d'écriture),
+`entities/adm/AdmAttachedFile` (colonne démappée), `AdmAttachedFileSummary` (`@Formula`),
+les 3 façades (`PieceJointeService`, `ReglementPieceJointeService`, `ArticlePieceJointeService`),
+`DossierController`, `ArticleController`, `application.properties`.
 
-**Article plans / pièces-jointes**: `web/ContentTypeParExtension.java` (new, extracted from `DossierController`'s local map — now shared), `AdmAttachedFileSummaryRepository.java` (+`findByArticleId`), `services/patrimoine/ArticlePieceJointeService.java` (new), `ArticleController.java` (+2 endpoints), `ArticlePiecesJointesTest.java` (new, 5 tests).
+**Tests** : `src/test/java/com/tsix/immocrm/storage/StockageMemoire.java` (`@Primary`, la suite ne
+touche jamais le réseau) et `FixturePieceJointe.java` (crée métadonnées **+** pointeur ; l'oubli
+du pointeur rend un fixture invisible via `hasFile`).
 
-**`POST /api/prospections`**: `dto/prospection/CreerProspectionRequest.java` (new), `ProspectionService.java` (+`creerProspection`, +`genererCodeProspection`), `ProspectionController.java` (+endpoint), `ProspectionCreationTest.java` (new, 7 tests). `instructions/from_front.md` — #9 moved to "Traitées" with full decision write-up, #4 is again the only open "Demandes en cours" entry.
-
-**Batch document generation**: `services/dossier/document/PdfMerger.java` (new), `dto/dossier/GenererDocumentsLotRequest.java` (new), `services/dossier/DocumentLotService.java` (new), `DossierController.java` (+6 endpoints + `lotResponse` helper), `DocumentLotTest.java` (new, 9 tests).
-
-**Dossier creation totals**: `DossierService.java` (+`appliquerMontants`, +`diviserParTaux`, `create()` restructured), `DossierController.java` (docs), `DossierCreateTest.java` (+1 test).
-
-**Prior-session pile, still uncommitted, not touched this session**: Encaissements, `NombreEnLettresFr`, `FicheTropPercuData/Service/PdfRenderer`, `TypeReglementDto`, `TierNomFormatter`, enriched `ReglementDto`, `SecurityConfig` (permitAll on doc-generators, deliberate temporary hole), Devis/GAP-07 work already committed on `feat/numero-fiche-offre` (`311d7dd`/`83ddb37`).
+**Spec** : `instructions/FEATURE-s3-storage.md` (inventaire, décisions, §4 impact front,
+§6 dépendance et variables d'environnement).
 
 ---
 
 ## 🔧 Environment & Config
-- Windows 11, PowerShell primary / Git Bash (`Bash` tool) for `sqlcmd`/git/scripting.
-- SQL Server `localhost,49687` — `yesRems` (real data, `ddl-auto=none`) vs `yesRemsTest` (test, DDL rights, schema drift possible — confirmed again this session).
-- Column-existence check (use before mapping ANY new entity field): `sqlcmd -S localhost,49687 -U tsix -P securePassword123 -d yesRemsTest -C -Q "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='X'" -h -1` (swap `-d yesRemsTest` for `-d yesRems` to check the real DB, e.g. for seed/reference data like `AdmSequence`/`AdmAttachedFileType` rows that may be sparse/empty in the test DB).
-- **Dev server (PID 1540 as of prior check) runs with NO profile active** (`app.jwt.cookie-secure=true` default) — login sets a `Secure` cookie that plain-HTTP browser access silently drops. User explicitly asked to leave this alone — **do not restart it or push `SPRING_PROFILES_ACTIVE=dev` unless asked again.**
-- Git: branch `feat/numero-fiche-offre`, nothing pushed this session, large uncommitted pile keeps growing across sessions.
+- **Deux serveurs SQL** : local `localhost,49687` (`yesRems`, `yesRemsProd`, `yesRemsTest`) et
+  **`localhost,1433` = tunnel SSH vers le VPS** (`yesRemsDev`). Le tunnel exige `-l 60` sur
+  `sqlcmd`, sinon timeout à la première connexion.
+- **États des bases** : `yesRemsProd` (local) migrée + purgée + colonne supprimée, prête pour le
+  `.bak` → VPS. `yesRemsDev` (VPS) déjà migrée (3 138 pointeurs, colonne supprimée).
+  `yesRemsTest` a reçu 002/003/004 et sert la suite.
+- **MinIO** `RELEASE.2025-09-07`, endpoint TLS ; bucket **`immo-back`** (objets sous `prod/`).
+  Buckets dev/prod séparés → `S3_PREFIX` devenu **facultatif** (il n'évitait que la collision
+  dans un bucket partagé, les `PKey` étant identiques entre restaurations).
+- **Secrets** : `migration/.env` (gitignoré, modèle dans `.env.example`) ; toute variable déjà
+  présente dans l'environnement prime. **À faire tourner** : la clé de service MinIO a transité
+  par la conversation.
+- **`pom.xml`** : `software.amazon.awssdk:s3:2.32.14` ajoutée par l'utilisateur.
+- **Variables d'exécution du backend** (en plus de `DB_*`/`JWT_SECRET`) : `S3_BUCKET`,
+  `S3_ENDPOINT`, `S3_REGION`, `S3_PREFIX`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`.
+- **Compte admin créé sur `yesRemsDev`** : `t.admin`, rôle `Administrateur`,
+  `MustChangePassword=0`, `ProfileCompleted=1`. Hash BCrypt produit avec l'encodeur du projet
+  puis relu depuis la base et vérifié. `AppUserCredential` y était **vide** (0 ligne pour
+  74 `AdmUser`) : c'est le seul compte connectable. Mots de passe non consignés ici.
+- **Git** : branche `migration/s3-storage`, arbre propre, **10 commits non poussés**
+  (`c378841` → `0597f56`).
 
 ---
 
 ## ⏭️ Next Step
-> Everything requested this session is **done and tests are green** — no pending action. Ask the user what's next: commit this (very large) pile of work — probably split into several logical commits (Fiche Dossier de Vente / Article fields+plans / Prospection creation / batch documents / Dossier totals are 5 natural boundaries) — or continue with `instructions/from_front.md` #4 (Article list/filter columns for Nature/Étage/Immeuble/Vocation/Entité + Prix/Surface range filters), or the deferred #401-cookie fix, whenever they're ready to revisit it (don't bring it up unprompted).
+> Pousser la branche (`node .claude/scripts/git-flow.mjs push back`), ouvrir la PR sur
+> `TsioryRasoloarijaona/immo-back` et attendre la fusion par l'utilisateur avant tout autre
+> travail. La demande de push a été posée trois fois sans réponse — la reposer.
 
 ### Backlog
-- [ ] **Commit everything** — nothing pushed all session, split into logical commits per feature area (see "Important Files" above for natural groupings).
-- [ ] **401 cookie bug** — root cause confirmed twice now (this session + prior), fix exists but user has twice declined applying it. Ask before touching server config again.
-- [ ] **`instructions/from_front.md` #4 remaining items** — Type Présentation (no backing lookup found), Superficie Sous Articles, TVA%, and `entiteId`/`natureId`/`vocationId`/`etageId`/`immeubleId` filters + list-DTO columns on `GET /api/articles`/`GET /api/tranches/{id}/articles` (detail-only so far, per this session's partial delivery).
-- [ ] **StkPresentationType / ComLoanCompanyDecision lookups** — if ever needed for Fiche Dossier de Vente's "Présentation"/"Décision MEILLEURTAUX" fields (currently deliberately blank, no lookup entity exists).
-- [ ] **Article pièces-jointes upload path** — currently read-only (`ArticlePieceJointeService`); add a `create` mirroring `PieceJointeService#create` if the front ever needs to upload new article plans, not just view legacy ones.
-- [ ] S3/MinIO migration — still "planification seulement," audit `AdmAttachedFile` volume first.
-- [ ] Prospect→Client promotion + code generation on Dossier creation — confirmed real legacy behavior, not implemented, ask before implementing.
-- [ ] `UtilisateurAdminService`'s employee `CfgTier` creation has the same `Description`-never-set bug already fixed in `ProspectService` — flagged, not fixed.
-- [ ] Re-enable auth on document-generator endpoints before prod — `SecurityConfig`'s 3 `permitAll()` lines, deliberate temporary hole.
-- [ ] Older backlog items (column-selection/grouping design, `sommePrixVenteTTC` aggregate, `syndicAmount`/`syndicPeriod` on TrancheDetailDto, `PATCH` devis, `GET /api/commerciaux` data source, DESISTEMENT via `ComSaleWithdrawalCancellation`, ADMOD/GHRIZA filter confirmation, Fiche Trop Perçu `tropPercu` formula confirmation) — still open, lower priority.
+- [ ] **CORS sur MinIO** pour l'origine du front — c'est ce qui cassera en premier après le
+      déploiement, avec un symptôme trompeur (échec CORS *après* une redirection réussie).
+- [ ] **Sauvegarde du bucket** (réplication Dropbox évoquée) : MinIO est aujourd'hui la seule
+      copie des 8 Go. Filets restants : le `.bak` d'origine et `yesRems` local (3 134 fichiers,
+      instantané plus ancien).
+- [ ] **Faire tourner la clé de service MinIO** (passée en clair dans la conversation) et
+      vérifier qu'elle est bien limitée au bucket, pas root.
+- [ ] Restaurer le `.bak` de `yesRemsProd` sur le VPS et lancer le **diff de schéma** contre la
+      base de dev pour détecter d'éventuelles colonnes ajoutées à la main non scriptées.
+- [ ] `ContentTypeParExtension` ignore `.jfif`/`.heic` (4 fichiers réels) — le script Python les
+      traite, pas le Java.
+- [ ] Endpoint d'upload pour les pièces jointes d'Article (lecture seule aujourd'hui).
+- [ ] `UtilisateurAdminService` : bug `Description` jamais renseignée à la création du `CfgTier`
+      employé, déjà corrigé dans `ProspectService` — signalé, non corrigé.
+- [ ] Réactiver l'auth sur les générateurs de documents (3 `permitAll()` dans `SecurityConfig`,
+      trou temporaire assumé) avant la prod.
+- [ ] Anciens items encore ouverts : bug cookie 401 (`app.jwt.cookie-secure` sans profil actif),
+      `sommePrixVenteTTC`, `PATCH` devis, source de `GET /api/commerciaux`, DESISTEMENT.
