@@ -12,6 +12,8 @@ import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.storage.FixturePieceJointe;
+import com.tsix.immocrm.storage.StockageMemoire;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,6 +44,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser
 class ArticlePiecesJointesTest {
+
+    @Autowired
+    private StockageMemoire stockageMemoire;
+
+    @Autowired
+    private FixturePieceJointe fixturePieceJointe;
 
     @Autowired
     private MockMvc mockMvc;
@@ -96,8 +104,7 @@ class ArticlePiecesJointesTest {
         file.setCategory("Yes.Stk.Building.Item");
         file.setDescription(description);
         file.setExtension(extension);
-        file.setAttachedFile(bytes);
-        return attachedFileRepository.save(file);
+        return fixturePieceJointe.deposer(file, bytes);
     }
 
     @Test
@@ -131,8 +138,7 @@ class ArticlePiecesJointesTest {
         plan.setDescription("Plan de l'appartement");
         plan.setExtension(".pdf");
         plan.setAdmAttachedFileTypeId(planType.getId());
-        plan.setAttachedFile("PLAN-BYTES".getBytes(StandardCharsets.UTF_8));
-        attachedFileRepository.save(plan);
+        fixturePieceJointe.deposer(plan, "PLAN-BYTES".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(get("/api/articles/{id}/pieces-jointes", article.getId()))
                 .andExpect(status().isOk())
@@ -147,15 +153,18 @@ class ArticlePiecesJointesTest {
     }
 
     @Test
-    void getFichier_returnsBytesWithResolvedContentType() throws Exception {
+    void getFichier_redirigeVersUrlPresigneeDuBonObjet() throws Exception {
         StkItem article = newArticle("ART-APJ-3");
         byte[] contenu = "PLAN-PDF-CONTENT".getBytes(StandardCharsets.UTF_8);
         AdmAttachedFile file = newArticleAttachment(article.getId(), contenu, ".pdf", "Plan étage 2");
 
+        String cle = fixturePieceJointe.cleAttendue(file);
+
         mockMvc.perform(get("/api/articles/{id}/pieces-jointes/{pieceId}/fichier", article.getId(), file.getId()))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Content-Type", MediaType.APPLICATION_PDF_VALUE))
-                .andExpect(content().bytes(contenu));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(cle)));
+
+        org.assertj.core.api.Assertions.assertThat(stockageMemoire.contenu(cle)).isEqualTo(contenu);
     }
 
     @Test

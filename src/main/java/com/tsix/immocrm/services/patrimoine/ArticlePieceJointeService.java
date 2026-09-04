@@ -1,13 +1,13 @@
 package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
-import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,11 +42,11 @@ public class ArticlePieceJointeService {
         return support.lister(articleId);
     }
 
-    /** Fetches the binary content — 404 if it doesn't belong to this article or has no file attached. */
-    public AdmAttachedFile findFichier(UUID articleId, UUID pieceId) {
+    /** URL présignée de téléchargement — 404 si la pièce n'appartient pas à cet article. */
+    public URI urlFichier(UUID articleId, UUID pieceId) {
         if (!itemRepository.existsById(articleId)) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
         }
-        return support.fichier(articleId, pieceId, "cet article");
+        return support.urlTelechargement(articleId, pieceId, "cet article");
     }
 }

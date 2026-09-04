@@ -1,17 +1,18 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
-import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
+import com.tsix.immocrm.storage.PorteurPieceJointe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -54,14 +55,14 @@ public class PieceJointeService {
     }
 
     /**
-     * Récupère le contenu binaire — 404 si la pièce n'appartient pas à ce dossier, ou s'il s'agit
-     * d'une case de checklist sans fichier réel (voir {@link #findByDossier}).
+     * URL présignée de téléchargement — 404 si la pièce n'appartient pas à ce dossier, ou s'il
+     * s'agit d'une case de checklist sans fichier réel (voir {@link #findByDossier}).
      */
-    public AdmAttachedFile findFichier(UUID dossierId, UUID pieceId) {
+    public URI urlFichier(UUID dossierId, UUID pieceId) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
         }
-        return support.fichier(dossierId, pieceId, "ce dossier");
+        return support.urlTelechargement(dossierId, pieceId, "ce dossier");
     }
 
     /**
@@ -78,6 +79,7 @@ public class PieceJointeService {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
         String category = "Dossier de vente N° " + folder.getCode() + " du " + LocalDateTime.now().format(DATE_LEGACY);
-        return support.deposer(dossierId, category, fichier, description, typeId, principal);
+        return support.deposer(dossierId, PorteurPieceJointe.DOSSIER, category, fichier, description,
+                typeId, principal);
     }
 }

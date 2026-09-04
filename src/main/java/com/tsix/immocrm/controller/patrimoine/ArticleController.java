@@ -5,10 +5,8 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
-import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.services.patrimoine.ArticlePieceJointeService;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
-import com.tsix.immocrm.web.ContentTypeParExtension;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,8 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -178,28 +174,24 @@ public class ArticleController {
     @GetMapping("/{id}/pieces-jointes/{pieceId}/fichier")
     @Operation(
             summary = "Télécharge/affiche une pièce jointe de l'article (ex. un plan)",
-            description = "Retourne le contenu binaire brut de la pièce jointe, avec le "
-                    + "content-type déduit de son extension stockée (`application/octet-stream` "
-                    + "si extension inconnue/absente)."
+            description = "**Renvoie une redirection `302` vers une URL présignée**, pas le contenu "
+                    + "binaire : le fichier est stocké sur S3/MinIO et transite directement entre le "
+                    + "client et le stockage, sans passer par le backend.\n\n"
+                    + "L'URL signée est valable quelques minutes et vaut autorisation d'accès ; elle "
+                    + "n'est délivrée qu'après vérification que la pièce appartient bien à cet article."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Contenu du fichier."),
-            @ApiResponse(responseCode = "404", description = "Article introuvable, pièce jointe introuvable pour cet article, ou aucun fichier attaché.")
+            @ApiResponse(responseCode = "302", description = "Redirection vers l'URL présignée du fichier."),
+            @ApiResponse(responseCode = "404", description = "Article introuvable, pièce jointe introuvable "
+                    + "pour cet article, ou aucun fichier stocké pour cette pièce.")
     })
-    public ResponseEntity<byte[]> getFichier(
+    public ResponseEntity<Void> getFichier(
             @Parameter(description = "Identifiant de l'article (StkItem.PKey).")
             @PathVariable UUID id,
             @Parameter(description = "Identifiant de la pièce jointe (AdmAttachedFile.PKey).")
             @PathVariable UUID pieceId) {
-        AdmAttachedFile fichier = pieceJointeService.findFichier(id, pieceId);
-        String extension = fichier.getExtension() != null ? fichier.getExtension().toLowerCase(Locale.ROOT) : "";
-        MediaType contentType = ContentTypeParExtension.resolve(extension);
-        String nomFichier = (fichier.getDescription() != null ? fichier.getDescription() : "piece-jointe") + extension;
-
-        return ResponseEntity.ok()
-                .contentType(contentType)
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(nomFichier).build().toString())
-                .body(fichier.getAttachedFile());
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(pieceJointeService.urlFichier(id, pieceId))
+                .build();
     }
 }

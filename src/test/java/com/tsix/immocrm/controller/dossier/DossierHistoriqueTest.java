@@ -17,6 +17,7 @@ import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
+import com.tsix.immocrm.storage.FixturePieceJointe;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser
 class DossierHistoriqueTest {
+
+    @Autowired
+    private FixturePieceJointe fixturePieceJointe;
 
     @Autowired
     private MockMvc mockMvc;
@@ -122,8 +126,7 @@ class DossierHistoriqueTest {
         piece.setCategoryId(folder.getId());
         piece.setCategory("Dossier de vente N° DOS-HIST-1 *");
         piece.setDescription("CIN client");
-        piece.setAttachedFile("X".getBytes(StandardCharsets.UTF_8));
-        attachedFileRepository.save(piece);
+        fixturePieceJointe.deposer(piece, "X".getBytes(StandardCharsets.UTF_8));
         // UserCreateDateTime for the attached file is left null (harness constraint on this
         // fixture) — sorted last by the nullsLast comparator, which is exercised here too.
 

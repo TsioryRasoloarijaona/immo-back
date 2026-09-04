@@ -70,7 +70,16 @@ Réplication Dropbox prévue — à faire avant d'écrire cette phase.
 
 ---
 
-## 3. Reste à faire — côté Java
+## 3. Implémenté — côté Java
+
+> Livré. Ne compile qu'une fois la dépendance `software.amazon.awssdk:s3` ajoutée au
+> `pom.xml` (voir §6) — c'est la seule chose qui manque, vérifié : la compilation
+> n'échoue que sur les imports AWS, aucun autre fichier.
+>
+> Nouveau paquet `storage/` : `StockageFichiers` (port), `StockageS3`,
+> `StockageConfig`, `StockageProperties`, `CleStockage`, `PorteurPieceJointe`,
+> `ObjetStocke`. Nouvelle entité `entities/app/AppFileObject` + son repository.
+> Côté tests, `StockageMemoire` (`@Primary`) et `FixturePieceJointe`.
 
 ### 3.1 Port de stockage
 
@@ -159,15 +168,39 @@ les nouveaux dépôts soient cohérents.
 
 ## 4. Impact front
 
-**Aucun à ce stade.** Le basculement décrit ci-dessus conserve URL, méthode, en-têtes
-et corps de réponse à l'identique.
+**RUPTURE DE CONTRAT — les trois endpoints de téléchargement ne renvoient plus le
+binaire.** Les URL présignées ont été explicitement demandées ; c'en est la conséquence
+directe, assumée.
 
-Une évolution ultérieure vers des **URL présignées** (le fichier transitant directement
-entre le navigateur et MinIO, sans passer par le backend) changerait, elle, le contrat
-de `GET …/pieces-jointes/{pieceId}/fichier` : corps binaire → redirection ou URL. Si
-elle est retenue, elle doit être un **endpoint distinct**, pas une redéfinition de
-l'existant — un endpoint re-scopé a déjà provoqué des 404 silencieux sur ce projet.
-Même raisonnement pour un dépôt direct en `PUT` présigné.
+| Endpoint | Avant | Après |
+|---|---|---|
+| `GET /api/dossiers/{id}/pieces-jointes/{pieceId}/fichier` | `200` + corps binaire | **`302`** + `Location` |
+| `GET /api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}/fichier` | `200` + corps binaire | **`302`** + `Location` |
+| `GET /api/articles/{id}/pieces-jointes/{pieceId}/fichier` | `200` + corps binaire | **`302`** + `Location` |
+
+Les URL, méthodes et paramètres sont inchangés ; seule la réponse change. `Content-Type`
+et `Content-Disposition` sont désormais portés par la réponse du stockage, pas par le
+backend.
+
+Ce qui continue de fonctionner sans modification : `<a href>`, `window.open`,
+`<img src>`, et tout `fetch()` — qui suit les redirections par défaut.
+
+Ce qui demande une vérification côté front :
+
+- **CORS sur MinIO.** Un `fetch()` depuis le navigateur suit le `302` vers
+  `s3.tsiory.tech`, qui doit donc autoriser l'origine du front. Sans cela le
+  téléchargement échoue en CORS après une redirection réussie — symptôme trompeur.
+- **Le cookie JWT n'est pas envoyé au stockage**, et n'a pas à l'être : l'URL porte sa
+  propre signature. Un `credentials: 'include'` reste sans effet et sans danger.
+- **L'URL expire** (`app.stockage.presign-minutes`, 15 min par défaut) : elle ne doit
+  pas être mise en cache ni stockée côté front, seulement suivie immédiatement.
+- **Elle vaut autorisation d'accès** pour sa durée de vie : ne pas la journaliser, ne
+  pas la mettre dans une query string partagée.
+
+Le dépôt (`POST .../pieces-jointes`, `multipart/form-data`) est **inchangé** : même
+requête, même réponse `201` + `PieceJointeDto`. Un `PUT` présigné direct navigateur →
+MinIO serait la suite logique, mais c'est un autre chantier et il devrait être un
+endpoint distinct.
 
 ---
 
@@ -185,7 +218,43 @@ Même raisonnement pour un dépôt direct en `PUT` présigné.
 - **MinIO `RELEASE.2025-09-07T16-13-09Z`** : `ChecksumSHA256` disponible, pas de repli
   nécessaire.
 
-## 6. Points ouverts
+## 6. À ajouter manuellement
+
+### `pom.xml`
+
+```xml
+<dependency>
+    <groupId>software.amazon.awssdk</groupId>
+    <artifactId>s3</artifactId>
+    <version>2.32.14</version>
+</dependency>
+```
+
+Ce seul artefact suffit : `S3Client`, `S3Presigner`, les credentials et les régions y
+sont. `s3-transfer-manager` est inutile à ces tailles (35 Mo au maximum). Spring Boot ne
+gère pas la version du SDK AWS, d'où la version explicite.
+
+### Variables d'environnement
+
+En plus des `DB_*` et `JWT_SECRET` existantes :
+
+| Variable | Local (base dev du VPS) | Production |
+|---|---|---|
+| `S3_BUCKET` | bucket de dev | bucket de prod |
+| `S3_ENDPOINT` | `https://s3.tsiory.tech` | idem |
+| `S3_REGION` | `us-east-1` (défaut, facultative) | idem |
+| `S3_PREFIX` | `dev` | `prod` |
+| `S3_ACCESS_KEY` | compte de service MinIO | compte distinct |
+| `S3_SECRET_KEY` | — | — |
+
+`S3_PREFIX` n'est pas cosmétique : les deux bases étant des restaurations du même jeu de
+données, les `PKey` y sont identiques, et deux environnements sans préfixe distinct
+écriraient sur les mêmes clés.
+
+`S3_ACCESS_KEY`/`S3_SECRET_KEY` doivent désigner un **compte de service limité au
+bucket**, pas les identifiants root MinIO.
+
+## 7. Points ouverts
 
 - **Droit `CREATE TABLE` sur `yesRems`** — `tsix` ne l'a pas. Nécessaire pour appliquer
   `002`/`003` avant la passe réelle.
