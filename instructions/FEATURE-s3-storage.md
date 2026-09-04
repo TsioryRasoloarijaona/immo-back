@@ -182,6 +182,18 @@ Les URL, méthodes et paramètres sont inchangés ; seule la réponse change. `C
 et `Content-Disposition` sont désormais portés par la réponse du stockage, pas par le
 backend.
 
+**`Content-Disposition: inline`, comme avant la migration.** Le backend servait déjà
+`ContentDisposition.inline()` sur ces trois endpoints ; la visualisation des PDF et des
+images dans un onglet, sans téléchargement, est donc préservée à l'identique. Les types
+que le navigateur ne sait pas rendre (`.docx`, `.xlsx`, 6 fichiers réels) retombent
+d'eux-mêmes sur le téléchargement, exactement comme avant.
+
+> Une première version de cette branche forçait `attachment`, ce qui cassait la
+> visualisation sans erreur visible. Corrigé dans `StockageS3.contentDisposition()` et
+> verrouillé par `StockageS3UrlTelechargementTest`. Aucun objet déjà migré n'a eu à être
+> retouché : la disposition est surchargée **à la signature**
+> (`responseContentDisposition`), jamais lue depuis l'objet stocké.
+
 Ce qui continue de fonctionner sans modification : `<a href>`, `window.open`,
 `<img src>`, et tout `fetch()` — qui suit les redirections par défaut.
 

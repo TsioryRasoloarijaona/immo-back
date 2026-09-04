@@ -173,12 +173,15 @@ public class ArticleController {
 
     @GetMapping("/{id}/pieces-jointes/{pieceId}/fichier")
     @Operation(
-            summary = "Télécharge/affiche une pièce jointe de l'article (ex. un plan)",
+            summary = "Affiche ou télécharge une pièce jointe de l'article (ex. un plan)",
             description = "**Renvoie une redirection `302` vers une URL présignée**, pas le contenu "
                     + "binaire : le fichier est stocké sur S3/MinIO et transite directement entre le "
                     + "client et le stockage, sans passer par le backend.\n\n"
                     + "L'URL signée est valable quelques minutes et vaut autorisation d'accès ; elle "
-                    + "n'est délivrée qu'après vérification que la pièce appartient bien à cet article."
+                    + "n'est délivrée qu'après vérification que la pièce appartient bien à cet article.\n\n"
+                    + "**La disposition est `inline`** : le plan s'affiche dans un onglet ou une "
+                    + "visionneuse sans être téléchargé, ce qui est l'usage courant ici. Le nom proposé "
+                    + "reprend la description de la pièce."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "302", description = "Redirection vers l'URL présignée du fichier."),

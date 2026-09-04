@@ -80,7 +80,14 @@ public class StockageS3 implements StockageFichiers {
     }
 
     /**
-     * {@code filename} en repli ASCII pour les clients anciens, {@code filename*} en UTF-8
+     * <b>{@code inline}, jamais {@code attachment}</b> — le front affiche les PDF et les images
+     * dans un onglet sans les télécharger. C'est ce que le backend servait déjà avant le passage
+     * à S3 ({@code ContentDisposition.inline()} dans les contrôleurs, convention conservée par
+     * les générateurs de documents) ; {@code attachment} forçait un téléchargement sur les trois
+     * endpoints {@code /fichier} et cassait la visualisation. Un navigateur qui ne sait pas rendre
+     * le type — {@code .docx}, {@code .xlsx} — retombe de lui-même sur le téléchargement.
+     *
+     * <p>{@code filename} en repli ASCII pour les clients anciens, {@code filename*} en UTF-8
      * (RFC 5987) pour le nom réel — les descriptions legacy sont accentuées et un en-tête HTTP
      * ne transporte pas d'UTF-8 brut.
      */
@@ -90,7 +97,7 @@ public class StockageS3 implements StockageFichiers {
         if (repli.length() > 120) {
             repli = repli.substring(0, 120);
         }
-        return "attachment; filename=\"" + repli + "\"; filename*=UTF-8''"
+        return "inline; filename=\"" + repli + "\"; filename*=UTF-8''"
                 + URLEncoder.encode(propre, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
