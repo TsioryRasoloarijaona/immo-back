@@ -30,10 +30,37 @@ public final class CleStockage {
 
     public static String construire(String prefix, PorteurPieceJointe porteur, UUID porteurId,
                                     UUID pieceId, String extension) {
-        return prefix + "/pieces-jointes/" + porteur.segmentCle() + "/"
+        return normaliserPrefixe(prefix) + "pieces-jointes/" + porteur.segmentCle() + "/"
                 + porteurId.toString().toLowerCase(Locale.ROOT) + "/"
                 + pieceId.toString().toLowerCase(Locale.ROOT)
                 + normaliserExtension(extension);
+    }
+
+    /**
+     * {@code "prod"} / {@code "prod/"} / {@code "/prod/"} → {@code "prod/"} ; vide ou
+     * {@code null} → {@code ""}.
+     *
+     * <p>Le préfixe devient facultatif dès lors que chaque environnement a <b>son propre
+     * bucket</b> : le risque qu'il écartait — deux environnements écrivant la même clé, les
+     * bases étant des restaurations du même jeu de données donc porteuses des mêmes
+     * {@code PKey} — n'existe plus entre buckets distincts.
+     *
+     * <p>Un préfixe vide ne doit pour autant pas produire une clé commençant par {@code /} :
+     * S3 l'accepterait, mais elle s'afficherait comme un dossier sans nom dans la console MinIO
+     * et compliquerait toute inspection manuelle.
+     */
+    private static String normaliserPrefixe(String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            return "";
+        }
+        String propre = prefix.trim();
+        while (propre.startsWith("/")) {
+            propre = propre.substring(1);
+        }
+        while (propre.endsWith("/")) {
+            propre = propre.substring(0, propre.length() - 1);
+        }
+        return propre.isEmpty() ? "" : propre + "/";
     }
 
     /** {@code .PDF} / {@code pdf} / {@code null} → {@code .pdf} / {@code .pdf} / {@code ""}. */
