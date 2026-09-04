@@ -20,16 +20,32 @@
  * ci-dessous recontrôlent la cohérence côté base, mais ils ne peuvent PAS savoir si
  * les objets sont réellement lisibles sur le stockage — seul --verify le prouve.
  *
- * EXÉCUTION — la confirmation explicite est obligatoire ; sans elle sqlcmd s'arrête
- * sur une variable non définie, ce qui est le comportement voulu :
+ * EXÉCUTION — la confirmation est explicite et se fait EN ÉDITANT CE FICHIER, à la
+ * ligne @confirmation ci-dessous : remplacer 'NON' par 'OUI'.
+ *
+ * Exécuté tel quel, le script n'écrit rien : il se contente d'afficher les compteurs
+ * puis s'arrête. C'est voulu — lancer le fichier par mégarde ne peut rien détruire.
+ *
+ * Depuis n'importe quel client SQL (DataGrip, SSMS, Azure Data Studio) ou en ligne de
+ * commande :
  *
  *     sqlcmd -S "<hote>" -U <user> -P <pwd> -d yesRemsProd -C -b \
- *            -v CONFIRMER=OUI -i migration/purge_attached_file.sql
+ *            -i migration/purge_attached_file.sql
+ *
+ * (Une précédente version attendait `-v CONFIRMER=OUI`. C'était une substitution
+ * propre à sqlcmd : les clients graphiques passent `$(CONFIRMER)` tel quel, si bien
+ * que la confirmation ne pouvait jamais aboutir. D'où ce drapeau en clair, qui a le
+ * même effet et fonctionne partout.)
+ *
+ * PENSER À REMETTRE 'NON' APRÈS USAGE.
  */
 
 SET NOCOUNT ON;
 
-DECLARE @confirmation NVARCHAR(20) = N'$(CONFIRMER)';
+--  ┌────────────────────────────────────────────────────────────────────────────┐
+--  │  Mettre N'OUI' pour autoriser la purge. Toute autre valeur = simple etat.   │
+--  └────────────────────────────────────────────────────────────────────────────┘
+DECLARE @confirmation NVARCHAR(20) = N'NON';
 DECLARE @restants     INT;
 DECLARE @echecs       INT;
 DECLARE @ecarts       INT;
@@ -69,7 +85,9 @@ PRINT '  binaires purgeables        : ' + CAST(@aPurger  AS VARCHAR)
 
 IF @confirmation <> N'OUI'
 BEGIN
-    RAISERROR('Purge annulee : relancer avec -v CONFIRMER=OUI apres avoir lu l en-tete du script.', 16, 1);
+    PRINT '';
+    PRINT 'Purge NON executee (mode etat seul).';
+    PRINT 'Pour l autoriser : editer ce fichier et mettre @confirmation = N''OUI''.';
     RETURN;
 END
 
