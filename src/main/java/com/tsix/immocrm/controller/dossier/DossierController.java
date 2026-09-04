@@ -201,12 +201,13 @@ public class DossierController {
             @RequestParam(required = false) List<String> statut,
             @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")
             @RequestParam(required = false) UUID commercial,
-            @Parameter(description = "Id de l'entité/projet (CfgProject.id), matché via l'article "
-                    + "principal du dossier.")
+            @Parameter(description = "Id de l'entité/projet (CfgProject.id), résolu par la tranche "
+                    + "de l'article principal du dossier.")
             @RequestParam(required = false) UUID projet,
             @Parameter(description = "Id(s) de tranche (CfgTranche.id, StkItem.stkHierarchy). "
                     + "Répéter le paramètre pour plusieurs tranches. Renvoie les dossiers dont au "
-                    + "moins un article appartient à une des tranches demandées.")
+                    + "moins un article lié — ou l'article principal — appartient à une des "
+                    + "tranches demandées.")
             @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Jalon sur lequel appliquer dateDebut/dateFin. Ignoré si "
                     + "aucun des deux n'est fourni. Défaut : RESERVATION (= date de création du "

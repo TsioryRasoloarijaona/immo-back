@@ -147,15 +147,19 @@ public class DossierService {
      *                   values match any of them (OR). Repeated query param
      *                   ({@code ?statut=a&statut=b}), see {@code instructions/filtres-avances.md}.
      * @param commercial {@code CfgTier.id} (cfgCommercial) filter
-     * @param projet     {@code CfgProject.id} filter, matched via the folder's primary
-     *                   article's project ({@code ComFolder.stkItem.cfgProject}) — a folder's
-     *                   linked articles are assumed to share one project.
-     * @param trancheIds {@code CfgTranche.id} filter — matches a dossier if at least one of its
-     *                   linked articles ({@code StkItem.comFolderId}) belongs to one of these
-     *                   tranches ({@code StkItem.stkHierarchy}). A dossier can have several
-     *                   articles (main lot + annexes) possibly spanning tranches, hence the
-     *                   {@code EXISTS} subquery rather than a direct join. See
-     *                   {@code instructions/filtres-avances.md} point 2.
+     * @param projet     {@code CfgProject.id} filter, résolu par la <b>tranche</b> de l'article
+     *                   principal ({@code ComFolder.stkItem.stkHierarchy.cfgProject}) et non par
+     *                   {@code StkItem.cfgProject}, colonne morte en base réelle (0 ligne sur
+     *                   1068) sur laquelle ce filtre ne renvoyait jamais aucun dossier. Le chemin
+     *                   retenu couvre 358 dossiers sur 358.
+     * @param trancheIds {@code CfgTranche.id} filter — retient un dossier si l'un de ses articles
+     *                   liés ({@code StkItem.comFolderId}) <b>ou</b> son article principal
+     *                   ({@code ComFolder.stkItem}) appartient à l'une de ces tranches. Les deux
+     *                   branches sont nécessaires : le lien inverse ne couvre que 328 des 358
+     *                   dossiers réels, l'article principal les 358. Un dossier peut porter
+     *                   plusieurs articles (lot principal + annexes) éventuellement répartis sur
+     *                   plusieurs tranches, d'où l'{@code EXISTS} plutôt qu'une simple jointure.
+     *                   Voir {@code instructions/filtres-avances.md} point 2.
      * @param champDate  which {@code ComFolder} milestone column {@code dateDebut}/{@code dateFin}
      *                   apply to (defaults to {@link ChampDateDossier#RESERVATION} — i.e.
      *                   {@code docDate} — if a range is given without an explicit field). Ignored
@@ -182,7 +186,12 @@ public class DossierService {
                 predicates.add(cb.equal(root.get("cfgCommercial").get("id"), commercial));
             }
             if (projet != null) {
-                predicates.add(cb.equal(root.get("stkItem").get("cfgProject").get("id"), projet));
+                // Le projet se résout par la TRANCHE de l'article principal, jamais par
+                // StkItem.CfgProjectId : ce raccourci est mort en base réelle (0 ligne sur 1068),
+                // donc le filtre ne renvoyait jamais aucun dossier. Même chemin que
+                // ComFolderRepository.findDashboardProjectionDansPerimetre, qui le documentait déjà.
+                predicates.add(cb.equal(
+                        root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), projet));
             }
             if (trancheIds != null && !trancheIds.isEmpty()) {
                 jakarta.persistence.criteria.Subquery<UUID> subquery = query.subquery(UUID.class);
@@ -191,7 +200,22 @@ public class DossierService {
                         .where(cb.and(
                                 cb.equal(article.get("comFolderId"), root.get("id")),
                                 article.get("stkHierarchy").get("id").in(trancheIds)));
-                predicates.add(cb.exists(subquery));
+                // L'EXISTS seul ne suffit pas : il passe par le lien inverse StkItem.ComFolderId,
+                // qui n'est renseigné que pour 328 des 358 dossiers réels. Les 30 autres ont
+                // pourtant bien une tranche via leur article principal (ComFolder.StkItemId, lui
+                // renseigné à 358/358) — sans cette seconde branche ils étaient invisibles au
+                // filtre, silencieusement.
+                //
+                // Jointures explicitement LEFT : une navigation implicite produirait des INNER
+                // JOIN qui, portant sur toute la requête et non sur la seule branche du OR,
+                // écarteraient un dossier sans article principal même quand l'EXISTS le retient.
+                jakarta.persistence.criteria.Join<ComFolder, StkItem> principal =
+                        root.join("stkItem", jakarta.persistence.criteria.JoinType.LEFT);
+                jakarta.persistence.criteria.Join<StkItem, CfgTranche> trancheDuPrincipal =
+                        principal.join("stkHierarchy", jakarta.persistence.criteria.JoinType.LEFT);
+                predicates.add(cb.or(
+                        cb.exists(subquery),
+                        trancheDuPrincipal.get("id").in(trancheIds)));
             }
             if (dateDebut != null || dateFin != null) {
                 String champ = (champDate != null ? champDate : ChampDateDossier.RESERVATION).getChampEntite();

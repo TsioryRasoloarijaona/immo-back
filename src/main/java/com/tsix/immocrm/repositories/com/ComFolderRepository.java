@@ -3,6 +3,8 @@ package com.tsix.immocrm.repositories.com;
 import com.tsix.immocrm.entities.com.ComFolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +14,26 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, JpaSpecificationExecutor<ComFolder> {
+
+    /**
+     * {@code GET /api/dossiers} — surcharge la méthode de {@link JpaSpecificationExecutor} pour
+     * charger en une seule requête les quatre associations que
+     * {@code DossierService.toListItem} déréférence sur <b>chaque</b> ligne.
+     *
+     * <p><b>Sans ce graphe, la liste est un N+1.</b> Les quatre associations sont
+     * {@code @ManyToOne(fetch = LAZY)} : une page de 20 déclenchait jusqu'à 80 SELECT
+     * supplémentaires, et le temps de réponse était strictement proportionnel à la taille de
+     * page (mesuré : 0,72 s à {@code size=1}, 3,51 s à 20, 7,72 s à 50 — soit ~0,15 s par ligne,
+     * dont l'essentiel en allers-retours réseau). Le volume n'y était pour rien : 358 dossiers
+     * en tout.
+     *
+     * <p>Les quatre sont des {@code ToOne} : le join-fetch reste compatible avec la pagination,
+     * qui continue de se faire en SQL. Un {@code @EntityGraph} sur une collection provoquerait au
+     * contraire une pagination en mémoire — à ne pas ajouter ici.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"strStatus", "cfgCustomer", "cfgCommercial", "comProspection"})
+    Page<ComFolder> findAll(Specification<ComFolder> spec, Pageable pageable);
 
     /**
      * Lightweight projection for {@code GET /api/dashboard} — avoids loading full ComFolder
