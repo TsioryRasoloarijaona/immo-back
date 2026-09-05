@@ -27,6 +27,15 @@ import org.springframework.web.cors.CorsUtils;
  * toute route accessible sans principal est, par construction, une route sans périmètre.
  * N'y rajoutez pas d'exception pour du confort de test manuel.
  * <p>
+ * {@code /actuator/health} est ouvert, et c'est la seule exception <b>non applicative</b> : elle
+ * ne sert aucune donnée métier, seulement {@code {"status":"UP"}} — {@code show-details=never}
+ * est posé dans {@code application.properties} et doit y rester, sinon l'endpoint divulguerait
+ * l'état du {@code DataSource} et du stockage objet. Elle existe parce qu'une sonde de
+ * déploiement (HEALTHCHECK Docker, vérification post-déploiement du pipeline) n'a pas de cookie
+ * JWT à présenter : derrière l'authentification, elle recevrait {@code 401} et déclarerait le
+ * conteneur en échec en permanence. {@code /actuator/metrics} reste authentifié — il exposerait
+ * l'inventaire des URI et les latences par endpoint.
+ * <p>
  * Phase 3 adds {@link EnableMethodSecurity} so {@code @PreAuthorize("hasRole(...)")} works on
  * individual endpoints — {@code UtilisateurAdminController} is the first (and, until another
  * endpoint needs one, only) place in the app that checks a specific role rather than just
@@ -68,6 +77,9 @@ public class SecurityConfig {
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Sonde de déploiement uniquement — chemin exact, pas de /**, pour ne pas
+                        // ouvrir /actuator/metrics au passage. Voir le javadoc de la classe.
+                        .requestMatchers("/actuator/health").permitAll()
                         // Les générateurs de documents (PDF/Word) étaient ouverts en permitAll pour
                         // permettre des tests manuels, marqué TEMPORAIRE. Refermé avec le périmètre
                         // commercial : sans authentification il n'y a pas de principal, donc pas de

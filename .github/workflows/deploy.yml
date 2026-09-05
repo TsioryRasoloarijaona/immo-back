@@ -1,0 +1,132 @@
+name: Build et déploiement
+
+# Un merge de PR sur main EST un push sur main : c'est le déclencheur normal.
+# workflow_dispatch permet de redéployer sans nouveau commit (incident, rollback).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Aucun secret de registre : GITHUB_TOKEN est injecté automatiquement et expire à la fin
+# du job. packages:write suppose que le package est rattaché à ce dépôt avec le rôle Write
+# (Package settings > Manage Actions access) — sans ça le push échoue en "denied".
+permissions:
+  contents: read
+  packages: write
+
+# Deux déploiements simultanés écriraient IMMO_BACK_TAG en même temps dans le .env du VPS.
+# cancel-in-progress reste false : on ne coupe pas un déploiement à mi-course.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+env:
+  # En dur et en minuscules : ${{ github.repository }} vaut TsioryRasoloarijaona/immo-back,
+  # et Docker refuse les majuscules dans un nom de dépôt.
+  IMAGE: ghcr.io/tsioryrasoloarijaona/immo-back
+
+jobs:
+  build:
+    name: Construire et pousser l'image
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOTE : la suite de tests n'est pas jouée ici. Elle exige un SQL Server réel
+      # (src/test/resources/application.properties pointe sur yesRemsTest), qu'un runner
+      # GitHub n'a pas. Le Dockerfile construit donc avec -DskipTests : la validation
+      # reste manuelle, avant le merge. Voir le backlog de SESSION_MEMORY.md.
+
+      - name: Calculer les tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # sha-<7 caractères> est le tag immuable, celui qu'on déploie et sur lequel on
+          # revient en arrière. latest n'est qu'un raccourci de confort.
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Se connecter à GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.TOKEN }}
+
+      - name: Construire et pousser
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Sans ce cache, chaque build retélécharge Maven 3.9.16 puis toutes les
+          # dépendances. La couche dependency:go-offline est réutilisée tant que
+          # pom.xml ne change pas.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Déployer sur le VPS
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Préparer la clé SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # TOFU : on accepte la clé d'hôte au premier contact. Pour durcir, stocker la
+          # sortie de ssh-keyscan dans un secret et l'écrire ici au lieu de la scanner.
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Basculer sur la nouvelle image
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "TAG='$TAG' VPS_PATH='${{ secrets.VPS_PATH }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          # Repli sur ~/app si le secret VPS_PATH n'est pas défini (:- couvre aussi le vide).
+          cd "${VPS_PATH:-$HOME/app}"
+
+          # Le tag SHA est immuable : écrire cette ligne suffit à décider quelle image
+          # tourne, et suffit aussi à revenir en arrière à la main en cas d'incident.
+          if grep -q '^IMMO_BACK_TAG=' .env; then
+            sed -i "s|^IMMO_BACK_TAG=.*|IMMO_BACK_TAG=${TAG}|" .env
+          else
+            echo "IMMO_BACK_TAG=${TAG}" >> .env
+          fi
+
+          docker compose pull immo-back
+          # Nom du service explicite : sans lui, up -d recréerait aussi minio et sqlserver.
+          docker compose up -d immo-back
+          REMOTE
+
+      - name: Vérifier que l'application répond
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "VPS_PATH='${{ secrets.VPS_PATH }}' bash -s" <<'REMOTE'
+          set -uo pipefail
+          cd "${VPS_PATH:-$HOME/app}"
+          # Spring met une trentaine de secondes à démarrer ; on sonde jusqu'à 90 s avant
+          # de déclarer l'échec. Sans cette étape, le job serait vert alors que le
+          # conteneur est en boucle de crash.
+          for i in $(seq 1 45); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
+            if [ "$code" = "200" ]; then
+              echo "OK : /actuator/health répond 200 après $((i * 2)) s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ECHEC : /actuator/health n'a jamais répondu 200"
+          docker compose logs --tail=50 immo-back
+          exit 1
+          REMOTE
