@@ -33,7 +33,10 @@ RUN java -Djarmode=tools -jar target/*.jar extract \
 # storage per tag. Alpine is safe here -- the PDF renderers only import
 # java.awt.Color, which needs no fontconfig/freetype.
 FROM eclipse-temurin:21-jre-alpine
-LABEL org.opencontainers.image.source="https://github.com/tsioryRasoloarijaona/immo-back"
+# GHCR matches this URL against the repository path to link the package (and to inherit its
+# permissions, which is what lets Actions' GITHUB_TOKEN push). The match is case-sensitive:
+# the owner is TsioryRasoloarijaona, capital T.
+LABEL org.opencontainers.image.source="https://github.com/TsioryRasoloarijaona/immo-back"
 
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app

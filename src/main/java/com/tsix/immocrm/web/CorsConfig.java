@@ -6,9 +6,14 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Allows any localhost origin (regardless of port) to call the API — covers local frontend dev
- * servers (e.g. Vite on 5173, CRA on 3000) without hardcoding a specific port. Also the single
- * place where {@link PerimetreInterceptor} (périmètre commercial) is wired into the MVC stack.
+ * Allows the deployed frontend origin plus any localhost origin (regardless of port) to call the
+ * API — the latter covers local frontend dev servers (e.g. Vite on 5173, CRA on 3000) without
+ * hardcoding a specific port. Also the single place where {@link PerimetreInterceptor} (périmètre
+ * commercial) is wired into the MVC stack.
+ * <p>
+ * {@code allowCredentials(true)} is required by the JWT-in-httpOnly-cookie scheme, and it rules
+ * out the {@code *} wildcard: every production origin has to be listed here explicitly. A new
+ * deployment domain therefore means editing this file — there is no configuration escape hatch.
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
@@ -34,7 +39,11 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOriginPatterns("http://192.168.11.114:5473" , "http://localhost:*" , "http://192.168.11.*:*")
+                .allowedOriginPatterns(
+                        // Frontend déployé, servi en HTTPS par Caddy : l'Origin envoyée par le
+                        // navigateur porte le schéma https, jamais http.
+                        "https://immo.tsiory.tech",
+                        "http://192.168.11.114:5473", "http://localhost:*", "http://192.168.11.*:*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);

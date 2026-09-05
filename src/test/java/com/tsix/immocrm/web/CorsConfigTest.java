@@ -31,6 +31,26 @@ class CorsConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
+    /**
+     * L'origine de production est listée explicitement : {@code allowCredentials(true)} interdit
+     * le joker {@code *}, donc rien d'autre que cette liste ne passera le contrôle du navigateur.
+     * Ce test échoue si quelqu'un retire le domaine déployé de {@link CorsConfig}.
+     */
+    @Test
+    void apiEndpoint_echoesDeployedFrontendOriginInCorsHeader() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "https://immo.tsiory.tech"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://immo.tsiory.tech"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    /** Le schéma fait partie de l'origine : la variante en clair n'est pas autorisée. */
+    @Test
+    void apiEndpoint_rejectsDeployedFrontendOriginOverPlainHttp() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "http://immo.tsiory.tech"))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void preflight_allowsPatchFromLocalhostOrigin() throws Exception {
         mockMvc.perform(options("/api/dossiers/{id}/statut", "00000000-0000-0000-0000-000000000000")
