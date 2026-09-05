@@ -42,3 +42,9 @@ migration/.venv/
 migration/__pycache__/
 migration/*.log
 migration/.env
+
+### Environnement local (docker run --env-file) ###
+# Porte DB_PWD, JWT_SECRET et les clés MinIO. Seul .env.example est suivi.
+.env
+.env.*
+!.env.example
