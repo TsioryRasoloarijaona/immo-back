@@ -1,0 +1,24 @@
+# The whole context is uploaded to the daemon before the first COPY runs, even
+# though every COPY here is scoped. Without this file that is ~57 MB (target/,
+# graphify-out/, .git/, instructions/) for ~5 MB of actual build input.
+.git/
+.gitattributes
+.gitignore
+target/
+graphify-out/
+.idea/
+.claude/
+*.iml
+
+# Never let credentials into the build context.
+.env
+.env.*
+
+# Docs, specs and legacy report templates: never copied, never needed at runtime.
+instructions/
+docs/
+*.md
+
+Dockerfile
+.dockerignore
+docker-compose*.yml
