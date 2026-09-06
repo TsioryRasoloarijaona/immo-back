@@ -118,8 +118,10 @@ jobs:
           # Spring met une trentaine de secondes à démarrer ; on sonde jusqu'à 90 s avant
           # de déclarer l'échec. Sans cette étape, le job serait vert alors que le
           # conteneur est en boucle de crash.
+          # Port 9091 et non 8080 : l'actuator est servi sur management.server.port, publié
+          # sur 127.0.0.1 uniquement. Le compose doit exposer "127.0.0.1:9091:9091".
           for i in $(seq 1 45); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9091/actuator/health || true)
             if [ "$code" = "200" ]; then
               echo "OK : /actuator/health répond 200 après $((i * 2)) s"
               exit 0

@@ -50,6 +50,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Expose /actuator/prometheus. Les histogrammes p50/p95/p99 par URI sont déjà calculés
+             par la configuration Micrometer d'application.properties ; seul ce registre manquait
+             pour les exporter. Version gérée par spring-boot-starter-parent. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- JWT signing/parsing — Source: https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
