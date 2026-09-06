@@ -19,17 +19,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * l'accès <b>anonyme</b> qui est sous test. Une sonde de déploiement — HEALTHCHECK Docker,
  * vérification post-déploiement du pipeline — n'a pas de cookie JWT à présenter.
  *
- * <p>Les deux assertions vont par paire et doivent le rester : ouvrir {@code /actuator/health} ne
- * doit jamais ouvrir {@code /actuator/metrics}, qui exposerait l'inventaire des URI et les
- * latences par endpoint.
+ * <p>Les trois assertions forment un tout et doivent le rester : ouvrir {@code health} et
+ * {@code prometheus} ne doit jamais ouvrir {@code metrics}, qui exposerait l'inventaire des URI
+ * et les latences par endpoint.
  *
- * <p><b>Ce que ce test ne couvre pas.</b> En production, {@code management.server.port=9091}
- * sert l'actuator sur un port dédié. Or l'environnement web {@code MOCK} de
- * {@code @SpringBootTest} n'ouvre aucun port réel : {@code management.server.port} y est
- * <b>ignoré</b>, et MockMvc voit donc l'actuator dans le contexte principal. Ce test valide
- * l'état de repli — celui qui s'appliquerait si le port de management disparaissait — et non
- * la configuration réellement servie en production. Vérifier celle-ci demande un appel réseau
- * contre l'instance déployée, pas un test MockMvc.
+ * <p><b>Portée réelle.</b> En production, {@code management.server.port=9091} sert l'actuator
+ * sur un port dédié, alors que l'environnement web {@code MOCK} n'ouvre aucun port et ignore
+ * cette propriété. La différence est sans effet <b>ici</b> : la chaîne de filtres de
+ * {@code SecurityConfig} s'applique aux deux ports, et c'est elle qui est sous test. Vérifié en
+ * production sur 9091 — {@code health} en {@code 200} anonyme, {@code metrics} en {@code 401}.
+ *
+ * <p>L'exposition des trois endpoints est forcée dans
+ * {@code src/test/resources/application.properties} : ce fichier remplace celui de {@code main},
+ * et sans cette ligne seul {@code health} serait monté — le test passerait au vert en
+ * n'interrogeant rien.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,6 +52,19 @@ class ActuatorSecuriteTest {
                 .andExpect(jsonPath("$.components").doesNotExist())
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("dataSource"))));
+    }
+
+    /**
+     * Prometheus scrape sans identifiant : derrière l'authentification, la cible ressort
+     * {@code down} avec un {@code 401} — c'est exactement le défaut qui a motivé ce test.
+     */
+    @Test
+    void prometheus_estPublic_etRendLeFormatTexte() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                // Le format d'exposition Prometheus, pas du JSON : la présence d'une ligne
+                // HELP/TYPE prouve que le registre est bien branché et pas seulement l'endpoint.
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("# TYPE")));
     }
 
     @Test

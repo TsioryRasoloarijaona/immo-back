@@ -27,19 +27,27 @@ import org.springframework.web.cors.CorsUtils;
  * toute route accessible sans principal est, par construction, une route sans périmètre.
  * N'y rajoutez pas d'exception pour du confort de test manuel.
  * <p>
- * {@code /actuator/health} est ouvert, et c'est la seule exception <b>non applicative</b> : elle
- * ne sert aucune donnée métier, seulement {@code {"status":"UP"}} — {@code show-details=never}
- * est posé dans {@code application.properties} et doit y rester, sinon l'endpoint divulguerait
- * l'état du {@code DataSource} et du stockage objet. Elle existe parce qu'une sonde de
- * déploiement (HEALTHCHECK Docker, vérification post-déploiement du pipeline) n'a pas de cookie
- * JWT à présenter : derrière l'authentification, elle recevrait {@code 401} et déclarerait le
- * conteneur en échec en permanence.
+ * {@code /actuator/health} et {@code /actuator/prometheus} sont ouverts, et ce sont les seules
+ * exceptions <b>non applicatives</b> : aucune donnée métier n'y transite. {@code health} ne rend
+ * que {@code {"status":"UP"}} — {@code show-details=never} est posé dans
+ * {@code application.properties} et doit y rester, sinon l'endpoint divulguerait l'état du
+ * {@code DataSource} et du stockage objet. Elles existent parce que leurs appelants — sonde de
+ * déploiement du pipeline, scrape Prometheus — n'ont aucun cookie JWT à présenter : derrière
+ * l'authentification ils recevraient {@code 401}, et la sonde déclarerait le conteneur en échec
+ * en permanence.
  * <p>
- * <b>En production cette règle ne s'applique plus</b> : {@code management.server.port=9091}
- * déplace tout l'actuator sur un port dédié, qui n'est pas celui que Caddy proxifie, et cette
- * chaîne de filtres ne le couvre pas. La règle reste ici comme <b>filet</b> — si le port de
- * management était un jour retiré, l'actuator retomberait sur 8080 et seul {@code health} y
- * serait ouvert, plutôt que tout. Ne pas la supprimer en la croyant morte.
+ * <b>Cette chaîne de filtres couvre bien le port de management.</b> {@code
+ * management.server.port=9091} déplace l'actuator sur un port dédié, non proxifié par Caddy et
+ * publié sur {@code 127.0.0.1} seulement — mais la sécurité continue de s'y appliquer. Vérifié
+ * en production : {@code 9091/actuator/health} rend {@code 200} sans cookie (la règle matche),
+ * {@code 9091/actuator/metrics} rend {@code 401} (aucune règle ne le couvre). Ces deux lignes
+ * sont donc <b>porteuses</b>, pas décoratives : les retirer casse la sonde de déploiement et le
+ * scrape.
+ * <p>
+ * Sur le port applicatif 8080 en revanche, ces chemins n'ont plus de handler MVC, donc le
+ * matcher ne matche pas et {@code anyRequest().authenticated()} rend {@code 401}. C'est pourquoi
+ * {@code https://api.tsiory.tech/actuator/health} ne répond plus depuis le passage au port de
+ * management — ce n'est pas une panne.
  * <p>
  * Phase 3 adds {@link EnableMethodSecurity} so {@code @PreAuthorize("hasRole(...)")} works on
  * individual endpoints — {@code UtilisateurAdminController} is the first (and, until another
@@ -82,9 +90,9 @@ public class SecurityConfig {
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // Sonde de déploiement uniquement — chemin exact, pas de /**, pour ne pas
-                        // ouvrir /actuator/metrics au passage. Voir le javadoc de la classe.
-                        .requestMatchers("/actuator/health").permitAll()
+                        // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé.
+                        // Voir le javadoc de la classe pour la portée réelle de ces deux règles.
+                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         // Les générateurs de documents (PDF/Word) étaient ouverts en permitAll pour
                         // permettre des tests manuels, marqué TEMPORAIRE. Refermé avec le périmètre
                         // commercial : sans authentification il n'y a pas de principal, donc pas de
