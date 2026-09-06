@@ -22,6 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Les deux assertions vont par paire et doivent le rester : ouvrir {@code /actuator/health} ne
  * doit jamais ouvrir {@code /actuator/metrics}, qui exposerait l'inventaire des URI et les
  * latences par endpoint.
+ *
+ * <p><b>Ce que ce test ne couvre pas.</b> En production, {@code management.server.port=9091}
+ * sert l'actuator sur un port dédié. Or l'environnement web {@code MOCK} de
+ * {@code @SpringBootTest} n'ouvre aucun port réel : {@code management.server.port} y est
+ * <b>ignoré</b>, et MockMvc voit donc l'actuator dans le contexte principal. Ce test valide
+ * l'état de repli — celui qui s'appliquerait si le port de management disparaissait — et non
+ * la configuration réellement servie en production. Vérifier celle-ci demande un appel réseau
+ * contre l'instance déployée, pas un test MockMvc.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

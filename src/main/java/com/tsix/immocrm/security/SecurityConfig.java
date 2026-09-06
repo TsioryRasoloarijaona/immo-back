@@ -33,8 +33,13 @@ import org.springframework.web.cors.CorsUtils;
  * l'état du {@code DataSource} et du stockage objet. Elle existe parce qu'une sonde de
  * déploiement (HEALTHCHECK Docker, vérification post-déploiement du pipeline) n'a pas de cookie
  * JWT à présenter : derrière l'authentification, elle recevrait {@code 401} et déclarerait le
- * conteneur en échec en permanence. {@code /actuator/metrics} reste authentifié — il exposerait
- * l'inventaire des URI et les latences par endpoint.
+ * conteneur en échec en permanence.
+ * <p>
+ * <b>En production cette règle ne s'applique plus</b> : {@code management.server.port=9091}
+ * déplace tout l'actuator sur un port dédié, qui n'est pas celui que Caddy proxifie, et cette
+ * chaîne de filtres ne le couvre pas. La règle reste ici comme <b>filet</b> — si le port de
+ * management était un jour retiré, l'actuator retomberait sur 8080 et seul {@code health} y
+ * serait ouvert, plutôt que tout. Ne pas la supprimer en la croyant morte.
  * <p>
  * Phase 3 adds {@link EnableMethodSecurity} so {@code @PreAuthorize("hasRole(...)")} works on
  * individual endpoints — {@code UtilisateurAdminController} is the first (and, until another
