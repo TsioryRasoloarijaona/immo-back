@@ -13,6 +13,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -56,6 +57,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class FicheReservationTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -96,11 +99,13 @@ class FicheReservationTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-FR-" + suffix);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-FR-" + suffix);
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkBuilding building = new StkBuilding();
@@ -151,6 +156,7 @@ class FicheReservationTest {
         article.setStkFloor(floor);
         article.setCfgProject(project);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(article);
 
         CfgTier client = new CfgTier();

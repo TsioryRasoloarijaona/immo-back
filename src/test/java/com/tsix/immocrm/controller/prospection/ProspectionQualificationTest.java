@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.com.ComProspectionProfile;
 import com.tsix.immocrm.entities.com.ComProspectionProfileCategory;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmCityRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionProfileCategoryRepository;
@@ -38,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class ProspectionQualificationTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -104,6 +107,7 @@ class ProspectionQualificationTest {
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-QUALIF-1");
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         mockMvc.perform(post("/api/prospections/{id}/categories", prospection.getId())
@@ -123,6 +127,7 @@ class ProspectionQualificationTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-QUALIF-1");
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         mockMvc.perform(post("/api/prospections/{id}/types-bien", prospection.getId())

@@ -2,8 +2,12 @@ package com.tsix.immocrm.entities.stk;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,6 +25,15 @@ public class StkItemCategory {
     @Id
     @Column(name = "PKey", nullable = false)
     private UUID id;
+
+    /**
+     * Nature physique à laquelle la catégorie se rattache — voir {@link StkKind}.
+     * La colonne est NOT NULL en base : une catégorie existe toujours au sein d'une nature.
+     */
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "StkKindId", nullable = false)
+    private StkKind stkKind;
 
     @Size(max = 255)
     @Nationalized

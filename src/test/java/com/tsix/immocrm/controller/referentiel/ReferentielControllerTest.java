@@ -21,6 +21,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmCityRepository;
 import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
@@ -62,6 +63,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class ReferentielControllerTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -445,11 +448,13 @@ class ReferentielControllerTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-REF-ART-" + code);
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-REF-ART-" + code);
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkVocation vocation = new StkVocation();
@@ -466,6 +471,7 @@ class ReferentielControllerTest {
         item.setStkVocation(vocation);
         item.setStkHierarchy(tranche);
         item.setComFolderId(comFolderId);
+        item.setStkKind(fixtureReferentielStk.natureParDefaut());
         return item;
     }
 

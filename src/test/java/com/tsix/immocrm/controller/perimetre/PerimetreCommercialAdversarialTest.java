@@ -19,6 +19,7 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
@@ -95,6 +96,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class PerimetreCommercialAdversarialTest {
 
+    @Autowired private FixtureReferentielStk fixtureReferentielStk;
     @Autowired private MockMvc mockMvc;
     @Autowired private PerimetreCommercialService perimetreService;
     @Autowired private AdmUserRepository userRepository;
@@ -130,11 +132,13 @@ class PerimetreCommercialAdversarialTest {
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-ADV-" + suffixe());
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-ADV-" + suffixe());
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -222,6 +226,7 @@ class PerimetreCommercialAdversarialTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         return stkItemRepository.save(article);
     }
 

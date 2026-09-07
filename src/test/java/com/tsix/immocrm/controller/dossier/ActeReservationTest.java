@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -54,6 +55,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ActeReservationTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -94,12 +97,14 @@ class ActeReservationTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-AR-" + suffix);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-AR-" + suffix);
         category.setDescription("APPARTEMENT");
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkBuilding building = new StkBuilding();
@@ -149,6 +154,10 @@ class ActeReservationTest {
         article.setStkFloor(floor);
         article.setCfgProject(project);
         article.setStkHierarchy(tranche);
+        // Nature générique par défaut : la colonne est NOT NULL en base, y compris pour le cas
+        // "bâti" qui ne s'intéresse pas à la nature. Le cas "terrain" la remplace ci-dessous,
+        // parce que le code "TER" pilote la mise en forme de l'acte.
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         if (terrain) {
             StkKind kind = new StkKind();
             kind.setId(UUID.randomUUID());
@@ -184,6 +193,7 @@ class ActeReservationTest {
         terrasse.setStkItemCategory(category);
         terrasse.setStkVocation(vocation);
         terrasse.setComFolderId(folder.getId());
+        terrasse.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(terrasse);
 
         return folder.getId();

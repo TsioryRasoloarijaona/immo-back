@@ -18,6 +18,8 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
+import com.tsix.immocrm.fixtures.ReferentielSeme;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
@@ -84,6 +86,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class PerimetreCommercialRevisionTest {
 
+    @Autowired private FixtureReferentielStk fixtureReferentielStk;
     @Autowired private MockMvc mockMvc;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
@@ -117,11 +120,13 @@ class PerimetreCommercialRevisionTest {
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-REV-" + suffixe());
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-REV-" + suffixe());
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -196,6 +201,7 @@ class PerimetreCommercialRevisionTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         return stkItemRepository.save(article);
     }
 
@@ -440,7 +446,9 @@ class PerimetreCommercialRevisionTest {
         societe.setCode("STE-REV-" + suffixe());
         companyRepository.save(societe);
 
-        UUID prjProjectId = UUID.randomUUID();
+        // Ligne semée, pas un UUID tiré au hasard : AdmUserHabilitation__PrjProject_FK1 exige une
+        // cible réelle, et PrjProject n'est modélisé par aucune entité — voir ReferentielSeme.
+        UUID prjProjectId = ReferentielSeme.PRJ_PROJECT;
         AdmUserHabilitation mixte = new AdmUserHabilitation();
         mixte.setId(UUID.randomUUID());
         mixte.setAdmUser(cible);

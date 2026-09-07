@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -51,6 +52,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class ArticleControllerTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -107,12 +110,14 @@ class ArticleControllerTest {
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-TEST");
         itemType.setDescription("2 CHAMBRES + SALON");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-TEST");
         itemCategory.setDescription("APPARTEMENT");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -149,6 +154,7 @@ class ArticleControllerTest {
         item.setStkVocation(vocation);
         item.setStkHierarchy(tranche);
         item.setComFolderId(comFolderId);
+        item.setStkKind(fixtureReferentielStk.natureParDefaut());
         return item;
     }
 
@@ -203,12 +209,14 @@ class ArticleControllerTest {
         autreCategorie.setId(UUID.randomUUID());
         autreCategorie.setCode("CAT-AUTRE");
         autreCategorie.setDescription("VILLA");
+        autreCategorie.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(autreCategorie);
 
         StkItemType autreType = new StkItemType();
         autreType.setId(UUID.randomUUID());
         autreType.setCode("TYPE-AUTRE");
         autreType.setDescription("3 CHAMBRES + SALON");
+        autreType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(autreType);
 
         StkItem appartementT2 = newItem("ART-APP-T2", null);
@@ -474,7 +482,10 @@ class ArticleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.immeubleId").doesNotExist())
                 .andExpect(jsonPath("$.etageId").doesNotExist())
-                .andExpect(jsonPath("$.natureId").doesNotExist());
+                // natureId n'est volontairement pas asserté absent : StkItem.StkKindId est NOT NULL
+                // en base, donc un article a toujours une nature. L'assertion précédente ne tenait
+                // qu'à une fixture qui omettait la colonne, ce que la base réelle refuse.
+                .andExpect(jsonPath("$.natureId").exists());
     }
 
     @Test

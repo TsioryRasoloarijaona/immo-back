@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -50,6 +51,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DossierListeFiltresEtRequetesTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -91,11 +94,13 @@ class DossierListeFiltresEtRequetesTest {
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-FILTRE-TEST");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-FILTRE-TEST");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -140,6 +145,7 @@ class DossierListeFiltresEtRequetesTest {
         if (folderPourLienInverse != null) {
             item.setComFolderId(folderPourLienInverse.getId());
         }
+        item.setStkKind(fixtureReferentielStk.natureParDefaut());
         return stkItemRepository.save(item);
     }
 
