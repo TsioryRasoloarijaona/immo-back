@@ -85,9 +85,9 @@ public class ArticleService {
      * {@code GET /api/articles}: catalogue transverse, toutes tranches confondues — contrairement à
      * {@link #findByTranche}, {@code statut} n'a PAS de valeur par défaut ici : absent = tous les
      * statuts (DISPONIBLE + OCCUPE), pour permettre une vraie vue "tout le patrimoine" plutôt
-     * qu'un pré-filtrage implicite. Restreint aux entités juridiques actives (ADMOD/GHRIZA, voir
-     * {@link com.tsix.immocrm.domain.EntitesJuridiquesActives}) comme les autres endpoints de
-     * listing Projet/Tranche/Article. Mêmes filtres de parité legacy que {@link #findByTranche}
+     * qu'un pré-filtrage implicite. Restreint aux entités juridiques en exploitation
+     * ({@code CfgCompany.isActive}) comme les autres endpoints de listing
+     * Projet/Tranche/Article. Mêmes filtres de parité legacy que {@link #findByTranche}
      * (instructions/from_front.md #4).
      */
     public Page<ArticleListItemDto> findAll(String search, List<UUID> trancheIds, StatutArticle statut,

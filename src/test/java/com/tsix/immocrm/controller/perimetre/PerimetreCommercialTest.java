@@ -518,6 +518,7 @@ class PerimetreCommercialTest {
         CfgCompany societe = new CfgCompany();
         societe.setId(UUID.randomUUID());
         societe.setCode("STE-PERIM-TEST");
+        societe.setIsActive(true);
         companyRepository.save(societe);
 
         // Les trois portées que l'application de bureau légataire (toujours en service) utilise et
@@ -550,6 +551,7 @@ class PerimetreCommercialTest {
         CfgCompany societeMixte = new CfgCompany();
         societeMixte.setId(UUID.randomUUID());
         societeMixte.setCode("STE-PERIM-MIXTE");
+        societeMixte.setIsActive(true);
         companyRepository.save(societeMixte);
 
         AdmUserHabilitation ligneMixte = new AdmUserHabilitation();

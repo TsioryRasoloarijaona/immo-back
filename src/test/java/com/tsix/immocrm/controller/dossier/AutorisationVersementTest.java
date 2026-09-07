@@ -129,6 +129,7 @@ class AutorisationVersementTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-AV-" + suffix);
         company.setDescription("GHRIZA");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

@@ -129,6 +129,7 @@ class ArticleControllerTest {
         company.setId(UUID.randomUUID());
         company.setCode("ADMOD");
         company.setDescription("ADMOD");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();
@@ -397,6 +398,7 @@ class ArticleControllerTest {
         autreEntite.setId(UUID.randomUUID());
         autreEntite.setCode("GHRIZA");
         autreEntite.setDescription("GHRIZA");
+        autreEntite.setIsActive(true);
         companyRepository.save(autreEntite);
 
         mockMvc.perform(get("/api/articles")

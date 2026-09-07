@@ -48,6 +48,39 @@ DB_HOST, DB_NAME, DB_USER, DB_PWD, JWT_SECRET
 ```
 `ImmoCrmApplicationTests` boots the full Spring context (`@SpringBootTest`), so these must be set (or a local SQL Server reachable) even to run tests. `spring.jpa.hibernate.ddl-auto=none` in both `src/main/resources/application.properties` and `src/test/resources/application.properties` — the schema is owned by the DB on both sides; new app-only tables (e.g. `AppUserCredential`) are created by hand-written SQL scripts, not by Hibernate.
 
+## Interroger les données réelles (`yesRemsProd`)
+
+**Toute étude de motif, vérification de schéma ou décision de mapping se fait contre la base
+locale `yesRemsProd`** — pas contre `yesRemsTest`, qui est une base minimale bâtie à la main, ni
+en devinant depuis le code.
+
+```bash
+sqlcmd -S localhost,49687 -U tsix -P securePassword123 -d yesRemsProd -C -Q "<requête>"
+```
+
+Sous PowerShell, `Invoke-Sqlcmd -ServerInstance "localhost,49687" -Database yesRemsProd
+-Username tsix -Password securePassword123 -TrustServerCertificate` évite les problèmes de
+chemin et de quoting de `sqlcmd.exe`.
+
+Pourquoi cette base précisément :
+
+- c'est **le schéma complet du légataire** — 462 tables, 216 vues, les triggers et les 1 219
+  clés étrangères. `yesRemsTest` n'en contient que 79 tables sans contrainte, donc elle ne dit
+  rien de ce que la production accepte ou refuse ;
+- elle porte des **données réelles**, ce qui permet de mesurer avant de décider. Plusieurs choix
+  de ce dépôt ont été pris ou annulés sur des taux de population, et c'est la règle : une
+  colonne « qui a l'air bonne » se vérifie (`INFORMATION_SCHEMA.COLUMNS`, puis un `COUNT`).
+
+Deux réflexes qui ont déjà évité des erreurs ici :
+
+- **compter avant de conclure** — un total qui tombe juste (ex. la somme des statuts = le nombre
+  de dossiers) prouve qu'aucune ligne ne se cache ailleurs ; un écart désigne le mécanisme ;
+- **ne jamais mapper une colonne de vue** comme si c'était une colonne de table.
+
+C'est une base de **lecture**. Aucune écriture, aucun `UPDATE` de confort : les corrections de
+données se livrent en script SQL que l'utilisateur applique lui-même, sur cette base comme sur
+`yesRemsDev` (le VPS).
+
 ## Architecture
 
 - **Entities mirror an existing DB schema.** Every entity's `@Table`/`@Column` names are PascalCase matching the SQL Server table/column names exactly (e.g. `CfgTranche`, `PKey`, `StkVocationId`). Primary keys are `UUID` mapped from a `PKey` column. Do not rename columns/tables when adding fields — check the actual DB schema (see `.idea/dataSources.xml` for the configured local `yesRems` DB connection) rather than guessing.

@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.referentiel;
 
-import com.tsix.immocrm.domain.EntitesJuridiquesActives;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
@@ -481,10 +480,10 @@ public class ReferentielService {
     /**
      * {@code GET /api/referentiels/entites} — dropdown "Entité" pour {@code GET /api/encaissements}
      * (colonne/filtre "Entité" de l'écran legacy "Encaissements Vente"). Restreint aux entités
-     * actives comme les autres listings ({@link com.tsix.immocrm.domain.EntitesJuridiquesActives}).
+     * en exploitation ({@code CfgCompany.isActive}), comme les autres listings.
      */
     public List<ReferentielItemDto> entites() {
-        return companyRepository.findByCodeInOrderByDescriptionAsc(EntitesJuridiquesActives.CODES).stream()
+        return companyRepository.findActivesOrderByDescriptionAsc().stream()
                 .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
@@ -523,11 +522,11 @@ public class ReferentielService {
 
     /**
      * {@code GET /api/referentiels/projets} — dropdown "Projet" (CfgProject.Code/Description).
-     * Restreint aux entités juridiques réellement en exploitation, voir
-     * {@link com.tsix.immocrm.domain.EntitesJuridiquesActives}.
+     * Restreint aux entités juridiques en exploitation
+     * ({@code CfgCompany.isActive}).
      */
     public List<ReferentielItemDto> projets() {
-        return projectRepository.findByCfgCompany_CodeIn(EntitesJuridiquesActives.CODES).stream()
+        return projectRepository.findDesEntitesActives().stream()
                 .map(p -> new ReferentielItemDto(p.getId(), p.getCode(), p.getDescription(), null)).toList();
     }
 
@@ -535,13 +534,13 @@ public class ReferentielService {
      * {@code GET /api/referentiels/tranches} — dropdown "Tranche", optionnellement scopé à un
      * projet via {@code projetId} (mêmes cascades de sélection Projet → Tranche → Article que
      * {@code GET /api/tranches?projetId=} mais sans pagination, pour peupler un `<select>`).
-     * Restreint aux entités juridiques réellement en exploitation, voir
-     * {@link com.tsix.immocrm.domain.EntitesJuridiquesActives}.
+     * Restreint aux entités juridiques en exploitation
+     * ({@code CfgCompany.isActive}).
      */
     public List<ReferentielItemDto> tranches(UUID projetId) {
         List<CfgTranche> tranches = projetId != null
-                ? trancheRepository.findByCfgProjectIdAndCfgProject_CfgCompany_CodeIn(projetId, EntitesJuridiquesActives.CODES)
-                : trancheRepository.findByCfgProject_CfgCompany_CodeIn(EntitesJuridiquesActives.CODES);
+                ? trancheRepository.findDesEntitesActivesParProjet(projetId)
+                : trancheRepository.findDesEntitesActives();
         return tranches.stream().map(t -> new ReferentielItemDto(
                 t.getId(), t.getCode(), t.getDescription(), null)).toList();
     }

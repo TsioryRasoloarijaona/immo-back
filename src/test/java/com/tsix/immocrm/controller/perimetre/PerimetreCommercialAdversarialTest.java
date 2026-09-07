@@ -567,6 +567,7 @@ class PerimetreCommercialAdversarialTest {
         CfgCompany societe = new CfgCompany();
         societe.setId(UUID.randomUUID());
         societe.setCode("STE-ADV-" + suffixe());
+        societe.setIsActive(true);
         companyRepository.save(societe);
 
         AdmUserHabilitation ligneMixte = new AdmUserHabilitation();
@@ -704,6 +705,7 @@ class PerimetreCommercialAdversarialTest {
         CfgCompany societe = new CfgCompany();
         societe.setId(UUID.randomUUID());
         societe.setCode("STE-ADV2-" + suffixe());
+        societe.setIsActive(true);
         companyRepository.save(societe);
 
         AdmUserHabilitation ligneSociete = new AdmUserHabilitation();

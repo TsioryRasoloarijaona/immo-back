@@ -43,6 +43,21 @@ public class CfgCompany {
     @Column(name = "Description")
     private String description;
 
+    /**
+     * Entité en exploitation ou non — c'est ce drapeau qui décide de sa visibilité dans les
+     * listes et les référentiels, ainsi que de celle de ses projets, tranches et articles.
+     *
+     * <p>Il remplace une liste de codes figée dans le code. La conséquence est qu'il faut
+     * <b>l'entretenir</b> : les neuf entités de la base réelle étaient toutes à {@code true} au
+     * moment du basculement, y compris {@code YESTEST} et quatre entités sans aucun projet.
+     * Voir {@code src/main/resources/db/migration/005_CfgCompany_IsActive.sql}.
+     *
+     * <p>{@code null} vaut inactif : une entité créée sans se prononcer n'apparaît pas. Le
+     * défaut sûr est de ne rien exposer, pas d'exposer par accident.
+     */
+    @Column(name = "IsActive")
+    private Boolean isActive;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "Address")

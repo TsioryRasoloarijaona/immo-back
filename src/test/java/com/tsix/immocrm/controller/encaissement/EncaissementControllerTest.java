@@ -143,12 +143,14 @@ class EncaissementControllerTest {
         entiteA.setId(UUID.randomUUID());
         entiteA.setCode("ENT-ENC-A");
         entiteA.setDescription("Entité A");
+        entiteA.setIsActive(true);
         entiteA = companyRepository.save(entiteA);
 
         CfgCompany entiteB = new CfgCompany();
         entiteB.setId(UUID.randomUUID());
         entiteB.setCode("ENT-ENC-B");
         entiteB.setDescription("Entité B");
+        entiteB.setIsActive(true);
         entiteB = companyRepository.save(entiteB);
 
         ComDocument echeanceA = newEcheance("4A");

@@ -131,6 +131,7 @@ class FicheBancaireTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-FB-" + suffix);
         company.setDescription("MAYLINE");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

@@ -124,6 +124,7 @@ class FicheReservationTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-FR-" + suffix);
         company.setDescription("MAYLINE");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

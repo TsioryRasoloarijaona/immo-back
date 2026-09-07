@@ -196,7 +196,7 @@ public class StlSettlement {
     @Column(name = "BuySettlementId_old")
     private UUID buysettlementidOld;
 
-    /** "Entité" — l'entité juridique (voir {@code EntitesJuridiquesActives}) sur laquelle le règlement a été saisi. */
+    /** "Entité" — l'entité juridique ({@link com.tsix.immocrm.entities.cfg.CfgCompany}) sur laquelle le règlement a été saisi. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;

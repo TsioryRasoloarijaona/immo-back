@@ -4,8 +4,9 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,12 +16,16 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
 
     Page<CfgTranche> findByCfgProjectId(UUID projectId, Pageable pageable);
 
-    /** Tranches dont l'entité juridique du projet parent ({@code CfgCompany.Code}) fait partie de {@code codes} — voir {@link com.tsix.immocrm.domain.EntitesJuridiquesActives}. */
-    List<CfgTranche> findByCfgProject_CfgCompany_CodeIn(Collection<String> codes);
+    /** Tranches dont l'entité juridique du projet parent est en exploitation — voir {@code CfgCompany.isActive}. */
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true")
+    List<CfgTranche> findDesEntitesActives();
 
-    Page<CfgTranche> findByCfgProject_CfgCompany_CodeIn(Collection<String> codes, Pageable pageable);
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true")
+    Page<CfgTranche> findDesEntitesActives(Pageable pageable);
 
-    List<CfgTranche> findByCfgProjectIdAndCfgProject_CfgCompany_CodeIn(UUID projectId, Collection<String> codes);
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.id = :projetId AND t.cfgProject.cfgCompany.isActive = true")
+    List<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId);
 
-    Page<CfgTranche> findByCfgProjectIdAndCfgProject_CfgCompany_CodeIn(UUID projectId, Collection<String> codes, Pageable pageable);
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.id = :projetId AND t.cfgProject.cfgCompany.isActive = true")
+    Page<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId, Pageable pageable);
 }

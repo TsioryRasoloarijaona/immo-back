@@ -110,6 +110,7 @@ class DocumentLotTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-LOT-" + suffix);
         company.setDescription("ADMOD");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

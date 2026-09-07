@@ -126,10 +126,11 @@ class ProjetControllerTest {
     private CfgProject newProject(String code, String description) {
         CfgCompany company = new CfgCompany();
         company.setId(UUID.randomUUID());
-        // GET /api/projets ne renvoie que les entités juridiques actives, voir
-        // com.tsix.immocrm.domain.EntitesJuridiquesActives.
+        // GET /api/projets ne renvoie que les entités en exploitation : c'est isActive qui
+        // le décide désormais, plus le code de la société.
         company.setCode("ADMOD");
         company.setDescription("ADMOD");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();
