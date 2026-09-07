@@ -13,19 +13,22 @@ import org.springframework.stereotype.Component;
  *
  * <h2>Pourquoi {@code SameSite} est configurable</h2>
  *
- * <p>Le frontend n'est plus servi depuis le même site que l'API : {@code immo-front-six.vercel.app}
- * et {@code api.tsiory.tech} sont deux domaines enregistrables distincts, donc toute requête de
- * l'un vers l'autre est <b>cross-site</b>. Avec {@code SameSite=Strict}, le navigateur n'attache
- * jamais le cookie à ces requêtes : la connexion réussirait, poserait le cookie, et l'appel suivant
- * repartirait anonyme — un « 401 après login réussi » sans trace côté serveur.
+ * <p>La valeur en service est {@code Strict}, et elle dépend d'un choix d'hébergement :
+ * {@code immo.tsiory.tech} et {@code api.tsiory.tech} partagent le domaine enregistrable
+ * {@code tsiory.tech}, donc leurs échanges sont <b>same-site</b> et le cookie est attaché
+ * normalement. C'est aussi ce qui tient lieu de protection CSRF, {@code SecurityConfig}
+ * désactivant la protection dédiée.
  *
- * <p>{@code SameSite=None} lève cette restriction, mais les navigateurs <b>rejettent</b> un cookie
- * {@code None} qui n'est pas également {@code Secure}. La combinaison est donc vérifiée au
- * démarrage : mal configurée, elle ne produirait aucune erreur, juste un cookie silencieusement
- * ignoré — la panne la plus coûteuse à diagnostiquer.
+ * <p>Servir le frontend depuis un autre domaine enregistrable rendrait ces requêtes cross-site :
+ * le navigateur cesserait d'attacher un cookie {@code Strict}, la connexion réussirait, poserait
+ * le cookie, et l'appel suivant repartirait anonyme — un « 401 après login réussi » sans trace
+ * côté serveur. D'où le réglage plutôt qu'une constante : le remède est {@code None}.
  *
- * <p>En développement local, frontend et API partagent {@code localhost} : {@code Lax} suffit et
- * évite d'exiger HTTPS.
+ * <p>Mais {@code None} n'est pas un simple assouplissement. Les navigateurs <b>rejettent</b> un
+ * cookie {@code None} qui n'est pas également {@code Secure} — d'où la vérification au démarrage
+ * ci-dessous, car mal configurée la combinaison ne produit aucune erreur, juste un cookie
+ * silencieusement ignoré. Et un cookie {@code None} vers un autre domaine devient un cookie tiers,
+ * que Safari bloque par défaut. Passer cross-site est une décision, pas un réglage.
  */
 @Component
 public class CookieJwt {

@@ -31,8 +31,22 @@ class CookieJwtTest {
     }
 
     @Test
-    @DisplayName("Configuration de production : le cookie part en SameSite=None; Secure")
-    void configurationProduction_emetNoneEtSecure() {
+    @DisplayName("Configuration en service : le cookie part en SameSite=Strict; Secure")
+    void configurationEnService_emetStrictEtSecure() {
+        String entete = new CookieJwt(true, "Strict").poser("jeton", 480 * 60).toString();
+
+        assertThat(entete)
+                .contains(CookieJwt.NOM + "=jeton")
+                .contains("SameSite=Strict")
+                .contains("Secure")
+                .contains("HttpOnly")
+                .contains("Path=/")
+                .contains("Max-Age=28800");
+    }
+
+    @Test
+    @DisplayName("Bascule cross-site : None reste possible dès lors que Secure l'accompagne")
+    void bascultCrossSite_emetNoneEtSecure() {
         String entete = new CookieJwt(true, "None").poser("jeton", 480 * 60).toString();
 
         assertThat(entete)
@@ -45,23 +59,24 @@ class CookieJwtTest {
     }
 
     @Test
-    @DisplayName("Configuration locale : Lax sans Secure reste permise, pour du HTTP en dev")
-    void configurationLocale_laxSansSecure() {
-        String entete = new CookieJwt(false, "Lax").poser("jeton", 60).toString();
-
-        assertThat(entete).contains("SameSite=Lax").doesNotContain("Secure");
+    @DisplayName("Seul None impose Secure : Lax et Strict restent permis en HTTP, pour le dev local")
+    void horsNone_secureResteFacultatif() {
+        assertThat(new CookieJwt(false, "Lax").poser("jeton", 60).toString())
+                .contains("SameSite=Lax").doesNotContain("Secure");
+        assertThat(new CookieJwt(false, "Strict").poser("jeton", 60).toString())
+                .contains("SameSite=Strict").doesNotContain("Secure");
     }
 
     @Test
     @DisplayName("L'effacement rejoue les mêmes attributs, sinon le navigateur n'écrase rien")
     void effacer_memesAttributsEtMaxAgeZero() {
-        CookieJwt cookie = new CookieJwt(true, "None");
+        CookieJwt cookie = new CookieJwt(true, "Strict");
         String pose = cookie.poser("jeton", 3600).toString();
         String efface = cookie.effacer().toString();
 
         assertThat(efface)
                 .contains("Max-Age=0")
-                .contains("SameSite=None")
+                .contains("SameSite=Strict")
                 .contains("Secure")
                 .contains("HttpOnly")
                 .contains("Path=/");
@@ -72,9 +87,9 @@ class CookieJwtTest {
     @Test
     @DisplayName("La réémission de /api/mon-compte reste un cookie de session, sans Max-Age")
     void poserSession_sansMaxAge() {
-        assertThat(new CookieJwt(true, "None").poserSession("jeton").toString())
+        assertThat(new CookieJwt(true, "Strict").poserSession("jeton").toString())
                 .doesNotContain("Max-Age")
-                .contains("SameSite=None");
+                .contains("SameSite=Strict");
     }
 
     /** Attributs hors valeur et hors Max-Age — ce que le navigateur compare pour écraser. */

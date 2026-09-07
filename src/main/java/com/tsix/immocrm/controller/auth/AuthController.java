@@ -36,11 +36,13 @@ public class AuthController {
     @Operation(
             summary = "Connexion",
             description = "Vérifie username/password contre AppUserCredential (bcrypt) et pose un "
-                    + "cookie JWT httpOnly `access_token` (Secure, SameSite=None — le frontend est "
-                    + "servi depuis un autre site que l'API, le navigateur n'attacherait pas un "
-                    + "cookie Strict) valable app.jwt.expiration-minutes. Chaque appel doit donc "
-                    + "partir avec `credentials: 'include'`, et l'origine doit figurer dans "
-                    + "`CorsConfig` : `allowCredentials(true)` interdit le joker `*`. "
+                    + "cookie JWT httpOnly `access_token` (Secure, SameSite=Strict) valable "
+                    + "app.jwt.expiration-minutes. Chaque appel doit partir avec "
+                    + "`credentials: 'include'`, et l'origine appelante doit figurer dans "
+                    + "`CorsConfig` : `allowCredentials(true)` interdit le joker `*`. Le cookie "
+                    + "étant SameSite=Strict, le frontend doit être servi depuis le domaine "
+                    + "`tsiory.tech` — depuis un autre domaine, le navigateur ne l'attacherait pas "
+                    + "et tout appel suivant la connexion repartirait anonyme. "
                     + "Le corps de réponse contient le profil et les "
                     + "rôles, jamais le token lui-même. Si `mustChangePassword`/`profileCompleted` "
                     + "sont défavorables, seules les routes /api/auth/** et /api/mon-compte/** "
