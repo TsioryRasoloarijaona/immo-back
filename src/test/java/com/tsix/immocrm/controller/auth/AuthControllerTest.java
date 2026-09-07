@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.auth;
 
+import com.tsix.immocrm.security.CookieJwt;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
@@ -87,8 +88,8 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.mustChangePassword").value(false))
                 .andExpect(jsonPath("$.profileCompleted").value(true))
                 .andExpect(jsonPath("$.roles[0]").exists())
-                .andExpect(cookie().exists(AuthController.COOKIE_NAME))
-                .andExpect(cookie().httpOnly(AuthController.COOKIE_NAME, true));
+                .andExpect(cookie().exists(CookieJwt.NOM))
+                .andExpect(cookie().httpOnly(CookieJwt.NOM, true));
     }
 
     @Test
@@ -124,6 +125,6 @@ class AuthControllerTest {
     void deconnexion_clearsCookie() throws Exception {
         mockMvc.perform(post("/api/auth/deconnexion"))
                 .andExpect(status().isNoContent())
-                .andExpect(cookie().maxAge(AuthController.COOKIE_NAME, 0));
+                .andExpect(cookie().maxAge(CookieJwt.NOM, 0));
     }
 }

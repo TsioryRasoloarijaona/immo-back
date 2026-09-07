@@ -1,6 +1,6 @@
 package com.tsix.immocrm.controller.dossier;
 
-import com.tsix.immocrm.controller.auth.AuthController;
+import com.tsix.immocrm.security.CookieJwt;
 import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmRole;
@@ -140,7 +140,7 @@ class DossierPiecesJointesTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andReturn();
-        Cookie cookie = result.getResponse().getCookie(AuthController.COOKIE_NAME);
+        Cookie cookie = result.getResponse().getCookie(CookieJwt.NOM);
         assertThat(cookie).isNotNull();
         return cookie;
     }

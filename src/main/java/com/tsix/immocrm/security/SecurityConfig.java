@@ -75,10 +75,28 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Stateless JWT-in-httpOnly-cookie auth, no server-side session — CSRF strategy
-                // (SameSite=Strict already blocks cross-site form/script submission of the
-                // cookie; revisit with a double-submit token if a cross-subdomain frontend needs
-                // SameSite=Lax instead).
+                // Authentification sans session serveur, JWT dans un cookie httpOnly.
+                //
+                // ATTENTION — la justification historique de ce disable() ne tient plus. Elle
+                // reposait sur SameSite=Strict, qui empêchait le navigateur d'attacher le cookie
+                // à une requête cross-site. Le frontend étant désormais servi depuis un autre
+                // site, le cookie est passé à SameSite=None (voir CookieJwt) : il part avec
+                // toute requête cross-site, y compris celles d'une page hostile.
+                //
+                // Ce qui protège encore : les endpoints qui modifient l'état consomment du JSON,
+                // et application/json n'est pas un type de contenu « simple » — le navigateur
+                // impose un préflight, que CORS refuse à une origine non listée.
+                //
+                // Ce qui n'est PAS protégé : les deux POST multipart de pièces jointes
+                // (/api/dossiers/{id}/pieces-jointes et .../reglements/{id}/pieces-jointes).
+                // multipart/form-data EST un type simple : un formulaire hébergé n'importe où
+                // peut les soumettre sans préflight, cookie attaché. L'attaquant ne lit pas la
+                // réponse (CORS l'en empêche), mais l'écriture aboutit.
+                //
+                // Correctif retenu si on ferme ce trou : exiger un en-tête applicatif sur les
+                // méthodes non sûres — sa seule présence force un préflight, donc le contrôle
+                // d'origine. Un double-submit par cookie ne conviendrait pas : le frontend est
+                // sur un autre domaine et ne peut pas lire un cookie posé par l'API.
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())

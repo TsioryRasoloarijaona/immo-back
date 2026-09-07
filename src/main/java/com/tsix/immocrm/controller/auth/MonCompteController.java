@@ -4,6 +4,7 @@ import com.tsix.immocrm.dto.auth.ChangerMotDePasseRequest;
 import com.tsix.immocrm.dto.auth.CompleterProfilRequest;
 import com.tsix.immocrm.dto.auth.UtilisateurCourantDto;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.security.CookieJwt;
 import com.tsix.immocrm.services.auth.AuthService;
 import com.tsix.immocrm.services.auth.MonCompteService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,9 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -29,11 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MonCompteController {
 
     private final MonCompteService monCompteService;
-    private final boolean cookieSecure;
+    private final CookieJwt cookieJwt;
 
-    public MonCompteController(MonCompteService monCompteService, @Value("${app.jwt.cookie-secure}") boolean cookieSecure) {
+    public MonCompteController(MonCompteService monCompteService, CookieJwt cookieJwt) {
         this.monCompteService = monCompteService;
-        this.cookieSecure = cookieSecure;
+        this.cookieJwt = cookieJwt;
     }
 
     @GetMapping
@@ -59,7 +58,7 @@ public class MonCompteController {
                                                      @RequestBody ChangerMotDePasseRequest request,
                                                      HttpServletResponse response) {
         AuthService.LoginResult result = monCompteService.changerMotDePasse(principal, request);
-        response.addHeader(HttpHeaders.SET_COOKIE, buildCookie(result.token()).toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieJwt.poserSession(result.token()).toString());
         return result.utilisateur();
     }
 
@@ -78,16 +77,8 @@ public class MonCompteController {
                                                    @RequestBody CompleterProfilRequest request,
                                                    HttpServletResponse response) {
         AuthService.LoginResult result = monCompteService.completerProfil(principal, request);
-        response.addHeader(HttpHeaders.SET_COOKIE, buildCookie(result.token()).toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieJwt.poserSession(result.token()).toString());
         return result.utilisateur();
     }
 
-    private ResponseCookie buildCookie(String token) {
-        return ResponseCookie.from(AuthController.COOKIE_NAME, token)
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path("/")
-                .build();
-    }
 }
