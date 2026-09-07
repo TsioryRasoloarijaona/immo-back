@@ -27,7 +27,11 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
  */
 @Tag(name = "Devis", description = "Offres de prix (\"devis\") faites aux prospects — vue globale "
         + "tous prospections confondues. Voir aussi POST/GET /api/prospections/{id}/devis pour la "
-        + "vue nestée sur une seule prospection.")
+        + "vue nestée sur une seule prospection.\n\n"
+        + "**Entités juridiques en exploitation.** Ne sont renvoyés que les devis dont la tranche "
+        + "relève d'une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui ADMOD et "
+        + "GHRIZA. Restriction globale et permanente, appliquée à tout appelant. Un devis sans "
+        + "tranche reste visible.")
 @RestController
 @RequestMapping("/api/devis")
 public class DevisController {

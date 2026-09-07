@@ -12,7 +12,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Tableau de bord", description = "Agrégats de la page d'accueil : valeur du pipeline, "
         + "panier moyen, répartition des dossiers par étape, relances en retard et compteurs de "
-        + "prospections.")
+        + "prospections.\n\n"
+        + "**Entités juridiques en exploitation.** Tous les agrégats ne portent que sur les "
+        + "entités juridiques actives (`CfgCompany.IsActive`) — aujourd'hui ADMOD et GHRIZA. "
+        + "L'assiette du tableau de bord est donc la même que celle de GET /api/dossiers et de "
+        + "GET /api/prospections ; les totaux ne sont pas comparables à ceux d'avant cette "
+        + "restriction.")
 @RestController
 @RequestMapping("/api/dashboard")
 public class DashboardController {

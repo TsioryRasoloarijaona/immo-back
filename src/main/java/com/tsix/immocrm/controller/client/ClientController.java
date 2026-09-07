@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -32,6 +33,15 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
  * internally rather than duplicating logic. Only the list ({@code GET /api/clients}) has
  * client-specific shape/filtering — see {@link ClientService}.
  */
+@Tag(name = "Clients", description = "Tiers ayant acheté — un `CfgTier` référencé par au moins un "
+        + "dossier de vente. Il n'y a pas d'entité Client distincte dans le schéma : la fiche et "
+        + "ses sous-ressources sont celles de /api/prospects.\n\n"
+        + "**Entités juridiques en exploitation.** La qualité de client se juge sur les seuls "
+        + "dossiers rattachés à une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui "
+        + "ADMOD et GHRIZA. Un tier dont tous les dossiers relèvent d'une entité hors exploitation "
+        + "n'est donc plus un client au sens de cet endpoint et disparaît de la liste ; les "
+        + "agrégats `nombreDossiers`, `totalAPayer` et `totalRegle` suivent la même assiette, pour "
+        + "qu'ils concordent avec GET /api/clients/{id}/dossiers.")
 @RestController
 @RequestMapping("/api/clients")
 public class ClientController {
@@ -47,8 +57,17 @@ public class ClientController {
         this.subResourcesService = subResourcesService;
     }
 
+    @Operation(
+            summary = "Liste des clients",
+            description = "Les tiers portant au moins un dossier de vente sur une entité juridique "
+                    + "en exploitation, avec leurs agrégats calculés côté serveur (nombre de "
+                    + "dossiers, total à payer, total réglé). Une page vide signifie qu'aucun "
+                    + "client ne correspond, pas une erreur.")
     @GetMapping
-    public PageDto<ClientListItemDto> findAll(@RequestParam(required = false) String search,
+    public PageDto<ClientListItemDto> findAll(
+            @Parameter(description = "Recherche insensible à la casse sur le code, le nom, le "
+                    + "prénom, la raison sociale ou l'e-mail.", example = "benali")
+            @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(clientService.findAll(search, pageable));
     }

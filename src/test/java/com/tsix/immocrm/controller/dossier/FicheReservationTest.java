@@ -90,7 +90,12 @@ class FicheReservationTest {
     @Autowired
     private com.tsix.immocrm.repositories.com.ComDocumentRepository documentRepository;
 
+    /** Par défaut la société correspond à la marque du code dossier (APF → ADMOD). */
     private UUID setUpDossier(String suffix) {
+        return setUpDossier(suffix, "ADMOD");
+    }
+
+    private UUID setUpDossier(String suffix, String societe) {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
         vocation.setCode("VOC-FR-" + suffix);
@@ -123,7 +128,8 @@ class FicheReservationTest {
         CfgCompany company = new CfgCompany();
         company.setId(UUID.randomUUID());
         company.setCode("CIE-FR-" + suffix);
-        company.setDescription("MAYLINE");
+        company.setDescription(societe);
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();
@@ -230,19 +236,19 @@ class FicheReservationTest {
         assertThat(docx[1]).isEqualTo((byte) 'K');
     }
 
+    /**
+     * Anciennement {@code usesProjectCompanyNotHardcoded}, qui lisait le nom de la société dans le
+     * texte du PDF. Ce n'est plus vérifiable ainsi : la société fait partie du fond de page
+     * pré-imprimé de la marque, comme dans le rapport légataire. La garantie n'a pas disparu, elle
+     * est devenue un contrôle — un dossier dont l'entité ne correspond pas à la marque de son code
+     * n'est pas émis du tout, plutôt qu'émis sous l'en-tête et les clauses d'une autre société.
+     */
     @Test
-    void getFicheReservation_pdf_usesProjectCompanyNotHardcoded() throws Exception {
-        UUID dossierId = setUpDossier("CIE");
+    void getFicheReservation_societeIncoherenteAvecLaMarque_returns409() throws Exception {
+        UUID dossierId = setUpDossier("CIE", "MAYLINE");
 
-        byte[] pdf = mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-reservation", dossierId))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsByteArray();
-
-        String text;
-        try (PdfReader reader = new PdfReader(pdf)) {
-            text = new PdfTextExtractor(reader).getTextFromPage(1);
-        }
-        assertThat(text).contains("SOCIETE MAYLINE").doesNotContain("ADMOD");
+        mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-reservation", dossierId))
+                .andExpect(status().isConflict());
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.patrimoine;
 
-import com.tsix.immocrm.domain.EntitesJuridiquesActives;
 import com.tsix.immocrm.dto.patrimoine.ProjetDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetListItemDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
@@ -29,11 +28,11 @@ public class ProjetService {
     }
 
     /**
-     * {@code GET /api/projets}: restreint aux entités juridiques réellement en exploitation, voir
-     * {@link EntitesJuridiquesActives}.
+     * {@code GET /api/projets}: restreint aux entités juridiques en exploitation.
+     * La sélection vient de {@code CfgCompany.isActive}, pas d'une liste figée dans le code.
      */
     public Page<ProjetListItemDto> findAll(Pageable pageable) {
-        return projectRepository.findByCfgCompany_CodeIn(EntitesJuridiquesActives.CODES, pageable)
+        return projectRepository.findDesEntitesActives(pageable)
                 .map(ProjetService::toListItem);
     }
 

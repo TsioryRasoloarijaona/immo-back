@@ -1,216 +1,243 @@
 package com.tsix.immocrm.services.dossier.document;
 
-import org.openpdf.text.Chunk;
+import com.tsix.immocrm.dto.dossier.FicheReservationData;
+import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.Alignement;
+import com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.Zone;
 import org.openpdf.text.Document;
 import org.openpdf.text.Element;
 import org.openpdf.text.Font;
 import org.openpdf.text.FontFactory;
+import org.openpdf.text.Image;
 import org.openpdf.text.PageSize;
-import org.openpdf.text.Paragraph;
-import org.openpdf.text.Rectangle;
-import org.openpdf.text.pdf.PdfPCell;
-import org.openpdf.text.pdf.PdfPTable;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.pdf.ColumnText;
+import org.openpdf.text.pdf.PdfContentByte;
 import org.openpdf.text.pdf.PdfWriter;
-import com.tsix.immocrm.dto.dossier.FicheReservationData;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.ARTICLE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.ADRESSE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.CIN;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.CM;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.DATE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.DOSSIER;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.ETAGE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.IMMEUBLE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.MODE_PAIEMENT;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.MONTANT;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.NOM;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.PAGE_H;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.PAGE_L;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.PORTE;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.PRIX;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.REGLE_PAR;
+import static com.tsix.immocrm.services.dossier.document.GabaritFicheReservation.SUPERFICIE;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montant;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
 /**
- * Renders the "Fiche de réservation" as a PDF, modeled on the legacy "FICHE RESERVATION MBR"
- * template (see {@code instructions/templates/FICHE RESERVATION MBR.pdf}). Uses OpenPDF
- * ({@code org.openpdf.text}) — pure Java, no external process needed.
+ * Rend la « Fiche de réservation » en PDF, à l'identique du document légataire.
+ *
+ * <p>Le rapport d'origine ne dessine rien : chaque marque a un <b>fond de page pré-imprimé</b>
+ * (cadre, logo, libellés, cases, paragraphes fixes, bandeau de pied) posé en filigrane, sur
+ * lequel une quinzaine de valeurs sont incrustées. Ce générateur fait la même chose, et c'est
+ * ce qui rend bordures, espacements et polices exacts : ils ne sont pas reproduits, ils sont
+ * <i>les mêmes</i>. La version précédente redessinait tout en primitives, ce qui ne pouvait pas
+ * coïncider — la police du fond n'est pas Helvetica.
+ *
+ * <p><b>La marque vient du préfixe du code dossier</b>, comme dans le rapport légataire, dont les
+ * pages s'appellent APF / ARS / ART / MBR. C'est aussi ce qui décide de la société mentionnée,
+ * du projet cité et des clauses imprimées : un dossier ADMOD et un dossier GHRIZA n'ont ni le
+ * même en-tête, ni les mêmes conditions.
  */
 @Component
 public class FicheReservationPdfRenderer {
 
-    private static final Color ORANGE = new Color(0xE8, 0x7A, 0x1E);
-    private static final Color GRAY_LABEL = new Color(0xE4, 0xE4, 0xE4);
+    /** Une fiche de réservation est un document contractuel : la police reste noire et nette. */
+    private static final Color NOIR = Color.BLACK;
 
-    private static final Font TITLE_FONT = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, ORANGE);
-    private static final Font LABEL_BOLD = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
-    private static final Font NORMAL = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.BLACK);
-    private static final Font BOLD = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
-    private static final Font SECTION = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.BLACK);
-    private static final Font FOOTER = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.WHITE);
+    /** Arial dans le rapport d'origine ; Helvetica en est l'équivalent métrique en PDF. */
+    private static final String POLICE = FontFactory.HELVETICA_BOLD;
+
+    /** Les fonds pèsent ~1 Mo : lus une fois, gardés en mémoire. */
+    private static final Map<String, byte[]> FONDS = new ConcurrentHashMap<>();
 
     public byte[] render(FicheReservationData data) {
-        Document document = new Document(PageSize.A4, 45, 45, 30, 40);
+        String marque = marque(data.dossierCode());
+        verifierCoherenceSociete(marque, data.entrepriseNom());
+        Map<String, Zone> gabarit = gabarit(marque);
+
+        Document document = new Document(PageSize.A4, 0, 0, 0, 0);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
-            PdfWriter.getInstance(document, out);
+            PdfWriter writer = PdfWriter.getInstance(document, out);
             document.open();
 
-            document.add(titleBox(data.dossierCode()));
-            document.add(spacer());
-            document.add(introParagraph(data));
-            document.add(spacer());
-            document.add(fieldsTable(data));
-            document.add(spacer());
-            document.add(descriptionParagraph(data));
-            document.add(spacer());
-            document.add(fixedWarningParagraph());
-            document.add(spacer());
-            document.add(new Paragraph("CONDITION DE RESERVATION", SECTION));
-            document.add(spacer());
-            document.add(conditionsParagraph());
-            document.add(spacer());
-            document.add(spacer());
+            poserFond(writer, marque);
+            PdfContentByte canevas = writer.getDirectContent();
 
-            Paragraph fait = new Paragraph();
-            fait.add(new Chunk("Fait le ", NORMAL));
-            fait.add(new Chunk(date(data.dateEdition()), BOLD));
-            document.add(fait);
-            document.add(spacer());
-            document.add(spacer());
-            document.add(signatureTable());
-            document.add(spacer());
-            document.add(spacer());
-            document.add(footerBar());
-        } catch (Exception e) {
-            throw new DocumentRenderingException("Erreur lors de la génération du PDF de la fiche de réservation", e);
-        } finally {
+            ecrire(canevas, gabarit.get(DOSSIER), vide(data.dossierCode()));
+            ecrire(canevas, gabarit.get(NOM), vide(data.clientNom()));
+            ecrire(canevas, gabarit.get(ADRESSE), vide(data.clientAdresse()));
+            ecrire(canevas, gabarit.get(CIN), vide(data.clientCin()));
+            ecrire(canevas, gabarit.get(MODE_PAIEMENT), vide(data.modePaiement()));
+            ecrire(canevas, gabarit.get(MONTANT), montant(data.montant()));
+            ecrire(canevas, gabarit.get(REGLE_PAR), vide(data.reglePar()));
+            ecrire(canevas, gabarit.get(PRIX), montant(data.prixArticle()));
+            ecrire(canevas, gabarit.get(ARTICLE), vide(data.articleCode()));
+            ecrire(canevas, gabarit.get(IMMEUBLE), vide(data.immeubleCode()));
+            ecrire(canevas, gabarit.get(PORTE), vide(data.porte()));
+            ecrire(canevas, gabarit.get(ETAGE), vide(data.etage()));
+            ecrire(canevas, gabarit.get(SUPERFICIE), superficie(data));
+            ecrire(canevas, gabarit.get(DATE), date(data.dateEdition()));
+
+            if (MARQUE_ARS.equals(marque)) {
+                ecrire(canevas, GabaritFicheReservation.ZONE_MENTION_ARS,
+                        GabaritFicheReservation.MENTION_ARS);
+            }
+
             document.close();
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new DocumentRenderingException("Échec du rendu de la fiche de réservation", e);
         }
-        return out.toByteArray();
     }
 
-    private static Paragraph spacer() {
-        return new Paragraph(" ", NORMAL);
+    static final String MARQUE_APF = "APF";
+    static final String MARQUE_ARS = "ARS";
+
+    /**
+     * Marque déduite du préfixe du code dossier (« ARS 2026/00370 » → {@code ARS}).
+     *
+     * <p>Un préfixe non couvert est un <b>refus explicite</b>, pas un repli. Émettre un reçu de
+     * réservation sous l'en-tête et les conditions d'une autre société serait pire qu'une erreur
+     * visible : c'est une pièce remise au client. Les marques MBR (Mansouria Beach Resort) et ART
+     * (Residence Tribeca) existent dans le rapport légataire et représentent 221 dossiers réels —
+     * les ajouter demande leur fond et le relevé de leurs cases.
+     */
+    private static String marque(String codeDossier) {
+        String prefixe = codeDossier == null || codeDossier.length() < 3
+                ? ""
+                : codeDossier.substring(0, 3).toUpperCase();
+        if (!MARQUE_APF.equals(prefixe) && !MARQUE_ARS.equals(prefixe)) {
+            throw new ConflictException(
+                    "Fiche de réservation non disponible pour la marque « " + prefixe + " » : "
+                            + "seules APF et ARS ont un fond de page. Émettre le document sous "
+                            + "l'en-tête d'une autre société n'est pas acceptable pour une pièce "
+                            + "remise au client.");
+        }
+        return prefixe;
     }
 
-    private static PdfPTable titleBox(String dossierCode) {
-        PdfPTable table = new PdfPTable(1);
-        table.setWidthPercentage(35);
-        table.setHorizontalAlignment(Element.ALIGN_LEFT);
-        PdfPCell cell = new PdfPCell();
-        cell.setBorderColor(ORANGE);
-        cell.setBorderWidth(1.5f);
-        cell.setPadding(6);
-        Paragraph p = new Paragraph();
-        p.add(new Chunk("N°V: ", TITLE_FONT));
-        p.add(new Chunk(vide(dossierCode), BOLD));
-        cell.addElement(p);
-        table.addCell(cell);
-        return table;
+    /** Société attendue pour chaque marque, telle qu'imprimée dans le fond de page. */
+    private static String societeAttendue(String marque) {
+        return MARQUE_ARS.equals(marque) ? "GHRIZA" : "ADMOD";
     }
 
-    private static Paragraph introParagraph(FicheReservationData data) {
-        Paragraph p = new Paragraph(
-                "Nous soussignés, la Société dite « SOCIETE " + vide(data.entrepriseNom()) + " (groupe AYAD "
-                        + "DEVELOPPEMENT) », société à Responsabilité limitée, sise à Casablanca, 100 Boulvard "
-                        + "Zerktouni, représentées par l'un des mandataires dûment habilité à cet effet.\n"
-                        + "Agissant en notre qualité de promoteur immobilier, reconnaissons sous réserve des conditions "
-                        + "ci-dessous avoir reçu de :",
-                NORMAL);
-        p.setAlignment(Element.ALIGN_JUSTIFIED);
-        return p;
+    /**
+     * Refuse d'émettre si la société du projet ne correspond pas à la marque déduite du code.
+     *
+     * <p>Le nom de la société n'est plus une valeur incrustée : il fait partie du fond pré-imprimé,
+     * comme dans le rapport légataire. Cette garantie-là ne peut donc plus se vérifier en lisant le
+     * PDF — elle doit être <b>appliquée</b> ici. Sans ce contrôle, un dossier codé {@code APF…} mais
+     * rattaché à une autre entité sortirait sous l'en-tête et les clauses d'ADMOD, en silence.
+     */
+    private static void verifierCoherenceSociete(String marque, String entreprise) {
+        String attendue = societeAttendue(marque);
+        if (entreprise == null || !entreprise.toUpperCase().contains(attendue)) {
+            throw new ConflictException(
+                    "Incohérence entre le code dossier (marque « " + marque + " », en-tête "
+                            + attendue + ") et l'entité juridique du projet « " + entreprise
+                            + " ». La fiche n'est pas émise : elle porterait l'en-tête et les "
+                            + "clauses d'une société qui n'est pas le vendeur.");
+        }
     }
 
-    private static PdfPTable fieldsTable(FicheReservationData data) {
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
+    private static Map<String, Zone> gabarit(String marque) {
+        return MARQUE_ARS.equals(marque) ? GabaritFicheReservation.ARS : GabaritFicheReservation.APF;
+    }
+
+    /** Le fond couvre la page entière : les deux images font exactement 21 × 29,7 cm à 300 dpi. */
+    private void poserFond(PdfWriter writer, String marque) throws IOException {
+        Image fond = Image.getInstance(fond(marque));
+        fond.setAbsolutePosition(0, 0);
+        fond.scaleAbsolute(PAGE_L * CM, PAGE_H * CM);
         try {
-            table.setWidths(new float[]{35, 65});
-        } catch (Exception ignored) {
-            // widths array length always matches column count here
+            writer.getDirectContentUnder().addImage(fond);
+        } catch (org.openpdf.text.DocumentException e) {
+            throw new DocumentRenderingException("Fond de page inutilisable pour la marque " + marque, e);
         }
-
-        addRow(table, "M", vide(data.clientNom()), false);
-        addRow(table, "Demeurant à", vide(data.clientAdresse()), false);
-        addRow(table, "Passeport ou CIN N°", vide(data.clientCin()), false);
-        addRow(table, "Mode de paiement", vide(data.modePaiement()), false);
-        addRow(table, "Montant de", montant(data.montant()), true);
-        addRow(table, "Réglé par", vide(data.reglePar()), false);
-        addRow(table, "Prix article", montant(data.prixArticle()), true);
-        return table;
     }
 
-    private static void addRow(PdfPTable table, String label, String value, boolean valueRightAligned) {
-        PdfPCell labelCell = new PdfPCell(new Paragraph(label, LABEL_BOLD));
-        labelCell.setBackgroundColor(GRAY_LABEL);
-        labelCell.setPadding(5);
-        labelCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        table.addCell(labelCell);
-
-        PdfPCell valueCell = new PdfPCell(new Paragraph(value, valueRightAligned ? BOLD : NORMAL));
-        valueCell.setPadding(5);
-        valueCell.setHorizontalAlignment(valueRightAligned ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT);
-        table.addCell(valueCell);
+    private static byte[] fond(String marque) {
+        return FONDS.computeIfAbsent(marque, m -> {
+            ClassPathResource resource = new ClassPathResource("documents/fiche-reservation/fond-" + m + ".jpg");
+            try (InputStream in = resource.getInputStream()) {
+                return in.readAllBytes();
+            } catch (IOException e) {
+                throw new DocumentRenderingException("Fond de page introuvable pour la marque " + m, e);
+            }
+        });
     }
 
-    private static Paragraph descriptionParagraph(FicheReservationData data) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("A titre de réservation en sa faveur d'un appartement portant le n° ")
-                .append(vide(data.articleCode())).append(", imm ").append(vide(data.immeubleCode()))
-                .append(", porte ").append(vide(data.porte())).append(", au ").append(vide(data.etage()))
-                .append(", d'une superficie totale approximative de (")
-                .append(data.superficie() != null ? data.superficie().toPlainString() : "")
-                .append(" m²) lequel lot fera l'objet d'un titre foncier");
-        if (data.projetNom() != null) {
-            sb.append(", au sein du projet ").append(data.projetNom());
+    /**
+     * Écrit une valeur dans sa boîte, centrée verticalement.
+     *
+     * <p>{@code showTextAligned} placerait le texte sur une ligne de base, ce qui obligerait à
+     * réajuster à chaque changement de taille. Une colonne de la hauteur de la case, avec un
+     * décalage d'un tiers de cadratin, garde l'alignement optique sur les filets du fond.
+     */
+    private static void ecrire(PdfContentByte canevas, Zone zone, String valeur) {
+        if (zone == null || valeur == null || valeur.isBlank()) {
+            return;
         }
-        if (data.projetAdresse() != null) {
-            sb.append(" à ").append(data.projetAdresse());
+        Font police = FontFactory.getFont(POLICE, zone.taille(), NOIR);
+        float x = zone.xCm() * CM;
+        float largeur = zone.largeurCm() * CM;
+        float interligne = zone.taille() * 1.15f;
+
+        // La colonne est construite AUTOUR de la ligne de base voulue, pas autour de la case.
+        // Sinon une case plus basse que l'interligne — les valeurs incrustées dans le paragraphe
+        // font 0,4 cm, soit 11,3 pt, pour un interligne de 11,5 pt à 10 pt de corps — ne peut
+        // accueillir aucune ligne : OpenPDF n'écrit rien, sans erreur ni trace.
+        float centre = (PAGE_H - zone.yCm() - zone.hauteurCm() / 2f) * CM;
+        float ligneDeBase = centre - zone.taille() * 0.35f;
+
+        ColumnText colonne = new ColumnText(canevas);
+        colonne.setLeading(interligne);
+        colonne.setAlignment(alignement(zone.alignement()));
+        // Hauteur volontairement limitée à une seule ligne : une valeur trop longue est tronquée,
+        // comme dans le document légataire (le mode de paiement l'est déjà sur la référence APF).
+        // Sans ça elle passerait à la ligne et déborderait de la case imprimée sur le fond.
+        colonne.setSimpleColumn(x, ligneDeBase - 0.2f, x + largeur, ligneDeBase + interligne);
+        colonne.addText(new Phrase(valeur, police));
+        try {
+            colonne.go();
+        } catch (org.openpdf.text.DocumentException e) {
+            throw new DocumentRenderingException("Placement impossible pour la valeur « " + valeur + " »", e);
         }
-        sb.append(".");
-
-        Paragraph p = new Paragraph(sb.toString(), NORMAL);
-        p.setAlignment(Element.ALIGN_JUSTIFIED);
-        return p;
     }
 
-    private static Paragraph fixedWarningParagraph() {
-        Paragraph p = new Paragraph(
-                "A défaut de l'encaissement effectif du montant ci-dessus, la réservation est annulée sans "
-                        + "formalités.\n"
-                        + "Des frais d'immobilisation seront déduits de l'avance à hauteur de 10% de la valeur totale "
-                        + "du bien en cas de non aboutissement de la transaction.",
-                NORMAL);
-        p.setAlignment(Element.ALIGN_JUSTIFIED);
-        return p;
+    private static int alignement(Alignement a) {
+        return switch (a) {
+            case CENTRE -> Element.ALIGN_CENTER;
+            case DROITE -> Element.ALIGN_RIGHT;
+            case GAUCHE -> Element.ALIGN_LEFT;
+        };
     }
 
-    private static Paragraph conditionsParagraph() {
-        Paragraph p = new Paragraph(
-                "- Le client s'engage à signer le contrat de réservation dans un délai maximum de 15 JOURS à "
-                        + "compter de la date de la signature du présent reçu de réservation, et sous condition de "
-                        + "l'encaissement effectif du montant de réservation.\n\n"
-                        + "- Ce document ne constitue en aucun cas un acte de vente.",
-                NORMAL);
-        p.setAlignment(Element.ALIGN_JUSTIFIED);
-        return p;
-    }
-
-    private static PdfPTable signatureTable() {
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        PdfPCell promoteur = new PdfPCell(new Paragraph("LE PROMOTEUR", SECTION));
-        promoteur.setBorder(Rectangle.NO_BORDER);
-        PdfPCell client = new PdfPCell(new Paragraph("LE CLIENT", SECTION));
-        client.setBorder(Rectangle.NO_BORDER);
-        table.addCell(promoteur);
-        table.addCell(client);
-        return table;
-    }
-
-    private static PdfPTable footerBar() {
-        PdfPTable table = new PdfPTable(1);
-        table.setWidthPercentage(100);
-        PdfPCell cell = new PdfPCell(new Paragraph(
-                "AYAD DEVELOPPEMENT — 100 Boulvard Zerktouni, Casablanca, Maroc — "
-                        + "tel: +212 5 22 27 34 96 / +212 6 45 45 45 50 — contact@ayaddeveloppement.com",
-                FOOTER));
-        cell.setBackgroundColor(ORANGE);
-        cell.setPadding(6);
-        cell.setBorder(Rectangle.NO_BORDER);
-        table.addCell(cell);
-        return table;
+    /** La superficie s'imprime à deux décimales, sans unité : le « m² » est dans le fond. */
+    private static String superficie(FicheReservationData data) {
+        return data.superficie() == null ? "" : String.format("%.2f", data.superficie());
     }
 }

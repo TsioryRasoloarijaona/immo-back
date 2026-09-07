@@ -121,6 +121,7 @@ class ActeReservationTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-AR-" + suffix);
         company.setDescription("MAYLINE");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

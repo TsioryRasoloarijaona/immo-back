@@ -1,13 +1,20 @@
 package com.tsix.immocrm.services.client;
 
 import com.tsix.immocrm.dto.client.ClientListItemDto;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,10 +60,19 @@ public class ClientService {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
+            // "Client" = tier porté par au moins un ComFolder. La visibilité par entité juridique
+            // s'applique donc ici, dans la sous-requête : un client dont tous les dossiers sont sur
+            // une entité hors exploitation disparaît de la liste par construction, sans règle
+            // supplémentaire (FEATURE-visibilite-transversale-entites.md, R5).
             Subquery<UUID> clientsAvecDossier = query.subquery(UUID.class);
-            var folderRoot = clientsAvecDossier.from(ComFolder.class);
+            Root<ComFolder> folderRoot = clientsAvecDossier.from(ComFolder.class);
+            Join<ComFolder, StkItem> article = folderRoot.join("stkItem", JoinType.LEFT);
+            Join<StkItem, CfgTranche> tranche = article.join("stkHierarchy", JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
             clientsAvecDossier.select(folderRoot.get("cfgCustomer").get("id"))
-                    .where(cb.isNotNull(folderRoot.get("cfgCustomer")));
+                    .where(cb.and(
+                            cb.isNotNull(folderRoot.get("cfgCustomer")),
+                            VisibiliteEntites.depuisProjet(projet, cb)));
             predicates.add(root.get("id").in(clientsAvecDossier));
 
             if (StringUtils.hasText(search)) {

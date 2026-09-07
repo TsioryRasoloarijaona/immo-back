@@ -37,7 +37,12 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         + "identifiant, un encaissement hors du périmètre de l'appelant renvoie 404 (jamais 403 — "
         + "un 403 confirmerait son existence), et un identifiant qui n'est pas un UUID valide "
         + "renvoie 404 lui aussi, plutôt que le 400 habituel : il est refusé avant d'atteindre le "
-        + "contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.")
+        + "contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.\n\n"
+        + "**Entités juridiques en exploitation.** Ne sont renvoyés que les règlements portés par "
+        + "une entité juridique active (`StlSettlement.CfgCompanyId` → `CfgCompany.IsActive`) — "
+        + "aujourd'hui ADMOD et GHRIZA. Restriction **globale et permanente**, distincte du "
+        + "périmètre commercial : elle s'applique à tout appelant, rôles exemptés compris. Un "
+        + "règlement masqué renvoie 404 sur toutes les routes portant son identifiant.")
 @RestController
 @RequestMapping("/api/encaissements")
 public class EncaissementController {

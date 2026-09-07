@@ -179,12 +179,18 @@ class DevisTest {
         itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-DEVIS-2");
+        stkVocationRepository.save(vocation);
+
         StkItem article = new StkItem();
         article.setId(UUID.randomUUID());
         article.setCode("LOT-DEVIS-2");
         article.setDescription("17");
         article.setStkItemType(itemType);
         article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
         article.setArea(new BigDecimal("45.000000"));
         article.setComSalePriceHT(new BigDecimal("1290000.000000"));
@@ -222,9 +228,29 @@ class DevisTest {
 
         CfgTranche tranche = creerTranche("TR-DEVIS-3");
 
+        StkItemType itemType3 = new StkItemType();
+        itemType3.setId(UUID.randomUUID());
+        itemType3.setCode("TYPE-DEVIS-3");
+        itemType3.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemTypeRepository.save(itemType3);
+
+        StkItemCategory itemCategory3 = new StkItemCategory();
+        itemCategory3.setId(UUID.randomUUID());
+        itemCategory3.setCode("CAT-DEVIS-3");
+        itemCategory3.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemCategoryRepository.save(itemCategory3);
+
+        StkVocation vocation3 = new StkVocation();
+        vocation3.setId(UUID.randomUUID());
+        vocation3.setCode("VOC-DEVIS-3");
+        stkVocationRepository.save(vocation3);
+
         StkItem article = new StkItem();
         article.setId(UUID.randomUUID());
         article.setCode("LOT-DEVIS-3");
+        article.setStkItemType(itemType3);
+        article.setStkItemCategory(itemCategory3);
+        article.setStkVocation(vocation3);
         article.setStkHierarchy(tranche);
         article.setArea(new BigDecimal("100.000000"));
         article.setComSalePriceHT(new BigDecimal("100000.000000"));

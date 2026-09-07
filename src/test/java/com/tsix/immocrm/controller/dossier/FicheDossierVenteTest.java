@@ -124,6 +124,7 @@ class FicheDossierVenteTest {
         company.setId(UUID.randomUUID());
         company.setCode("CIE-FDV-1");
         company.setDescription("MAYLINE");
+        company.setIsActive(true);
         companyRepository.save(company);
 
         CfgProject project = new CfgProject();

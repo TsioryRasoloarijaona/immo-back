@@ -444,6 +444,7 @@ class PerimetreCommercialRevisionTest {
         CfgCompany societe = new CfgCompany();
         societe.setId(UUID.randomUUID());
         societe.setCode("STE-REV-" + suffixe());
+        societe.setIsActive(true);
         companyRepository.save(societe);
 
         // Ligne semée, pas un UUID tiré au hasard : AdmUserHabilitation__PrjProject_FK1 exige une

@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.patrimoine;
 
-import com.tsix.immocrm.domain.EntitesJuridiquesActives;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.entities.stk.StkItem;
 import jakarta.persistence.criteria.Predicate;
@@ -45,13 +44,13 @@ public final class StkItemSpecifications {
      * {@code GET /api/tranches/{id}/articles} — adds a repeatable {@code trancheIds} OR-filter
      * (vs. the single-tranche form above, scoped by path variable elsewhere), a free-text
      * {@code search} on {@code code}/{@code description}, the ADMOD/GHRIZA "entité juridique
-     * active" restriction (see {@link EntitesJuridiquesActives}) so the transverse catalogue
+     * active" restriction ({@code CfgCompany.isActive}) so the transverse catalogue
      * doesn't surface legacy test entities' lots alongside real ones, and the legacy-grid filters
      * confirmed missing (entité/nature/vocation/étage, prix/surface de-à).
      *
      * @param trancheIds           OR-matched on {@code StkItem.stkHierarchy.id}; null/empty = no restriction
      * @param search               case-insensitive substring match on {@code code} OR {@code description}; blank = no restriction
-     * @param entitesActivesOnly   when true, restricts to {@code StkItem.stkHierarchy.cfgProject.cfgCompany.code} in {@link EntitesJuridiquesActives#CODES}
+     * @param entitesActivesOnly   when true, restricts to items whose {@code StkItem.stkHierarchy.cfgProject.cfgCompany.isActive} is true
      * @param entiteId             {@code StkItem.stkHierarchy.cfgProject.cfgCompany.id}; null = no restriction
      * @param natureId             {@code StkItem.stkKind.id}; null = no restriction
      * @param vocationId           {@code StkItem.stkVocation.id}; null = no restriction
@@ -97,8 +96,8 @@ public final class StkItemSpecifications {
                 ));
             }
             if (entitesActivesOnly) {
-                predicates.add(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("code")
-                        .in(EntitesJuridiquesActives.CODES));
+                predicates.add(cb.isTrue(
+                        root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("isActive")));
             }
             if (entiteId != null) {
                 predicates.add(cb.equal(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("id"), entiteId));

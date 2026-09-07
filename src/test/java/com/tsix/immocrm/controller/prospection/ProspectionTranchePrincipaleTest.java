@@ -102,20 +102,20 @@ class ProspectionTranchePrincipaleTest {
         trancheA.setCode("TR-TP-A");
         trancheA.setDescription("Tranche A");
         trancheA.setCfgProject(project);
-        trancheRepository.save(trancheA);
+        // Reprendre l'instance renvoyée : l'id étant assigné, save() passe par merge() et rend une
+        // *autre* instance gérée. Sans cela, un test qui rattache trancheA à une prospection gérée
+        // fait voir à Hibernate une référence transiente au moment du flush.
+        trancheA = trancheRepository.save(trancheA);
 
         trancheB = new CfgTranche();
         trancheB.setId(UUID.randomUUID());
         trancheB.setCode("TR-TP-B");
         trancheB.setDescription("Tranche B");
         trancheB.setCfgProject(project);
-        trancheRepository.save(trancheB);
+        trancheB = trancheRepository.save(trancheB);
 
-        articleDeTrancheA = newItem("ART-TP-A", trancheA);
-        stkItemRepository.save(articleDeTrancheA);
-
-        articleDeTrancheB = newItem("ART-TP-B", trancheB);
-        stkItemRepository.save(articleDeTrancheB);
+        articleDeTrancheA = stkItemRepository.save(newItem("ART-TP-A", trancheA));
+        articleDeTrancheB = stkItemRepository.save(newItem("ART-TP-B", trancheB));
     }
 
     private StkItem newItem(String code, CfgTranche tranche) {

@@ -95,7 +95,13 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         + "l'appelant renvoie 404 (jamais 403 — un 403 confirmerait son existence), et un "
         + "identifiant qui n'est pas un UUID valide renvoie 404 lui aussi, plutôt que le 400 "
         + "habituel : il est refusé avant d'atteindre le contrôleur. Voir `perimetreRestreint` sur "
-        + "GET /api/mon-compte.")
+        + "GET /api/mon-compte.\n\n"
+        + "**Entités juridiques en exploitation.** Cette collection ne renvoie que les dossiers "
+        + "rattachés à une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui ADMOD et "
+        + "GHRIZA, comme dans l'application de bureau. Restriction **globale et permanente**, "
+        + "distincte du périmètre commercial : elle s'applique à tout appelant, y compris aux "
+        + "rôles qui en sont exemptés (dont Administrateur). Un dossier masqué renvoie 404 sur "
+        + "toutes les routes portant son identifiant, exactement comme un dossier inexistant.")
 @RestController
 @RequestMapping("/api/dossiers")
 public class DossierController {

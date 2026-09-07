@@ -101,12 +101,13 @@ class ReferentielControllerTest {
     @Autowired
     private CfgCompanyRepository companyRepository;
 
-    /** Entité juridique active, voir com.tsix.immocrm.domain.EntitesJuridiquesActives. */
+    /** Entité juridique en exploitation — c'est {@code isActive} qui la rend visible. */
     private CfgCompany newActiveCompany() {
         CfgCompany company = new CfgCompany();
         company.setId(UUID.randomUUID());
         company.setCode("ADMOD");
         company.setDescription("ADMOD");
+        company.setIsActive(true);
         return companyRepository.save(company);
     }
 

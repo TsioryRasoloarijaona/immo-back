@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.patrimoine;
 
-import com.tsix.immocrm.domain.EntitesJuridiquesActives;
 import com.tsix.immocrm.dto.patrimoine.TrancheDetailDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -28,12 +27,12 @@ public class TrancheService {
      * projet (Entité). Lets the front populate a Tranche checklist without the {@code GET
      * /api/projets} + {@code GET /api/projets/{id}/tranches} N+1 workaround — see
      * {@code instructions/filtres-avances.md} point 2. Restreint aux entités juridiques
-     * réellement en exploitation, voir {@link EntitesJuridiquesActives}.
+     * en exploitation ({@code CfgCompany.isActive}).
      */
     public Page<TrancheListItemDto> findAll(UUID projetId, Pageable pageable) {
         Page<CfgTranche> page = projetId != null
-                ? trancheRepository.findByCfgProjectIdAndCfgProject_CfgCompany_CodeIn(projetId, EntitesJuridiquesActives.CODES, pageable)
-                : trancheRepository.findByCfgProject_CfgCompany_CodeIn(EntitesJuridiquesActives.CODES, pageable);
+                ? trancheRepository.findDesEntitesActivesParProjet(projetId, pageable)
+                : trancheRepository.findDesEntitesActives(pageable);
         return page.map(TrancheService::toListItem);
     }
 

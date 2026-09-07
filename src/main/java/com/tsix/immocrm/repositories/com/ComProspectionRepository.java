@@ -18,13 +18,22 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
 
     Page<ComProspection> findByCfgProspectIsNullAndCfgCommercialIsNull(Pageable pageable);
 
-    /** Real prospections (excludes pré-prospections), for {@code GET /api/dashboard}. */
-    @Query("SELECT COUNT(p) FROM ComProspection p WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL)")
+    /**
+     * Real prospections (excludes pré-prospections), for {@code GET /api/dashboard} — restreint aux
+     * entités juridiques en exploitation, les prospections sans tranche restant comptées (R2).
+     */
+    @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspections();
 
-    /** Real, non-closed prospections, for {@code GET /api/dashboard}. */
-    @Query("SELECT COUNT(p) FROM ComProspection p WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) " +
-            "AND (p.isClosed IS NULL OR p.isClosed = false)")
+    /** Real, non-closed prospections, for {@code GET /api/dashboard} — même restriction d'entité. */
+    @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "AND (p.isClosed IS NULL OR p.isClosed = false) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countOpenExcludingPreProspections();
 
     /**
@@ -36,15 +45,19 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
      * sans projet résoluble n'est masquée à personne (§6.4).
      */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
-            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
 
     /** Variante de {@link #countOpenExcludingPreProspections()} restreinte au périmètre commercial. */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
             + "AND (p.isClosed IS NULL OR p.isClosed = false) "
-            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countOpenExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
 
     /**
@@ -53,8 +66,20 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
      * inexistante (404), jamais 403.
      */
     @Query("SELECT COUNT(p) > 0 FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
-            + "WHERE p.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL)")
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE p.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Variante de {@link #existsDansPerimetre} pour un appelant non restreint par un périmètre :
+     * seule la visibilité par entité juridique s'applique (R4). Une prospection sans tranche reste
+     * accessible (R2).
+     */
+    @Query("SELECT COUNT(p) > 0 FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE p.id = :id AND (soc.isActive = true OR soc.id IS NULL)")
+    boolean existsVisible(@Param("id") UUID id);
 
     /** {@code GET /api/prospects/{id}/prospections} (GAP-06). */
     Page<ComProspection> findByCfgProspectId(UUID prospectId, Pageable pageable);

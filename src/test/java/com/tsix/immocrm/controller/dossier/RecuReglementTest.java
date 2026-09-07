@@ -118,6 +118,7 @@ class RecuReglementTest {
         reglementCompany.setAddress("100 Boulevard Zerktouni");
         reglementCompany.setCity("Casablanca");
         reglementCompany.setSignatureCity("Casablanca");
+        reglementCompany.setIsActive(true);
         companyRepository.save(reglementCompany);
 
         CfgProject project = new CfgProject();
