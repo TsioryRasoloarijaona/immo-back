@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier.document;
 
 import com.tsix.immocrm.dto.dossier.FicheReservationData;
+import com.tsix.immocrm.exceptions.ConflictException;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -27,20 +28,23 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 @Component
 public class FicheReservationDocxRenderer {
 
-    private static final String ORANGE = "E87A1E";
+    /** Couleurs relevees sur les fonds de page legataires, pas approximees. */
+    private static final String APF_ORANGE = "F37123";
+    private static final String ARS_VIOLET = "726789";
     private static final String GRAY_LABEL = "E4E4E4";
 
     public byte[] render(FicheReservationData data) {
+        String marque = marque(data.dossierCode());
         try (XWPFDocument document = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            addTitleBox(document, data.dossierCode());
+            addTitleBox(document, data.dossierCode(), couleur(marque));
             blank(document);
-            addIntro(document, data);
+            addIntro(document, data, marque);
             blank(document);
             addFieldsTable(document, data);
             blank(document);
             addDescription(document, data);
             blank(document);
-            addFixedWarning(document);
+            addFixedWarning(document, marque);
             blank(document);
             addHeading(document, "CONDITION DE RESERVATION");
             blank(document);
@@ -60,7 +64,7 @@ public class FicheReservationDocxRenderer {
             addSignatureTable(document);
             blank(document);
             blank(document);
-            addFooterBar(document);
+            addFooterBar(document, couleur(marque));
 
             document.write(out);
             return out.toByteArray();
@@ -73,7 +77,28 @@ public class FicheReservationDocxRenderer {
         document.createParagraph();
     }
 
-    private static void addTitleBox(XWPFDocument document, String dossierCode) {
+    /**
+     * Marque deduite du prefixe du code dossier, comme dans le rapport legataire dont les pages
+     * s'appellent APF / ARS / ART / MBR. Elle decide de la couleur, de la societe citee et des
+     * clauses imprimees. Un prefixe inconnu est refuse plutot que rendu sous une autre marque :
+     * une fiche de reservation est remise au client.
+     */
+    static String marque(String dossierCode) {
+        String prefixe = dossierCode == null || dossierCode.length() < 3
+                ? "" : dossierCode.substring(0, 3).toUpperCase();
+        if (!"APF".equals(prefixe) && !"ARS".equals(prefixe)) {
+            throw new ConflictException(
+                    "Fiche de reservation non disponible pour la marque « " + prefixe + " » : "
+                            + "seules APF et ARS sont couvertes.");
+        }
+        return prefixe;
+    }
+
+    private static String couleur(String marque) {
+        return "ARS".equals(marque) ? ARS_VIOLET : APF_ORANGE;
+    }
+
+    private static void addTitleBox(XWPFDocument document, String dossierCode, String couleur) {
         XWPFTable table = document.createTable(1, 1);
         table.setWidth("35%");
         XWPFTableCell cell = table.getRow(0).getCell(0);
@@ -82,19 +107,28 @@ public class FicheReservationDocxRenderer {
         XWPFRun label = p.createRun();
         label.setText("N°V: ");
         label.setBold(true);
-        label.setColor(ORANGE);
+        label.setColor(couleur);
         XWPFRun value = p.createRun();
         value.setText(vide(dossierCode));
         value.setBold(true);
     }
 
-    private static void addIntro(XWPFDocument document, FicheReservationData data) {
+    /**
+     * Le paragraphe de societe differe par marque : ce n'est pas une mise en forme mais le texte
+     * legal de l'entite qui vend. L'ancienne version composait « SOCIETE {nom} (groupe AYAD
+     * DEVELOPPEMENT) » quelle que soit l'entite, ce qui produisait une mention fausse pour GHRIZA.
+     */
+    private static void addIntro(XWPFDocument document, FicheReservationData data, String marque) {
         XWPFParagraph p = document.createParagraph();
         p.setAlignment(ParagraphAlignment.BOTH);
         XWPFRun r = p.createRun();
-        r.setText("Nous soussignés, la Société dite « SOCIETE " + vide(data.entrepriseNom()) + " (groupe AYAD "
-                + "DEVELOPPEMENT) », société à Responsabilité limitée, sise à Casablanca, 100 Boulvard Zerktouni, "
-                + "représentées par l'un des mandataires dûment habilité à cet effet.");
+        r.setText("ARS".equals(marque)
+                ? "Nous soussignés, la Société dite « " + vide(data.entrepriseNom()) + " », société à "
+                        + "responsabilité limitée au capital de 100 000,00 Dhs, sise à Casablanca, 20 rue Racine, "
+                        + "Val Fleuri, représentées par l'un des mandataires dûment habilité à cet effet."
+                : "Nous soussignés, la Société dite « SOCIETE " + vide(data.entrepriseNom()) + " (groupe AYAD "
+                        + "DEVELOPPEMENT) », société à Responsabilité limitée, sise à Casablanca, 100 Boulvard "
+                        + "Zerktouni, représentées par l'un des mandataires dûment habilité à cet effet.");
         r.addBreak();
         r.setText("Agissant en notre qualité de promoteur immobilier, reconnaissons sous réserve des conditions "
                 + "ci-dessous avoir reçu de :");
@@ -162,15 +196,30 @@ public class FicheReservationDocxRenderer {
         p.createRun().setText(sb.toString());
     }
 
-    private static void addFixedWarning(XWPFDocument document) {
+    /**
+     * La clause d'immobilisation de 10 % n'existe que sur APF, et la mention parking que sur ARS :
+     * les deux sont imprimees dans le fond de page de leur marque respective. Les appliquer aux
+     * deux, comme le faisait l'ancienne version, revenait a engager GHRIZA sur une penalite que
+     * son document ne prevoit pas.
+     */
+    private static void addFixedWarning(XWPFDocument document, String marque) {
         XWPFParagraph p = document.createParagraph();
         p.setAlignment(ParagraphAlignment.BOTH);
         XWPFRun r = p.createRun();
         r.setText("A défaut de l'encaissement effectif du montant ci-dessus, la réservation est annulée sans "
                 + "formalités.");
-        r.addBreak();
-        r.setText("Des frais d'immobilisation seront déduits de l'avance à hauteur de 10% de la valeur totale du "
-                + "bien en cas de non aboutissement de la transaction.");
+        if ("APF".equals(marque)) {
+            r.addBreak();
+            r.setText("Des frais d'immobilisation seront déduits de l'avance à hauteur de 10% de la valeur totale du "
+                    + "bien en cas de non aboutissement de la transaction.");
+        }
+        if ("ARS".equals(marque)) {
+            XWPFParagraph mention = document.createParagraph();
+            XWPFRun m = mention.createRun();
+            m.setText(GabaritFicheReservation.MENTION_ARS);
+            m.setBold(true);
+            m.setFontSize(14);
+        }
     }
 
     private static void addHeading(XWPFDocument document, String text) {
@@ -222,11 +271,11 @@ public class FicheReservationDocxRenderer {
         table.setRightBorder(XWPFTable.XWPFBorderType.NONE, 0, 0, "auto");
     }
 
-    private static void addFooterBar(XWPFDocument document) {
+    private static void addFooterBar(XWPFDocument document, String couleur) {
         XWPFTable table = document.createTable(1, 1);
         table.setWidth("100%");
         XWPFTableCell cell = table.getRow(0).getCell(0);
-        shade(cell, ORANGE);
+        shade(cell, couleur);
         cell.removeParagraph(0);
         XWPFParagraph p = cell.addParagraph();
         XWPFRun r = p.createRun();
