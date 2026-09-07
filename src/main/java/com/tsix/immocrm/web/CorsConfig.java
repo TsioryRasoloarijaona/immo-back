@@ -42,6 +42,7 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                         // Frontend déployé, servi en HTTPS par Caddy : l'Origin envoyée par le
                         // navigateur porte le schéma https, jamais http.
+                        "immo-front-six.vercel.app",
                         "https://immo.tsiory.tech",
                         "http://192.168.11.114:5473", "http://localhost:*", "http://192.168.11.*:*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
