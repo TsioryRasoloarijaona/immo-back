@@ -75,10 +75,30 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Stateless JWT-in-httpOnly-cookie auth, no server-side session — CSRF strategy
-                // (SameSite=Strict already blocks cross-site form/script submission of the
-                // cookie; revisit with a double-submit token if a cross-subdomain frontend needs
-                // SameSite=Lax instead).
+                // Authentification sans session serveur, JWT dans un cookie httpOnly.
+                //
+                // La protection CSRF dédiée est désactivée parce que SameSite=Strict la remplace :
+                // le navigateur n'attache pas le cookie aux requêtes venues d'un autre site, donc
+                // une page hostile ne peut pas agir au nom de l'utilisateur.
+                //
+                // Cette justification tient tant que le frontend reste sur tsiory.tech
+                // (immo.tsiory.tech aujourd'hui — voir CorsConfig et app.jwt.cookie-same-site).
+                // L'héberger sur un autre domaine enregistrable imposerait SameSite=None, et
+                // ferait tomber cette protection. Ce qui subsisterait alors :
+                //
+                //  - les endpoints modifiant l'état consomment du JSON, et application/json n'est
+                //    pas un type de contenu « simple » : le navigateur impose un préflight, que
+                //    CORS refuse à une origine non listée ;
+                //  - MAIS les deux POST multipart de pièces jointes
+                //    (/api/dossiers/{id}/pieces-jointes et .../reglements/{id}/pieces-jointes)
+                //    ne seraient pas couverts : multipart/form-data EST un type simple, donc
+                //    soumissible sans préflight par un formulaire hébergé n'importe où, cookie
+                //    attaché. L'attaquant ne lirait pas la réponse, mais l'écriture aboutirait.
+                //
+                // Le remède, le cas échéant : exiger un en-tête applicatif sur les méthodes non
+                // sûres — sa seule présence force un préflight, donc le contrôle d'origine. Un
+                // double-submit par cookie ne conviendrait pas, un frontend d'un autre domaine ne
+                // pouvant pas lire un cookie posé par l'API.
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())

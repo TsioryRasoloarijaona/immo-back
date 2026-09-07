@@ -1,6 +1,5 @@
 package com.tsix.immocrm.security;
 
-import com.tsix.immocrm.controller.auth.AuthController;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -60,7 +59,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return Optional.empty();
         }
         return Arrays.stream(cookies)
-                .filter(c -> AuthController.COOKIE_NAME.equals(c.getName()))
+                .filter(c -> CookieJwt.NOM.equals(c.getName()))
                 .map(Cookie::getValue)
                 .findFirst();
     }

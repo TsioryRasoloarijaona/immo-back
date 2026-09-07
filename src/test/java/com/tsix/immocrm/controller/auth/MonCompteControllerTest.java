@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.auth;
 
+import com.tsix.immocrm.security.CookieJwt;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
@@ -103,7 +104,7 @@ class MonCompteControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andReturn();
-        Cookie cookie = result.getResponse().getCookie(AuthController.COOKIE_NAME);
+        Cookie cookie = result.getResponse().getCookie(CookieJwt.NOM);
         assertThat(cookie).isNotNull();
         return cookie;
     }
@@ -132,7 +133,7 @@ class MonCompteControllerTest {
                 .andExpect(jsonPath("$.mustChangePassword").value(false))
                 .andExpect(jsonPath("$.profileCompleted").value(false))
                 .andReturn();
-        Cookie cookieAfterPasswordChange = changeResult.getResponse().getCookie(AuthController.COOKIE_NAME);
+        Cookie cookieAfterPasswordChange = changeResult.getResponse().getCookie(CookieJwt.NOM);
         assertThat(cookieAfterPasswordChange).isNotNull();
 
         mockMvc.perform(get("/api/referentiels/etapes-prospection").cookie(cookieAfterPasswordChange))
@@ -151,7 +152,7 @@ class MonCompteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profileCompleted").value(true))
                 .andReturn();
-        Cookie finalCookie = completeResult.getResponse().getCookie(AuthController.COOKIE_NAME);
+        Cookie finalCookie = completeResult.getResponse().getCookie(CookieJwt.NOM);
         assertThat(finalCookie).isNotNull();
 
         mockMvc.perform(get("/api/referentiels/etapes-prospection").cookie(finalCookie))
