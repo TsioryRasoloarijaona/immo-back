@@ -16,6 +16,7 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmIdentityDocumentTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmTierTitleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
@@ -68,6 +69,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class AutorisationVersementTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -146,11 +149,13 @@ class AutorisationVersementTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-AV-" + suffix);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-AV-" + suffix);
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkItem article = new StkItem();
@@ -160,6 +165,7 @@ class AutorisationVersementTest {
         article.setStkItemType(type);
         article.setStkItemCategory(category);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(article);
 
         CfgTier client = new CfgTier();

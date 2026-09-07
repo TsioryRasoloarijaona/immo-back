@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -59,6 +60,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class FicheDossierVenteTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
     @Autowired
     private StkVocationRepository vocationRepository;
@@ -100,18 +103,21 @@ class FicheDossierVenteTest {
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-FDV-1");
         type.setDescription("2 CHAMBRES + SALON");
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-FDV-1");
         category.setDescription("APPARTEMENT");
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkItemCategory categorieParking = new StkItemCategory();
         categorieParking.setId(UUID.randomUUID());
         categorieParking.setCode("CAT-FDV-PARK");
         categorieParking.setDescription("PARKING");
+        categorieParking.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(categorieParking);
 
         CfgCompany company = new CfgCompany();
@@ -142,6 +148,7 @@ class FicheDossierVenteTest {
         article.setStkItemCategory(category);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(article);
 
         StkItem parking = new StkItem();
@@ -151,6 +158,7 @@ class FicheDossierVenteTest {
         parking.setStkItemType(type);
         parking.setStkItemCategory(categorieParking);
         parking.setStkVocation(vocation);
+        parking.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(parking);
 
         CfgTier client = new CfgTier();

@@ -15,6 +15,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmProfessionRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
@@ -62,6 +63,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class FicheBancaireTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
     @Autowired
     private StkVocationRepository vocationRepository;
@@ -103,12 +106,14 @@ class FicheBancaireTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-FB-" + suffix);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-FB-" + suffix);
         category.setDescription("APPARTEMENT");
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkBuilding building = new StkBuilding();
@@ -154,6 +159,7 @@ class FicheBancaireTest {
         article.setStkBuilding(building);
         article.setStkFloor(floor);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(article);
 
         AdmProfession profession = new AdmProfession();

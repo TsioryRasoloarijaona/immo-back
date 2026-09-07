@@ -18,6 +18,8 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
+import com.tsix.immocrm.fixtures.ReferentielSeme;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
@@ -82,6 +84,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class PerimetreCommercialTest {
 
+    @Autowired private FixtureReferentielStk fixtureReferentielStk;
     @Autowired private MockMvc mockMvc;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
@@ -116,11 +119,13 @@ class PerimetreCommercialTest {
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-PERIM-TEST");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-PERIM-TEST");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -213,6 +218,7 @@ class PerimetreCommercialTest {
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
         article.setComFolderId(folder.getId());
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         folder.setStkItem(article);
@@ -528,7 +534,9 @@ class PerimetreCommercialTest {
         ligneTranche.setCfgTranche(trancheB);
         habilitationRepository.save(ligneTranche);
 
-        UUID prjProjectId = UUID.randomUUID();
+        // Ligne semée, pas un UUID tiré au hasard : AdmUserHabilitation__PrjProject_FK1 exige une
+        // cible réelle, et PrjProject n'est modélisé par aucune entité — voir ReferentielSeme.
+        UUID prjProjectId = ReferentielSeme.PRJ_PROJECT;
         AdmUserHabilitation lignePrjProject = new AdmUserHabilitation();
         lignePrjProject.setId(UUID.randomUUID());
         lignePrjProject.setAdmUser(cible);
@@ -743,6 +751,7 @@ class PerimetreCommercialTest {
         articleB.setStkItemCategory(itemCategory);
         articleB.setStkVocation(vocation);
         articleB.setStkHierarchy(trancheB);
+        articleB.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(articleB);
 
         ComPaymentMethod modePaie = new ComPaymentMethod();
@@ -783,6 +792,7 @@ class PerimetreCommercialTest {
         articleA.setStkItemCategory(itemCategory);
         articleA.setStkVocation(vocation);
         articleA.setStkHierarchy(trancheA);
+        articleA.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(articleA);
 
         ComPaymentMethod modePaie = new ComPaymentMethod();

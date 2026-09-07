@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
@@ -58,6 +59,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RecuReglementTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private MockMvc mockMvc;
     @Autowired
     private StkVocationRepository vocationRepository;
@@ -97,12 +100,14 @@ class RecuReglementTest {
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-RR-" + suffix);
         type.setDescription("2 CHAMBRES + SALON");
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-RR-" + suffix);
         category.setDescription("APPARTEMENT");
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         CfgCompany reglementCompany = new CfgCompany();
@@ -136,6 +141,7 @@ class RecuReglementTest {
         article.setStkItemCategory(category);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemRepository.save(article);
 
         CfgTier client = new CfgTier();

@@ -1,0 +1,104 @@
+name: Tests
+
+# Sur pull_request, jamais sur push:main. Des tests joues apres le merge ne gardent rien :
+# le code serait deja parti au deploiement (voir deploy.yml, declenche par push:main).
+# Pour que ce workflow serve de barriere, le declarer comme check requis dans les regles de
+# protection de la branche main.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Une PR poussee trois fois de suite n'a pas besoin de trois suites completes : seule la
+# derniere revision compte, contrairement au deploiement qu'on ne coupe jamais a mi-course.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Suite complete sur SQL Server ephemere
+    runs-on: ubuntu-latest
+
+    env:
+      # Mot de passe d'un conteneur jetable, lie a localhost d'un runner ephemere et detruit
+      # avec lui : ce n'est pas un secret, en faire un compliquerait sans rien proteger.
+      # SQL Server exige >= 8 caracteres avec majuscule, minuscule, chiffre et symbole.
+      SA_PWD: Ci-Ephemere-Passw0rd!
+      DB_TEST: yesRemsCi
+      SQLCMD: /opt/mssql-tools18/bin/sqlcmd
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # MSSQL_PID=Developer et non Express : Express plafonne chaque base a 10 Go et n'apporte
+      # rien ici. Developer est gratuit pour un usage de developpement et de test.
+      - name: Demarrer SQL Server
+        run: |
+          docker run -d --name sqlserver -p 1433:1433 \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$SA_PWD" \
+            -e MSSQL_PID=Developer \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+      # Boucle explicite plutot qu'un --health-cmd : le chemin de sqlcmd a change entre les
+      # images 2019 et 2022 (mssql-tools -> mssql-tools18), et un healthcheck qui pointe a cote
+      # echoue en silence jusqu'au timeout sans dire pourquoi.
+      - name: Attendre que le moteur reponde
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server pret apres $((i * 2)) s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ECHEC : SQL Server n'a jamais repondu"
+          docker logs sqlserver
+          exit 1
+
+      # -b fait sortir sqlcmd en erreur des le premier Msg, sinon un DDL casse defilerait sans
+      # faire echouer l'etape et la suite echouerait plus loin, sur un symptome sans rapport.
+      # -I active QUOTED_IDENTIFIER, requis par une partie du DDL genere.
+      - name: Construire le schema
+        run: |
+          docker cp ci/schema sqlserver:/schema
+          docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b \
+            -Q "CREATE DATABASE [$DB_TEST]"
+          for f in 010_tables 020_foreign_keys 030_triggers 040_seed_reference; do
+            echo "--- $f.sql"
+            docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b -I \
+              -d "$DB_TEST" -i "/schema/$f.sql"
+          done
+
+      # mvnw est versionne en 100644 : sans ce chmod, ./mvnw sort en "Permission denied".
+      # Le Dockerfile fait exactement la meme chose pour la meme raison.
+      - name: Executer la suite
+        env:
+          # Ces variables priment sur src/test/resources/application.properties : Spring Boot
+          # place l'environnement au-dessus des fichiers de proprietes. Aucun fichier du depot
+          # n'a donc a etre modifie pour rediriger la suite.
+          SPRING_DATASOURCE_URL: jdbc:sqlserver://localhost:1433;databaseName=yesRemsCi;encrypt=true;trustServerCertificate=true
+          SPRING_DATASOURCE_USERNAME: sa
+          SPRING_DATASOURCE_PASSWORD: Ci-Ephemere-Passw0rd!
+        run: |
+          chmod +x ./mvnw
+          ./mvnw --batch-mode test
+
+      - name: Publier les rapports Surefire en cas d'echec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+      - name: Journal SQL Server en cas d'echec
+        if: failure()
+        run: docker logs --tail=100 sqlserver

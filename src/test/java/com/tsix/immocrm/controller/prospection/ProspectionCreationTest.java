@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -42,6 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class ProspectionCreationTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -90,11 +93,13 @@ class ProspectionCreationTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-PSNC-" + UUID.randomUUID());
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-PSNC-" + UUID.randomUUID());
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(category);
 
         StkVocation vocation = new StkVocation();
@@ -126,6 +131,7 @@ class ProspectionCreationTest {
         article.setStkItemCategory(category);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         articleAutreTranche = new StkItem();
@@ -135,6 +141,7 @@ class ProspectionCreationTest {
         articleAutreTranche.setStkItemCategory(category);
         articleAutreTranche.setStkVocation(vocation);
         articleAutreTranche.setStkHierarchy(autreTranche);
+        articleAutreTranche.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(articleAutreTranche);
     }
 

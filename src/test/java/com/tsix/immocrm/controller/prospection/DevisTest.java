@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -46,6 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class DevisTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -166,12 +169,14 @@ class DevisTest {
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-DEVIS-2");
         itemType.setDescription("1 CHAMBRES + SALON");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-DEVIS-2");
         itemCategory.setDescription("APPARTEMENT");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -185,6 +190,7 @@ class DevisTest {
         article.setComSalePriceHT(new BigDecimal("1290000.000000"));
         article.setComSalePrice(new BigDecimal("1548000.000000"));
         article.setVat(new BigDecimal("0.200000"));
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         String body = "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId() + "\"}";
@@ -224,6 +230,7 @@ class DevisTest {
         article.setComSalePriceHT(new BigDecimal("100000.000000"));
         article.setComSalePrice(new BigDecimal("120000.000000"));
         article.setVat(new BigDecimal("0.200000"));
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         String body = "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId()
@@ -318,18 +325,21 @@ class DevisTest {
         typeAppart.setId(UUID.randomUUID());
         typeAppart.setCode("TYPE-DEVIS-7");
         typeAppart.setDescription("2 CHAMBRES + SALON");
+        typeAppart.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(typeAppart);
 
         StkItemCategory categorieAppart = new StkItemCategory();
         categorieAppart.setId(UUID.randomUUID());
         categorieAppart.setCode("CAT-DEVIS-7");
         categorieAppart.setDescription("APPARTEMENT");
+        categorieAppart.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(categorieAppart);
 
         StkItemCategory categorieJardin = new StkItemCategory();
         categorieJardin.setId(UUID.randomUUID());
         categorieJardin.setCode("CAT-DEVIS-7-JRD");
         categorieJardin.setDescription("JARDIN");
+        categorieJardin.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(categorieJardin);
 
         StkVocation vocation = new StkVocation();
@@ -348,6 +358,7 @@ class DevisTest {
         article.setComSalePriceHT(new BigDecimal("812500.000000"));
         article.setComSalePrice(new BigDecimal("975000.000000"));
         article.setVat(new BigDecimal("0.200000"));
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         StkItem sousArticle = new StkItem();
@@ -363,6 +374,7 @@ class DevisTest {
         sousArticle.setComSalePrice(new BigDecimal("188151.470000"));
         sousArticle.setVat(new BigDecimal("0.200000"));
         sousArticle.setAlwaysAffected(Boolean.TRUE);
+        sousArticle.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(sousArticle);
 
         String body = "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId()

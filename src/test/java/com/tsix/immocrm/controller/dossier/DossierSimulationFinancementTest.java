@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -41,6 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class DossierSimulationFinancementTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -106,11 +109,13 @@ class DossierSimulationFinancementTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SIM-TEST");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SIM-TEST");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -120,6 +125,7 @@ class DossierSimulationFinancementTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         long dossiersAvant = folderRepository.count();
@@ -172,11 +178,13 @@ class DossierSimulationFinancementTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SIM-REMISE");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SIM-REMISE");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -186,6 +194,7 @@ class DossierSimulationFinancementTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         String body = """
@@ -213,11 +222,13 @@ class DossierSimulationFinancementTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SIM-REMISE-KO");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SIM-REMISE-KO");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -226,6 +237,7 @@ class DossierSimulationFinancementTest {
         article.setStkItemType(itemType);
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         mockMvc.perform(post("/api/dossiers/simulation-financement")
@@ -246,11 +258,13 @@ class DossierSimulationFinancementTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SIM-OCCUPE");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SIM-OCCUPE");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -260,6 +274,7 @@ class DossierSimulationFinancementTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setComFolderId(UUID.randomUUID());
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         String body = """
@@ -275,11 +290,13 @@ class DossierSimulationFinancementTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SIM-NOPRIX");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SIM-NOPRIX");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkVocation vocation = new StkVocation();
@@ -293,6 +310,7 @@ class DossierSimulationFinancementTest {
         article.setStkItemType(itemType);
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         mockMvc.perform(post("/api/dossiers/simulation-financement")

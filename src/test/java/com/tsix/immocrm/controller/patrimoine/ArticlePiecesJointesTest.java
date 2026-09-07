@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileRepository;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
@@ -46,6 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ArticlePiecesJointesTest {
 
     @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
     private StockageMemoire stockageMemoire;
 
     @Autowired
@@ -81,11 +84,13 @@ class ArticlePiecesJointesTest {
         StkItemType type = new StkItemType();
         type.setId(UUID.randomUUID());
         type.setCode("TYPE-APJ-" + UUID.randomUUID());
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemTypeRepository.save(type);
 
         StkItemCategory category = new StkItemCategory();
         category.setId(UUID.randomUUID());
         category.setCode("CAT-APJ-" + UUID.randomUUID());
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
         itemCategoryRepository.save(category);
 
         StkItem item = new StkItem();
@@ -94,6 +99,7 @@ class ArticlePiecesJointesTest {
         item.setStkItemType(type);
         item.setStkItemCategory(category);
         item.setStkVocation(vocation);
+        item.setStkKind(fixtureReferentielStk.natureParDefaut());
         return itemRepository.save(item);
     }
 

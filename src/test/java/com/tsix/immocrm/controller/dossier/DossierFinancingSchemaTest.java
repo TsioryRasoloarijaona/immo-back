@@ -11,6 +11,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -48,6 +49,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class DossierFinancingSchemaTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -119,11 +122,13 @@ class DossierFinancingSchemaTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SCHEMA-TEST");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SCHEMA-TEST");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -133,6 +138,7 @@ class DossierFinancingSchemaTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         CfgTier prospect = new CfgTier();
@@ -209,11 +215,13 @@ class DossierFinancingSchemaTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SCHEMA-REMISE");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SCHEMA-REMISE");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -223,6 +231,7 @@ class DossierFinancingSchemaTest {
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
         article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         CfgTier prospect = new CfgTier();
@@ -280,11 +289,13 @@ class DossierFinancingSchemaTest {
         StkItemType itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-SCHEMA-NOPRIX");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         StkItemCategory itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-SCHEMA-NOPRIX");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         StkItem article = new StkItem();
@@ -293,6 +304,7 @@ class DossierFinancingSchemaTest {
         article.setStkItemType(itemType);
         article.setStkItemCategory(itemCategory);
         article.setStkVocation(vocation);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemRepository.save(article);
 
         CfgTier prospect = new CfgTier();

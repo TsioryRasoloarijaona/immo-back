@@ -9,6 +9,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -41,6 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class DossierCreateTest {
 
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private MockMvc mockMvc;
 
@@ -86,11 +89,13 @@ class DossierCreateTest {
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-CREATE-TEST");
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemTypeRepository.save(itemType);
 
         itemCategory = new StkItemCategory();
         itemCategory.setId(UUID.randomUUID());
         itemCategory.setCode("CAT-CREATE-TEST");
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
         stkItemCategoryRepository.save(itemCategory);
 
         vocation = new StkVocation();
@@ -106,6 +111,7 @@ class DossierCreateTest {
         item.setStkItemType(itemType);
         item.setStkItemCategory(itemCategory);
         item.setStkVocation(vocation);
+        item.setStkKind(fixtureReferentielStk.natureParDefaut());
         return stkItemRepository.save(item);
     }
 
