@@ -11,6 +11,7 @@ import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
@@ -64,12 +65,18 @@ import java.util.UUID;
  * d'usage. Le refus est émis en positionnant le statut et en renvoyant {@code false}, jamais en
  * levant une exception (qui deviendrait un 500).
  *
- * <p>Le seul saut légitime est <b>structurel</b>, décidé sur le motif de route et jamais sur la
- * valeur : un motif sans variable d'id au segment 3 ({@code /api/dossiers/documents/…},
- * {@code /api/dossiers/simulation-financement}) ne désigne aucune ressource à contrôler.
+ * <p>Les sauts légitimes sont <b>structurels</b>, décidés sur la forme de la requête et jamais sur
+ * la valeur de l'id : un motif sans variable d'id au segment 3 ({@code /api/dossiers/documents/…},
+ * {@code /api/dossiers/simulation-financement}) ne désigne aucune ressource à contrôler, et une
+ * <b>préflight CORS</b> ne demande pas une ressource mais l'autorisation d'une méthode.
  *
- * <p>Hors périmètre ⇒ {@code 404}, jamais {@code 403} : un 403 confirmerait l'existence de la
- * ressource. Lorsque l'appelant n'est pas restreint, aucune requête supplémentaire n'est émise.
+ * <p>Hors visibilité ⇒ {@code 404}, jamais {@code 403} : un 403 confirmerait l'existence de la
+ * ressource.
+ *
+ * <p><b>Ce contrôle s'exécute désormais pour tout appelant</b>, et non plus seulement pour un
+ * compte restreint par un périmètre : la visibilité par entité juridique
+ * ({@code VisibiliteEntites}) est globale. Il en coûte une requête d'existence par route portant un
+ * id — c'est le prix de la règle, sans quoi elle ne tiendrait que sur les listes.
  *
  * <p>Angle mort assumé et couvert ailleurs : les générateurs de documents <i>en lot</i>
  * ({@code POST /api/dossiers/documents/…}) reçoivent leurs ids dans le corps de la requête, hors
@@ -96,6 +103,15 @@ public class PerimetreInterceptor implements HandlerInterceptor {
     @SuppressWarnings("unchecked")
     public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
                              @NonNull Object handler) throws IOException {
+        // Une préflight CORS ne désigne aucune ressource : elle demande « ai-je le droit d'émettre
+        // un PATCH depuis cette origine ? », question à laquelle une règle de visibilité n'a rien à
+        // répondre. Le navigateur l'envoie d'ailleurs sans cookie, donc sans appelant identifiable.
+        // La refuser casserait TOUTE requête cross-origin non simple du frontend, pas seulement
+        // celles portant un id masqué — y compris sur des ressources parfaitement visibles.
+        if (CorsUtils.isPreFlightRequest(request)) {
+            return true;
+        }
+
         String pattern = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         Object variables = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (pattern == null || !(variables instanceof Map)) {

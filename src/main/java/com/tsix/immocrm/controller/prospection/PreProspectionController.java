@@ -36,7 +36,12 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         + "identifiant, une ressource hors du périmètre de l'appelant renvoie 404 (jamais 403 — un "
         + "403 confirmerait son existence), et un identifiant qui n'est pas un UUID valide renvoie "
         + "404 lui aussi, plutôt que le 400 habituel : il est refusé avant d'atteindre le "
-        + "contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.")
+        + "contrôleur. Voir `perimetreRestreint` sur GET /api/mon-compte.\n\n"
+        + "**Entités juridiques en exploitation.** Ne sont renvoyées que les pré-prospections "
+        + "rattachées à une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui ADMOD et "
+        + "GHRIZA. Restriction **globale et permanente**, distincte du périmètre commercial : elle "
+        + "s'applique à tout appelant, rôles exemptés compris. Une pré-prospection **sans tranche** "
+        + "n'est rattachée à aucune entité et reste donc visible — le lead n'est pas perdu.")
 @RestController
 @RequestMapping("/api/pre-prospections")
 public class PreProspectionController {

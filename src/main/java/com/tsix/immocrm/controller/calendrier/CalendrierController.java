@@ -17,7 +17,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Tag(name = "Calendrier", description = "Rendez-vous et visites planifiés lors des interactions "
-        + "de prospection, exposés pour affichage dans un calendrier côté front.")
+        + "de prospection, exposés pour affichage dans un calendrier côté front.\n\n"
+        + "**Entités juridiques en exploitation.** Seuls les événements rattachés — par leur "
+        + "prospection ou par leur dossier — à une entité juridique active (`CfgCompany.IsActive`) "
+        + "sont renvoyés : aujourd'hui ADMOD et GHRIZA. Restriction globale et permanente, "
+        + "appliquée à tout appelant. Un événement qu'aucune prospection ni aucun dossier ne "
+        + "rattache à une entité reste affiché.")
 @RestController
 @RequestMapping("/api/calendrier")
 public class CalendrierController {

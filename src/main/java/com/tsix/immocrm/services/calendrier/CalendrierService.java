@@ -31,6 +31,11 @@ public class CalendrierService {
      * {@code GET /api/calendrier/evenements?debut=...&fin=...}: every rendez-vous/visite
      * ({@code AdmEvent}) created via {@code POST /api/prospections/{id}/interactions} whose
      * start falls within [debut, fin], earliest first.
+     *
+     * <p>Seuls les événements rattachés à une entité juridique en exploitation sont renvoyés
+     * ({@code CfgCompany.IsActive}) ; ceux qu'aucune prospection ni aucun dossier ne rattache à une
+     * entité restent affichés. Le prédicat est porté par la requête, pas par ce service — voir
+     * {@code ComActionMessageRepository.findEvenementsVisibles}.
      */
     public List<EvenementCalendrierDto> evenements(LocalDateTime debut, LocalDateTime fin) {
         if (debut == null || fin == null) {
@@ -40,7 +45,7 @@ public class CalendrierService {
             throw new InvalidRequestException("fin doit être postérieure ou égale à debut");
         }
         return actionMessageRepository
-                .findByAdmEventIsNotNullAndAdmEventStartHourBetweenOrderByAdmEventStartHourAsc(debut, fin)
+                .findEvenementsVisibles(debut, fin)
                 .stream()
                 .map(CalendrierService::toEvenementDto)
                 .toList();

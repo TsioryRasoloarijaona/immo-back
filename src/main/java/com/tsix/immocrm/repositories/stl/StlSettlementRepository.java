@@ -24,10 +24,23 @@ public interface StlSettlementRepository extends JpaRepository<StlSettlement, UU
      * n'est masqué à personne). Même motif de sous-requête {@code EXISTS} que le filtre
      * {@code dossierId} de {@code EncaissementService}.
      */
-    @Query("SELECT COUNT(s) > 0 FROM StlSettlement s WHERE s.id = :id AND ("
+    @Query("SELECT COUNT(s) > 0 FROM StlSettlement s LEFT JOIN s.cfgCompany soc "
+            + "WHERE s.id = :id AND (soc.isActive = true OR soc.id IS NULL) AND ("
             + "EXISTS (SELECT 1 FROM StlSettlementLine l WHERE l.stlSettlement = s "
             + "        AND l.comDocument.comFolder.stkItem.stkHierarchy.cfgProject.id IN :projetIds) "
             + "OR NOT EXISTS (SELECT 1 FROM StlSettlementLine l2 WHERE l2.stlSettlement = s "
             + "        AND l2.comDocument.comFolder.stkItem.stkHierarchy.cfgProject.id IS NOT NULL))")
     boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Variante de {@link #existsDansPerimetre} pour un appelant non restreint par un périmètre :
+     * seule la visibilité par entité juridique s'applique (R4).
+     *
+     * <p>Le règlement porte sa société en FK directe ({@code StlSettlement.CfgCompanyId}), mesurée
+     * concordante avec celle déduite du dossier sur 644 règlements de vente sur 644 — inutile de
+     * repasser par les lignes ici.
+     */
+    @Query("SELECT COUNT(s) > 0 FROM StlSettlement s LEFT JOIN s.cfgCompany soc "
+            + "WHERE s.id = :id AND (soc.isActive = true OR soc.id IS NULL)")
+    boolean existsVisible(@Param("id") UUID id);
 }

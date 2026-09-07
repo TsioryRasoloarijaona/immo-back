@@ -23,7 +23,9 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> 
      * used by {@code GET /api/clients} (server-side aggregate, one round trip for every client
      * on the page). Tuple: [cfgCustomerId, montantTotal].
      */
-    @Query("SELECT d.comFolder.cfgCustomer.id, COALESCE(SUM(d.amount), 0) FROM ComDocument d " +
-            "WHERE d.comFolder.cfgCustomer.id IN :clientIds GROUP BY d.comFolder.cfgCustomer.id")
+    @Query("SELECT f.cfgCustomer.id, COALESCE(SUM(d.amount), 0) FROM ComDocument d JOIN d.comFolder f " +
+            "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc " +
+            "WHERE f.cfgCustomer.id IN :clientIds AND (soc.isActive = true OR soc.id IS NULL) " +
+            "GROUP BY f.cfgCustomer.id")
     List<Object[]> sumAmountGroupedByClientId(List<UUID> clientIds);
 }

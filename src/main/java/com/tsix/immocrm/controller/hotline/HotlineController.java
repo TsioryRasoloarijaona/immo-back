@@ -24,7 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Hotline", description = "Recherche d'un correspondant par numéro de téléphone, avec "
         + "tout son historique d'activité (prospections, dossiers de vente, règlements, "
         + "interactions...) en une seule requête. Pensé pour un agent hotline qui doit "
-        + "identifier un appelant et voir instantanément son passé dans le CRM.")
+        + "identifier un appelant et voir instantanément son passé dans le CRM.\n\n"
+        + "**Entités juridiques en exploitation.** Les blocs prospections, dossiers, règlements et "
+        + "interactions ne remontent que ce qui relève d'une entité juridique active "
+        + "(`CfgCompany.IsActive`) — aujourd'hui ADMOD et GHRIZA. Un correspondant dont toute "
+        + "l'activité porte sur une entité hors exploitation est donc trouvé avec un historique "
+        + "vide, ce qui n'est pas une erreur.")
 public class HotlineController {
 
     private final HotlineService hotlineService;

@@ -43,7 +43,9 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
      */
     @Query("SELECT f.id, s.code, f.totalToPay, f.revival1, f.revival1ValidityDate, f.revival2, f.revival2ValidityDate, " +
             "c.socialReason, c.firstName, c.lastName " +
-            "FROM ComFolder f LEFT JOIN f.strStatus s LEFT JOIN f.cfgCustomer c")
+            "FROM ComFolder f LEFT JOIN f.strStatus s LEFT JOIN f.cfgCustomer c " +
+            "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc " +
+            "WHERE (soc.isActive = true OR soc.id IS NULL)")
     List<Object[]> findDashboardProjection();
 
     /**
@@ -61,8 +63,8 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
     @Query("SELECT f.id, s.code, f.totalToPay, f.revival1, f.revival1ValidityDate, f.revival2, f.revival2ValidityDate, " +
             "c.socialReason, c.firstName, c.lastName " +
             "FROM ComFolder f LEFT JOIN f.strStatus s LEFT JOIN f.cfgCustomer c " +
-            "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr " +
-            "WHERE pr.id IN :projetIds OR pr.id IS NULL")
+            "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc " +
+            "WHERE (pr.id IN :projetIds OR pr.id IS NULL) AND (soc.isActive = true OR soc.id IS NULL)")
     List<Object[]> findDashboardProjectionDansPerimetre(@Param("projetIds") List<UUID> projetIds);
 
     /**
@@ -73,9 +75,25 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
      * 403, sinon l'existence de la ressource serait confirmée et les ids énumérables.
      */
     @Query("SELECT COUNT(f) > 0 FROM ComFolder f "
-            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
-            + "WHERE f.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL)")
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
     boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Variante de {@link #existsDansPerimetre} pour un appelant <b>non restreint</b> par un
+     * périmètre : seule la visibilité par entité juridique s'applique
+     * ({@code instructions/FEATURE-visibilite-transversale-entites.md}, R4).
+     *
+     * <p>Sans elle, le filtre d'entité serait purement décoratif sur les listes : un dossier absent
+     * de {@code GET /api/dossiers} resterait servi par {@code GET /api/dossiers/{id}}, échéancier,
+     * pièces jointes et générateurs de documents compris. Comme pour le périmètre, un dossier
+     * masqué est traité en <b>404</b>, jamais 403.
+     */
+    @Query("SELECT COUNT(f) > 0 FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.id = :id AND (soc.isActive = true OR soc.id IS NULL)")
+    boolean existsVisible(@Param("id") UUID id);
 
     /** {@code GET /api/prospects/{id}/dossiers} (GAP-06). */
     Page<ComFolder> findByCfgCustomerId(UUID customerId, Pageable pageable);
@@ -84,7 +102,10 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
      * Dossier count per client — used by {@code GET /api/clients} (server-side aggregate).
      * Tuple: [cfgCustomerId, nbDossiers].
      */
-    @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f WHERE f.cfgCustomer.id IN :clientIds GROUP BY f.cfgCustomer.id")
+    @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.cfgCustomer.id IN :clientIds AND (soc.isActive = true OR soc.id IS NULL) "
+            + "GROUP BY f.cfgCustomer.id")
     List<Object[]> countGroupedByClientId(List<UUID> clientIds);
 
     /**

@@ -24,9 +24,11 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -67,6 +69,25 @@ import java.util.UUID;
  * <p>La jointure se fait toujours sur {@code AdmUserId}, jamais via {@code CfgEmployeeId} : cette
  * dernière colonne n'est pas unique en base réelle (un tier porté par deux comptes), et une
  * résolution par tier duplique les lignes.
+ *
+ * <h2>Deux restrictions, pas une</h2>
+ *
+ * <p>Les méthodes {@code filtreXxx()} et {@code verifierAccesXxx()} de cette classe portent
+ * <b>deux</b> restrictions superposées, et leur nom ne dit que la première :
+ * <ol>
+ *   <li>le <b>périmètre commercial</b> décrit ci-dessus — par compte, opt-in ;</li>
+ *   <li>la <b>visibilité par entité juridique</b> ({@link VisibiliteEntites}) — globale,
+ *       permanente, appliquée y compris aux rôles exemptés de périmètre.</li>
+ * </ol>
+ *
+ * <p>Elles sont assemblées ici plutôt que sur chacun des neuf sites d'appel, qui héritent donc du
+ * filtre d'entité sans avoir été modifiés. Les deux partagent la même chaîne de jointures
+ * ({@code … → CfgTranche → CfgProject}, prolongée d'un cran vers {@code CfgCompany}), d'où
+ * l'assemblage dans une seule lambda par méthode — voir {@link #combine}.
+ *
+ * <p>Elles partagent aussi la même règle sur les lignes non résolues (§6.4 côté périmètre, R2 côté
+ * entité) : une ligne dont le projet — donc la société — ne se résout pas reste visible de tous.
+ * C'est ce qui permet de les composer sans qu'elles se contredisent.
  */
 @Service
 @Transactional(readOnly = true)
@@ -181,15 +202,11 @@ public class PerimetreCommercialService {
      */
     public Specification<ComFolder> filtreDossiers() {
         Optional<List<UUID>> perimetre = perimetreCourant();
-        if (perimetre.isEmpty()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        List<UUID> projetIds = perimetre.get();
         return (root, query, cb) -> {
             Join<ComFolder, StkItem> article = root.join("stkItem", JoinType.LEFT);
             Join<StkItem, CfgTranche> tranche = article.join("stkHierarchy", JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
-            return cb.or(projet.get("id").in(projetIds), cb.isNull(projet.get("id")));
+            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
 
@@ -205,14 +222,10 @@ public class PerimetreCommercialService {
      */
     public Specification<ComProspection> filtreProspections() {
         Optional<List<UUID>> perimetre = perimetreCourant();
-        if (perimetre.isEmpty()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        List<UUID> projetIds = perimetre.get();
         return (root, query, cb) -> {
             Join<ComProspection, CfgTranche> tranche = root.join("stkHierarchy", JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
-            return cb.or(projet.get("id").in(projetIds), cb.isNull(projet.get("id")));
+            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
 
@@ -224,11 +237,15 @@ public class PerimetreCommercialService {
      */
     public Specification<StlSettlement> filtreEncaissements() {
         Optional<List<UUID>> perimetre = perimetreCourant();
-        if (perimetre.isEmpty()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        List<UUID> projetIds = perimetre.get();
         return (root, query, cb) -> {
+            // Visibilité : FK société directe, mesurée exacte (voir VisibiliteEntites) — pas de
+            // sous-requête ici, contrairement au périmètre qui doit passer par les lignes.
+            Predicate visible = VisibiliteEntites.depuisSocieteDirecte(root, "cfgCompany", cb);
+            if (perimetre.isEmpty()) {
+                return visible;
+            }
+            List<UUID> projetIds = perimetre.get();
+
             Subquery<UUID> dansPerimetre = query.subquery(UUID.class);
             var ligne = dansPerimetre.from(StlSettlementLine.class);
             dansPerimetre.select(ligne.get("id")).where(cb.and(
@@ -243,7 +260,7 @@ public class PerimetreCommercialService {
                     cb.isNotNull(ligne2.get("comDocument").get("comFolder").get("stkItem")
                             .get("stkHierarchy").get("cfgProject").get("id"))));
 
-            return cb.or(cb.exists(dansPerimetre), cb.not(cb.exists(avecProjet)));
+            return cb.and(visible, cb.or(cb.exists(dansPerimetre), cb.not(cb.exists(avecProjet))));
         };
     }
 
@@ -257,14 +274,10 @@ public class PerimetreCommercialService {
      */
     public Specification<StlQuote> filtreDevis() {
         Optional<List<UUID>> perimetre = perimetreCourant();
-        if (perimetre.isEmpty()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        List<UUID> projetIds = perimetre.get();
         return (root, query, cb) -> {
             Join<StlQuote, CfgTranche> tranche = root.join("cfgTranche", JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
-            return cb.or(projet.get("id").in(projetIds), cb.isNull(projet.get("id")));
+            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
 
@@ -284,10 +297,6 @@ public class PerimetreCommercialService {
      */
     public Specification<ComActionMessage> filtreInteractions() {
         Optional<List<UUID>> perimetre = perimetreCourant();
-        if (perimetre.isEmpty()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        List<UUID> projetIds = perimetre.get();
         return (root, query, cb) -> {
             Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.LEFT);
             Join<ComProspection, CfgTranche> trancheProspection = prospection.join("stkHierarchy", JoinType.LEFT);
@@ -300,8 +309,28 @@ public class PerimetreCommercialService {
 
             // coalesce = "prospection d'abord, dossier ensuite" ; NULL = les deux chemins épuisés.
             Expression<UUID> projet = cb.coalesce(projetProspection.get("id"), projetDossier.get("id"));
-            return cb.or(projet.in(projetIds), cb.isNull(projet));
+            Predicate visible = VisibiliteEntites.depuisDeuxProjets(projetProspection, projetDossier, cb);
+            if (perimetre.isEmpty()) {
+                return visible;
+            }
+            return cb.and(visible, cb.or(projet.in(perimetre.get()), cb.isNull(projet)));
         };
+    }
+
+    /**
+     * Assemble les deux restrictions autour d'une <b>même</b> chaîne de jointures : la visibilité
+     * par entité (toujours), puis le périmètre commercial (seulement si l'appelant est restreint).
+     *
+     * <p>Volontairement pas un {@code Specification.and(...)} de deux spécifications : chacune
+     * reposerait ses propres {@code LEFT JOIN} sur le même chemin, et la requête SQL porterait la
+     * chaîne article → tranche → projet en double.
+     */
+    private static Predicate combine(Predicate visibilite, Join<?, CfgProject> projet,
+                                     Optional<List<UUID>> perimetre, CriteriaBuilder cb) {
+        return perimetre
+                .map(projetIds -> cb.and(visibilite,
+                        cb.or(projet.get("id").in(projetIds), cb.isNull(projet.get("id")))))
+                .orElse(visibilite);
     }
 
     // ---------------------------------------------------------------- contrôle d'accès par id
@@ -316,29 +345,50 @@ public class PerimetreCommercialService {
      * N'exécute aucune requête lorsque l'appelant n'est pas restreint.
      */
     public void verifierAccesDossier(UUID dossierId) {
-        perimetreCourant().ifPresent(projetIds -> {
-            if (!folderRepository.existsDansPerimetre(dossierId, projetIds)) {
-                throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
-            }
-        });
+        verifier(dossierId,
+                projetIds -> folderRepository.existsDansPerimetre(dossierId, projetIds),
+                () -> folderRepository.existsVisible(dossierId),
+                "Dossier introuvable: " + dossierId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour une prospection ou une pré-prospection. */
     public void verifierAccesProspection(UUID prospectionId) {
-        perimetreCourant().ifPresent(projetIds -> {
-            if (!prospectionRepository.existsDansPerimetre(prospectionId, projetIds)) {
-                throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
-            }
-        });
+        verifier(prospectionId,
+                projetIds -> prospectionRepository.existsDansPerimetre(prospectionId, projetIds),
+                () -> prospectionRepository.existsVisible(prospectionId),
+                "Prospection introuvable: " + prospectionId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour un encaissement (règlement). */
     public void verifierAccesEncaissement(UUID encaissementId) {
-        perimetreCourant().ifPresent(projetIds -> {
-            if (!settlementRepository.existsDansPerimetre(encaissementId, projetIds)) {
-                throw new ResourceNotFoundException("Encaissement introuvable: " + encaissementId);
-            }
-        });
+        verifier(encaissementId,
+                projetIds -> settlementRepository.existsDansPerimetre(encaissementId, projetIds),
+                () -> settlementRepository.existsVisible(encaissementId),
+                "Encaissement introuvable: " + encaissementId);
+    }
+
+    /**
+     * Le squelette commun des trois contrôles ci-dessus : une requête, toujours, mais laquelle
+     * dépend de l'appelant.
+     *
+     * <p><b>Ce contrôle n'est plus conditionnel.</b> Il ne s'exécutait autrefois que pour un compte
+     * restreint par un périmètre ; la visibilité par entité juridique, elle, s'applique à tout le
+     * monde ({@code VisibiliteEntites}), donc une ressource doit être vérifiée même quand aucun
+     * périmètre n'est en jeu. Sans cela le filtre d'entité ne tiendrait que sur les listes et se
+     * contournerait en énumérant les ids — détail du dossier, échéancier, pièces jointes et
+     * générateurs de documents inclus.
+     *
+     * <p>La variante « dans le périmètre » porte déjà les deux restrictions, d'où l'alternative
+     * plutôt qu'un cumul.
+     */
+    private void verifier(UUID id, java.util.function.Predicate<List<UUID>> dansPerimetre,
+                          java.util.function.BooleanSupplier visible, String messageSiAbsent) {
+        boolean autorise = perimetreCourant()
+                .map(dansPerimetre::test)
+                .orElseGet(visible::getAsBoolean);
+        if (!autorise) {
+            throw new ResourceNotFoundException(messageSiAbsent);
+        }
     }
 
     // ---------------------------------------------------------------- contrôle d'accès en écriture
