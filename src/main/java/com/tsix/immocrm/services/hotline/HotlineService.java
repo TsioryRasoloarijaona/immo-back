@@ -13,6 +13,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
+import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -201,25 +202,14 @@ public class HotlineService {
         );
     }
 
+    /**
+     * Délègue au mappeur commun de {@code ProspectionService} : ce bloc existait ici en copie
+     * identique, et c'est cette duplication qui l'a fait diverger quand la liste a gagné le
+     * contact et l'alerte. Les champs d'alerte restent nuls ici — ils ne sont résolus que par
+     * les listes de prospections, qui les chargent en une requête groupée.
+     */
     private static ProspectionListItemDto toProspectionListItem(ComProspection p) {
-        return new ProspectionListItemDto(
-                p.getId(),
-                p.getCode(),
-                p.getDocDate(),
-                p.getTempDescription(),
-                p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                TierNomFormatter.nom(p.getCfgProspect()),
-                p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                TierNomFormatter.nom(p.getCfgCommercial()),
-                p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
-                p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
-                p.getIsClosed(),
-                p.getPrice(),
-                p.getArea(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null
-        );
+        return ProspectionService.toListItem(p);
     }
 
     private static InteractionDto toInteractionDto(ComActionMessage m) {

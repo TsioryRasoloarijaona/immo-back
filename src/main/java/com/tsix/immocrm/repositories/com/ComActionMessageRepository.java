@@ -131,4 +131,42 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
                                                              @Param("resultatVisiteDecrochee") String resultatVisiteDecrochee,
                                                              @Param("resultatRdvPris") String resultatRdvPris,
                                                              @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Dernière alerte de relance posée sur chacune des prospections données — <b>une seule
+     * requête pour toute une page</b>.
+     *
+     * <p>C'est la raison d'être de cette méthode : résoudre l'alerte prospection par prospection
+     * ferait 20 requêtes pour une page de 20, et 50 pour la hotline. Le {@code ROW_NUMBER()}
+     * fait le travail côté serveur et ne renvoie qu'une ligne par prospection.
+     *
+     * <p>L'alerte vient toujours d'une <b>interaction</b> : la colonne {@code AlertValidityDate}
+     * portée par {@code ComProspection} elle-même est morte en base réelle — 0 ligne sur les
+     * 8 613 prospections ouvertes.
+     *
+     * <p>« Dernière » = celle de l'interaction la plus récente ({@code DocDate}), pas celle dont
+     * l'échéance est la plus lointaine : c'est la dernière décision du commercial qui fait foi.
+     *
+     * <p><b>Ne jamais appeler avec une collection vide</b> : {@code IN ()} est une erreur de
+     * syntaxe SQL. Les appelants court-circuitent sur page vide.
+     */
+    @Query(value = "SELECT a.ComProspectionId AS prospectionId, a.AlertValidityDate AS dateAlerte, "
+            + "CAST(a.AlertMessage AS nvarchar(max)) AS message FROM ("
+            + "SELECT m.ComProspectionId, m.AlertValidityDate, m.AlertMessage, "
+            + "ROW_NUMBER() OVER (PARTITION BY m.ComProspectionId "
+            + "ORDER BY m.DocDate DESC, m.AlertValidityDate DESC) AS rn "
+            + "FROM ComActionMessage m "
+            + "WHERE m.ComProspectionId IN (:prospectionIds) AND m.AlertValidityDate IS NOT NULL"
+            + ") a WHERE a.rn = 1",
+            nativeQuery = true)
+    List<DerniereAlerteProjection> dernieresAlertes(@Param("prospectionIds") List<UUID> prospectionIds);
+
+    /** Projection de {@link #dernieresAlertes} — les noms doivent suivre les alias de la requête. */
+    interface DerniereAlerteProjection {
+        UUID getProspectionId();
+
+        LocalDateTime getDateAlerte();
+
+        String getMessage();
+    }
 }
