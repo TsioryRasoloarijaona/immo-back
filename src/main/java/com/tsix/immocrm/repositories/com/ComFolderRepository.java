@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -117,4 +118,29 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
      */
     @Query("SELECT f FROM ComFolder f LEFT JOIN FETCH f.strStatus LEFT JOIN FETCH f.cfgCustomer WHERE f.id IN :ids")
     List<ComFolder> findWithStatusAndCustomerByIdIn(List<UUID> ids);
+
+    /**
+     * Projection par dossier pour les KPI commerciaux — colonnes : {@code commercialId},
+     * {@code totalToPay}. Une ligne par dossier plutôt qu'un {@code SUM} groupé : le service en
+     * tire à la fois le compte, le montant total et le panier moyen, et les volumes sont faibles
+     * (358 dossiers en base, 36 depuis 2025).
+     *
+     * <p>La date retenue est {@code DocDate}, renseignée sur les 358 dossiers réels.
+     * {@code ReservationDate} ne l'est que sur 2 et ne peut fonder aucun indicateur.
+     */
+    @Query("SELECT f.cfgCommercial.id, f.totalToPay FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.docDate BETWEEN :debut AND :fin AND f.cfgCommercial.id IS NOT NULL "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> projeterPourKpi(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    /** Variante de {@link #projeterPourKpi} restreinte au périmètre commercial (§6.4 incluse). */
+    @Query("SELECT f.cfgCommercial.id, f.totalToPay FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.docDate BETWEEN :debut AND :fin AND f.cfgCommercial.id IS NOT NULL "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    List<Object[]> projeterPourKpiDansPerimetre(@Param("debut") LocalDateTime debut,
+                                                @Param("fin") LocalDateTime fin,
+                                                @Param("projetIds") List<UUID> projetIds);
 }

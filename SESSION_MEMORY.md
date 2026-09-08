@@ -1,15 +1,18 @@
 # Session Memory
-_Last updated: 2026-09-08T10:15+01:00_
+_Last updated: 2026-09-08T11:40+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-Livrer les **suppressions manquantes**, en commençant par les pièces jointes. Le socle existait
-déjà entièrement : `AppFileObject.DeletedAt` est né avec la migration `002`, la `@Formula`
-`hasFile` et `findByAdmAttachedFileIdAndDeletedAtIsNull` le respectent depuis toujours — mais
-**aucun code ne l'écrivait**. Il ne manquait que contrôleur et service.
+Deux features livrées dans la session :
+
+1. **Suppression des pièces jointes** (mergée, PR #16). Le socle existait entièrement —
+   `AppFileObject.DeletedAt` né avec la migration `002`, respecté par la `@Formula` `hasFile` et
+   par `findByAdmAttachedFileIdAndDeletedAtIsNull` — mais **aucun code ne l'écrivait**.
+2. **KPI de performance des commerciaux** (branche poussée, en attente de merge) : deux endpoints,
+   activité + réactivité + transformation + valeur.
 
 ---
 
@@ -92,6 +95,25 @@ qui ne s'applique pas — rien n'est vérifié en lecture. Mesuré sur `yesRemsP
 `POINTED`, dont 3 avec exactement une pièce jointe** — les 3 seules lignes de la base où ce 409
 peut se déclencher. Le javadoc a été amendé pour enregistrer l'exception.
 
+### KPI commerciaux — l'attribution, décision structurante
+- **L'activité est attribuée à son AUTEUR** (`ComActionMessage.AdmUserId`, **mappé par cette
+  feature**), le **portefeuille au commercial ASSIGNÉ** (`CfgCommercialId`). Ne pas les confondre.
+- **`ComActionMessage.CfgEmployeeId` n'est PAS l'auteur.** Renseignée à 77 % seulement, et là où
+  les deux existent elle désigne une personne **différente 844 fois**. Le départage vient de
+  `UserCreate` : elle vaut le compte **37 186/37 186** et cet employé-là 30 894/37 186. Le champ
+  porte désormais cet avertissement en javadoc — ne pas l'utiliser pour attribuer quoi que ce soit.
+- **La clé de regroupement est le commercial (`CfgTier`), jamais le compte** : un employé porte
+  parfois deux comptes (1 cas mesuré), dont les chiffres doivent s'additionner. Le sens
+  compte→employé est N→1, donc toujours sûr ; l'inverse ne l'est pas.
+- **`/api/kpi` n'est pas dans `COLLECTIONS_SCOPEES`** de `PerimetreInterceptor` : périmètre et
+  filtre d'entité sont appliqués **explicitement à chaque agrégat**, comme `DashboardService`.
+  C'est le point de fuite de la feature ; verrouillé par
+  `activiteSurUneEntiteInactive_nestCompteeNullePart`.
+- **`ComFolder.ReservationDate` est inutilisable** : 2 lignes sur 358. Le seul jalon de signature
+  peuplé est `AgreementDate` (73/358) — c'est lui à prendre pour un futur KPI « vente signée ».
+- Volumétrie mesurée (entités actives, 2025-2026) : 23 commerciaux actifs, 6 533 prospections dont
+  **2 117 jamais contactées (32 %)**, délai moyen de première réponse 109 h, 36 dossiers créés.
+
 ### Pièges Hibernate mis au jour (valables au-delà de cette feature)
 - Une **`@Formula` n'entre pas dans les espaces de requête** de son entité : Hibernate ne sait pas
   qu'elle dépend d'une autre table et ne flushe pas avant la lecture. `saveAndFlush` obligatoire.
@@ -102,6 +124,10 @@ peut se déclencher. Le javadoc a été amendé pour enregistrer l'exception.
 
 ## 📁 Important Files & Paths
 
+- `instructions/FEATURE-kpi-performance-commerciaux.md` — le contrat KPI : §3 (l'attribution et
+  ses mesures), §5 (visibilité, le point de fuite), §9 (impact front).
+- `services/kpi/PerformanceCommercialService.java` — fusion des trois projections, médiane du
+  délai, taux `null` plutôt que zéro.
 - `instructions/FEATURE-suppression-pieces-jointes.md` — le contrat : portée, règles R1–R5, la
   justification chiffrée du 409 (§6), et la section « Impact front » (§9, purement additive).
 - `src/main/resources/db/migration/006_AppFileObject_DeletedBy.sql` — **à rejouer sur
@@ -118,7 +144,7 @@ peut se déclencher. Le javadoc a été amendé pour enregistrer l'exception.
 
 ## 🔧 Environment & Config
 
-- **Tests** : `507 tests, verts` (495 avant cette session). Lancer avec
+- **Tests** : `522 tests, verts` (495 en début de session). Lancer avec
   `$env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"`
   (+ `USERNAME=tsix`, `PASSWORD=securePassword123`) puis `.\mvnw.cmd clean test`.
   Ajouter `"-Dspring.jpa.show-sql=false"` — **guillemets obligatoires sous PowerShell**.
@@ -131,17 +157,21 @@ peut se déclencher. Le javadoc a été amendé pour enregistrer l'exception.
 
 ## ⏭️ Next Step
 
-> **Attendre la fusion de la PR par l'utilisateur sur GitHub, puis `sync`.** Branche
-> `feat/suppression-pieces-jointes`, commit `7409ba3` (11 fichiers), poussée.
+> **Attendre la fusion de la PR KPI sur GitHub, puis `sync`.** Branche
+> `feat/kpi-performance-commerciaux`, commit `27b3e6c` (10 fichiers). La feature précédente
+> (`feat/suppression-pieces-jointes`, `7409ba3`) est **mergée** — PR #16.
 >
 > **Ne pas couper de nouvelle branche avant le merge**, et demander l'accord avant de le faire.
 >
-> **Après le merge, jouer `006_AppFileObject_DeletedBy.sql` sur `yesRemsProd` et `yesRemsDev`** —
-> sans quoi l'écriture de `DeletedBy` échouera sur « nom de colonne non valide ».
+> **Toujours en attente d'application manuelle : `006_AppFileObject_DeletedBy.sql` sur
+> `yesRemsProd` et `yesRemsDev`** — sans quoi tout `DELETE` de pièce jointe échouera en production
+> sur « nom de colonne non valide ». `yesRemsCiCheck` l'a déjà.
 >
-> **À relayer au dépôt frontend** (autre lane) : §9 de
-> `FEATURE-suppression-pieces-jointes.md`. Purement additif — deux routes neuves, réponse 204 sans
-> corps, et un 409 propre au règlement dont le `detail` RFC 7807 doit être affiché tel quel.
+> **À relayer au dépôt frontend** (autre lane, deux specs) : §9 de
+> `FEATURE-suppression-pieces-jointes.md` et §9 de `FEATURE-kpi-performance-commerciaux.md`. Les
+> deux sont purement additives. Points saillants : réponse 204 sans corps sur les `DELETE`, 409
+> propre au règlement pointé, et côté KPI des taux qui sont des **`BigDecimal` 0-1 ou `null`** —
+> `null` s'affiche « — », jamais « 0 % ».
 
 ### Backlog
 - [ ] Rejouer `005_CfgCompany_IsActive.sql` sur **`yesRemsDev` (VPS)** — `yesRemsProd` est bon.

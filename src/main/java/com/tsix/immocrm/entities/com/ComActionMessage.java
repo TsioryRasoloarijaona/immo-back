@@ -1,6 +1,7 @@
 package com.tsix.immocrm.entities.com;
 
 import com.tsix.immocrm.entities.adm.AdmEvent;
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import jakarta.persistence.*;
@@ -45,9 +46,28 @@ public class ComActionMessage {
     @Column(name = "UserName")
     private String userName;
 
+    /**
+     * <b>L'employé <i>concerné</i>, pas l'auteur</b> — ne pas s'en servir pour attribuer une
+     * interaction à quelqu'un. Renseignée sur 37 186/48 118 lignes seulement, et là où les deux
+     * sont présentes elle désigne une personne <b>différente</b> de {@link #admUser} sur 844
+     * lignes. Le départage vient de {@code UserCreate}, la trace laissée par l'application
+     * Windows : elle vaut le compte 37 186/37 186 et cet employé-ci 30 894/37 186.
+     * Voir {@code FEATURE-kpi-performance-commerciaux.md} §3.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgEmployeeId")
     private CfgTier cfgEmployee;
+
+    /**
+     * <b>L'auteur de l'interaction</b> : le compte qui l'a saisie. Renseigné sur les 48 118 lignes
+     * réelles, et concordant avec {@code UserCreate} sans une seule exception — c'est donc la
+     * seule attribution fiable, et celle qu'utilisent les KPI de performance commerciale. Le
+     * commercial s'en déduit par {@code AdmUser.cfgEmployee} (N→1, toujours résoluble sauf pour
+     * 80 lignes dont le compte n'a pas d'employé).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmUserId")
+    private AdmUser admUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
