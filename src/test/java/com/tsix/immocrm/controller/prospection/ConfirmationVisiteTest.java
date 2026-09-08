@@ -37,6 +37,7 @@ import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
 import com.tsix.immocrm.storage.FixturePieceJointe;
+import com.tsix.immocrm.whatsapp.EnvoiWhatsAppMemoire;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +52,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +60,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Mail de confirmation de visite — voir {@code instructions/FEATURE-mail-confirmation-visite.md}.
+ * Confirmation de visite, sur ses deux canaux — voir
+ * {@code instructions/FEATURE-mail-confirmation-visite.md}.
  *
  * <p><b>Deux pièges de ce dépôt, contournés ici de façon délibérée.</b> Un
  * {@code @TransactionalEventListener(AFTER_COMMIT)} ne se déclenche <b>jamais</b> sous cette
@@ -79,9 +80,14 @@ class ConfirmationVisiteTest {
 
     private static final String RESULTAT_VISITE = "Le prospect veut faire une visite du projet";
 
+    /** Forme dominante en base : indicatif sans « + », numéro national espacé. */
+    private static final String MOBILE_VALIDE = "6 61 22 48 57";
+    private static final String ATTENDU_E164 = "+212661224857";
+
     @Autowired private MockMvc mockMvc;
     @Autowired private ApplicationEvents evenements;
     @Autowired private EnvoiEmailMemoire envoiEmail;
+    @Autowired private EnvoiWhatsAppMemoire envoiWhatsApp;
     @Autowired private ConfirmationVisiteService confirmationVisiteService;
 
     @Autowired private ComProspectionRepository prospectionRepository;
@@ -103,12 +109,13 @@ class ConfirmationVisiteTest {
     @Autowired private StkItemRepository itemRepository;
 
     /**
-     * Le double d'envoi est un singleton du contexte : son état survivrait au rollback de la
-     * transaction, contrairement aux données.
+     * Les deux doubles d'envoi sont des singletons du contexte : leur état survivrait au rollback
+     * de la transaction, contrairement aux données.
      */
     @BeforeEach
-    void viderLesMessages() {
+    void viderLesEnvois() {
         envoiEmail.vider();
+        envoiWhatsApp.vider();
     }
 
     // ------------------------------------------------------------------ fixtures
@@ -134,14 +141,20 @@ class ConfirmationVisiteTest {
         return trancheRepository.save(tranche);
     }
 
-    private CfgTier newTier(String nom, String email, String mobile) {
+    private CfgTier newTier(String nom, String email, String mobile, String indicatif) {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setCode("TIER-CV-" + UUID.randomUUID());
         tier.setDescription(nom);
         tier.setEMail(email);
         tier.setMobile(mobile);
+        tier.setMobileIndicatif(indicatif);
         return tierRepository.save(tier);
+    }
+
+    /** Prospect joignable par les deux canaux — le cas nominal. */
+    private CfgTier newProspectComplet() {
+        return newTier("Ahmed BENNANI", "ahmed@exemple.ma", MOBILE_VALIDE, "212");
     }
 
     private ComProspection newProspection(CfgTier prospect, CfgTranche tranche) {
@@ -150,7 +163,7 @@ class ConfirmationVisiteTest {
         p.setCode("PSN-CV-" + UUID.randomUUID());
         p.setCfgProspect(prospect);
         p.setStkHierarchy(tranche);
-        p.setCfgCommercial(newTier("Khadija ELKORRI", null, "0600000000"));
+        p.setCfgCommercial(newTier("Khadija ELKORRI", null, "0600000000", "212"));
         return prospectionRepository.save(p);
     }
 
@@ -183,6 +196,10 @@ class ConfirmationVisiteTest {
         m.setAlertMessage("visite programmée");
         m.setAdmEvent(evenement);
         return actionMessageRepository.save(m);
+    }
+
+    private LocalDateTime leRdv() {
+        return LocalDateTime.of(2026, 9, 15, 15, 30);
     }
 
     private StkItem newArticle() {
@@ -232,11 +249,17 @@ class ConfirmationVisiteTest {
         return fixturePieceJointe.deposer(piece, "PLAN-PDF".getBytes(StandardCharsets.UTF_8));
     }
 
+    /** Prospection nominale : prospect complet, projet adressé, tranche sans adresse. */
+    private ComProspection prospectionNominale() {
+        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
+        return newProspection(newProspectComplet(), newTranche(projet, "Tranche 1", null));
+    }
+
     // ------------------------------------------------------------------ publication
 
     @Test
     void priseDeRendezVous_publieLevenement() throws Exception {
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), null);
+        ComProspection p = prospectionNominale();
         ComActionMessageSubCategory resultat = newResultat(RESULTAT_VISITE);
         String body = """
                 {"description":"le prospect veut visiter","resultatId":"%s","dateRdv":"2026-09-15T15:30:00"}"""
@@ -253,11 +276,11 @@ class ConfirmationVisiteTest {
     /**
      * Une interaction ordinaire ne convoque personne. C'est la garantie que la fonctionnalité
      * n'élargit pas l'ensemble déclencheur : seul ce qui crée déjà une entrée de calendrier
-     * envoie un mail.
+     * envoie quelque chose.
      */
     @Test
     void interactionSansRendezVous_nePublieRien() throws Exception {
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), null);
+        ComProspection p = prospectionNominale();
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -267,19 +290,20 @@ class ConfirmationVisiteTest {
         assertThat(evenements.stream(VisitePlanifiee.class)).isEmpty();
     }
 
-    // ------------------------------------------------------------------ R1 destinataire
+    // ------------------------------------------------------------------ R1 destinataires
 
     @Test
-    void prospectSansEmail_nEnvoieRien() {
-        ComProspection p = newProspection(newTier("Sans Adresse", null, null), null);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+    void prospectSansCoordonnees_nEnvoieRien() {
+        ComProspection p = newProspection(newTier("Sans Rien", null, null, null), null);
+        ComActionMessage interaction = newInteractionAvecRdv(p, leRdv());
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(interaction.getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(interaction.getId());
 
-        assertThat(resultat.envoye()).isFalse();
-        assertThat(resultat.motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
-        assertThat(resultat.destinataire()).isNull();
+        assertThat(r.envoye()).isFalse();
+        assertThat(r.email().motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
+        assertThat(r.whatsapp().motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
         assertThat(envoiEmail.nombreMessages()).isZero();
+        assertThat(envoiWhatsApp.nombreMessages()).isZero();
     }
 
     /**
@@ -289,40 +313,162 @@ class ConfirmationVisiteTest {
      */
     @Test
     void emailSansArobase_estTraiteCommeAbsent() {
-        ComProspection p = newProspection(newTier("Faux Email", "0612345678", null), null);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection p = newProspection(newTier("Faux Email", "0612345678", null, null), null);
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(interaction.getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
+        assertThat(r.email().motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
         assertThat(envoiEmail.nombreMessages()).isZero();
     }
 
-    /** Le repli n'est pas une commodité : aucune des deux sources ne suffit seule. */
+    /** Le repli n'est pas une commodité : aucune des deux sources d'email ne suffit seule. */
     @Test
     void sansEmailSurLaFiche_replieSurCeluiDuPremierContact() {
-        ComProspection p = newProspection(newTier("Fiche Sans Email", null, null), null);
+        ComProspection p = newProspection(newTier("Fiche Sans Email", null, null, null), null);
         p.setTempEMail("  contact@exemple.ma  ");
         prospectionRepository.save(p);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(interaction.getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.envoye()).isTrue();
-        assertThat(resultat.destinataire()).isEqualTo("contact@exemple.ma");
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(r.email().destinataire()).isEqualTo("contact@exemple.ma");
         assertThat(envoiEmail.dernier().destinataire()).isEqualTo("contact@exemple.ma");
+    }
+
+    // ------------------------------------------------------------------ canal WhatsApp
+
+    @Test
+    void prospectAvecMobile_recoitAussiUnWhatsApp() {
+        ComProspection p = prospectionNominale();
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.whatsapp().envoye()).isTrue();
+        assertThat(r.whatsapp().destinataire()).isEqualTo(ATTENDU_E164);
+        assertThat(envoiWhatsApp.dernier().destinataire()).isEqualTo(ATTENDU_E164);
+        // Les deux canaux ont servi : c'est le cas nominal, pas une exclusivité.
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(envoiEmail.nombreMessages()).isEqualTo(1);
+    }
+
+    /**
+     * 19 fiches réelles portent un fixe dans la colonne mobile. Le motif doit les distinguer de
+     * l'absence de numéro : l'action corrective n'est pas la même.
+     */
+    @Test
+    void numeroFixe_donneNumeroInexploitable() {
+        ComProspection p = newProspection(
+                newTier("Fixe Seulement", "a@exemple.ma", "5 22 27 34 96", "212"), null);
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.whatsapp().motif()).isEqualTo(MotifEnvoiVisite.NUMERO_INEXPLOITABLE);
+        assertThat(envoiWhatsApp.nombreMessages()).isZero();
+        // Le mail, lui, part : l'échec d'un canal n'empêche pas l'autre.
+        assertThat(r.email().envoye()).isTrue();
+    }
+
+    @Test
+    void sansAucunMobile_donneDestinataireAbsentEtPasNumeroInexploitable() {
+        ComProspection p = newProspection(newTier("Sans Mobile", "a@exemple.ma", null, "212"), null);
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.whatsapp().motif()).isEqualTo(MotifEnvoiVisite.DESTINATAIRE_ABSENT);
+    }
+
+    /**
+     * UltraMsg répond 200 même pour un refus. Le confondre avec un succès ferait mentir le champ
+     * {@code envoye} au commercial, qui croirait son prospect prévenu.
+     */
+    @Test
+    void refusDeLApi_donneEchecEnvoiEtPasUnFauxSucces() {
+        ComProspection p = prospectionNominale();
+        envoiWhatsApp.definirAccepte(false);
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.whatsapp().envoye()).isFalse();
+        assertThat(r.whatsapp().motif()).isEqualTo(MotifEnvoiVisite.ECHEC_ENVOI);
+        assertThat(r.envoye()).isTrue(); // le mail a compensé
+    }
+
+    /**
+     * La propriété centrale du choix « les deux canaux » : chacun tombe sans entraîner l'autre.
+     * C'est ce qui fait passer la couverture de 57 % à ~99 %.
+     */
+    @Test
+    void emailInactif_nEmpechePasLeWhatsApp() {
+        ComProspection p = prospectionNominale();
+        envoiEmail.definirActif(false);
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.email().motif()).isEqualTo(MotifEnvoiVisite.SERVICE_INACTIF);
+        assertThat(r.whatsapp().envoye()).isTrue();
+        assertThat(r.envoye()).isTrue();
+    }
+
+    @Test
+    void whatsAppInactif_nEmpechePasLeMail() {
+        ComProspection p = prospectionNominale();
+        envoiWhatsApp.definirActif(false);
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.whatsapp().motif()).isEqualTo(MotifEnvoiVisite.SERVICE_INACTIF);
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(envoiWhatsApp.nombreMessages()).isZero();
+    }
+
+    /** Le WhatsApp porte la même information que le mail, dans une forme adaptée au canal. */
+    @Test
+    void leTexteWhatsAppReprendLesInformationsEssentielles() {
+        ComProspection p = prospectionNominale();
+
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
+
+        String texte = envoiWhatsApp.dernier().texte();
+        assertThat(texte).contains("15/09/2026", "15h30", "100 BD ZERKTOUNI",
+                "AYAD RESIDENCE BEL AIR", "Khadija ELKORRI", "0600000000", "pièce d'identité");
+        // Mise en gras propre à WhatsApp.
+        assertThat(texte).contains("*Date*");
+    }
+
+    /**
+     * Le WhatsApp ne doit pas annoncer de plan : il n'en porte aucun, faute d'URL publique
+     * durable. Promettre une pièce jointe absente serait pire que se taire.
+     */
+    @Test
+    void leTexteWhatsAppNAnnoncePasDePlanMemeQuandLeMailEnPorte() {
+        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
+        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
+        newPiece(projet.getId(), "PLAN DE MASSE", "PLAN");
+
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
+
+        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
+        assertThat(r.whatsapp().nombrePiecesJointes()).isZero();
+        assertThat(envoiWhatsApp.dernier().texte()).doesNotContain("pièce jointe");
     }
 
     // ------------------------------------------------------------------ R3/R4 lieu et adresse
 
     @Test
     void adresseAbsenteDeLaTranche_vientDuProjet() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection p = prospectionNominale();
 
-        confirmationVisiteService.envoyer(interaction.getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
         MessageEmail message = envoiEmail.dernier();
         assertThat(message.variables()).containsEntry("adresse", "100 BD ZERKTOUNI");
@@ -341,15 +487,17 @@ class ConfirmationVisiteTest {
     void adresseEgaleAuNomDuPorteur_estOmiseMaisLeMessagePart() {
         CfgProject projet = newProjet("MANSOURIA BEACH RESORT", "Mansouria Beach Resort", "Ben Slimane");
         CfgTranche tranche = newTranche(projet, "MANSOURIA BEACH RESORT", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection p = newProspection(newProspectComplet(), tranche);
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(interaction.getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.envoye()).isTrue();
+        assertThat(r.envoye()).isTrue();
         assertThat(envoiEmail.dernier().variables()).containsEntry("adresse", null);
         // Le lieu, lui, reste : c'est bien un nom de projet, à sa place.
         assertThat(envoiEmail.dernier().variables()).containsEntry("lieu", "MANSOURIA BEACH RESORT");
+        // Et le WhatsApp suit la même règle, puisqu'il lit le même contenu résolu.
+        assertThat(envoiWhatsApp.dernier().texte()).doesNotContain("*Adresse*");
     }
 
     /** Cas réel {@code YESTEST} : la colonne contient littéralement le mot « adresse ». */
@@ -357,22 +505,18 @@ class ConfirmationVisiteTest {
     void adresseTropCourte_estOmise() {
         CfgProject projet = newProjet("YESTEST", "adresse", "VIlle");
         CfgTranche tranche = newTranche(projet, "Tranche test", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection p = newProspection(newProspectComplet(), tranche);
 
-        confirmationVisiteService.envoyer(interaction.getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
         assertThat(envoiEmail.dernier().variables()).containsEntry("adresse", null);
     }
 
     @Test
     void leCommercialEtSonMobileSontDansLeMessage() {
-        CfgProject projet = newProjet("AYAD PRIVATE FERME BRETONE", "62 Impasse Abderahim Bouabid", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "APF", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection p = prospectionNominale();
 
-        confirmationVisiteService.envoyer(interaction.getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
         assertThat(envoiEmail.dernier().variables()).containsEntry("mobileCommercial", "0600000000");
         assertThat(envoiEmail.dernier().variables()).containsEntry("nomCommercial", "Khadija ELKORRI");
@@ -384,16 +528,16 @@ class ConfirmationVisiteTest {
     void planDeLarticle_estJoint() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
         StkItem article = newArticle();
         p.setStkItem(article);
         prospectionRepository.save(p);
         newPiece(article.getId(), "PLAN RDC", "PLAN");
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.nombrePiecesJointes()).isEqualTo(1);
+        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
         assertThat(envoiEmail.dernier().piecesJointes()).hasSize(1);
         assertThat(envoiEmail.dernier().piecesJointes().get(0).nom()).isEqualTo("PLAN RDC.pdf");
         assertThat(envoiEmail.dernier().piecesJointes().get(0).contenu())
@@ -409,17 +553,17 @@ class ConfirmationVisiteTest {
     void pieceQuiNestPasUnPlan_estIgnoree() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
         StkItem article = newArticle();
         p.setStkItem(article);
         prospectionRepository.save(p);
         newPiece(article.getId(), "CONTRAT SIGNE", "CONTRAT");
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.envoye()).isTrue();
-        assertThat(resultat.nombrePiecesJointes()).isZero();
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(r.email().nombrePiecesJointes()).isZero();
     }
 
     /** Les plans déposés au niveau du projet servent quand l'article n'est pas connu (97 % des cas). */
@@ -427,13 +571,13 @@ class ConfirmationVisiteTest {
     void sansArticle_lesPlansDuProjetSontJoints() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
         newPiece(projet.getId(), "PLAN DE MASSE", "PLAN");
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.nombrePiecesJointes()).isEqualTo(1);
+        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
         assertThat(envoiEmail.dernier().piecesJointes().get(0).nom()).isEqualTo("PLAN DE MASSE.pdf");
     }
 
@@ -445,7 +589,7 @@ class ConfirmationVisiteTest {
     void planAuDelaDuPlafond_estAbandonneEtLeMessagePart() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
         AdmAttachedFile piece = newPiece(projet.getId(), "PLAN ENORME", "PLAN_ETAGE");
 
         // La taille déclarée est ce que consulte la règle — c'est délibéré : plafonner après
@@ -454,43 +598,46 @@ class ConfirmationVisiteTest {
         objet.setSizeBytes(64L * 1024 * 1024);
         fileObjectRepository.saveAndFlush(objet);
 
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
+                newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(resultat.envoye()).isTrue();
-        assertThat(resultat.nombrePiecesJointes()).isZero();
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(r.email().nombrePiecesJointes()).isZero();
     }
 
     // ------------------------------------------------------------------ endpoint de renvoi
 
     @Test
-    void renvoi_nominal_renvoie200EtExpedie() throws Exception {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+    void renvoi_nominal_renvoie200EtExpedieSurLesDeuxCanaux() throws Exception {
+        ComProspection p = prospectionNominale();
+        ComActionMessage interaction = newInteractionAvecRdv(p, leRdv());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions/{interactionId}/email-visite",
                         p.getId(), interaction.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.envoye").value(true))
-                .andExpect(jsonPath("$.motif").value("ENVOYE"))
-                .andExpect(jsonPath("$.destinataire").value("ahmed@exemple.ma"));
+                .andExpect(jsonPath("$.email.envoye").value(true))
+                .andExpect(jsonPath("$.email.motif").value("ENVOYE"))
+                .andExpect(jsonPath("$.email.destinataire").value("ahmed@exemple.ma"))
+                .andExpect(jsonPath("$.whatsapp.envoye").value(true))
+                .andExpect(jsonPath("$.whatsapp.destinataire").value(ATTENDU_E164));
 
         assertThat(envoiEmail.nombreMessages()).isEqualTo(1);
+        assertThat(envoiWhatsApp.nombreMessages()).isEqualTo(1);
     }
 
-    /** Sans adresse, l'issue est un 200 explicite — le commercial doit voir pourquoi. */
+    /** Sans coordonnées, l'issue est un 200 explicite — le commercial doit voir pourquoi. */
     @Test
-    void renvoi_sansAdresse_renvoie200AvecLeMotif() throws Exception {
-        ComProspection p = newProspection(newTier("Sans Adresse", null, null), null);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
+    void renvoi_sansCoordonnees_renvoie200AvecLesMotifs() throws Exception {
+        ComProspection p = newProspection(newTier("Sans Rien", null, null, null), null);
+        ComActionMessage interaction = newInteractionAvecRdv(p, leRdv());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions/{interactionId}/email-visite",
                         p.getId(), interaction.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.envoye").value(false))
-                .andExpect(jsonPath("$.motif").value("DESTINATAIRE_ABSENT"));
+                .andExpect(jsonPath("$.email.motif").value("DESTINATAIRE_ABSENT"))
+                .andExpect(jsonPath("$.whatsapp.motif").value("DESTINATAIRE_ABSENT"));
     }
 
     /**
@@ -499,21 +646,21 @@ class ConfirmationVisiteTest {
      */
     @Test
     void renvoi_interactionDuneAutreProspection_renvoie404() throws Exception {
-        ComProspection sienne = newProspection(newTier("A", "a@exemple.ma", null), null);
-        ComProspection autre = newProspection(newTier("B", "b@exemple.ma", null), null);
-        ComActionMessage interactionDeLautre =
-                newInteractionAvecRdv(autre, LocalDateTime.of(2026, 9, 15, 15, 30));
+        ComProspection sienne = prospectionNominale();
+        ComProspection autre = prospectionNominale();
+        ComActionMessage interactionDeLautre = newInteractionAvecRdv(autre, leRdv());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions/{interactionId}/email-visite",
                         sienne.getId(), interactionDeLautre.getId()))
                 .andExpect(status().isNotFound());
 
         assertThat(envoiEmail.nombreMessages()).isZero();
+        assertThat(envoiWhatsApp.nombreMessages()).isZero();
     }
 
     @Test
     void renvoi_interactionSansRendezVous_renvoie409() throws Exception {
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), null);
+        ComProspection p = prospectionNominale();
         ComActionMessage sansRdv = new ComActionMessage();
         sansRdv.setId(UUID.randomUUID());
         sansRdv.setComProspection(p);
@@ -526,41 +673,24 @@ class ConfirmationVisiteTest {
                 .andExpect(status().isConflict());
 
         assertThat(envoiEmail.nombreMessages()).isZero();
+        assertThat(envoiWhatsApp.nombreMessages()).isZero();
     }
 
     @Test
     void renvoi_interactionInconnue_renvoie404() throws Exception {
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), null);
+        ComProspection p = prospectionNominale();
 
         mockMvc.perform(post("/api/prospections/{id}/interactions/{interactionId}/email-visite",
                         p.getId(), UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
 
-    /** Le service coupé se distingue d'un prospect sans adresse : les deux se corrigent ailleurs. */
-    @Test
-    void serviceInactif_leDitPlutotQueDeLaisserCroireAUnEnvoi() {
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), null);
-        ComActionMessage interaction = newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30));
-        envoiEmail.definirActif(false);
-
-        ResultatEnvoiVisiteDto resultat = confirmationVisiteService.envoyer(interaction.getId());
-
-        assertThat(resultat.envoye()).isFalse();
-        assertThat(resultat.motif()).isEqualTo(MotifEnvoiVisite.SERVICE_INACTIF);
-        assertThat(resultat.destinataire()).isEqualTo("ahmed@exemple.ma");
-        assertThat(envoiEmail.nombreMessages()).isZero();
-    }
-
     /** Le corps texte est l'alternative des clients sans HTML : il doit porter la même information. */
     @Test
     void leCorpsTexteReprendLesInformationsEssentielles() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = prospectionNominale();
 
-        confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
         String texte = envoiEmail.dernier().corpsTexte();
         assertThat(texte).contains("15/09/2026", "15h30", "100 BD ZERKTOUNI",
@@ -572,13 +702,12 @@ class ConfirmationVisiteTest {
     void lObjetDuMessagePorteLaDateEtLeProjet() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "AYAD RESIDENCE BEL AIR", null);
-        ComProspection p = newProspection(newTier("Ahmed BENNANI", "ahmed@exemple.ma", null), tranche);
+        ComProspection p = newProspection(newProspectComplet(), tranche);
 
-        confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, LocalDateTime.of(2026, 9, 15, 15, 30)).getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
         assertThat(envoiEmail.dernier().sujet())
                 .isEqualTo("Votre visite du 15/09/2026 — AYAD RESIDENCE BEL AIR");
-        assertThat(List.of(envoiEmail.dernier().template())).containsExactly("mail/confirmation-visite");
+        assertThat(envoiEmail.dernier().template()).isEqualTo("mail/confirmation-visite");
     }
 }
