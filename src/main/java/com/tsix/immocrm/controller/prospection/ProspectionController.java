@@ -26,9 +26,12 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.ProspectionProfilDto;
 import com.tsix.immocrm.dto.prospection.ProspectionTypeBienDto;
 import com.tsix.immocrm.dto.prospection.ProspectionVilleDto;
+import com.tsix.immocrm.dto.prospection.EnvoyerOffrePrixRequest;
+import com.tsix.immocrm.dto.prospection.ResultatEnvoiOffreDto;
 import com.tsix.immocrm.dto.prospection.ResultatEnvoiVisiteDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
+import com.tsix.immocrm.services.prospection.OffrePrixService;
 import com.tsix.immocrm.services.prospection.DevisService;
 import com.tsix.immocrm.services.prospection.NdaService;
 import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
@@ -114,6 +117,7 @@ public class ProspectionController {
     private final ProspectionFicheService prospectionFicheService;
     private final ProspectionFichePdfRenderer prospectionFichePdfRenderer;
     private final ConfirmationVisiteService confirmationVisiteService;
+    private final OffrePrixService offrePrixService;
 
     public ProspectionController(ProspectionService prospectionService,
                                   ProspectionQualificationService qualificationService,
@@ -124,8 +128,10 @@ public class ProspectionController {
                                   NdaPdfRenderer ndaPdfRenderer,
                                   ProspectionFicheService prospectionFicheService,
                                   ProspectionFichePdfRenderer prospectionFichePdfRenderer,
-                                  ConfirmationVisiteService confirmationVisiteService) {
+                                  ConfirmationVisiteService confirmationVisiteService,
+                                  OffrePrixService offrePrixService) {
         this.confirmationVisiteService = confirmationVisiteService;
+        this.offrePrixService = offrePrixService;
         this.prospectionService = prospectionService;
         this.qualificationService = qualificationService;
         this.devisService = devisService;
@@ -427,6 +433,48 @@ public class ProspectionController {
                     + "résultat vaut \"Rendez vous pris\", \"RDV reporté\" ou \"Le prospect veut "
                     + "faire une visite du projet\".") @PathVariable UUID interactionId) {
         return confirmationVisiteService.renvoyer(id, interactionId);
+    }
+
+    @PostMapping("/{id}/offre-prix")
+    @Operation(
+            summary = "Établit l'offre de prix et l'envoie au prospect (email + WhatsApp)",
+            description = "Second temps de l'après-visite. Le **remerciement** part automatiquement "
+                    + "au passage à l'étape « 4 APRES VISITES » (`PATCH /api/prospections/{id}/etape`) "
+                    + "et ne demande rien ; **l'offre de prix**, elle, s'envoie explicitement par cet "
+                    + "endpoint, parce qu'elle suppose un prix que seul un humain peut arrêter.\n\n"
+                    + "**Pourquoi ce n'est pas automatique.** Le prix vient du lot, et le lot n'est "
+                    + "renseigné que sur **7 %** des prospections de cette étape (94 sur 1 266). Sans "
+                    + "lot il n'y a aucun montant à annoncer — d'où le **409** ci-dessous, qui est le "
+                    + "cas majoritaire attendu et doit être traité comme une étape de parcours, pas "
+                    + "comme une panne.\n\n"
+                    + "**Ce que fait l'appel**, dans l'ordre : réutilise l'offre existante si la "
+                    + "prospection en porte déjà une **et** que l'appel n'impose ni remise ni prix "
+                    + "(réécrire les montants modifierait un document que le prospect détient) ; sinon "
+                    + "crée une offre (`StlQuote`) numérotée comme le legacy ; rend la Fiche Offre en "
+                    + "PDF ; expédie sur les deux canaux.\n\n"
+                    + "**Le WhatsApp porte le montant en clair**, contrairement à la confirmation de "
+                    + "visite. À cette étape le rapport s'inverse : **19,7 %** des prospects ont une "
+                    + "adresse email contre **99,7 %** un numéro exploitable. Le PDF ne part que par "
+                    + "email — UltraMsg exige une URL publique et les nôtres expirent en quinze "
+                    + "minutes — et le message WhatsApp **ne mentionne le mail que s'il est "
+                    + "réellement parti**.\n\n"
+                    + "**Un envoi qui n'a pas lieu n'est pas une erreur** : 200 avec `envoye = false` "
+                    + "et un motif par canal. L'offre est créée avant l'envoi et le reste quoi qu'il "
+                    + "arrive — `offreId` et `offreCode` sont toujours renseignés."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Offre établie et envoi tenté — lire "
+                    + "`envoye` et le `motif` de chaque canal pour en connaître l'issue."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
+                    + "prospection hors du périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409", description = "La prospection n'a pas de lot "
+                    + "(rattachez-le via `PATCH /api/prospections/{id}/tranche-principale` puis "
+                    + "relancez), ou elle n'est pas à l'étape « 4 APRES VISITES ».")
+    })
+    public ResultatEnvoiOffreDto envoyerOffrePrix(
+            @Parameter(description = "Id de la prospection.") @PathVariable UUID id,
+            @RequestBody(required = false) EnvoyerOffrePrixRequest request) {
+        return offrePrixService.envoyer(id, request);
     }
 
     // -- GAP-04: qualification sub-resources --

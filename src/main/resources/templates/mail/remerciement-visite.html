@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!--
+  Remerciement envoyé au prospect après sa visite. Voir
+  instructions/FEATURE-offre-apres-visite.md §3.
+
+  Mêmes contraintes de forme que confirmation-visite.html — mise en page par <table>, styles
+  EN LIGNE : Outlook et les webmails ignorent largement les feuilles de style.
+
+  Volontairement court, et sans bloc d'informations pratiques : la visite a eu lieu, l'adresse
+  et l'horaire n'ont plus d'objet. Le seul bloc conditionnel est le conseiller, qui manque sur
+  une minorité de prospections réelles.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Merci de votre visite</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 12px;">
+    <tr>
+        <td align="center">
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px; background-color:#ffffff; border-radius:8px; border:1px solid #e4e7eb;">
+
+                <tr>
+                    <td style="padding:28px 32px 8px 32px;">
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;">
+                            Merci de votre visite
+                        </h1>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:8px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 14px 0;">
+                            Bonjour <span th:if="${nomProspect}" th:text="${nomProspect}" style="font-weight:600;">Prénom Nom</span>,
+                        </p>
+                        <p style="margin:0 0 14px 0;">
+                            Merci d'avoir pris le temps de visiter
+                            <span th:if="${lieu}" th:text="${lieu}" style="font-weight:600;">AYAD RESIDENCE BEL AIR</span><span
+                                th:unless="${lieu}">notre projet</span>.
+                        </p>
+                        <p style="margin:0 0 20px 0;">
+                            Nous espérons que cette visite a répondu à vos attentes. Nous restons à
+                            votre disposition pour toute question sur le projet, les disponibilités
+                            ou les conditions.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr th:if="${nomCommercial}">
+                    <td style="padding:0 32px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                               style="background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px;">
+                            <tr>
+                                <td style="padding:16px 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Votre conseiller
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 20px 16px 20px; font-size:16px; font-weight:600;">
+                                    <span th:text="${nomCommercial}">Nom du conseiller</span><span
+                                        th:if="${mobileCommercial}" style="font-weight:400; color:#52606d;">
+                                        — <span th:text="${mobileCommercial}">06 00 00 00 00</span></span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:20px 32px 28px 32px; border-top:1px solid #e4e7eb;">
+                        <p style="margin:16px 0 0 0; font-size:13px; color:#7b8794; line-height:1.5;">
+                            Ce message est automatique, merci de ne pas y répondre. Pour toute
+                            question, contactez directement votre conseiller.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
