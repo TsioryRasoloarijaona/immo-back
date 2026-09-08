@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierContact;
@@ -227,25 +228,14 @@ public class ProspectSubResourcesService {
         );
     }
 
+    /**
+     * Délègue au mappeur commun de {@code ProspectionService} : ce bloc existait ici en copie
+     * identique, et c'est cette duplication qui l'a fait diverger quand la liste a gagné le
+     * contact et l'alerte. Les champs d'alerte restent nuls ici — ils ne sont résolus que par
+     * les listes de prospections, qui les chargent en une requête groupée.
+     */
     private static ProspectionListItemDto toProspectionListItem(ComProspection p) {
-        return new ProspectionListItemDto(
-                p.getId(),
-                p.getCode(),
-                p.getDocDate(),
-                p.getTempDescription(),
-                p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                TierNomFormatter.nom(p.getCfgProspect()),
-                p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                TierNomFormatter.nom(p.getCfgCommercial()),
-                p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
-                p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
-                p.getIsClosed(),
-                p.getPrice(),
-                p.getArea(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null
-        );
+        return ProspectionService.toListItem(p);
     }
 
     private static DossierListItemDto toDossierListItem(ComFolder f) {

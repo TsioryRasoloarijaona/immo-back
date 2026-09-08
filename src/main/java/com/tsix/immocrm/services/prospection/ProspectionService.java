@@ -38,6 +38,7 @@ import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageRepository.DerniereAlerteProjection;
 import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComActionRepository;
@@ -67,8 +68,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -82,15 +85,15 @@ public class ProspectionService {
      * uses) — same underlying mechanism, distinguished on the calendar by
      * {@code AdmEvent.comActionMessageSubCategory}. See {@code GET /api/calendrier/evenements}.
      */
+    private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
+            "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
+
     /**
      * Format du libellé {@code ComActionMessage.Description}, repris à l'identique de
      * l'application de bureau : {@code 07/09/2026 17:13 Khadija ELKORRI}. Vérifié sur les
      * 46 546 interactions de {@code yesRemsProd}, sans une seule exception.
      */
     private static final DateTimeFormatter FORMAT_LIBELLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-
-    private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
-            "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
     private final ComProspectionRepository prospectionRepository;
     private final ProspectService prospectService;
@@ -182,7 +185,7 @@ public class ProspectionService {
                 ))
                 // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
                 .and(perimetreService.filtreProspections());
-        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
+        return versListe(prospectionRepository.findAll(spec, pageable));
     }
 
     /**
@@ -201,7 +204,7 @@ public class ProspectionService {
                 // Périmètre commercial : une pré-prospection a par construction un commercial NULL
                 // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
                 .and(perimetreService.filtreProspections());
-        return prospectionRepository.findAll(spec, pageable).map(ProspectionService::toListItem);
+        return versListe(prospectionRepository.findAll(spec, pageable));
     }
 
     /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
@@ -742,7 +745,62 @@ public class ProspectionService {
         );
     }
 
-    private static ProspectionListItemDto toListItem(ComProspection p) {
+    /**
+     * Résout la page en DTO en chargeant les alertes de toute la page <b>en une requête</b>.
+     * Les résoudre ligne par ligne ferait 20 requêtes pour une page de 20 — le genre de N+1 qui
+     * ne se voit pas en test sur trois lignes et qui coûte cher sur un écran réel.
+     */
+    private Page<ProspectionListItemDto> versListe(Page<ComProspection> page) {
+        List<UUID> ids = page.getContent().stream().map(ComProspection::getId).toList();
+        // IN () est une erreur de syntaxe SQL : ne pas interroger sur une page vide.
+        Map<UUID, DerniereAlerteProjection> alertes = ids.isEmpty()
+                ? Map.of()
+                : actionMessageRepository.dernieresAlertes(ids).stream()
+                        .collect(Collectors.toMap(DerniereAlerteProjection::getProspectionId, a -> a));
+        return page.map(p -> toListItem(p, alertes.get(p.getId())));
+    }
+
+    /**
+     * Téléphone joignable : la fiche d'abord (mobile, à défaut fixe), puis le numéro saisi au
+     * premier contact. Mesuré sur les 8 613 prospections ouvertes — 5 034 par la fiche, 7 596
+     * par le champ temporaire, <b>8 591 par l'une ou l'autre</b> : aucune des deux sources ne
+     * suffit seule, le repli n'est pas une commodité.
+     */
+    private static String telephoneProspect(CfgTier prospect, ComProspection p) {
+        if (prospect != null) {
+            if (StringUtils.hasText(prospect.getMobile())) {
+                return prospect.getMobile();
+            }
+            if (StringUtils.hasText(prospect.getPhone())) {
+                return prospect.getPhone();
+            }
+        }
+        return StringUtils.hasText(p.getTempTel()) ? p.getTempTel() : null;
+    }
+
+    /** Même règle de repli que {@link #telephoneProspect} — 4 752 des 8 613 ouvertes (55 %). */
+    private static String emailProspect(CfgTier prospect, ComProspection p) {
+        if (prospect != null && StringUtils.hasText(prospect.getEMail())) {
+            return prospect.getEMail();
+        }
+        return StringUtils.hasText(p.getTempEMail()) ? p.getTempEMail() : null;
+    }
+
+    /**
+     * Mappeur commun de {@link ProspectionListItemDto}. Public parce qu'il est le seul :
+     * {@code HotlineService} et {@code ProspectSubResourcesService} en portaient chacun une copie
+     * identique au caractère près, et c'est cette duplication qui les a fait diverger dès que la
+     * liste a gagné le contact et l'alerte.
+     *
+     * <p>Cette variante laisse les champs d'alerte nuls. Ils ne sont résolus que par les listes
+     * de prospections, qui les chargent pour toute la page en une requête — voir
+     * {@link #versListe}.
+     */
+    public static ProspectionListItemDto toListItem(ComProspection p) {
+        return toListItem(p, null);
+    }
+
+    private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte) {
         return new ProspectionListItemDto(
                 p.getId(),
                 p.getCode(),
@@ -759,7 +817,11 @@ public class ProspectionService {
                 p.getArea(),
                 p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
                 p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null
+                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null,
+                telephoneProspect(p.getCfgProspect(), p),
+                emailProspect(p.getCfgProspect(), p),
+                alerte != null ? alerte.getDateAlerte() : null,
+                alerte != null ? alerte.getMessage() : null
         );
     }
 
