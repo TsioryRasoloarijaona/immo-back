@@ -36,12 +36,32 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
      */
     private final boolean actif;
 
+    /**
+     * Adresse d'expédition réellement utilisée : {@code app.mail.expediteur}, à défaut le compte
+     * SMTP lui-même.
+     *
+     * <p>Ce repli n'est pas une commodité. Titan (comme la plupart des hébergeurs mutualisés)
+     * <b>impose</b> que l'expéditeur soit la boîte authentifiée : toute autre valeur est rejetée.
+     * Les deux ne peuvent donc pratiquement pas différer, et exiger {@code MAIL_FROM} en plus de
+     * {@code MAIL_USERNAME} ne faisait qu'ajouter une variable à oublier — ce qui est arrivé, et
+     * rendait le service silencieusement inactif alors que les identifiants étaient bons.
+     */
+    private final String expediteurEffectif;
+
     public EnvoiEmailSmtp(JavaMailSender expedieur, ITemplateEngine moteurTemplate,
                           EmailProperties properties) {
         this.expedieur = expedieur;
         this.moteurTemplate = moteurTemplate;
         this.properties = properties;
-        this.actif = determinerActivite(expedieur, properties);
+        this.expediteurEffectif = resoudreExpediteur(expedieur, properties);
+        this.actif = determinerActivite(expedieur, properties, this.expediteurEffectif);
+    }
+
+    private static String resoudreExpediteur(JavaMailSender expedieur, EmailProperties properties) {
+        if (StringUtils.hasText(properties.getExpediteur())) {
+            return properties.getExpediteur().trim();
+        }
+        return (expedieur instanceof JavaMailSenderImpl impl) ? impl.getUsername() : null;
     }
 
     /**
@@ -49,14 +69,10 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
      * éléments sans lesquels aucun message ne peut partir sont renseignés : le serveur, le
      * compte SMTP, et l'adresse d'expédition.
      */
-    private static boolean determinerActivite(JavaMailSender expedieur, EmailProperties properties) {
+    private static boolean determinerActivite(JavaMailSender expedieur, EmailProperties properties,
+                                              String expediteurEffectif) {
         if (!properties.isActif()) {
             log.info("Envoi d'email désactivé (app.mail.actif=false) : les messages seront ignorés.");
-            return false;
-        }
-        if (!StringUtils.hasText(properties.getExpediteur())) {
-            log.warn("Envoi d'email INACTIF : app.mail.expediteur est vide (variable MAIL_FROM). "
-                    + "Les mots de passe temporaires devront être communiqués à la main.");
             return false;
         }
         if (expedieur instanceof JavaMailSenderImpl impl
@@ -66,7 +82,13 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
                     + "Les mots de passe temporaires devront être communiqués à la main.");
             return false;
         }
-        log.info("Envoi d'email actif, expéditeur {}.", properties.getExpediteur());
+        if (!StringUtils.hasText(expediteurEffectif)) {
+            log.warn("Envoi d'email INACTIF : aucune adresse d'expédition (ni app.mail.expediteur "
+                    + "via MAIL_FROM, ni spring.mail.username via MAIL_USERNAME). "
+                    + "Les mots de passe temporaires devront être communiqués à la main.");
+            return false;
+        }
+        log.info("Envoi d'email actif, expéditeur {}.", expediteurEffectif);
         return true;
     }
 
@@ -85,7 +107,7 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
             MimeMessage mime = expedieur.createMimeMessage();
             // multipart=true : indispensable pour joindre l'alternative texte au HTML.
             MimeMessageHelper aide = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
-            aide.setFrom(properties.getExpediteur(), properties.getNomExpediteur());
+            aide.setFrom(expediteurEffectif, properties.getNomExpediteur());
             aide.setTo(message.destinataire());
             aide.setSubject(message.sujet());
 

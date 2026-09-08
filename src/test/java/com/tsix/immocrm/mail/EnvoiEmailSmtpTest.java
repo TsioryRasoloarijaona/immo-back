@@ -152,6 +152,30 @@ class EnvoiEmailSmtpTest {
         assertThat(capteur.envoyes).isEmpty();
     }
 
+    /**
+     * MAIL_FROM absent : l'expéditeur retombe sur le compte SMTP au lieu de désactiver le
+     * service. Cas rencontré pour de vrai — la configuration de lancement portait
+     * MAIL_USERNAME et MAIL_PASSWORD mais pas MAIL_FROM, et le service se déclarait inactif
+     * alors que les identifiants étaient bons. Titan impose de toute façon que l'expéditeur
+     * soit la boîte authentifiée, les deux valeurs ne peuvent donc pas diverger.
+     */
+    @Test
+    void expediteurAbsent_retombeSurLeCompteSmtp() throws Exception {
+        EmailProperties sansExpediteur = new EmailProperties();
+        sansExpediteur.setActif(true);
+        sansExpediteur.setNomExpediteur("Ayad Estate");
+        // setExpediteur() volontairement non appelé.
+
+        ExpediteurCapteur capteur = new ExpediteurCapteur();
+        EnvoiEmailSmtp envoi = new EnvoiEmailSmtp(capteur, moteurTemplate, sansExpediteur);
+
+        assertThat(envoi.estActif()).isTrue();
+        envoi.envoyer(MESSAGE);
+
+        assertThat(capteur.envoyes).hasSize(1);
+        assertThat(capteur.envoyes.get(0).getFrom()[0].toString()).contains("test");
+    }
+
     @Test
     void interrupteurBaisse_serviceInactifEtAucunEnvoi() {
         EmailProperties eteint = new EmailProperties();
