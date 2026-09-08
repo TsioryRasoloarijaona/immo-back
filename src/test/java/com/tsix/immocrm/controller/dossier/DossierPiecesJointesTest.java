@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
+import com.tsix.immocrm.entities.app.AppFileObject;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -15,6 +16,7 @@ import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
+import com.tsix.immocrm.repositories.app.AppFileObjectRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -40,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -80,6 +83,9 @@ class DossierPiecesJointesTest {
 
     @Autowired
     private AdmAttachedFileTypeRepository attachedFileTypeRepository;
+
+    @Autowired
+    private AppFileObjectRepository fileObjectRepository;
 
     @Autowired
     private AdmUserRepository userRepository;
@@ -387,5 +393,117 @@ class DossierPiecesJointesTest {
         mockMvc.perform(multipart("/api/dossiers/{id}/pieces-jointes", UUID.randomUUID())
                         .file(fichier))
                 .andExpect(status().isNotFound());
+    }
+
+    // ------------------------------------------------------------------- suppression
+
+    /**
+     * Les deux chemins de lecture doivent basculer d'un coup : la liste (via la {@code @Formula}
+     * {@code hasFile}) et le téléchargement (via {@code findBy...AndDeletedAtIsNull}). Les tester
+     * séparément laisserait passer le cas où seul l'un des deux respecte {@code DeletedAt}.
+     */
+    @Test
+    void supprimerPieceJointe_laRetireDeLaListeEtDuTelechargement() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-1");
+        AdmAttachedFile piece = newDossierAttachment(folder.getId(),
+                "PDF".getBytes(StandardCharsets.UTF_8), ".pdf", "À supprimer");
+        AdmAttachedFile autre = newDossierAttachment(folder.getId(),
+                "AUTRE".getBytes(StandardCharsets.UTF_8), ".pdf", "À garder");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}", folder.getId(), piece.getId()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/dossiers/{id}/pieces-jointes", folder.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(autre.getId().toString()));
+
+        mockMvc.perform(get("/api/dossiers/{id}/pieces-jointes/{pieceId}/fichier",
+                        folder.getId(), piece.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * R2 de {@code FEATURE-suppression-pieces-jointes.md} : la suppression est logique. L'objet
+     * reste sur le stockage — le supprimer dans la transaction rouvrirait le cas d'une ligne
+     * pointant vers le vide si la transaction était annulée après coup.
+     */
+    @Test
+    void supprimerPieceJointe_neToucheNiAuStockageNiALaLigneDeMetadonnees() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-2");
+        byte[] contenu = "PDF-CONTENT".getBytes(StandardCharsets.UTF_8);
+        AdmAttachedFile piece = newDossierAttachment(folder.getId(), contenu, ".pdf", "Scan illisible");
+        String cle = fixturePieceJointe.cleAttendue(piece);
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}", folder.getId(), piece.getId()))
+                .andExpect(status().isNoContent());
+
+        assertThat(stockageMemoire.contenu(cle)).isEqualTo(contenu);
+        assertThat(attachedFileRepository.findById(piece.getId())).isPresent();
+        assertThat(fileObjectRepository.findById(piece.getId()).orElseThrow().getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void supprimerPieceJointe_dunAutreDossier_returns404() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-3A");
+        ComFolder autreDossier = newFolder("DOS-PJ-DEL-3B");
+        AdmAttachedFile piece = newDossierAttachment(folder.getId(),
+                "X".getBytes(StandardCharsets.UTF_8), ".pdf", "Test");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}",
+                        autreDossier.getId(), piece.getId()))
+                .andExpect(status().isNotFound());
+
+        // Et elle est toujours là, vue depuis son vrai dossier.
+        assertThat(fileObjectRepository.findById(piece.getId()).orElseThrow().getDeletedAt()).isNull();
+    }
+
+    /** Deuxième suppression : plus d'objet vivant, donc 404 — voir R4 de la spec. */
+    @Test
+    void supprimerPieceJointe_deuxFois_returns404LaSecondeFois() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-4");
+        AdmAttachedFile piece = newDossierAttachment(folder.getId(),
+                "X".getBytes(StandardCharsets.UTF_8), ".pdf", "Doublon");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}", folder.getId(), piece.getId()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}", folder.getId(), piece.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void supprimerPieceJointe_dossierOuPieceInconnus_returns404() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-5");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}",
+                        UUID.randomUUID(), UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}",
+                        folder.getId(), UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * {@code DeletedBy} vient du token, jamais du front — d'où le vrai login : le principal de
+     * {@code @WithMockUser} n'est pas un {@code AuthenticatedUser} et laisserait le champ à null
+     * sans rien prouver (même raison que {@link #uploadPieceJointe_recordsAuthenticatedUserAsCreePar}).
+     */
+    @Test
+    void supprimerPieceJointe_enregistreLAuteurEtLaDate() throws Exception {
+        ComFolder folder = newFolder("DOS-PJ-DEL-6");
+        AdmAttachedFile piece = newDossierAttachment(folder.getId(),
+                "X".getBytes(StandardCharsets.UTF_8), ".pdf", "Déposée par erreur");
+        AdmUser user = newActiveUser("test.pj.del." + UUID.randomUUID(), "Password123", "Test SUPPRESSION");
+        Cookie cookie = login(user.getCode(), "Password123");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/pieces-jointes/{pieceId}", folder.getId(), piece.getId())
+                        .cookie(cookie))
+                .andExpect(status().isNoContent());
+
+        AppFileObject objet = fileObjectRepository.findById(piece.getId()).orElseThrow();
+        assertThat(objet.getDeletedBy()).isEqualTo("Test SUPPRESSION");
+        assertThat(objet.getDeletedAt()).isNotNull();
+        // Le dépôt reste attribué à qui l'a fait : la suppression n'écrase pas UploadedBy.
+        assertThat(objet.getUploadedBy()).isEqualTo("test");
     }
 }

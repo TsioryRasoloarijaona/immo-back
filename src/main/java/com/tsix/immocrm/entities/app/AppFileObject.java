@@ -70,4 +70,16 @@ public class AppFileObject {
      */
     @Column(name = "DeletedAt")
     private LocalDateTime deletedAt;
+
+    /**
+     * Nom affiché de l'auteur de la suppression, symétrique de {@link #uploadedBy}. Ajoutée par
+     * {@code 006_AppFileObject_DeletedBy.sql} en même temps que les endpoints {@code DELETE} :
+     * jusque-là {@code DeletedAt} n'était écrite par personne, donc la question ne se posait pas.
+     * {@code null} tant que la pièce n'est pas supprimée, et pour toute suppression faite hors
+     * API.
+     */
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "DeletedBy")
+    private String deletedBy;
 }

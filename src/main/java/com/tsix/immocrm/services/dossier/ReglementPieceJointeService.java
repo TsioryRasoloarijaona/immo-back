@@ -1,7 +1,10 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
+import com.tsix.immocrm.entities.app.AppFileObject;
 import com.tsix.immocrm.entities.stl.StlSettlement;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
@@ -99,5 +102,43 @@ public class ReglementPieceJointeService {
         String category = Boolean.FALSE.equals(settlement.getIsCredit()) ? CATEGORY_DEBIT : CATEGORY_CREDIT;
         return support.deposer(reglementId, PorteurPieceJointe.REGLEMENT, category, fichier, description,
                 typeId, principal);
+    }
+
+    /**
+     * Retire une preuve de paiement — suppression logique, mêmes gardes 404 que
+     * {@link #findByReglement}.
+     *
+     * <p><b>La dernière preuve d'un règlement {@code POINTED} est protégée (409).</b> C'est la
+     * pièce jointe qui a autorisé le pointage ({@link ReglementStatutService}) ; la retirer
+     * laisserait un règlement pointé sans justificatif, trou d'audit indétectable après coup. La
+     * garde ne mord que sur ce cas précis : une pièce parmi plusieurs, ou n'importe quelle pièce
+     * d'un règlement {@code IN_WORK} ou {@code CANCELED}, se supprime normalement.
+     *
+     * <p>Le javadoc de {@link ReglementStatutService} déconseillait d'étendre la règle « pointé ⇒
+     * preuve » à la suppression. L'exception est assumée et documentée dans
+     * {@code FEATURE-suppression-pieces-jointes.md} §6 : l'argument d'origine portait sur le
+     * risque rétroactif — rendre illisibles les 12 règlements pointés legacy sans pièce jointe —
+     * et ce risque n'existe pas ici, puisque rien n'est vérifié en lecture. Mesuré sur
+     * {@code yesRemsProd} : sur 17 règlements {@code POINTED}, <b>3</b> portent exactement une
+     * pièce jointe, et ce sont les seules lignes de toute la base où ce 409 pourrait se
+     * déclencher.
+     *
+     * <p>L'ordre des contrôles compte : la pièce est résolue <b>avant</b> l'évaluation de la
+     * règle, sans quoi un {@code pieceId} inconnu sur un règlement pointé renverrait 409 au lieu
+     * de 404 — et révélerait au passage l'état du règlement.
+     */
+    @Transactional
+    public void supprimer(UUID dossierId, UUID reglementId, UUID pieceId, AuthenticatedUser principal) {
+        StlSettlement settlement = reglementDuDossier(dossierId, reglementId);
+        AppFileObject objet = support.exigerFichier(reglementId, pieceId, "ce règlement");
+
+        boolean pointe = StatutReglement.POINTED == StatutReglement.depuisCodeOuNull(settlement.getStatus());
+        if (pointe && support.nombreDeFichiers(reglementId) <= 1) {
+            throw new ConflictException("Ce règlement est pointé : sa dernière preuve de paiement "
+                    + "ne peut pas être supprimée. Déposez d'abord une autre pièce jointe, ou "
+                    + "laissez celle-ci en place.");
+        }
+
+        support.marquerSupprime(objet, principal);
     }
 }

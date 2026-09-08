@@ -795,7 +795,8 @@ CREATE TABLE [dbo].[AppFileObject](
 	[UploadedAt] [datetime2](7) NOT NULL,
 	[UploadedBy] [nvarchar](255) COLLATE French_CI_AS NULL,
 	[DeletedAt] [datetime2](7) NULL,
- CONSTRAINT [PK_AppFileObject] PRIMARY KEY CLUSTERED 
+	[DeletedBy] [nvarchar](255) COLLATE French_CI_AS NULL,
+ CONSTRAINT [PK_AppFileObject] PRIMARY KEY CLUSTERED
 (
 	[AdmAttachedFileId] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)

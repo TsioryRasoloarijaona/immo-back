@@ -1,57 +1,52 @@
 # Session Memory
-_Last updated: 2026-09-07T18:40+01:00_
+_Last updated: 2026-09-08T10:15+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
-Aligner l'API sur l'application de bureau légataire : **seules ADMOD et GHRIZA sont en
-exploitation**, et **toute** donnée visible ou manipulable doit provenir de ces deux entités. Les
-deux chantiers précédents (visibilité pilotée par `CfgCompany.IsActive`, fiche de réservation par
-estampillage) sont poussés ; ce troisième les complète en rendant le filtre **transversal** au lieu
-de le laisser cantonné au patrimoine et aux référentiels.
+
+Livrer les **suppressions manquantes**, en commençant par les pièces jointes. Le socle existait
+déjà entièrement : `AppFileObject.DeletedAt` est né avec la migration `002`, la `@Formula`
+`hasFile` et `findByAdmAttachedFileIdAndDeletedAtIsNull` le respectent depuis toujours — mais
+**aucun code ne l'écrivait**. Il ne manquait que contrôleur et service.
 
 ---
 
 ## ✅ What Worked
 
-- **Le point d'accroche prévu par la session précédente était le bon.** Composer le prédicat
-  d'entité dans les **5 méthodes `filtreXxx()` de `PerimetreCommercialService`** couvre 9 sites
-  d'appel — dossiers, prospections ×3, encaissements ×2, devis, interactions — **sans modifier un
-  seul service**.
-- **Choisir la même sémantique que le périmètre pour les lignes non résolues.** Décision
-  utilisateur : « entité non résoluble ⇒ visible », identique au §6.4 du périmètre. Les deux
-  prédicats se composent alors sans se contredire, et la lambda est unique par méthode.
-- **Mesurer la FK directe avant de s'y fier.** `StlSettlement.CfgCompanyId` concorde avec la
-  société déduite du dossier sur **644 règlements de vente sur 644**, aucun règlement à cheval sur
-  deux sociétés. D'où un prédicat direct sur la racine au lieu d'une sous-requête `EXISTS`.
-- **Vérifier une régression par `git stash` plutôt que par raisonnement.** Quatre tests cassés
-  « ressemblaient » à des défauts de fixtures préexistants. Sur la base de référence ils passaient :
-  c'était bien mon changement. Sans cette vérification, une vraie régression CORS partait en
-  production.
-- **Une lambda unique par filtre, pas `Specification.and()` de deux spécifications** — sinon chacune
-  repose ses propres `LEFT JOIN` et la requête porte la chaîne article → tranche → projet en double.
-- **Réconcilier tranche par tranche après coup** (demande de l'utilisateur). Le détail des 5
-  tranches actives redonne exactement les totaux du filtre — 116 dossiers, 11 595 prospections,
-  500 articles — et 116 + 242 masqués = 358, le total de `ComFolder`. C'est cette égalité, pas la
-  lecture du code, qui prouve qu'aucune ligne ne se cache ailleurs.
+- **Mesurer avant de choisir la portée.** 3 410 pièces jointes réparties en 745 dossier /
+  461 règlement / 476 article / 1 728 autres porteurs. Le DELETE va sur dossier + règlement —
+  les deux seuls porteurs ayant un `POST`, et les seuls couverts par `PerimetreInterceptor`.
+- **L'intercepteur couvre le DELETE sans une ligne de code.** Il matche sur le *motif de route*
+  (`/api/dossiers/{id}/…`), pas sur la méthode HTTP : la visibilité par périmètre et par entité
+  s'applique d'office à toute route ajoutée sous une collection scopée.
+- **Séparer `exigerFichier` de `marquerSupprime`** au lieu d'un seul `supprimer`. C'est ce qui
+  permet au règlement d'intercaler sa règle métier **entre** le 404 et la suppression — sinon un
+  `pieceId` inconnu sur un règlement pointé aurait renvoyé 409, révélant l'état du règlement.
+- **Amender un javadoc plutôt que le contredire en silence.** `ReglementStatutService` interdisait
+  explicitement d'étendre la règle « pointé ⇒ preuve » à la suppression. La consigne est corrigée
+  sur place, avec le chiffre qui justifie l'exception.
+- **`entityManager.flush()/clear()` dans le test** pour rétablir la condition de production (un
+  contexte de persistance par requête HTTP) — précédent déjà posé dans
+  `DossierListeFiltresEtRequetesTest#compterRequetes`.
 
 ## ❌ What Failed
 
-- **`cb.isTrue(coalesce(...))` sur SQL Server** → « Expression de type non booléen spécifiée dans un
-  contexte où une condition est attendue ». **9 tests hotline cassés.** SQL Server n'a pas de type
-  booléen : sur un chemin simple Hibernate rend `= 1`, sur une expression composée il émet
-  l'expression nue. Toujours `cb.equal(expr, Boolean.TRUE)`.
-- **Faire traverser la préflight CORS par l'intercepteur de périmètre.** Le contrôle devenu
-  inconditionnel refusait les `OPTIONS`, ce qui aurait cassé **tout `PATCH` cross-origin** du
-  frontend, y compris sur des ressources visibles. Corrigé par `CorsUtils.isPreFlightRequest`.
-- **`path.get("cfgCompany").get("isActive")` en Criteria API** produit une **jointure interne
-  implicite** et masque les lignes sans société. Toujours `join("cfgCompany", JoinType.LEFT)`.
-- **Ne pas reprendre le retour de `save()`** sur une entité à id assigné : Spring Data passe par
-  `merge()` et rend une *autre* instance. Rattacher l'originale fait voir à Hibernate une référence
-  transiente au flush. Ce piège a mordu ma propre fixture **et** deux tests existants.
-- **`-Dtest=A+B+C`** n'est pas la syntaxe de surefire (c'est `A,B,C`), et sous PowerShell tout
-  `-Dxxx.yyy` doit être **entre guillemets** sinon Maven lit un phase de cycle de vie.
+- **`save()` au lieu de `saveAndFlush()` dans `marquerSupprime`** → 3 tests rouges, la pièce
+  supprimée restait dans la liste. `hasFile` est une `@Formula` : sa sous-requête sur
+  `AppFileObject` est évaluée par SQL Server, Hibernate n'y voit qu'un fragment opaque, **n'inscrit
+  pas `AppFileObject` dans les espaces de requête d'`AdmAttachedFile`** et ne déclenche donc aucun
+  auto-flush avant le `SELECT`. Règle générale : toute écriture dont dépend une `@Formula` doit
+  être flushée explicitement.
+- **Le flush ne suffit pas quand l'entité a déjà été chargée.** Un 4ᵉ test restait rouge : le
+  pointage avait chargé les `AdmAttachedFileSummary` du règlement, et Hibernate rend **l'instance
+  du cache de premier niveau**, formule comprise, plutôt que la ligne relue. Invisible en
+  production (une requête = un contexte), permanent sous `@Transactional`. Corrigé par `clear()`,
+  pas par un contournement de production.
+- **`sqlcmd` a rendu un timeout de connexion** sur la première tentative contre `yesRemsCiCheck`
+  alors que `yesRemsProd` répondait. `-l 30` (timeout de login) l'a réglé — ne pas en conclure que
+  la base est absente.
 
 ---
 
@@ -59,17 +54,11 @@ de le laisser cantonné au patrimoine et aux référentiels.
 
 | # | Error / Bug | Status | Fix applied |
 |---|-------------|--------|-------------|
-| 1 | Suite injouable en CI : schéma légataire versionné nulle part | Fixed | `ci/schema/` + `.github/workflows/ci.yml` |
-| 2 | `StkItemType`/`StkItemCategory` ne mappaient pas `StkKindId`, pourtant `NOT NULL` | Fixed | Association ajoutée + 105 `setStkKind` dans les fixtures |
-| 5 | Formule « SOCIETE {nom} (groupe AYAD DEVELOPPEMENT) » appliquée à toute entité | Fixed | Paragraphe par marque |
-| 6 | Clause d'immobilisation 10 % inconditionnelle | Fixed | APF seulement |
-| 8 | `EntitesJuridiquesActives` figeait ADMOD+GHRIZA dans le code | Fixed | Bascule sur `CfgCompany.IsActive` + migration `005` |
-| 10 | `GET .../documents/fiche-reservation` renvoie 409 sur un dossier ART | **Fixed** | **Clos par la visibilité transversale** : ces dossiers ne sont plus adressables, 404 en amont. Aucun gabarit MBR/ART à dessiner |
-| 14 | `cb.isTrue(coalesce(...))` → SQL non booléen, 9 tests hotline | Fixed | `cb.equal(expr, Boolean.TRUE)` |
-| 15 | **Préflight CORS refusée par `PerimetreInterceptor`** devenu inconditionnel | Fixed | Saut explicite sur `CorsUtils.isPreFlightRequest` |
-| 16 | `DevisTest` : `StkItem` sans type/catégorie/vocation, jamais flushé donc jamais validé | Fixed | Référentiels posés dans les 2 fixtures |
-| 17 | `ProspectionTranchePrincipaleTest` : `CfgTranche` détachée rattachée à une prospection gérée | Fixed | Retour de `save()` repris |
-| 11 | Règlement annulé (`CANCELED`) garde ses lignes ; la somme des montants réglés ne filtre pas sur le statut | **Open** | Latent : aucune annulation n'est encore passée par l'API |
+| 14 | `cb.isTrue(coalesce(...))` → SQL non booléen | Fixed | `cb.equal(expr, Boolean.TRUE)` |
+| 15 | Préflight CORS refusée par `PerimetreInterceptor` | Fixed | Saut sur `CorsUtils.isPreFlightRequest` |
+| 18 | **Pièce supprimée toujours listée** : `@Formula` non couverte par l'auto-flush | **Fixed** | `saveAndFlush` dans `marquerSupprime`, documenté sur place |
+| 19 | **Cache de premier niveau** : `hasFile` figé à sa valeur de chargement | **Fixed (test)** | `entityManager.clear()` — aucun impact production |
+| 11 | Règlement annulé (`CANCELED`) garde ses lignes ; `sumAmountByComDocumentId` ne filtre pas sur le statut | **Open** | Latent |
 | 12 | `POST /echeancier` sans `exclureDuPrix` : la catégorie ne l'implique pas | **Open** | Non corrigé |
 | 13 | Config IntelliJ : `S3_ENDPOINT` pointe la **production** | **Open** | Un lancement manuel écrit dans le vrai bucket MinIO |
 
@@ -78,130 +67,92 @@ de le laisser cantonné au patrimoine et aux référentiels.
 ## 🔑 Key Points to Remember
 
 ### Base de données — la règle
-- **Toute étude de motif se fait contre `yesRemsProd`**, pas `yesRemsTest`. Base de **lecture** :
-  les corrections se livrent en script SQL que l'utilisateur applique lui-même.
-- **`yesRemsTest` est obsolète.** La suite tourne contre **`yesRemsCiCheck`**, via
-  `SPRING_DATASOURCE_URL/USERNAME/PASSWORD` (voir Environment).
+- **Toute étude de motif se fait contre `yesRemsProd`** (lecture seule), pas `yesRemsTest`
+  (obsolète). La suite tourne contre **`yesRemsCiCheck`**.
 
-### Visibilité par entité — l'architecture retenue
-- **`CfgCompany.IsActive` est déjà correct en base** : ADMOD (1 projet, 2 tranches) et GHRIZA
-  (1 projet, 3 tranches) seules actives. Les 5 tranches correspondent exactement à la grille de
-  l'application de bureau (`APF-HIDDEN`, `APF`, `ARB-ALC`, `ars hidden`, `ARS`). **La migration
-  `005` n'a plus besoin d'être rejouée sur `yesRemsProd`.**
-- **`VisibiliteEntites`** (`services/perimetre/`) : fabrique **statique** de prédicats, sans état —
-  le filtre ne dépend pas de l'appelant. Trois formes : `depuisProjet`, `depuisSocieteDirecte`
-  (encaissements), `depuisDeuxProjets` (interactions, prospection d'abord puis dossier).
-- **Deux restrictions distinctes, superposées dans `PerimetreCommercialService`** : le périmètre
-  (par compte, opt-in) et l'entité (**globale, permanente, appliquée même aux rôles exemptés dont
-  `Administrateur`**). Le nom des méthodes `filtreXxx()` ne dit que la première — c'est documenté
-  en tête de classe, ne pas s'y laisser prendre.
-- **Le contrôle par id n'est plus conditionnel.** `verifierAccesXxx()` exécute désormais toujours
-  une requête (`existsDansPerimetre` si restreint, sinon `existsVisible`). Sans cela le filtre ne
-  tiendrait que sur les listes et se contournerait en énumérant les ids.
-- **Conséquence non évidente** : cette requête JPQL déclenche un **auto-flush Hibernate plus tôt**
-  qu'avant dans les tests `@Transactional`. Elle a révélé deux fixtures invalides qui survivaient
-  uniquement parce qu'elles n'étaient jamais flushées avant le rollback (bugs #16 et #17). Si un
-  test casse ainsi, la fixture est en cause, pas le filtre.
-- **Les prospects ne sont pas filtrés** (décision utilisateur) : `CfgTier` n'a aucun lien vers une
-  entité, un prospect est une personne, pas un bien. **Les clients le sont**, mais par
-  construction : « client » = tier porté par au moins un `ComFolder` visible.
+### Suppression de pièce jointe — l'architecture retenue
+- **Suppression logique, jamais physique.** `AppFileObject.DeletedAt` + `DeletedBy`. La ligne
+  `AdmAttachedFile` **reste** (elle porte les métadonnées et l'auteur du dépôt) et bascule
+  simplement à `hasFile = false`, donc indiscernable d'une case de checklist.
+- **L'objet S3 n'est jamais supprimé**, ni dans la transaction ni après : un balayage hors ligne
+  s'en charge (`FEATURE-s3-storage.md` §3.4). Symétrique du dépôt, qui écrit S3 avant la base pour
+  que la seule fuite possible soit un objet orphelin, jamais une ligne pointant vers le vide.
+- **Deux fois le même DELETE ⇒ 404**, pas 204 : l'information utile est que la pièce n'est plus là.
+- **`DeletedBy` est une colonne neuve** (migration `006`). On n'a **pas** réutilisé
+  `AdmAttachedFile.UserUpdate`, peuplée à 3 410/3 410 par l'application Windows avec la sémantique
+  « dernier modificateur » — l'écraser détruirait une donnée legacy.
+- **L'Article reste en lecture seule.** Ses 476 pièces sont des plans legacy, et `/api/articles`
+  n'est **pas** dans `COLLECTIONS_SCOPEES` de `PerimetreInterceptor` : y ouvrir une écriture
+  demande d'abord d'écrire le contrôle de visibilité à la main.
 
-### Volumétrie du filtre (mesurée sur `yesRemsProd`)
-Dossiers 358→116 · prospections 17 823→11 787 · encaissements de vente 644→332 · devis 298→71 ·
-interactions 48 118→30 668. Restent visibles car sans entité résoluble : **192 prospections**,
-**1 644 interactions**.
+### La garde 409 sur le règlement pointé — décision assumée
+Un règlement `POINTED` ne peut pas perdre sa **dernière** preuve. Le javadoc de
+`ReglementStatutService` déconseillait cette extension ; l'argument était le risque *rétroactif*,
+qui ne s'applique pas — rien n'est vérifié en lecture. Mesuré sur `yesRemsProd` : **17 règlements
+`POINTED`, dont 3 avec exactement une pièce jointe** — les 3 seules lignes de la base où ce 409
+peut se déclencher. Le javadoc a été amendé pour enregistrer l'exception.
 
-### Réconciliation par tranche — vérifiée, à ne pas refaire
-Les 5 tranches actives et ce qu'elles portent (`yesRemsProd`) :
-
-| Entité | Tranche | Dossiers | Prospections | Articles |
-|---|---|---:|---:|---:|
-| ADMOD | `APF` (AYAD PRIVATE FERME BRETONE) | 33 | 1 830 | 80 |
-| ADMOD | `APF-HIDDEN` | 0 | 8 | 0 |
-| GHRIZA | `ARB-ALC` (ALCENOR BEL AIR) | 0 | 169 | 0 |
-| GHRIZA | `ARS` (AYAD RESIDENCE BEL AIR) | 83 | 9 588 | 420 |
-| GHRIZA | `ars hidden` | 0 | 0 | 0 |
-| | **Total** | **116** | **11 595** | **500** |
-
-Ces totaux sont **identiques** à ce que le filtre laisse passer : rien de rattaché aux 5 tranches
-n'est masqué. Les 242 dossiers masqués sont BENACEUR (200), MAYLINE (26), YESTEST (16) — soit les
-marques MBR et ART, plus une entité de test.
-
-**`ComFolder.StkHierarchyId` est renseigné sur les 358 dossiers** (0 sans tranche) : la règle R2
-« entité non résoluble ⇒ visible » ne concerne donc **aucun dossier réel**, seulement les 192
-prospections et 1 644 interactions orphelines. L'écart 11 787 vs 11 595 vient exactement de ces 192.
-
-### Échéancier / règlements — modèle réel
-- `ComDocument` (échéance, liée au dossier), `StlSettlement` (règlement, **sans lien vers le
-  dossier**), `StlSettlementLine` (imputation polymorphe). Relation plusieurs-à-plusieurs réelle.
-- `GET /api/encaissements` est **déjà restreint aux règlements de vente** (au moins une ligne
-  portant un `ComDocumentId`) : les 2 599 règlements d'achat ne sont pas concernés.
-- Les remboursements sont des **montants négatifs**. La suppression d'un règlement existe déjà
-  (`PATCH .../reglements/{id}/statut` → `CANCELED`) ; suppression physique exclue.
-
-### Sécurité / auth
-- Cookie JWT `SameSite=Strict` ⇒ **suppose le front sur `tsiory.tech`**. `JWT_SECRET` fait
-  exactement 32 caractères, le minimum HS256.
-- Rôle `Administrateur` ∈ `RolesExemptesPerimetre` ⇒ aucun périmètre — **mais subit le filtre
-  d'entité**, c'est précisément ce que verrouille `VisibiliteEntitesActivesTest`.
+### Pièges Hibernate mis au jour (valables au-delà de cette feature)
+- Une **`@Formula` n'entre pas dans les espaces de requête** de son entité : Hibernate ne sait pas
+  qu'elle dépend d'une autre table et ne flushe pas avant la lecture. `saveAndFlush` obligatoire.
+- Le **cache de premier niveau rend l'instance mémorisée**, formule figée comprise. Un test
+  `@Transactional` qui écrit puis relit doit `clear()` pour reproduire la production.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- `instructions/FEATURE-visibilite-transversale-entites.md` — le contrat : règles R1–R5, volumétrie
-  mesurée, surface à modifier, **et la section « Impact front »** à relayer à l'autre dépôt.
-- `src/main/java/.../services/perimetre/VisibiliteEntites.java` — la fabrique de prédicats, avec les
-  deux pièges documentés (jointure implicite, `isTrue` sur SQL Server).
-- `src/main/java/.../services/perimetre/PerimetreCommercialService.java` — composition des deux
-  restrictions ; `combine()` et le nouveau squelette `verifier()`.
-- `src/main/java/.../web/PerimetreInterceptor.java` — saut de la préflight CORS.
-- `src/test/java/.../controller/perimetre/VisibiliteEntitesActivesTest.java` — 8 tests ; le
-  contre-test `prospectionSansTranche_doncAucuneEntite_resteVisible` est celui qui distingue une
-  implémentation correcte d'une jointure interne.
-- `src/main/java/.../services/dossier/document/GabaritFicheReservation.java` — coordonnées mesurées
-  sur les fonds. **Source de vérité, pas le `.yes`.**
-- `ci/schema/*.sql` + `.github/workflows/ci.yml` — schéma de test versionné. **Mergés.**
+- `instructions/FEATURE-suppression-pieces-jointes.md` — le contrat : portée, règles R1–R5, la
+  justification chiffrée du 409 (§6), et la section « Impact front » (§9, purement additive).
+- `src/main/resources/db/migration/006_AppFileObject_DeletedBy.sql` — **à rejouer sur
+  `yesRemsProd` et `yesRemsDev` (VPS)**. Déjà appliquée sur `yesRemsCiCheck`, et la colonne est
+  dans `ci/schema/010_tables.sql` pour toute base reconstruite.
+- `services/piecejointe/PieceJointeSupport.java` — `exigerFichier` / `marquerSupprime` /
+  `supprimer` / `nombreDeFichiers`, avec les deux pièges Hibernate documentés sur place.
+- `services/dossier/ReglementPieceJointeService.java` — la garde 409 et l'ordre imposé des
+  contrôles (404 avant 409).
+- `services/perimetre/VisibiliteEntites.java` + `PerimetreCommercialService.java` — filtre
+  d'entité juridique, globale et permanente (feature précédente, mergée).
 
 ---
 
 ## 🔧 Environment & Config
 
-- **Tests** : `495 tests, verts`. Lancer avec
+- **Tests** : `507 tests, verts` (495 avant cette session). Lancer avec
   `$env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"`
   (+ `USERNAME=tsix`, `PASSWORD=securePassword123`) puis `.\mvnw.cmd clean test`.
-  Ajouter `"-Dspring.jpa.show-sql=false"` — **guillemets obligatoires sous PowerShell** — sinon la
-  sortie est noyée sous le SQL de Hibernate.
+  Ajouter `"-Dspring.jpa.show-sql=false"` — **guillemets obligatoires sous PowerShell**.
 - **SQL Server local** sur `49687`, user `tsix` : `yesRemsProd` (schéma complet + données réelles),
-  `yesRemsCiCheck` (reconstruite depuis `ci/schema`), `yesRemsTest` (obsolète).
+  `yesRemsCiCheck` (reconstruite depuis `ci/schema`, **porte désormais `DeletedBy`**),
+  `yesRemsTest` (obsolète). Ajouter `-l 30` à `sqlcmd` en cas de timeout de login.
 - **Compte de développement** : `t.admin` dans `yesRemsProd`, rôle `Administrateur`.
-- **`CfgCompany.IsActive` en base `yesRemsProd`** : ADMOD et GHRIZA = 1, les 7 autres = 0. ✅ Conforme.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Attendre la fusion de la PR par l'utilisateur sur GitHub, puis `sync`.** Le travail est
-> **commité et poussé** — commit `faad467`, branche `feat/entites-actives-et-fiche-reservation`,
-> qui porte trois unités : entités actives (`3785da9`), fiche de réservation (`2f93f02`),
-> visibilité transversale (`faad467`).
-> PR : https://github.com/TsioryRasoloarijaona/immo-back/pull/new/feat/entites-actives-et-fiche-reservation
+> **Attendre la fusion de la PR par l'utilisateur sur GitHub, puis `sync`.** Branche
+> `feat/suppression-pieces-jointes`, commit `7409ba3` (11 fichiers), poussée.
 >
 > **Ne pas couper de nouvelle branche avant le merge**, et demander l'accord avant de le faire.
 >
-> **À relayer au dépôt frontend** (autre PR, autre lane — ne pas le faire depuis ici) : la section
-> « Impact front » de `FEATURE-visibilite-transversale-entites.md`. En particulier
-> `GET /api/dossiers/{id}` peut désormais renvoyer **404** sur un id qui répondait 200 la veille,
-> et tous les volumes de liste chutent.
+> **Après le merge, jouer `006_AppFileObject_DeletedBy.sql` sur `yesRemsProd` et `yesRemsDev`** —
+> sans quoi l'écriture de `DeletedBy` échouera sur « nom de colonne non valide ».
+>
+> **À relayer au dépôt frontend** (autre lane) : §9 de
+> `FEATURE-suppression-pieces-jointes.md`. Purement additif — deux routes neuves, réponse 204 sans
+> corps, et un 409 propre au règlement dont le `detail` RFC 7807 doit être affiché tel quel.
 
 ### Backlog
-- [ ] Rejouer `005_CfgCompany_IsActive.sql` sur **`yesRemsDev` (VPS)** — `yesRemsProd` est déjà bon.
+- [ ] Rejouer `005_CfgCompany_IsActive.sql` sur **`yesRemsDev` (VPS)** — `yesRemsProd` est bon.
 - [ ] Déclarer le check **`Tests` comme requis** sur `main` — sans ça le workflow ne bloque rien.
 - [ ] Garde-fou sur `S3_ENDPOINT` en local : un lancement manuel écrit dans le bucket de production.
 - [ ] Règlement annulé : filtrer `sumAmountByComDocumentId` sur le statut du règlement (bug #11).
 - [ ] `exclureDuPrix` : le dériver de la catégorie à défaut, et exposer l'écart au prix TTC (#12).
-- [ ] Les DELETE manquants — commencer par les pièces jointes (`AppFileObject.DeletedAt` existe déjà,
-      la lecture filtre dessus, **rien ne l'écrit jamais** : il ne manque que contrôleur et service).
+- [ ] **Balayage hors ligne du bucket** : rien ne supprime encore les objets dont `DeletedAt` est
+      renseigné. Sans conséquence fonctionnelle, mais le coût de stockage ne redescend jamais.
+- [ ] Suite des DELETE manquants : suppression d'un règlement (aujourd'hui `CANCELED` seulement),
+      d'une échéance, d'une interaction.
 - [ ] Endpoint de désactivation d'un compte (`AdmUser.Disabled` lu partout, jamais écrit).
 - [ ] `deploy.yml` ne joue toujours pas les tests : la barrière est sur la PR, pas sur `main`.
 - [ ] `ContentTypeParExtension` ignore `.jfif`/`.heic` (4 fichiers réels).

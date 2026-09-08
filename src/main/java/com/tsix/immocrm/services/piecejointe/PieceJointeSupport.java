@@ -97,6 +97,17 @@ public class PieceJointeSupport {
     }
 
     /**
+     * Nombre de pièces jointes réelles du porteur — mêmes exclusions que {@link #lister}. Sert à
+     * un appelant qui doit savoir, <b>avant</b> de supprimer, si la pièce visée est la dernière
+     * (voir {@code ReglementPieceJointeService#supprimer}).
+     */
+    public long nombreDeFichiers(UUID porteurId) {
+        return summaryRepository.findByCategoryId(porteurId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
+                .count();
+    }
+
+    /**
      * URL présignée de téléchargement, bornée au porteur : un id de pièce appartenant à un autre
      * porteur donne 404, jamais le fichier d'autrui. {@code libellePorteur} n'entre que dans le
      * message d'erreur ("ce dossier", "ce règlement"…).
@@ -196,6 +207,73 @@ public class PieceJointeSupport {
         return new PieceJointeDto(entity.getId(), entity.getDescription(), entity.getCategory(),
                 Champs.de(type, AdmAttachedFileType::getDescription), entity.getExtension(),
                 entity.getUserCreateDateTime(), entity.getUserCreate());
+    }
+
+    /**
+     * Le fichier stocké de cette pièce, borné au porteur — ou 404. Deux échecs distincts, tous
+     * deux invisibles pour l'appelant : la pièce n'appartient pas à ce porteur (ou n'existe pas),
+     * ou elle n'a aucun objet stocké <b>vivant</b> (case de checklist jamais téléversée, ou pièce
+     * déjà supprimée logiquement).
+     *
+     * <p>Exposée séparément de {@link #supprimer} pour l'appelant qui doit intercaler une règle
+     * métier entre le contrôle d'existence et la suppression : sans elle, une pièce inconnue sur
+     * un règlement pointé donnerait 409 au lieu de 404.
+     */
+    public AppFileObject exigerFichier(UUID porteurId, UUID pieceId, String libellePorteur) {
+        fileRepository.findByIdAndCategoryId(pieceId, porteurId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Pièce jointe introuvable pour " + libellePorteur + ": " + pieceId));
+
+        return fileObjectRepository.findByAdmAttachedFileIdAndDeletedAtIsNull(pieceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucun fichier stocké pour cette pièce jointe: " + pieceId));
+    }
+
+    /**
+     * Suppression logique : {@code DeletedAt} + {@code DeletedBy} sur {@code AppFileObject}.
+     *
+     * <p><b>Deux choses ne sont volontairement pas faites ici.</b>
+     *
+     * <p>La ligne {@code AdmAttachedFile} <b>n'est pas supprimée</b> : elle porte les métadonnées
+     * et l'auteur du dépôt, et la faire disparaître rendrait la suppression intraçable. Elle
+     * bascule simplement à {@code hasFile = false} — la {@code @Formula} de
+     * {@link AdmAttachedFileSummary} teste {@code DeletedAt IS NULL} — donc invisible de
+     * {@link #lister} et de {@link #urlTelechargement} sans qu'aucun de ces deux chemins n'ait à
+     * connaître la suppression.
+     *
+     * <p>L'objet S3 <b>n'est pas supprimé</b>, ni maintenant ni après : un balayage hors ligne
+     * s'en charge ({@code FEATURE-s3-storage.md} §3.4). Le dépôt écrit le stockage avant la base
+     * précisément pour que la seule fuite possible soit un objet orphelin ; supprimer le binaire
+     * dans la transaction rouvrirait le cas inverse — une transaction annulée après un
+     * {@code DELETE} S3 laisserait une ligne pointant vers le vide, c'est-à-dire un 500 au
+     * téléchargement.
+     *
+     * <p><b>{@code saveAndFlush}, pas {@code save}</b> — et ce n'est pas une précaution
+     * décorative. {@code hasFile} est une {@link org.hibernate.annotations.Formula} : sa
+     * sous-requête sur {@code AppFileObject} est évaluée <b>par SQL Server</b> au chargement de
+     * {@link AdmAttachedFileSummary}. Hibernate ne voit dans cette formule qu'un fragment de SQL
+     * opaque, ignore donc que la liste dépend d'{@code AppFileObject}, et n'inclut pas cette table
+     * dans les espaces de requête qui déclenchent l'auto-flush. Sans le flush explicite, une
+     * lecture faite dans la même transaction que la suppression relit la ligne <i>d'avant</i> et
+     * la pièce supprimée réapparaît dans la liste. En production le cas ne se voit pas — une
+     * requête, une transaction — mais il est réel et permanent sous {@code @Transactional} côté
+     * test, et il le serait pour tout appelant qui enchaînerait suppression et relecture.
+     */
+    @Transactional
+    public void marquerSupprime(AppFileObject objet, AuthenticatedUser principal) {
+        objet.setDeletedAt(LocalDateTime.now());
+        objet.setDeletedBy(utilisateurAffiche.nom(principal));
+        fileObjectRepository.saveAndFlush(objet);
+    }
+
+    /**
+     * Cas courant : résout la pièce puis la marque supprimée. Équivaut à
+     * {@link #exigerFichier} suivi de {@link #marquerSupprime}.
+     */
+    @Transactional
+    public void supprimer(UUID porteurId, UUID pieceId, String libellePorteur,
+                          AuthenticatedUser principal) {
+        marquerSupprime(exigerFichier(porteurId, pieceId, libellePorteur), principal);
     }
 
     /**
