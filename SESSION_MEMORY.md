@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-08T22:30+01:00_
+_Last updated: 2026-09-08T23:15+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -13,7 +13,10 @@ fiabiliser la donnée qui le rend possible.
 |---|---|---|
 | 1 | Mail de confirmation de visite (adresse, conseiller, plans en pièce jointe) | **mergé** (PR #26, `e5a6d60`) |
 | 2 | Même confirmation par **WhatsApp** (UltraMsg) | **mergé** (PR #27, `c333609`) |
-| 3 | **Indicatif obligatoire** + formatage des numéros à l'écriture | branche `feat/indicatif-telephone` (`adbaac9`), **poussée, PR à merger** |
+| 3 | **Indicatif obligatoire** + formatage des numéros à l'écriture | **mergé** (PR #28, `4882122`) |
+
+Les trois sont dans `main`. Le prérequis données du chantier 3 est levé : le référentiel
+`AdmCountry` est à 44 indicatifs sur **les trois bases**.
 
 **632 tests verts** (573 en début de session).
 
@@ -72,7 +75,8 @@ fiabiliser la donnée qui le rend possible.
 | 35 | `yesRemsTest` : 4 colonnes manquantes, 28 tests en erreur | Contourné | Utiliser **`yesRemsCiCheck`** (voir Environment) |
 | 36 | PR #26 mergée avant le push du 2ᵉ commit → WhatsApp orphelin | **Fixed** | 2ᵉ PR (#27) sur la même branche |
 | 37 | `app.whatsapp.timeout-secondes` documenté mais appliqué nulle part | **Fixed** | Posé sur `SimpleClientHttpRequestFactory` |
-| 38 | Correction du référentiel `AdmCountry` vivant **seulement** dans `yesRemsProd` | **Open** | Sera écrasée à la prochaine synchro depuis le `.115` — script rejouable |
+| 38 | Correction du référentiel `AdmCountry` vivant seulement dans `yesRemsProd` | **Fixed** | Script appliqué le 08/09 sur **les trois bases** : `yesRemsProd`, `yesRemsDev` (VPS) et le **`.115`**. 40 → 44 indicatifs partout. Le `.115` étant la source, la synchro descendante propage désormais le correctif au lieu de l'effacer |
+| 39 | **`sync-vps-yesRemsDev.sql` ne transporte pas `AdmCountry`** — 11 tables vente seulement | **Open (par conception)** | Tout correctif de référentiel doit être joué **à la main** sur le VPS ; aucune synchro ne le descendra |
 | 32 | **VS Code retient les ports 9090 et 9091** → l'app ne démarre pas | **Open** | Ajouter `MANAGEMENT_SERVER_PORT=9092` à la run config |
 | 11 | Règlement `CANCELED` : `sumAmountByComDocumentId` ne filtre pas sur le statut | **Open** | Latent |
 | 12 | `POST /echeancier` sans `exclureDuPrix` | **Open** | Non corrigé |
@@ -169,8 +173,17 @@ fiabiliser la donnée qui le rend possible.
 - **`../creer-prospection-test-tsiory.sql`** — hors dépôt. Crée `PSN-TEST-TSIORY` /
   `TSIORY NAHOMA` (`hei.tsiory@gmail.com`), tranche ARS, article ARS0814 (a un plan).
   **Déjà appliqué sur `yesRemsProd`.** Bloc de nettoyage en fin de fichier.
-- **`../corriger-referentiel-indicatifs.sql`** — hors dépôt. Sénégal + 3 pays.
-  **Déjà appliqué sur `yesRemsProd`** (40 → 44 indicatifs). À porter sur le `.115`.
+- **`../corriger-referentiel-indicatifs.sql`** — hors dépôt. Sénégal + 3 pays. Idempotent,
+  ne touche que `AdmCountry`, aucune fiche client. **Appliqué le 08/09 sur les TROIS bases**
+  (`yesRemsProd`, `yesRemsDev`, `.115`) — 40 → 44 indicatifs partout, 24 fiches résiduelles
+  hors référentiel partout (le même chiffre des trois côtés confirme que les `CfgTier` sont
+  alignés). Accès VPS : tunnel SSH `127.0.0.1:1433`, compte `dev`, base `yesRemsDev`.
+  **Rollback** si besoin : `DELETE FROM AdmCountry WHERE ISOAlpha3 IN ('CIV','TUR','AFG')` +
+  remettre `PhoneCode = ''` sur `SEN` (repérables par `UserCreate/UserUpdate =
+  'script-referentiel-indicatifs'`).
+- **`../sync-vps-yesRemsDev.sql`** — la liste des tables synchronisées est en tête de boucle
+  (`@meta`, 11 tables du domaine vente). **`AdmCountry` n'en fait pas partie**, ni aucune
+  table `Adm*` : les référentiels ne descendent jamais vers le VPS.
 
 ---
 
@@ -194,13 +207,13 @@ fiabiliser la donnée qui le rend possible.
 
 ## ⏭️ Next Step
 
-> **Merger la PR de `feat/indicatif-telephone`** (`adbaac9`, 11 fichiers) :
-> https://github.com/TsioryRasoloarijaona/immo-back/compare/main...feat%2Findicatif-telephone?expand=1
+> **Faire le test manuel de bout en bout** (ci-dessous) : c'est la seule chose que les 632 tests
+> ne couvrent pas, et elle valide les trois chantiers d'un coup.
 >
-> Puis `node .claude/scripts/git-flow.mjs sync back`.
->
-> **Vérifier que le commit est bien dans `origin/main` après merge** — le piège s'est produit
-> cette session (bug #36) : `git log origin/main..origin/<branche>` doit être vide.
+> **Toujours `git fetch` avant de juger un merge.** Cette session a affirmé deux fois que la PR
+> #28 n'était pas mergée alors qu'elle l'était : `git log origin/main..origin/<branche>` lit une
+> référence *locale*, périmée tant qu'on n'a pas fetché. Le symptôme est indiscernable d'un vrai
+> oubli de merge (bug #36) — d'où l'erreur.
 
 ### Test manuel encore à faire
 - [ ] Relancer le backend **sur `main` mergé** avec `WP_TOKEN`/`WP_INSTANCE`, puis prendre un
@@ -212,9 +225,31 @@ fiabiliser la donnée qui le rend possible.
       `NUMERO_INEXPLOITABLE`. Pour un envoi réel :
       `UPDATE CfgTier SET MobileIndicatif='212' WHERE PKey='7C51013E-0001-4A00-9000-000000000001';`
 
+### État des branches après le nettoyage du 08/09
+
+Nettoyage fait **sur `immo-crm` seulement**, local + distant : 19 branches locales et 22 distantes
+dont le tip était déjà dans `origin/main`. `crm-prototype` n'a pas été touché.
+
+**Ce qui reste, et pourquoi** — trois branches portent du travail qui n'existe nulle part ailleurs :
+
+| Repo | Branche | Hors `main` | Remote |
+|---|---|---|---|
+| front | `refractor/best-practice` | **11 commits** — a11y, perf bundle/contextes, filtres+pagination dans l'URL | **supprimé** |
+| front | `feat/remise-dossier` | 3 commits | aucun |
+| back | `feat/remise-dossier` | 1 commit — remise en pourcentage | aucun |
+| back | `docs/memoire-de-session` | 2 commits | existe |
+
+⚠️ **`refractor/best-practice` (front) n'existe qu'en local** : son remote a été supprimé sans
+merge. Un `git clone` frais ou un poste différent ne l'a pas. À rouvrir ou à abandonner
+explicitement — pas à laisser pourrir.
+
+Le front a aussi **4 fichiers non commités** sur `refactor/indicatif-telephone` (branche non
+mergée) : c'est la contrepartie front du chantier 3, travail en cours.
+
 ### Backlog
-- [ ] **Porter la correction du référentiel sur le `.115`** (bug #38), sinon la synchro l'efface
-      et la validation se met à refuser le Sénégal.
+- [x] ~~Porter la correction du référentiel sur le `.115`~~ — **fait le 08/09** (bug #38 clos).
+      Les trois bases sont à 44 indicatifs ; le prérequis de la validation stricte est levé.
+- [ ] **Trancher le sort de `refractor/best-practice`** (front, 11 commits orphelins).
 - [ ] Relayer au dépôt frontend (autre lane), trois lots :
       **confirmation de visite** (endpoint de renvoi, réponse à **deux blocs** `email`/`whatsapp`) ;
       **indicatif** — **RUPTURE DE CONTRAT** : `POST`/`PATCH /api/prospects` renvoient 400 si un
