@@ -13,7 +13,15 @@ import java.util.UUID;
         + "prospection ou une fiche.")
 public record CreerInteractionRequest(
 
-        @Schema(description = "Texte libre décrivant l'interaction.", requiredMode = Schema.RequiredMode.REQUIRED)
+        // Le nom reste `description` alors qu'il alimente `note` en sortie : le renommer
+        // obligerait le frontend à bouger pour un gain cosmétique. L'asymétrie est assumée et
+        // documentée. Voir instructions/FIX-interaction-note.md §6.
+        @Schema(description = "Texte libre décrivant l'interaction — ce que le commercial a "
+                + "constaté ou fait. **Ressort dans le champ `note` de la réponse**, pas dans "
+                + "`description` : ce dernier est un libellé `JJ/MM/AAAA HH:MM <auteur>` généré "
+                + "par le serveur, que l'appelant ne peut pas imposer.",
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                example = "la cliente cherche 2 chambres et salon, rdv mercredi 10h")
         String description,
 
         @Schema(description = "true si l'interaction est entrante (l'appelant/le prospect a "

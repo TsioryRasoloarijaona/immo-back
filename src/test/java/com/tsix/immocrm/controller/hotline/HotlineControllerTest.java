@@ -76,7 +76,10 @@ class HotlineControllerTest {
         interaction.setId(UUID.randomUUID());
         interaction.setCfgTier(tier);
         interaction.setDocDate(LocalDateTime.now());
-        interaction.setDescription("Appel entrant test hotline");
+        // Fixture alignée sur la base réelle : le texte du commercial va dans AlertMessage,
+        // Description ne porte que le libellé « date + auteur ».
+        interaction.setAlertMessage("Appel entrant test hotline");
+        interaction.setDescription("08/09/2026 11:38 Testeur");
         interaction.setIsIn(true);
         actionMessageRepository.save(interaction);
 
@@ -89,7 +92,8 @@ class HotlineControllerTest {
                 .andExpect(jsonPath("$.fiches[0].dossiers.length()").value(1))
                 .andExpect(jsonPath("$.fiches[0].dossiers[0].code").value("DOS-HOTLINE-TEST"))
                 .andExpect(jsonPath("$.fiches[0].interactions.length()").value(1))
-                .andExpect(jsonPath("$.fiches[0].interactions[0].description").value("Appel entrant test hotline"));
+                .andExpect(jsonPath("$.fiches[0].interactions[0].note").value("Appel entrant test hotline"))
+                .andExpect(jsonPath("$.fiches[0].interactions[0].description").value("08/09/2026 11:38 Testeur"));
     }
 
     @Test

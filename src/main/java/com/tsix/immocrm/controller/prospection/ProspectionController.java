@@ -312,7 +312,12 @@ public class ProspectionController {
     @Operation(
             summary = "Journal des interactions d'une prospection",
             description = "Historique des interactions (appels, messages, notes, visites...) "
-                    + "loggées sur cette prospection, les plus récentes en premier."
+                    + "loggées sur cette prospection, les plus récentes en premier.\n\n"
+                    + "**Afficher `note`, pas `description`.** `note` porte le texte saisi par "
+                    + "le commercial. `description` est un libellé généré valant "
+                    + "`JJ/MM/AAAA HH:MM <auteur>` sur 100 % des lignes réelles — soit "
+                    + "exactement `date` + `employeNom`, déjà renvoyés séparément. Il n'est "
+                    + "conservé que pour ne rien casser."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Page d'interactions (peut être vide)."),
@@ -334,7 +339,16 @@ public class ProspectionController {
                     + "GET /api/referentiels/resultats-interaction. Si le résultat choisi est "
                     + "\"Rendez vous pris\", \"RDV reporté\" ou \"Le prospect veut faire une "
                     + "visite du projet\", `dateRdv` devient obligatoire et une entrée "
-                    + "calendrier est créée, visible ensuite via GET /api/calendrier/evenements."
+                    + "calendrier est créée, visible ensuite via GET /api/calendrier/evenements.\n\n"
+                    + "**Le corps de requête ne change pas** : `description` reste le champ "
+                    + "d'entrée et reste obligatoire. Seule sa destination en base a été "
+                    + "corrigée — il alimente désormais le champ `note` de la réponse, et non "
+                    + "plus le libellé. Le libellé `description` de la réponse est **généré par "
+                    + "le serveur** (`JJ/MM/AAAA HH:MM <auteur>`) et ne peut pas être imposé : "
+                    + "c'est ce qui rend les interactions créées ici indiscernables de celles "
+                    + "de l'application de bureau.\n\n"
+                    + "L'**auteur** est déduit du jeton d'authentification, jamais du corps : "
+                    + "le laisser choisir fausserait les KPI de performance commerciale."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Interaction créée."),
