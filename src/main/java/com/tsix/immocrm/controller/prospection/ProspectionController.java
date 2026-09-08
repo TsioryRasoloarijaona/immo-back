@@ -26,7 +26,9 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.ProspectionProfilDto;
 import com.tsix.immocrm.dto.prospection.ProspectionTypeBienDto;
 import com.tsix.immocrm.dto.prospection.ProspectionVilleDto;
+import com.tsix.immocrm.dto.prospection.ResultatEnvoiVisiteDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
+import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
 import com.tsix.immocrm.services.prospection.DevisService;
 import com.tsix.immocrm.services.prospection.NdaService;
 import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
@@ -111,6 +113,7 @@ public class ProspectionController {
     private final NdaPdfRenderer ndaPdfRenderer;
     private final ProspectionFicheService prospectionFicheService;
     private final ProspectionFichePdfRenderer prospectionFichePdfRenderer;
+    private final ConfirmationVisiteService confirmationVisiteService;
 
     public ProspectionController(ProspectionService prospectionService,
                                   ProspectionQualificationService qualificationService,
@@ -120,7 +123,9 @@ public class ProspectionController {
                                   NdaService ndaService,
                                   NdaPdfRenderer ndaPdfRenderer,
                                   ProspectionFicheService prospectionFicheService,
-                                  ProspectionFichePdfRenderer prospectionFichePdfRenderer) {
+                                  ProspectionFichePdfRenderer prospectionFichePdfRenderer,
+                                  ConfirmationVisiteService confirmationVisiteService) {
+        this.confirmationVisiteService = confirmationVisiteService;
         this.prospectionService = prospectionService;
         this.qualificationService = qualificationService;
         this.devisService = devisService;
@@ -340,6 +345,14 @@ public class ProspectionController {
                     + "\"Rendez vous pris\", \"RDV reporté\" ou \"Le prospect veut faire une "
                     + "visite du projet\", `dateRdv` devient obligatoire et une entrée "
                     + "calendrier est créée, visible ensuite via GET /api/calendrier/evenements.\n\n"
+                    + "**Un email de confirmation part alors automatiquement au prospect** "
+                    + "(date, heure, adresse du projet, conseiller, et les plans quand nous en "
+                    + "avons). L'envoi a lieu après validation de la transaction et hors du temps "
+                    + "de réponse : il ne peut ni retarder ni faire échouer cet appel, et la "
+                    + "réponse ne dit pas s'il a abouti. Il n'a pas lieu si le prospect n'a "
+                    + "aucune adresse email — c'est le cas de **43 %** des prises de rendez-vous. "
+                    + "Pour connaître l'issue, ou pour renvoyer après avoir saisi l'adresse, "
+                    + "voir POST /api/prospections/{id}/interactions/{interactionId}/email-visite.\n\n"
                     + "**Le corps de requête ne change pas** : `description` reste le champ "
                     + "d'entrée et reste obligatoire. Seule sa destination en base a été "
                     + "corrigée — il alimente désormais le champ `note` de la réponse, et non "
@@ -361,6 +374,46 @@ public class ProspectionController {
             @Parameter(description = "Id de la prospection.") @PathVariable UUID id,
             @RequestBody CreerInteractionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.addInteraction(id, request));
+    }
+
+    @PostMapping("/{id}/interactions/{interactionId}/email-visite")
+    @Operation(
+            summary = "Renvoie au prospect l'email de confirmation de sa visite",
+            description = "Réexpédie la confirmation déjà envoyée automatiquement à la création de "
+                    + "l'interaction. Deux usages : le prospect n'avait pas d'adresse email au "
+                    + "moment de la prise de rendez-vous et vient d'en fournir une, ou il déclare "
+                    + "n'avoir rien reçu.\n\n"
+                    + "Le contenu est **recalculé à chaque appel**, jamais rejoué : une adresse de "
+                    + "projet corrigée ou un plan déposé depuis la prise de rendez-vous seront donc "
+                    + "bien dans le message renvoyé.\n\n"
+                    + "**Un envoi qui n'a pas lieu n'est pas une erreur.** Un prospect sans adresse "
+                    + "exploitable donne **200** avec `envoye = false` et `motif = "
+                    + "DESTINATAIRE_ABSENT` : le commercial doit voir pourquoi rien n'est parti, ce "
+                    + "qu'un code 4xx ne dirait pas. Seuls l'introuvable (404) et l'interaction qui "
+                    + "ne planifie aucun rendez-vous (409) sont des erreurs.\n\n"
+                    + "**Contenu du message** : date et heure du rendez-vous, projet visité, "
+                    + "adresse (celle de la tranche si elle est renseignée, sinon celle du projet — "
+                    + "le bloc est omis plutôt qu'approximatif quand la donnée n'est pas "
+                    + "exploitable), nom et mobile du conseiller, et les plans en pièce jointe. Les "
+                    + "plans sont ceux du lot lorsqu'il est connu — ce qui n'est le cas que dans "
+                    + "**3 %** des prises de rendez-vous — sinon ceux déposés au niveau du projet. "
+                    + "`nombrePiecesJointes = 0` est donc la valeur normale aujourd'hui."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tentative effectuée — lire `envoye` "
+                    + "et `motif` pour en connaître l'issue."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, "
+                    + "prospection hors du périmètre commercial de l'appelant, ou interaction "
+                    + "inconnue / rattachée à une autre prospection."),
+            @ApiResponse(responseCode = "409", description = "Cette interaction ne planifie aucun "
+                    + "rendez-vous : il n'y a rien à confirmer.")
+    })
+    public ResultatEnvoiVisiteDto renvoyerEmailVisite(
+            @Parameter(description = "Id de la prospection.") @PathVariable UUID id,
+            @Parameter(description = "Id de l'interaction portant le rendez-vous — celle dont le "
+                    + "résultat vaut \"Rendez vous pris\", \"RDV reporté\" ou \"Le prospect veut "
+                    + "faire une visite du projet\".") @PathVariable UUID interactionId) {
+        return confirmationVisiteService.renvoyer(id, interactionId);
     }
 
     // -- GAP-04: qualification sub-resources --

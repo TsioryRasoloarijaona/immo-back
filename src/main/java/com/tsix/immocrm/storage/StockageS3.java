@@ -72,6 +72,15 @@ public class StockageS3 implements StockageFichiers {
     }
 
     @Override
+    public byte[] lire(String cle) {
+        return client.getObjectAsBytes(GetObjectRequest.builder()
+                        .bucket(properties.getBucket())
+                        .key(cle)
+                        .build())
+                .asByteArray();
+    }
+
+    @Override
     public void supprimer(String cle) {
         client.deleteObject(DeleteObjectRequest.builder()
                 .bucket(properties.getBucket())

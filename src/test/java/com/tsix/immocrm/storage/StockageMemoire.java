@@ -41,8 +41,24 @@ public class StockageMemoire implements StockageFichiers {
     }
 
     @Override
+    public byte[] lire(String cle) {
+        byte[] contenu = objets.get(cle);
+        if (contenu == null) {
+            // Même forme d'échec que S3 (NoSuchKey) : les appelants qui prétendent survivre à
+            // un objet manquant doivent le prouver contre une exception, pas contre un null.
+            throw new IllegalStateException("Aucun objet stocké sous la clé " + cle);
+        }
+        return contenu.clone();
+    }
+
+    @Override
     public void supprimer(String cle) {
         objets.remove(cle);
+    }
+
+    /** Dépose un contenu sans passer par {@link #deposer} — pour armer un test de lecture. */
+    public void injecter(String cle, byte[] contenu) {
+        objets.put(cle, contenu.clone());
     }
 
     /** Contenu déposé sous cette clé, {@code null} si absent — pour les assertions de test. */

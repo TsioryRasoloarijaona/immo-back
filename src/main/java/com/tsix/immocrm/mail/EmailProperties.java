@@ -39,6 +39,16 @@ public class EmailProperties {
      */
     private String urlApplication;
 
+    /**
+     * Taille cumulée maximale des pièces jointes d'un message, en mégaoctets.
+     *
+     * <p>Calibré sur les fichiers réels : un {@code PLAN_ETAGE} pèse 4,6 Mo en moyenne et jusqu'à
+     * 5 Mo, un {@code PLAN} 1,5 Mo. Dix mégaoctets laissent donc passer deux plans d'étage ou six
+     * plans ordinaires, tout en restant sous les limites usuelles des boîtes destinataires — un
+     * message trop lourd n'est pas rejeté chez nous mais chez le client, silencieusement.
+     */
+    private int piecesJointesMaxMo = 10;
+
     public boolean isActif() {
         return actif;
     }
@@ -69,5 +79,18 @@ public class EmailProperties {
 
     public void setUrlApplication(String urlApplication) {
         this.urlApplication = urlApplication;
+    }
+
+    public int getPiecesJointesMaxMo() {
+        return piecesJointesMaxMo;
+    }
+
+    public void setPiecesJointesMaxMo(int piecesJointesMaxMo) {
+        this.piecesJointesMaxMo = piecesJointesMaxMo;
+    }
+
+    /** Le plafond de {@link #getPiecesJointesMaxMo()} exprimé en octets. */
+    public long piecesJointesMaxOctets() {
+        return (long) piecesJointesMaxMo * 1024L * 1024L;
     }
 }

@@ -3,6 +3,7 @@ package com.tsix.immocrm.mail;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -122,15 +123,26 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
                 aide.setText(html, true);
             }
 
+            // Les pièces sont ajoutées APRÈS le corps : MimeMessageHelper construit la structure
+            // multipart à la première écriture de texte, et une pièce ajoutée avant se
+            // retrouverait dans la partie « alternative » au lieu de la partie « mixed » —
+            // certains clients ne l'afficheraient alors pas du tout.
+            for (PieceJointeEmail piece : message.piecesJointes()) {
+                aide.addAttachment(piece.nom(),
+                        new ByteArrayResource(piece.contenu()), piece.contentType());
+            }
+
             expedieur.send(mime);
-            log.info("Email envoyé : sujet « {} », destinataire {}.",
-                    message.sujet(), AdresseMasquee.de(message.destinataire()));
+            log.info("Email envoyé : sujet « {} », destinataire {}, {} pièce(s) jointe(s).",
+                    message.sujet(), AdresseMasquee.de(message.destinataire()),
+                    message.piecesJointes().size());
         } catch (Exception e) {
             // Volontairement large et volontairement avalée : cette méthode est appelée depuis
             // un écouteur @Async exécuté après commit. Propager n'annulerait rien et ferait
             // seulement disparaître la trace dans l'exécuteur.
-            log.error("Échec de l'envoi d'email : sujet « {} », destinataire {}. "
-                            + "Le mot de passe reste disponible dans la réponse HTTP de l'appel d'origine.",
+            log.error("Échec de l'envoi d'email : sujet « {} », destinataire {}. L'appel d'origine "
+                            + "n'est pas affecté : un mot de passe temporaire reste dans sa réponse "
+                            + "HTTP, une confirmation de visite est renvoyable depuis la prospection.",
                     message.sujet(), AdresseMasquee.de(message.destinataire()), e);
         }
     }
