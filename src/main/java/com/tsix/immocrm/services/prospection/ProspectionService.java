@@ -31,6 +31,7 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.mail.VisiteEffectuee;
 import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
@@ -89,6 +90,16 @@ public class ProspectionService {
      */
     private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
+
+    /**
+     * {@code ComProspectionKind.Code} de l'étape qui déclenche le remerciement d'après-visite —
+     * voir {@code instructions/FEATURE-offre-apres-visite.md}.
+     *
+     * <p>C'est bien l'étape et non un résultat d'interaction : sur les 44 152 interactions réelles,
+     * les résultats {@code Réalisée} et {@code Non réalisée} comptent <b>zéro</b> ligne. 1 266
+     * prospections portent cette étape, dont 99,7 % joignables sur WhatsApp.
+     */
+    static final String ETAPE_APRES_VISITE = "4 APRES VISITES";
 
     /**
      * Format du libellé {@code ComActionMessage.Description}, repris à l'identique de
@@ -488,6 +499,10 @@ public class ProspectionService {
     /**
      * {@code PATCH /api/prospections/{id}/etape}: changes {@code ComProspectionKindId}
      * ("Nature"). Only membership is validated — no transition table.
+     *
+     * <p>Le passage à {@link #ETAPE_APRES_VISITE} publie {@link VisiteEffectuee}, qui déclenche le
+     * remerciement au prospect après commit. Aucune règle métier n'est ajoutée ici : le
+     * changement d'étape reste libre, seule sa valeur d'arrivée est observée.
      */
     @Transactional
     public ProspectionDetailDto changerEtape(UUID id, ChangerEtapeRequest request) {
@@ -502,7 +517,23 @@ public class ProspectionService {
         if (request.note() != null) {
             prospection.setNotes(request.note());
         }
-        return toDetail(prospectionRepository.save(prospection));
+        ComProspection enregistree = prospectionRepository.save(prospection);
+
+        // La livraison n'a lieu qu'après commit : une étape annulée ne remercie personne.
+        if (estEtapeApresVisite(kind)) {
+            publisher.publishEvent(new VisiteEffectuee(enregistree.getId()));
+        }
+        return toDetail(enregistree);
+    }
+
+    /**
+     * Le libellé d'étape, comparé sans casse ni espaces de bord. Ce n'est pas de la prudence
+     * gratuite : le référentiel voisin des résultats porte des valeurs réellement suffixées d'un
+     * espace ({@code "Numéro erroné "}), et une égalité stricte y serait silencieusement fausse.
+     */
+    private static boolean estEtapeApresVisite(ComProspectionKind kind) {
+        return kind != null && kind.getCode() != null
+                && ETAPE_APRES_VISITE.equalsIgnoreCase(kind.getCode().trim());
     }
 
     /**
