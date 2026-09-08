@@ -73,9 +73,21 @@ L'hôte, le port et les identifiants passent par les propriétés **natives de S
 (`spring.mail.*`), pas par des propriétés maison — `JavaMailSender` est autoconfiguré à
 partir d'elles.
 
+> **Le serveur SMTP n'est PAS celui de Hostinger.** Vérifié le 08/09/2026 par un envoi réel :
+> la boîte `n.tsiory@ayaddeveloppement.com` est facturée par Hostinger mais **hébergée par
+> Titan**, que Hostinger revend. Les MX du domaine le disent (`mx1.titan.email`,
+> `mx2.titan.email`) et le SPF aussi (`include:spf.titan.email`). Contre
+> `smtp.hostinger.com`, des identifiants pourtant valides sont rejetés en
+> `535 5.7.8 authentication failed` — l'erreur ne dit pas que le serveur est le mauvais, elle
+> ressemble à un mot de passe faux, et c'est ce qui rend le piège coûteux.
+>
+> **`MAIL_FROM` est facultatif** : à défaut, l'expéditeur retombe sur `MAIL_USERNAME`. Titan
+> impose que l'expéditeur soit la boîte authentifiée, les deux ne peuvent donc pas diverger, et
+> exiger la variable en plus ne faisait qu'ajouter quelque chose à oublier — ce qui est arrivé.
+
 ```properties
-# --- Envoi d'email (SMTP Hostinger) ---
-spring.mail.host=${MAIL_HOST:smtp.hostinger.com}
+# --- Envoi d'email (SMTP Titan, revendu par Hostinger) ---
+spring.mail.host=${MAIL_HOST:smtp.titan.email}
 spring.mail.port=${MAIL_PORT:587}
 spring.mail.username=${MAIL_USERNAME:}
 spring.mail.password=${MAIL_PASSWORD:}
