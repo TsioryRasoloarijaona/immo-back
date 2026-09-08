@@ -20,10 +20,23 @@ public record CreerEmployeResponse(
         @Schema(description = "Codes AdmRole assignés au compte.")
         List<String> roles,
 
-        @Schema(description = "Mot de passe temporaire généré, à communiquer à l'employé par un "
-                + "canal hors-bande (jamais renvoyé une seconde fois — ni stocké en clair côté "
+        @Schema(description = "Mot de passe temporaire généré, envoyé par email à l'employé et "
+                + "renvoyé ici une seule fois (jamais une seconde, ni stocké en clair côté "
                 + "serveur). Le compte devra le changer dès sa première connexion "
-                + "(mustChangePassword=true).")
-        String motDePasseTemporaire
+                + "(mustChangePassword=true). **À continuer d'afficher à l'administrateur** : "
+                + "l'envoi du mail est asynchrone et peut échouer, ce champ est le filet.")
+        String motDePasseTemporaire,
+
+        @Schema(description = "L'envoi du mail a été **déclenché**. L'expédition étant "
+                + "asynchrone, `true` ne prouve pas la remise — seulement qu'aucun obstacle "
+                + "n'a été rencontré côté serveur. `false` signifie que le service d'envoi est "
+                + "inactif (configuration SMTP absente ou incomplète) : le mot de passe doit "
+                + "alors être communiqué à la main.",
+                example = "true")
+        boolean emailEnvoye,
+
+        @Schema(description = "Adresse de destination, masquée — permet de vérifier d'un coup "
+                + "d'œil que le message part au bon endroit.", example = "j***@exemple.ma")
+        String destinataire
 ) {
 }

@@ -72,17 +72,28 @@ class UtilisateurAdminControllerTest {
     }
 
     private AdmUser newUser(String username) {
+        return newUser(username, null);
+    }
+
+    /**
+     * Depuis FEATURE-service-envoi-email, la réinitialisation exige une adresse et refuse le
+     * compte en 400 sans elle — les tests qui attendent un succès doivent donc en fournir une.
+     * Les autres (403, 404, listing) continuent d'utiliser {@link #newUser(String)} sans email :
+     * c'est le cas majoritaire en base et il doit rester représenté.
+     */
+    private AdmUser newUser(String username, String email) {
         AdmUser user = new AdmUser();
         user.setId(UUID.randomUUID());
         user.setCode(username);
         user.setDisabled(false);
+        user.setEmail(email);
         return userRepository.save(user);
     }
 
     @Test
     @WithMockUser(roles = "Administrateur")
     void reinitialiser_accountWithNoPriorCredential_createsOneAndReturnsTempPassword() throws Exception {
-        AdmUser user = newUser("test.admin-reset.new." + UUID.randomUUID());
+        AdmUser user = newUser("test.admin-reset.new." + UUID.randomUUID(), "reset.new@example.com");
 
         MvcResult result = mockMvc.perform(post("/api/utilisateurs/{id}/reinitialiser-mot-de-passe", user.getId()))
                 .andExpect(status().isOk())
@@ -103,7 +114,7 @@ class UtilisateurAdminControllerTest {
     @Test
     @WithMockUser(roles = "Administrateur")
     void reinitialiser_existingCredential_bumpsTokenVersionAndResetsFlag() throws Exception {
-        AdmUser user = newUser("test.admin-reset.existing." + UUID.randomUUID());
+        AdmUser user = newUser("test.admin-reset.existing." + UUID.randomUUID(), "reset.existing@example.com");
         AppUserCredential credential = new AppUserCredential();
         credential.setId(UUID.randomUUID());
         credential.setAdmUser(user);

@@ -42,6 +42,13 @@ class ActuatorSecuriteTest {
     @Autowired
     private MockMvc mockMvc;
 
+    /**
+     * Ce test est aussi le garde-fou de {@code management.health.mail.enabled=false}.
+     * {@code spring-boot-starter-mail} enregistre un {@code MailHealthIndicator} qui ouvre une
+     * connexion SMTP à chaque appel : retirer cette propriété fait répondre {@code 503} ici au
+     * bout de sept secondes, et en production ferait échouer la sonde de déploiement dès que la
+     * boîte Hostinger est injoignable. Voir {@code FEATURE-service-envoi-email.md}.
+     */
     @Test
     void health_estPublic_etNeDivulgueQueLeStatut() throws Exception {
         mockMvc.perform(get("/actuator/health"))

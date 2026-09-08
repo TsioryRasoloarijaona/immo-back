@@ -1,0 +1,115 @@
+package com.tsix.immocrm.mail;
+
+import jakarta.mail.internet.MimeMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.thymeleaf.ITemplateEngine;
+import org.thymeleaf.context.Context;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+
+/**
+ * Implémentation SMTP du port {@link EnvoiEmail} : rend le template Thymeleaf puis remet le
+ * message à {@code JavaMailSender} (configuré par les {@code spring.mail.*}).
+ *
+ * <p><b>Cette classe n'échoue jamais vers l'appelant.</b> Voir {@link EnvoiEmail#envoyer}.
+ */
+@Component
+public class EnvoiEmailSmtp implements EnvoiEmail {
+
+    private static final Logger log = LoggerFactory.getLogger(EnvoiEmailSmtp.class);
+
+    private final JavaMailSender expedieur;
+    private final ITemplateEngine moteurTemplate;
+    private final EmailProperties properties;
+
+    /**
+     * Calculé une fois au démarrage plutôt qu'à chaque envoi : une configuration incomplète
+     * doit se voir dans le journal de démarrage, pas seulement le jour où un administrateur
+     * crée un employé et croit que le mail est parti.
+     */
+    private final boolean actif;
+
+    public EnvoiEmailSmtp(JavaMailSender expedieur, ITemplateEngine moteurTemplate,
+                          EmailProperties properties) {
+        this.expedieur = expedieur;
+        this.moteurTemplate = moteurTemplate;
+        this.properties = properties;
+        this.actif = determinerActivite(expedieur, properties);
+    }
+
+    /**
+     * Le service n'est réellement actif que si l'interrupteur est levé <b>et</b> que les trois
+     * éléments sans lesquels aucun message ne peut partir sont renseignés : le serveur, le
+     * compte SMTP, et l'adresse d'expédition.
+     */
+    private static boolean determinerActivite(JavaMailSender expedieur, EmailProperties properties) {
+        if (!properties.isActif()) {
+            log.info("Envoi d'email désactivé (app.mail.actif=false) : les messages seront ignorés.");
+            return false;
+        }
+        if (!StringUtils.hasText(properties.getExpediteur())) {
+            log.warn("Envoi d'email INACTIF : app.mail.expediteur est vide (variable MAIL_FROM). "
+                    + "Les mots de passe temporaires devront être communiqués à la main.");
+            return false;
+        }
+        if (expedieur instanceof JavaMailSenderImpl impl
+                && (!StringUtils.hasText(impl.getHost()) || !StringUtils.hasText(impl.getUsername()))) {
+            log.warn("Envoi d'email INACTIF : configuration SMTP incomplète (spring.mail.host / "
+                    + "spring.mail.username, variables MAIL_HOST / MAIL_USERNAME). "
+                    + "Les mots de passe temporaires devront être communiqués à la main.");
+            return false;
+        }
+        log.info("Envoi d'email actif, expéditeur {}.", properties.getExpediteur());
+        return true;
+    }
+
+    @Override
+    public boolean estActif() {
+        return actif;
+    }
+
+    @Override
+    public void envoyer(MessageEmail message) {
+        if (!actif) {
+            log.info("Envoi d'email ignoré (service inactif) : sujet « {} ».", message.sujet());
+            return;
+        }
+        try {
+            MimeMessage mime = expedieur.createMimeMessage();
+            // multipart=true : indispensable pour joindre l'alternative texte au HTML.
+            MimeMessageHelper aide = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
+            aide.setFrom(properties.getExpediteur(), properties.getNomExpediteur());
+            aide.setTo(message.destinataire());
+            aide.setSubject(message.sujet());
+
+            Context contexte = new Context(Locale.FRENCH, message.variables());
+            String html = moteurTemplate.process(message.template(), contexte);
+
+            if (StringUtils.hasText(message.corpsTexte())) {
+                // L'ordre des arguments porte le sens : texte d'abord, HTML ensuite. Le client
+                // affiche la DERNIÈRE alternative qu'il sait rendre.
+                aide.setText(message.corpsTexte(), html);
+            } else {
+                aide.setText(html, true);
+            }
+
+            expedieur.send(mime);
+            log.info("Email envoyé : sujet « {} », destinataire {}.",
+                    message.sujet(), AdresseMasquee.de(message.destinataire()));
+        } catch (Exception e) {
+            // Volontairement large et volontairement avalée : cette méthode est appelée depuis
+            // un écouteur @Async exécuté après commit. Propager n'annulerait rien et ferait
+            // seulement disparaître la trace dans l'exécuteur.
+            log.error("Échec de l'envoi d'email : sujet « {} », destinataire {}. "
+                            + "Le mot de passe reste disponible dans la réponse HTTP de l'appel d'origine.",
+                    message.sujet(), AdresseMasquee.de(message.destinataire()), e);
+        }
+    }
+}
