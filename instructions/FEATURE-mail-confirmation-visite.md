@@ -10,13 +10,17 @@
 ## 1. Objet
 
 Quand un commercial enregistre une interaction dont le résultat planifie un rendez-vous, le
-prospect reçoit automatiquement un email de confirmation : la date et l'heure, l'adresse du
-projet, le commercial qui l'accueille, ce qu'il doit prévoir, et le ou les plans si nous en
-avons.
+prospect reçoit automatiquement une confirmation : la date et l'heure, l'adresse du projet, le
+commercial qui l'accueille, ce qu'il doit prévoir, et le ou les plans si nous en avons.
 
-Le canal est l'email seul. Le WhatsApp est envisagé plus tard : la **construction du contenu**
-est donc séparée de son **acheminement**, pour qu'un second canal se branche sans réécrire les
-règles de résolution.
+**Deux canaux, email et WhatsApp**, tentés indépendamment l'un de l'autre. La construction du
+contenu est séparée de son acheminement — un `ContenuVisite` résolu une fois, mis en forme
+ensuite par chaque canal — de sorte que les règles R1 à R7 ne puissent diverger ni entre les
+canaux, ni entre l'envoi automatique et le renvoi manuel.
+
+> **Historique.** Le WhatsApp a été ajouté après coup, dans la même branche. La séparation
+> annoncée ici l'était par anticipation ; elle a effectivement suffi — l'ajout du second canal
+> n'a modifié aucune règle de résolution, seulement leur mise en forme.
 
 ---
 
@@ -141,6 +145,73 @@ doit pas priver le client de l'adresse et de l'heure de son rendez-vous.
 
 ---
 
+## 4 bis. Le canal WhatsApp (UltraMsg)
+
+**C'est le canal majoritaire, pas le canal d'appoint.** Mesuré sur la même population de
+5 079 prospections avec rendez-vous :
+
+| | Email | WhatsApp |
+|---|---|---|
+| Destinataire exploitable | **2 910 (57 %)** | **5 027 (99 %)** |
+| Peut porter les plans | oui | non |
+
+C'est cet écart qui a décidé la conception : les deux canaux partent **ensemble et
+indépendamment**. Ne déclencher le WhatsApp qu'en l'absence d'email priverait du canal le plus
+lu la moitié des prospects qui en disposent ; le réserver aux seuls sans-email n'économiserait
+rien puisque le coût est le même.
+
+**W1 — Le numéro.** `CfgTier.MobileIndicatif` porte l'indicatif sans le `+` (« 212 » sur
+14 078 tiers, « 33 » sur 225), `CfgTier.Mobile` le numéro national espacé sans zéro initial
+(`"6 61 22 48 57"`). Le format international se compose donc par simple concaténation, une fois
+les espaces retirés — **aucune ligne réelle ne contient d'autre caractère parasite**, ni tiret,
+ni point, ni parenthèse.
+
+Un numéro est retenu s'il fait exactement **9 chiffres et commence par 6 ou 7** (mobile marocain
+comme français). Sur 5 070 fiches portant un mobile, **5 027 passent** ; les 43 refus se
+répartissent en 24 longueurs anormales (`"000000"`, saisies tronquées), 19 fixes
+(`"5 22 27 34 96"`) et 1 sans indicatif. Un fixe est refusé **en amont** plutôt que tenté :
+UltraMsg l'accepterait puis échouerait à la livraison, ou pire l'enverrait à un inconnu si le
+numéro a été réattribué — un refus tracé se corrige dans la fiche, un échec côté API ne se voit
+que dans un journal.
+
+**W2 — Pas de repli sur `ComProspection.TempTel`**, contrairement à l'email. Deux raisons, une
+mesurée et une de principe : le mobile de la fiche couvre déjà 5 070 des 5 079 prospections, si
+bien que le repli en apporterait **huit** ; et `TempTel` ne porte pas d'indicatif, ce qui
+obligerait à supposer le Maroc — supposition qui, sur les 225 tiers d'indicatif « 33 »,
+enverrait le message à un inconnu. Huit prospections ne valent pas ce risque.
+
+**W3 — Pas de pièce jointe.** L'envoi d'un document par UltraMsg passe par un autre endpoint qui
+exige une **URL publique**, or les URL du stockage expirent en quinze minutes (voir
+`StockageProperties.presignMinutes`). Le message WhatsApp ne mentionne donc pas les plans :
+annoncer une pièce jointe absente serait pire que se taire. Les plans restent au mail tant que
+la question du lien longue durée n'est pas tranchée — c'est le même arbitrage que celui posé au
+début de cette feature, et il reste ouvert.
+
+**W4 — Un refus d'UltraMsg n'est pas un succès.** L'API répond **200 même pour un refus**, en
+plaçant le motif dans le corps JSON (`"sent":"true"` pour un succès). Se fier au seul code HTTP
+ferait passer tous les refus pour des envois réussis, et le champ `envoye` mentirait au
+commercial. C'est pourquoi `EnvoiWhatsApp.envoyer` **renvoie un booléen** là où
+`EnvoiEmail.envoyer` ne renvoie rien : remettre un message à un SMTP ne dit rien de sa
+livraison, alors qu'UltraMsg répond synchroniquement — l'information existe, la jeter par souci
+de symétrie serait dommage.
+
+**W5 — Configuration.** `WP_TOKEN` (secret, sans valeur par défaut, service inactif s'il
+manque), `WP_INSTANCE` (non secret mais variable entre compte d'essai et production),
+`WP_URL`, `WP_ENABLED`. Même convention que le mail : une valeur par défaut vide plutôt qu'une
+propriété obligatoire, sans quoi les 611 tests qui bootent le contexte échoueraient sur une
+variable d'environnement absente — un échec qui ressemblerait à un bug de code.
+
+> **Pas de nouvelle dépendance.** L'appel se fait avec `RestClient` (déjà présent via
+> `spring-boot-starter-webmvc`), pas avec OkHttp : le besoin est un POST de formulaire et la
+> lecture d'une réponse, et deux piles HTTP dans le même processus pour une capacité identique
+> ne se justifiaient pas. **Piège rencontré** : Spring Boot 4 avec `starter-webmvc`
+> n'autoconfigure **pas** de bean `RestClient.Builder` — le contexte refusait de démarrer. Le
+> client est donc construit à la main, ce qui permet au passage de poser réellement les délais
+> de connexion et de lecture (10 s), indispensables puisque l'appel occupe un fil du pool
+> `mailExecutor` partagé avec les emails.
+
+---
+
 ## 5. Endpoint de renvoi
 
 ```
@@ -163,27 +234,42 @@ Pour l'adresse email saisie après le rendez-vous, ou le client qui n'a rien re�
 > un aurait été redondant. Ce qui est vérifié en propre, en revanche, c'est l'appartenance de
 > l'interaction à la prospection nommée — sans quoi la route permettrait de faire expédier le
 > rendez-vous d'autrui par énumération.
-- **200** — `ResultatEnvoiVisiteDto` :
+- **200** — `ResultatEnvoiVisiteDto`, **un bloc par canal** :
 
-| Champ | Sens |
-|---|---|
-| `envoye` | `false` si le service mail est inactif ou si R1 n'a rien donné |
-| `motif` | `ENVOYE`, `DESTINATAIRE_ABSENT`, `SERVICE_INACTIF` |
-| `destinataire` | adresse retenue, `null` si aucune |
-| `nombrePiecesJointes` | plans effectivement joints |
+```json
+{ "envoye": true,
+  "email":    { "envoye": true,  "motif": "ENVOYE", "destinataire": "a@exemple.ma", "nombrePiecesJointes": 1 },
+  "whatsapp": { "envoye": false, "motif": "NUMERO_INEXPLOITABLE", "destinataire": null, "nombrePiecesJointes": 0 } }
+```
 
-L'absence d'email du prospect rend **200 avec `envoye = false`**, pas une erreur : le commercial
-doit voir *pourquoi* rien n'est parti, ce qu'un 4xx générique ne dit pas. Même convention que
+`envoye` de premier niveau vaut vrai dès qu'**au moins un** canal a abouti — la seule lecture
+utile pour un affichage binaire « prévenu / pas prévenu ». Motifs : `ENVOYE`,
+`DESTINATAIRE_ABSENT`, `NUMERO_INEXPLOITABLE`, `SERVICE_INACTIF`, `ECHEC_ENVOI`.
+
+`DESTINATAIRE_ABSENT` et `NUMERO_INEXPLOITABLE` sont distincts parce que l'action corrective
+diffère : le premier demande d'obtenir une coordonnée, le second d'en réparer une déjà saisie
+(43 cas réels).
+
+L'absence de coordonnée rend **200 avec `envoye = false`**, pas une erreur : le commercial doit
+voir *pourquoi* rien n'est parti, ce qu'un 4xx générique ne dit pas. Même convention que
 `emailEnvoye` sur la création de compte.
+
+> **Forme modifiée en cours de branche.** La première version rendait
+> `{ envoye, motif, destinataire, nombrePiecesJointes }` à plat. L'ajout du second canal l'a
+> rendue insuffisante — un seul `motif` ne peut pas décrire deux issues. Sans conséquence : la
+> branche n'était pas encore mergée et aucun appelant frontend n'existait.
 
 ---
 
 ## 6. Impact front (à relayer, pas à traiter ici)
 
-- Nouvel endpoint de renvoi ci-dessus, à câbler sur la fiche prospection.
-- L'email du prospect devient **fonctionnellement porteur** : 43 % des rendez-vous ne
-  déclenchent aucun envoi faute d'adresse. Un indicateur au moment de la prise de rendez-vous
-  serait le levier le plus rentable de cette fonctionnalité.
+- Nouvel endpoint de renvoi ci-dessus, à câbler sur la fiche prospection. Sa réponse porte
+  **deux blocs** (`email`, `whatsapp`) : afficher les deux, sans quoi un « non envoyé » sera
+  incompréhensible alors que l'autre canal a fonctionné.
+- L'email et le mobile du prospect deviennent **fonctionnellement porteurs**. Le mobile l'est
+  déjà à 99 % ; c'est l'email qui manque, sur 43 % des rendez-vous. Un indicateur au moment de
+  la prise de rendez-vous reste le levier le plus rentable — mais moins critique qu'avant
+  l'ajout du WhatsApp, qui rattrape l'essentiel des cas.
 - Aucun contrat existant n'est modifié : `POST /interactions` garde sa signature et sa réponse.
 
 ---
@@ -205,6 +291,11 @@ soit déposée sur ce projet.
 **Renseigner l'adresse de `APO` et `LAZ`**, les deux projets sans adresse. `APO` porte
 1 prospection ouverte.
 
+**Réparer les 43 numéros inexploitables** — 24 de longueur anormale, 19 fixes rangés dans la
+colonne mobile. Ils remonteront désormais avec le motif `NUMERO_INEXPLOITABLE` sur l'endpoint de
+renvoi, donc la liste se constitue toute seule à l'usage ; aucune campagne de nettoyage n'est
+nécessaire d'avance.
+
 ---
 
 ## 8. Tests attendus
@@ -216,7 +307,21 @@ Les deux pièges de ce dépôt, déjà payés une fois :
   s'appelle directement ;
 - un bean `@Async` injecté est un **proxy** : instancier l'écouteur à la main.
 
-Réalisé — `ConfirmationVisiteTest`, **21 tests**, suite complète à **594** (573 avant) :
+Réalisé — `ConfirmationVisiteTest` (**28 tests**) et `NumeroWhatsAppTest` (**10 tests**), suite
+complète à **611** (573 avant la feature) :
+
+`NumeroWhatsAppTest` est un test **unitaire pur**, sans contexte Spring ni base : la
+normalisation d'un numéro est de l'arithmétique de chaîne, et la faire tourner en
+`@SpringBootTest` coûterait trente secondes pour ne rien prouver de plus. Chacun de ses cas
+correspond à une forme **réellement présente** dans `yesRemsProd`, avec son effectif — les
+inventer aurait vérifié mon imagination plutôt que les données.
+
+Côté WhatsApp, quatre propriétés méritaient leur test : le refus d'un fixe donne bien
+`NUMERO_INEXPLOITABLE` et non `DESTINATAIRE_ABSENT` ; un refus de l'API donne `ECHEC_ENVOI` et
+non un faux succès ; et surtout **chaque canal tombe sans entraîner l'autre**, dans les deux
+sens — c'est la propriété qui justifie tout le choix de conception.
+
+
 
 1. résultat « visite » + `dateRdv` ⇒ `VisitePlanifiee` publié une fois ;
 2. résultat sans rendez-vous ⇒ aucun événement (l'ensemble déclencheur ne s'élargit pas) ;

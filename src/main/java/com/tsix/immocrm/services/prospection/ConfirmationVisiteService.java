@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.prospection;
 
 import com.tsix.immocrm.domain.MotifEnvoiVisite;
+import com.tsix.immocrm.dto.prospection.CanalEnvoiDto;
 import com.tsix.immocrm.dto.prospection.ResultatEnvoiVisiteDto;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
@@ -14,8 +15,8 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.mail.EnvoiEmail;
 import com.tsix.immocrm.mail.EmailProperties;
+import com.tsix.immocrm.mail.EnvoiEmail;
 import com.tsix.immocrm.mail.MessageEmail;
 import com.tsix.immocrm.mail.PieceJointeEmail;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository;
@@ -25,6 +26,9 @@ import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
 import com.tsix.immocrm.storage.StockageFichiers;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import com.tsix.immocrm.whatsapp.EnvoiWhatsApp;
+import com.tsix.immocrm.whatsapp.MessageWhatsApp;
+import com.tsix.immocrm.whatsapp.NumeroWhatsApp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -45,11 +49,15 @@ import java.util.UUID;
  * Construit et expédie la confirmation de visite envoyée au prospect quand un rendez-vous est
  * planifié. Voir {@code instructions/FEATURE-mail-confirmation-visite.md}.
  *
- * <p><b>Un seul chemin de résolution pour deux déclencheurs.</b> L'envoi automatique (après
- * commit, via {@code EmailVisiteListener}) et le renvoi manuel (endpoint) appellent le même
- * {@link #envoyerPour(ComActionMessage)} : les règles R1 à R7 ne peuvent pas diverger entre les
- * deux, et le jour où un canal WhatsApp s'ajoutera, c'est le contenu déjà résolu ici qu'il
- * consommera — seule l'expédition changera.
+ * <p><b>Une résolution, deux canaux, deux déclencheurs.</b> Le contenu est résolu une fois
+ * ({@link ContenuVisite}) puis mis en forme séparément pour l'email et pour WhatsApp ; l'envoi
+ * automatique (après commit) et le renvoi manuel (endpoint) empruntent tous deux ce chemin. Les
+ * règles R1 à R7 ne peuvent donc diverger ni entre les canaux, ni entre les déclencheurs.
+ *
+ * <p><b>Les deux canaux sont tentés indépendamment</b>, et cela répond à un écart mesuré :
+ * 99 % des prospections avec rendez-vous portent un numéro exploitable contre 57 % une adresse
+ * email. Lier les deux — n'envoyer le WhatsApp qu'en l'absence d'email, par exemple — priverait
+ * du canal le plus lu la moitié des prospects qui en disposent.
  */
 @Service
 @Transactional(readOnly = true)
@@ -83,6 +91,7 @@ public class ConfirmationVisiteService {
     private final AppFileObjectRepository fileObjectRepository;
     private final StockageFichiers stockage;
     private final EnvoiEmail envoiEmail;
+    private final EnvoiWhatsApp envoiWhatsApp;
     private final EmailProperties properties;
 
     public ConfirmationVisiteService(ComActionMessageRepository actionMessageRepository,
@@ -90,12 +99,14 @@ public class ConfirmationVisiteService {
                                      AppFileObjectRepository fileObjectRepository,
                                      StockageFichiers stockage,
                                      EnvoiEmail envoiEmail,
+                                     EnvoiWhatsApp envoiWhatsApp,
                                      EmailProperties properties) {
         this.actionMessageRepository = actionMessageRepository;
         this.attachedFileSummaryRepository = attachedFileSummaryRepository;
         this.fileObjectRepository = fileObjectRepository;
         this.stockage = stockage;
         this.envoiEmail = envoiEmail;
+        this.envoiWhatsApp = envoiWhatsApp;
         this.properties = properties;
     }
 
@@ -136,8 +147,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * Résout le contenu puis expédie. Ne lève jamais pour un motif métier : un prospect sans
-     * adresse est une issue, pas une erreur.
+     * Résout le contenu puis expédie sur les deux canaux. Ne lève jamais pour un motif métier :
+     * un prospect sans adresse est une issue, pas une erreur.
      */
     private ResultatEnvoiVisiteDto envoyerPour(ComActionMessage interaction) {
         AdmEvent rendezVous = interaction.getAdmEvent();
@@ -147,28 +158,43 @@ public class ConfirmationVisiteService {
             // NullPointerException dans un fil asynchrone, c'est-à-dire une trace illisible.
             log.warn("Confirmation de visite ignorée : l'interaction {} ne porte pas de rendez-vous.",
                     interaction.getId());
-            return ResultatEnvoiVisiteDto.nonEnvoye(MotifEnvoiVisite.DESTINATAIRE_ABSENT, null);
+            return ResultatEnvoiVisiteDto.de(
+                    CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.DESTINATAIRE_ABSENT, null),
+                    CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.DESTINATAIRE_ABSENT, null));
         }
 
-        ComProspection prospection = interaction.getComProspection();
+        ContenuVisite contenu = resoudre(interaction.getComProspection(), rendezVous.getStartHour());
+
+        return ResultatEnvoiVisiteDto.de(
+                parEmail(contenu, interaction.getId()),
+                parWhatsApp(contenu, interaction.getId()));
+    }
+
+    // ------------------------------------------------------------------ résolution du contenu
+
+    private ContenuVisite resoudre(ComProspection prospection, LocalDateTime rendezVous) {
         CfgTier prospect = prospection != null ? prospection.getCfgProspect() : null;
+        CfgTranche tranche = prospection != null ? prospection.getStkHierarchy() : null;
+        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
+        CfgTier commercial = prospection != null ? prospection.getCfgCommercial() : null;
 
-        String destinataire = destinataire(prospect, prospection);
-        if (destinataire == null) {
-            log.info("Confirmation de visite non envoyée pour l'interaction {} : aucune adresse "
-                    + "email exploitable sur la prospection.", interaction.getId());
-            return ResultatEnvoiVisiteDto.nonEnvoye(MotifEnvoiVisite.DESTINATAIRE_ABSENT, null);
-        }
-        if (!envoiEmail.estActif()) {
-            return ResultatEnvoiVisiteDto.nonEnvoye(MotifEnvoiVisite.SERVICE_INACTIF, destinataire);
-        }
+        Adresse adresse = adresse(tranche, projet);
 
-        MessageEmail message = construire(interaction, prospection, prospect, destinataire,
-                rendezVous.getStartHour());
-        envoiEmail.envoyer(message);
-
-        return new ResultatEnvoiVisiteDto(true, MotifEnvoiVisite.ENVOYE, destinataire,
-                message.piecesJointes().size());
+        return new ContenuVisite(
+                prospection,
+                projet,
+                tranche,
+                TierNomFormatter.nom(prospect),
+                email(prospect, prospection),
+                numeroWhatsApp(prospect),
+                prospect != null && StringUtils.hasText(prospect.getMobile()),
+                rendezVous.format(FORMAT_DATE),
+                rendezVous.format(FORMAT_HEURE),
+                lieu(projet, tranche),
+                adresse != null ? adresse.ligne() : null,
+                adresse != null ? adresse.ville() : null,
+                commercial != null ? TierNomFormatter.nom(commercial) : null,
+                commercial != null ? nettoyer(commercial.getMobile()) : null);
     }
 
     /**
@@ -181,7 +207,7 @@ public class ConfirmationVisiteService {
      * (un numéro de téléphone, le plus souvent). Le serveur SMTP refuserait le message, et
      * l'échec serait invisible depuis l'application.
      */
-    private static String destinataire(CfgTier prospect, ComProspection prospection) {
+    private static String email(CfgTier prospect, ComProspection prospection) {
         if (prospection == null) {
             return null;
         }
@@ -193,42 +219,21 @@ public class ConfirmationVisiteService {
         return propre.contains("@") ? propre : null;
     }
 
-    private MessageEmail construire(ComActionMessage interaction, ComProspection prospection,
-                                    CfgTier prospect, String destinataire, LocalDateTime rendezVous) {
-        CfgTranche tranche = prospection.getStkHierarchy();
-        CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
-        CfgTier commercial = prospection.getCfgCommercial();
-
-        Adresse adresse = adresse(tranche, projet);
-        List<PieceJointeEmail> plans = plans(prospection, projet, tranche);
-
-        String date = rendezVous.format(FORMAT_DATE);
-        String heure = rendezVous.format(FORMAT_HEURE);
-        String lieu = lieu(projet, tranche);
-
-        Map<String, Object> variables = new LinkedHashMap<>();
-        variables.put("nomProspect", TierNomFormatter.nom(prospect));
-        variables.put("date", date);
-        variables.put("heure", heure);
-        variables.put("lieu", lieu);
-        variables.put("adresse", adresse != null ? adresse.ligne() : null);
-        variables.put("ville", adresse != null ? adresse.ville() : null);
-        variables.put("nomCommercial", commercial != null ? TierNomFormatter.nom(commercial) : null);
-        variables.put("mobileCommercial", commercial != null ? nettoyer(commercial.getMobile()) : null);
-        variables.put("plans", plans.stream().map(PieceJointeEmail::nom).toList());
-
-        return new MessageEmail(destinataire,
-                sujet(lieu, date),
-                TEMPLATE,
-                variables,
-                corpsTexte(variables),
-                plans);
-    }
-
-    private static String sujet(String lieu, String date) {
-        return StringUtils.hasText(lieu)
-                ? "Votre visite du " + date + " — " + lieu
-                : "Confirmation de votre rendez-vous du " + date;
+    /**
+     * R1 bis — le numéro WhatsApp, composé du mobile de la fiche et de son indicatif.
+     *
+     * <p><b>Aucun repli sur {@code ComProspection.TempTel}</b>, contrairement à l'email. Deux
+     * raisons, l'une mesurée et l'autre de principe : le mobile de la fiche couvre déjà
+     * 5 070 des 5 079 prospections avec rendez-vous, si bien que le repli en apporterait <i>huit</i> ;
+     * et {@code TempTel} ne porte pas d'indicatif, ce qui obligerait à supposer le Maroc — une
+     * supposition qui, sur les 225 tiers d'indicatif « 33 », enverrait le message à un inconnu.
+     * Huit prospections ne valent pas ce risque.
+     */
+    private static String numeroWhatsApp(CfgTier prospect) {
+        if (prospect == null) {
+            return null;
+        }
+        return NumeroWhatsApp.international(prospect.getMobileIndicatif(), prospect.getMobile());
     }
 
     /** R3 — le projet, précisé de sa tranche lorsque celle-ci porte un libellé différent. */
@@ -278,8 +283,8 @@ public class ConfirmationVisiteService {
      *
      * <p>Le filtre est volontairement étroit. Le but n'est pas de valider des adresses marocaines
      * — personne ne sait le faire de façon fiable — mais d'empêcher deux cas connus d'atteindre un
-     * client. Un doute se tranche en faveur de l'omission : un mail sans bloc adresse reste utile,
-     * un mail avec une fausse adresse envoie quelqu'un au mauvais endroit.
+     * client. Un doute se tranche en faveur de l'omission : un message sans bloc adresse reste
+     * utile, un message avec une fausse adresse envoie quelqu'un au mauvais endroit.
      */
     private static Adresse adresseValide(String adresse, String codePostal, String ville,
                                          String libellePorteur) {
@@ -299,6 +304,111 @@ public class ConfirmationVisiteService {
         return new Adresse(propre, ligneVille);
     }
 
+    // ------------------------------------------------------------------ canal email
+
+    private CanalEnvoiDto parEmail(ContenuVisite contenu, UUID interactionId) {
+        if (contenu.email() == null) {
+            log.info("Confirmation de visite non envoyée par email pour l'interaction {} : aucune "
+                    + "adresse exploitable sur la prospection.", interactionId);
+            return CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.DESTINATAIRE_ABSENT, null);
+        }
+        if (!envoiEmail.estActif()) {
+            return CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.SERVICE_INACTIF, contenu.email());
+        }
+
+        // Les plans ne sont lus qu'ici : le téléchargement depuis le stockage coûte cher, et il
+        // serait absurde de le payer pour un prospect sans adresse email.
+        List<PieceJointeEmail> plans = plans(contenu);
+
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("nomProspect", contenu.nomProspect());
+        variables.put("date", contenu.date());
+        variables.put("heure", contenu.heure());
+        variables.put("lieu", contenu.lieu());
+        variables.put("adresse", contenu.adresse());
+        variables.put("ville", contenu.ville());
+        variables.put("nomCommercial", contenu.nomCommercial());
+        variables.put("mobileCommercial", contenu.mobileCommercial());
+        variables.put("plans", plans.stream().map(PieceJointeEmail::nom).toList());
+
+        envoiEmail.envoyer(new MessageEmail(contenu.email(), sujet(contenu), TEMPLATE,
+                variables, corpsTexte(contenu, !plans.isEmpty()), plans));
+
+        return CanalEnvoiDto.envoye(contenu.email(), plans.size());
+    }
+
+    private static String sujet(ContenuVisite contenu) {
+        return StringUtils.hasText(contenu.lieu())
+                ? "Votre visite du " + contenu.date() + " — " + contenu.lieu()
+                : "Confirmation de votre rendez-vous du " + contenu.date();
+    }
+
+    // ------------------------------------------------------------------ canal WhatsApp
+
+    private CanalEnvoiDto parWhatsApp(ContenuVisite contenu, UUID interactionId) {
+        if (contenu.numeroWhatsApp() == null) {
+            // Distinguer les deux permet au commercial de savoir s'il doit obtenir un numéro ou
+            // en réparer un : 43 fiches réelles portent un numéro que rien ne peut envoyer.
+            MotifEnvoiVisite motif = contenu.aUnMobileBrut()
+                    ? MotifEnvoiVisite.NUMERO_INEXPLOITABLE
+                    : MotifEnvoiVisite.DESTINATAIRE_ABSENT;
+            log.info("Confirmation de visite non envoyée par WhatsApp pour l'interaction {} : {}.",
+                    interactionId, motif);
+            return CanalEnvoiDto.nonEnvoye(motif, null);
+        }
+        if (!envoiWhatsApp.estActif()) {
+            return CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.SERVICE_INACTIF, contenu.numeroWhatsApp());
+        }
+
+        boolean parti = envoiWhatsApp.envoyer(
+                new MessageWhatsApp(contenu.numeroWhatsApp(), texteWhatsApp(contenu)));
+
+        return parti
+                ? CanalEnvoiDto.envoye(contenu.numeroWhatsApp(), 0)
+                : CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.ECHEC_ENVOI, contenu.numeroWhatsApp());
+    }
+
+    /**
+     * Le message WhatsApp reprend les mêmes informations que le mail, dans une forme adaptée au
+     * canal : court, sans salutation cérémonieuse, et avec la mise en gras {@code *…*} que
+     * WhatsApp interprète.
+     *
+     * <p>Il ne mentionne pas les plans, puisqu'il n'en porte aucun — annoncer une pièce jointe
+     * absente serait pire que se taire.
+     */
+    private static String texteWhatsApp(ContenuVisite contenu) {
+        StringBuilder texte = new StringBuilder();
+        texte.append("Bonjour");
+        if (contenu.nomProspect() != null) {
+            texte.append(' ').append(contenu.nomProspect());
+        }
+        texte.append(",\n\nVotre visite est confirmée.\n\n");
+        texte.append("*Date* : ").append(contenu.date())
+                .append(" à ").append(contenu.heure()).append('\n');
+        if (contenu.lieu() != null) {
+            texte.append("*Projet* : ").append(contenu.lieu()).append('\n');
+        }
+        if (contenu.adresse() != null) {
+            texte.append("*Adresse* : ").append(contenu.adresse());
+            if (contenu.ville() != null) {
+                texte.append(", ").append(contenu.ville());
+            }
+            texte.append('\n');
+        }
+        if (contenu.nomCommercial() != null) {
+            texte.append("*Votre conseiller* : ").append(contenu.nomCommercial());
+            if (contenu.mobileCommercial() != null) {
+                texte.append(" — ").append(contenu.mobileCommercial());
+            }
+            texte.append('\n');
+        }
+        texte.append("\nMerci de vous munir d'une pièce d'identité. Prévoyez environ une heure ")
+                .append("sur place.\n\nPour modifier ou annuler, contactez votre conseiller.");
+        return texte.toString();
+    }
+
+    // ------------------------------------------------------------------ pièces jointes
+
     /**
      * R6 — les plans de l'article s'il est connu, sinon ceux du projet puis de la tranche. On
      * s'arrête au premier niveau qui donne quelque chose : cumuler enverrait au prospect le plan
@@ -308,22 +418,21 @@ public class ConfirmationVisiteService {
      * cas courant, et il est aujourd'hui vide — voir §7 de la spec, qui décrit ce qu'il reste à
      * téléverser pour que ce chemin produise enfin quelque chose.
      */
-    private List<PieceJointeEmail> plans(ComProspection prospection, CfgProject projet,
-                                         CfgTranche tranche) {
-        StkItem article = prospection.getStkItem();
+    private List<PieceJointeEmail> plans(ContenuVisite contenu) {
+        StkItem article = contenu.prospection() != null ? contenu.prospection().getStkItem() : null;
         if (article != null) {
             List<PieceJointeEmail> depuisArticle = plansDe(article.getId());
             if (!depuisArticle.isEmpty()) {
                 return depuisArticle;
             }
         }
-        if (projet != null) {
-            List<PieceJointeEmail> depuisProjet = plansDe(projet.getId());
+        if (contenu.projet() != null) {
+            List<PieceJointeEmail> depuisProjet = plansDe(contenu.projet().getId());
             if (!depuisProjet.isEmpty()) {
                 return depuisProjet;
             }
         }
-        return tranche != null ? plansDe(tranche.getId()) : List.of();
+        return contenu.tranche() != null ? plansDe(contenu.tranche().getId()) : List.of();
     }
 
     /**
@@ -375,6 +484,52 @@ public class ConfirmationVisiteService {
         }
     }
 
+    private static boolean estUnPlan(AdmAttachedFileSummary piece) {
+        String code = Champs.de(piece.getType(), AdmAttachedFileType::getCode);
+        return code != null && code.trim().toUpperCase(Locale.ROOT).startsWith(PREFIXE_TYPE_PLAN);
+    }
+
+    // ------------------------------------------------------------------ divers
+
+    /**
+     * Alternative texte brut du mail, construite en Java comme celle du mot de passe temporaire —
+     * un second résolveur Thymeleaf en mode TEXT serait beaucoup de plomberie pour quinze lignes.
+     */
+    private static String corpsTexte(ContenuVisite contenu, boolean avecPlans) {
+        StringBuilder texte = new StringBuilder();
+        texte.append("Bonjour");
+        if (contenu.nomProspect() != null) {
+            texte.append(' ').append(contenu.nomProspect());
+        }
+        texte.append(",\n\nNous avons le plaisir de confirmer votre visite.\n\n");
+        texte.append("Date : ").append(contenu.date()).append(" à ").append(contenu.heure()).append('\n');
+        if (contenu.lieu() != null) {
+            texte.append("Projet : ").append(contenu.lieu()).append('\n');
+        }
+        if (contenu.adresse() != null) {
+            texte.append("Adresse : ").append(contenu.adresse());
+            if (contenu.ville() != null) {
+                texte.append(", ").append(contenu.ville());
+            }
+            texte.append('\n');
+        }
+        if (contenu.nomCommercial() != null) {
+            texte.append("Votre conseiller : ").append(contenu.nomCommercial());
+            if (contenu.mobileCommercial() != null) {
+                texte.append(" — ").append(contenu.mobileCommercial());
+            }
+            texte.append('\n');
+        }
+        texte.append("\nMerci de vous munir d'une pièce d'identité. Prévoyez environ une heure ")
+                .append("sur place.\n");
+        if (avecPlans) {
+            texte.append("\nVous trouverez le ou les plans en pièce jointe.\n");
+        }
+        texte.append("\nPour modifier ou annuler ce rendez-vous, contactez votre conseiller au ")
+                .append("numéro ci-dessus.\n");
+        return texte.toString();
+    }
+
     /**
      * Une valeur utilisable, ou {@code null}. Les colonnes legacy contiennent aussi bien
      * {@code NULL} que des chaînes d'espaces — les deux doivent produire la même absence, sans
@@ -384,51 +539,35 @@ public class ConfirmationVisiteService {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 
-    private static boolean estUnPlan(AdmAttachedFileSummary piece) {
-        String code = Champs.de(piece.getType(), AdmAttachedFileType::getCode);
-        return code != null && code.trim().toUpperCase(Locale.ROOT).startsWith(PREFIXE_TYPE_PLAN);
+    /** Adresse retenue, déjà validée et déjà mise en forme sur deux lignes. */
+    private record Adresse(String ligne, String ville) {
     }
 
     /**
-     * Alternative texte brut, construite en Java comme celle du mot de passe temporaire — un
-     * second résolveur Thymeleaf en mode TEXT serait beaucoup de plomberie pour quinze lignes.
+     * Le contenu de la confirmation, résolu une fois pour tous les canaux.
+     *
+     * <p>Porte aussi les trois entités dont dépend la résolution des pièces jointes
+     * ({@code prospection}, {@code projet}, {@code tranche}) : elles ne sont traversées que si le
+     * canal email aboutit, et les garder ici évite de refaire la remontée
+     * prospection → tranche → projet une seconde fois.
+     *
+     * @param aUnMobileBrut la fiche porte un mobile, exploitable ou non — permet de distinguer
+     *                      « pas de numéro » de « numéro impossible à composer »
      */
-    private static String corpsTexte(Map<String, Object> v) {
-        StringBuilder texte = new StringBuilder();
-        texte.append("Bonjour");
-        if (v.get("nomProspect") != null) {
-            texte.append(' ').append(v.get("nomProspect"));
-        }
-        texte.append(",\n\nNous avons le plaisir de confirmer votre visite.\n\n");
-        texte.append("Date : ").append(v.get("date")).append(" à ").append(v.get("heure")).append('\n');
-        if (v.get("lieu") != null) {
-            texte.append("Projet : ").append(v.get("lieu")).append('\n');
-        }
-        if (v.get("adresse") != null) {
-            texte.append("Adresse : ").append(v.get("adresse"));
-            if (v.get("ville") != null) {
-                texte.append(", ").append(v.get("ville"));
-            }
-            texte.append('\n');
-        }
-        if (v.get("nomCommercial") != null) {
-            texte.append("Votre conseiller : ").append(v.get("nomCommercial"));
-            if (v.get("mobileCommercial") != null) {
-                texte.append(" — ").append(v.get("mobileCommercial"));
-            }
-            texte.append('\n');
-        }
-        texte.append("\nMerci de vous munir d'une pièce d'identité. Prévoyez environ une heure ")
-                .append("sur place.\n");
-        if (v.get("plans") instanceof List<?> plans && !plans.isEmpty()) {
-            texte.append("\nVous trouverez le ou les plans en pièce jointe.\n");
-        }
-        texte.append("\nPour modifier ou annuler ce rendez-vous, contactez votre conseiller au ")
-                .append("numéro ci-dessus.\n");
-        return texte.toString();
-    }
-
-    /** Adresse retenue, déjà validée et déjà mise en forme sur deux lignes. */
-    private record Adresse(String ligne, String ville) {
+    private record ContenuVisite(
+            ComProspection prospection,
+            CfgProject projet,
+            CfgTranche tranche,
+            String nomProspect,
+            String email,
+            String numeroWhatsApp,
+            boolean aUnMobileBrut,
+            String date,
+            String heure,
+            String lieu,
+            String adresse,
+            String ville,
+            String nomCommercial,
+            String mobileCommercial) {
     }
 }
