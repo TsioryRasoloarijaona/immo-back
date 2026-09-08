@@ -295,8 +295,12 @@ public class PieceJointeSupport {
         });
     }
 
-    /** Nom proposé au navigateur : la description, suffixée de l'extension si elle manque. */
-    private static String nomTelechargement(String description, String extension) {
+    /**
+     * Nom proposé au navigateur : la description, suffixée de l'extension si elle manque.
+     * Publique parce que la pièce jointe d'un email a besoin du même nom de fichier que le
+     * téléchargement — un plan doit s'appeler pareil qu'on le télécharge ou qu'on le reçoive.
+     */
+    public static String nomTelechargement(String description, String extension) {
         String base = StringUtils.hasText(description) ? description.trim() : "piece-jointe";
         if (StringUtils.hasText(extension) && !base.toLowerCase().endsWith(extension)) {
             base = base + extension;

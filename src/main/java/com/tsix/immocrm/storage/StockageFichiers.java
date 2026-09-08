@@ -29,6 +29,22 @@ public interface StockageFichiers {
     URI urlTelechargement(String cle, String nomTelechargement, String contentType);
 
     /**
+     * Lit le contenu de l'objet, en mémoire.
+     *
+     * <p><b>À n'employer que lorsque le backend a réellement besoin des octets</b> — aujourd'hui
+     * le seul cas est la pièce jointe d'un email, qui doit être incorporée au message MIME. Tout
+     * ce qui est destiné au navigateur passe par {@link #urlTelechargement} : le fichier y
+     * transite directement entre le client et le stockage, sans mobiliser la mémoire du serveur.
+     * Un plan pèse 1,5 Mo en moyenne et jusqu'à 5 Mo, d'où le plafond appliqué par l'appelant
+     * ({@code app.mail.pieces-jointes-max-mo}).
+     *
+     * @throws RuntimeException si l'objet est absent ou illisible — l'appelant décide quoi en
+     *                          faire. Côté mail, la pièce est abandonnée et le message part
+     *                          quand même (règle R8 de {@code FEATURE-mail-confirmation-visite.md}).
+     */
+    byte[] lire(String cle);
+
+    /**
      * Supprime l'objet. Utilisé pour rattraper un dépôt dont la transaction a échoué — jamais
      * pour une suppression métier, qui passe par {@code AppFileObject.DeletedAt}.
      */

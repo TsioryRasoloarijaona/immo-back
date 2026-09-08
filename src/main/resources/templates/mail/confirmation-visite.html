@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<!--
+  Confirmation de visite envoyée au prospect. Voir
+  instructions/FEATURE-mail-confirmation-visite.md §4.
+
+  Mêmes contraintes de forme que mot-de-passe-temporaire.html — mise en page par <table>,
+  styles EN LIGNE : Outlook et les webmails ignorent largement les feuilles de style.
+
+  Toutes les sections sauf la date sont conditionnelles, et ce n'est pas de la prudence
+  décorative : l'adresse est omise quand la donnée n'est pas exploitable (règle R4), le
+  commercial peut manquer (28 prospections réelles sur 5 078), et les plans sont l'exception.
+  Un bloc vide serait pire qu'un bloc absent — il donnerait l'impression d'une information
+  perdue en route.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmation de votre visite</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 12px;">
+    <tr>
+        <td align="center">
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px; background-color:#ffffff; border-radius:8px; border:1px solid #e4e7eb;">
+
+                <tr>
+                    <td style="padding:28px 32px 8px 32px;">
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;">
+                            Votre visite est confirmée
+                        </h1>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:8px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 14px 0;">
+                            Bonjour <span th:if="${nomProspect}" th:text="${nomProspect}" style="font-weight:600;">Prénom Nom</span>,
+                        </p>
+                        <p style="margin:0 0 20px 0;">
+                            Nous avons le plaisir de confirmer votre rendez-vous. Vous trouverez
+                            ci-dessous les informations utiles pour vous y rendre.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 32px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                               style="background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px;">
+
+                            <tr>
+                                <td style="padding:16px 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Date et heure
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 20px 14px 20px; font-size:17px; font-weight:600;">
+                                    <span th:text="${date}">12/09/2026</span> à <span th:text="${heure}">15h30</span>
+                                </td>
+                            </tr>
+
+                            <tr th:if="${lieu}">
+                                <td style="padding:0 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Projet
+                                </td>
+                            </tr>
+                            <tr th:if="${lieu}">
+                                <td style="padding:0 20px 14px 20px; font-size:16px; font-weight:600;"
+                                    th:text="${lieu}">AYAD RESIDENCE BEL AIR
+                                </td>
+                            </tr>
+
+                            <tr th:if="${adresse}">
+                                <td style="padding:0 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Adresse
+                                </td>
+                            </tr>
+                            <tr th:if="${adresse}">
+                                <td style="padding:0 20px 18px 20px; font-size:15px; line-height:1.5;">
+                                    <span th:text="${adresse}">100 BD ZERKTOUNI</span>
+                                    <span th:if="${ville}"><br><span th:text="${ville}">20000 Casablanca</span></span>
+                                </td>
+                            </tr>
+
+                        </table>
+                    </td>
+                </tr>
+
+                <tr th:if="${nomCommercial}">
+                    <td style="padding:20px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0;">
+                            Vous serez accueilli par
+                            <span th:text="${nomCommercial}" style="font-weight:600;">Nom du conseiller</span><span
+                                th:if="${mobileCommercial}">, joignable au
+                            <span th:text="${mobileCommercial}" style="font-weight:600;">06 00 00 00 00</span></span>.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:20px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 8px 0;">Pour préparer votre visite :</p>
+                        <ul style="margin:0 0 16px 0; padding-left:20px; color:#52606d;">
+                            <li style="margin-bottom:6px;">munissez-vous d'une pièce d'identité ;</li>
+                            <li style="margin-bottom:6px;">prévoyez environ une heure sur place ;</li>
+                            <li th:if="${plans != null and !plans.isEmpty()}" style="margin-bottom:6px;">
+                                le ou les plans sont joints à ce message.
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 32px 28px 32px; border-top:1px solid #e4e7eb;">
+                        <p style="margin:16px 0 0 0; font-size:13px; color:#7b8794; line-height:1.5;">
+                            Ce message est automatique, merci de ne pas y répondre. Pour modifier ou
+                            annuler ce rendez-vous, contactez directement votre conseiller.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

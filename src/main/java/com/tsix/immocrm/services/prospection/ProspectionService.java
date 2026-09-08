@@ -31,6 +31,7 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
@@ -55,6 +56,7 @@ import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -115,6 +117,12 @@ public class ProspectionService {
     private final PerimetreCommercialService perimetreService;
     /** Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}. */
     private final AdmUserRepository userRepository;
+    /**
+     * Publie {@link VisitePlanifiee} — voir {@code FEATURE-mail-confirmation-visite.md}. Un
+     * événement plutôt qu'un appel direct : le mail ne doit partir que si l'interaction est
+     * réellement écrite, et l'envoi ne doit rien pouvoir annuler.
+     */
+    private final ApplicationEventPublisher publisher;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -132,7 +140,9 @@ public class ProspectionService {
                                StrHistoryRepository historyRepository,
                                AdmSequenceRepository sequenceRepository,
                                PerimetreCommercialService perimetreService,
-                               AdmUserRepository userRepository) {
+                               AdmUserRepository userRepository,
+                               ApplicationEventPublisher publisher) {
+        this.publisher = publisher;
         this.userRepository = userRepository;
         this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
@@ -691,7 +701,16 @@ public class ProspectionService {
                     + "\"RDV reporté\" ou \"Le prospect veut faire une visite du projet\")");
         }
 
-        return toInteractionDto(actionMessageRepository.save(message));
+        ComActionMessage enregistree = actionMessageRepository.save(message);
+
+        // Confirmation au prospect — publiée seulement si un rendez-vous a effectivement été créé,
+        // et donc sur exactement l'ensemble de résultats qui alimente déjà le calendrier. Aucune
+        // règle métier nouvelle. La livraison, elle, n'a lieu qu'après commit : voir VisitePlanifiee.
+        if (enregistree.getAdmEvent() != null) {
+            publisher.publishEvent(new VisitePlanifiee(enregistree.getId()));
+        }
+
+        return toInteractionDto(enregistree);
     }
 
     /**
@@ -778,8 +797,19 @@ public class ProspectionService {
         return StringUtils.hasText(p.getTempTel()) ? p.getTempTel() : null;
     }
 
-    /** Même règle de repli que {@link #telephoneProspect} — 4 752 des 8 613 ouvertes (55 %). */
-    private static String emailProspect(CfgTier prospect, ComProspection p) {
+    /**
+     * Même règle de repli que {@link #telephoneProspect} — 4 752 des 8 613 ouvertes (55 %).
+     *
+     * <p><b>Publique parce qu'elle est la seule.</b> {@code ConfirmationVisiteService} résout le
+     * destinataire du mail de visite avec exactement cette règle ; en recopier une variante est
+     * précisément ce qui avait fait diverger les trois mappeurs de {@code ProspectionListItemDto}.
+     *
+     * <p>Aucune validation de forme ici, délibérément : cette méthode sert d'abord à
+     * <i>afficher</i> le contact, et 33 lignes réelles portent une valeur non vide qui n'est pas
+     * une adresse. Les montrer telles quelles est utile — un commercial voit qu'il y a une saisie
+     * à corriger. C'est l'appelant qui <i>envoie</i> qui doit exiger davantage.
+     */
+    public static String emailProspect(CfgTier prospect, ComProspection p) {
         if (prospect != null && StringUtils.hasText(prospect.getEMail())) {
             return prospect.getEMail();
         }
