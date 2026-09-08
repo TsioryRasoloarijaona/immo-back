@@ -71,6 +71,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -78,6 +79,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -519,6 +521,34 @@ public class DossierController {
                 .build();
     }
 
+    @DeleteMapping("/{id}/pieces-jointes/{pieceId}")
+    @Operation(
+            summary = "Supprime une pièce jointe du dossier",
+            description = "Retire la pièce du dossier. **Suppression logique** : la pièce "
+                    + "disparaît immédiatement de `GET /api/dossiers/{id}/pieces-jointes`, son "
+                    + "`.../fichier` renvoie désormais 404, mais le fichier reste sur le stockage "
+                    + "en attendant un balayage hors ligne — une suppression accidentelle est donc "
+                    + "récupérable côté base, jamais via l'API.\n\n"
+                    + "L'auteur de la suppression est déduit du token de l'utilisateur connecté et "
+                    + "enregistré (`AppFileObject.DeletedBy`) ; il n'est jamais demandé au front.\n\n"
+                    + "**Réponse vide (204)** — ne rien tenter de désérialiser. Rejouer le `DELETE` "
+                    + "sur la même pièce renvoie 404, la pièce n'étant plus visible."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Pièce jointe supprimée."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable, pièce jointe "
+                    + "introuvable pour ce dossier, ou pièce déjà supprimée.")
+    })
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePieceJointe(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id,
+            @Parameter(description = "Identifiant de la pièce jointe (AdmAttachedFile.PKey), tel que renvoyé par `PieceJointeDto.id`.")
+            @PathVariable UUID pieceId,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        pieceJointeService.supprimer(id, pieceId, principal);
+    }
+
     @GetMapping("/{id}/payeurs")
     @Operation(
             summary = "Payeurs possibles d'un règlement de ce dossier",
@@ -653,6 +683,43 @@ public class DossierController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(reglementPieceJointeService.urlFichier(id, reglementId, pieceId))
                 .build();
+    }
+
+    @DeleteMapping("/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}")
+    @Operation(
+            summary = "Supprime une preuve de paiement d'un règlement",
+            description = "Retire le justificatif du règlement. **Suppression logique**, mêmes "
+                    + "effets que pour une pièce jointe de dossier : disparition immédiate de la "
+                    + "liste, 404 sur `.../fichier`, fichier conservé sur le stockage en attendant "
+                    + "un balayage hors ligne.\n\n"
+                    + "**Un règlement `POINTED` ne peut pas perdre sa dernière preuve** (409) : "
+                    + "c'est la pièce jointe qui a autorisé le pointage (voir "
+                    + "`PATCH .../reglements/{reglementId}/statut`), et un règlement pointé sans "
+                    + "justificatif serait un trou d'audit. La règle ne vise que ce cas — supprimer "
+                    + "une pièce parmi plusieurs, ou n'importe quelle pièce d'un règlement "
+                    + "`IN_WORK` ou `CANCELED`, passe normalement. Pour remplacer l'unique preuve "
+                    + "d'un règlement pointé : déposer la nouvelle d'abord, supprimer l'ancienne "
+                    + "ensuite.\n\n"
+                    + "**Réponse vide (204)** — ne rien tenter de désérialiser."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Preuve de paiement supprimée."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, "
+                    + "règlement non rattaché à ce dossier, pièce jointe introuvable pour ce "
+                    + "règlement, ou pièce déjà supprimée."),
+            @ApiResponse(responseCode = "409", description = "Dernière preuve de paiement d'un "
+                    + "règlement au statut `POINTED`.")
+    })
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePieceJointeReglement(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id,
+            @Parameter(description = "Identifiant du règlement (StlSettlement.PKey).")
+            @PathVariable UUID reglementId,
+            @Parameter(description = "Identifiant de la pièce jointe (AdmAttachedFile.PKey), tel que renvoyé par `PieceJointeDto.id`.")
+            @PathVariable UUID pieceId,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        reglementPieceJointeService.supprimer(id, reglementId, pieceId, principal);
     }
 
     // -- Génération de documents ("Fiche de réservation" pour l'instant — voir instructions/templates) --

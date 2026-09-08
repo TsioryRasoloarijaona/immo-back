@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * {@code /api/dossiers/{id}/pieces-jointes[/...]} — accès (lecture + dépôt) aux pièces jointes
+ * {@code /api/dossiers/{id}/pieces-jointes[/...]} — accès (lecture, dépôt, suppression) aux pièces jointes
  * d'un Dossier ({@code AdmAttachedFile}). Voir la doc de {@link AdmAttachedFileSummary} pour le
  * rattachement à {@code ComFolder} (confirmé malgré l'absence de FK déclarée en DB).
  *
@@ -81,5 +81,22 @@ public class PieceJointeService {
         String category = "Dossier de vente N° " + folder.getCode() + " du " + LocalDateTime.now().format(DATE_LEGACY);
         return support.deposer(dossierId, PorteurPieceJointe.DOSSIER, category, fichier, description,
                 typeId, principal);
+    }
+
+    /**
+     * {@code DELETE /api/dossiers/{id}/pieces-jointes/{pieceId}} — retire une pièce du dossier.
+     *
+     * <p>Suppression <b>logique</b> (voir {@link PieceJointeSupport#marquerSupprime}) : la pièce
+     * quitte {@link #findByDossier} et son fichier n'est plus téléchargeable, mais la ligne de
+     * métadonnées et l'objet stocké restent. Aucune règle métier ne s'y oppose côté Dossier —
+     * contrairement au règlement, où la dernière preuve d'un règlement pointé est protégée (voir
+     * {@code ReglementPieceJointeService#supprimer}).
+     */
+    @Transactional
+    public void supprimer(UUID dossierId, UUID pieceId, AuthenticatedUser principal) {
+        if (!folderRepository.existsById(dossierId)) {
+            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+        }
+        support.supprimer(dossierId, pieceId, "ce dossier", principal);
     }
 }

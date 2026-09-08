@@ -38,8 +38,17 @@ import java.util.UUID;
  * transition uniquement</b>. Jamais en lecture, jamais rétroactivement — 12 des 14 règlements
  * {@code POINTED} existants n'ont aucune pièce jointe et doivent rester lisibles, et l'application
  * desktop continue d'écrire dans {@code yesRems} sans rien contrôler. Ne pas « renforcer » cette
- * règle en la déplaçant vers la lecture ou vers la suppression d'une pièce jointe : ce serait
- * casser des dossiers réels au nom d'un invariant que la base n'a jamais respecté.
+ * règle en la déplaçant vers la lecture : ce serait casser des dossiers réels au nom d'un
+ * invariant que la base n'a jamais respecté.
+ *
+ * <p><b>Une exception, décidée et mesurée</b> : {@code ReglementPieceJointeService#supprimer}
+ * refuse (409) de supprimer la <i>dernière</i> pièce jointe d'un règlement déjà {@code POINTED}.
+ * Cette phrase déconseillait auparavant aussi ce cas ; l'argument qui la fondait est le risque
+ * <i>rétroactif</i>, et il ne s'y applique pas — rien n'est vérifié en lecture, aucune ligne
+ * existante ne devient illisible, et la garde ne s'évalue qu'au moment d'une suppression demandée
+ * par l'utilisateur. Sur {@code yesRemsProd} : 17 règlements {@code POINTED}, dont 3 portent
+ * exactement une pièce jointe — les 3 seules lignes de la base où ce 409 peut se déclencher. Voir
+ * {@code FEATURE-suppression-pieces-jointes.md} §6.
  */
 @Service
 @Transactional(readOnly = true)

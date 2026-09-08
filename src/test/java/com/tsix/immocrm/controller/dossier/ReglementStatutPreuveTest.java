@@ -17,6 +17,7 @@ import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
 import com.tsix.immocrm.storage.CleStockage;
 import com.tsix.immocrm.storage.PorteurPieceJointe;
 import com.tsix.immocrm.storage.StockageMemoire;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -32,6 +33,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -86,6 +88,9 @@ class ReglementStatutPreuveTest {
 
     @Autowired
     private CfgTierRepository tierRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     // ---------------------------------------------------------------- fixtures
 
@@ -400,6 +405,158 @@ class ReglementStatutPreuveTest {
                 .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(cle)));
 
         assertThat(stockageMemoire.contenu(cle)).isEqualTo("PDF-BYTES".getBytes());
+    }
+
+    // ------------------------------------------- suppression d'une preuve de paiement
+
+    /** Dépose une preuve et renvoie l'id de la pièce créée. */
+    private UUID deposerPreuveEtRendreId(ComFolder folder, UUID reglementId, String nom) throws Exception {
+        MockMultipartFile fichier = new MockMultipartFile(
+                "fichier", nom, MediaType.APPLICATION_PDF_VALUE, ("contenu-" + nom).getBytes());
+        String json = mockMvc.perform(multipart("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes",
+                        folder.getId(), reglementId).file(fichier))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(json.replaceAll("^.*?\"id\"\\s*:\\s*\"([^\"]+)\".*$", "$1"));
+    }
+
+    private void pointer(ComFolder folder, UUID reglementId) throws Exception {
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"POINTED\",\"dateReglement\":\"2026-09-05T09:00:00\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void supprimerPreuve_dunReglementNonPointe_returns204() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-50");
+        ComDocument echeance = newEcheance(folder, "100000");
+        UUID reglementId = creerReglement(folder, echeance, "50000.00");
+        UUID pieceId = deposerPreuveEtRendreId(folder, reglementId, "cheque.pdf");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, pieceId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes",
+                        folder.getId(), reglementId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * Le cœur de la garde : un règlement pointé ne peut pas se retrouver sans justificatif.
+     * Voir {@code FEATURE-suppression-pieces-jointes.md} §6 — la règle ne s'évalue qu'ici, jamais
+     * en lecture, et ne concerne que 3 règlements de la base réelle.
+     */
+    @Test
+    void supprimerLaDernierePreuve_dunReglementPointe_returns409() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-51");
+        ComDocument echeance = newEcheance(folder, "100000");
+        UUID reglementId = creerReglement(folder, echeance, "50000.00");
+        UUID pieceId = deposerPreuveEtRendreId(folder, reglementId, "cheque.pdf");
+        pointer(folder, reglementId);
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, pieceId))
+                .andExpect(status().isConflict());
+
+        // La pièce est toujours là : un 409 ne doit rien avoir supprimé au passage.
+        mockMvc.perform(get("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes",
+                        folder.getId(), reglementId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(pieceId.toString()));
+    }
+
+    /**
+     * La garde ne vise que la DERNIÈRE preuve : avec deux pièces la suppression passe, puis la
+     * pièce restante redevient protégée.
+     *
+     * <p>Les {@code clear()} ne sont pas décoratifs. Le pointage a chargé les
+     * {@code AdmAttachedFileSummary} du règlement (contrôle « au moins une pièce ») ; ces
+     * instances restent dans le contexte de persistance, et Hibernate rend l'instance mémorisée
+     * plutôt que la ligne relue — {@code hasFile}, calculé par SQL Server au chargement, garde
+     * donc sa valeur d'avant la suppression. En production le cas n'existe pas, chaque requête
+     * HTTP ayant son propre contexte ; ici tout le test tient dans une transaction, et le
+     * {@code clear()} rétablit cette condition. Même raison que dans
+     * {@code DossierListeFiltresEtRequetesTest#compterRequetes}.
+     */
+    @Test
+    void supprimerUnePreuveParmiDeux_dunReglementPointe_returns204() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-52");
+        ComDocument echeance = newEcheance(folder, "100000");
+        UUID reglementId = creerReglement(folder, echeance, "50000.00");
+        UUID premiere = deposerPreuveEtRendreId(folder, reglementId, "cheque.pdf");
+        UUID seconde = deposerPreuveEtRendreId(folder, reglementId, "avis-virement.pdf");
+        pointer(folder, reglementId);
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, premiere))
+                .andExpect(status().isNoContent());
+
+        entityManager.flush();
+        entityManager.clear();
+
+        mockMvc.perform(get("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes",
+                        folder.getId(), reglementId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(seconde.toString()));
+
+        entityManager.clear();
+
+        // La pièce restante est maintenant la dernière : elle passe sous la garde.
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, seconde))
+                .andExpect(status().isConflict());
+    }
+
+    /**
+     * L'ordre des contrôles : une pièce inconnue sur un règlement pointé doit donner 404, pas le
+     * 409 de la garde — sinon la réponse révélerait l'état du règlement.
+     */
+    @Test
+    void supprimerPreuve_pieceInconnueSurReglementPointe_returns404PasLe409() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-53");
+        ComDocument echeance = newEcheance(folder, "100000");
+        UUID reglementId = creerReglement(folder, echeance, "50000.00");
+        deposerPreuveEtRendreId(folder, reglementId, "cheque.pdf");
+        pointer(folder, reglementId);
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void supprimerPreuve_reglementDunAutreDossier_returns404() throws Exception {
+        ComFolder folder1 = newFolder("DOS-RSP-54A");
+        ComFolder folder2 = newFolder("DOS-RSP-54B");
+        ComDocument echeance = newEcheance(folder1, "100000");
+        UUID reglementId = creerReglement(folder1, echeance, "50000.00");
+        UUID pieceId = deposerPreuveEtRendreId(folder1, reglementId, "cheque.pdf");
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder2.getId(), reglementId, pieceId))
+                .andExpect(status().isNotFound());
+    }
+
+    /** Un règlement annulé n'a rien à protéger : sa preuve se supprime. */
+    @Test
+    void supprimerLaDernierePreuve_dunReglementAnnule_returns204() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-55");
+        ComDocument echeance = newEcheance(folder, "100000");
+        UUID reglementId = creerReglement(folder, echeance, "50000.00");
+        UUID pieceId = deposerPreuveEtRendreId(folder, reglementId, "cheque.pdf");
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"CANCELED\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/dossiers/{id}/reglements/{reglementId}/pieces-jointes/{pieceId}",
+                        folder.getId(), reglementId, pieceId))
+                .andExpect(status().isNoContent());
     }
 
     // ----------------------------------------------------------- transition de statut
