@@ -100,7 +100,10 @@ class ProspectionInteractionsTest {
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.description").value("Relance telephonique"))
+                // Le texte fourni ressort dans `note`, plus dans `description` : celui-ci est
+                // désormais un libellé généré. Voir instructions/FIX-interaction-note.md.
+                .andExpect(jsonPath("$.note").value("Relance telephonique"))
+                .andExpect(jsonPath("$.description").value(org.hamcrest.Matchers.not("Relance telephonique")))
                 .andExpect(jsonPath("$.entrante").value(false))
                 .andExpect(jsonPath("$.id").exists());
     }

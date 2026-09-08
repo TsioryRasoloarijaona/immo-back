@@ -19,6 +19,20 @@ public record InteractionDto(
         @Schema(description = "Date/heure de l'interaction.")
         LocalDateTime date,
 
+        @Schema(description = "**Le texte saisi par le commercial — c'est ce qu'il faut "
+                + "afficher dans le journal.** Stocké dans `ComActionMessage.AlertMessage`, qui "
+                + "malgré son nom ne relève pas des relances : 6 502 interactions portent une "
+                + "note sans aucune date d'alerte. `null` quand rien n'a été saisi (3,4 % des "
+                + "lignes réelles).",
+                example = "la cliente cherche 2 chambres et salon, rdv mercredi 10h")
+        String note,
+
+        @Schema(description = "**Libellé généré, pas un contenu.** Vaut `JJ/MM/AAAA HH:MM "
+                + "<auteur>` sur 100 % des lignes réelles (46 546 sur 46 546, zéro exception), "
+                + "c'est-à-dire exactement `date` + `employeNom`, déjà présents ci-dessus. "
+                + "Conservé pour ne rien casser, mais **l'afficher revient à répéter trois fois "
+                + "la même information** — utilisez `note`.",
+                example = "07/09/2026 17:13 Khadija ELKORRI")
         String description,
 
         @Schema(description = "true si entrante, false si sortante.")

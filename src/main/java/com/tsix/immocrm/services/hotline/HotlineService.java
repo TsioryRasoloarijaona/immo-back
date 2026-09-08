@@ -158,6 +158,9 @@ public class HotlineService {
         return new InteractionDto(
                 m.getId(),
                 m.getDocDate(),
+                // AlertMessage porte le texte du commercial ; Description n'est qu'un libellé
+                // « date + auteur ». Voir instructions/FIX-interaction-note.md.
+                m.getAlertMessage(),
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,

@@ -14,6 +14,7 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmSequence;
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComAction;
@@ -32,6 +33,8 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
+import com.tsix.immocrm.repositories.adm.AdmUserRepository;
+import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -54,11 +57,14 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -76,6 +82,13 @@ public class ProspectionService {
      * uses) — same underlying mechanism, distinguished on the calendar by
      * {@code AdmEvent.comActionMessageSubCategory}. See {@code GET /api/calendrier/evenements}.
      */
+    /**
+     * Format du libellé {@code ComActionMessage.Description}, repris à l'identique de
+     * l'application de bureau : {@code 07/09/2026 17:13 Khadija ELKORRI}. Vérifié sur les
+     * 46 546 interactions de {@code yesRemsProd}, sans une seule exception.
+     */
+    private static final DateTimeFormatter FORMAT_LIBELLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
     private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
@@ -97,6 +110,8 @@ public class ProspectionService {
     private final StrHistoryRepository historyRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final PerimetreCommercialService perimetreService;
+    /** Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}. */
+    private final AdmUserRepository userRepository;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -113,7 +128,9 @@ public class ProspectionService {
                                StkItemRepository stkItemRepository,
                                StrHistoryRepository historyRepository,
                                AdmSequenceRepository sequenceRepository,
-                               PerimetreCommercialService perimetreService) {
+                               PerimetreCommercialService perimetreService,
+                               AdmUserRepository userRepository) {
+        this.userRepository = userRepository;
         this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
         this.prospectService = prospectService;
@@ -613,11 +630,31 @@ public class ProspectionService {
             throw new InvalidRequestException("description est requise");
         }
 
+        LocalDateTime maintenant = LocalDateTime.now();
+        AdmUser auteur = auteurCourant();
+        String nomAuteur = auteur != null ? auteur.getDescription() : null;
+
         ComActionMessage message = new ComActionMessage();
         message.setId(UUID.randomUUID());
         message.setComProspection(prospection);
-        message.setDocDate(LocalDateTime.now());
-        message.setDescription(request.description());
+        message.setDocDate(maintenant);
+
+        // Le texte de l'appelant va dans AlertMessage, PAS dans Description : c'est là que
+        // l'application de bureau écrit et lit la note. Description est un libellé « date +
+        // auteur » qu'elle régénère, et que nous générons donc à l'identique — mesuré sur
+        // 46 546 lignes réelles, sans une seule exception. Voir FIX-interaction-note.md §2.
+        message.setAlertMessage(request.description());
+        message.setDescription(libelleInteraction(maintenant, nomAuteur));
+
+        // L'auteur vient du jeton, jamais du corps : le laisser choisir fausserait les KPI de
+        // performance commerciale. AdmUser est le porteur fiable de l'auteur — CfgEmployeeId
+        // est vide 4 fois sur 5 en base réelle.
+        message.setAdmUser(auteur);
+        message.setCfgEmployee(auteur != null ? auteur.getCfgEmployee() : null);
+        message.setUserName(nomAuteur);
+        message.setUserCreate(nomAuteur);
+        message.setUserCreateDateTime(maintenant);
+
         message.setIsIn(request.entrante() != null ? request.entrante() : true);
         message.setAlertValidityDate(request.dateAlerte());
 
@@ -654,10 +691,41 @@ public class ProspectionService {
         return toInteractionDto(actionMessageRepository.save(message));
     }
 
+    /**
+     * Format exact du libellé de l'application de bureau : {@code dd/MM/yyyy HH:mm } suivi du
+     * nom de l'auteur. Vérifié ligne à ligne sur {@code yesRemsProd} — la date correspond
+     * toujours à {@code DocDate}, et le nom à {@code AdmUser.Description}.
+     *
+     * <p>Sans auteur connu (R3 de la spec), le libellé se réduit à la date plutôt que de
+     * traîner un « null » : certains contextes n'ont pas de principal authentifié, et une
+     * interaction sans auteur vaut mieux qu'une exception.
+     */
+    private static String libelleInteraction(LocalDateTime date, String nomAuteur) {
+        String horodatage = date.format(FORMAT_LIBELLE);
+        return StringUtils.hasText(nomAuteur) ? horodatage + " " + nomAuteur : horodatage;
+    }
+
+    /**
+     * Compte authentifié, ou {@code null} hors contexte web. {@code @WithMockUser} et les
+     * endpoints ouverts portent un principal d'un autre type : traités comme « pas d'auteur »,
+     * jamais comme une erreur.
+     */
+    private AdmUser auteurCourant() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser utilisateur
+                && utilisateur.admUserId() != null) {
+            return userRepository.findById(utilisateur.admUserId()).orElse(null);
+        }
+        return null;
+    }
+
     private static InteractionDto toInteractionDto(ComActionMessage m) {
         return new InteractionDto(
                 m.getId(),
                 m.getDocDate(),
+                // AlertMessage porte le texte du commercial ; Description n'est qu'un libellé
+                // « date + auteur » régénéré à chaque écriture. Voir FIX-interaction-note.md.
+                m.getAlertMessage(),
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
