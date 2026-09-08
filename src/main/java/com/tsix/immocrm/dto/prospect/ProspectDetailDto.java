@@ -19,9 +19,17 @@ public record ProspectDetailDto(
         String nom,
         String raisonSociale,
         String telephone,
+        /**
+         * Indicatif pays du fixe, sans le {@code +} ({@code "212"}). Sert à préremplir le
+         * sélecteur en édition — sans lui, rouvrir une fiche et la réenregistrer obligerait à
+         * rechoisir le pays à chaque fois.
+         */
+        String indicatifTelephone,
         String telephone1,
         String telephone2,
         String mobile,
+        /** Indicatif pays du mobile, même usage que {@link #indicatifTelephone}. */
+        String indicatifMobile,
         String fax,
         String email,
         String siteWeb,

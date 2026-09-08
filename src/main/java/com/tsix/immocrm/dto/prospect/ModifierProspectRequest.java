@@ -18,7 +18,15 @@ public record ModifierProspectRequest(
         String nom,
         String raisonSociale,
         String telephone,
+        /**
+         * Indicatif pays du fixe, sans le {@code +}. <b>Requis dès que {@code telephone} est
+         * fourni</b>, sans reprise implicite de celui déjà en base : un numéro qui change peut
+         * changer de pays. Une modification qui ne touche pas au téléphone n'a rien à fournir.
+         */
+        String indicatifTelephone,
         String mobile,
+        /** Indicatif pays du mobile, mêmes règles que {@link #indicatifTelephone}. */
+        String indicatifMobile,
         String email,
         String adresse,
         String ville,

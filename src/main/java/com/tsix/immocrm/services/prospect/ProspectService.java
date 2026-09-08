@@ -76,6 +76,8 @@ public class ProspectService {
     private final AdmProfessionRepository professionRepository;
     private final AdmSalaryRepository salaryRepository;
     private final AdmIdentityDocumentTypeRepository identityDocumentTypeRepository;
+    /** Contrôle indicatif + numéro — voir {@code FEATURE-indicatif-telephone.md}. */
+    private final NumeroTelephoneSupport numeroSupport;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -89,7 +91,9 @@ public class ProspectService {
                             AdmMatrimonialRegimeRepository matrimonialRegimeRepository,
                             AdmProfessionRepository professionRepository,
                             AdmSalaryRepository salaryRepository,
-                            AdmIdentityDocumentTypeRepository identityDocumentTypeRepository) {
+                            AdmIdentityDocumentTypeRepository identityDocumentTypeRepository,
+                            NumeroTelephoneSupport numeroSupport) {
+        this.numeroSupport = numeroSupport;
         this.tierRepository = tierRepository;
         this.tierTypeRepository = tierTypeRepository;
         this.tierKindRepository = tierKindRepository;
@@ -165,7 +169,8 @@ public class ProspectService {
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);
         applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
-                request.mobile(), request.email(), request.adresse(), request.ville(), request.codePostal(),
+                request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
+                request.email(), request.adresse(), request.ville(), request.codePostal(),
                 request.dateNaissance(), request.lieuNaissance(), request.nombreEnfants(), request.typeId(),
                 request.kindId(), request.commercialId(), request.titreId(), request.sexeId(),
                 request.paysResidenceId(), request.paysId(), request.nationaliteId(), request.situationFamilialeId(),
@@ -204,7 +209,8 @@ public class ProspectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + id));
 
         applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
-                request.mobile(), request.email(), request.adresse(), request.ville(), request.codePostal(),
+                request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
+                request.email(), request.adresse(), request.ville(), request.codePostal(),
                 request.dateNaissance(), request.lieuNaissance(), request.nombreEnfants(), request.typeId(),
                 request.kindId(), request.commercialId(), request.titreId(), request.sexeId(),
                 request.paysResidenceId(), request.paysId(), request.nationaliteId(), request.situationFamilialeId(),
@@ -216,18 +222,37 @@ public class ProspectService {
     }
 
     private void applyFields(CfgTier tier, String prenom, String nom, String raisonSociale, String telephone,
-                              String mobile, String email, String adresse, String ville, String codePostal,
+                              String indicatifTelephone, String mobile, String indicatifMobile,
+                              String email, String adresse, String ville, String codePostal,
                               LocalDateTime dateNaissance, String lieuNaissance, Integer nombreEnfants,
                               UUID typeId, UUID kindId, UUID commercialId, UUID titreId, UUID sexeId,
                               UUID paysResidenceId, UUID paysId, UUID nationaliteId, UUID situationFamilialeId,
                               UUID typeResidenceId, UUID regimeMatrimonialId, UUID professionId, UUID salaireId,
                               String employeur, Integer anciennete, String filsDe, String etDe, String adresse2,
                               String adresse3, PieceIdentiteRequest pieceIdentite) {
+        // Un numéro ne s'écrit jamais seul : indicatif exigé, valeur normalisée au format que
+        // porte déjà la base. Voir FEATURE-indicatif-telephone.md §5.
+        //
+        // Les DEUX contrôles ont lieu avant la moindre écriture, et l'ordre porte le sens : une
+        // requête fournissant un mobile valide et un fixe fautif ne doit pas laisser la fiche
+        // avec le mobile écrit et le reste non. La transaction annulerait de toute façon, mais
+        // s'appuyer là-dessus ferait dépendre la cohérence d'un mécanisme extérieur à la méthode.
+        NumeroTelephoneSupport.NumeroNormalise fixe =
+                numeroSupport.valider(telephone, indicatifTelephone, "telephone");
+        NumeroTelephoneSupport.NumeroNormalise portable =
+                numeroSupport.valider(mobile, indicatifMobile, "mobile");
+
         if (prenom != null) tier.setFirstName(prenom);
         if (nom != null) tier.setLastName(nom);
         if (raisonSociale != null) tier.setSocialReason(raisonSociale);
-        if (telephone != null) tier.setPhone(telephone);
-        if (mobile != null) tier.setMobile(mobile);
+        if (fixe != null) {
+            tier.setPhone(fixe.numero());
+            tier.setPhoneIndicatif(fixe.indicatif());
+        }
+        if (portable != null) {
+            tier.setMobile(portable.numero());
+            tier.setMobileIndicatif(portable.indicatif());
+        }
         if (email != null) tier.setEMail(email);
         if (adresse != null) tier.setAddress(adresse);
         if (adresse2 != null) tier.setAddress2(adresse2);
@@ -365,9 +390,11 @@ public class ProspectService {
                 tier.getLastName(),
                 tier.getSocialReason(),
                 tier.getPhone(),
+                tier.getPhoneIndicatif(),
                 tier.getPhone1(),
                 tier.getPhone2(),
                 tier.getMobile(),
+                tier.getMobileIndicatif(),
                 tier.getFax(),
                 tier.getEMail(),
                 tier.getWebSite(),

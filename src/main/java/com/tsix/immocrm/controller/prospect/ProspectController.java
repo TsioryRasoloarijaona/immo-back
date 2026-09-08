@@ -62,11 +62,54 @@ public class ProspectController {
     }
 
     @PostMapping
+    @Operation(
+            summary = "Crée un prospect",
+            description = "`nom` ou `raisonSociale` est requis ; tout le reste est optionnel.\n\n"
+                    + "**Un numéro de téléphone ne s'enregistre jamais seul.** Fournir `mobile` "
+                    + "impose `indicatifMobile`, fournir `telephone` impose "
+                    + "`indicatifTelephone` — sinon **400**. L'indicatif est l'indicatif pays "
+                    + "sans le `+` (`\"212\"`, le `+` étant toléré et retiré), et il doit exister "
+                    + "dans le référentiel : voir GET /api/referentiels/pays, champ "
+                    + "`indicatifTelephone`. C'est ce contrôle qui rend l'envoi WhatsApp fiable "
+                    + "en aval — un numéro sans indicatif est inenvoyable, un indicatif fautif "
+                    + "expédie le message à un inconnu.\n\n"
+                    + "**Le numéro est normalisé avant écriture**, au format que porte déjà la "
+                    + "base : 9 chiffres deviennent `6 98 29 80 95` (espacé, zéro initial retiré) "
+                    + "— la forme de 98,8 % des fiches existantes ; toute autre longueur est "
+                    + "stockée en chiffres nus, comme le sont déjà les mobiles nord-américains à "
+                    + "10 chiffres. La valeur relue peut donc différer de celle envoyée."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Prospect créé."),
+            @ApiResponse(responseCode = "400", description = "`nom`/`raisonSociale` absents ; "
+                    + "numéro fourni sans son indicatif, ou indicatif seul sans numéro ; "
+                    + "indicatif absent du référentiel ; numéro hors de 6–14 chiffres ; "
+                    + "référence (type, pays, profession...) inconnue.")
+    })
     public ResponseEntity<ProspectDetailDto> create(@RequestBody CreerProspectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectService.create(request));
     }
 
     @PatchMapping("/{id}")
+    @Operation(
+            summary = "Modifie un prospect",
+            description = "Mise à jour partielle : un champ absent ou `null` est laissé "
+                    + "inchangé.\n\n"
+                    + "**Les mêmes règles de téléphone qu'à la création s'appliquent** (voir "
+                    + "POST /api/prospects), avec une conséquence propre à la modification : "
+                    + "l'indicatif **n'est jamais repris implicitement** de la fiche existante. "
+                    + "Modifier `mobile` sans envoyer `indicatifMobile` renvoie 400 même si la "
+                    + "fiche en portait déjà un — un numéro qui change peut changer de pays, et "
+                    + "hériter de l'ancien indicatif fabriquerait un numéro qui n'existe pas.\n\n"
+                    + "En revanche, une modification qui **ne touche pas** au téléphone ne "
+                    + "demande aucun indicatif : les fiches historiques dont l'indicatif manque "
+                    + "restent modifiables sur leurs autres champs."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospect mis à jour."),
+            @ApiResponse(responseCode = "400", description = "Mêmes causes qu'à la création."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
     public ProspectDetailDto update(@PathVariable UUID id, @RequestBody ModifierProspectRequest request) {
         return prospectService.update(id, request);
     }
