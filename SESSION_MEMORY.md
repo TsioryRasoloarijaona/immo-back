@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-07T18:05+01:00_
+_Last updated: 2026-09-07T18:40+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -31,6 +31,10 @@ de le laisser cantonné au patrimoine et aux référentiels.
   production.
 - **Une lambda unique par filtre, pas `Specification.and()` de deux spécifications** — sinon chacune
   repose ses propres `LEFT JOIN` et la requête porte la chaîne article → tranche → projet en double.
+- **Réconcilier tranche par tranche après coup** (demande de l'utilisateur). Le détail des 5
+  tranches actives redonne exactement les totaux du filtre — 116 dossiers, 11 595 prospections,
+  500 articles — et 116 + 242 masqués = 358, le total de `ComFolder`. C'est cette égalité, pas la
+  lecture du code, qui prouve qu'aucune ligne ne se cache ailleurs.
 
 ## ❌ What Failed
 
@@ -107,6 +111,26 @@ Dossiers 358→116 · prospections 17 823→11 787 · encaissements de vente 644
 interactions 48 118→30 668. Restent visibles car sans entité résoluble : **192 prospections**,
 **1 644 interactions**.
 
+### Réconciliation par tranche — vérifiée, à ne pas refaire
+Les 5 tranches actives et ce qu'elles portent (`yesRemsProd`) :
+
+| Entité | Tranche | Dossiers | Prospections | Articles |
+|---|---|---:|---:|---:|
+| ADMOD | `APF` (AYAD PRIVATE FERME BRETONE) | 33 | 1 830 | 80 |
+| ADMOD | `APF-HIDDEN` | 0 | 8 | 0 |
+| GHRIZA | `ARB-ALC` (ALCENOR BEL AIR) | 0 | 169 | 0 |
+| GHRIZA | `ARS` (AYAD RESIDENCE BEL AIR) | 83 | 9 588 | 420 |
+| GHRIZA | `ars hidden` | 0 | 0 | 0 |
+| | **Total** | **116** | **11 595** | **500** |
+
+Ces totaux sont **identiques** à ce que le filtre laisse passer : rien de rattaché aux 5 tranches
+n'est masqué. Les 242 dossiers masqués sont BENACEUR (200), MAYLINE (26), YESTEST (16) — soit les
+marques MBR et ART, plus une entité de test.
+
+**`ComFolder.StkHierarchyId` est renseigné sur les 358 dossiers** (0 sans tranche) : la règle R2
+« entité non résoluble ⇒ visible » ne concerne donc **aucun dossier réel**, seulement les 192
+prospections et 1 644 interactions orphelines. L'écart 11 787 vs 11 595 vient exactement de ces 192.
+
 ### Échéancier / règlements — modèle réel
 - `ComDocument` (échéance, liée au dossier), `StlSettlement` (règlement, **sans lien vers le
   dossier**), `StlSettlementLine` (imputation polymorphe). Relation plusieurs-à-plusieurs réelle.
@@ -157,9 +181,13 @@ interactions 48 118→30 668. Restent visibles car sans entité résoluble : **1
 
 ## ⏭️ Next Step
 
-> **Committer, pousser, et faire fusionner la PR sur GitHub.** La branche
-> `feat/entites-actives-et-fiche-reservation` porte alors trois unités : entités actives, fiche de
-> réservation, visibilité transversale. Puis `sync` avant toute nouvelle branche.
+> **Attendre la fusion de la PR par l'utilisateur sur GitHub, puis `sync`.** Le travail est
+> **commité et poussé** — commit `faad467`, branche `feat/entites-actives-et-fiche-reservation`,
+> qui porte trois unités : entités actives (`3785da9`), fiche de réservation (`2f93f02`),
+> visibilité transversale (`faad467`).
+> PR : https://github.com/TsioryRasoloarijaona/immo-back/pull/new/feat/entites-actives-et-fiche-reservation
+>
+> **Ne pas couper de nouvelle branche avant le merge**, et demander l'accord avant de le faire.
 >
 > **À relayer au dépôt frontend** (autre PR, autre lane — ne pas le faire depuis ici) : la section
 > « Impact front » de `FEATURE-visibilite-transversale-entites.md`. En particulier
