@@ -92,9 +92,17 @@ Portefeuille (attribution `CfgCommercialId`) :
 | `tauxAppelVersRdv` | `rdvObtenus / appelsPasses` |
 | `tauxProspectionVersDossier` | `dossiersCrees / prospectionsAssignees` |
 
-**La réactivité est l'indicateur qui sépare le plus.** Sur les 6 533 prospections reçues depuis
-2025 sur les entités actives : **2 117 n'ont jamais été contactées (32 %)**, 2 815 l'ont été sous
-24 h, délai moyen 109 h.
+**La réactivité est l'indicateur qui sépare le plus** — mais il faut lire le bon chiffre. Sur les
+6 533 prospections reçues depuis 2025 sur les entités actives, 2 117 n'ont jamais été contactées
+(32 %), 2 815 l'ont été sous 24 h, délai moyen 109 h.
+
+> **Ce 32 % ne mesure pas les commerciaux.** Vérifié après coup contre l'API et la base :
+> **1 858 de ces 2 117 prospections n'ont aucun commercial assigné**. Parmi celles qui en ont un,
+> seules **259 sur 4 555 (5,7 %)** sont restées sans contact. Les indicateurs ci-dessous ne portent
+> que sur les prospections **assignées** — d'où des taux de prise en charge très élevés en sortie
+> réelle (1 455/1 460 pour le premier commercial). Le vrai problème que révèle le 32 % est un
+> **stock de leads jamais attribués**, ce qui relève de l'affectation et non de la performance
+> individuelle. Ne pas présenter ce chiffre comme un taux de commercial.
 
 **Chaque taux est accompagné de son effectif brut**, et vaut `null` — jamais `0` — quand le
 dénominateur est nul. Avec 36 dossiers créés depuis 2025 toutes personnes confondues, un
