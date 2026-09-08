@@ -25,16 +25,33 @@ import java.util.List;
         + "appels antérieurs non encore rattachés à une fiche formelle.")
 public record HotlineResultDto(
 
-        @Schema(description = "Numéro de téléphone tel que saisi par l'agent, non modifié.",
+        @Schema(description = "Quel critère a produit ce résultat : `TELEPHONE` ou `NOM`.",
+                example = "TELEPHONE", allowableValues = {"TELEPHONE", "NOM"})
+        String critere,
+
+        @Schema(description = "Numéro de téléphone tel que saisi par l'agent, non modifié. "
+                + "`null` pour une recherche par nom.",
                 example = "06 12 34 56 78")
         String telephoneRecherche,
 
         @Schema(description = "Numéro normalisé effectivement utilisé pour la recherche : "
                 + "uniquement les chiffres, 9 derniers chiffres conservés (indicatif pays "
                 + "ignoré). Utile pour comprendre pourquoi deux numéros écrits différemment se "
-                + "sont (ou non) rejoints.",
+                + "sont (ou non) rejoints. `null` pour une recherche par nom.",
                 example = "612345678")
         String telephoneNormalise,
+
+        @Schema(description = "Terme recherché, tel que saisi. `null` pour une recherche par "
+                + "téléphone.", example = "alami")
+        String nomRecherche,
+
+        @Schema(description = "**À afficher.** `true` quand plus de 20 fiches correspondent au "
+                + "nom et que la liste a été coupée — l'agent doit alors préciser sa recherche. "
+                + "Sans cette indication il conclurait que la personne n'existe pas, alors "
+                + "qu'elle est simplement au-delà du plafond : « MOHAMED » remonte 555 fiches en "
+                + "base réelle. Toujours `false` pour une recherche par téléphone, qui n'est pas "
+                + "plafonnée.")
+        boolean tronque,
 
         @Schema(description = "true si au moins une fiche (CfgTier) existante correspond à ce "
                 + "numéro — c'est-à-dire si cette personne est déjà connue du système, pas "

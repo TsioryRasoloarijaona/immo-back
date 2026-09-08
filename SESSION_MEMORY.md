@@ -1,52 +1,67 @@
 # Session Memory
-_Last updated: 2026-09-08T17:30+01:00_
+_Last updated: 2026-09-08T18:00+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-**Service d'envoi d'email (SMTP Hostinger)** — la brique générique *et* son premier
-consommateur réel : l'expédition du mot de passe temporaire à la création d'un employé et à la
-réinitialisation. Branche `feat/service-envoi-email`, **en attente de merge GitHub**.
+Quatre chantiers dans cette session :
 
-Les trois unités de la session précédente (suppression de pièces jointes, KPI commerciaux,
-401→403) sont mergées. **Les migrations SQL en attente ont été appliquées à la main par
-l'utilisateur** — le blocage n°21 est levé.
+1. **Service d'envoi d'email (SMTP)** + expédition du mot de passe temporaire — **mergé**
+   (PR #20 `8697d01`, PR #21 `697a2ed`).
+2. **Synchronisation des données du légataire** sur les trois bases
+   (`192.168.11.115` → `yesRemsProd` → `yesRemsDev`) — **terminée et vérifiée**.
+3. **Correction de la note d'interaction** — branche `fix/interaction-note` (`b688a55`),
+   **poussée, en attente de merge**.
+4. **Recherche hotline par nom** — branche `feat/hotline-recherche-nom` (`675f24a`),
+   **poussée, en attente de merge**.
+
+**564 tests verts** (525 en début de session).
 
 ---
 
 ## ✅ What Worked
 
-- **Mesurer avant de spécifier, encore une fois décisif.** Le taux global « 32 % des comptes
-  ont un email » (24/75) est **trompeur** : 60 comptes sur 75 sont désactivés. Le seul chiffre
-  qui décrit la population vivante est **10 sur 15**. Toute la règle du destinataire a été
-  écrite sur ce chiffre-là.
-- **Calquer la brique sur `storage/`** plutôt que d'inventer : port `EnvoiEmail` +
-  implémentation unique + double `@Primary` dans `src/test/java`, exactement comme
-  `StockageFichiers` / `StockageS3` / `StockageMemoire`. Zéro décision d'architecture à
-  prendre, et les tests ne touchent jamais le réseau.
-- **Lire les noms d'artefacts dans le BOM au lieu de les deviner.** Le `pom.xml` utilise
-  `spring-boot-starter-webmvc` et `-data-jpa-test` : les starters ont été renommés en Boot 4.
-  Vérification dans `spring-boot-dependencies-4.1.0.pom` avant d'écrire quoi que ce soit.
-- **Découper les tests selon ce qui est réellement observable** (voir « Ce qui est
-  intestable » ci-dessous) — trois classes, trois angles, plutôt qu'une classe qui aurait
-  échoué ou, pire, serait passée pour une mauvaise raison.
-- **Faire tourner la suite complète a payé immédiatement** : le seul test rouge a révélé une
-  régression de production que rien d'autre n'aurait attrapée (bug #25).
+- **Mesurer avant de spécifier.** Décisif quatre fois de suite :
+  - « 32 % des comptes ont un email » est trompeur — 60 comptes sur 75 sont désactivés, la
+    population vivante est **10 sur 15** ;
+  - `ComActionMessage.Description` est remplie à 100 % mais fait 22 à 41 caractères : c'est un
+    libellé généré, pas un contenu ;
+  - « MOHAMED » remonte **555 fiches** — le plafond de la recherche par nom n'est pas théorique ;
+  - la collation `French_CI_AS` est **sensible aux accents**, et la base contient `Héjér F'H`.
+- **Calquer sur l'existant plutôt qu'inventer** : la brique mail reprend exactement le dispositif
+  de `storage/` (port + implémentation unique + double `@Primary` en test).
+- **Lire les noms d'artefacts dans le BOM** — les starters ont été renommés en Boot 4.
+- **Envoyer un vrai email** : seul moyen d'avoir trouvé le mauvais serveur SMTP et l'expéditeur
+  manquant. Aucun test hors ligne ne pouvait les voir.
+- **Extraire le tronc commun avant d'ajouter une variante** (hotline `assembler()`) : c'est ce
+  qui fait hériter la recherche par nom des règles déjà éprouvées.
+- **Lancer la suite complète après chaque chantier** : elle a révélé une régression de
+  production que rien d'autre n'aurait attrapée (bug #25).
 
 ## ❌ What Failed
 
-- **`spring-boot-starter-mail` casse `/actuator/health` en silence.** Il enregistre un
-  `MailHealthIndicator` qui ouvre une connexion SMTP **à chaque appel**. `ActuatorSecuriteTest`
-  est passé de 200 à **503**, en sept secondes — le délai d'expiration. En production, la sonde
-  post-déploiement (`127.0.0.1:9091/actuator/health`) aurait échoué dès que la boîte Hostinger
-  aurait été injoignable. **`management.health.mail.enabled=false`, dans les DEUX fichiers de
-  propriétés.**
-- **`commit` refuse de tourner sur `main`** — et `SESSION_MEMORY.md` traînait modifié depuis la
-  session précédente, ce qui bloquait aussi `git-flow start`. Résolu par `git stash push` →
-  `start` → `git stash pop`. Ne pas contourner le garde-fou, il a raison.
-- **Séparateur de `-Dtest=` : virgule, pas `+`** (`No tests matching pattern`).
+- **`smtp.hostinger.com` n'est pas le serveur de la boîte pro** → `535 authentication failed`.
+  Boîte facturée par Hostinger, **hébergée par Titan**. L'erreur ressemble à un mot de passe faux.
+- **`spring-boot-starter-mail` casse `/actuator/health`** : `MailHealthIndicator` ouvre une
+  connexion SMTP à chaque appel → 503 en 7 s.
+- **Synchronisation par INSERT seul** : les compteurs concordaient exactement alors que 12 lignes
+  divergeaient.
+- **Synchronisation par horodatage** : 4 règlements modifiés **sans** incrément de
+  `UserUpdateDateTime`.
+- **Diff shell sur des fichiers CRLF** : le retour chariot écrase la moitié gauche à l'affichage
+  → 942 fausses divergences et un dossier fantôme. **Toujours `tr -d '\r'` avant de comparer.**
+- **`EXCEPT` refuse `text`/`ntext`/`image`** — `ComFolder.ComDocumentDetail` est en `text`.
+- **`STRING_AGG` renvoie `nvarchar(4000)` et TRONQUE** si ses entrées ne sont pas `max`.
+- **Thymeleaf nu → `NoClassDefFoundError: ognl/PropertyAccessor`** : le starter Spring fournit
+  SpEL, pas OGNL. Injecter l'`ITemplateEngine` du contexte.
+- **JPQL ne connaît pas `COLLATE`** → requêtes natives obligatoires pour la recherche par nom.
+- **`sp_addlinkedserver` et son usage dans le même lot** → « serveur introuvable dans
+  sysservers » : le nom se résout à la compilation, il faut un `GO`.
+- **Sous-requête dans un `GROUP BY`** en T-SQL → erreur d'agrégat ; passer par une CTE.
+- **Séparateur de `-Dtest=` : virgule, pas `+`.**
+- **Guillemets échappés dans `sqlcmd -Q "..."`** → l'argument est coupé ; passer par `-i fichier`.
 
 ---
 
@@ -54,145 +69,159 @@ l'utilisateur** — le blocage n°21 est levé.
 
 | # | Error / Bug | Status | Fix applied |
 |---|-------------|--------|-------------|
-| 25 | **`MailHealthIndicator` rend `/actuator/health` 503** dès que le SMTP est injoignable | **Fixed** | `management.health.mail.enabled=false` dans `main` **et** `test` ; `ActuatorSecuriteTest` en est le garde-fou |
-| 21 | Migration `006` non appliquée en prod | **Fixed** | Appliquée à la main par l'utilisateur |
-| 22 | Refus de rôle rendait 401 au lieu de 403 | Fixed | `accessDeniedHandler` explicite |
-| 18 | Pièce supprimée toujours listée : `@Formula` hors auto-flush | Fixed | `saveAndFlush` |
-| 19 | Cache de premier niveau : `hasFile` figé | Fixed (test) | `entityManager.clear()` |
-| 20 | `ComActionMessage.CfgEmployeeId` prise pour l'auteur | Fixed | Mapping d'`AdmUserId` |
+| 26 | `535 authentication failed` : défaut `smtp.hostinger.com` alors que la boîte est chez Titan | **Fixed** | Défaut `smtp.titan.email` (`697a2ed`) |
+| 27 | `MAIL_FROM` absent ⇒ service silencieusement INACTIF | **Fixed** | Repli de l'expéditeur sur `spring.mail.username` |
+| 25 | `MailHealthIndicator` rend `/actuator/health` 503 | **Fixed** | `management.health.mail.enabled=false` dans `main` **et** `test` |
+| 28 | Synchro par INSERT seul : 12 lignes périmées invisibles aux compteurs | **Fixed** | Upsert avec comparaison de ligne entière |
+| 30 | **`GET /interactions` n'exposait pas la note** ; `description` = libellé généré | **Fixed** | Champ `note` depuis `AlertMessage` (`b688a55`) |
+| 31 | **`POST /interactions` écrivait dans la mauvaise colonne** et sans auteur | **Fixed** | Texte → `AlertMessage`, libellé généré, auteur depuis le jeton. **0 ligne à réparer** (défaut latent) |
+| 29 | `RESOURCE_SEMAPHORE` : la vérification du script VPS n'obtient pas sa mémoire (SQL Express) | Contourné | Session tuée, vérification par requêtes légères |
+| 21 | Migrations `005`/`006` non appliquées | **Fixed** | Appliquées par l'utilisateur ; vérifiées présentes sur le VPS |
 | 11 | Règlement `CANCELED` : `sumAmountByComDocumentId` ne filtre pas sur le statut | **Open** | Latent |
 | 12 | `POST /echeancier` sans `exclureDuPrix` | **Open** | Non corrigé |
 | 13 | `S3_ENDPOINT` de la run config pointe la **production** | **Open** | Aucune écriture faite |
-| 24 | `mvnw clean` tue l'app IntelliJ lancée depuis `target/classes` | Contourné | Ne plus builder tant qu'une instance tourne |
+| 32 | VS Code retient les ports **9090 et 9091** → l'app ne démarre pas | **Open** | Contourner par `MANAGEMENT_SERVER_PORT=9092` dans la run config |
+| 24 | `mvnw clean` tue l'app IntelliJ lancée depuis `target/classes` | Contourné | Ne pas builder tant qu'une instance tourne |
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### Le mail — ce qu'il faut savoir avant d'y toucher
+### Le mode de défaillance central de la session
 
-- **Configuration** : `spring.mail.*` (natif Spring, alimente `JavaMailSender`) pour l'hôte, le
-  port et les identifiants ; `app.mail.*` pour l'expéditeur, l'interrupteur et l'URL applicative.
-  Port **587 + STARTTLS**, pas 465.
-- **Les secrets ont un défaut VIDE, contrairement au S3 — c'est délibéré.** 546 tests bootent
-  le contexte complet : une propriété sans défaut ferait échouer toute la suite sur une variable
-  d'environnement absente, et l'échec ressemblerait à un bug de code. La contrepartie est le
-  contrôle de démarrage d'`EnvoiEmailSmtp`, qui journalise en WARN et bascule le service en
-  inactif plutôt que de laisser croire qu'un mail est parti.
-- **Variables d'environnement à ajouter à la run config IntelliJ et au déploiement** :
-  `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`. Sans elles l'application démarre, mais
-  n'envoie rien (et le dit dans le journal).
-- **Chaîne complète** : le service publie `MotDePasseTemporaireEmis` → écouteur
-  `AFTER_COMMIT` + `@Async("mailExecutor")` → port `EnvoiEmail`. `AFTER_COMMIT` garantit
-  qu'aucun mot de passe ne part pour une transaction annulée ; l'échec SMTP est journalisé,
-  jamais propagé.
-- **`@EnableAsync` est introduit par cette feature** et n'existait nulle part avant. Le bean
-  `mailExecutor` fait reculer l'autoconfiguration d'`applicationTaskExecutor` — sans effet ici
-  (aucun contrôleur ne renvoie `Callable`/`DeferredResult`/`StreamingResponseBody`), mais à
-  savoir si un endpoint devient asynchrone un jour.
+**Compter ne prouve rien.** Trois occurrences :
 
-### Ce qui est intestable tel quel, et comment le contourner
+1. Après une synchro par INSERT seul, les totaux concordaient **exactement** des deux côtés
+   alors que 12 lignes divergeaient.
+2. Un sondage par `UserUpdateDateTime` annonçait 8 lignes périmées sur le VPS ; la comparaison
+   de ligne entière en a trouvé **16**, dont 4 règlements modifiés sans que la date bouge.
+3. Un diff shell sur des fichiers CRLF a affiché 942 fausses divergences.
 
-- **Un `@TransactionalEventListener(AFTER_COMMIT)` ne se déclenche JAMAIS sous test** : la suite
-  est `@Transactional` et annulée. Attendre un message dans le double d'envoi au bout d'un appel
-  MockMvc donne un test qui échoue toujours. → `@RecordApplicationEvents` capture les événements
-  *publiés*, même sans commit.
-- **Un bean `@Async` injecté est un proxy** : l'appeler rend la main avant que le travail soit
-  fait. → instancier l'écouteur à la main dans le test, l'exécution redevient synchrone.
-- Conséquence : trois classes de test, une par couche observable
-  (`UtilisateurAdminEmailTest` / `EmailMotDePasseListenerTest` / `EnvoiEmailSmtpTest`).
+**Seule méthode fiable** : `EXISTS (SELECT s.<cols> EXCEPT SELECT t.<cols>)` — compare toutes
+les colonnes, traite `NULL = NULL`, avec cast des colonnes `text`/`ntext`/`image`.
 
-### Changement de contrat livré au frontend (autre lane)
+### Le corollaire : une colonne bien remplie n'est pas une colonne utile
 
-- `POST /api/utilisateurs/{id}/reinitialiser-mot-de-passe` **peut désormais rendre 400** quand
-  le compte n'a aucune adresse — **5 des 15 comptes actifs**. Choix explicite de l'utilisateur,
-  fait en connaissance du coût. Le refus précède toute écriture : `TokenVersion` intact.
-- `POST /api/utilisateurs` : **`email` devient réellement obligatoire et validé** (il était
-  annoncé `REQUIRED` mais ne portait aucune contrainte — `@Valid` ne vérifiait rien).
-- Deux champs additifs sur les deux réponses : `emailEnvoye`, `destinataire` (masqué).
-  `motDePasseTemporaire` **reste** — l'envoi est asynchrone et faillible, c'est le filet.
+`ComActionMessage.Description` est renseignée sur **46 546 lignes sur 46 546**. Elle est
+pourtant inexploitable : longueur 22–41 caractères, motif `JJ/MM/AAAA HH:MM <auteur>` sans une
+seule exception. C'est un libellé généré, redondant avec `date` + `employeNom`. **Le contenu
+réel est dans `AlertMessage`** (1–944 caractères, 96,6 %), qui malgré son nom ne relève pas des
+relances : 6 502 interactions ont une note sans aucune date d'alerte.
 
-### Interroger `yesRemsProd`
+Toujours regarder **la distribution des longueurs et un échantillon**, pas seulement le taux de
+remplissage.
 
-- **`SET DATEFORMAT ymd;` en tête de toute requête datée.** Session française ⇒ `dmy` ⇒
-  `'2026-09-08'` lu **9 août**. Une borne fausse peut produire une fausse concordance.
-- **Base de lecture seule.** La suite tourne contre `yesRemsCiCheck`, jamais `yesRemsProd`.
-- **Compter avant de conclure** ; **ne jamais mapper une colonne de vue**.
-- **Toujours vérifier si la population est vivante avant de citer un taux** — c'est ce qui a
-  transformé « 32 % » en « 10 sur 15 » cette session.
+### Le mail
 
-### 401 vs 403
+- **Serveur : `smtp.titan.email`**, pas Hostinger — qui **revend** Titan. Vérifiable par les MX
+  du domaine et le SPF. Port 587 + STARTTLS.
+- **Variables suffisantes** : `MAIL_USERNAME` + `MAIL_PASSWORD`. `MAIL_FROM` est facultatif
+  (repli sur le compte SMTP).
+- **`management.health.mail.enabled=false` obligatoire**, dans les DEUX fichiers de propriétés
+  (celui de `test` REMPLACE celui de `main`).
+- Chaîne : publication de `MotDePasseTemporaireEmis` → écouteur `AFTER_COMMIT` +
+  `@Async("mailExecutor")` → port `EnvoiEmail`. Échec SMTP journalisé, jamais propagé.
 
-- Sans `accessDeniedHandler` explicite, `sendError(403)` → forward `/error` → contexte vidé →
-  **401**. **MockMvc ne rejoue pas la dispatch ERROR** : un test vert ne prouve rien ici, seule
-  la comparaison de deux instances réelles le fait.
+### Ce qui est intestable tel quel
+
+- **`@TransactionalEventListener(AFTER_COMMIT)` ne se déclenche JAMAIS sous test** (suite
+  `@Transactional`, annulée) → `@RecordApplicationEvents` capture les événements *publiés*.
+- **Un bean `@Async` injecté est un proxy** → instancier l'écouteur à la main dans le test.
+
+### La topologie des bases
+
+| Base | Rôle | Version |
+|---|---|---|
+| `192.168.11.115` / `YesRems` | **source de vérité**, app de bureau | SQL 2019 |
+| `yesRemsProd` (local, `49687`) | copie de travail | SQL 2019 |
+| `yesRemsDev` (VPS, tunnel `127.0.0.1:1433`) | environnement **déployé**, Docker | SQL 2022 |
+
+- **Le VPS ne peut pas joindre le `.115`** (LAN privé) : la synchro passe par le local en relais.
+- **Aucune dérive de schéma légataire** : sur 7 100 colonnes, le seul écart est
+  `AdmAttachedFile.AttachedFile` (FILESTREAM refusée au RESTORE), plus nos trois tables `App*`.
+- **Chaque base a ses lignes propres, à ne jamais écraser** : le local porte `t.admin` et sa
+  fiche `CfgTier` « Tsiory Admin » (`F7F6EC46-…`, **exclue** de la poussée vers le VPS) ; le VPS
+  porte une interaction créée par l'app déployée et ses `AppUserCredential`.
+- **`SET DATEFORMAT ymd;`** en tête de toute requête datée (session française ⇒ `dmy`).
+- **`CHECKSUM()` n'est pas stable entre SQL 2019 et 2022** — inutilisable pour comparer local et VPS.
+- **Collation `French_CI_AS`** : insensible à la casse, **sensible aux accents**. Toute recherche
+  textuelle sur un nom exige `COLLATE French_CI_AI` — donc une requête **native**.
+
+### Ce que les données disent du produit
+
+- **L'acquisition est automatisée** : `n8n_api` et une source sans `UserCreate` injectent
+  ~19 leads/jour depuis Facebook Ads et les sites web.
+- **84 % des leads entrants ne sont ni assignés ni contactés.** Sur 114 nouveaux leads :
+  18 assignés **et** contactés, 96 ni l'un ni l'autre — **aucune case hors diagonale**.
+- **Stock dormant : 2 994** prospections ouvertes jamais assignées ni contactées, **+91 en six
+  jours**. 664 ont plus d'un an.
+- `CfgTierKind` est nul pour **98,8 %** des tiers : la norme, jamais une anomalie.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- `instructions/FEATURE-service-envoi-email.md` — la spec : §2 les mesures, §5 l'asynchronie,
-  **§7 bis le piège de la sonde de santé**, §9 l'impact front, §11 le découpage des tests.
-- `src/main/java/.../mail/` — `EnvoiEmail` (port), `EnvoiEmailSmtp`, `EmailConfig`
-  (`@EnableAsync`), `EmailProperties`, `MessageEmail`, `MotDePasseTemporaireEmis`,
-  `EmailMotDePasseListener`, `AdresseMasquee`.
-- `src/main/resources/templates/mail/mot-de-passe-temporaire.html` — tables + styles en ligne,
-  **aucun lien portant le mot de passe**.
-- `src/test/java/.../mail/EnvoiEmailMemoire.java` — double `@Primary`, jumeau de
-  `StockageMemoire`.
-- `src/main/java/.../services/auth/UtilisateurAdminService.java` — résolution du destinataire
-  (`AdmUser.Email` → repli `CfgTier.EMail`), refus 400 **avant** toute écriture.
-- `src/main/resources/application.properties` + `src/test/resources/application.properties` —
-  le second **remplace** le premier, toute propriété utile aux tests doit y être répétée.
-- `src/main/java/.../security/SecurityConfig.java` — `accessDeniedHandler`. Ne pas revenir au
-  handler implicite.
+- `instructions/FEATURE-service-envoi-email.md` — §4 la config **avec l'encadré Titan**,
+  §7 bis le piège de la sonde de santé, §9 l'impact front.
+- `instructions/FIX-interaction-note.md` — §2 les mesures qui prouvent que `Description` est un
+  libellé, §5 les règles d'écriture, §6 l'impact front.
+- `instructions/FEATURE-hotline-recherche-nom.md` — §2 la collation et la volumétrie, §3 le
+  contrat, §7 l'impact front.
+- `src/main/java/.../mail/` — `EnvoiEmail` (port), `EnvoiEmailSmtp` (repli d'expéditeur),
+  `EmailConfig` (`@EnableAsync`), `MotDePasseTemporaireEmis` (`toString()` masqué), `AdresseMasquee`.
+- `src/main/java/.../services/hotline/HotlineService.java` — `assembler()` commun aux deux
+  recherches, `FICHES_MAX_PAR_NOM = 20`.
+- `src/main/java/.../repositories/{cfg/CfgTierRepository,com/ComProspectionRepository}.java` —
+  requêtes natives `COLLATE French_CI_AI`, avec variante « dans périmètre ».
+- **`../sync-yesRemsProd-depuis-115.sql`** et **`../sync-vps-yesRemsDev.sql`** — upserts
+  idempotents, **hors dépôt git** (dans `prototype/`), volontairement. La section 4 du second est
+  trop lourde et se bloque en `RESOURCE_SEMAPHORE` : vérifier à la main.
 
 ---
 
 ## 🔧 Environment & Config
 
-- **Tests** : `546 tests, verts` (525 en début de session, +21).
+- **Tests** : `564 tests, verts`.
   ```powershell
   $env:SPRING_DATASOURCE_URL="jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"
   $env:SPRING_DATASOURCE_USERNAME="tsix"; $env:SPRING_DATASOURCE_PASSWORD="securePassword123"
   .\mvnw.cmd test "-Dspring.jpa.show-sql=false"
   ```
-  Guillemets obligatoires sous PowerShell ; `-Dtest=A,B,C` avec des **virgules**.
-- **⚠️ Ne pas lancer `mvnw clean` pendant qu'une instance tourne depuis IntelliJ** (bug #24).
-- **SQL Server local** sur `49687`, user `tsix` : `yesRemsProd` (schéma + données réelles),
-  `yesRemsCiCheck` (tests), `yesRemsTest` (obsolète). `-l 30` si timeout de login.
-- **Run config IntelliJ** : `DB_HOST=localhost`, `DB_NAME=yesRemsProd`, `DB_PORT=49687`,
-  `S3_ENDPOINT=https://s3.tsiory.tech` (**bucket de production**), `S3_BUCKET=immo-back`.
-  **À compléter** : `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (boîte pro Hostinger).
-- **Comptes applicatifs de test** dans `yesRemsProd` : `t.admin` (Administrateur, périmètre
-  libre), `Khadija` (Commercial, restreint APF + ARS). Mots de passe **non consignés ici**.
+- **Run config IntelliJ** : porte `MAIL_USERNAME` / `MAIL_PASSWORD`. **Ajouter
+  `MANAGEMENT_SERVER_PORT=9092`** — VS Code occupe 9090 et 9091 (bug #32). Mots de passe **non
+  consignés ici**.
+- **⚠️ Ne pas lancer `mvnw clean`** pendant qu'une instance tourne depuis IntelliJ (bug #24).
+- **Sources de données IntelliJ** : `prod`, `vps_dev`, `YesRems@192.168.11.115`. Les mots de
+  passe y sont chiffrés (`master_key`), **non lisibles** depuis les fichiers de configuration.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Faire merger la PR `feat/service-envoi-email` sur GitHub**, puis
-> `node .claude/scripts/git-flow.mjs sync back`.
+> **Merger les deux PR de code sur GitHub**, dans n'importe quel ordre — elles ont été coupées
+> du même `main` et portent sur des fichiers disjoints :
+> - `fix/interaction-note` (`b688a55`)
+> - `feat/hotline-recherche-nom` (`675f24a`)
 >
-> **Avant de tester en vrai**, renseigner `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` avec
-> la boîte pro Hostinger dans la run config IntelliJ. Sans elles, le journal de démarrage
-> affiche « Envoi d'email INACTIF » et rien ne part — c'est le comportement voulu, pas une
-> panne. Le premier essai grandeur nature : créer un employé avec sa vraie adresse.
+> Puis `node .claude/scripts/git-flow.mjs sync back`.
+>
+> **⚠️ La PR `docs/memoire-de-session` est à FERMER sans merger** : elle ne contient qu'une
+> version antérieure de ce fichier, entièrement reprise ici. La merger créerait un conflit.
 
 ### Backlog
-- [ ] Relayer au dépôt frontend (autre lane) : **le 400 sur la réinitialisation**, `email`
-      obligatoire à la création, les champs `emailEnvoye`/`destinataire` — plus les points
-      restants des specs précédentes (401→403, taux KPI en `BigDecimal` 0-1 ou `null`).
-- [ ] **Comptes actifs sans adresse** : 5 sur 15. Ils ne peuvent plus être réinitialisés tant
-      que leur fiche n'est pas complétée — à traiter en amont, c'est la contrepartie assumée
-      du choix du 400.
-- [ ] **Leads non attribués** : 1 858 prospections sans commercial jamais contactées. Le vrai
-      gisement révélé par les KPI.
-- [ ] Autres usages du mail maintenant que la brique existe : rappels d'échéance, notification
-      d'affectation de prospection.
-- [ ] Rejouer `005_CfgCompany_IsActive.sql` sur **`yesRemsDev` (VPS)** si ce n'est pas fait.
-- [ ] Déclarer le check **`Tests` comme requis** sur `main` ; `deploy.yml` ne joue toujours pas
-      les tests.
+- [ ] Relayer au dépôt frontend (autre lane), trois lots :
+      **mail** — 400 sur la réinitialisation sans email, `email` obligatoire à la création,
+      champs `emailEnvoye`/`destinataire` ;
+      **interactions** — afficher `note` et non `description` ;
+      **hotline** — champ de recherche par nom, et **afficher `tronque`**.
+- [ ] **Écran d'affectation en masse des leads** — 2 994 dormants, +91 par semaine. Plus d'effet
+      que tout le reste du backlog.
+- [ ] **5 comptes actifs sur 15 sans adresse** : plus réinitialisables tant que leur fiche n'est
+      pas complétée. Contrepartie assumée du choix du 400.
+- [ ] Relancer l'app depuis IntelliJ après avoir ajouté `MANAGEMENT_SERVER_PORT` (bug #32).
+- [ ] Alléger la section 4 de `sync-vps-yesRemsDev.sql`.
+- [ ] Autres usages du mail : rappels d'échéance, notification d'affectation de prospection.
+- [ ] Déclarer le check **`Tests` comme requis** sur `main` ; `deploy.yml` ne joue pas les tests.
 - [ ] Garde-fou sur `S3_ENDPOINT` en local (bug #13).
 - [ ] Balayage hors ligne du bucket : rien ne supprime les objets dont `DeletedAt` est renseigné.
 - [ ] Règlement annulé : filtrer `sumAmountByComDocumentId` sur le statut (bug #11).

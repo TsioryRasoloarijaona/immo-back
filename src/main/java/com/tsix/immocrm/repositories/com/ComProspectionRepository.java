@@ -145,4 +145,40 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     Page<ComProspection> findByNormalizedTempTelDansPerimetre(@Param("normalizedPhone") String normalizedPhone,
                                                                @Param("projetIds") List<UUID> projetIds,
                                                                Pageable pageable);
+
+    /**
+     * Pendant par NOM de {@link #findByNormalizedTempTel} : pré-prospections dont le nom saisi à
+     * l'époque ({@code TempDescription}) contient le terme. Cette colonne est renseignée sur
+     * 3 569 des 3 574 pré-prospections sans fiche (99,9 %) — mieux que {@code TempTel} lui-même.
+     *
+     * <p>Native pour la même raison que
+     * {@link com.tsix.immocrm.repositories.cfg.CfgTierRepository#rechercherParNom} : la base est
+     * en {@code French_CI_AS}, sensible aux accents, et JPQL ne sait pas exprimer
+     * {@code COLLATE}.
+     */
+    @Query(value = "SELECT TOP (:limite) p.* FROM ComProspection p "
+            + "WHERE p.TempDescription COLLATE French_CI_AI LIKE :motif "
+            + "ORDER BY p.DocDate DESC",
+            nativeQuery = true)
+    List<ComProspection> rechercherPreProspectionsParNom(@Param("motif") String motif,
+                                                          @Param("limite") int limite);
+
+    /**
+     * Variante de {@link #rechercherPreProspectionsParNom} restreinte au périmètre commercial.
+     *
+     * <p>Elle existe pour la même raison que sa jumelle par téléphone, et l'omettre serait un
+     * trou de sécurité plutôt qu'un oubli de confort : sans elle, la recherche par nom
+     * deviendrait un contournement du périmètre — un commercial restreint verrait par le nom ce
+     * que le numéro lui cache. Le filtre est <b>dans</b> la requête, jamais appliqué au résultat,
+     * pour la raison expliquée sur {@link #findByNormalizedTempTelDansPerimetre}.
+     */
+    @Query(value = "SELECT TOP (:limite) p.* FROM ComProspection p "
+            + "LEFT JOIN CfgTranche t ON t.PKey = p.StkHierarchyId "
+            + "WHERE p.TempDescription COLLATE French_CI_AI LIKE :motif "
+            + "AND (t.CfgProjectId IN (:projetIds) OR t.CfgProjectId IS NULL) "
+            + "ORDER BY p.DocDate DESC",
+            nativeQuery = true)
+    List<ComProspection> rechercherPreProspectionsParNomDansPerimetre(@Param("motif") String motif,
+                                                                       @Param("projetIds") List<UUID> projetIds,
+                                                                       @Param("limite") int limite);
 }

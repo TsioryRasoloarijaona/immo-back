@@ -28,6 +28,30 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
     List<CfgTier> findByNormalizedPhone(@Param("normalizedPhone") String normalizedPhone);
 
     /**
+     * Recherche hotline par nom — {@code Description} (« Ines ALAMI », renseignée sur 100 % des
+     * 14 514 lignes réelles), {@code FirstName} et {@code LastName} (97 %). Les trois, parce que
+     * l'ordre des mots dans {@code Description} n'est pas garanti : « ALAMI Ines » doit trouver
+     * autant que « Ines ALAMI ».
+     *
+     * <p><b>Requête native pour une seule raison : {@code COLLATE}, que JPQL ne connaît pas.</b>
+     * La base est en {@code French_CI_AS} — insensible à la casse mais <b>sensible aux
+     * accents</b>. Sans {@code COLLATE French_CI_AI}, « Hejer » ne trouverait pas « Héjér », qui
+     * existe réellement en base. Le défaut serait invisible en test avec des noms ASCII et
+     * systématique en production.
+     *
+     * <p>{@code limite} borne le coût : chaque fiche construite déclenche ensuite cinq requêtes,
+     * et « MOHAMED » remonte 555 lignes. Demander {@code limite + 1} permet à l'appelant de
+     * savoir qu'il a tronqué. Voir {@code instructions/FEATURE-hotline-recherche-nom.md} §2.
+     */
+    @Query(value = "SELECT TOP (:limite) t.* FROM CfgTier t WHERE "
+            + "t.Description COLLATE French_CI_AI LIKE :motif "
+            + "OR t.FirstName COLLATE French_CI_AI LIKE :motif "
+            + "OR t.LastName COLLATE French_CI_AI LIKE :motif "
+            + "ORDER BY t.Description",
+            nativeQuery = true)
+    List<CfgTier> rechercherParNom(@Param("motif") String motif, @Param("limite") int limite);
+
+    /**
      * {@code GET /api/referentiels/banques} — {@code CfgTier} filtré sur {@code CfgTierType.Code}
      * ("BAN", confirmé sur données réelles : 21 tiers) pour peupler {@code CreerReglementRequest.banqueId}.
      */
