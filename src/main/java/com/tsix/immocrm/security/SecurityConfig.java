@@ -103,7 +103,33 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                // Deux refus distincts, deux codes distincts — et la distinction est
+                // fonctionnelle, pas décorative. 401 signifie « je ne sais pas qui tu es » et
+                // déclenche côté frontend le scénario « session expirée » : purge du cookie,
+                // retour à l'écran de connexion. 403 signifie « je sais qui tu es, ce n'est pas
+                // pour toi ». Servir 401 sur un simple manque de rôle déconnecte un utilisateur
+                // parfaitement authentifié, et se reconnecter n'y change rien puisque le rôle
+                // manquera encore.
+                //
+                // CE GESTIONNAIRE EST PORTEUR, et il doit poser le statut LUI-MÊME plutôt que
+                // déléguer à sendError(). Sans lui, le gestionnaire par défaut
+                // (AccessDeniedHandlerImpl) appelle response.sendError(403), ce qui déclenche un
+                // FORWARD vers /error. Ce forward repasse dans la chaîne de sécurité, à un moment
+                // où le contexte d'authentification de la requête initiale a déjà été vidé :
+                // anyRequest().authenticated() ne voit plus personne et récrit la réponse en 401.
+                // Un commercial ouvrant une route réservée à Administrateur recevait donc 401 en
+                // production. setStatus() n'engage aucun forward, donc le 403 parvient au client.
+                //
+                // Ce défaut a survécu longtemps parce qu'il est INVISIBLE SOUS MOCKMVC : MockMvc
+                // ne rejoue pas la dispatch ERROR, si bien qu'un test rendait 403 pendant que
+                // l'application rendait 401. Vérifié par comparaison de deux instances réelles
+                // lancées côte à côte sur la même base. Ne pas revenir au gestionnaire implicite
+                // au motif qu'« un test passe » — c'est exactement ce qui a masqué le problème.
+                // Voir AccesRefuseTest, qui passe par le vrai cookie.
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                        .accessDeniedHandler((request, response, denied) ->
+                                response.setStatus(HttpStatus.FORBIDDEN.value())))
                 .authorizeHttpRequests(auth -> auth
                         // Real browser CORS preflight requests never carry the cookie — must be
                         // let through unconditionally or actual cross-origin calls break in prod.

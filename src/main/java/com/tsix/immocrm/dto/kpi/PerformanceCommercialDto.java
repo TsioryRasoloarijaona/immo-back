@@ -79,7 +79,10 @@ public record PerformanceCommercialDto(
 
         @Schema(description = "Parmi les prospections assignées, celles ayant reçu au moins une "
                 + "interaction — de lui ou de quelqu'un d'autre. Le complément est le nombre de "
-                + "leads jamais contactés, qui vaut 32 % sur l'ensemble de la base.", example = "104")
+                + "leads confiés puis laissés sans contact : 259 sur 4 555 en données réelles "
+                + "(5,7 %). À ne pas confondre avec les 32 % de leads jamais contactés de la base "
+                + "entière, dont l'essentiel n'est assigné à personne et n'entre donc dans le "
+                + "compteur d'aucun commercial.", example = "104")
         long prospectionsPrisesEnCharge,
 
         @Schema(description = "`prospectionsPrisesEnCharge / prospectionsAssignees`, entre 0 et 1. "
