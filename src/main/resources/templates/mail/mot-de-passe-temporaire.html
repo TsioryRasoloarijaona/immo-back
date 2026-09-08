@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!--
+  Corps du message portant un mot de passe temporaire (création de compte ou
+  réinitialisation). Voir instructions/FEATURE-service-envoi-email.md §8.
+
+  Deux contraintes de forme, propres à l'email et non négociables :
+    - mise en page par <table> et styles EN LIGNE. Outlook et les webmails ignorent
+      largement les feuilles de style et les dispositions modernes ;
+    - AUCUN lien portant le mot de passe. Un lien de connexion pré-rempli finirait dans un
+      historique de navigation et dans les journaux de tout proxy traversé.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${creation} ? 'Vos identifiants de connexion' : 'Réinitialisation de votre mot de passe'">Vos identifiants</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 12px;">
+    <tr>
+        <td align="center">
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px; background-color:#ffffff; border-radius:8px; border:1px solid #e4e7eb;">
+
+                <tr>
+                    <td style="padding:28px 32px 8px 32px;">
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;"
+                            th:text="${creation} ? 'Bienvenue sur Ayad Estate' : 'Votre mot de passe a été réinitialisé'">
+                            Bienvenue
+                        </h1>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:8px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 14px 0;">
+                            Bonjour <span th:text="${nomComplet}" style="font-weight:600;">Prénom Nom</span>,
+                        </p>
+                        <p style="margin:0 0 20px 0;" th:if="${creation}">
+                            Un compte vient d'être créé pour vous sur l'application Ayad Estate.
+                            Voici vos identifiants de connexion.
+                        </p>
+                        <p style="margin:0 0 20px 0;" th:unless="${creation}">
+                            Le mot de passe de votre compte Ayad Estate vient d'être réinitialisé
+                            par un administrateur. Voici votre nouveau mot de passe provisoire.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 32px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                               style="background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px;">
+                            <tr>
+                                <td style="padding:16px 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Identifiant
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 20px 14px 20px; font-size:16px; font-weight:600;"
+                                    th:text="${identifiant}">j.dupont
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
+                                    Mot de passe temporaire
+                                </td>
+                            </tr>
+                            <tr>
+                                <!-- Monospace et lettres espacées : ce mot de passe est recopié à la
+                                     main, et son alphabet exclut déjà les caractères ambigus
+                                     (0/O, 1/I/l) côté génération. -->
+                                <td style="padding:0 20px 18px 20px; font-family:'Courier New',Courier,monospace; font-size:19px; font-weight:700; letter-spacing:1.5px; color:#1f2933;"
+                                    th:text="${motDePasse}">Ab3xK9mQp2Rt
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:20px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 16px 0;">
+                            Ce mot de passe est <strong>provisoire</strong> : il vous sera demandé
+                            d'en choisir un nouveau dès votre première connexion.
+                        </p>
+                        <p style="margin:0 0 24px 0; font-size:14px; color:#52606d;"
+                           th:if="${urlApplication}">
+                            Application :
+                            <span th:text="${urlApplication}" style="color:#1f2933;">https://exemple</span>
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 32px 28px 32px; border-top:1px solid #e4e7eb;">
+                        <p style="margin:16px 0 0 0; font-size:13px; color:#7b8794; line-height:1.5;">
+                            Ce message est automatique, merci de ne pas y répondre. Si vous n'êtes
+                            pas à l'origine de cette demande, prévenez votre administrateur.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

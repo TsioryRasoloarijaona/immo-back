@@ -1,6 +1,8 @@
 package com.tsix.immocrm.dto.auth;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
 
@@ -19,7 +21,17 @@ public record CreerEmployeRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED, example = "j.dupont")
         String identifiant,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+        // Seul champ du record porteur de contraintes, et c'est délibéré : la création écrit
+        // cette adresse sur CfgTier.EMail ET AdmUser.Email, puis s'en sert pour expédier le mot
+        // de passe temporaire. Une adresse absente ou malformée se propageait jusque-là sur deux
+        // tables sans que rien ne la vérifie — le @Schema l'annonçait REQUIRED, mais @Valid
+        // n'avait aucune contrainte à faire respecter. Durcir les autres champs déborderait de
+        // cette feature.
+        @Schema(description = "Adresse email de l'employé, obligatoire et vérifiée : elle sert à "
+                + "lui expédier son mot de passe temporaire.",
+                requiredMode = Schema.RequiredMode.REQUIRED, example = "j.dupont@exemple.ma")
+        @NotBlank(message = "email est requis")
+        @Email(message = "email doit être une adresse valide")
         String email,
 
         String mobile,

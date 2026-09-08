@@ -13,6 +13,9 @@ import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.mail.AdresseMasquee;
+import com.tsix.immocrm.mail.EnvoiEmail;
+import com.tsix.immocrm.mail.MotDePasseTemporaireEmis;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
@@ -22,6 +25,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,12 +64,15 @@ public class UtilisateurAdminService {
     private final AdmRoleRepository roleRepository;
     private final AdmUserRoleRepository userRoleRepository;
     private final PerimetreCommercialService perimetreService;
+    private final ApplicationEventPublisher evenements;
+    private final EnvoiEmail envoiEmail;
 
     public UtilisateurAdminService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                                     PasswordEncoder passwordEncoder, CfgTierRepository tierRepository,
                                     CfgTierKindRepository tierKindRepository, AdmRoleRepository roleRepository,
                                     AdmUserRoleRepository userRoleRepository,
-                                    PerimetreCommercialService perimetreService) {
+                                    PerimetreCommercialService perimetreService,
+                                    ApplicationEventPublisher evenements, EnvoiEmail envoiEmail) {
         this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -74,6 +81,8 @@ public class UtilisateurAdminService {
         this.tierKindRepository = tierKindRepository;
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
+        this.evenements = evenements;
+        this.envoiEmail = envoiEmail;
     }
 
     /**
@@ -152,11 +161,25 @@ public class UtilisateurAdminService {
      * bumps {@code TokenVersion} (invalidates every token already issued to this account, on
      * every device). Creates the {@code AppUserCredential} row if the account has never logged
      * into the web app before — an admin can bootstrap any legacy {@code AdmUser} this way.
+     *
+     * <p>Le mot de passe est expédié par email après commit (voir
+     * {@code instructions/FEATURE-service-envoi-email.md}). <b>Un compte sans adresse est
+     * refusé en 400 avant toute écriture</b> : la vérification précède délibérément la
+     * génération du mot de passe et l'incrément de {@code TokenVersion}, pour qu'un refus
+     * laisse le compte strictement intact plutôt que de déconnecter l'utilisateur de tous ses
+     * appareils au profit d'un mot de passe que personne ne recevra.
      */
     @Transactional
     public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(UUID admUserId) {
         AdmUser user = userRepository.findById(admUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable: " + admUserId));
+
+        String destinataire = resoudreDestinataire(user);
+        if (destinataire == null) {
+            throw new InvalidRequestException("Ce compte n'a aucune adresse email : le mot de passe "
+                    + "temporaire ne peut pas être envoyé. Renseignez l'email de l'utilisateur avant "
+                    + "de réinitialiser son mot de passe.");
+        }
 
         AppUserCredential credential = credentialRepository.findByAdmUserId(admUserId).orElseGet(() -> {
             AppUserCredential c = new AppUserCredential();
@@ -174,7 +197,11 @@ public class UtilisateurAdminService {
         credential.setUserUpdateDateTime(LocalDateTime.now());
         credentialRepository.save(credential);
 
-        return new ReinitialiserMotDePasseResponse(user.getId(), user.getCode(), motDePasseTemporaire);
+        evenements.publishEvent(new MotDePasseTemporaireEmis(
+                destinataire, nomAffiche(user), user.getCode(), motDePasseTemporaire, false));
+
+        return new ReinitialiserMotDePasseResponse(user.getId(), user.getCode(), motDePasseTemporaire,
+                envoiEmail.estActif(), AdresseMasquee.de(destinataire));
     }
 
     /**
@@ -194,6 +221,14 @@ public class UtilisateurAdminService {
         if (request.roles() == null || request.roles().isEmpty()) {
             throw new InvalidRequestException("Au moins un rôle est requis");
         }
+        // Doublon assumé des contraintes @NotBlank/@Email du record : celles-ci ne s'appliquent
+        // qu'aux appels passant par le contrôleur, et l'adresse est ici écrite sur DEUX tables
+        // avant d'être utilisée pour l'envoi.
+        String destinataire = adressePlausible(request.email());
+        if (destinataire == null) {
+            throw new InvalidRequestException("email est requis et doit être une adresse valide : "
+                    + "c'est à cette adresse qu'est envoyé le mot de passe temporaire.");
+        }
 
         CfgTierKind tierKind = tierKindRepository.findByCode(request.typeEmployeCode())
                 .orElseThrow(() -> new InvalidRequestException(
@@ -212,7 +247,7 @@ public class UtilisateurAdminService {
         tier.setId(UUID.randomUUID());
         tier.setFirstName(request.prenom());
         tier.setLastName(request.nom());
-        tier.setEMail(request.email());
+        tier.setEMail(destinataire);
         tier.setMobile(request.mobile());
         tier.setCfgTierKind(tierKind);
         tier.setUserCreateDateTime(now);
@@ -222,7 +257,7 @@ public class UtilisateurAdminService {
         user.setId(UUID.randomUUID());
         user.setCode(request.identifiant());
         user.setDescription(request.prenom() + " " + request.nom());
-        user.setEmail(request.email());
+        user.setEmail(destinataire);
         user.setMobile(request.mobile());
         user.setDisabled(false);
         user.setCfgEmployee(tier);
@@ -248,8 +283,13 @@ public class UtilisateurAdminService {
         credential.setUserCreateDateTime(now);
         credentialRepository.save(credential);
 
+        evenements.publishEvent(new MotDePasseTemporaireEmis(
+                destinataire, request.prenom() + " " + request.nom(), user.getCode(),
+                motDePasseTemporaire, true));
+
         List<String> roleCodes = roles.stream().map(AdmRole::getCode).toList();
-        return new CreerEmployeResponse(tier.getId(), user.getId(), user.getCode(), roleCodes, motDePasseTemporaire);
+        return new CreerEmployeResponse(tier.getId(), user.getId(), user.getCode(), roleCodes,
+                motDePasseTemporaire, envoiEmail.estActif(), AdresseMasquee.de(destinataire));
     }
 
     private static String genererMotDePasseTemporaire() {
@@ -258,5 +298,56 @@ public class UtilisateurAdminService {
             sb.append(TEMP_PASSWORD_CHARS.charAt(RANDOM.nextInt(TEMP_PASSWORD_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    /**
+     * Adresse à laquelle expédier le mot de passe : {@code AdmUser.Email}, à défaut l'email de
+     * la fiche employé liée ({@code CfgTier.EMail}). {@code null} si le compte n'en a aucune.
+     *
+     * <p>Le repli n'est pas décoratif — mesuré sur {@code yesRemsProd} : 24 comptes portent une
+     * adresse sur {@code AdmUser}, 17 sur {@code CfgTier}, et 25 sur l'une ou l'autre. Il gagne
+     * donc un destinataire réel, ce qui suffit à le justifier sur une population de 15 comptes
+     * actifs.
+     */
+    private static String resoudreDestinataire(AdmUser user) {
+        String direct = adressePlausible(user.getEmail());
+        if (direct != null) {
+            return direct;
+        }
+        return adressePlausible(Champs.de(user.getCfgEmployee(), CfgTier::getEMail));
+    }
+
+    /**
+     * Normalise et filtre grossièrement une adresse : {@code null} si elle est vide, blanche,
+     * ou dépourvue de structure {@code local@domaine.tld}.
+     *
+     * <p>Volontairement permissif — le but n'est pas de valider une adresse (seul un envoi
+     * réussi le fait) mais d'écarter ce qui ne peut manifestement pas en être une, en
+     * particulier les chaînes vides que la base contient à la place de {@code NULL}.
+     */
+    private static String adressePlausible(String valeur) {
+        if (!StringUtils.hasText(valeur)) {
+            return null;
+        }
+        String nettoyee = valeur.trim();
+        int arobase = nettoyee.indexOf('@');
+        if (arobase < 1 || nettoyee.indexOf('@', arobase + 1) >= 0) {
+            return null;
+        }
+        String domaine = nettoyee.substring(arobase + 1);
+        int point = domaine.indexOf('.');
+        return (point > 0 && point < domaine.length() - 1) ? nettoyee : null;
+    }
+
+    /** Nom lisible pour l'en-tête du message, avec repli sur l'identifiant du compte. */
+    private static String nomAffiche(AdmUser user) {
+        if (StringUtils.hasText(user.getDescription())) {
+            return user.getDescription().trim();
+        }
+        CfgTier employe = user.getCfgEmployee();
+        String prenom = Champs.de(employe, CfgTier::getFirstName);
+        String nom = Champs.de(employe, CfgTier::getLastName);
+        String complet = ((prenom == null ? "" : prenom) + " " + (nom == null ? "" : nom)).trim();
+        return StringUtils.hasText(complet) ? complet : user.getCode();
     }
 }

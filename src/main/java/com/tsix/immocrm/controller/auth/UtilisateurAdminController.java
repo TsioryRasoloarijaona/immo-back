@@ -81,16 +81,30 @@ public class UtilisateurAdminController {
     @PreAuthorize("hasRole('Administrateur')")
     @Operation(
             summary = "Réinitialise le mot de passe d'un utilisateur",
-            description = "Génère un mot de passe temporaire, le renvoie une seule fois dans la "
-                    + "réponse (à communiquer par un canal hors-bande — jamais stocké en clair), "
-                    + "et force l'utilisateur à le changer à sa prochaine connexion "
-                    + "(mustChangePassword=true). Invalide immédiatement tous les tokens déjà "
-                    + "émis pour ce compte, sur tous les appareils. Crée l'enregistrement "
-                    + "d'identifiants web si ce compte legacy (AdmUser) ne s'était encore jamais "
-                    + "connecté à l'application web. Réservé au rôle Administrateur."
+            description = "Génère un mot de passe temporaire, **l'envoie par email à "
+                    + "l'utilisateur**, le renvoie une seule fois dans la réponse, et force son "
+                    + "changement à la prochaine connexion (mustChangePassword=true). Invalide "
+                    + "immédiatement tous les tokens déjà émis pour ce compte, sur tous les "
+                    + "appareils. Crée l'enregistrement d'identifiants web si ce compte legacy "
+                    + "(AdmUser) ne s'était encore jamais connecté à l'application web.\n\n"
+                    + "**Le compte doit avoir une adresse email, sinon 400.** L'adresse est "
+                    + "cherchée sur `AdmUser.Email` puis, à défaut, sur la fiche employé liée "
+                    + "(`CfgTier`). Le refus intervient **avant toute écriture** : aucun mot de "
+                    + "passe n'est généré et les sessions en cours ne sont pas invalidées, le "
+                    + "compte reste donc strictement intact. Cas fréquent sur les comptes "
+                    + "hérités — au 08/09/2026, 5 des 15 comptes actifs sont dans ce cas.\n\n"
+                    + "L'envoi est **asynchrone** et postérieur au commit : `emailEnvoye=true` "
+                    + "signifie qu'il a été déclenché sans obstacle, pas qu'il a été remis. "
+                    + "C'est pourquoi `motDePasseTemporaire` reste dans la réponse et doit "
+                    + "continuer d'être affiché à l'administrateur. Réservé au rôle "
+                    + "Administrateur."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Mot de passe temporaire généré."),
+            @ApiResponse(responseCode = "200", description = "Mot de passe temporaire généré et envoi déclenché."),
+            @ApiResponse(responseCode = "400", description = "Le compte n'a aucune adresse email "
+                    + "(ni sur AdmUser, ni sur sa fiche employé) : le mot de passe ne peut être "
+                    + "envoyé. Le message serveur nomme le remède — renseigner l'email de "
+                    + "l'utilisateur — et peut être affiché tel quel."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
             @ApiResponse(responseCode = "404", description = "Aucun AdmUser avec cet id.")
     })
@@ -105,16 +119,27 @@ public class UtilisateurAdminController {
             summary = "Crée un nouvel employé",
             description = "Crée en une seule opération la fiche personne (CfgTier), le compte de "
                     + "connexion (AdmUser) qui lui est lié, les rôles demandés (AdmUserRole), et "
-                    + "génère un mot de passe temporaire renvoyé une seule fois dans la réponse "
-                    + "(à communiquer par un canal hors-bande — jamais stocké en clair). Le "
-                    + "compte devra changer ce mot de passe et compléter son profil à sa première "
-                    + "connexion (mustChangePassword=true, profileCompleted=false — voir "
-                    + "GET /api/mon-compte). Réservé au rôle Administrateur."
+                    + "génère un mot de passe temporaire **envoyé par email à l'employé** et "
+                    + "renvoyé une seule fois dans la réponse. Le compte devra changer ce mot de "
+                    + "passe et compléter son profil à sa première connexion "
+                    + "(mustChangePassword=true, profileCompleted=false — voir "
+                    + "GET /api/mon-compte).\n\n"
+                    + "**`email` est désormais réellement obligatoire et doit être une adresse "
+                    + "valide**, alors qu'il était jusqu'ici accepté vide malgré sa mention "
+                    + "REQUIRED : c'est à cette adresse qu'est expédié le mot de passe, et elle "
+                    + "est écrite à la fois sur la fiche personne et sur le compte. Le "
+                    + "formulaire doit donc la valider avant envoi.\n\n"
+                    + "L'envoi est **asynchrone** et postérieur au commit : `emailEnvoye=true` "
+                    + "signifie qu'il a été déclenché sans obstacle, pas qu'il a été remis. "
+                    + "C'est pourquoi `motDePasseTemporaire` reste dans la réponse et doit "
+                    + "continuer d'être affiché à l'administrateur. Réservé au rôle "
+                    + "Administrateur."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Employé créé."),
-            @ApiResponse(responseCode = "400", description = "Champ requis manquant, ou "
-                    + "typeEmployeCode/rôle référençant un code inconnu en base."),
+            @ApiResponse(responseCode = "201", description = "Employé créé et envoi déclenché."),
+            @ApiResponse(responseCode = "400", description = "Champ requis manquant, `email` "
+                    + "absent ou malformé, ou typeEmployeCode/rôle référençant un code inconnu "
+                    + "en base."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
             @ApiResponse(responseCode = "409", description = "L'identifiant demandé est déjà utilisé "
                     + "par un autre compte.")
