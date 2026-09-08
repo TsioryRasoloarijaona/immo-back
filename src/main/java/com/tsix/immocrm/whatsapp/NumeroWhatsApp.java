@@ -1,6 +1,6 @@
 package com.tsix.immocrm.whatsapp;
 
-import org.springframework.util.StringUtils;
+import com.tsix.immocrm.utils.NumeroTelephone;
 
 /**
  * Fabrique le numéro international attendu par UltraMsg ({@code +212661224857}) à partir des
@@ -31,7 +31,7 @@ import org.springframework.util.StringUtils;
 public final class NumeroWhatsApp {
 
     /** Longueur d'un numéro mobile national marocain — et français, par coïncidence utile. */
-    private static final int CHIFFRES_ATTENDUS = 9;
+    private static final int CHIFFRES_ATTENDUS = NumeroTelephone.CHIFFRES_MOBILE_NATIONAL;
 
     private NumeroWhatsApp() {
     }
@@ -54,24 +54,13 @@ public final class NumeroWhatsApp {
     }
 
     /**
-     * Ne garde que les chiffres. Retire au passage le {@code +} que quelques indicatifs portent,
-     * et le zéro initial d'un numéro saisi en forme nationale ({@code "06 61 …"}) — cette
-     * dernière forme est absente des données mesurées, mais rien n'empêche une saisie future.
+     * Délègue à {@link NumeroTelephone#chiffres} : retirer les caractères non numériques et le
+     * zéro initial est vrai partout, et l'enregistrement d'une fiche en a besoin exactement
+     * comme l'envoi. Ce qui reste propre à cette classe est la seule chose qui ne vaut que pour
+     * envoyer — {@link #estUnMobile}.
      */
     private static String chiffres(String valeur) {
-        if (!StringUtils.hasText(valeur)) {
-            return "";
-        }
-        StringBuilder propre = new StringBuilder();
-        for (char c : valeur.toCharArray()) {
-            if (Character.isDigit(c)) {
-                propre.append(c);
-            }
-        }
-        while (propre.length() > CHIFFRES_ATTENDUS && propre.charAt(0) == '0') {
-            propre.deleteCharAt(0);
-        }
-        return propre.toString();
+        return NumeroTelephone.chiffres(valeur);
     }
 
     /**

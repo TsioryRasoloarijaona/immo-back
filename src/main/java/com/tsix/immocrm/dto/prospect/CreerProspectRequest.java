@@ -23,7 +23,16 @@ public record CreerProspectRequest(
         String nom,
         String raisonSociale,
         String telephone,
+        /**
+         * Indicatif pays du fixe, sans le {@code +} ({@code "212"}). <b>Requis dès que
+         * {@code telephone} est fourni</b> — voir {@code FEATURE-indicatif-telephone.md} §5.
+         * Valeurs possibles : {@code GET /api/referentiels/pays}, champ
+         * {@code indicatifTelephone}.
+         */
+        String indicatifTelephone,
         String mobile,
+        /** Indicatif pays du mobile, mêmes règles que {@link #indicatifTelephone}. */
+        String indicatifMobile,
         String email,
         String adresse,
         String ville,
