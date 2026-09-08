@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -80,6 +81,42 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE p.id = :id AND (soc.isActive = true OR soc.id IS NULL)")
     boolean existsVisible(@Param("id") UUID id);
+
+    /**
+     * Projection par prospection pour les KPI commerciaux — colonnes : {@code commercialId},
+     * {@code docDate}, {@code isClosed}, date de la <b>première</b> interaction reçue (toutes
+     * origines confondues), {@code null} si jamais contactée.
+     *
+     * <p>Une ligne par prospection plutôt qu'un agrégat SQL : la médiane du délai de première
+     * réponse ne s'exprime pas en JPQL, et le taux de prise en charge se déduit du même passage.
+     * Même parti-pris que {@code DashboardService}, qui agrège en Java une projection de dossiers.
+     *
+     * <p>{@code p.cfgCommercial.id IS NOT NULL} exclut mécaniquement les pré-prospections, qui
+     * n'ont par construction aucun commercial (0 sur 2 800 mesurées).
+     *
+     * <p>La sous-requête {@code MIN} porte sur <b>toutes</b> les interactions de la prospection,
+     * pas seulement celles de son commercial : ce qu'on mesure est le délai avant que le prospect
+     * reçoive une réponse, pas la performance individuelle du titulaire.
+     */
+    @Query("SELECT p.cfgCommercial.id, p.docDate, p.isClosed, "
+            + "(SELECT MIN(m.docDate) FROM ComActionMessage m WHERE m.comProspection = p) "
+            + "FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE p.docDate BETWEEN :debut AND :fin AND p.cfgCommercial.id IS NOT NULL "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> projeterPourKpi(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    /** Variante de {@link #projeterPourKpi} restreinte au périmètre commercial (§6.4 incluse). */
+    @Query("SELECT p.cfgCommercial.id, p.docDate, p.isClosed, "
+            + "(SELECT MIN(m.docDate) FROM ComActionMessage m WHERE m.comProspection = p) "
+            + "FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE p.docDate BETWEEN :debut AND :fin AND p.cfgCommercial.id IS NOT NULL "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL)")
+    List<Object[]> projeterPourKpiDansPerimetre(@Param("debut") LocalDateTime debut,
+                                                @Param("fin") LocalDateTime fin,
+                                                @Param("projetIds") List<UUID> projetIds);
 
     /** {@code GET /api/prospects/{id}/prospections} (GAP-06). */
     Page<ComProspection> findByCfgProspectId(UUID prospectId, Pageable pageable);
