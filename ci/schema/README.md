@@ -10,6 +10,7 @@ chaque *pull request*.
 | `020_foreign_keys.sql` | 562 clés étrangères, dans une passe séparée pour s'affranchir de l'ordre de création | généré |
 | `030_triggers.sql` | 4 triggers (`ComFolder`, `RntFolder`) | généré |
 | `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
+| `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
 
 Appliquer dans l'ordre numérique.
 
@@ -38,7 +39,12 @@ sinon les contraintes ne peuvent pas être créées.
 
 Sont volontairement exclus :
 
-- **les 216 vues** — aucune requête native ni `@Subselect` dans le code applicatif ;
+- **215 des 216 vues.** L'exception est `ComSaleProspectionView`, mappée depuis la feature
+  « vues legacy — fiche prospection » par une entité JPA `@Immutable` en lecture seule ; elle
+  vit dans `050_views.sql` avec les deux tables qu'elle lit et qui n'entrent dans aucune
+  fermeture de clés étrangères (`AdmAlertData`, `AdmParamsInteger`). Toutes les autres restent
+  hors périmètre — et `ComActionMessageView` a été explicitement écartée après mesure : 30 s
+  pour une seule ligne. Voir `instructions/FEATURE-vues-legacy-prospection.md` ;
 - **les procédures stockées, fonctions et le type table `WorkingOutType`** — jamais appelés ;
 - **les données**, hormis le semis documenté ci-dessous ;
 - **les utilisateurs, rôles et filegroups** — propres à l'installation.
@@ -86,7 +92,7 @@ neuve, puis lancer `./mvnw test` avec `SPRING_DATASOURCE_URL` pointant dessus.
 
 ```powershell
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -C -Q "CREATE DATABASE yesRemsCiCheck"
-foreach ($f in @("010_tables","020_foreign_keys","030_triggers","040_seed_reference")) {
+foreach ($f in @("010_tables","020_foreign_keys","030_triggers","040_seed_reference","050_views")) {
   sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsCiCheck -C -I -b -i "ci/schema/$f.sql"
 }
 $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"

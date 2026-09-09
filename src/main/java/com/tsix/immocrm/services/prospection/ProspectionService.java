@@ -9,12 +9,14 @@ import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComAction;
@@ -22,6 +24,7 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComSaleProspectionView;
 import com.tsix.immocrm.entities.com.ComProspectionClosingReason;
 import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.entities.com.ComProspectionOrigin;
@@ -49,6 +52,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginSupportRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
@@ -109,6 +113,12 @@ public class ProspectionService {
     private static final DateTimeFormatter FORMAT_LIBELLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final ComProspectionRepository prospectionRepository;
+    /**
+     * Vue légataire fournissant le bloc « activité » de la fiche — voir
+     * {@code instructions/FEATURE-vues-legacy-prospection.md}. Lecture seule, une ligne à la fois
+     * (26 ms) : ne jamais l'utiliser pour une liste.
+     */
+    private final ComSaleProspectionViewRepository prospectionViewRepository;
     private final ProspectService prospectService;
     private final CfgTierRepository tierRepository;
     private final ComProspectionKindRepository prospectionKindRepository;
@@ -152,7 +162,9 @@ public class ProspectionService {
                                AdmSequenceRepository sequenceRepository,
                                PerimetreCommercialService perimetreService,
                                AdmUserRepository userRepository,
+                               ComSaleProspectionViewRepository prospectionViewRepository,
                                ApplicationEventPublisher publisher) {
+        this.prospectionViewRepository = prospectionViewRepository;
         this.publisher = publisher;
         this.userRepository = userRepository;
         this.perimetreService = perimetreService;
@@ -272,8 +284,63 @@ public class ProspectionService {
 
     public ProspectionDetailDto findById(UUID id) {
         return prospectionRepository.findById(id)
-                .map(ProspectionService::toDetail)
+                .map(this::detailEnrichi)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+    }
+
+    /**
+     * Construit le détail depuis {@link ComProspection}, puis le complète du bloc « activité »
+     * calculé par {@code ComSaleProspectionView}.
+     *
+     * <p>Une requête de plus, mesurée à 26 ms sur la base réelle. Quand la vue ne rend rien — cas
+     * systématique des <strong>pré-prospections</strong>, qu'elle exclut par construction — le
+     * détail est renvoyé tel quel avec {@code activite = null}. Ce n'est pas une erreur : les
+     * pré-prospections ont leur propre vue, et un 404 ici serait faux.
+     */
+    private ProspectionDetailDto detailEnrichi(ComProspection p) {
+        ActiviteProspectionDto activite = prospectionViewRepository.findById(p.getId())
+                .map(ProspectionService::toActivite)
+                .orElse(null);
+        return toDetail(p, activite);
+    }
+
+    /**
+     * Traduit la ligne de vue en bloc d'activité.
+     *
+     * <p>Trois colonnes de la vue rendent une <strong>chaîne vide</strong> plutôt que
+     * {@code NULL} quand il n'y a rien à dire : elles sont non-{@code NULL} sur 100 % des lignes
+     * mais non-vides sur 90 % (résultat et message de communication) et 25 %
+     * ({@code LastActiveAlertReason}) seulement. Sans la normalisation ci-dessous, l'API
+     * répondrait {@code ""} là où elle doit répondre {@code null}, et le front afficherait un
+     * libellé vide au lieu de masquer le champ.
+     */
+    private static ActiviteProspectionDto toActivite(ComSaleProspectionView v) {
+        return new ActiviteProspectionDto(
+                v.getInactivityTimeout(),
+                v.getActionsMessageNumber(),
+                v.getLastActionDate(),
+                v.getLastCommunicationDate(),
+                videEnNull(v.getLastCommunicationResult()),
+                videEnNull(v.getLastCommunicationMessage()),
+                v.getLastActiveAlertDate(),
+                videEnNull(v.getLastActiveAlertReason()),
+                v.getNbrVisit(),
+                v.getFirstVisit(),
+                v.getLastVisitDate(),
+                v.getCfgProjectId(),
+                videEnNull(v.getCfgProjectCode()),
+                videEnNull(v.getCfgProjectDescription()),
+                videEnNull(v.getCfgTierIdNumber()),
+                v.getComFolderId(),
+                videEnNull(v.getComFolderCode()),
+                v.getCfgCustomerId(),
+                videEnNull(v.getStatus())
+        );
+    }
+
+    /** {@code null} pour une chaîne nulle ou blanche — voir {@link #toActivite}. */
+    private static String videEnNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     /**
@@ -413,7 +480,7 @@ public class ProspectionService {
 
         prospection = prospectionRepository.save(prospection);
         enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + TierNomFormatter.nom(prospect));
-        return toDetail(prospection);
+        return detailEnrichi(prospection);
     }
 
     /**
@@ -468,7 +535,7 @@ public class ProspectionService {
         prospection.setCfgProspect(tier);
         prospection = prospectionRepository.save(prospection);
         enregistrerHistorique(prospectionId, "Prospect créé et lié : " + TierNomFormatter.nom(tier));
-        return toDetail(prospection);
+        return detailEnrichi(prospection);
     }
 
     /**
@@ -493,7 +560,7 @@ public class ProspectionService {
         prospection.setCfgCommercial(commercial);
         prospection = prospectionRepository.save(prospection);
         enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + TierNomFormatter.nom(commercial));
-        return toDetail(prospection);
+        return detailEnrichi(prospection);
     }
 
     /**
@@ -523,7 +590,7 @@ public class ProspectionService {
         if (estEtapeApresVisite(kind)) {
             publisher.publishEvent(new VisiteEffectuee(enregistree.getId()));
         }
-        return toDetail(enregistree);
+        return detailEnrichi(enregistree);
     }
 
     /**
@@ -581,7 +648,7 @@ public class ProspectionService {
         if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
         if (request.notes() != null) prospection.setNotes(request.notes());
 
-        return toDetail(prospectionRepository.save(prospection));
+        return detailEnrichi(prospectionRepository.save(prospection));
     }
 
     /**
@@ -628,7 +695,7 @@ public class ProspectionService {
         }
 
         prospection.setStkHierarchy(tranche);
-        return toDetail(prospectionRepository.save(prospection));
+        return detailEnrichi(prospectionRepository.save(prospection));
     }
 
     /** {@code PATCH /api/prospections/{id}/archiver}: closes the prospection with a reason. */
@@ -652,7 +719,7 @@ public class ProspectionService {
         prospection.setIsClosed(true);
         prospection.setClosingDate(LocalDateTime.now());
 
-        return toDetail(prospectionRepository.save(prospection));
+        return detailEnrichi(prospectionRepository.save(prospection));
     }
 
     /** {@code GET /api/prospections/{id}/interactions}: journal, most recent first. */
@@ -773,6 +840,10 @@ public class ProspectionService {
     }
 
     private static InteractionDto toInteractionDto(ComActionMessage m) {
+        // Contexte projet/tranche : déduit, jamais stocké sur ComActionMessage — voir
+        // ContexteInteraction, qui reproduit la règle de la vue légataire.
+        CfgTranche tranche = ContexteInteraction.tranche(m);
+        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
         return new InteractionDto(
                 m.getId(),
                 m.getDocDate(),
@@ -791,7 +862,15 @@ public class ProspectionService {
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getDescription() : null,
                 m.getAlertValidityDate(),
-                m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null
+                m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null,
+                m.getComActionMessageCategory() != null ? m.getComActionMessageCategory().getId() : null,
+                m.getComActionMessageCategory() != null ? m.getComActionMessageCategory().getDescription() : null,
+                tranche != null ? tranche.getId() : null,
+                tranche != null ? tranche.getCode() : null,
+                tranche != null ? tranche.getDescription() : null,
+                projet != null ? projet.getId() : null,
+                projet != null ? projet.getCode() : null,
+                projet != null ? projet.getDescription() : null
         );
     }
 
@@ -886,7 +965,11 @@ public class ProspectionService {
         );
     }
 
-    private static ProspectionDetailDto toDetail(ComProspection p) {
+    /**
+     * Détail « nu », sans le bloc activité. Passer par {@link #detailEnrichi(ComProspection)} pour
+     * une réponse d'API : c'est lui qui interroge la vue et remplit {@code activite}.
+     */
+    private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite) {
         return new ProspectionDetailDto(
                 p.getId(),
                 p.getCode(),
@@ -932,7 +1015,8 @@ public class ProspectionService {
                 p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null,
                 p.getStkItem() != null ? p.getStkItem().getId() : null,
                 p.getStkItem() != null ? p.getStkItem().getCode() : null,
-                p.getStkItem() != null ? p.getStkItem().getDescription() : null
+                p.getStkItem() != null ? p.getStkItem().getDescription() : null,
+                activite
         );
     }
 }

@@ -115,6 +115,28 @@ public class ComProspection {
     @JoinColumn(name = "StkHierarchyId")
     private CfgTranche stkHierarchy;
 
+    /**
+     * Entité structurelle du légataire, qui distingue une <strong>prospection de vente</strong>
+     * ({@code Code = 'ComProspection'}) d'une <strong>pré-prospection</strong>
+     * ({@code 'ComPreProspection'}), d'une prospection de location, etc.
+     *
+     * <p>C'est le discriminant réel du logiciel de bureau, et ses vues font un
+     * {@code INNER JOIN} dessus : une ligne dont {@code StrEntityId} est {@code NULL}
+     * <strong>n'apparaît dans aucune vue</strong>, donc dans aucun écran du logiciel de bureau.
+     * En base réelle, 4 lignes sont dans ce cas — deux injectées par {@code n8n_api}, une créée
+     * par notre API, une par un script de test.
+     *
+     * <p>Mappé en UUID brut plutôt qu'en {@code @ManyToOne} : {@code StrEntity} n'a pas d'entité
+     * JPA dans ce dépôt, et {@code StrStatus.StrConfigEntityId} suit déjà exactement cette
+     * convention.
+     *
+     * <p>Mappé pour que les tests puissent produire des prospections visibles de
+     * {@code ComSaleProspectionView}. <strong>{@code ProspectionService.creerProspection} ne le
+     * renseigne toujours pas</strong> — voir {@code FEATURE-vues-legacy-prospection.md} §8.
+     */
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkItemId")
     private StkItem stkItem;
