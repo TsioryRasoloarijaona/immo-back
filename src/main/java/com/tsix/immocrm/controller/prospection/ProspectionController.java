@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
 import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
+import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
@@ -57,6 +58,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -191,12 +193,13 @@ public class ProspectionController {
                     + "`GET /api/referentiels/colonnes/prospections` pour la liste exacte.",
                     example = "code,prospectNom,joursInactivite,nbInteractions")
             @RequestParam(required = false) List<String> colonnes,
+            @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         // Résolu ici pour que le 400 parte avant toute requête. L'omission des clés non demandées
         // est appliquée à la sérialisation par SelectionColonnesPropertyFilter.
         Set<ColonneProspection> selection = ColonneProspection.resoudre(colonnes);
         return PageDto.of(prospectionService.findAll(etape, origine, commercial, trancheId, dateDebut, dateFin,
-                search, ouvertes, selection, pageable));
+                search, ouvertes, filtres, selection, pageable));
     }
 
     @GetMapping("/{id}")
