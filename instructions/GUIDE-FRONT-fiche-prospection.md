@@ -71,8 +71,15 @@ Les deux derniers ne concernent qu'un quart des fiches : bloc entier masqué qua
 ### Rang 4 — contexte et identité
 
 `activite.projetCode` / `projetLibelle` (**99 %**, la fiche n'exposait que la tranche jusqu'ici),
-puis les champs déjà servis (`trancheCode`, `articleCode`, `prix`, `surface`, `avance`,
-financement), puis `activite.cin` (99 %).
+puis `trancheCode` et `articleCode`, puis `activite.cin` — **2,7 %**, chiffre corrigé depuis la
+première version de ce guide, à afficher conditionnellement.
+
+> ⚠️ **Ne pas afficher `prix`, `surface`, `avance` ni les trois champs de financement.** Mesuré
+> sur les 14 114 prospections réelles : `Price` est renseigné sur **4 lignes** et vaut **0**
+> partout ailleurs — jamais `null`, donc non masquable par un test de nullité. `Area`,
+> `AdvanceAmount` et les financements sont à **0 ligne**. Les afficher revient à annoncer un
+> budget de « 0,00 DH » sur tout le portefeuille. Détail dans
+> `INVENTAIRE-colonnes-prospection.md` §1.
 
 ---
 

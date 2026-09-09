@@ -72,7 +72,10 @@ public record ActiviteProspectionDto(
         @Schema(description = "Libellé du projet. 99 %.")
         String projetLibelle,
 
-        @Schema(description = "CIN du prospect, telle que la porte la vue. 99 %.")
+        @Schema(description = "CIN du prospect, telle que la porte la vue. **Rare : 2,7 %** "
+                + "(387 lignes sur 14 118). Une mesure initiale annonçait 99 %, en comptant les "
+                + "non-`NULL` d'une colonne qui porte des chaînes vides — à afficher "
+                + "conditionnellement, jamais comme une donnée d'identité fiable.")
         String cin,
 
         @Schema(description = "Identifiant du dossier de vente issu de cette prospection — **le "
