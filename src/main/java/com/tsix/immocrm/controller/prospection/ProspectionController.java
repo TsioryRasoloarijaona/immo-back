@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
 import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
+import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
@@ -41,6 +42,7 @@ import com.tsix.immocrm.services.prospection.ProspectionFicheService;
 import com.tsix.immocrm.services.prospection.document.NdaPdfRenderer;
 import com.tsix.immocrm.services.prospection.document.OffreDevisPdfRenderer;
 import com.tsix.immocrm.services.prospection.document.ProspectionFichePdfRenderer;
+import com.tsix.immocrm.domain.ColonneProspection;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -56,6 +58,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,6 +69,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -144,6 +148,9 @@ public class ProspectionController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "400",
+            description = "Un nom passé à `colonnes` ne figure pas au catalogue. Le corps "
+                    + "(ProblemDetail) porte `colonne` et `colonnesValides`.")
     @Operation(
             summary = "Liste paginée des prospections",
             description = "Filtre optionnellement par étape/origine/commercial (multi-sélection, "
@@ -179,9 +186,20 @@ public class ProspectionController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean ouvertes,
+            @Parameter(description = "Colonnes à renvoyer. Répétable ou séparé par des virgules. "
+                    + "**Absent = comportement historique à l'identique** : les colonnes du groupe "
+                    + "`ACTIVITE` sont omises et la vue légataire n'est pas interrogée. `id` est "
+                    + "toujours renvoyé, demandé ou non. Un nom hors catalogue renvoie 400 — voir "
+                    + "`GET /api/referentiels/colonnes/prospections` pour la liste exacte.",
+                    example = "code,prospectNom,joursInactivite,nbInteractions")
+            @RequestParam(required = false) List<String> colonnes,
+            @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        // Résolu ici pour que le 400 parte avant toute requête. L'omission des clés non demandées
+        // est appliquée à la sérialisation par SelectionColonnesPropertyFilter.
+        Set<ColonneProspection> selection = ColonneProspection.resoudre(colonnes);
         return PageDto.of(prospectionService.findAll(etape, origine, commercial, trancheId, dateDebut, dateFin,
-                search, ouvertes, pageable));
+                search, ouvertes, filtres, selection, pageable));
     }
 
     @GetMapping("/{id}")

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -136,6 +137,18 @@ public class ComProspection {
      */
     @Column(name = "StrEntityId")
     private UUID strEntityId;
+
+    /**
+     * Pays du prospect, tel que la vue légataire l'expose sous {@code AdmCountryId} — renseigné
+     * sur <strong>27,3 %</strong> des 14 118 prospections réelles.
+     *
+     * <p>La colonne existait en base sans être mappée : c'était le seul manque de
+     * {@code INVENTAIRE-colonnes-prospection.md} §2 qui exigeait autre chose qu'une entrée au
+     * catalogue.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkItemId")

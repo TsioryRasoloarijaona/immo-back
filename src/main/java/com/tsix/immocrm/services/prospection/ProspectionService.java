@@ -9,13 +9,16 @@ import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
+import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -60,7 +63,11 @@ import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -209,16 +216,18 @@ public class ProspectionService {
      */
     public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
             List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
-            Boolean ouvertes, Pageable pageable) {
+            Boolean ouvertes, FiltresAvancesProspection filtres, Set<ColonneProspection> colonnes,
+            Pageable pageable) {
         Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
                 search, ouvertes)
+                .and(filtresAvances(filtres))
                 .and((root, query, cb) -> cb.or(
                         cb.isNotNull(root.get("cfgProspect")),
                         cb.isNotNull(root.get("cfgCommercial"))
                 ))
                 // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
                 .and(perimetreService.filtreProspections());
-        return versListe(prospectionRepository.findAll(spec, pageable));
+        return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
     }
 
     /**
@@ -237,7 +246,10 @@ public class ProspectionService {
                 // Périmètre commercial : une pré-prospection a par construction un commercial NULL
                 // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
                 .and(perimetreService.filtreProspections());
-        return versListe(prospectionRepository.findAll(spec, pageable));
+        // Sélection par défaut, sans discussion : ComSaleProspectionView exclut par construction
+        // les pré-prospections, donc aucune colonne d'activité ne peut être servie ici. Demander
+        // la vue reviendrait à payer une requête pour n'obtenir que des null.
+        return versListe(prospectionRepository.findAll(spec, pageable), ColonneProspection.parDefautSet());
     }
 
     /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
@@ -280,6 +292,107 @@ public class ProspectionService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Filtres du lot C — voir {@link FiltresAvancesProspection}.
+     *
+     * <p>Prédicat neutre quand aucun n'est renseigné : {@code findPreProspections} et les appels
+     * historiques ne changent pas de comportement.
+     */
+    private static Specification<ComProspection> filtresAvances(FiltresAvancesProspection f) {
+        return (root, query, cb) -> {
+            if (f == null) {
+                return cb.conjunction();
+            }
+            List<Predicate> predicates = new ArrayList<>();
+            // -- Portés par l'entité. Chacun traverse une association : quand le filtre est actif,
+            //    la jointure devient interne et écarte les lignes sans valeur, ce qui est le
+            //    comportement attendu d'un filtre (une prospection sans tranche n'a pas de projet).
+            if (estRenseignee(f.projetId())) {
+                predicates.add(root.get("stkHierarchy").get("cfgProject").get("id").in(f.projetId()));
+            }
+            if (estRenseignee(f.societeId())) {
+                predicates.add(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("id")
+                        .in(f.societeId()));
+            }
+            if (estRenseignee(f.vocationId())) {
+                predicates.add(root.get("stkVocation").get("id").in(f.vocationId()));
+            }
+            if (estRenseignee(f.typeContactId())) {
+                predicates.add(root.get("comActionMessageType").get("id").in(f.typeContactId()));
+            }
+            if (estRenseignee(f.raisonFermetureId())) {
+                predicates.add(root.get("comProspectionClosingReason").get("id").in(f.raisonFermetureId()));
+            }
+            if (estRenseignee(f.paysId())) {
+                predicates.add(root.get("admCountry").get("id").in(f.paysId()));
+            }
+            if (estRenseignee(f.actionId())) {
+                predicates.add(root.get("comAction").get("id").in(f.actionId()));
+            }
+            if (estRenseignee(f.origineSupportId())) {
+                predicates.add(root.get("comProspectionOriginSupport").get("id").in(f.origineSupportId()));
+            }
+            if (f.ancienClient() != null) {
+                predicates.add(f.ancienClient()
+                        ? cb.isTrue(root.get("isOldCustomer"))
+                        : cb.or(cb.isFalse(root.get("isOldCustomer")), cb.isNull(root.get("isOldCustomer"))));
+            }
+            // -- Portés par la vue : une seule sous-requête, quel que soit le nombre de critères.
+            if (f.exigeLaVue()) {
+                predicates.add(root.get("id").in(sousRequeteVue(f, query, cb)));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * Sous-requête sur {@code ComSaleProspectionView} portant les critères calculés.
+     *
+     * <p>C'est le compromis retenu après mesure : la liste reste servie par {@code ComProspection}
+     * — table indexée, pagination profonde, périmètre commercial inchangés — et seul le prédicat
+     * traverse la vue. Coût mesuré : <strong>231 ms page 1, 302 ms à l'{@code OFFSET 5000}</strong>,
+     * contre 100/134 ms sans filtre de cette famille, et 515 ms dès la page 1 si la liste elle-même
+     * était servie depuis la vue.
+     *
+     * <p>Effet de bord assumé : la vue exclut les pré-prospections et les lignes sans
+     * {@code StrEntityId}. Activer un de ces filtres les écarte donc toutes — ce qui est cohérent,
+     * ces lignes n'ayant par construction aucun indicateur d'activité.
+     */
+    private static Subquery<UUID> sousRequeteVue(FiltresAvancesProspection f,
+                                                 CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Subquery<UUID> sousRequete = query.subquery(UUID.class);
+        Root<ComSaleProspectionView> vue = sousRequete.from(ComSaleProspectionView.class);
+        sousRequete.select(vue.get("id"));
+
+        List<Predicate> criteres = new ArrayList<>();
+        if (f.inactiviteMin() != null) {
+            criteres.add(cb.greaterThanOrEqualTo(vue.get("inactivityTimeout"), f.inactiviteMin()));
+        }
+        if (f.nbInteractionsMin() != null) {
+            criteres.add(cb.greaterThanOrEqualTo(vue.get("actionsMessageNumber"), f.nbInteractionsMin()));
+        }
+        if (f.nbVisitesMin() != null) {
+            criteres.add(cb.greaterThanOrEqualTo(vue.get("nbrVisit"), f.nbVisitesMin()));
+        }
+        if (f.communicationDepuis() != null) {
+            criteres.add(cb.greaterThanOrEqualTo(vue.get("lastCommunicationDate"), f.communicationDepuis()));
+        }
+        if (f.communicationJusqua() != null) {
+            criteres.add(cb.lessThanOrEqualTo(vue.get("lastCommunicationDate"), f.communicationJusqua()));
+        }
+        if (f.avecAlerteActive() != null) {
+            criteres.add(f.avecAlerteActive()
+                    ? cb.isNotNull(vue.get("lastActiveAlertDate"))
+                    : cb.isNull(vue.get("lastActiveAlertDate")));
+        }
+        sousRequete.where(cb.and(criteres.toArray(new Predicate[0])));
+        return sousRequete;
+    }
+
+    private static boolean estRenseignee(List<UUID> ids) {
+        return ids != null && !ids.isEmpty();
     }
 
     public ProspectionDetailDto findById(UUID id) {
@@ -879,14 +992,21 @@ public class ProspectionService {
      * Les résoudre ligne par ligne ferait 20 requêtes pour une page de 20 — le genre de N+1 qui
      * ne se voit pas en test sur trois lignes et qui coûte cher sur un écran réel.
      */
-    private Page<ProspectionListItemDto> versListe(Page<ComProspection> page) {
+    private Page<ProspectionListItemDto> versListe(Page<ComProspection> page,
+                                                   Set<ColonneProspection> colonnes) {
         List<UUID> ids = page.getContent().stream().map(ComProspection::getId).toList();
         // IN () est une erreur de syntaxe SQL : ne pas interroger sur une page vide.
         Map<UUID, DerniereAlerteProjection> alertes = ids.isEmpty()
                 ? Map.of()
                 : actionMessageRepository.dernieresAlertes(ids).stream()
                         .collect(Collectors.toMap(DerniereAlerteProjection::getProspectionId, a -> a));
-        return page.map(p -> toListItem(p, alertes.get(p.getId())));
+        // La vue n'est interrogée que si la sélection contient au moins une colonne d'activité :
+        // sans `?colonnes=`, cette requête n'est pas émise et le coût du lot est nul.
+        Map<UUID, ComSaleProspectionView> activite = ids.isEmpty() || !ColonneProspection.exigeLaVue(colonnes)
+                ? Map.of()
+                : prospectionViewRepository.findByIdIn(ids).stream()
+                        .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
+        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()), colonnes));
     }
 
     /**
@@ -937,10 +1057,27 @@ public class ProspectionService {
      * {@link #versListe}.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
-        return toListItem(p, null);
+        return toListItem(p, null, null, Set.of());
     }
 
-    private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte) {
+    /**
+     * @param vue ligne de {@code ComSaleProspectionView}, ou {@code null} quand aucune colonne
+     *            d'activité n'est demandée — ou que la prospection n'y figure pas
+     *            (pré-prospection, ou {@code StrEntityId} absent).
+     */
+    private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
+                                                     ComSaleProspectionView vue,
+                                                     Set<ColonneProspection> colonnes) {
+        // Les associations du lot B ne sont déréférencées QUE si la colonne est demandée : chacune
+        // est un chargement paresseux de plus par ligne (deux pour la société, qui traverse
+        // tranche → projet). Non demandée, elle ne coûte rien.
+        CfgTranche tranche = p.getStkHierarchy();
+        CfgProject projet = colonnes.contains(ColonneProspection.SOCIETE_ID)
+                || colonnes.contains(ColonneProspection.SOCIETE_CODE)
+                || colonnes.contains(ColonneProspection.SOCIETE_LIBELLE)
+                ? (tranche != null ? tranche.getCfgProject() : null)
+                : null;
+        CfgCompany societe = projet != null ? projet.getCfgCompany() : null;
         return new ProspectionListItemDto(
                 p.getId(),
                 p.getCode(),
@@ -961,7 +1098,48 @@ public class ProspectionService {
                 telephoneProspect(p.getCfgProspect(), p),
                 emailProspect(p.getCfgProspect(), p),
                 alerte != null ? alerte.getDateAlerte() : null,
-                alerte != null ? alerte.getMessage() : null
+                alerte != null ? alerte.getMessage() : null,
+                vue != null ? vue.getInactivityTimeout() : null,
+                vue != null ? vue.getActionsMessageNumber() : null,
+                vue != null ? vue.getLastActionDate() : null,
+                vue != null ? vue.getLastCommunicationDate() : null,
+                vue != null ? videEnNull(vue.getLastCommunicationResult()) : null,
+                vue != null ? vue.getNbrVisit() : null,
+                vue != null ? vue.getLastVisitDate() : null,
+                vue != null ? vue.getCfgProjectId() : null,
+                vue != null ? videEnNull(vue.getCfgProjectCode()) : null,
+                vue != null ? videEnNull(vue.getCfgProjectDescription()) : null,
+                vue != null ? videEnNull(vue.getCfgTierIdNumber()) : null,
+                vue != null ? vue.getComFolderId() : null,
+                vue != null ? videEnNull(vue.getComFolderCode()) : null,
+                vue != null ? videEnNull(vue.getStatus()) : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getCode() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getMobile() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getMobileIndicatif() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getEMail() : null,
+                p.getCfgCommercial() != null ? p.getCfgCommercial().getCode() : null,
+                p.getIsOldCustomer(),
+                p.getClosingDate(),
+                colonnes.contains(ColonneProspection.RAISON_FERMETURE)
+                        && p.getComProspectionClosingReason() != null
+                        ? p.getComProspectionClosingReason().getDescription() : null,
+                colonnes.contains(ColonneProspection.TYPE_PROSPECT)
+                        && p.getCfgProspect() != null && p.getCfgProspect().getCfgTierType() != null
+                        ? p.getCfgProspect().getCfgTierType().getCode() : null,
+                colonnes.contains(ColonneProspection.ORIGINE_SUPPORT)
+                        && p.getComProspectionOriginSupport() != null
+                        ? p.getComProspectionOriginSupport().getDescription() : null,
+                colonnes.contains(ColonneProspection.ACTION_COMMERCIALE) && p.getComAction() != null
+                        ? p.getComAction().getDescription() : null,
+                colonnes.contains(ColonneProspection.PAYS) && p.getAdmCountry() != null
+                        ? p.getAdmCountry().getDescription() : null,
+                societe != null ? societe.getId() : null,
+                societe != null ? societe.getCode() : null,
+                societe != null ? societe.getDescription() : null,
+                p.getUserCreate(),
+                p.getUserCreateDateTime(),
+                p.getUserUpdate(),
+                p.getUserUpdateDateTime()
         );
     }
 

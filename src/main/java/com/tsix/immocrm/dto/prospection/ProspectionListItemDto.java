@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.prospection;
 
+import com.fasterxml.jackson.annotation.JsonFilter;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -9,10 +10,19 @@ import java.util.UUID;
 /**
  * Summary shape for {@code GET /api/prospections} and {@code GET /api/pre-prospections}.
  *
+ * <p><strong>Toutes les clés ne sont pas toujours présentes.</strong> Le paramètre
+ * {@code ?colonnes=} sélectionne celles qui sont sérialisées ; les autres sont absentes de la
+ * réponse — voir {@link com.tsix.immocrm.domain.ColonneProspection}, qui fait aussi office de
+ * liste blanche et alimente {@code GET /api/referentiels/colonnes/prospections}.
+ *
+ * <p>Sans ce paramètre, la réponse est <em>exactement</em> celle d'avant son introduction : les
+ * champs du groupe activité valent {@code null} et le serveur n'interroge pas la vue légataire.
+ *
  * NOTE: field naming is not yet backed by a shared API spec doc
  * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
  * directly from {@code ComProspection}. Adjust once a spec is available.
  */
+@JsonFilter(ProspectionListItemDto.FILTRE_COLONNES)
 public record ProspectionListItemDto(
         UUID id,
         String code,
@@ -25,8 +35,18 @@ public record ProspectionListItemDto(
         String origine,
         String etape,
         Boolean fermee,
+
+        @Schema(description = "Budget déclaré du prospect. **Mesuré mort : renseigné sur 4 lignes "
+                + "sur 14 114**, et valant `0` — jamais `null` — partout ailleurs. Retiré de la "
+                + "sélection par défaut pour cette raison ; reste demandable via `?colonnes=prix`. "
+                + "Ne pas afficher comme un budget : ce serait annoncer « 0,00 DH » sur tout le "
+                + "portefeuille.")
         BigDecimal prix,
+
+        @Schema(description = "Surface recherchée. **Mesurée morte : 0 ligne renseignée** sur "
+                + "14 114. Même traitement que `prix`.")
         BigDecimal surface,
+
         UUID trancheId,
         // -- Libellé de la tranche principale (CfgTranche.Code/Description), pour affichage sans
         // second appel à GET /api/tranches/{trancheId}.
@@ -58,6 +78,136 @@ public record ProspectionListItemDto(
         @Schema(description = "Message de cette dernière alerte — en pratique la note du "
                 + "commercial sur l'interaction qui l'a posée. `null` si aucune alerte.",
                 example = "rappeler la cliente lundi matin")
-        String derniereAlerteMessage
+        String derniereAlerteMessage,
+
+        // ------------------------------------------------------------------
+        // Groupe « activité » — calculé par la base légataire (ComSaleProspectionView).
+        // Hors sélection par défaut : ces champs valent null tant que ?colonnes= ne les
+        // demande pas, et la requête de vue n'est alors même pas émise.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Jours écoulés depuis la dernière action — le tri de relance du "
+                + "logiciel de bureau. Renseigné sur 100 % des prospections de vente.",
+                example = "1688")
+        Integer joursInactivite,
+
+        @Schema(description = "Nombre d'interactions journalisées. 97 %.", example = "12")
+        Integer nbInteractions,
+
+        @Schema(description = "Date de la dernière action, tous types confondus. 97 %.")
+        LocalDateTime derniereActionDate,
+
+        @Schema(description = "Date du dernier échange avec le prospect. 90 %.")
+        LocalDateTime derniereCommunicationDate,
+
+        @Schema(description = "Résultat du dernier échange. 90 %.",
+                example = "Prospect n'est plus intéressé par un appartement")
+        String derniereCommunicationResultat,
+
+        @Schema(description = "Nombre de visites effectuées. 20 %.", example = "2")
+        Integer nbVisites,
+
+        @Schema(description = "Date de la dernière visite. `null` si aucune visite.")
+        LocalDateTime derniereVisiteDate,
+
+        @Schema(description = "Identifiant du projet — la liste n'exposait que la tranche. 99 %.")
+        UUID projetId,
+
+        @Schema(description = "Code du projet. 99 %.", example = "CITEB")
+        String projetCode,
+
+        @Schema(description = "Libellé du projet. 99 %.")
+        String projetLibelle,
+
+        @Schema(description = "CIN du prospect. 99 %.")
+        String cin,
+
+        @Schema(description = "Identifiant du dossier issu de la prospection. `null` sur 98 % des "
+                + "lignes : c'est le taux de conversion réel, pas une donnée manquante.")
+        UUID dossierId,
+
+        @Schema(description = "Code du dossier issu de la prospection. `null` si non transformée.",
+                example = "26/00314")
+        String dossierCode,
+
+        @Schema(description = "Statut du dossier issu de la prospection. `null` si non "
+                + "transformée.", example = "CONCRETISATION")
+        String statutDossier,
+
+        // ------------------------------------------------------------------
+        // Lot B — colonnes que le logiciel de bureau affiche et que la liste ne renvoyait pas.
+        // Servies par les entités, hors sélection par défaut.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Code du prospect (`CfgTier.Code`). 100 %.")
+        String prospectCode,
+
+        @Schema(description = "Mobile **brut de la fiche prospect**, sans le repli sur le numéro "
+                + "de premier contact qu'applique `telephone`. 99,8 %. Utile pour éditer ou "
+                + "dédoublonner, là où `telephone` sert à appeler.")
+        String mobileProspect,
+
+        @Schema(description = "Indicatif pays du mobile. 100 %.", example = "212")
+        String indicatifMobile,
+
+        @Schema(description = "Email **brut de la fiche**, sans le repli appliqué par `email`. "
+                + "59,1 %.")
+        String emailFiche,
+
+        @Schema(description = "Code du commercial (`CfgTier.Code`). 99,3 % — la liste n'exposait "
+                + "que son nom.")
+        String commercialCode,
+
+        @Schema(description = "Le prospect est un ancien client. 100 %. Déjà en fiche, absent de "
+                + "la liste jusqu'ici.")
+        Boolean ancienClient,
+
+        @Schema(description = "Date de clôture de la prospection. 62,9 %.")
+        LocalDateTime dateFermeture,
+
+        @Schema(description = "Motif de clôture. 60,5 %.", example = "Hors budget")
+        String raisonFermeture,
+
+        @Schema(description = "Type du prospect (`CfgTierType`). 100 %.", example = "PRO")
+        String typeProspect,
+
+        @Schema(description = "Support de l'origine. 50,2 %.", example = "FACEBOOK")
+        String origineSupport,
+
+        @Schema(description = "Action commerciale (campagne) rattachée. 40,2 %.")
+        String actionCommerciale,
+
+        @Schema(description = "Pays du prospect. 27,3 %.")
+        String pays,
+
+        @Schema(description = "Identifiant de la société / entité juridique. 99,8 %. Elle filtre "
+                + "déjà les résultats côté serveur (seules les sociétés actives sont servies) "
+                + "sans avoir jamais été renvoyée.")
+        UUID societeId,
+
+        @Schema(description = "Code de la société. 99,8 %.", example = "ADMOD")
+        String societeCode,
+
+        @Schema(description = "Libellé de la société. 99,8 %.")
+        String societeLibelle,
+
+        @Schema(description = "Auteur de la création. **34,3 % seulement** — les prospections "
+                + "créées par notre API n'en portent pas (bug #41).")
+        String creePar,
+
+        @Schema(description = "Date de création. 100 %.")
+        LocalDateTime creeLe,
+
+        @Schema(description = "Auteur de la dernière modification. 100 %.")
+        String modifiePar,
+
+        @Schema(description = "Date de dernière modification. 100 %.")
+        LocalDateTime modifieLe
 ) {
+
+    /**
+     * Identifiant du filtre Jackson qui porte la sélection de colonnes. Déclaré ici pour que la
+     * constante suive le DTO qu'elle filtre.
+     */
+    public static final String FILTRE_COLONNES = "colonnesProspection";
 }

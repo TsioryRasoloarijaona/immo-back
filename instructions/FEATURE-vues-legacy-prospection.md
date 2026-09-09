@@ -43,7 +43,7 @@ Ajouts **purement additifs** : aucun champ existant n'est renommé, retypé ni r
 | `nbInteractions` | `ActionsMessageNumber` | **97 %** | Nombre d'interactions journalisées. |
 | `derniereActionDate` | `LastActionDate` | **97 %** | Dernière action, tous types confondus. |
 | `projetId` / `projetCode` / `projetLibelle` | `CfgProjectId/Code/Description` | **99 %** | Le projet. Nous n'exposions que la tranche. |
-| `cin` | `CfgTierIDNumber` | **99 %** | CIN du prospect, déjà porté par la vue. |
+| `cin` | `CfgTierIDNumber` | ~~99 %~~ **2,7 %** | CIN du prospect. **Chiffre corrigé** — voir `INVENTAIRE-colonnes-prospection.md` §4 : la mesure initiale comptait les non-`NULL` d'une colonne remplie de chaînes vides. 387 lignes sur 14 118. |
 | `derniereCommunicationDate` | `LastCommunicationDate` | **90 %** | |
 | `derniereCommunicationResultat` | `LastCommunicationResult` | **90 %** | Ex. « Prospect n'est plus intéressé ». |
 | `derniereCommunicationMessage` | `LastCommunicationMessage` | **90 %** | Le texte saisi. |

@@ -39,14 +39,40 @@ public record ProspectionDetailDto(
         UUID actionCommercialeId,
         String actionCommerciale,
         String notes,
+
+        // -- Bloc « qualification budgétaire » : MESURÉ MORT sur les 14 114 prospections réelles.
+        //    Price est renseigné sur 4 lignes et vaut 0 — jamais null — partout ailleurs ; Area,
+        //    AreaTo, PriceTo, AdvanceAmount et les trois financements : 0 ligne. Les champs sont
+        //    conservés pour ne pas rompre le contrat existant, mais le front ne doit pas les
+        //    afficher : ils annonceraient un budget de « 0,00 DH » sur tout le portefeuille.
+        //    Retirés de la sélection par défaut de la liste (ColonneProspection).
+        //    Voir instructions/INVENTAIRE-colonnes-prospection.md §1.
+        @Schema(description = "Surface recherchée. **Mesurée morte : 0 ligne renseignée sur "
+                + "14 114.** Conservée pour compatibilité — ne pas afficher.")
         BigDecimal surface,
+
+        @Schema(description = "Borne haute de surface. **Morte : 0 ligne.** Ne pas afficher.")
         BigDecimal surfaceJusqua,
+
+        @Schema(description = "Budget déclaré. **Mesuré mort : 4 lignes sur 14 114**, et `0` — "
+                + "jamais `null` — ailleurs. Conservé pour compatibilité ; ne pas afficher.")
         BigDecimal prix,
+
+        @Schema(description = "Borne haute de budget. **Morte : 0 ligne.** Ne pas afficher.")
         BigDecimal prixJusqua,
+
+        @Schema(description = "Avance envisagée. **Morte : 0 ligne.** Ne pas afficher.")
         BigDecimal avance,
+
+        @Schema(description = "Financement sur fonds propres. **Mort : 0 ligne.** Ne pas afficher.")
         BigDecimal financementFondsPropres,
+
+        @Schema(description = "Financement par crédit. **Mort : 0 ligne.** Ne pas afficher.")
         BigDecimal financementCredit,
+
+        @Schema(description = "Autre financement. **Mort : 0 ligne.** Ne pas afficher.")
         BigDecimal financementAutre,
+
         Boolean fermee,
         LocalDateTime dateFermeture,
         UUID raisonFermetureId,

@@ -8,6 +8,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
+import com.tsix.immocrm.domain.ColonneProspection;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -27,6 +28,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidRequestException.class)
     public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * Nom hors catalogue passé à {@code ?colonnes=}.
+     *
+     * <p>Le corps porte la liste des noms valides : une faute de frappe se corrige alors depuis
+     * la réponse, sans aller lire la doc. Ignorer le nom en silence laisserait le front croire à
+     * une colonne vide plutôt qu'à une erreur d'appel.
+     */
+    @ExceptionHandler(ColonneProspection.ColonneInconnueException.class)
+    public ProblemDetail handleColonneInconnue(ColonneProspection.ColonneInconnueException ex) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        probleme.setProperty("colonne", ex.colonne());
+        probleme.setProperty("colonnesValides", ColonneProspection.nomsValides());
+        return probleme;
     }
 
     @ExceptionHandler(UnauthorizedException.class)

@@ -23,6 +23,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import com.tsix.immocrm.domain.ColonneProspection;
+import com.tsix.immocrm.dto.referentiel.ColonneDto;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -400,5 +404,28 @@ public class ReferentielController {
             @Parameter(description = "Filtre sur la disponibilité. Absent = DISPONIBLE.")
             @RequestParam(required = false) StatutArticle statut) {
         return referentielService.sousArticles(articleId, statut, categorieId, typeId);
+    }
+
+    @GetMapping("/colonnes/prospections")
+    @Operation(
+            summary = "Catalogue des colonnes de la liste des prospections",
+            description = "Alimente le **sélecteur de colonnes** de `GET /api/prospections`. "
+                    + "Chaque entrée donne le nom technique à passer dans `?colonnes=`, son "
+                    + "libellé français, son groupe d'affichage, son type (pour aligner et "
+                    + "formater), et si elle fait partie de la sélection par défaut.\n\n"
+                    + "Le front n'a ainsi aucune liste de colonnes à coder en dur, et le "
+                    + "catalogue est la même source que la liste blanche qui valide `?colonnes=` "
+                    + "— les deux ne peuvent pas diverger.\n\n"
+                    + "Les colonnes du groupe `ACTIVITE` (et `CONVERSION`) proviennent d'une vue "
+                    + "de la base légataire : les demander déclenche une requête supplémentaire, "
+                    + "mesurée à 7 ms pour une page de 20. Ne pas les demander n'en déclenche "
+                    + "aucune.\n\n"
+                    + "Référentiel statique, sans paramètre : cacheable côté client."
+    )
+    public List<ColonneDto> getColonnesProspections() {
+        return Arrays.stream(ColonneProspection.values())
+                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut()))
+                .toList();
     }
 }
