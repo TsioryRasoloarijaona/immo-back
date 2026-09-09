@@ -35,8 +35,18 @@ public record ProspectionListItemDto(
         String origine,
         String etape,
         Boolean fermee,
+
+        @Schema(description = "Budget déclaré du prospect. **Mesuré mort : renseigné sur 4 lignes "
+                + "sur 14 114**, et valant `0` — jamais `null` — partout ailleurs. Retiré de la "
+                + "sélection par défaut pour cette raison ; reste demandable via `?colonnes=prix`. "
+                + "Ne pas afficher comme un budget : ce serait annoncer « 0,00 DH » sur tout le "
+                + "portefeuille.")
         BigDecimal prix,
+
+        @Schema(description = "Surface recherchée. **Mesurée morte : 0 ligne renseignée** sur "
+                + "14 114. Même traitement que `prix`.")
         BigDecimal surface,
+
         UUID trancheId,
         // -- Libellé de la tranche principale (CfgTranche.Code/Description), pour affichage sans
         // second appel à GET /api/tranches/{trancheId}.

@@ -12,6 +12,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -74,6 +75,10 @@ class ProspectionColonnesTest {
         p.setDocDate(LocalDateTime.now());
         p.setStrEntityId(ENTITE_PROSPECTION);
         p.setCfgProspect(prospect);
+        // Un budget non nul, alors qu'il est mort sur 14 110 des 14 114 lignes réelles : c'est
+        // ce qui rend le test du défaut probant — la colonne est omise bien qu'elle ait une
+        // valeur, et non parce qu'elle est vide.
+        p.setPrice(new BigDecimal("1350000"));
         prospectionRepository.saveAndFlush(p);
         return code;
     }
@@ -93,6 +98,26 @@ class ProspectionColonnesTest {
                 .andExpect(jsonPath("$.content[0].joursInactivite").doesNotExist())
                 .andExpect(jsonPath("$.content[0].nbInteractions").doesNotExist())
                 .andExpect(jsonPath("$.content[0].dossierCode").doesNotExist());
+    }
+
+    /**
+     * Budget et surface sont mesurés morts (4 lignes sur 14 114 pour `Price`, 0 pour `Area`) et
+     * valent {@code 0} plutôt que {@code null} : les servir par défaut faisait afficher
+     * « 0,00 DH » de budget sur tout le portefeuille. Ils restent demandables — ce test tient les
+     * deux moitiés de la règle.
+     */
+    @Test
+    void budgetEtSurface_horsDefautMaisToujoursDemandables() throws Exception {
+        String code = prospectionVisible();
+
+        mockMvc.perform(get("/api/prospections").param("search", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].prix").doesNotExist())
+                .andExpect(jsonPath("$.content[0].surface").doesNotExist());
+
+        mockMvc.perform(get("/api/prospections").param("colonnes", "code,prix").param("search", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].prix").value(1350000));
     }
 
     @Test

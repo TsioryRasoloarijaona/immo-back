@@ -55,8 +55,15 @@ public enum ColonneProspection {
     TRANCHE_ID("trancheId", "Id tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
     TRANCHE_CODE("trancheCode", "Tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
     TRANCHE_DESCRIPTION("trancheDescription", "Libellé tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
-    PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, true, Source.ENTITE),
-    SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, true, Source.ENTITE),
+    // -- Qualification budgétaire : mesurée morte, donc HORS sélection par défaut.
+    //    `Price` est renseigné sur 4 lignes sur 14 114 et vaut 0 partout ailleurs — jamais NULL,
+    //    donc non masquable par un test de nullité côté front. `Area` : 0 ligne. Les laisser par
+    //    défaut faisait afficher « 0,00 DH » de budget sur tout le portefeuille : de
+    //    l'information fausse, plus nuisible que l'absence. Elles restent demandables via
+    //    ?colonnes= pour les rares lignes qui portent une valeur.
+    //    Voir instructions/INVENTAIRE-colonnes-prospection.md §1.
+    PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, false, Source.ENTITE),
+    SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, false, Source.ENTITE),
 
     // -- Activité, calculée par la base légataire. Hors sélection par défaut : ajouter un
     //    de ces champs déclenche la requête de vue, absente sinon.
