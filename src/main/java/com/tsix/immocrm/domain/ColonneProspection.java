@@ -65,6 +65,39 @@ public enum ColonneProspection {
     PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, false, Source.ENTITE),
     SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, false, Source.ENTITE),
 
+    // ------------------------------------------------------------------
+    // Colonnes ajoutées au lot B — présentes dans la vue légataire (donc affichables par le
+    // logiciel de bureau) mais que nos GET ne renvoyaient pas. Toutes servies par les entités :
+    // aucune requête de vue, aucun coût quand elles ne sont pas demandées.
+    // Voir instructions/INVENTAIRE-colonnes-prospection.md §2.
+    // ------------------------------------------------------------------
+
+    // Scalaires ou associations déjà déréférencées par la liste : coût nul.
+    PROSPECT_CODE("prospectCode", "Code prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    MOBILE_PROSPECT("mobileProspect", "Mobile (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
+    INDICATIF_MOBILE("indicatifMobile", "Indicatif", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
+    EMAIL_FICHE("emailFiche", "Email (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
+    COMMERCIAL_CODE("commercialCode", "Code commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    ANCIEN_CLIENT("ancienClient", "Ancien client", Groupe.IDENTITE, TypeColonne.BOOLEEN, false, Source.ENTITE),
+    DATE_FERMETURE("dateFermeture", "Date de clôture", Groupe.CLOTURE, TypeColonne.DATE, false, Source.ENTITE),
+    CREE_PAR("creePar", "Créée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE),
+    CREE_LE("creeLe", "Créée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE),
+    MODIFIE_PAR("modifiePar", "Modifiée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE),
+    MODIFIE_LE("modifieLe", "Modifiée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE),
+
+    // Associations supplémentaires : une jointure paresseuse de plus par ligne, payée seulement
+    // si la colonne est demandée — le mappeur ne les déréférence pas autrement.
+    TYPE_PROSPECT("typeProspect", "Type de prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    RAISON_FERMETURE("raisonFermeture", "Motif de clôture", Groupe.CLOTURE, TypeColonne.TEXTE, false, Source.ENTITE),
+    ORIGINE_SUPPORT("origineSupport", "Support d'origine", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    ACTION_COMMERCIALE("actionCommerciale", "Action commerciale", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    PAYS("pays", "Pays", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+
+    // Deux jointures de plus (tranche → projet → société), même règle.
+    SOCIETE_ID("societeId", "Id société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+    SOCIETE_CODE("societeCode", "Société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+    SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+
     // -- Activité, calculée par la base légataire. Hors sélection par défaut : ajouter un
     //    de ces champs déclenche la requête de vue, absente sinon.
     JOURS_INACTIVITE("joursInactivite", "Jours d'inactivité", Groupe.ACTIVITE, TypeColonne.NOMBRE, false, Source.VUE),
@@ -86,7 +119,7 @@ public enum ColonneProspection {
     STATUT_DOSSIER("statutDossier", "Statut dossier", Groupe.CONVERSION, TypeColonne.TEXTE, false, Source.VUE);
 
     /** Regroupement d'affichage du sélecteur. */
-    public enum Groupe { IDENTITE, CONTACT, CONTEXTE, FINANCIER, ACTIVITE, CONVERSION }
+    public enum Groupe { IDENTITE, CONTACT, CONTEXTE, FINANCIER, ACTIVITE, CONVERSION, CLOTURE, AUDIT }
 
     /** Type d'affichage, pour que le front aligne et formate sans table de correspondance. */
     public enum TypeColonne { TEXTE, NOMBRE, MONTANT, DATE, BOOLEEN }

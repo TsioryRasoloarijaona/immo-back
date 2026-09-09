@@ -132,7 +132,77 @@ public record ProspectionListItemDto(
 
         @Schema(description = "Statut du dossier issu de la prospection. `null` si non "
                 + "transformée.", example = "CONCRETISATION")
-        String statutDossier
+        String statutDossier,
+
+        // ------------------------------------------------------------------
+        // Lot B — colonnes que le logiciel de bureau affiche et que la liste ne renvoyait pas.
+        // Servies par les entités, hors sélection par défaut.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Code du prospect (`CfgTier.Code`). 100 %.")
+        String prospectCode,
+
+        @Schema(description = "Mobile **brut de la fiche prospect**, sans le repli sur le numéro "
+                + "de premier contact qu'applique `telephone`. 99,8 %. Utile pour éditer ou "
+                + "dédoublonner, là où `telephone` sert à appeler.")
+        String mobileProspect,
+
+        @Schema(description = "Indicatif pays du mobile. 100 %.", example = "212")
+        String indicatifMobile,
+
+        @Schema(description = "Email **brut de la fiche**, sans le repli appliqué par `email`. "
+                + "59,1 %.")
+        String emailFiche,
+
+        @Schema(description = "Code du commercial (`CfgTier.Code`). 99,3 % — la liste n'exposait "
+                + "que son nom.")
+        String commercialCode,
+
+        @Schema(description = "Le prospect est un ancien client. 100 %. Déjà en fiche, absent de "
+                + "la liste jusqu'ici.")
+        Boolean ancienClient,
+
+        @Schema(description = "Date de clôture de la prospection. 62,9 %.")
+        LocalDateTime dateFermeture,
+
+        @Schema(description = "Motif de clôture. 60,5 %.", example = "Hors budget")
+        String raisonFermeture,
+
+        @Schema(description = "Type du prospect (`CfgTierType`). 100 %.", example = "PRO")
+        String typeProspect,
+
+        @Schema(description = "Support de l'origine. 50,2 %.", example = "FACEBOOK")
+        String origineSupport,
+
+        @Schema(description = "Action commerciale (campagne) rattachée. 40,2 %.")
+        String actionCommerciale,
+
+        @Schema(description = "Pays du prospect. 27,3 %.")
+        String pays,
+
+        @Schema(description = "Identifiant de la société / entité juridique. 99,8 %. Elle filtre "
+                + "déjà les résultats côté serveur (seules les sociétés actives sont servies) "
+                + "sans avoir jamais été renvoyée.")
+        UUID societeId,
+
+        @Schema(description = "Code de la société. 99,8 %.", example = "ADMOD")
+        String societeCode,
+
+        @Schema(description = "Libellé de la société. 99,8 %.")
+        String societeLibelle,
+
+        @Schema(description = "Auteur de la création. **34,3 % seulement** — les prospections "
+                + "créées par notre API n'en portent pas (bug #41).")
+        String creePar,
+
+        @Schema(description = "Date de création. 100 %.")
+        LocalDateTime creeLe,
+
+        @Schema(description = "Auteur de la dernière modification. 100 %.")
+        String modifiePar,
+
+        @Schema(description = "Date de dernière modification. 100 %.")
+        LocalDateTime modifieLe
 ) {
 
     /**

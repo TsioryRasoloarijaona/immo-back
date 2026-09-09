@@ -17,6 +17,7 @@ import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -897,7 +898,7 @@ public class ProspectionService {
                 ? Map.of()
                 : prospectionViewRepository.findByIdIn(ids).stream()
                         .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
-        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId())));
+        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()), colonnes));
     }
 
     /**
@@ -948,7 +949,7 @@ public class ProspectionService {
      * {@link #versListe}.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
-        return toListItem(p, null, null);
+        return toListItem(p, null, null, Set.of());
     }
 
     /**
@@ -957,7 +958,18 @@ public class ProspectionService {
      *            (pré-prospection, ou {@code StrEntityId} absent).
      */
     private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
-                                                     ComSaleProspectionView vue) {
+                                                     ComSaleProspectionView vue,
+                                                     Set<ColonneProspection> colonnes) {
+        // Les associations du lot B ne sont déréférencées QUE si la colonne est demandée : chacune
+        // est un chargement paresseux de plus par ligne (deux pour la société, qui traverse
+        // tranche → projet). Non demandée, elle ne coûte rien.
+        CfgTranche tranche = p.getStkHierarchy();
+        CfgProject projet = colonnes.contains(ColonneProspection.SOCIETE_ID)
+                || colonnes.contains(ColonneProspection.SOCIETE_CODE)
+                || colonnes.contains(ColonneProspection.SOCIETE_LIBELLE)
+                ? (tranche != null ? tranche.getCfgProject() : null)
+                : null;
+        CfgCompany societe = projet != null ? projet.getCfgCompany() : null;
         return new ProspectionListItemDto(
                 p.getId(),
                 p.getCode(),
@@ -992,7 +1004,34 @@ public class ProspectionService {
                 vue != null ? videEnNull(vue.getCfgTierIdNumber()) : null,
                 vue != null ? vue.getComFolderId() : null,
                 vue != null ? videEnNull(vue.getComFolderCode()) : null,
-                vue != null ? videEnNull(vue.getStatus()) : null
+                vue != null ? videEnNull(vue.getStatus()) : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getCode() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getMobile() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getMobileIndicatif() : null,
+                p.getCfgProspect() != null ? p.getCfgProspect().getEMail() : null,
+                p.getCfgCommercial() != null ? p.getCfgCommercial().getCode() : null,
+                p.getIsOldCustomer(),
+                p.getClosingDate(),
+                colonnes.contains(ColonneProspection.RAISON_FERMETURE)
+                        && p.getComProspectionClosingReason() != null
+                        ? p.getComProspectionClosingReason().getDescription() : null,
+                colonnes.contains(ColonneProspection.TYPE_PROSPECT)
+                        && p.getCfgProspect() != null && p.getCfgProspect().getCfgTierType() != null
+                        ? p.getCfgProspect().getCfgTierType().getCode() : null,
+                colonnes.contains(ColonneProspection.ORIGINE_SUPPORT)
+                        && p.getComProspectionOriginSupport() != null
+                        ? p.getComProspectionOriginSupport().getDescription() : null,
+                colonnes.contains(ColonneProspection.ACTION_COMMERCIALE) && p.getComAction() != null
+                        ? p.getComAction().getDescription() : null,
+                colonnes.contains(ColonneProspection.PAYS) && p.getAdmCountry() != null
+                        ? p.getAdmCountry().getDescription() : null,
+                societe != null ? societe.getId() : null,
+                societe != null ? societe.getCode() : null,
+                societe != null ? societe.getDescription() : null,
+                p.getUserCreate(),
+                p.getUserCreateDateTime(),
+                p.getUserUpdate(),
+                p.getUserUpdateDateTime()
         );
     }
 

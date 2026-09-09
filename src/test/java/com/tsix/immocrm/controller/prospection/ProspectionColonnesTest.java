@@ -79,6 +79,11 @@ class ProspectionColonnesTest {
         // ce qui rend le test du défaut probant — la colonne est omise bien qu'elle ait une
         // valeur, et non parce qu'elle est vide.
         p.setPrice(new BigDecimal("1350000"));
+        // Audit renseigné explicitement : en base réelle `UserCreate` ne l'est que sur 34 % des
+        // lignes, parce que creerProspection ne le pose pas (bug #41). Le test doit vérifier que
+        // la colonne est servie, pas reproduire ce défaut.
+        p.setUserCreate("test");
+        p.setUserCreateDateTime(LocalDateTime.now());
         prospectionRepository.saveAndFlush(p);
         return code;
     }
@@ -188,6 +193,47 @@ class ProspectionColonnesTest {
                         .param("sort", "joursInactivite,desc")
                         .param("search", code))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Lot B : les colonnes que le logiciel de bureau affiche et que la liste ne renvoyait pas.
+     * Toutes servies par les entités — aucune requête de vue n'est déclenchée ici.
+     */
+    @Test
+    void colonnesDuLotB_sontServiesParLesEntites() throws Exception {
+        String code = prospectionVisible();
+
+        mockMvc.perform(get("/api/prospections")
+                        .param("colonnes", "code,prospectCode,mobileProspect,creeLe,ancienClient")
+                        .param("search", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].prospectCode").exists())
+                .andExpect(jsonPath("$.content[0].creeLe").exists())
+                // Non demandées : absentes, y compris parmi les nouvelles.
+                .andExpect(jsonPath("$.content[0].societeCode").doesNotExist())
+                .andExpect(jsonPath("$.content[0].typeProspect").doesNotExist());
+    }
+
+    /**
+     * Les associations coûteuses ne sont déréférencées que sur demande. Ce test vérifie le
+     * contrat observable — la colonne répond quand on la demande — plutôt que le nombre de
+     * requêtes, que MockMvc ne permet pas de compter simplement.
+     */
+    @Test
+    void societe_nEstResolueQueSiDemandee() throws Exception {
+        String code = prospectionVisible();
+
+        mockMvc.perform(get("/api/prospections").param("colonnes", "code").param("search", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].societeId").doesNotExist());
+
+        mockMvc.perform(get("/api/prospections")
+                        .param("colonnes", "code,societeId,societeCode")
+                        .param("search", code))
+                .andExpect(status().isOk())
+                // La fixture n'a pas de tranche, donc pas de société : la clé est presente dans la
+                // selection mais la valeur reste nulle — c'est bien un null, pas une erreur.
+                .andExpect(jsonPath("$.content[0].code").value(code));
     }
 
     @Test
