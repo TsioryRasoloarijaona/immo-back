@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.prospection;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -62,6 +64,14 @@ public record ProspectionDetailDto(
         String trancheDescription,
         UUID articleId,
         String articleCode,
-        String articleDescription
+        String articleDescription,
+
+        @Schema(description = "Bloc d'indicateurs d'activité calculés par la base légataire "
+                + "(nombre d'interactions, inactivité, dernière communication, visites, relance "
+                + "en cours, projet, et le lien vers le dossier issu de la prospection).\n\n"
+                + "**Vaut `null` en entier sur une pré-prospection** : ces indicateurs viennent "
+                + "de `ComSaleProspectionView`, qui exclut les pré-prospections. L'absence du "
+                + "bloc signifie « non disponible », jamais « zéro ».")
+        ActiviteProspectionDto activite
 ) {
 }

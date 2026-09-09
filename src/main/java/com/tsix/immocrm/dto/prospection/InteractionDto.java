@@ -63,6 +63,39 @@ public record InteractionDto(
         @Schema(description = "Date du rendez-vous, présente uniquement quand resultat est "
                 + "\"Rendez vous pris\" ou \"RDV reporté\" et qu'une date a été fournie à la "
                 + "création. null sinon.")
-        LocalDateTime dateRdv
+        LocalDateTime dateRdv,
+
+        @Schema(description = "Id de la **catégorie** de l'interaction — à ne pas confondre avec "
+                + "`resultatId`, qui est la sous-catégorie. Renseignée sur 100 % des 48 160 "
+                + "interactions réelles.")
+        UUID categorieId,
+
+        @Schema(description = "Libellé de la catégorie. Sert de discriminant : `Prospection` "
+                + "(46 666 lignes), `Dossier de vente (Réservation)` (1 325), "
+                + "`Dossier de vente (Livraison)` (167), `Réclamation` (2).",
+                example = "Prospection")
+        String categorie,
+
+        @Schema(description = "Id de la tranche de rattachement. Déduite comme le fait le "
+                + "logiciel de bureau : la tranche de la **prospection** quand `categorie` vaut "
+                + "\"Prospection\", celle du **lot** sinon. Renseignée sur 96 % des interactions ; "
+                + "`null` quand ni l'une ni l'autre n'en porte.")
+        UUID trancheId,
+
+        @Schema(description = "Code de la tranche. null si trancheId est null.", example = "CITEB2")
+        String trancheCode,
+
+        @Schema(description = "Libellé de la tranche. null si trancheId est null.")
+        String trancheLibelle,
+
+        @Schema(description = "Id du projet, déduit de la tranche. 96 %. null si trancheId est "
+                + "null.")
+        UUID projetId,
+
+        @Schema(description = "Code du projet. null si projetId est null.", example = "CITEB")
+        String projetCode,
+
+        @Schema(description = "Libellé du projet. null si projetId est null.")
+        String projetLibelle
 ) {
 }

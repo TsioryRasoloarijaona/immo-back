@@ -4,7 +4,9 @@ import com.tsix.immocrm.dto.hotline.HotlineFicheDto;
 import com.tsix.immocrm.dto.hotline.HotlineResultDto;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -13,6 +15,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
+import com.tsix.immocrm.services.prospection.ContexteInteraction;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
@@ -213,6 +216,10 @@ public class HotlineService {
     }
 
     private static InteractionDto toInteractionDto(ComActionMessage m) {
+        // Même contexte projet/tranche que GET /api/prospections/{id}/interactions : la règle
+        // est partagée pour que les deux endpoints ne divergent pas.
+        CfgTranche tranche = ContexteInteraction.tranche(m);
+        CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
         return new InteractionDto(
                 m.getId(),
                 m.getDocDate(),
@@ -228,7 +235,15 @@ public class HotlineService {
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getDescription() : null,
                 m.getAlertValidityDate(),
-                m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null
+                m.getAdmEvent() != null ? m.getAdmEvent().getStartHour() : null,
+                m.getComActionMessageCategory() != null ? m.getComActionMessageCategory().getId() : null,
+                m.getComActionMessageCategory() != null ? m.getComActionMessageCategory().getDescription() : null,
+                tranche != null ? tranche.getId() : null,
+                tranche != null ? tranche.getCode() : null,
+                tranche != null ? tranche.getDescription() : null,
+                projet != null ? projet.getId() : null,
+                projet != null ? projet.getCode() : null,
+                projet != null ? projet.getDescription() : null
         );
     }
 }
