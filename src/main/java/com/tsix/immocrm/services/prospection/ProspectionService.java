@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
@@ -209,7 +210,7 @@ public class ProspectionService {
      */
     public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
             List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
-            Boolean ouvertes, Pageable pageable) {
+            Boolean ouvertes, Set<ColonneProspection> colonnes, Pageable pageable) {
         Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
                 search, ouvertes)
                 .and((root, query, cb) -> cb.or(
@@ -218,7 +219,7 @@ public class ProspectionService {
                 ))
                 // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
                 .and(perimetreService.filtreProspections());
-        return versListe(prospectionRepository.findAll(spec, pageable));
+        return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
     }
 
     /**
@@ -237,7 +238,10 @@ public class ProspectionService {
                 // Périmètre commercial : une pré-prospection a par construction un commercial NULL
                 // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
                 .and(perimetreService.filtreProspections());
-        return versListe(prospectionRepository.findAll(spec, pageable));
+        // Sélection par défaut, sans discussion : ComSaleProspectionView exclut par construction
+        // les pré-prospections, donc aucune colonne d'activité ne peut être servie ici. Demander
+        // la vue reviendrait à payer une requête pour n'obtenir que des null.
+        return versListe(prospectionRepository.findAll(spec, pageable), ColonneProspection.parDefautSet());
     }
 
     /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
@@ -879,14 +883,21 @@ public class ProspectionService {
      * Les résoudre ligne par ligne ferait 20 requêtes pour une page de 20 — le genre de N+1 qui
      * ne se voit pas en test sur trois lignes et qui coûte cher sur un écran réel.
      */
-    private Page<ProspectionListItemDto> versListe(Page<ComProspection> page) {
+    private Page<ProspectionListItemDto> versListe(Page<ComProspection> page,
+                                                   Set<ColonneProspection> colonnes) {
         List<UUID> ids = page.getContent().stream().map(ComProspection::getId).toList();
         // IN () est une erreur de syntaxe SQL : ne pas interroger sur une page vide.
         Map<UUID, DerniereAlerteProjection> alertes = ids.isEmpty()
                 ? Map.of()
                 : actionMessageRepository.dernieresAlertes(ids).stream()
                         .collect(Collectors.toMap(DerniereAlerteProjection::getProspectionId, a -> a));
-        return page.map(p -> toListItem(p, alertes.get(p.getId())));
+        // La vue n'est interrogée que si la sélection contient au moins une colonne d'activité :
+        // sans `?colonnes=`, cette requête n'est pas émise et le coût du lot est nul.
+        Map<UUID, ComSaleProspectionView> activite = ids.isEmpty() || !ColonneProspection.exigeLaVue(colonnes)
+                ? Map.of()
+                : prospectionViewRepository.findByIdIn(ids).stream()
+                        .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
+        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId())));
     }
 
     /**
@@ -937,10 +948,16 @@ public class ProspectionService {
      * {@link #versListe}.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
-        return toListItem(p, null);
+        return toListItem(p, null, null);
     }
 
-    private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte) {
+    /**
+     * @param vue ligne de {@code ComSaleProspectionView}, ou {@code null} quand aucune colonne
+     *            d'activité n'est demandée — ou que la prospection n'y figure pas
+     *            (pré-prospection, ou {@code StrEntityId} absent).
+     */
+    private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
+                                                     ComSaleProspectionView vue) {
         return new ProspectionListItemDto(
                 p.getId(),
                 p.getCode(),
@@ -961,7 +978,21 @@ public class ProspectionService {
                 telephoneProspect(p.getCfgProspect(), p),
                 emailProspect(p.getCfgProspect(), p),
                 alerte != null ? alerte.getDateAlerte() : null,
-                alerte != null ? alerte.getMessage() : null
+                alerte != null ? alerte.getMessage() : null,
+                vue != null ? vue.getInactivityTimeout() : null,
+                vue != null ? vue.getActionsMessageNumber() : null,
+                vue != null ? vue.getLastActionDate() : null,
+                vue != null ? vue.getLastCommunicationDate() : null,
+                vue != null ? videEnNull(vue.getLastCommunicationResult()) : null,
+                vue != null ? vue.getNbrVisit() : null,
+                vue != null ? vue.getLastVisitDate() : null,
+                vue != null ? vue.getCfgProjectId() : null,
+                vue != null ? videEnNull(vue.getCfgProjectCode()) : null,
+                vue != null ? videEnNull(vue.getCfgProjectDescription()) : null,
+                vue != null ? videEnNull(vue.getCfgTierIdNumber()) : null,
+                vue != null ? vue.getComFolderId() : null,
+                vue != null ? videEnNull(vue.getComFolderCode()) : null,
+                vue != null ? videEnNull(vue.getStatus()) : null
         );
     }
 

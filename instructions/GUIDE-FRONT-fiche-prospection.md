@@ -9,15 +9,16 @@
 
 ## 0. État réel du backend — à lire avant de planifier
 
-| | Aujourd'hui | Ce qui manque |
-|---|---|---|
-| `GET /api/prospections/{id}` | **enrichi** — nouveau bloc `activite` | — |
-| `GET /api/prospections/{id}/interactions` | **enrichi** — catégorie + projet/tranche | — |
-| `GET /api/prospections` (liste) | **inchangé** — les 20 champs de `ProspectionListItemDto` | les indicateurs d'activité |
-| `?colonnes=` (sélection serveur) | **n'existe pas** | tout le mécanisme |
+| | Aujourd'hui |
+|---|---|
+| `GET /api/prospections/{id}` | **enrichi** — nouveau bloc `activite` |
+| `GET /api/prospections/{id}/interactions` | **enrichi** — catégorie + projet/tranche |
+| `GET /api/prospections` (liste) | **enrichi** — 14 colonnes d'activité, sur demande |
+| `?colonnes=` (sélection serveur) | **livré** |
+| `GET /api/referentiels/colonnes/prospections` | **livré** — le catalogue du sélecteur |
 
-Autrement dit : **le sélecteur de colonnes ne peut pas encore être branché sur le serveur.** La
-§5 donne le contrat visé et ce qu'on peut construire dès maintenant sans se tromper.
+Tout est en place : le sélecteur de colonnes peut être branché sur le serveur. La §5 donne le
+contrat exact.
 
 Pourquoi ce découpage : le journal d'usage du logiciel de bureau (311 923 ouvertures d'écran)
 montre que la **fiche** prospection est ouverte **7 372 fois sur 12 mois** contre **270** pour sa
@@ -139,26 +140,27 @@ renseignée.
 Filtres serveur inchangés : `etape`, `origine`, `commercial`, `trancheId` (répétables),
 `dateDebut`, `dateFin`, `search`, `ouvertes`, plus la pagination `Pageable`.
 
-**Les colonnes de liste les plus intéressantes sont précisément celles qui manquent** —
-`joursInactivite`, `nbInteractions`, `derniereCommunicationDate`, `nbVisites`, `dossierCode`.
-Elles n'ont pas été ajoutées parce que les servir naïvement sur une liste coûte, mesuré :
+**14 colonnes d'activité s'y ajoutent désormais**, mais uniquement sur demande via `?colonnes=` :
+`joursInactivite`, `nbInteractions`, `derniereActionDate`, `derniereCommunicationDate`,
+`derniereCommunicationResultat`, `nbVisites`, `derniereVisiteDate`, `projetId`/`projetCode`/
+`projetLibelle`, `cin`, `dossierId`/`dossierCode`/`statutDossier`.
 
-| Requête (20 lignes) | Toutes colonnes | 8 colonnes |
-|---|---:|---:|
-| page 1 | 121 ms | 38 ms |
-| `OFFSET 500` (page 25) | 1 176 ms | 82 ms |
-| `OFFSET 5000` (page 250) | **5 942 ms** | **123 ms** |
+Elles ne sont pas servies par défaut, et ce n'est pas une précaution de performance : la liste
+est servie par la table indexée, puis enrichie par lot d'identifiants sur la page déjà chargée —
+**7 ms**, qu'on demande 4 colonnes ou 20. C'est simplement le seul moyen de garantir que la
+réponse par défaut reste identique à celle d'avant.
 
-C'est le fond du sujet : **la sélection de colonnes n'est pas un confort d'affichage, c'est ce
-qui rend ces colonnes servables**. D'où le mécanisme ci-dessous, plutôt qu'un ajout de champs.
+> Une version antérieure de ce guide justifiait `?colonnes=` par la pagination profonde
+> (5 942 ms → 123 ms). **Cette justification est caduque** : elle valait pour une architecture
+> où la liste était servie *depuis* la vue, écartée à la mesure. La sélection économise la charge
+> utile et, quand aucune colonne d'activité n'est demandée, une requête — pas des secondes.
 
 ---
 
-## 5. Le sélecteur de colonnes — contrat visé
+## 5. Le sélecteur de colonnes — contrat livré
 
-> ⚠️ **Non implémenté à ce jour.** Cette section est le contrat sur lequel le front peut
-> construire sans risque de réécriture. Le paramètre `colonnes` sera **ignoré** tant que le lot
-> « listes » n'est pas livré : ne pas conditionner l'affichage à sa prise en compte.
+> ✅ **Implémenté.** Voir `FEATURE-selection-colonnes-listes.md` pour les mesures et les choix
+> d'implémentation.
 
 ### 5.1 La requête
 
@@ -173,6 +175,10 @@ GET /api/prospections?colonnes=code,prospectNom,joursInactivite,nbInteractions&p
 - L'ordre du paramètre ne porte pas l'ordre d'affichage : c'est au front de le gérer. Le serveur
   renvoie un objet JSON, pas un tableau positionnel.
 - `id` est toujours renvoyé, qu'il soit demandé ou non — sans lui la ligne n'est pas cliquable.
+- Le paramètre est **répétable ou séparé par des virgules**, indifféremment.
+- **Le tri sur une colonne d'activité n'est pas supporté** : `?sort=joursInactivite` renvoie 400.
+  Le tri est appliqué sur la table, qui ne porte pas ces colonnes. Ne pas proposer d'en-tête
+  cliquable sur les colonnes du groupe `ACTIVITE` ou `CONVERSION`.
 
 ### 5.2 La réponse
 
@@ -193,19 +199,23 @@ GET /api/referentiels/colonnes/prospections
 → [ { nom, libelle, groupe, type, parDefaut } ]
 ```
 
-`groupe` permet de présenter le sélecteur par sections (Identité / Activité / Contexte /
-Financier), `parDefaut` donne la sélection initiale, `type` (`texte` | `nombre` | `date` |
-`montant` | `booleen`) permet d'aligner et de formater sans table de correspondance côté front.
+`groupe` vaut `IDENTITE` | `CONTACT` | `CONTEXTE` | `FINANCIER` | `ACTIVITE` | `CONVERSION` et
+permet de présenter le sélecteur par sections. `parDefaut` donne la sélection initiale — l'union
+des colonnes `parDefaut` reproduit exactement la réponse sans paramètre. `type` vaut `TEXTE` |
+`NOMBRE` | `MONTANT` | `DATE` | `BOOLEEN` et permet d'aligner et de formater sans table de
+correspondance côté front.
 
-### 5.4 Ce que le front peut faire dès maintenant
+C'est **la même source que la liste blanche** qui valide `?colonnes=` côté serveur : les deux ne
+peuvent pas diverger, et une colonne ajoutée plus tard apparaît dans le sélecteur sans
+redéploiement du front.
 
-1. **Construire l'UI du sélecteur** et sa persistance. Aucune table légataire ne stocke de
-   disposition de colonnes — vérifié, le logiciel de bureau les garde sur le poste client. Donc
-   `localStorage` par défaut, et une table applicative côté backend seulement si le métier veut
-   retrouver son affichage d'un poste à l'autre : c'est une décision distincte, à demander via
-   `from_front.md`.
-2. **Fixer les colonnes par défaut** sur celles disponibles aujourd'hui (§4), pour que le passage
-   au serveur ne change pas ce que voit l'utilisateur.
+### 5.4 Recommandations d'intégration
+
+1. **Construire l'UI du sélecteur à partir du référentiel**, jamais d'une liste codée en dur.
+2. **Mémoriser le choix en `localStorage`.** Aucune table légataire ne stocke de disposition de
+   colonnes — vérifié, le logiciel de bureau les garde sur le poste client. Une table applicative
+   côté backend n'a de sens que si le métier veut retrouver son affichage d'un poste à l'autre :
+   c'est une décision distincte, à demander via `from_front.md`.
 3. **Ne pas** filtrer côté client après avoir chargé un gros lot. Le contournement du même genre
    existe déjà pour le filtre `statut` des dossiers (demande #10 de `from_front.md`, lot de 500
    dossiers filtré côté client) et il ne passe pas l'échelle. Ici il serait pire : c'est

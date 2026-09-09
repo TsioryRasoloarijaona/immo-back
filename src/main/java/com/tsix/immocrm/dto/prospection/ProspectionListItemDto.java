@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.prospection;
 
+import com.fasterxml.jackson.annotation.JsonFilter;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -9,10 +10,19 @@ import java.util.UUID;
 /**
  * Summary shape for {@code GET /api/prospections} and {@code GET /api/pre-prospections}.
  *
+ * <p><strong>Toutes les clés ne sont pas toujours présentes.</strong> Le paramètre
+ * {@code ?colonnes=} sélectionne celles qui sont sérialisées ; les autres sont absentes de la
+ * réponse — voir {@link com.tsix.immocrm.domain.ColonneProspection}, qui fait aussi office de
+ * liste blanche et alimente {@code GET /api/referentiels/colonnes/prospections}.
+ *
+ * <p>Sans ce paramètre, la réponse est <em>exactement</em> celle d'avant son introduction : les
+ * champs du groupe activité valent {@code null} et le serveur n'interroge pas la vue légataire.
+ *
  * NOTE: field naming is not yet backed by a shared API spec doc
  * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
  * directly from {@code ComProspection}. Adjust once a spec is available.
  */
+@JsonFilter(ProspectionListItemDto.FILTRE_COLONNES)
 public record ProspectionListItemDto(
         UUID id,
         String code,
@@ -58,6 +68,66 @@ public record ProspectionListItemDto(
         @Schema(description = "Message de cette dernière alerte — en pratique la note du "
                 + "commercial sur l'interaction qui l'a posée. `null` si aucune alerte.",
                 example = "rappeler la cliente lundi matin")
-        String derniereAlerteMessage
+        String derniereAlerteMessage,
+
+        // ------------------------------------------------------------------
+        // Groupe « activité » — calculé par la base légataire (ComSaleProspectionView).
+        // Hors sélection par défaut : ces champs valent null tant que ?colonnes= ne les
+        // demande pas, et la requête de vue n'est alors même pas émise.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Jours écoulés depuis la dernière action — le tri de relance du "
+                + "logiciel de bureau. Renseigné sur 100 % des prospections de vente.",
+                example = "1688")
+        Integer joursInactivite,
+
+        @Schema(description = "Nombre d'interactions journalisées. 97 %.", example = "12")
+        Integer nbInteractions,
+
+        @Schema(description = "Date de la dernière action, tous types confondus. 97 %.")
+        LocalDateTime derniereActionDate,
+
+        @Schema(description = "Date du dernier échange avec le prospect. 90 %.")
+        LocalDateTime derniereCommunicationDate,
+
+        @Schema(description = "Résultat du dernier échange. 90 %.",
+                example = "Prospect n'est plus intéressé par un appartement")
+        String derniereCommunicationResultat,
+
+        @Schema(description = "Nombre de visites effectuées. 20 %.", example = "2")
+        Integer nbVisites,
+
+        @Schema(description = "Date de la dernière visite. `null` si aucune visite.")
+        LocalDateTime derniereVisiteDate,
+
+        @Schema(description = "Identifiant du projet — la liste n'exposait que la tranche. 99 %.")
+        UUID projetId,
+
+        @Schema(description = "Code du projet. 99 %.", example = "CITEB")
+        String projetCode,
+
+        @Schema(description = "Libellé du projet. 99 %.")
+        String projetLibelle,
+
+        @Schema(description = "CIN du prospect. 99 %.")
+        String cin,
+
+        @Schema(description = "Identifiant du dossier issu de la prospection. `null` sur 98 % des "
+                + "lignes : c'est le taux de conversion réel, pas une donnée manquante.")
+        UUID dossierId,
+
+        @Schema(description = "Code du dossier issu de la prospection. `null` si non transformée.",
+                example = "26/00314")
+        String dossierCode,
+
+        @Schema(description = "Statut du dossier issu de la prospection. `null` si non "
+                + "transformée.", example = "CONCRETISATION")
+        String statutDossier
 ) {
+
+    /**
+     * Identifiant du filtre Jackson qui porte la sélection de colonnes. Déclaré ici pour que la
+     * constante suive le DTO qu'elle filtre.
+     */
+    public static final String FILTRE_COLONNES = "colonnesProspection";
 }
