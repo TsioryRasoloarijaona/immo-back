@@ -56,4 +56,18 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
      * ("BAN", confirmé sur données réelles : 21 tiers) pour peupler {@code CreerReglementRequest.banqueId}.
      */
     List<CfgTier> findByCfgTierType_CodeOrderByDescriptionAsc(String code);
+
+    /**
+     * Résolution d'un code tiers — sert à suivre le pointeur de doublon
+     * {@code ComProspection.TempField10}, qui porte un {@code CfgTier.Code} (849 valeurs réelles,
+     * 849 résolues).
+     *
+     * <p><b>Rend une {@code List}, jamais un {@code Optional} : {@code Code} n'est pas unique.</b>
+     * 14 516 tiers pour 14 504 codes distincts — {@code "000009"} est porté par 4 tiers. Aucun des
+     * 849 pointeurs réels n'est ambigu aujourd'hui, mais un dérivé {@code Optional} lèverait
+     * {@code IncorrectResultSizeDataAccessException} le jour où l'un d'eux tombe sur un doublon de
+     * code. L'appelant décide quoi faire de la multiplicité — voir
+     * {@code instructions/FEATURE-marqueurs-tri-pre-prospection.md} §3.
+     */
+    List<CfgTier> findByCode(String code);
 }

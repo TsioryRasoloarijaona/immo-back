@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-10T18:00+01:00_
+_Last updated: 2026-09-10T20:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -15,10 +15,15 @@ ce que le logiciel de bureau affiche.
 | 2 | Sélection de colonnes `?colonnes=` sur la liste | **mergé** |
 | 3 | Inventaire des 148 colonnes | **mergé** |
 | A/B/C | Champs morts retirés · 18 colonnes ajoutées à la liste · 15 filtres | **mergé** |
-| **D** | **Enrichissement de la fiche** (`GET /api/prospections/{id}`) | **branche en cours** |
+| D | Enrichissement de la fiche (`GET /api/prospections/{id}`) | **mergé** (PR #39) |
+| **E** | **Marqueurs de tri + pointeur de doublon** | **branche en cours** |
 
-Branche : **`feat/enrichissement-fiche-prospection`**, coupée d'un `main` fraîchement pull.
-**718 tests verts** (673 en fin de session précédente, +45 dont 8 écrits ici).
+Branche : **`feat/marqueurs-tri-pre-prospection`**, coupée d'un `main` fraîchement pull.
+**748 tests verts** (673 en début de session, +75 dont 38 écrits ici).
+
+**Le chantier « vues du légataire » est terminé côté prospection.** Le lot E a démontré que
+`ComSalePreProspectionView` n'a rien à donner (§Key Points) : la question suivante n'est plus
+« quelle vue exploiter » mais « quel écran ». Voir le backlog.
 
 ---
 
@@ -42,6 +47,15 @@ Branche : **`feat/enrichissement-fiche-prospection`**, coupée d'un `main` fraî
   association (id + libellé + code), les ternaires auraient triplé les passages par le proxy LAZY.
   Une variable locale par association + `Champs.de` = un seul passage.
 - **Mesurer la population avec la règle `NULL` **et** chaîne vide**, systématiquement.
+- **Mesurer la taille d'une vue avant de projeter du travail dessus.** La longueur de sa
+  définition et son nombre de sous-requêtes disent en une requête s'il y a quelque chose à en
+  tirer. `ComSalePreProspectionView` : 4 229 caractères, **0 sous-requête** — verdict immédiat,
+  là où j'allais lancer un lot complet.
+- **Tester une hypothèse de sémantique au lieu de la supposer.** « `TempField10` pointe un
+  tiers » se vérifie par un `EXISTS` : **849/849**. Sans ça, on expose une chaîne opaque.
+- **Vérifier l'unicité avant d'écrire un `findByCode`.** `CfgTier.Code` n'est pas unique — un
+  dérivé `Optional` aurait levé `IncorrectResultSizeDataAccessException` en production, sur un
+  cas absent des données du jour.
 
 ## ❌ What Failed
 
@@ -58,6 +72,12 @@ Branche : **`feat/enrichissement-fiche-prospection`**, coupée d'un `main` fraî
     `/api/prospections/{id}` sert les deux.
 - **Agréger 37 colonnes de la vue coûte 109 s** sur 14 118 lignes. Acceptable pour une mesure
   ponctuelle, mais confirme qu'on ne sert jamais une liste depuis la vue.
+- **Un champ servi « brut » sortait avec ses espaces** (`"  TRAITÉ  "`). Le test a eu raison ;
+  j'ai normalisé côté serveur et corrigé le mot « brut » dans le spec, devenu inexact.
+- **`-Dtest=A+B` n'est pas la syntaxe surefire** — c'est `-Dtest=A,B`. Le `+` échoue sans
+  message utile (`BUILD FAILURE` nu).
+- **`SUM(CASE WHEN (SELECT …))` est refusé par SQL Server** (« fonction d'agrégation sur une
+  expression comportant une sous-requête ») : passer par une table dérivée.
 
 ---
 
@@ -65,6 +85,8 @@ Branche : **`feat/enrichissement-fiche-prospection`**, coupée d'un `main` fraî
 
 | # | Error / Bug | Status | Fix applied |
 |---|-------------|--------|-------------|
+| 50 | **798 pré-prospections (20,9 %) marquées doublon/spam sont servies comme du travail à faire** — 795 encore à « 1 A TRAITER » | **Rendu visible** | `marqueurTri` exposé (lot E). **Filtrer reste une décision produit ouverte** |
+| 49 | `@Schema` d'audit annonçaient « 100 % » sans qualifier la population, alors que le DTO sert prospections **et** pré-prospections (28 % pour `modifieLe`) | **Fixed** | Taux qualifiés par population dans les `@Schema` et le guide front |
 | 48 | `proposeurId`/`proposeurNom` exposés alors que **morts : 1 ligne sur 14 118** | **Documenté** | `@Schema` « ne pas afficher » + §5 de la FEATURE. Retrait = rupture front, non fait |
 | 46 | `cin` documenté à 99 %, vaut 2,7 % | **Fixed (reliquat traité)** | La correction de la session précédente avait manqué le javadoc de `ComSaleProspectionView` — corrigé ici |
 | 43 | **`ComProspection.StrEntityId` jamais posé par `creerProspection`** → prospection **invisible dans le logiciel de bureau** | **Open — décision métier** | Comportement figé par un test |
@@ -100,6 +122,50 @@ ComProspection (56 col.)
 - **Règle tenue :** ne jamais mapper une colonne de plus sur `ComSaleProspectionView`. C'est le
   nombre de colonnes mappées qui décide de l'élagage des sous-requêtes par SQL Server, donc des
   26 ms de la fiche.
+
+### `ComSalePreProspectionView` : rien à en tirer, définitivement
+
+| | Vue vente | Vue pré-prospection |
+|---|---:|---:|
+| Colonnes | 148 | **70** |
+| Définition | 21 133 car. | **4 229 car.** |
+| Sous-requêtes corrélées | ~15 | **0** |
+
+Vue **plate** : `ComProspection` + 13 `LEFT JOIN` déjà mappés. Aucune autre vue n'existe pour la
+pré-prospection (vérifié par nom **et** par définition). Sur ses 70 colonnes, les seules non
+servies après le lot D sont mesurées **à 0 %** : proposeur, intermédiaire, mode de paiement,
+budget. **Ne pas reprendre ce sujet.**
+
+### Les champs libres, ce qu'ils contiennent vraiment
+
+- **`TempField1` porte deux conventions.** Pré-prospections : marqueur de tri (`Doublon` 770,
+  `spam` 30, `Traité` 9). Prospections : **typologie recherchée** — `salon_+_2_chambres` 518,
+  `salon_+_1_chambre` 213 — plus villes et budgets. 1 239 lignes de texte libre non reconnu.
+  D'où le nommage `noteQualification` (brut) + `marqueurTri` (dérivé, `null` si non reconnu).
+- **`TempField10` est un pointeur de doublon** : **849/849** résolvent vers un `CfgTier.Code`.
+- **`TempField3`–`TempField9` : 0 %.** `TempField2` : 29 lignes (tranches de budget).
+- **Conséquence produit :** 798 pré-prospections (20,9 %) marquées doublon/spam, dont **795
+  encore à l'étape « 1 A TRAITER »**. Le lot E expose, **ne filtre pas** — filtrer reste une
+  décision produit ouverte.
+- **`INVENTAIRE` §1 est à nuancer** : le bloc qualification est mort *en tant que colonnes*
+  (`Price`, `Area` = 0), mais l'information existe en texte libre. Non exploitée.
+
+### `CfgTier.Code` n'est pas unique
+
+14 516 tiers pour **14 504 codes distincts** (`000009` porté par 4 tiers). Aucun des 849
+pointeurs réels n'est ambigu, mais tout `findByCode` doit renvoyer une **`List`** — un
+`Optional` lèverait `IncorrectResultSizeDataAccessException`.
+
+### Les taux d'audit dépendent de la population, et le DTO est partagé
+
+| | Prospections | Pré-prospections |
+|---|---:|---:|
+| `creePar` | 34,3 % | 27,1 % |
+| `creeLe` | 100 % | 100 % |
+| `modifiePar` / `modifieLe` | 100 % | **28,1 %** |
+
+Et sur une pré-prospection : `fermee` **0 %** (aucune n'est jamais clôturée), `article*` 0,2 %,
+`proposeur*` 0 %. La tranche, elle, est à 95,5 % — la société reste utile.
 
 ### Quatre alias, mesurés à 0 écart sur 14 118 lignes — ne pas les exposer
 
@@ -162,7 +228,14 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ## 📁 Important Files & Paths
 
-- **`instructions/FEATURE-enrichissement-fiche-prospection.md`** — le lot en cours : §1 les trois
+- **`instructions/FEATURE-marqueurs-tri-pre-prospection.md`** — le lot en cours : §1 pourquoi la
+  vue pré-prospection ne sert à rien, §2 ce que les champs libres contiennent, §3 le contrat et
+  pourquoi brut **et** dérivé, §4 le fait opérationnel, §5 les corrections de doc.
+- `domain/MarqueurTriProspection.java` — correspondance **exacte** sur valeur normalisée. Le
+  risque n'est pas de rater un marqueur mais d'en inventer un : 1 239 lignes de texte libre.
+- `src/test/.../MarqueurTriProspectionTest.java` — 23 cas, dont les **négatifs** qui sont
+  l'essentiel du test.
+- `instructions/FEATURE-enrichissement-fiche-prospection.md` — lot D : §1 les trois
   couches de la vue et pourquoi on n'y touche pas, §2 les mesures + le tableau
   « déjà sur la liste ? », §3 les quatre alias, §4 les écartés et pourquoi, §5 les deux défauts.
 - **`instructions/INVENTAIRE-colonnes-prospection.md`** — les 148 colonnes et leur population.
@@ -204,32 +277,40 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/enrichissement-fiche-prospection`** | lot D, 718 tests verts |
-| back | `docs/memoire-de-session` | 2 commits, existe sur `origin` |
+| back | **`feat/marqueurs-tri-pre-prospection`** | lot E, 748 tests verts |
+| back | `feat/contexte-dossier` | **prouvée mergée, 0 commit hors `main` — supprimable** |
+| back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée **mais la branche locale a divergé depuis** (1 commit hors `main`) |
+| back | `docs/memoire-de-session` | 2 commits, sur `origin`, non mergée |
 | back | `feat/remise-dossier` | 1 commit, **aucun remote** |
 | front | `refractor/best-practice` | **11 commits, LOCAL SEUL** — remote supprimé sans merge |
 
-Les branches des lots 1 à C ont été mergées sur GitHub (PR jusqu'à #38). `sync` **ne supprime pas**
-la branche mergée — le faire à la main (`git branch -d` + `git push origin --delete`) ; `-d` refuse
-toute branche non mergée, s'en servir comme garde-fou plutôt que `-D`.
+Lots 1→D mergés sur GitHub (PR jusqu'à #39). `sync` **ne supprime pas** la branche mergée — le
+faire à la main (`git branch -d` + `git push origin --delete`, fait pour le lot D). `-d` refuse
+toute branche non mergée : s'en servir comme garde-fou plutôt que `-D`. C'est ce refus qui a
+révélé la divergence de `fix/ci-pollution-doubles-envoi`.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Faire merger la PR `feat/enrichissement-fiche-prospection` sur GitHub**, puis
+> **Faire merger la PR `feat/marqueurs-tri-pre-prospection` sur GitHub**, puis
 > `node ..\.claude\scripts\git-flow.mjs sync back` et supprimer la branche à la main.
 
 ### Backlog
 
-- [ ] **Relayer au dépôt frontend** `GUIDE-FRONT-fiche-prospection.md` (« Rang 5 ») : 25 champs
-      **additifs** sur `ProspectionDetailDto`, tous optionnels dans `types.ts`, **aux mêmes noms
-      que la liste** — le type de la fiche peut réutiliser les champs déjà déclarés.
+- [ ] **Relayer au dépôt frontend** `GUIDE-FRONT-fiche-prospection.md`, rangs **5 et 6** :
+      30 champs **additifs** sur `ProspectionDetailDto`, tous optionnels dans `types.ts`, et pour
+      le rang 5 **aux mêmes noms que la liste** — le type de la fiche peut réutiliser les champs
+      déjà déclarés.
+- [ ] **Décision produit : filtrer les doublons ?** Le lot E expose `marqueurTri` sans filtrer.
+      798 pré-prospections (20,9 %) sont du déchet marqué, 795 encore à « 1 A TRAITER ». Un
+      `?exclureDoublons=` optionnel, ou une exclusion par défaut (= rupture de comportement).
 - [ ] **Fiche tiers** — 5 447 ouvertures/an (3ᵉ écran), `ProspectDetailDto` 52 champs contre 97
       dans `ComSaleProspectView`. Le meilleur rapport valeur/effort restant. Appliquer la même
-      méthode : lire la définition de la vue, séparer jointures et sous-requêtes corrélées.
-- [ ] **Pré-prospection** — 5 420 ouvertures/an (4ᵉ écran), `ComSalePreProspectionView`
-      (70 colonnes) jamais exploitée.
+      méthode, en commençant par **mesurer la définition de la vue** (longueur, nb de
+      sous-requêtes) avant de projeter quoi que ce soit.
+- [ ] ~~Pré-prospection / `ComSalePreProspectionView`~~ — **clos par le lot E** : vue plate,
+      0 sous-requête, rien à en tirer. Ne pas rouvrir.
 - [ ] **Décision métier : les 830** (bug #44) — aligner sur `StrEntity.Code` ?
 - [ ] **Décision métier : `StrEntityId` à la création** (bug #43).
 - [ ] `UserCreate` sur `creerProspection` (bug #41) — préalable à un affichage honnête de `creePar`.

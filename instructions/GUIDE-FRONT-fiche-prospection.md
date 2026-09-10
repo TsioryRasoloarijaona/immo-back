@@ -12,7 +12,7 @@
 
 | | Aujourd'hui |
 |---|---|
-| `GET /api/prospections/{id}` | **enrichi** — bloc `activite`, puis société / coordonnées / codes de référentiel / audit (rang 5) |
+| `GET /api/prospections/{id}` | **enrichi** — bloc `activite`, société / coordonnées / codes de référentiel / audit (rang 5), marqueurs de tri et doublons (rang 6) |
 | `GET /api/prospections/{id}/interactions` | **enrichi** — catégorie + projet/tranche |
 | `GET /api/prospections` (liste) | **enrichi** — 14 colonnes d'activité, sur demande |
 | `?colonnes=` (sélection serveur) | **livré** |
@@ -95,8 +95,9 @@ déclaré pour la liste au lieu d'en dupliquer une variante.
 | `origineSupportCode` / `actionCommercialeCode` / `raisonFermetureCode` | 50 % / 40 % / 61 % | idem, conditionnels |
 | `articleCategorie` / `articleType` | 5,7 % | soit **100 % des prospections qui portent un article** |
 | `paysCode` / `pays` / `paysId` | 27,3 % | |
-| `creeLe` / `modifiePar` / `modifieLe` | **100 %** | piste d'audit |
-| `creePar` | **34,3 %** | ⚠️ deux fiches sur trois n'ont pas d'auteur — voir §7 |
+| `creeLe` | **100 %** sur les deux populations | piste d'audit |
+| `modifiePar` / `modifieLe` | **100 %** prospections · **28,1 %** pré-prospections | un lead injecté et jamais rouvert n'a pas d'auteur de modification |
+| `creePar` | **34,3 %** prospections · **27,1 %** pré-prospections | ⚠️ deux fiches sur trois n'ont pas d'auteur — voir §7 |
 
 > ⚠️ **`typeProspect` n'est pas `typeProspectionCode`.** Un caractère d'écart, deux notions :
 > `typeProspect` qualifie le **tiers** (`PRO`), `typeProspectionCode` qualifie le **document**
@@ -109,6 +110,32 @@ déclaré pour la liste au lieu d'en dupliquer une variante.
 > `AdvanceAmount` et les financements sont à **0 ligne**. Les afficher revient à annoncer un
 > budget de « 0,00 DH » sur tout le portefeuille. Détail dans
 > `INVENTAIRE-colonnes-prospection.md` §1.
+
+### Rang 6 — tri manuel et doublons *(nouveau)*
+
+L'équipe marque ses leads dans des champs libres. L'API expose désormais ce mécanisme —
+**sans rien filtrer** : aucune liste ne change de contenu.
+
+| Champ | Renseigné | Note |
+|---|---:|---|
+| `marqueurTri` | `DOUBLON` 921 · `SPAM` 32 · `TRAITE` 10 | énumération dérivée, `null` si le texte n'est pas un marqueur connu |
+| `noteQualification` | 2 202 lignes | le texte libre d'origine, servi tel quel |
+| `doublonDeCode` | 849 | code du tiers dupliqué |
+| `doublonDeId` / `doublonDeNom` | 849 | le même, résolu — `null` si le code est introuvable ou ambigu |
+
+**Le fait qui justifie ce rang :** 798 pré-prospections (**20,9 % du vivier**) sont marquées
+doublon ou spam, et **795 d'entre elles sont encore à l'étape « 1 A TRAITER »**. Sans ce champ,
+la liste présente environ 800 déchets comme du travail à faire. Le marqueur ne change pas l'étape
+— c'est au front de décider du traitement visuel (griser, badge, repli dans un onglet).
+
+> ⚠️ **`marqueurTri: null` ne veut pas dire « pas de note ».** 1 239 lignes ont un
+> `noteQualification` sans marqueur reconnu — côté prospection ce champ sert surtout à noter la
+> typologie recherchée (`salon_+_2_chambres`, 518 lignes). Afficher `noteQualification` même
+> quand `marqueurTri` est nul.
+
+> ⚠️ **`doublonDeCode` peut exister sans `doublonDeId`.** `CfgTier.Code` n'est pas unique en base
+> (14 516 tiers, 14 504 codes) : sur un code ambigu, le serveur refuse de désigner un tiers au
+> hasard. Afficher le code, sans lien cliquable.
 
 ---
 
@@ -129,10 +156,22 @@ if (!prospection.activite) {
 Ce n'est pas une erreur et l'API répond bien **200**. La pré-prospection est le 4ᵉ écran le plus
 ouvert du logiciel de bureau (5 420 ouvertures/an) : le cas est fréquent, pas marginal.
 
-**Le repli ne concerne que `activite`.** Tous les champs du rang 5 — société, coordonnées, type de
-tiers, codes de référentiel, audit — viennent des tables, pas de la vue, et **restent renseignés
-sur une pré-prospection**. Une fiche sans `activite` n'est donc pas une fiche vide : il y a
-largement de quoi l'afficher.
+**Le repli ne concerne que `activite`.** Tous les champs des rangs 5 et 6 — société, coordonnées,
+type de tiers, codes de référentiel, audit, marqueurs de tri — viennent des tables, pas de la vue,
+et **restent renseignés sur une pré-prospection**. Une fiche sans `activite` n'est donc pas une
+fiche vide : il y a largement de quoi l'afficher.
+
+En revanche, **trois blocs sont structurellement vides sur une pré-prospection** — mesurés, pas
+supposés — et il ne faut pas leur réserver de place :
+
+| Bloc | Sur pré-prospection |
+|---|---:|
+| `fermee`, `dateFermeture`, `raisonFermeture*` | **0 %** — aucune n'est jamais clôturée |
+| `articleId` / `articleCode` / `articleCategorie` / `articleType` | **0,2 %** |
+| `proposeurId` / `proposeurNom` | **0 %** |
+
+`societeLibelle`, elle, reste utile : la tranche est renseignée sur **95,5 %** des
+pré-prospections.
 
 ### 2.2 `null` ne veut jamais dire « zéro »
 

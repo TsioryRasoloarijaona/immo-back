@@ -10,6 +10,7 @@ import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
 import com.tsix.immocrm.domain.ColonneProspection;
+import com.tsix.immocrm.domain.MarqueurTriProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
@@ -454,7 +455,29 @@ public class ProspectionService {
         StrEntity type = p.getStrEntityId() == null
                 ? null
                 : strEntityRepository.findById(p.getStrEntityId()).orElse(null);
-        return toDetail(p, activite, type);
+        return toDetail(p, activite, type, resoudreDoublon(p.getTempField10()));
+    }
+
+    /**
+     * Suit le pointeur de doublon {@code ComProspection.TempField10}, qui porte un
+     * {@code CfgTier.Code} — 849 valeurs réelles, 849 résolues.
+     *
+     * <p><b>Une requête de plus, mais seulement sur moins de 5 % des fiches</b> : le champ est vide
+     * partout ailleurs, et on sort avant d'interroger quoi que ce soit.
+     *
+     * <p><b>{@code null} sur une correspondance multiple, délibérément.</b> {@code CfgTier.Code}
+     * n'est pas unique (14 516 tiers pour 14 504 codes distincts). Aucun des 849 pointeurs réels
+     * n'est ambigu aujourd'hui, mais prendre le premier de plusieurs reviendrait à désigner un
+     * tiers au hasard, et le front l'afficherait comme un fait. Le code brut reste servi par
+     * {@code doublonDeCode}, donc l'information n'est pas perdue — elle est seulement présentée
+     * comme non résolue, ce qu'elle est.
+     */
+    private CfgTier resoudreDoublon(String code) {
+        if (!StringUtils.hasText(code)) {
+            return null;
+        }
+        List<CfgTier> trouves = tierRepository.findByCode(code.trim());
+        return trouves.size() == 1 ? trouves.getFirst() : null;
     }
 
     /**
@@ -494,6 +517,21 @@ public class ProspectionService {
     /** {@code null} pour une chaîne nulle ou blanche — voir {@link #toActivite}. */
     private static String videEnNull(String s) {
         return s == null || s.isBlank() ? null : s;
+    }
+
+    /**
+     * Champ de saisie libre : {@code null} si vide, espaces de bordure retirés sinon.
+     *
+     * <p>Le contenu est servi tel quel — on ne corrige ni la casse ni l'orthographe, puisque c'est
+     * justement ce qu'on ne sait pas interpréter. Mais les espaces de bordure ne portent aucune
+     * information et se voient à l'affichage : {@code TempField1} contient réellement des valeurs
+     * comme {@code "  TRAITÉ  "}. Les laisser passer obligerait chaque client à les retirer.
+     *
+     * <p>Distinct de {@link #videEnNull} qui, lui, ne touche pas au contenu : celui-là sert aux
+     * colonnes de vue, où la chaîne vide est un artefact de la base et non une saisie.
+     */
+    private static String texteLibre(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     /**
@@ -1230,7 +1268,7 @@ public class ProspectionService {
      * une réponse d'API : c'est lui qui interroge la vue et remplit {@code activite}.
      */
     private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite,
-                                                 StrEntity type) {
+                                                 StrEntity type, CfgTier doublonDe) {
         // Chaque association est nommée une fois plutôt que déréférencée à chaque champ : depuis
         // que la fiche sert aussi le code des référentiels, un `p.getX() != null ? p.getX()...`
         // traverserait le proxy LAZY trois fois par association. Même raison d'être que
@@ -1327,6 +1365,13 @@ public class ProspectionService {
                 p.getUserCreateDateTime(),
                 p.getUserUpdate(),
                 p.getUserUpdateDateTime(),
+                // Le texte brut est servi tel quel ; le marqueur normalisé vaut null dès que ce
+                // texte n'en est pas un — ce qui est le cas le plus fréquent (1 239 lignes).
+                texteLibre(p.getTempField1()),
+                Champs.de(MarqueurTriProspection.depuis(p.getTempField1()), MarqueurTriProspection::name),
+                texteLibre(p.getTempField10()),
+                Champs.de(doublonDe, CfgTier::getId),
+                TierNomFormatter.nom(doublonDe),
                 p.getStrEntityId(),
                 type != null ? type.getCode() : null,
                 type != null ? type.getDescription() : null,
