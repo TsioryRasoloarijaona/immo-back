@@ -1,253 +1,260 @@
 # Session Memory
-_Last updated: 2026-09-10T00:00+01:00_
+_Last updated: 2026-09-10T15:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-**Exploiter les 216 vues du légataire** pour combler l'écart entre ce que nos `GET` renvoient et
-ce que le logiciel de bureau affiche. Le manque était réel et chiffré : 24 champs dans
-`DossierDetailDto` contre **217 colonnes** dans `ComSaleFolderView`, 45 contre 148 pour la
-prospection.
+**Exploiter les vues du légataire** pour combler l'écart entre ce que nos `GET` renvoient et ce que
+le logiciel de bureau affiche. Trois périmètres inventoriés cette session (prospect, dossier), plus
+la généralisation du sélecteur de colonnes et la remise au vert de la CI.
 
-| # | Lot | État |
+| PR | Contenu | État |
 |---|---|---|
-| 1 | Fiche prospection + interactions (vues `@Immutable`) | **mergé** (PR #31, `01ce74c`) |
-| 2 | Sélection de colonnes `?colonnes=` sur la liste | poussé, **non mergé** |
-| 3 | Inventaire des 148 colonnes | poussé, **non mergé** |
-| A | Retrait des champs morts (budget/surface) | poussé, **non mergé** |
-| B | 18 colonnes manquantes ajoutées à la liste | poussé, **non mergé** |
-| C | 15 filtres avancés | poussé, **non mergé** |
+| #33 | Récupération du commit de mémoire orphelin | **mergée** |
+| #34 | `StrEntity` — type de document sur la prospection | **mergée** |
+| #35 | Audit + tranches d'intérêt sur la fiche prospect | **mergée** |
+| #36 | Contexte patrimonial / audit / origine sur le dossier | **mergée** |
+| #37 | Sélecteur de colonnes sur les listes prospect **et** dossier | **mergée** |
+| — | `fix/ci-pollution-doubles-envoi` | **poussée, CI verte, en attente de merge** |
 
-Branche en cours : **`feat/selection-colonnes-listes`**, 6 commits, PR ouverte.
-**673 tests verts** (648 en début de session, +25).
+**710 tests verts** (648 en début de refactor, 673 session précédente).
 
 ---
 
 ## ✅ What Worked
 
-- **Mesurer une baseline avant de conclure.** Mon premier banc donnait 1 535 ms sur la vue et
-  j'allais la déclarer inutilisable ; `SELECT 1` coûtait déjà **667 ms** d'ouverture de connexion.
-  À chaud, la même requête tombe à **18 ms**. Toujours mesurer un témoin.
-- **`AdmFormsLog` (311 923 lignes) comme boussole de priorité.** Journal d'ouverture d'écran du
-  desktop, avec utilisateur et horodatage. Il a réordonné tout le refactor : la **fiche**
-  prospection est ouverte 7 372 fois sur 12 mois contre **270** pour sa liste (facteur 27), et les
-  interactions sont le 2ᵉ écran du logiciel — que je n'avais mis dans aucun lot.
-- **Mapper la vue en entité `@Immutable` en ne déclarant QUE les colonnes utiles.** Hibernate
-  n'émet alors que celles-là, ce qui déclenche l'élagage des sous-requêtes corrélées par SQL
-  Server. C'est ce qui rend `ComSaleProspectionView` utilisable (26 ms sur une ligne).
-- **Enrichir la page déjà chargée par `WHERE PKey IN (20 ids)`** plutôt que servir la liste depuis
-  la vue : **2–7 ms** contre 515 ms. La liste garde ses `Specification`, son périmètre commercial
-  et sa pagination profonde sur table indexée.
-- **Compter avant de conclure.** 14 118 + 3 817 + 4 = 17 939 exactement → la vue ne perd aucune
-  ligne, elle sépare prospection et pré-prospection. Un total qui tombe juste prouve qu'aucune
-  ligne ne se cache ailleurs.
-- **Lire la définition de la vue (`sys.sql_modules`) plutôt que sonder** : c'est elle qui a donné
-  le vrai discriminant (`StrEntityId`), la règle de tranche des interactions, et la preuve que
-  `ComProspectionOriginType` est un alias.
-- **Distinguer `NULL` de la chaîne vide dans toute mesure de population.** Sans ça, cinq colonnes
-  de la vue prospection passent pour remplies à 100 % alors qu'elles sont vides.
+- **Mesurer avec la règle adaptée au type.** Non-`NULL` pour les dates, **non-zéro** pour les
+  nombres, **non-vide** pour le texte. Sans ça, `Delai` paraît à 100 % alors qu'il vaut 0,8 %.
+- **Matérialiser une vue large avant de la mesurer.** 217 scans de `ComSaleFolderView` (sous-requêtes
+  corrélées) dépassent 5 min ; `SELECT * INTO #v` puis comptage dynamique sur `#v` → quelques
+  secondes. Génération du SQL depuis `sys.columns` pour ne pas retaper 217 noms.
+- **Vérifier qu'une colonne est un doublon plutôt que le supposer** — un `SUM(CASE WHEN a=b)` sur la
+  table entière tranche en une requête.
+- **Isoler une variable à la fois.** Deux tests corrigés d'un coup = cause inconnue. Retirer
+  `setIsActive` et réobserver a prouvé lequel comptait.
+- **Reproduire un échec de CI localement avant de le corriger** :
+  `-Dsurefire.runOrder=reversealphabetical` a rejoué exactement les deux mêmes échecs.
+- **Lire la définition de la vue (`sys.sql_modules`)** plutôt que sonder : c'est elle qui a donné la
+  règle d'agrégation des tranches et révélé que `Mobile1` est un alias.
+- **Vérifier les parents du commit de merge après chaque PR** — c'est ce qui a rattrapé un commit
+  perdu.
 
 ## ❌ What Failed
 
-- **Réécrire un fichier Java via PowerShell** (`Set-Content`, `[IO.File]::WriteAllText`) → accents
-  passés en latin-1 + BOM ajouté, compilation cassée (`illegal character: '\ufeff'`). Arrivé
-  **deux fois**. Restauré via `git checkout --` puis refait avec l'outil Edit. **Ne jamais
-  réécrire un fichier source par script.**
-- **`MappingJacksonValue` pour le filtrage Jackson par requête** → ne compile pas. Spring Boot 4.1
-  sérialise avec **Jackson 3** (`tools.jackson`), or le seul `MappingJacksonValue` de Spring 7 est
-  typé sur le `FilterProvider` de Jackson 2.
-- **`ComActionMessageView`** → écrite, puis **supprimée**. Aucune sélectivité : `SELECT *` sur
-  **une seule ligne** par sa clé primaire prend **30 070 ms** (un `COUNT` corrélé calcule
-  `ActionRank`). Tout ce qu'on en voulait vient de deux jointures sur les entités.
-- **Le SQL dynamique pour `?colonnes=`** → abandonné après mesure : demander 4 colonnes ou les 20
-  mappées coûte pareil (7 ms), la vue étant interrogée par clé. Assembler du SQL depuis une entrée
-  client pour un gain nul ne se justifie pas.
-- **`jsonPath(...).exists()` sur une valeur `null`** → échoue. A fait rougir deux tests dont le
-  code était correct. Poser une valeur dans la fixture.
-- **Chiffre publié faux : `cin` à 99 %** → vaut **2,7 %**. J'avais compté les non-`NULL` d'une
-  colonne remplie de chaînes vides — le piège que le même lot documentait par ailleurs.
-- **Vérification exhaustive de la règle de tranche sur `ComActionMessageView`** → dépasse 2 min,
-  abandonnée. La preuve retenue est la définition de la vue, pas le sondage.
+- **`gh pr list` sans `--repo`** → renvoie une liste vide sans erreur. Toujours passer `--repo`.
+- **Heredoc bash + `\n` dans une chaîne Java** → écrit de vrais retours à la ligne, casse les
+  littéraux (« unclosed string literal »). Passer par `chr(10)`/`chr(92)` explicites.
+- **Supposer que la chaîne agrégée `CfgTranches` était ambiguë** → vérifié : **aucune** des 16
+  descriptions de tranche ne contient de virgule. L'argument retenu pour la liste structurée est
+  plus modeste (rien ne garantit le séparateur).
+- **Annoncer `Mobile1` comme un second numéro** → c'est `CfgTier.Mobile` brut. Les 13 632 lignes
+  « différentes » l'étaient parce que je comparais du **formaté** à du **brut**.
+- **`git-flow start` avec des fichiers non commités** → refusé, et `commit` refuse sur `main` : les
+  deux garde-fous se croisent. Passer par `git stash` → `start` → `stash pop`.
+- **Croire un `main` vert** → sur `main`, seul le workflow de **déploiement** tourne. La suite de
+  tests ne s'exécute que sur les branches.
 
 ---
 
 ## 🐛 Bugs & Errors Log
 
 | # | Error / Bug | Status | Fix applied |
-|---|-------------|--------|-------------|
-| 43 | **`ComProspection.StrEntityId` jamais posé par `creerProspection`** → toute prospection créée par notre API est **invisible dans le logiciel de bureau** (les vues font un `INNER JOIN StrEntity`) | **Open — décision métier** | Champ mappé, comportement figé par un test. Corriger = poser `E7C73F70-1111-40D9-AA78-A2825C42B601`, mais les fiches apparaîtraient chez les commerciaux |
-| 44 | **830 pré-prospections classées « prospection »** — notre heuristique (`CfgProspectId IS NULL AND CfgCommercialId IS NULL`) diverge du legacy (`StrEntity.Code = 'ComPreProspection'`) | **Open — décision métier** | Écart unidirectionnel, mesuré. Corriger change le contenu de deux listes |
-| 45 | `prix`/`surface` exposés alors que morts (`Price` = 4 lignes/14 114, vaut **0** jamais `NULL`) | **Partiellement fixed** | Retirés de la sélection **par défaut** de la liste ; conservés dans la fiche (retrait = rupture front) avec `@Schema` « ne pas afficher » |
-| 46 | `cin` documenté à 99 %, vaut 2,7 % | **Fixed** | Corrigé dans `@Schema`, FEATURE et guide front |
-| 47 | `FEATURES.md` porte **deux entrées** pour `feat/vues-legacy-prospection` | **Open (mineur)** | L'index a tourné après chaque commit ; la 2ᵉ ne liste que `bb5660c` |
-| 41 | `creerProspection` ne pose ni `UserCreate` ni `UserCreateDateTime` | **Open** | **Confirmé par la mesure : `UserCreate` peuplé à 34,3 % seulement** |
-| 42 | 277 tiers `CLI` liés à une prospection, invisibles dans `GET /api/prospects` | **Open (question produit)** | Non tranché |
-| 39 | `sync-vps-yesRemsDev.sql` ne transporte aucune table `Adm*` | **Open (par conception)** | Correctifs de référentiel rejoués à la main |
-| 32 | VS Code retient les ports 9090/9091 | **Open** | `MANAGEMENT_SERVER_PORT=9092` |
-| 11 | Règlement `CANCELED` non filtré dans `sumAmountByComDocumentId` | **Open** | Latent |
-| 12 | `POST /echeancier` sans `exclureDuPrix` | **Open** | Non corrigé |
-| 13 | `S3_ENDPOINT` de la run config pointe la **production** | **Open** | Aucune écriture faite |
+|---|---|---|---|
+| 48 | **CI rouge sur chaque branche depuis la PR #32** — `$.emailEnvoye` false. Doubles d'envoi = singletons Spring, `ConfirmationVisiteTest` les éteignait sans les restaurer après son dernier test | **Fixed** | `@AfterEach` dans la classe qui mute. Reproduit puis vérifié dans les deux ordres |
+| 49 | **La suite de tests ne tourne sur aucune PR ni sur `main`** — un merge part sans que les tests aient tourné | **Open** | Non traité (choix utilisateur). Ajouter le déclencheur `pull_request` au workflow |
+| 50 | `PR #32` a mergé un head antérieur, laissant `9ddbd0c` orphelin | **Fixed** | Rouvert une PR depuis la même branche (#33). **Toujours vérifier `git log -1 --format=%P` du merge** |
+| 51 | Le hook `guard-branch` n'a **pas** bloqué une édition alors que le dépôt était sur `main` | **Open** | Constaté, non investigué. Le commit a bien fini sur une branche |
+| 52 | `profession` (fiche prospect) vient de `CfgTier.Quality` = **0 ligne / 13 664** — toujours nul. `professionId` est le seul référentiel servi **sans** son libellé | **Open (mineur)** | Documenté ; `AdmProfessionId` n'est qu'à 0,2 %, correction non rentable |
+| 53 | `notes` (fiche dossier) vient de `ComFolder.Notes` = **0 ligne / 358** | **Open (mineur)** | Documenté, pas retiré (romprait le contrat front) |
+| 54 | **`Agreement*` vs bloc principal** : miroir sur la plupart des lignes, divergent sur 20 % (`AgreementPrice`≠`Price` sur 72/358, `Total`≠`Price` sur 136/358) | **Open — décision métier** | Écarté du catalogue tant que « lequel fait foi » n'est pas tranché |
+| 43 | `creerProspection` ne pose pas `StrEntityId` → prospections **invisibles du logiciel de bureau** | **Open — décision métier** | Les 4 lignes identifiées : 1 API, 2 `n8n_api`, 1 script de test |
+| 44 | **830 pré-prospections** dans la liste de vente (+ 4 `RntProspection`, location) | **Open — décision métier** | Rendu **visible et filtrable** via `?typeProspection=` sans rien reclasser |
+| 41 | `creerProspection` ne pose ni `UserCreate` ni `UserCreateDateTime` | **Open** | `UserCreate` peuplé à 34,3 % seulement |
+| 42 | 277 tiers `CLI` liés à une prospection, invisibles de `GET /api/prospects` | **Open** | Non tranché |
+| 45 | `prix`/`surface` morts mais exposés | **Partiellement fixed** | Hors sélection par défaut, `@Schema` explicite |
+| 47 | `FEATURES.md` porte deux entrées pour `feat/vues-legacy-prospection` | **Open (mineur)** | — |
+| 39 | `sync-vps-yesRemsDev.sql` ne transporte aucune table `Adm*` | **Open (par conception)** | — |
+| 11 / 12 / 13 | Règlement `CANCELED` non filtré · `POST /echeancier` sans `exclureDuPrix` · `S3_ENDPOINT` pointe la prod | **Open** | Latents |
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### Les mesures qui commandent l'architecture
+### Les pièges de mesure — ils ont faussé plusieurs chiffres
 
-Sur `yesRemsProd`, connexion chaude, 14 118 lignes dans `ComSaleProspectionView` :
+| Piège | Exemple |
+|---|---|
+| Les colonnes **numériques** stockent `0`, pas `NULL` | `Delai` : 14 118 non-`NULL`, **111 utiles (0,8 %)**. Idem `MapRadius` 16,7 %, `Age` 0,4 %, `StatusIsCancellation` 0,2 % |
+| Les colonnes **texte** stockent `''`, pas `NULL` | `cin` annoncé 99 %, vaut **2,7 %** |
+| **Peuplé ≠ informatif** | `StlCurrencyCode` = `MAD` (1 valeur distincte), `SocialForm` = « Personne physique » sur 13 661/13 664 |
+| Les **alias de vue** ressemblent à des manques | `Commercial` = `CfgCommercialDescription`, `TierEmployee` = `Commercial`, les 8 `Tier*` = leur homologue, `CfgTierFirstName`+`LastName` = décomposition de `CfgTierDescription` (14 113/14 118) |
 
-| Forme | Temps |
-|---|---:|
-| Détail, 1 ligne (20 colonnes mappées) | **26 ms** |
-| Enrichir une page : `IN (20 ids)` | **2–7 ms** |
-| Enrichir 100 ids | 34 ms |
-| Liste servie **depuis** la vue, page 1 | 515 ms |
-| Liste depuis la vue, `OFFSET 5000`, 8 col | 123 ms · **toutes colonnes : 5 942 ms** |
-| Filtre par sous-requête sur la vue | **231 ms** page 1, **302 ms** `OFFSET 5000` |
-| Référence : liste sur table seule | 100 / 134 ms |
+**`Mobile1` n'existe dans AUCUNE table** — seulement dans les 8 vues prospect/client. C'est
+`CfgTier.Mobile` brut, tandis que ce que la vue appelle `Mobile` est la version **formatée**
+(`(212) 6 98 29 80 95`). Ne jamais mapper une colonne de vue sans vérifier `INFORMATION_SCHEMA`.
 
-**La règle qui en découle** : liste = `ComProspection` (table indexée), enrichissement = vue par
-lot d'identifiants, filtre « vue » = sous-requête. **Jamais** `findAll()` nu sur une entité de vue.
+### Les trois inventaires
 
-### Jackson 3 — le piège de Spring Boot 4.1
+| Vue | Colonnes | Servies | Vrais manques restants |
+|---|---:|---:|---|
+| `ComSaleProspectionView` | 148 | 84 | `StrEntity*` (traité), `LastActiveAlertOld`, `AdmCountryId/Code`, `TempField1/2` |
+| `ComSaleProspectView` | 97 | 58 | 6, dont audit et tranches — **traités** |
+| `ComSaleFolderView` | **217** | 26 → ~45 | ventilation financière (5 postes vivants/12), chronologie (38 dates, 12 mortes) |
 
-`tools.jackson.core:jackson-databind:3.1.4` est le sérialiseur ; Jackson 2 n'est là que via `jjwt`.
+`CfgTierView` (134 col.) est **1:1 avec la table** `CfgTier` ; `ComSaleProspectView` en est le
+sous-ensemble « prospect de vente ». `ComSaleCustomerView` (101 col., 332 lignes) jamais regardée.
 
-- `MappingJacksonValue` (Spring 7) est **typé Jackson 2** → inutilisable.
-- Montage retenu : `@JsonFilter` sur le DTO + `SelectionColonnesPropertyFilter` (Jackson 3) +
-  `ColonnesSelection` (`ThreadLocal`) + `ColonnesSelectionFilter` (servlet, nettoyage en
-  `finally`) + `ColonnesJacksonConfig` (`JsonMapperBuilderCustomizer`).
-- **Le filtre doit être enregistré globalement** : Jackson lève dès qu'il croise un `@JsonFilter`
-  inconnu, et `ProspectionListItemDto` est embarqué par `HotlineFicheDto` et servi par
-  `GET /api/pre-prospections` → 500 sur ces deux endpoints sinon.
-- **La sélection par défaut doit être réellement appliquée**, sinon les 14 champs ajoutés
-  apparaissent à `null` partout et « identique à l'existant » devient faux.
+### Chaînes de résolution à ne pas redécouvrir
 
-### Ce que la donnée réelle dit (et qu'il ne faut pas redécouvrir)
+- **Dossier → projet passe par la TRANCHE, jamais par l'article** : `StkItem.CfgProjectId` est
+  `NULL` sur les **358** articles de dossier. Chaîne : `ComFolder.stkItem` → `stkHierarchy` →
+  `cfgProject` → `cfgCompany`, vérifiée 358/358.
+- **Tranches d'intérêt d'un prospect** = union **DISTINCT** de la tranche principale de chaque
+  prospection et de ses `ComProspectionProject`. 13 246 prospects en ont 1, 254 en ont 2, 8 en ont 3.
+- **`ice` vient de `CfgTier.ICE`**, pas de `FiscalCode` (0,4 %, non servie).
+- `ComFolder` n'a **pas** de colonne `AdvanceAmount` : le « montant d'avance » de la fiche est
+  `AgreementAmount` (99,7 %).
 
-- **Bloc qualification mort** : `Price` = 4 lignes sur 14 114 et vaut **0** (jamais `NULL`, donc
-  non masquable côté front) ; `Area`, `AreaTo`, `PriceTo`, `AdvanceAmount`, les 3 financements =
-  **0 ligne**.
-- **Colonnes vides malgré un nom prometteur** : `Categories`, `Types`, `Cities` (0 %), `ComBudget`,
-  `ComUtilization`, `ComPaymentMethod`, `CfgProposer`, `CfgIntermediate`, `MapLatitude/Longitude`
-  (0 %), `Delai` (0,8 %), `TempField3..10`.
-- **`ComProspectionOriginType` EST `ComActionMessageType`** — alias dans la vue, identique sur les
-  14 118 lignes. Nous le servons déjà sous `typeContact`. Ne pas l'ajouter.
-- **Le mieux peuplé et le plus utile** : `InactivityTimeout` **100 %** (le tri de relance du
-  desktop), `ActionsMessageNumber` 97 %, `LastActionDate` 97 %, `LastCommunication*` 90 %,
-  `CfgProject`/`CfgCompany` 99,8 %.
-- **`StatusImg` est de type `image`** (binaire) : ne jamais sérialiser.
-- Conversion prospection → dossier : **2,5 %** (358 dossiers / 14 118). Taux réel, pas un manque.
+### Le sélecteur de colonnes — architecture
 
-### Pièges de test propres à ce chantier
+Trois catalogues (`ColonneProspection` 56, `ColonneProspect` 46, `ColonneDossier` 39) partagent
+`domain/Colonne` + `domain/Colonnes` (résolution générique) + `domain/ColonneInconnueException`.
 
-- **`saveAndFlush` obligatoire** avant d'interroger une vue : Hibernate ne connaît pas les tables
-  qu'elle lit, son auto-flush ne se déclenche pas.
-- **`StrEntityId` obligatoire sur la fixture**, sinon la ligne n'est dans aucune vue et le test
-  passe pour la mauvaise raison.
-- La liste **exclut** les prospections sans prospect ni commercial → rattacher un `CfgTier`.
-- Cibler sa propre ligne avec `?search=<code>` : la base de test est partagée entre classes.
+**Le `ThreadLocal` porte la demande BRUTE, pas la sélection résolue.** C'est la correction
+structurelle du lot : le montage d'origine y déposait les défauts de `ColonneProspection`, ce qui
+aurait fait revenir les listes prospect et dossier **avec la seule clé `id`**. Il y a désormais
+**une instance de `SelectionColonnesPropertyFilter` par catalogue**, portant ses propres défauts.
+
+Trois états distincts : `null` (hors requête → tout sérialiser), `Demande.noms() == null`
+(sans `?colonnes=` → défaut du catalogue), noms renseignés (sélection explicite).
+
+Rappels du lot 2 toujours valables : le filtre Jackson **doit être enregistré globalement**
+(sinon 500 sur `GET /api/pre-prospections` et la hotline), et la **sélection par défaut doit être
+réellement appliquée**.
+
+### Pièges de test
+
+- **`CfgCompany.isActive` est obligatoire** sur toute fixture de dossier rattaché à un projet. Le
+  périmètre commercial s'applique à la **fiche** autant qu'à la liste → **404**, et l'échec
+  ressemble à un bug de mapping. 8 tests sur 9 échouaient pour cette seule raison.
+- **`CfgTierType.Code = PRO`** obligatoire pour qu'un tiers apparaisse dans `GET /api/prospects`.
+- **Les doubles d'envoi sont des singletons Spring** : leur état survit au rollback. Qui les mute
+  doit les restaurer en `@AfterEach`, pas seulement en `@BeforeEach`.
+- `jsonPath(...).exists()` **échoue sur `null`** → utiliser `doesNotExist()`.
+- Ne jamais supposer une ligne préexistante : la base de test est partagée entre classes.
+
+### La CI — ce qu'il faut savoir avant de la croire
+
+- Sur **`main`** : uniquement « Construire et pousser l'image » + « Déployer sur le VPS ».
+- Sur une **branche** : « Suite complete sur SQL Server ephemere ».
+- **Aucun déclencheur `pull_request`** → un merge part sans que les tests aient tourné. C'est ce qui
+  a laissé la CI rouge pendant des semaines sans rien bloquer (bug #49).
+- Récupérer un log : `gh run view <id> --repo TsioryRasoloarijaona/immo-back --log-failed`.
 
 ### La topologie des bases (inchangée)
 
 | Base | Rôle |
 |---|---|
-| `192.168.11.115` / `YesRems` | source de vérité, app de bureau — lecture seule |
-| `yesRemsProd` (local, `49687`) | copie de travail, **c'est elle qu'interroge le backend local** |
-| `yesRemsCiCheck` (local) | **base des tests** — 165 tables, et désormais 1 vue |
+| `192.168.11.115` / `YesRems` | source de vérité, app de bureau — **lecture seule** |
+| `yesRemsProd` (local, `49687`) | copie de travail, celle qu'interroge le backend local |
+| `yesRemsCiCheck` (local) | base des tests locaux |
+| CI | SQL Server **éphémère**, bâti depuis `ci/schema/*.sql` |
 | `yesRemsDev` (VPS) | environnement déployé |
 
 ---
 
 ## 📁 Important Files & Paths
 
-- **`instructions/INVENTAIRE-colonnes-prospection.md`** — les 148 colonnes avec leur population
-  mesurée, les manques, les filtres possibles. **Le document de référence pour la suite.**
-- `instructions/FEATURE-vues-legacy-prospection.md` — lot 1 : §4 pourquoi `ComActionMessageView`
-  est écartée, §6 le schéma de test, §8 le défaut `StrEntityId`.
-- `instructions/FEATURE-selection-colonnes-listes.md` — lot 2 : les mesures, le contrat
-  `?colonnes=`, §4 pourquoi l'implémentation Jackson est inhabituelle.
-- **`instructions/GUIDE-FRONT-fiche-prospection.md`** — destiné à `crm-prototype` : ordre
-  d'affichage, pièges (`activite` nul sur pré-prospection, `null` ≠ zéro), contrat du sélecteur,
-  colonnes à ne pas demander.
-- `domain/ColonneProspection.java` — catalogue **et** liste blanche. Une seule source, donc le
-  sélecteur front ne peut pas diverger du serveur.
-- `entities/com/ComSaleProspectionView.java` — 20 des 148 colonnes. **Ne pas en mapper d'autres
-  sans remesurer** : c'est le nombre de colonnes mappées qui décide de l'élagage SQL.
-- `web/Colonnes*.java` + `SelectionColonnesPropertyFilter.java` — le montage Jackson 3.
-- `services/prospection/ContexteInteraction.java` — la règle de tranche des interactions, copiée
-  de la définition de la vue.
-- `dto/prospection/FiltresAvancesProspection.java` — les 15 filtres du lot C, liés par
-  `@ModelAttribute`.
-- **`ci/schema/050_views.sql`** — la vue, `AdmAlertData`, `AdmParamsInteger`, et les semis
-  (`DefaultAlertDelai`, les deux `StrEntity`). À appliquer **après** `040` ;
-  `.github/workflows/ci.yml` étendu en conséquence.
+- **`instructions/FEATURE-contexte-dossier.md`** — inventaire des **217 colonnes**, la méthode de
+  mesure, le piège `Agreement*`, les 35 mortes. **Le document de référence pour le dossier.**
+- **`instructions/FEATURE-selecteur-colonnes-prospect-dossier.md`** — pourquoi la plomberie a dû
+  être refondue avant d'ajouter quoi que ce soit.
+- `instructions/FEATURE-audit-tranches-prospect.md` — inventaire des 97 colonnes du prospect.
+- `instructions/FEATURE-strentity-prospection.md` — les 5 entités, le tableau croisé du bug #44.
+- `instructions/INVENTAIRE-colonnes-prospection.md` — les 148 colonnes (session précédente).
+- `domain/Colonne.java`, `Colonnes.java`, `ColonneInconnueException.java` — le socle partagé.
+- `domain/ColonneProspect.java`, `ColonneDossier.java` — les deux nouveaux catalogues.
+- `web/ColonnesSelection.java`, `SelectionColonnesPropertyFilter.java`, `ColonnesJacksonConfig.java`
+  — le montage Jackson 3, **une instance de filtre par catalogue**.
+- `entities/str/StrEntity.java` — 3 colonnes mappées sur 42, `@Immutable`.
+- `services/dossier/DossierService.java` — `tranche()` / `projet()` / `societe()` portent la règle
+  « le projet vient de la tranche ».
+- `controller/prospection/ProspectionTypeStrEntityTest.java` — fige l'écart des 830 **sans** le
+  corriger.
+- `controller/dossier/DossierContexteTest.java` — `projet_vientDeLaTrancheEtNonDeLArticle`.
+- `controller/referentiel/SelecteurColonnesProspectDossierTest.java` —
+  `chaqueListeAppliqueSonPropreDefaut`.
+- `controller/prospection/ConfirmationVisiteTest.java` — le `@AfterEach` du correctif CI.
 
 ---
 
 ## 🔧 Environment & Config
 
+- **Port SQL Server FIGÉ à 49687.** Il était **dynamique** et avait dérivé à 49702, cassant
+  silencieusement `workspace.xml`, les tests et toutes les commandes documentées. Corrigé dans le
+  registre (`…\MSSQL15.SQLEXPRESS\…\Tcp\IPAll` : `TcpPort=49687`, `TcpDynamicPorts` vidé) **et
+  réservé** (`netsh int ipv4 add excludedportrange … 49687`, car il est dans la plage éphémère
+  49152–65535). Si la connexion est refusée : **vérifier le registre**, ne pas chercher un nouveau
+  port.
 - **Tests — la commande qui marche** :
   ```powershell
   $env:SPRING_DATASOURCE_URL="jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"
   $env:SPRING_DATASOURCE_USERNAME="tsix"; $env:SPRING_DATASOURCE_PASSWORD="securePassword123"
   .\mvnw.cmd test "-Dspring.jpa.show-sql=false"
   ```
-- **Interroger `yesRemsProd`** : `Invoke-Sqlcmd -ServerInstance "localhost,49687" -Database
-  yesRemsProd -Username tsix -Password securePassword123 -TrustServerCertificate`. Pour un banc de
-  mesure, **ouvrir une seule `SqlConnection` .NET** et boucler — sinon on mesure l'ouverture de
-  connexion (667 ms).
-- **⚠️ Ne jamais réécrire un fichier source via PowerShell** (encodage cassé deux fois).
-- **⚠️ Dette de secrets** : jeton UltraMsg, PAT GHCR, clé MinIO, mot de passe `sasa` du `.115`,
-  compte `dev` du VPS — tous passés en clair en conversation. À révoquer.
-- **⚠️ Ne pas lancer `mvnw clean`** pendant qu'une instance tourne depuis IntelliJ (bug #24).
+  Ajouter `-Dsurefire.runOrder=reversealphabetical` pour débusquer une pollution entre classes.
+- **`gh` CLI v2.100.0 installé** mais **absent du `PATH`** de la session : appeler
+  `C:\Program Files\GitHub CLI\gh.exe`. Authentifié. **Toujours passer `--repo`.**
+- **⚠️ Ne jamais réécrire un fichier source via PowerShell** (encodage cassé, historique).
+- **⚠️ Dette de secrets** : jeton UltraMsg, PAT GHCR, clé MinIO, mot de passe du `.115`, compte VPS —
+  passés en clair en conversation. À révoquer.
 
 ### État des branches
 
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/selection-colonnes-listes`** | 6 commits, poussée, **PR en attente de merge** |
-| back | `docs/memoire-de-session` | 2 commits, existe sur `origin` |
-| back | `feat/remise-dossier` | 1 commit, **aucun remote** |
-| front | `refractor/best-practice` | **11 commits, LOCAL SEUL** — remote supprimé sans merge |
+| back | **`fix/ci-pollution-doubles-envoi`** | 1 commit, poussée, **CI verte**, PR en attente |
+| back | `main` | `a216fe4` (merge #37), à jour avec `origin` |
+| back | `feat/contexte-dossier` | mergée (#36 + #37) — **supprimable, local et distant** |
+| back | `docs/memoire-de-session` | 2 commits, **non mergée, aucune PR jamais ouverte**, périmée |
+| back | `feat/remise-dossier` | 1 commit, **local seul, aucun remote** |
+| front | `refractor/best-practice` | 11 commits, **local seul** |
 
-Nettoyage fait cette session : `feat/vues-legacy-prospection` et `feat/offre-apres-visite`
-supprimées en local et sur `origin`. `git branch -d` refuse toute branche non mergée — s'en servir
-comme garde-fou plutôt que `-D`. Le `stash` de `SESSION_MEMORY.md` qui traînait depuis la session
-précédente a été récupéré et consommé ; il ne reste que `stash@{0}` (wip 172 fichiers, ancien).
+`sync` **supprime** la branche locale quand elle est prouvablement mergée (corrige la note de la
+session précédente) mais **jamais la branche distante** — la supprimer à la main.
+`stash@{0}` (wip 172 fichiers, ancien) traîne toujours.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Merger la PR `feat/selection-colonnes-listes` sur GitHub**, puis
-> `node ..\.claude\scripts\git-flow.mjs sync back`.
->
-> Attention : `sync` **ne supprime pas** la branche mergée — le faire à la main
-> (`git branch -d` + `git push origin --delete`), comme cette session l'a fait pour les deux
-> précédentes.
+> **Merger la PR `fix/ci-pollution-doubles-envoi`** —
+> https://github.com/TsioryRasoloarijaona/immo-back/compare/main...fix%2Fci-pollution-doubles-envoi
+> puis `node ..\.claude\scripts\git-flow.mjs sync back`, et **vérifier les parents du commit de
+> merge** (`git log -1 --format=%P main`) : la PR #32 avait laissé un commit orphelin.
 
 ### Backlog
 
-- [ ] **Fiche tiers** — 5 447 ouvertures/an (3ᵉ écran), `ProspectDetailDto` 52 champs contre 97
-      dans `ComSaleProspectView`. Le meilleur rapport valeur/effort restant.
-- [ ] **Pré-prospection** — 5 420 ouvertures/an (4ᵉ écran), `ComSalePreProspectionView`
-      (70 colonnes) jamais exploitée.
-- [ ] **Décision métier : les 830** (bug #44) — aligner sur `StrEntity.Code` ?
-- [ ] **Décision métier : `StrEntityId` à la création** (bug #43) — rendre nos prospections
-      visibles dans le desktop ?
-- [ ] Déduplication de l'entrée `FEATURES.md` (bug #47).
-- [ ] **Trancher `refractor/best-practice`** (front, 11 commits orphelins, local seul).
-- [ ] Relayer au dépôt frontend : `GUIDE-FRONT-fiche-prospection.md`, et le fait que les champs de
-      `ProspectionListItemDto` deviennent **optionnels** dans `types.ts`.
-- [ ] `from_front.md` #10 — filtre `?statut=` des dossiers qui renvoie du vide (contourné côté
-      front par un chargement de 500 dossiers).
-- [ ] Dossier : `ComSaleFolderView` (217 colonnes) — la ventilation financière par poste
-      (Montant/Réglé/Reste × 12) et les 15 dates de chronologie réellement peuplées sur 40.
-- [ ] `UserCreate` sur `creerProspection` (bug #41) — préalable à l'exposition de l'auteur.
-- [ ] Les 277 tiers `CLI` (bug #42).
-- [ ] Règlement annulé (#11), `exclureDuPrix` (#12), garde-fou `S3_ENDPOINT` (#13).
+- [ ] **Bug #49 — ajouter le déclencheur `pull_request` au workflow de tests.** Sans lui, aucun
+      merge n'est protégé, et le backlog « déclarer le check `Tests` requis sur `main` » n'a pas de
+      sens.
+- [ ] Supprimer `feat/contexte-dossier` (local + distant), trancher `docs/memoire-de-session`
+      (périmée, 36 commits de retard) et `feat/remise-dossier` (local seul).
+- [ ] **Décisions métier** : le discriminant des 830 (#44), `StrEntityId` à la création (#43),
+      `Agreement*` vs bloc principal (#54).
+- [ ] **Dossier, lot 2** : ventilation financière (5 postes vivants sur 12) et chronologie (12 dates
+      au-dessus de 10 %) — bloqué par la décision #54.
+- [ ] **Pré-prospection** — `ComSalePreProspectionView` (70 colonnes) jamais exploitée, 4ᵉ écran du
+      desktop (5 420 ouvertures/an).
+- [ ] **Client** — `ComSaleCustomerView` (101 colonnes, 332 lignes) jamais regardée.
+- [ ] Relayer au dépôt frontend : trois catalogues de colonnes sur le même contrat (un seul
+      composant de sélecteur suffit), et les champs devenus **optionnels** dans `types.ts` pour
+      `ProspectListItemDto` et `DossierListItemDto`.
+- [ ] `from_front.md` #10 — filtre `?statut=` des dossiers qui renvoie du vide.
+- [ ] `UserCreate` sur `creerProspection` (#41), les 277 tiers `CLI` (#42).
+- [ ] Règlement annulé (#11), `exclureDuPrix` (#12), garde-fou `S3_ENDPOINT` (#13), doublon
+      `FEATURES.md` (#47).
+- [ ] Élucider pourquoi le hook `guard-branch` n'a pas bloqué une édition sur `main` (#51).
 - [ ] Révoquer tous les secrets listés dans Environment.
-- [ ] Déclarer le check `Tests` comme requis sur `main`.
