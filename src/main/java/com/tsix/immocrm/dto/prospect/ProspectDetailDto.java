@@ -1,6 +1,9 @@
 package com.tsix.immocrm.dto.prospect;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -74,6 +77,33 @@ public record ProspectDetailDto(
         Integer anciennete,
         String filsDe,
         String etDe,
-        PieceIdentiteDto pieceIdentite
+        PieceIdentiteDto pieceIdentite,
+
+        // ------------------------------------------------------------------
+        // Piste d'audit et tranches d'intérêt — voir
+        // instructions/FEATURE-audit-tranches-prospect.md.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Auteur de la création de la fiche. Renseigné sur **100 %** des "
+                + "13 664 prospects réels, avec 55 auteurs distincts : c'est une vraie piste "
+                + "d'audit, pas un champ technique.")
+        String creePar,
+
+        @Schema(description = "Date de création de la fiche. 100 %.")
+        LocalDateTime creeLe,
+
+        @Schema(description = "Auteur de la dernière modification. 99,9 %.")
+        String modifiePar,
+
+        @Schema(description = "Date de dernière modification. 99,9 %.")
+        LocalDateTime modifieLe,
+
+        @Schema(description = "Tranches auxquelles le prospect s'est intéressé, toutes ses "
+                + "prospections confondues : la tranche **principale** de chacune et ses "
+                + "**intérêts secondaires**, dédoublonnés.\n\n"
+                + "**Toujours présent, vide plutôt qu'absent** quand le prospect n'a aucune "
+                + "prospection. Court par nature — mesuré sur les 13 664 prospects réels : "
+                + "13 246 ont une seule tranche, 254 en ont deux, 8 en ont trois.")
+        List<TrancheInteretDto> tranchesInteret
 ) {
 }
