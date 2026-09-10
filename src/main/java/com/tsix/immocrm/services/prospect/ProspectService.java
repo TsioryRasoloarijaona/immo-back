@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.prospect.PieceIdentiteDto;
 import com.tsix.immocrm.dto.prospect.PieceIdentiteRequest;
 import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
 import com.tsix.immocrm.dto.prospect.ProspectListItemDto;
+import com.tsix.immocrm.dto.prospect.TrancheInteretDto;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmFamilySituation;
 import com.tsix.immocrm.entities.adm.AdmIdentityDocumentType;
@@ -32,6 +33,7 @@ import com.tsix.immocrm.repositories.adm.AdmSalaryRepository;
 import com.tsix.immocrm.repositories.adm.AdmSexTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmTierTitleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -64,6 +66,13 @@ public class ProspectService {
     private static final String CODE_TYPE_PROSPECT_PAR_DEFAUT = "PRO";
 
     private final CfgTierRepository tierRepository;
+    /**
+     * Sert les <strong>tranches d'intérêt</strong> de la fiche — voir
+     * {@code instructions/FEATURE-audit-tranches-prospect.md}. Une requête de plus sur la fiche
+     * seulement : la liste des prospects n'a pas de sélection de colonnes, un ajout y serait payé
+     * sur chaque ligne de chaque page.
+     */
+    private final CfgTrancheRepository trancheRepository;
     private final CfgTierTypeRepository tierTypeRepository;
     private final CfgTierKindRepository tierKindRepository;
     private final AdmTierTitleRepository tierTitleRepository;
@@ -92,7 +101,9 @@ public class ProspectService {
                             AdmProfessionRepository professionRepository,
                             AdmSalaryRepository salaryRepository,
                             AdmIdentityDocumentTypeRepository identityDocumentTypeRepository,
+                            CfgTrancheRepository trancheRepository,
                             NumeroTelephoneSupport numeroSupport) {
+        this.trancheRepository = trancheRepository;
         this.numeroSupport = numeroSupport;
         this.tierRepository = tierRepository;
         this.tierTypeRepository = tierTypeRepository;
@@ -442,7 +453,31 @@ public class ProspectService {
                 tier.getAntiquity(),
                 tier.getFatherName(),
                 tier.getMotherName(),
-                pieceIdentite
+                pieceIdentite,
+                tier.getUserCreate(),
+                tier.getUserCreateDateTime(),
+                tier.getUserUpdate(),
+                tier.getUserUpdateDateTime(),
+                tranchesInteret(tier)
         );
+    }
+
+    /**
+     * Tranches d'intérêt du prospect, dans la forme structurée que l'API sert à la place de la
+     * chaîne agrégée de la vue légataire.
+     *
+     * <p>Un tiers qui n'a pas encore d'identifiant — cas d'un {@code toDetail} appelé sur une
+     * entité tout juste construite — n'a par définition aucune prospection : rendre la liste vide
+     * sans interroger la base est ici correct, pas une optimisation prématurée.
+     *
+     * @return liste toujours non nulle, vide quand le prospect n'a aucune prospection.
+     */
+    private List<TrancheInteretDto> tranchesInteret(CfgTier tier) {
+        if (tier.getId() == null) {
+            return List.of();
+        }
+        return trancheRepository.tranchesInteret(tier.getId()).stream()
+                .map(t -> new TrancheInteretDto(t.getId(), t.getCode(), t.getDescription()))
+                .toList();
     }
 }
