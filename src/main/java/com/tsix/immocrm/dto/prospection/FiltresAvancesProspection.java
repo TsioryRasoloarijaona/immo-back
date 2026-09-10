@@ -61,6 +61,20 @@ public record FiltresAvancesProspection(
         @Schema(description = "Filtre sur « le prospect est un ancien client ». 100 % renseigné.")
         Boolean ancienClient,
 
+        @Schema(description = "Code(s) de type de document légataire (`StrEntity.Code`). "
+                + "Répétable. Filtre sur le **discriminant réel** du logiciel de bureau, et non "
+                + "sur l'heuristique que cette liste applique par ailleurs.\n\n"
+                + "C'est ce qui rend l'écart mesurable : `?typeProspection=ComPreProspection` "
+                + "isole les **830 pré-prospections** que l'heuristique laisse dans la liste de "
+                + "vente, et `RntProspection` les 4 prospections de location qui s'y trouvent "
+                + "aussi. Valeurs connues : `ComProspection`, `ComPreProspection`, "
+                + "`RntProspection`, `PrmProspection`, `RomProspection`.\n\n"
+                + "Un code inconnu ne provoque pas d'erreur : il ne correspond à aucune "
+                + "prospection et le résultat est vide. Les 4 lignes sans `StrEntityId` sont "
+                + "exclues dès que ce filtre est actif — elles n'ont aucun type.",
+                example = "ComPreProspection")
+        List<String> typeProspection,
+
         // ---------------- Portés par la vue — sous-requête ----------------
 
         @Schema(description = "Prospections inactives depuis **au moins** N jours. Renseigné sur "

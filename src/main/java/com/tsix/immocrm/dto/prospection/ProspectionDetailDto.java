@@ -92,6 +92,28 @@ public record ProspectionDetailDto(
         String articleCode,
         String articleDescription,
 
+        // -- Type de document du légataire (StrEntity) : le discriminant réel entre prospection
+        //    de vente, pré-prospection et prospection de location.
+        //    Voir instructions/FEATURE-strentity-prospection.md §3.1.
+        @Schema(description = "Identifiant du type de document légataire (`StrEntity`). `null` sur "
+                + "les 4 prospections dont `StrEntityId` n'est pas renseigné.")
+        UUID typeProspectionId,
+
+        @Schema(description = "Code du type de document — **c'est ce champ qu'il faut tester**, "
+                + "jamais le libellé. Valeurs observées : `ComProspection` (14 114 lignes), "
+                + "`ComPreProspection` (3 817), `RntProspection` (4, prospection de location).\n\n"
+                + "`null` signifie que la prospection ne porte aucun type : elle est alors "
+                + "**invisible dans le logiciel de bureau**, dont toutes les vues font un "
+                + "`INNER JOIN` sur `StrEntity`. Ce n'est pas une donnée manquante mais une "
+                + "anomalie de création — 4 lignes en base réelle.",
+                example = "ComProspection")
+        String typeProspectionCode,
+
+        @Schema(description = "Libellé d'affichage du type, traduit — « Prospection vente », "
+                + "« Pré-Prospection ». Ne pas s'en servir pour tester le type.",
+                example = "Prospection vente")
+        String typeProspection,
+
         @Schema(description = "Bloc d'indicateurs d'activité calculés par la base légataire "
                 + "(nombre d'interactions, inactivité, dernière communication, visites, relance "
                 + "en cours, projet, et le lien vers le dossier issu de la prospection).\n\n"
