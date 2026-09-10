@@ -38,6 +38,7 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
 import com.tsix.immocrm.storage.FixturePieceJointe;
 import com.tsix.immocrm.whatsapp.EnvoiWhatsAppMemoire;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,6 +115,29 @@ class ConfirmationVisiteTest {
      */
     @BeforeEach
     void viderLesEnvois() {
+        envoiEmail.vider();
+        envoiWhatsApp.vider();
+    }
+
+    /**
+     * <strong>Indispensable, et distinct du {@code @BeforeEach} ci-dessus.</strong>
+     *
+     * <p>Cette classe est la seule à éteindre les doubles ({@code definirActif(false)}) pour
+     * vérifier le mode dégradé. Nettoyer uniquement <em>avant</em> chaque test l'isole d'elle-même
+     * mais ne protège personne <em>après</em> : le dernier test de la classe laissait les
+     * singletons éteints, et la classe suivante à lire {@code estActif()} en héritait.
+     *
+     * <p>C'est exactement ce qui faisait échouer {@code UtilisateurAdminEmailTest} en CI
+     * ({@code emailEnvoye} attendu {@code true}, reçu {@code false}) alors que la suite passait en
+     * local : cette classe ne touche jamais aux doubles, elle ne fait que subir leur état, et
+     * l'échec ne se produit que si l'ordre d'exécution place {@code ConfirmationVisiteTest} avant
+     * elle. Reproduit localement avec {@code -Dsurefire.runOrder=reversealphabetical}.
+     *
+     * <p>Le nettoyage appartient à qui salit : ajouter un {@code @BeforeEach} défensif dans chaque
+     * classe qui lit l'état ne ferait que déplacer l'oubli.
+     */
+    @AfterEach
+    void restaurerLesEnvois() {
         envoiEmail.vider();
         envoiWhatsApp.vider();
     }
