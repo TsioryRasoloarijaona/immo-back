@@ -7,6 +7,7 @@ import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospect.ModifierProspectRequest;
+import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
 import com.tsix.immocrm.dto.prospect.ProspectListItemDto;
 import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
@@ -52,8 +53,14 @@ public class ProspectController {
     @GetMapping
     public PageDto<ProspectListItemDto> findAll(@RequestParam(required = false) String search,
             @RequestParam(required = false) List<String> type,
+            @Parameter(description = "Colonnes a serialiser, repetable ou separees par des "
+                    + "virgules. Absent : les 10 colonnes historiques. Catalogue et liste blanche : "
+                    + "`GET /api/referentiels/colonnes/prospects`. Un nom hors catalogue rend 400 "
+                    + "avec la liste des noms valides. `id` est toujours servi.",
+                    example = "code,nom,prenom,cin,creePar")
+            @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(prospectService.findAll(search, type, pageable));
+        return PageDto.of(prospectService.findAll(search, type, pageable, ColonneProspect.resoudre(colonnes)));
     }
 
     @GetMapping("/{id}")

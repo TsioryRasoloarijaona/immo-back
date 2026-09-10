@@ -8,7 +8,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
-import com.tsix.immocrm.domain.ColonneProspection;
+import com.tsix.immocrm.domain.ColonneInconnueException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,11 +37,14 @@ public class GlobalExceptionHandler {
      * la réponse, sans aller lire la doc. Ignorer le nom en silence laisserait le front croire à
      * une colonne vide plutôt qu'à une erreur d'appel.
      */
-    @ExceptionHandler(ColonneProspection.ColonneInconnueException.class)
-    public ProblemDetail handleColonneInconnue(ColonneProspection.ColonneInconnueException ex) {
+    @ExceptionHandler(ColonneInconnueException.class)
+    public ProblemDetail handleColonneInconnue(ColonneInconnueException ex) {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         probleme.setProperty("colonne", ex.colonne());
-        probleme.setProperty("colonnesValides", ColonneProspection.nomsValides());
+        // Les noms viennent de l'exception, pas d'un catalogue code en dur : trois listes sont
+        // desormais filtrables, et repondre les colonnes de prospection a une faute de frappe sur
+        // un prospect designerait le mauvais ecran.
+        probleme.setProperty("colonnesValides", ex.nomsValides());
         return probleme;
     }
 
