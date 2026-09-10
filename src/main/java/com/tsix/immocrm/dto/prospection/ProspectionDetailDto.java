@@ -202,19 +202,63 @@ public record ProspectionDetailDto(
         @Schema(description = "Libellé du pays. 27,3 % — `null` sur les deux tiers des fiches.")
         String pays,
 
-        @Schema(description = "Auteur de la création. **34,3 % seulement** : les prospections "
-                + "créées par notre API ne posent pas `UserCreate` (défaut connu). Un front qui "
-                + "affiche l'auteur verra deux fiches sur trois sans auteur.")
+        @Schema(description = "Auteur de la création. **34,3 % des prospections, 27,1 % des "
+                + "pré-prospections** : les lignes créées par notre API ne posent pas "
+                + "`UserCreate` (défaut connu). Un front qui affiche l'auteur verra deux fiches "
+                + "sur trois sans auteur.")
         String creePar,
 
-        @Schema(description = "Date de création de la prospection. 100 %.")
+        @Schema(description = "Date de création. 100 % sur les deux populations.")
         LocalDateTime creeLe,
 
-        @Schema(description = "Auteur de la dernière modification. 100 %.")
+        @Schema(description = "Auteur de la dernière modification. **100 % des prospections, mais "
+                + "28,1 % des pré-prospections** — un lead injecté automatiquement et jamais "
+                + "rouvert n'a pas d'auteur de modification.")
         String modifiePar,
 
-        @Schema(description = "Date de la dernière modification. 100 %.")
+        @Schema(description = "Date de la dernière modification. **100 % des prospections, 28,1 % "
+                + "des pré-prospections.**")
         LocalDateTime modifieLe,
+
+        // -- Tri manuel et déduplication (ComProspection.TempField1 / TempField10).
+        //    Voir instructions/FEATURE-marqueurs-tri-pre-prospection.md.
+        @Schema(description = "Contenu du champ libre de qualification (`TempField1`), servi tel "
+                + "quel — seuls les espaces de bordure sont retirés, et une valeur vide devient "
+                + "`null`. Ni la casse ni l'orthographe ne sont corrigées : c'est justement ce "
+                + "qu'on ne sait pas interpréter.\n\n"
+                + "**Son sens dépend de la population.** Sur une pré-prospection c'est un "
+                + "marqueur de tri (« Doublon », « spam »). Sur une prospection c'est le plus "
+                + "souvent la typologie recherchée — `salon_+_2_chambres` (518 lignes), "
+                + "`salon_+_1_chambre` (213) — parfois une ville ou un budget. Servi brut "
+                + "précisément parce qu'il n'est pas normalisé ; utiliser `marqueurTri` quand on "
+                + "cherche un marqueur.", example = "salon_+_2_chambres")
+        String noteQualification,
+
+        @Schema(description = "Marqueur de tri **normalisé**, déduit de `noteQualification` par "
+                + "correspondance exacte (casse et accents ignorés).\n\n"
+                + "`null` dès que le texte n'est pas un marqueur reconnu — **c'est le cas le plus "
+                + "fréquent** (1 239 lignes de texte libre, dont les 1 200 typologies). `null` "
+                + "signifie « pas un marqueur connu », jamais « pas de note » : regarder "
+                + "`noteQualification`.\n\n"
+                + "Volumes réels : `DOUBLON` 921, `SPAM` 32, `TRAITE` 10.",
+                allowableValues = {"DOUBLON", "SPAM", "TRAITE"}, example = "DOUBLON")
+        String marqueurTri,
+
+        @Schema(description = "Code du tiers que cette fiche duplique (`TempField10`). 849 lignes "
+                + "réelles le portent, et **les 849 résolvent vers un `CfgTier` existant**. "
+                + "Toujours renseigné quand le pointeur existe, **même si la résolution "
+                + "échoue**.", example = "25/11847")
+        String doublonDeCode,
+
+        @Schema(description = "Identifiant du tiers dupliqué, une fois `doublonDeCode` résolu.\n\n"
+                + "`null` si le code ne correspond à **aucun** tiers ou à **plusieurs** : "
+                + "`CfgTier.Code` n'est pas unique (14 516 tiers pour 14 504 codes), et désigner "
+                + "un tiers au hasard serait pire que ne rien désigner. Dans ce cas "
+                + "`doublonDeCode` reste affichable, sans lien.")
+        UUID doublonDeId,
+
+        @Schema(description = "Nom du tiers dupliqué. `null` dans les mêmes cas que `doublonDeId`.")
+        String doublonDeNom,
 
         // -- Type de document du légataire (StrEntity) : le discriminant réel entre prospection
         //    de vente, pré-prospection et prospection de location.

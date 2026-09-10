@@ -221,7 +221,15 @@ public class ProspectionController {
                     + "« non disponible », jamais « zéro ».\n\n"
                     + "Les champs mesurés morts (`prix`, `surface`, avance, financement, "
                     + "`proposeur*`) restent exposés pour ne pas rompre le contrat existant, mais "
-                    + "ne doivent pas être affichés — voir leur `@Schema`."
+                    + "ne doivent pas être affichés — voir leur `@Schema`.\n\n"
+                    + "**Tri manuel et déduplication** : `marqueurTri` (`DOUBLON`, `SPAM`, "
+                    + "`TRAITE`) et `doublonDe*` exposent un mécanisme que l'équipe tenait dans "
+                    + "des champs libres. **L'endpoint les expose sans rien filtrer** — 798 "
+                    + "pré-prospections sont marquées doublon ou spam et 795 d'entre elles sont "
+                    + "encore à l'étape `1 A TRAITER` : c'est au client de décider du traitement. "
+                    + "Voir `instructions/FEATURE-marqueurs-tri-pre-prospection.md`.\n\n"
+                    + "**Sur une pré-prospection**, `fermee` (0 %), les champs `article*` (0,2 %) "
+                    + "et `proposeur*` (0 %) sont structurellement vides — ne pas les attendre."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Prospection trouvée."),
