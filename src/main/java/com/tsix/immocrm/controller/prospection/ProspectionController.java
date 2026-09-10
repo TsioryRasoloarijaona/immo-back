@@ -211,7 +211,17 @@ public class ProspectionController {
                     + "**Périmètre commercial** : une prospection hors du périmètre de l'appelant "
                     + "renvoie **404**, et non 403 — un 403 confirmerait son existence et "
                     + "permettrait d'énumérer les identifiants. Même règle pour toutes les routes "
-                    + "imbriquées (interactions, devis, qualification, documents)."
+                    + "imbriquées (interactions, devis, qualification, documents).\n\n"
+                    + "**Deux origines de données, deux comportements** :\n"
+                    + "- les champs issus de `ComProspection` et de ses associations (société, "
+                    + "type de tiers, coordonnées, codes de référentiel, audit) sont servis "
+                    + "**dans tous les cas**, pré-prospection comprise ;\n"
+                    + "- le bloc `activite` vient de `ComSaleProspectionView`, qui exclut les "
+                    + "pré-prospections : il vaut alors `null` **en entier**. `null` signifie "
+                    + "« non disponible », jamais « zéro ».\n\n"
+                    + "Les champs mesurés morts (`prix`, `surface`, avance, financement, "
+                    + "`proposeur*`) restent exposés pour ne pas rompre le contrat existant, mais "
+                    + "ne doivent pas être affichés — voir leur `@Schema`."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Prospection trouvée."),

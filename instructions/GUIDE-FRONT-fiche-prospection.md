@@ -5,13 +5,14 @@
 > volontairement absent, et le contrat du sélecteur de colonnes à venir — pour que l'écran soit
 > structuré dès maintenant de façon à l'accueillir sans réécriture.
 >
-> Référence d'implémentation : `instructions/FEATURE-vues-legacy-prospection.md`.
+> Références d'implémentation : `instructions/FEATURE-vues-legacy-prospection.md` et
+> `instructions/FEATURE-enrichissement-fiche-prospection.md`.
 
 ## 0. État réel du backend — à lire avant de planifier
 
 | | Aujourd'hui |
 |---|---|
-| `GET /api/prospections/{id}` | **enrichi** — nouveau bloc `activite` |
+| `GET /api/prospections/{id}` | **enrichi** — bloc `activite`, puis société / coordonnées / codes de référentiel / audit (rang 5) |
 | `GET /api/prospections/{id}/interactions` | **enrichi** — catégorie + projet/tranche |
 | `GET /api/prospections` (liste) | **enrichi** — 14 colonnes d'activité, sur demande |
 | `?colonnes=` (sélection serveur) | **livré** |
@@ -74,6 +75,34 @@ Les deux derniers ne concernent qu'un quart des fiches : bloc entier masqué qua
 puis `trancheCode` et `articleCode`, puis `activite.cin` — **2,7 %**, chiffre corrigé depuis la
 première version de ce guide, à afficher conditionnellement.
 
+### Rang 5 — société, coordonnées, audit *(ajoutés par l'enrichissement de la fiche)*
+
+La fiche était **plus pauvre que la liste** : le lot « sélection de colonnes » avait enrichi
+`ProspectionListItemDto` de 18 colonnes sans que le détail reçoive le même traitement — le front
+affichait la société en colonne puis la perdait en cliquant dessus. C'est corrigé, **avec les
+mêmes noms de champs que la liste** : le type de la fiche peut donc réutiliser ce qui est déjà
+déclaré pour la liste au lieu d'en dupliquer une variante.
+
+| Champ | Peuplé | Note |
+|---|---:|---|
+| `societeCode` / `societeLibelle` / `societeId` | **99,8 %** | entité juridique (ADMOD, GHRIZA). **Dérivée de la tranche**, jamais saisie : sans tranche, pas de société |
+| `prospectCode` | **100 %** | code du tiers, ex. `26/14520` |
+| `mobileProspect` + `indicatifMobile` | 99,8 % / **100 %** | **l'indicatif n'a pas de `+`** — c'est `212`. Composer l'affichage |
+| `emailFiche` | 59,1 % | email de la fiche tiers — à distinguer de `tempEmail`, saisi sur la prospection |
+| `typeProspect` / `typeProspectLibelle` / `typeProspectId` | **100 %** | type du **tiers** (`PRO`, `PRORNT`) |
+| `commercialCode` | 99,3 % | on n'avait que le nom |
+| `origineCode`, `etapeCode`, `vocationCode`, `typeContactCode` | **100 %** | le **code** s'ajoute au libellé déjà servi, il ne le remplace pas |
+| `origineSupportCode` / `actionCommercialeCode` / `raisonFermetureCode` | 50 % / 40 % / 61 % | idem, conditionnels |
+| `articleCategorie` / `articleType` | 5,7 % | soit **100 % des prospections qui portent un article** |
+| `paysCode` / `pays` / `paysId` | 27,3 % | |
+| `creeLe` / `modifiePar` / `modifieLe` | **100 %** | piste d'audit |
+| `creePar` | **34,3 %** | ⚠️ deux fiches sur trois n'ont pas d'auteur — voir §7 |
+
+> ⚠️ **`typeProspect` n'est pas `typeProspectionCode`.** Un caractère d'écart, deux notions :
+> `typeProspect` qualifie le **tiers** (`PRO`), `typeProspectionCode` qualifie le **document**
+> (`ComProspection` / `ComPreProspection`). Le second est celui qui distingue une prospection
+> d'une pré-prospection. Le piège est hérité de la liste, où les deux coexistent déjà.
+
 > ⚠️ **Ne pas afficher `prix`, `surface`, `avance` ni les trois champs de financement.** Mesuré
 > sur les 14 114 prospections réelles : `Price` est renseigné sur **4 lignes** et vaut **0**
 > partout ailleurs — jamais `null`, donc non masquable par un test de nullité. `Area`,
@@ -99,6 +128,11 @@ if (!prospection.activite) {
 
 Ce n'est pas une erreur et l'API répond bien **200**. La pré-prospection est le 4ᵉ écran le plus
 ouvert du logiciel de bureau (5 420 ouvertures/an) : le cas est fréquent, pas marginal.
+
+**Le repli ne concerne que `activite`.** Tous les champs du rang 5 — société, coordonnées, type de
+tiers, codes de référentiel, audit — viennent des tables, pas de la vue, et **restent renseignés
+sur une pré-prospection**. Une fiche sans `activite` n'est donc pas une fiche vide : il y a
+largement de quoi l'afficher.
 
 ### 2.2 `null` ne veut jamais dire « zéro »
 
@@ -245,6 +279,21 @@ faut pas les redemander sans nouvelle mesure :
 
 Leur nom est prometteur, leur contenu ne l'est pas. C'est la raison d'être de la colonne
 « Peuplé » de ce guide : **demander une colonne vide coûte le même travail qu'une colonne utile.**
+
+### Et quatre qui ne sont pas vides, mais font double emploi
+
+Ne pas les redemander non plus — la mesure a montré qu'ils n'ajoutent rien à ce qui est déjà
+servi :
+
+| Colonne légataire | Ce qu'elle vaut réellement |
+|---|---|
+| `Commercial` | strictement égale à `commercialNom` — **0 écart sur 14 118 lignes** |
+| `ComProspectionOriginType*` | alias de `ComActionMessageType*`, déjà servi sous `typeContact` — 0 écart |
+| `LastActiveAlertOld` | doublon strict de `activite.alerteActiveDate` — 0 écart |
+| `CfgTierFirstName` / `CfgTierLastName` | `prospectNom` vaut déjà `Prénom + ' ' + Nom` — ils ne diffèrent que sur **7 lignes** |
+
+Le champ `proposeurNom` est, lui, exposé mais **mort** : renseigné sur **1 ligne sur 14 118**.
+Même traitement que le bloc budgétaire — ne pas l'afficher.
 
 ---
 

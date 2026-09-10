@@ -12,6 +12,12 @@ import java.util.UUID;
  * NOTE: field naming is not yet backed by a shared API spec doc
  * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
  * directly from {@code ComProspection}. Adjust once a spec is available.
+ *
+ * <p>Les champs ajoutés par {@code FEATURE-enrichissement-fiche-prospection.md} viennent tous des
+ * <strong>associations JPA</strong> de {@code ComProspection}, jamais de {@code ComSaleProspectionView} :
+ * mapper une colonne de plus sur l'entité de vue dégraderait l'élagage SQL qui fait tenir la fiche
+ * à 26 ms. Ils restent donc renseignés sur une <strong>pré-prospection</strong>, contrairement au
+ * bloc {@code activite}.
  */
 public record ProspectionDetailDto(
         UUID id,
@@ -20,24 +26,91 @@ public record ProspectionDetailDto(
         String tempDescription,
         String tempTel,
         String tempEmail,
+
+        // -- Prospect (CfgTier). Le nom est déjà servi ; le reste vient des colonnes que la vue
+        //    légataire affiche sur la fiche et que nous n'exposions pas.
         UUID prospectId,
         String prospectNom,
+
+        @Schema(description = "Code du prospect dans le référentiel tiers. Renseigné sur "
+                + "**100 %** des prospections réelles.", example = "26/14520")
+        String prospectCode,
+
+        @Schema(description = "Numéro de mobile **brut**, sans indicatif — 99,8 %. Le logiciel de "
+                + "bureau affiche `(indicatif) numéro` ; ce formatage est laissé au front. Même "
+                + "champ que `mobileProspect` de la liste.", example = "6 61 83 60 90")
+        String mobileProspect,
+
+        @Schema(description = "Indicatif pays du mobile, **stocké sans `+`** — 100 %. Composer "
+                + "l'affichage côté front (`+212 6 61 83 60 90`).", example = "212")
+        String indicatifMobile,
+
+        @Schema(description = "Email porté par la fiche tiers — à distinguer de `tempEmail`, saisi "
+                + "sur la prospection elle-même. 59,1 %.")
+        String emailFiche,
+
+        @Schema(description = "Identifiant du type de tiers. 100 %.")
+        UUID typeProspectId,
+
+        @Schema(description = "Code du type de tiers — **c'est ce champ qu'il faut tester**, "
+                + "jamais le libellé. 100 %.\n\n"
+                + "⚠️ **Ne pas confondre avec `typeProspectionCode`** : celui-ci qualifie le "
+                + "*tiers* (`PRO`, `PRORNT`), l'autre qualifie le *document* (`ComProspection`, "
+                + "`ComPreProspection`). Même distinction que sur la liste.", example = "PRO")
+        String typeProspect,
+
+        @Schema(description = "Libellé du type de tiers. 100 %.")
+        String typeProspectLibelle,
+
         UUID commercialId,
         String commercialNom,
+
+        @Schema(description = "Code du commercial dans le référentiel tiers. 99,3 %.")
+        String commercialCode,
+
+        @Schema(description = "Identifiant du proposeur. **Mesuré mort : 1 ligne sur 14 118.** "
+                + "Conservé pour compatibilité — ne pas afficher.")
         UUID proposeurId,
+
+        @Schema(description = "Nom du proposeur. **Mort : 1 ligne sur 14 118.** Ne pas afficher.")
         String proposeurNom,
+
         UUID origineId,
         String origine,
+
+        @Schema(description = "Code de l'origine. 100 %.")
+        String origineCode,
+
         UUID origineSupportId,
         String origineSupport,
+
+        @Schema(description = "Code du support d'origine. 50,2 %.")
+        String origineSupportCode,
+
         UUID etapeId,
         String etape,
+
+        @Schema(description = "Code de l'étape de prospection. 100 %.", example = "3 QUALIFIÉ")
+        String etapeCode,
+
         UUID vocationId,
         String vocation,
+
+        @Schema(description = "Code de la vocation. 100 %.", example = "VENTE")
+        String vocationCode,
+
         UUID typeContactId,
         String typeContact,
+
+        @Schema(description = "Code du type de contact. 100 %.")
+        String typeContactCode,
+
         UUID actionCommercialeId,
         String actionCommerciale,
+
+        @Schema(description = "Code de l'action commerciale (campagne). 40,2 %.")
+        String actionCommercialeCode,
+
         String notes,
 
         // -- Bloc « qualification budgétaire » : MESURÉ MORT sur les 14 114 prospections réelles.
@@ -77,6 +150,11 @@ public record ProspectionDetailDto(
         LocalDateTime dateFermeture,
         UUID raisonFermetureId,
         String raisonFermeture,
+
+        @Schema(description = "Code du motif de clôture. 60,5 % — ne vaut quelque chose que sur "
+                + "une prospection fermée.")
+        String raisonFermetureCode,
+
         String raisonFermetureTexte,
         Boolean ancienClient,
         // -- Tranche principale et article principal (ComProspection.StkHierarchyId/StkItemId).
@@ -91,6 +169,52 @@ public record ProspectionDetailDto(
         UUID articleId,
         String articleCode,
         String articleDescription,
+
+        @Schema(description = "Catégorie de l'article principal. Renseignée sur **100 % des "
+                + "prospections qui portent un article** — soit 5,7 % du total (804 sur 14 118), "
+                + "l'article lui-même étant rare.")
+        String articleCategorie,
+
+        @Schema(description = "Type de l'article principal. Même couverture que la catégorie : "
+                + "100 % des prospections portant un article.")
+        String articleType,
+
+        // -- Société : dérivée de la tranche (CfgTranche → CfgProject → CfgCompany), exactement
+        //    comme le fait la vue légataire. Elle n'est jamais saisie sur la prospection.
+        @Schema(description = "Identifiant de la société / entité juridique. **99,8 %.** "
+                + "Déjà servi par la liste depuis le lot B ; la fiche ne le portait pas.")
+        UUID societeId,
+
+        @Schema(description = "Code de la société. 99,8 %.", example = "ADMOD")
+        String societeCode,
+
+        @Schema(description = "Libellé de la société. **Dérivé de la tranche** "
+                + "(`CfgTranche → CfgProject → CfgCompany`), jamais saisi sur la prospection : "
+                + "une prospection sans tranche n'a pas de société, et ce n'est pas une anomalie.")
+        String societeLibelle,
+
+        @Schema(description = "Identifiant du pays du prospect. 27,3 %.")
+        UUID paysId,
+
+        @Schema(description = "Code du pays. 27,3 %.")
+        String paysCode,
+
+        @Schema(description = "Libellé du pays. 27,3 % — `null` sur les deux tiers des fiches.")
+        String pays,
+
+        @Schema(description = "Auteur de la création. **34,3 % seulement** : les prospections "
+                + "créées par notre API ne posent pas `UserCreate` (défaut connu). Un front qui "
+                + "affiche l'auteur verra deux fiches sur trois sans auteur.")
+        String creePar,
+
+        @Schema(description = "Date de création de la prospection. 100 %.")
+        LocalDateTime creeLe,
+
+        @Schema(description = "Auteur de la dernière modification. 100 %.")
+        String modifiePar,
+
+        @Schema(description = "Date de la dernière modification. 100 %.")
+        LocalDateTime modifieLe,
 
         // -- Type de document du légataire (StrEntity) : le discriminant réel entre prospection
         //    de vente, pré-prospection et prospection de location.
@@ -119,7 +243,8 @@ public record ProspectionDetailDto(
                 + "en cours, projet, et le lien vers le dossier issu de la prospection).\n\n"
                 + "**Vaut `null` en entier sur une pré-prospection** : ces indicateurs viennent "
                 + "de `ComSaleProspectionView`, qui exclut les pré-prospections. L'absence du "
-                + "bloc signifie « non disponible », jamais « zéro ».")
+                + "bloc signifie « non disponible », jamais « zéro ». Les autres champs de cette "
+                + "fiche restent, eux, renseignés sur une pré-prospection.")
         ActiviteProspectionDto activite
 ) {
 }

@@ -134,7 +134,13 @@ public class ComSaleProspectionView {
     @Column(name = "CfgProjectDescription")
     private String cfgProjectDescription;
 
-    /** CIN du prospect, portée par la vue. 99 %. */
+    /**
+     * CIN du prospect, portée par la vue. <strong>Rare : 2,7 %</strong> (387 lignes sur 14 118).
+     *
+     * <p>Une première mesure annonçait 99 % en comptant les non-{@code NULL} d'une colonne qui
+     * porte des chaînes vides. La correction avait été passée dans les {@code @Schema} et les
+     * specs sans l'être ici — voir {@code INVENTAIRE-colonnes-prospection.md} §4.
+     */
     @Size(max = 255)
     @Nationalized
     @Column(name = "CfgTierIDNumber")
