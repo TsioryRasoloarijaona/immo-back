@@ -17,6 +17,8 @@ import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
 import com.tsix.immocrm.entities.adm.AdmSequence;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
@@ -838,11 +840,78 @@ public class DossierService {
                 f.getProbabilityOfFinalisation(),
                 f.getComPaymentMethod() != null ? f.getComPaymentMethod().getCode() : null,
                 f.getComProspection() != null ? f.getComProspection().getId() : null,
-                f.getComProspection() != null ? f.getComProspection().getCode() : null
+                f.getComProspection() != null ? f.getComProspection().getCode() : null,
+                // -- Contexte patrimonial. La chaîne article → tranche → projet → société est
+                //    vérifiée à 358/358, mais chaque maillon est déréférencé défensivement : la
+                //    vue légataire la traverse en LEFT JOIN, donc rien ne garantit en base qu'un
+                //    maillon manquant soit impossible.
+                projet(f) != null ? projet(f).getId() : null,
+                projet(f) != null ? projet(f).getCode() : null,
+                projet(f) != null ? projet(f).getDescription() : null,
+                tranche(f) != null ? tranche(f).getId() : null,
+                tranche(f) != null ? tranche(f).getCode() : null,
+                tranche(f) != null ? tranche(f).getDescription() : null,
+                societe(f) != null ? societe(f).getId() : null,
+                societe(f) != null ? societe(f).getCode() : null,
+                societe(f) != null ? societe(f).getDescription() : null,
+                f.getStkVocation() != null ? f.getStkVocation().getId() : null,
+                f.getStkVocation() != null ? f.getStkVocation().getCode() : null,
+                f.getStkVocation() != null ? f.getStkVocation().getDescription() : null,
+                f.getUserCreate(),
+                f.getUserCreateDateTime(),
+                f.getUserUpdate(),
+                f.getUserUpdateDateTime(),
+                f.getComProspection() != null && f.getComProspection().getComProspectionKind() != null
+                        ? f.getComProspection().getComProspectionKind().getDescription() : null,
+                f.getComProspection() != null && f.getComProspection().getComProspectionOrigin() != null
+                        ? f.getComProspection().getComProspectionOrigin().getDescription() : null,
+                f.getComProspection() != null ? f.getComProspection().getDocDate() : null
         );
     }
 
+    /**
+     * Tranche du dossier, portée par son article principal.
+     *
+     * <p>{@code ComFolder} n'a pas de tranche à lui : elle vient de {@code StkItem.StkHierarchyId},
+     * renseigné sur les 358 articles de dossier réels.
+     */
+    private static CfgTranche tranche(ComFolder f) {
+        return f.getStkItem() != null ? f.getStkItem().getStkHierarchy() : null;
+    }
+
+    /**
+     * Projet du dossier — <strong>via la tranche, jamais via l'article</strong>.
+     *
+     * <p>{@code StkItem.CfgProjectId} est {@code null} sur les <strong>358</strong> articles de
+     * dossier de la base réelle. Le lire directement rendrait {@code null} partout, sans erreur
+     * visible : c'est le genre de mapping qui passe les tests et ne remplit jamais l'écran.
+     */
+    private static CfgProject projet(ComFolder f) {
+        CfgTranche t = tranche(f);
+        return t != null ? t.getCfgProject() : null;
+    }
+
+    /** Entité juridique sous laquelle le projet est vendu. */
+    private static CfgCompany societe(ComFolder f) {
+        CfgProject p = projet(f);
+        return p != null ? p.getCfgCompany() : null;
+    }
+
     private static ArticleSummaryDto toArticleSummary(StkItem item) {
-        return new ArticleSummaryDto(item.getId(), item.getCode(), item.getDescription(), item.getArea(), item.getSalePrice());
+        return new ArticleSummaryDto(
+                item.getId(), item.getCode(), item.getDescription(), item.getArea(), item.getSalePrice(),
+                item.getStkItemCategory() != null ? item.getStkItemCategory().getId() : null,
+                item.getStkItemCategory() != null ? item.getStkItemCategory().getCode() : null,
+                item.getStkItemCategory() != null ? item.getStkItemCategory().getDescription() : null,
+                item.getStkItemType() != null ? item.getStkItemType().getId() : null,
+                item.getStkItemType() != null ? item.getStkItemType().getCode() : null,
+                item.getStkItemType() != null ? item.getStkItemType().getDescription() : null,
+                item.getStkFloor() != null ? item.getStkFloor().getId() : null,
+                item.getStkFloor() != null ? item.getStkFloor().getCode() : null,
+                item.getStkFloor() != null ? item.getStkFloor().getDescription() : null,
+                item.getStkBuilding() != null ? item.getStkBuilding().getId() : null,
+                item.getStkBuilding() != null ? item.getStkBuilding().getCode() : null,
+                item.getStkBuilding() != null ? item.getStkBuilding().getDescription() : null
+        );
     }
 }
