@@ -146,8 +146,11 @@ donc courte par nature — inutile de la paginer ou de la conditionner.
   façon portable, et le plan est équivalent sur une liste de cette taille.
 
 - `ProspectService` — une requête de plus sur la fiche seulement. **La liste
-  (`ProspectListItemDto`) n'est pas touchée** : elle n'a pas de sélection de colonnes, donc tout
-  ajout y serait payé sur chaque ligne de chaque page.
+  (`ProspectListItemDto`) n'est pas touchée par ce lot.**
+
+> **Mise à jour.** La liste a depuis reçu un sélecteur de colonnes
+> (`FEATURE-selecteur-colonnes-prospect-dossier.md`). `tranchesInteret` en reste néanmoins exclue,
+> et pour la raison d'origine : elle coûte une requête *par ligne*.
 
 ---
 

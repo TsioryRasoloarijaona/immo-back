@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.prospect;
 
+import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospect.ModifierProspectRequest;
 import com.tsix.immocrm.dto.prospect.PieceIdentiteDto;
@@ -48,6 +49,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -69,8 +71,10 @@ public class ProspectService {
     /**
      * Sert les <strong>tranches d'intérêt</strong> de la fiche — voir
      * {@code instructions/FEATURE-audit-tranches-prospect.md}. Une requête de plus sur la fiche
-     * seulement : la liste des prospects n'a pas de sélection de colonnes, un ajout y serait payé
-     * sur chaque ligne de chaque page.
+     * seulement : en liste, elle serait payée <em>par ligne</em>, soit vingt requêtes par page.
+     * C'est pour cette raison que {@code tranchesInteret} ne figure pas au catalogue
+     * {@link com.tsix.immocrm.domain.ColonneProspect} — l'exposer en liste demanderait un
+     * chargement par lot, comme l'enrichissement de la prospection.
      */
     private final CfgTrancheRepository trancheRepository;
     private final CfgTierTypeRepository tierTypeRepository;
@@ -130,7 +134,8 @@ public class ProspectService {
      *               confirmed on real data: 13 567 tiers, vs. only 13 with the app-only
      *               {@code CfgTier.IsProspect} flag this endpoint filtered on before).
      */
-    public Page<ProspectListItemDto> findAll(String search, List<String> types, Pageable pageable) {
+    public Page<ProspectListItemDto> findAll(String search, List<String> types, Pageable pageable,
+                                            Set<ColonneProspect> colonnes) {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (types != null && !types.isEmpty()) {
@@ -151,7 +156,7 @@ public class ProspectService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return tierRepository.findAll(spec, pageable).map(ProspectService::toListItem);
+        return tierRepository.findAll(spec, pageable).map(t -> toListItem(t, colonnes));
     }
 
     public ProspectDetailDto findById(UUID id) {
@@ -365,7 +370,18 @@ public class ProspectService {
         }
     }
 
-    private static ProspectListItemDto toListItem(CfgTier tier) {
+    /**
+     * Mappeur de la liste des prospects.
+     *
+     * <p>Les <strong>référentiels ne sont déréférencés que si la colonne est demandée</strong> :
+     * chacun est un chargement paresseux de plus par ligne, soit vingt requêtes inutiles par page
+     * quand personne ne les réclame. Les scalaires de {@code CfgTier}, eux, sont déjà chargés —
+     * les conditionner n'apporterait rien et alourdirait la lecture.
+     *
+     * @param colonnes sélection résolue ; {@code Set.of()} pour les appels hors liste, qui ne
+     *                 déréférenceront alors aucun référentiel optionnel.
+     */
+    private static ProspectListItemDto toListItem(CfgTier tier, Set<ColonneProspect> colonnes) {
         return new ProspectListItemDto(
                 tier.getId(),
                 tier.getCode(),
@@ -376,7 +392,57 @@ public class ProspectService {
                 tier.getMobile(),
                 tier.getEMail(),
                 tier.getCity(),
-                tier.getCfgTierType() != null ? tier.getCfgTierType().getCode() : null
+                tier.getCfgTierType() != null ? tier.getCfgTierType().getCode() : null,
+                tier.getIDNumber(),
+                tier.getIce(),
+                tier.getBirthDate(),
+                tier.getBirthPlace(),
+                tier.getNbrChildren(),
+                tier.getIsOldCustomer(),
+                tier.getFatherName(),
+                tier.getMotherName(),
+                tier.getPhoneIndicatif(),
+                tier.getPhone1(),
+                tier.getPhone2(),
+                tier.getMobileIndicatif(),
+                tier.getFax(),
+                tier.getWebSite(),
+                tier.getAddress(),
+                tier.getAddress2(),
+                tier.getAddress3(),
+                tier.getZipCode(),
+                tier.getEmployer(),
+                tier.getAntiquity(),
+                colonnes.contains(ColonneProspect.KIND) && tier.getCfgTierKind() != null
+                        ? tier.getCfgTierKind().getDescription() : null,
+                colonnes.contains(ColonneProspect.TITRE) && tier.getAdmTierTitle() != null
+                        ? tier.getAdmTierTitle().getDescription() : null,
+                colonnes.contains(ColonneProspect.SEXE) && tier.getAdmSexType() != null
+                        ? tier.getAdmSexType().getDescription() : null,
+                colonnes.contains(ColonneProspect.NATIONALITE) && tier.getAdmNationality() != null
+                        ? tier.getAdmNationality().getDescription() : null,
+                colonnes.contains(ColonneProspect.SITUATION_FAMILIALE) && tier.getAdmFamilySituation() != null
+                        ? tier.getAdmFamilySituation().getDescription() : null,
+                colonnes.contains(ColonneProspect.REGIME_MATRIMONIAL) && tier.getAdmMatrimonialRegime() != null
+                        ? tier.getAdmMatrimonialRegime().getDescription() : null,
+                colonnes.contains(ColonneProspect.PAYS) && tier.getAdmCountry() != null
+                        ? tier.getAdmCountry().getDescription() : null,
+                colonnes.contains(ColonneProspect.PAYS_RESIDENCE) && tier.getAdmCountryResidence() != null
+                        ? tier.getAdmCountryResidence().getDescription() : null,
+                colonnes.contains(ColonneProspect.TYPE_RESIDENCE) && tier.getAdmResidenceType() != null
+                        ? tier.getAdmResidenceType().getDescription() : null,
+                // Alimentée par CfgTier.Quality, mesurée à 0 ligne sur 13 664 : toujours nulle.
+                tier.getQuality(),
+                colonnes.contains(ColonneProspect.SALAIRE) && tier.getAdmSalary() != null
+                        ? tier.getAdmSalary().getDescription() : null,
+                colonnes.contains(ColonneProspect.COMMERCIAL_ID) && tier.getCfgCommercial() != null
+                        ? tier.getCfgCommercial().getId() : null,
+                colonnes.contains(ColonneProspect.COMMERCIAL_NOM) && tier.getCfgCommercial() != null
+                        ? TierNomFormatter.nom(tier.getCfgCommercial()) : null,
+                tier.getUserCreate(),
+                tier.getUserCreateDateTime(),
+                tier.getUserUpdate(),
+                tier.getUserUpdateDateTime()
         );
     }
 

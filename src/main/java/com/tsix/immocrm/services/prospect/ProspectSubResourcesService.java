@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.services.dossier.DossierService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -36,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -238,21 +240,15 @@ public class ProspectSubResourcesService {
         return ProspectionService.toListItem(p);
     }
 
+    /**
+     * Délègue au mappeur commun de {@code DossierService}, pour la même raison que
+     * {@link #toProspectionListItem} : ce bloc en était une copie caractère pour caractère, et
+     * la liste des dossiers vient de gagner vingt-six colonnes qu'il aurait fallu recopier ici.
+     *
+     * <p>{@code Set.of()} — aucune colonne optionnelle demandée : cette sous-ressource sert le
+     * contrat historique, et ne doit pas payer les jointures du contexte patrimonial.
+     */
     private static DossierListItemDto toDossierListItem(ComFolder f) {
-        return new DossierListItemDto(
-                f.getId(),
-                f.getCode(),
-                f.getDocDate(),
-                f.getStrStatus() != null ? f.getStrStatus().getCode() : null,
-                f.getCfgCustomer() != null ? f.getCfgCustomer().getId() : null,
-                TierNomFormatter.nom(f.getCfgCustomer()),
-                f.getCfgCommercial() != null ? f.getCfgCommercial().getId() : null,
-                TierNomFormatter.nom(f.getCfgCommercial()),
-                f.getPrice(),
-                f.getTotalToPay(),
-                f.getAdvanceDate(),
-                f.getComProspection() != null ? f.getComProspection().getId() : null,
-                f.getComProspection() != null ? f.getComProspection().getCode() : null
-        );
+        return DossierService.toListItem(f, Set.of());
     }
 }

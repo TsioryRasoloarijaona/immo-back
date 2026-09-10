@@ -1,6 +1,7 @@
 package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
+import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
@@ -230,8 +231,14 @@ public class DossierController {
             @Parameter(description = "Recherche libre sur le code du dossier OU le nom/prénom/"
                     + "raison sociale du client lié (sous-chaîne, insensible à la casse).")
             @RequestParam(required = false) String search,
+            @Parameter(description = "Colonnes a serialiser, repetable ou separees par des "
+                    + "virgules. Absent : les 13 colonnes historiques. Catalogue et liste blanche : "
+                    + "`GET /api/referentiels/colonnes/dossiers`. Un nom hors catalogue rend 400 "
+                    + "avec la liste des noms valides. `id` est toujours servi.",
+                    example = "code,statut,projetCode,trancheCode,creePar")
+            @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate, dateDebut, dateFin, search, pageable));
+        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate, dateDebut, dateFin, search, pageable, ColonneDossier.resoudre(colonnes)));
     }
 
     @GetMapping("/{id}")

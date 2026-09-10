@@ -23,6 +23,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.referentiel.ColonneDto;
 
@@ -424,6 +426,55 @@ public class ReferentielController {
     )
     public List<ColonneDto> getColonnesProspections() {
         return Arrays.stream(ColonneProspection.values())
+                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut()))
+                .toList();
+    }
+
+    @GetMapping("/colonnes/prospects")
+    @Operation(
+            summary = "Catalogue des colonnes de la liste des prospects",
+            description = "Alimente le **sélecteur de colonnes** de `GET /api/prospects`, sur le "
+                    + "même contrat que celui des prospections : nom technique à passer dans "
+                    + "`?colonnes=`, libellé français, groupe, type d'affichage, et appartenance "
+                    + "à la sélection par défaut.\n\n"
+                    + "La sélection par défaut reproduit **exactement** les 10 colonnes servies "
+                    + "avant l'introduction du paramètre — une intégration qui ignore `colonnes` "
+                    + "ne voit aucun changement.\n\n"
+                    + "Deux réserves utiles au moment de bâtir le sélecteur : `profession` est "
+                    + "alimentée par une colonne **mesurée à 0 ligne sur 13 664** et sera donc "
+                    + "toujours vide ; `kind` l'est sur 14 339 des 14 516 tiers réels. Les "
+                    + "**tranches d'intérêt sont absentes du catalogue** : elles exigent une "
+                    + "requête par prospect et restent réservées à la fiche.\n\n"
+                    + "Référentiel statique, sans paramètre : cacheable côté client."
+    )
+    public List<ColonneDto> getColonnesProspects() {
+        return Arrays.stream(ColonneProspect.values())
+                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut()))
+                .toList();
+    }
+
+    @GetMapping("/colonnes/dossiers")
+    @Operation(
+            summary = "Catalogue des colonnes de la liste des dossiers de vente",
+            description = "Alimente le **sélecteur de colonnes** de `GET /api/dossiers`, sur le "
+                    + "même contrat que les deux précédents.\n\n"
+                    + "La sélection par défaut reproduit **exactement** les 13 colonnes servies "
+                    + "avant l'introduction du paramètre.\n\n"
+                    + "Les colonnes du groupe `PATRIMOINE` traversent la chaîne article → tranche "
+                    + "→ projet → société : les demander coûte trois jointures paresseuses par "
+                    + "ligne, ne pas les demander n'en coûte aucune. Même règle pour le groupe "
+                    + "`ORIGINE`, qui déréférence la prospection.\n\n"
+                    + "Ne figurent pas au catalogue, et c'est délibéré : les **articles** (une "
+                    + "requête par dossier), la **ventilation financière du légataire** (5 postes "
+                    + "vivants sur 12, et un bloc `Agreement*` qui diverge du bloc principal sur "
+                    + "20 % des lignes sans qu'on sache lequel fait foi) et **`notes`** (mesurée à "
+                    + "0 ligne sur 358).\n\n"
+                    + "Référentiel statique, sans paramètre : cacheable côté client."
+    )
+    public List<ColonneDto> getColonnesDossiers() {
+        return Arrays.stream(ColonneDossier.values())
                 .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
                         c.parDefaut()))
                 .toList();

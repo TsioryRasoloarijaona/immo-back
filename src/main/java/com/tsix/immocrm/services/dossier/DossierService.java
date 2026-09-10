@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
+import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.EtapeMilestone;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
@@ -62,6 +63,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -177,7 +179,7 @@ public class DossierService {
      */
     public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Pageable pageable) {
+            String search, Pageable pageable, Set<ColonneDossier> colonnes) {
         Specification<ComFolder> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (statuts != null && !statuts.isEmpty()) {
@@ -246,7 +248,7 @@ public class DossierService {
         // Prédicat neutre (aucune requête supplémentaire) tant qu'aucun projet ne lui est affecté
         // ou s'il porte un rôle d'exemption — voir PerimetreCommercialService#filtreDossiers.
         return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
-                .map(DossierService::toListItem);
+                .map(f -> toListItem(f, colonnes));
     }
 
     public DossierDetailDto findById(UUID id) {
@@ -797,7 +799,23 @@ public class DossierService {
                 .toList();
     }
 
-    private static DossierListItemDto toListItem(ComFolder f) {
+    /**
+     * Mappeur de la liste des dossiers.
+     *
+     * <p>Le <strong>contexte patrimonial n'est traversé que s'il est demandé</strong> : la chaîne
+     * article → tranche → projet → société est de trois jointures paresseuses par ligne, soit
+     * soixante requêtes inutiles sur une page de vingt quand personne ne les réclame. Même règle
+     * pour la prospection d'origine.
+     *
+     * @param colonnes sélection résolue ; {@code Set.of()} pour les appels hors liste.
+     */
+    public static DossierListItemDto toListItem(ComFolder f, Set<ColonneDossier> colonnes) {
+        boolean patrimoine = ColonneDossier.exigeLePatrimoine(colonnes);
+        CfgTranche tranche = patrimoine ? tranche(f) : null;
+        CfgProject projet = patrimoine ? projet(f) : null;
+        CfgCompany societe = patrimoine ? societe(f) : null;
+        ComProspection prospection = ColonneDossier.exigeLaProspection(colonnes)
+                ? f.getComProspection() : null;
         return new DossierListItemDto(
                 f.getId(),
                 f.getCode(),
@@ -811,7 +829,41 @@ public class DossierService {
                 f.getTotalToPay(),
                 f.getAdvanceDate(),
                 f.getComProspection() != null ? f.getComProspection().getId() : null,
-                f.getComProspection() != null ? f.getComProspection().getCode() : null
+                f.getComProspection() != null ? f.getComProspection().getCode() : null,
+                f.getPriceBeforeDiscount(),
+                f.getDiscount(),
+                f.getDiscountAmount(),
+                f.getPriceAfterDiscount(),
+                // Le "montant d'avance" de la fiche vient d'AgreementAmount (99,7 % des 358
+                // dossiers), pas d'une colonne AdvanceAmount : ComFolder n'en porte pas.
+                f.getAgreementAmount(),
+                f.getProbabilityOfFinalisation(),
+                projet != null ? projet.getId() : null,
+                projet != null ? projet.getCode() : null,
+                projet != null ? projet.getDescription() : null,
+                tranche != null ? tranche.getId() : null,
+                tranche != null ? tranche.getCode() : null,
+                tranche != null ? tranche.getDescription() : null,
+                societe != null ? societe.getId() : null,
+                societe != null ? societe.getCode() : null,
+                societe != null ? societe.getDescription() : null,
+                patrimoine && f.getStkVocation() != null ? f.getStkVocation().getCode() : null,
+                patrimoine && f.getStkVocation() != null ? f.getStkVocation().getDescription() : null,
+                colonnes.contains(ColonneDossier.AVOCAT_ID) && f.getCfgLawyer() != null
+                        ? f.getCfgLawyer().getId() : null,
+                colonnes.contains(ColonneDossier.AVOCAT_NOM) && f.getCfgLawyer() != null
+                        ? TierNomFormatter.nom(f.getCfgLawyer()) : null,
+                colonnes.contains(ColonneDossier.MODE_PAIE) && f.getComPaymentMethod() != null
+                        ? f.getComPaymentMethod().getCode() : null,
+                prospection != null && prospection.getComProspectionKind() != null
+                        ? prospection.getComProspectionKind().getDescription() : null,
+                prospection != null && prospection.getComProspectionOrigin() != null
+                        ? prospection.getComProspectionOrigin().getDescription() : null,
+                prospection != null ? prospection.getDocDate() : null,
+                f.getUserCreate(),
+                f.getUserCreateDateTime(),
+                f.getUserUpdate(),
+                f.getUserUpdateDateTime()
         );
     }
 
