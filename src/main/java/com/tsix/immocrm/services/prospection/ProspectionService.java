@@ -15,12 +15,14 @@ import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComAction;
 import com.tsix.immocrm.entities.com.ComActionMessage;
@@ -33,6 +35,8 @@ import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.entities.com.ComProspectionOrigin;
 import com.tsix.immocrm.entities.com.ComProspectionOriginSupport;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrHistory;
@@ -63,6 +67,7 @@ import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -1226,6 +1231,29 @@ public class ProspectionService {
      */
     private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite,
                                                  StrEntity type) {
+        // Chaque association est nommée une fois plutôt que déréférencée à chaque champ : depuis
+        // que la fiche sert aussi le code des référentiels, un `p.getX() != null ? p.getX()...`
+        // traverserait le proxy LAZY trois fois par association. Même raison d'être que
+        // com.tsix.immocrm.utils.Champs.
+        CfgTier prospect = p.getCfgProspect();
+        CfgTierType typeTiers = Champs.de(prospect, CfgTier::getCfgTierType);
+        CfgTier commercial = p.getCfgCommercial();
+        CfgTier proposeur = p.getCfgProposer();
+        ComProspectionOrigin origine = p.getComProspectionOrigin();
+        ComProspectionOriginSupport origineSupport = p.getComProspectionOriginSupport();
+        ComProspectionKind etape = p.getComProspectionKind();
+        StkVocation vocation = p.getStkVocation();
+        ComActionMessageType typeContact = p.getComActionMessageType();
+        ComAction actionCommerciale = p.getComAction();
+        ComProspectionClosingReason raisonFermeture = p.getComProspectionClosingReason();
+        CfgTranche tranche = p.getStkHierarchy();
+        StkItem article = p.getStkItem();
+        AdmCountry pays = p.getAdmCountry();
+        // Société : dérivée de la tranche (CfgTranche → CfgProject → CfgCompany), exactement comme
+        // le fait ComSaleProspectionView. Elle n'est jamais saisie sur la prospection. Contrairement
+        // à la liste, rien n'est ici conditionné à une sélection de colonnes : la fiche sert un
+        // enregistrement unique, les deux chargements paresseux sont payés une fois, pas par ligne.
+        CfgCompany societe = Champs.de(tranche, CfgTranche::getCfgProject, CfgProject::getCfgCompany);
         return new ProspectionDetailDto(
                 p.getId(),
                 p.getCode(),
@@ -1233,24 +1261,38 @@ public class ProspectionService {
                 p.getTempDescription(),
                 p.getTempTel(),
                 p.getTempEMail(),
-                p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                TierNomFormatter.nom(p.getCfgProspect()),
-                p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                TierNomFormatter.nom(p.getCfgCommercial()),
-                p.getCfgProposer() != null ? p.getCfgProposer().getId() : null,
-                TierNomFormatter.nom(p.getCfgProposer()),
-                p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getId() : null,
-                p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getDescription() : null,
-                p.getComProspectionOriginSupport() != null ? p.getComProspectionOriginSupport().getId() : null,
-                p.getComProspectionOriginSupport() != null ? p.getComProspectionOriginSupport().getDescription() : null,
-                p.getComProspectionKind() != null ? p.getComProspectionKind().getId() : null,
-                p.getComProspectionKind() != null ? p.getComProspectionKind().getDescription() : null,
-                p.getStkVocation() != null ? p.getStkVocation().getId() : null,
-                p.getStkVocation() != null ? p.getStkVocation().getDescription() : null,
-                p.getComActionMessageType() != null ? p.getComActionMessageType().getId() : null,
-                p.getComActionMessageType() != null ? p.getComActionMessageType().getDescription() : null,
-                p.getComAction() != null ? p.getComAction().getId() : null,
-                p.getComAction() != null ? p.getComAction().getDescription() : null,
+                Champs.de(prospect, CfgTier::getId),
+                TierNomFormatter.nom(prospect),
+                Champs.de(prospect, CfgTier::getCode),
+                Champs.de(prospect, CfgTier::getMobile),
+                Champs.de(prospect, CfgTier::getMobileIndicatif),
+                Champs.de(prospect, CfgTier::getEMail),
+                Champs.de(typeTiers, CfgTierType::getId),
+                Champs.de(typeTiers, CfgTierType::getCode),
+                Champs.de(typeTiers, CfgTierType::getDescription),
+                Champs.de(commercial, CfgTier::getId),
+                TierNomFormatter.nom(commercial),
+                Champs.de(commercial, CfgTier::getCode),
+                Champs.de(proposeur, CfgTier::getId),
+                TierNomFormatter.nom(proposeur),
+                Champs.de(origine, ComProspectionOrigin::getId),
+                Champs.de(origine, ComProspectionOrigin::getDescription),
+                Champs.de(origine, ComProspectionOrigin::getCode),
+                Champs.de(origineSupport, ComProspectionOriginSupport::getId),
+                Champs.de(origineSupport, ComProspectionOriginSupport::getDescription),
+                Champs.de(origineSupport, ComProspectionOriginSupport::getCode),
+                Champs.de(etape, ComProspectionKind::getId),
+                Champs.de(etape, ComProspectionKind::getDescription),
+                Champs.de(etape, ComProspectionKind::getCode),
+                Champs.de(vocation, StkVocation::getId),
+                Champs.de(vocation, StkVocation::getDescription),
+                Champs.de(vocation, StkVocation::getCode),
+                Champs.de(typeContact, ComActionMessageType::getId),
+                Champs.de(typeContact, ComActionMessageType::getDescription),
+                Champs.de(typeContact, ComActionMessageType::getCode),
+                Champs.de(actionCommerciale, ComAction::getId),
+                Champs.de(actionCommerciale, ComAction::getDescription),
+                Champs.de(actionCommerciale, ComAction::getCode),
                 p.getNotes(),
                 p.getArea(),
                 p.getAreaTo(),
@@ -1262,16 +1304,29 @@ public class ProspectionService {
                 p.getFundingOther(),
                 p.getIsClosed(),
                 p.getClosingDate(),
-                p.getComProspectionClosingReason() != null ? p.getComProspectionClosingReason().getId() : null,
-                p.getComProspectionClosingReason() != null ? p.getComProspectionClosingReason().getDescription() : null,
+                Champs.de(raisonFermeture, ComProspectionClosingReason::getId),
+                Champs.de(raisonFermeture, ComProspectionClosingReason::getDescription),
+                Champs.de(raisonFermeture, ComProspectionClosingReason::getCode),
                 p.getClosingReasonText(),
                 p.getIsOldCustomer(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null,
-                p.getStkItem() != null ? p.getStkItem().getId() : null,
-                p.getStkItem() != null ? p.getStkItem().getCode() : null,
-                p.getStkItem() != null ? p.getStkItem().getDescription() : null,
+                Champs.de(tranche, CfgTranche::getId),
+                Champs.de(tranche, CfgTranche::getCode),
+                Champs.de(tranche, CfgTranche::getDescription),
+                Champs.de(article, StkItem::getId),
+                Champs.de(article, StkItem::getCode),
+                Champs.de(article, StkItem::getDescription),
+                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getDescription),
+                Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
+                Champs.de(societe, CfgCompany::getId),
+                Champs.de(societe, CfgCompany::getCode),
+                Champs.de(societe, CfgCompany::getDescription),
+                Champs.de(pays, AdmCountry::getId),
+                Champs.de(pays, AdmCountry::getCode),
+                Champs.de(pays, AdmCountry::getDescription),
+                p.getUserCreate(),
+                p.getUserCreateDateTime(),
+                p.getUserUpdate(),
+                p.getUserUpdateDateTime(),
                 p.getStrEntityId(),
                 type != null ? type.getCode() : null,
                 type != null ? type.getDescription() : null,
