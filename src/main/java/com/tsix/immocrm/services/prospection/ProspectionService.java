@@ -34,6 +34,7 @@ import com.tsix.immocrm.entities.com.ComProspectionOrigin;
 import com.tsix.immocrm.entities.com.ComProspectionOriginSupport;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -58,6 +59,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
@@ -83,6 +85,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -126,6 +129,12 @@ public class ProspectionService {
      * (26 ms) : ne jamais l'utiliser pour une liste.
      */
     private final ComSaleProspectionViewRepository prospectionViewRepository;
+    /**
+     * Référentiel des types de document du légataire (162 lignes) — voir
+     * {@code instructions/FEATURE-strentity-prospection.md}. Résout {@code StrEntityId} en code et
+     * libellé, et sert le filtre {@code ?typeProspection=}.
+     */
+    private final StrEntityRepository strEntityRepository;
     private final ProspectService prospectService;
     private final CfgTierRepository tierRepository;
     private final ComProspectionKindRepository prospectionKindRepository;
@@ -170,8 +179,10 @@ public class ProspectionService {
                                PerimetreCommercialService perimetreService,
                                AdmUserRepository userRepository,
                                ComSaleProspectionViewRepository prospectionViewRepository,
+                               StrEntityRepository strEntityRepository,
                                ApplicationEventPublisher publisher) {
         this.prospectionViewRepository = prospectionViewRepository;
+        this.strEntityRepository = strEntityRepository;
         this.publisher = publisher;
         this.userRepository = userRepository;
         this.perimetreService = perimetreService;
@@ -339,6 +350,18 @@ public class ProspectionService {
                         ? cb.isTrue(root.get("isOldCustomer"))
                         : cb.or(cb.isFalse(root.get("isOldCustomer")), cb.isNull(root.get("isOldCustomer"))));
             }
+            // -- Type de document légataire. Sous-requête sur StrEntity plutôt que résolution
+            //    préalable des codes en identifiants : ça garde la méthode statique, et surtout ça
+            //    évite qu'un code inconnu doive être distingué d'un code sans correspondance — les
+            //    deux rendent un résultat vide, ce qui est le comportement voulu.
+            //    Une prospection sans StrEntityId est écartée d'office (NULL IN (…) est inconnu),
+            //    ce qui est correct : elle n'a pas de type.
+            if (estRenseignee(f.typeProspection())) {
+                Subquery<UUID> types = query.subquery(UUID.class);
+                Root<StrEntity> typeRoot = types.from(StrEntity.class);
+                types.select(typeRoot.get("id")).where(typeRoot.get("code").in(f.typeProspection()));
+                predicates.add(root.get("strEntityId").in(types));
+            }
             // -- Portés par la vue : une seule sous-requête, quel que soit le nombre de critères.
             if (f.exigeLaVue()) {
                 predicates.add(root.get("id").in(sousRequeteVue(f, query, cb)));
@@ -391,8 +414,13 @@ public class ProspectionService {
         return sousRequete;
     }
 
-    private static boolean estRenseignee(List<UUID> ids) {
-        return ids != null && !ids.isEmpty();
+    /**
+     * Générique plutôt que typée {@code List<UUID>} : le filtre de type de document porte des
+     * codes ({@code List<String>}), et dupliquer la méthode pour une différence de paramètre de
+     * type aurait été le genre de copie qui finit par diverger.
+     */
+    private static boolean estRenseignee(List<?> valeurs) {
+        return valeurs != null && !valeurs.isEmpty();
     }
 
     public ProspectionDetailDto findById(UUID id) {
@@ -414,7 +442,14 @@ public class ProspectionService {
         ActiviteProspectionDto activite = prospectionViewRepository.findById(p.getId())
                 .map(ProspectionService::toActivite)
                 .orElse(null);
-        return toDetail(p, activite);
+        // Contrairement à la liste, la fiche sert toujours le type : il n'y a pas de sélection de
+        // colonnes ici, et la requête porte sur une clé unique d'une table de 162 lignes. Reste
+        // null sur les 4 prospections dépourvues de StrEntityId — celles-là mêmes qui sont
+        // invisibles du logiciel de bureau.
+        StrEntity type = p.getStrEntityId() == null
+                ? null
+                : strEntityRepository.findById(p.getStrEntityId()).orElse(null);
+        return toDetail(p, activite, type);
     }
 
     /**
@@ -1006,7 +1041,38 @@ public class ProspectionService {
                 ? Map.of()
                 : prospectionViewRepository.findByIdIn(ids).stream()
                         .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
-        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()), colonnes));
+        // Même discipline pour le référentiel StrEntity : résolu seulement si l'une des trois
+        // colonnes de type est demandée. Les identifiants sont dédoublonnés — en pratique un ou
+        // deux types distincts sur une page de 20, la quasi-totalité des lignes portant
+        // ComProspection — donc la requête porte sur une poignée de clés d'une table de 162 lignes.
+        Map<UUID, StrEntity> types = chargerTypes(page.getContent(), colonnes);
+        return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()),
+                typeDe(types, p), colonnes));
+    }
+
+    /**
+     * Types de document de la page, indexés par identifiant — vide si aucune colonne de type n'est
+     * demandée, auquel cas aucune requête n'est émise.
+     */
+    private Map<UUID, StrEntity> chargerTypes(List<ComProspection> prospections,
+                                              Set<ColonneProspection> colonnes) {
+        if (!ColonneProspection.exigeLeTypeProspection(colonnes)) {
+            return Map.of();
+        }
+        Set<UUID> typeIds = prospections.stream()
+                .map(ComProspection::getStrEntityId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (typeIds.isEmpty()) {
+            return Map.of();
+        }
+        return strEntityRepository.findByIdIn(typeIds).stream()
+                .collect(Collectors.toMap(StrEntity::getId, e -> e));
+    }
+
+    /** Type d'une prospection, ou {@code null} si elle n'en porte pas — 4 lignes en base réelle. */
+    private static StrEntity typeDe(Map<UUID, StrEntity> types, ComProspection p) {
+        return p.getStrEntityId() == null ? null : types.get(p.getStrEntityId());
     }
 
     /**
@@ -1057,16 +1123,21 @@ public class ProspectionService {
      * {@link #versListe}.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
-        return toListItem(p, null, null, Set.of());
+        return toListItem(p, null, null, null, Set.of());
     }
 
     /**
-     * @param vue ligne de {@code ComSaleProspectionView}, ou {@code null} quand aucune colonne
-     *            d'activité n'est demandée — ou que la prospection n'y figure pas
-     *            (pré-prospection, ou {@code StrEntityId} absent).
+     * @param vue  ligne de {@code ComSaleProspectionView}, ou {@code null} quand aucune colonne
+     *             d'activité n'est demandée — ou que la prospection n'y figure pas
+     *             (pré-prospection, ou {@code StrEntityId} absent).
+     * @param type type de document légataire, ou {@code null} quand aucune colonne de type n'est
+     *             demandée — ou que la prospection ne porte pas de {@code StrEntityId}. Les deux
+     *             cas produisent la même sortie ; c'est la sélection de colonnes, et non le DTO,
+     *             qui distingue « non demandé » de « absent ».
      */
     private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
                                                      ComSaleProspectionView vue,
+                                                     StrEntity type,
                                                      Set<ColonneProspection> colonnes) {
         // Les associations du lot B ne sont déréférencées QUE si la colonne est demandée : chacune
         // est un chargement paresseux de plus par ligne (deux pour la société, qui traverse
@@ -1139,7 +1210,13 @@ public class ProspectionService {
                 p.getUserCreate(),
                 p.getUserCreateDateTime(),
                 p.getUserUpdate(),
-                p.getUserUpdateDateTime()
+                p.getUserUpdateDateTime(),
+                // typeProspectionId vient de la prospection elle-même, pas du référentiel : il est
+                // connu sans jointure. Mais il reste conditionné à la sélection, sinon il
+                // apparaîtrait alors que les deux autres champs du groupe seraient nuls.
+                colonnes.contains(ColonneProspection.TYPE_PROSPECTION_ID) ? p.getStrEntityId() : null,
+                type != null ? type.getCode() : null,
+                type != null ? type.getDescription() : null
         );
     }
 
@@ -1147,7 +1224,8 @@ public class ProspectionService {
      * Détail « nu », sans le bloc activité. Passer par {@link #detailEnrichi(ComProspection)} pour
      * une réponse d'API : c'est lui qui interroge la vue et remplit {@code activite}.
      */
-    private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite) {
+    private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite,
+                                                 StrEntity type) {
         return new ProspectionDetailDto(
                 p.getId(),
                 p.getCode(),
@@ -1194,6 +1272,9 @@ public class ProspectionService {
                 p.getStkItem() != null ? p.getStkItem().getId() : null,
                 p.getStkItem() != null ? p.getStkItem().getCode() : null,
                 p.getStkItem() != null ? p.getStkItem().getDescription() : null,
+                p.getStrEntityId(),
+                type != null ? type.getCode() : null,
+                type != null ? type.getDescription() : null,
                 activite
         );
     }

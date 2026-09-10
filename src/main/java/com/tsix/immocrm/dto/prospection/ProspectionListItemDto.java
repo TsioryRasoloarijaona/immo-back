@@ -202,7 +202,31 @@ public record ProspectionListItemDto(
         String modifiePar,
 
         @Schema(description = "Date de dernière modification. 100 %.")
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+
+        // ------------------------------------------------------------------
+        // Type de document du légataire (StrEntity). Servi depuis les entités, hors sélection
+        // par défaut. Voir instructions/FEATURE-strentity-prospection.md.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Identifiant du type de document légataire (`StrEntity`). 100 % — "
+                + "sauf 4 lignes en base réelle.")
+        UUID typeProspectionId,
+
+        @Schema(description = "Code du type de document — **c'est ce champ qu'il faut tester**, "
+                + "jamais le libellé. `ComProspection`, `ComPreProspection`, `RntProspection`.\n\n"
+                + "Attention : cette liste applique une **heuristique** "
+                + "(`CfgProspectId`/`CfgCommercialId`) qui n'est pas celle du légataire. Elle y "
+                + "laisse donc **830 lignes de code `ComPreProspection`** et 4 de code "
+                + "`RntProspection` (location). Ce champ est précisément ce qui rend l'écart "
+                + "visible et comptable ; il ne le corrige pas.",
+                example = "ComProspection")
+        String typeProspectionCode,
+
+        @Schema(description = "Libellé d'affichage du type, traduit. Ne pas s'en servir pour "
+                + "tester le type.",
+                example = "Prospection vente")
+        String typeProspection
 ) {
 
     /**

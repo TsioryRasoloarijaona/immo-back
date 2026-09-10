@@ -98,6 +98,20 @@ public enum ColonneProspection {
     SOCIETE_CODE("societeCode", "Société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
     SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
 
+    // ------------------------------------------------------------------
+    // Type de document du légataire (StrEntity) — le discriminant réel entre prospection de
+    // vente, pré-prospection et prospection de location. Peuplé à 100 % sur la vue, et la
+    // seule colonne dans ce cas que nos GET ne renvoyaient pas.
+    //
+    // Source.ENTITE et non VUE : la valeur vient de ComProspection.StrEntityId résolu contre
+    // StrEntity, donc demander ces colonnes ne doit PAS déclencher la requête de vue. Elle
+    // déclenche en revanche la résolution du référentiel — voir exigeLeTypeProspection().
+    // Voir instructions/FEATURE-strentity-prospection.md.
+    // ------------------------------------------------------------------
+    TYPE_PROSPECTION_ID("typeProspectionId", "Id type", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    TYPE_PROSPECTION_CODE("typeProspectionCode", "Code type", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    TYPE_PROSPECTION("typeProspection", "Type de prospection", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+
     // -- Activité, calculée par la base légataire. Hors sélection par défaut : ajouter un
     //    de ces champs déclenche la requête de vue, absente sinon.
     JOURS_INACTIVITE("joursInactivite", "Jours d'inactivité", Groupe.ACTIVITE, TypeColonne.NOMBRE, false, Source.VUE),
@@ -218,6 +232,19 @@ public enum ColonneProspection {
     /** Vrai si la sélection oblige à interroger {@code ComSaleProspectionView}. */
     public static boolean exigeLaVue(Set<ColonneProspection> selection) {
         return selection.stream().anyMatch(c -> c.source == Source.VUE);
+    }
+
+    /**
+     * Vrai si la sélection oblige à résoudre le référentiel {@code StrEntity}.
+     *
+     * <p>Distinct de {@link #exigeLaVue(Set)} : ces colonnes viennent des entités, pas de la vue.
+     * Sans ce test, une liste par défaut paierait une requête de référentiel pour trois champs que
+     * personne n'a demandés — le même travers que la sélection par défaut évite pour la vue.
+     */
+    public static boolean exigeLeTypeProspection(Set<ColonneProspection> selection) {
+        return selection.contains(TYPE_PROSPECTION_ID)
+                || selection.contains(TYPE_PROSPECTION_CODE)
+                || selection.contains(TYPE_PROSPECTION);
     }
 
     /** Nom inconnu passé à {@code ?colonnes=} — traduit en 400 par le GlobalExceptionHandler. */
