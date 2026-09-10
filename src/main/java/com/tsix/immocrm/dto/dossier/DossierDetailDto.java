@@ -42,6 +42,80 @@ public record DossierDetailDto(
         @Schema(description = "Identifiant de la prospection à l'origine du dossier (ComFolder.ComProspectionId).")
         UUID prospectionId,
         @Schema(description = "Code de la prospection à l'origine du dossier — pour la référence cascade et le lien cliquable vers la prospection depuis le dossier (`GET /api/prospections/{prospectionId}`).")
-        String prospectionCode
+        String prospectionCode,
+
+        // ------------------------------------------------------------------
+        // Contexte patrimonial — voir instructions/FEATURE-contexte-dossier.md §2.1.
+        // Le dossier servait son article sans jamais dire OÙ il se trouve.
+        // Chaîne : article → tranche → projet → société, vérifiée à 358/358.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Identifiant du projet. 100 %. **Provient de la tranche de "
+                + "l'article, pas de l'article** : `StkItem.CfgProjectId` est `null` sur les 358 "
+                + "articles de dossier réels.")
+        UUID projetId,
+
+        @Schema(description = "Code du projet. 100 %.", example = "CITEB")
+        String projetCode,
+
+        @Schema(description = "Libellé du projet. 100 %.")
+        String projetLibelle,
+
+        @Schema(description = "Identifiant de la tranche de l'article principal. 100 %.")
+        UUID trancheId,
+
+        @Schema(description = "Code de la tranche. 100 %.")
+        String trancheCode,
+
+        @Schema(description = "Libellé de la tranche. 100 %.")
+        String trancheLibelle,
+
+        @Schema(description = "Identifiant de la société / entité juridique. 100 %.")
+        UUID societeId,
+
+        @Schema(description = "Code de la société. 100 %.", example = "ADMOD")
+        String societeCode,
+
+        @Schema(description = "Libellé de la société. 100 %.")
+        String societeLibelle,
+
+        @Schema(description = "Identifiant de la vocation du dossier. 100 %.")
+        UUID vocationId,
+
+        @Schema(description = "Code de la vocation. 100 %.")
+        String vocationCode,
+
+        @Schema(description = "Libellé de la vocation. 100 %.")
+        String vocationLibelle,
+
+        // ------------------------------------------------------------------
+        // Piste d'audit — §2.3. Colonnes déjà mappées sur ComFolder.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Auteur de la création du dossier. 100 % des 358 dossiers réels.")
+        String creePar,
+
+        @Schema(description = "Date de création. 100 %.")
+        LocalDateTime creeLe,
+
+        @Schema(description = "Auteur de la dernière modification. 100 %.")
+        String modifiePar,
+
+        @Schema(description = "Date de dernière modification. 100 %.")
+        LocalDateTime modifieLe,
+
+        // ------------------------------------------------------------------
+        // Origine — §2.4. Le dossier ne renvoyait que l'id et le code de la prospection.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Étape de la prospection d'origine. `null` sur les 3 dossiers (sur "
+                + "358) qui n'ont pas de prospection — cas réel, pas une anomalie.")
+        String etapeProspection,
+
+        @Schema(description = "Origine de la prospection. 99,2 %.", example = "FACEBOOK")
+        String origineProspection,
+
+        @Schema(description = "Date de la prospection d'origine. 99,2 %.")
+        LocalDateTime dateProspection
 ) {
 }
