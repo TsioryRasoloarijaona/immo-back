@@ -1041,6 +1041,34 @@ public class ProspectionService {
         message.setIsIn(request.entrante() != null ? request.entrante() : true);
         message.setAlertValidityDate(request.dateAlerte());
 
+        // ------------------------------------------------------------------
+        // Les quatre drapeaux du légataire, et le tiers. Nous ne les posions pas, et ce n'était
+        // pas anodin : ComSaleProspectionView calcule LastCommunicationDate et
+        // LastCommunicationResult avec `AND IsSystem = 0`. Un NULL ne satisfait pas `= 0`, donc
+        // nos interactions étaient EXCLUES du « dernier échange » — dans l'écran du logiciel de
+        // bureau comme dans notre propre liste, qui lit cette colonne depuis la vue.
+        //
+        // Mesuré sur yesRems avant correctif : 14 lignes à IsSystem NULL, toutes écrites par
+        // cette API (UserCreate nul, note dans Description), touchant 8 prospections dont le
+        // dernier échange restait faux. Script de rattrapage :
+        // src/main/resources/db/migration/007_ComActionMessage_drapeaux_api.sql
+        //
+        // Les valeurs suivent la convention mesurée sur les 43 540 interactions manuelles.
+        // ------------------------------------------------------------------
+
+        // 0 = saisie humaine. 1 est réservé aux alertes que le légataire génère lui-même
+        // (4 431 lignes), et c'est exactement ce que la vue écarte du dernier échange.
+        message.setIsSystem(false);
+        // 43 493 lignes sur 43 540 sont à 0 ; le 1 signale une note à lire, pas une interaction.
+        message.setIsNotRead(false);
+        message.setIsUnpaid(false);
+        // 0 à la création. Le passage à 1 est un acte distinct — c'est la transformation en vente
+        // qui désarme les relances de la prospection (voir DossierService.create).
+        message.setWithoutRevival(false);
+        // Renseigné sur 42 028 des 43 540 interactions manuelles (96,5 %). Le prospect de la
+        // prospection : la même valeur que le légataire y met.
+        message.setCfgTier(prospection.getCfgProspect());
+
         if (request.actionTypeId() != null) {
             ComActionMessageType actionType = actionMessageTypeRepository.findById(request.actionTypeId())
                     .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.actionTypeId()));
