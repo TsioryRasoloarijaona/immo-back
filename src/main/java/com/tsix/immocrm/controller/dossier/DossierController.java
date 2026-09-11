@@ -314,6 +314,12 @@ public class DossierController {
             @Parameter(description = "Ordre des groupes : LIBELLE (croissant, défaut) ou NOMBRE "
                     + "(effectif décroissant).", example = "NOMBRE")
             @RequestParam(required = false) TriGroupe tri,
+            @Parameter(description = "Inclure le groupe des lignes dont la colonne groupée est "
+                    + "vide. **Faux par défaut** : l'écran veut les valeurs qui existent, et sur "
+                    + "une colonne peu renseignée le groupe vide écraserait tous les autres. "
+                    + "Passer `true` pour le récupérer — la somme des effectifs retombe alors sur "
+                    + "le `totalElements` de la liste non groupée.", example = "false")
+            @RequestParam(defaultValue = "false") boolean inclureSansValeur,
             @RequestParam(required = false) List<String> statut,
             @RequestParam(required = false) UUID commercial,
             @RequestParam(required = false) UUID projet,
@@ -328,7 +334,7 @@ public class DossierController {
                 dateDebut, dateFin, search, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneDossier.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, pageable));
+                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable));
     }
 
     @GetMapping("/{id}")

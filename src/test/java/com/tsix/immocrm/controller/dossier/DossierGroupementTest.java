@@ -176,10 +176,13 @@ class DossierGroupementTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(4));
 
-        // 3 groupes : A, B, et celui des dossiers sans statut.
+        // 3 groupes : A, B, et celui des dossiers sans statut. `inclureSansValeur=true` est
+        // indispensable ici : c'est ce qui rend la somme des effectifs comparable au total de la
+        // liste. Sans lui l'invariant ne tient pas — et ne doit pas tenir.
         mockMvc.perform(get("/api/dossiers/groupes")
                         .param("groupBy", "statut")
                         .param("agregats", "prix")
+                        .param("inclureSansValeur", "true")
                         .param("search", "GRPC-"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(3))
@@ -343,13 +346,6 @@ class DossierGroupementTest {
     // ------------------------------------------------------------------
 
     @Test
-    void groupBy_surColonneNonGroupable_rend400() throws Exception {
-        // `prix` est agrégeable, pas groupable : 190 valeurs distinctes sur 358 dossiers réels.
-        mockMvc.perform(get("/api/dossiers/groupes").param("groupBy", "prix"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     void groupBy_surColonneInconnue_rend400() throws Exception {
         mockMvc.perform(get("/api/dossiers/groupes").param("groupBy", "colonneQuiNExistePas"))
                 .andExpect(status().isBadRequest());
@@ -380,10 +376,96 @@ class DossierGroupementTest {
     }
 
     @Test
-    void groupeColonne_nonGroupable_rend400() throws Exception {
+    void groupeColonne_inconnue_rend400() throws Exception {
         mockMvc.perform(get("/api/dossiers")
-                        .param("groupeColonne", "prix")
-                        .param("groupeValeur", "1000"))
+                        .param("groupeColonne", "colonneQuiNExistePas")
+                        .param("groupeValeur", "x"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ------------------------------------------------------------------
+    // Le groupe sans valeur est écarté par défaut
+    // ------------------------------------------------------------------
+
+    /**
+     * Le comportement demandé : « juste les lignes qui existent ». Sur une colonne peu renseignée,
+     * le groupe vide écraserait tous les autres — 11 186 prospections sans dernière visite sur
+     * 14 118, mesuré. Il reste récupérable par {@code inclureSansValeur=true}.
+     */
+    @Test
+    void groupeSansValeur_ecarteParDefaut_recuperableSurDemande() throws Exception {
+        StrStatus statut = newStatut("GRP-SV-PRESENT");
+        newFolder("GRPL-1", statut, new BigDecimal("100.00"));
+        newFolder("GRPL-2", null, new BigDecimal("200.00"));
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "statut")
+                        .param("search", "GRPL-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[?(@.cle == null)]").doesNotExist());
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "statut")
+                        .param("inclureSansValeur", "true")
+                        .param("search", "GRPL-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[?(@.cle == null)].nombre").value(1));
+    }
+
+    // ------------------------------------------------------------------
+    // Toute colonne est groupable — y compris celles écartées au lot précédent
+    // ------------------------------------------------------------------
+
+    /**
+     * Un montant est clé de groupe <strong>et</strong> total. Il avait été refusé sur sa
+     * cardinalité (190 prix distincts sur 358 dossiers) ; c'est au client de juger, pas au
+     * catalogue — un portefeuille filtré sur une tranche n'a que quelques prix distincts.
+     */
+    @Test
+    void groupeParMontant_estGroupableEtAgregeable() throws Exception {
+        StrStatus statut = newStatut("GRP-MT");
+        newFolder("GRPM-1", statut, new BigDecimal("500000.00"));
+        newFolder("GRPM-2", statut, new BigDecimal("500000.00"));
+        newFolder("GRPM-3", statut, new BigDecimal("750000.00"));
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "prix")
+                        .param("agregats", "prix")
+                        .param("search", "GRPM-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[?(@.cle==500000.00)].nombre").value(2))
+                .andExpect(jsonPath("$.content[?(@.cle==500000.00)].agregats.prix").value(1000000.00))
+                .andExpect(jsonPath("$.content[?(@.cle==750000.00)].nombre").value(1));
+    }
+
+    /** Les identifiants aussi : même partition que leur jumelle `*Nom`, clés en UUID. */
+    @Test
+    void groupeParIdentifiant_estGroupable() throws Exception {
+        CfgTier client = newTier("TIER-GRP-ID", null, null, "ZAHIDI");
+        ComFolder folder = newFolder("GRPN-1", null, new BigDecimal("100.00"));
+        folder.setCfgCustomer(client);
+        folderRepository.save(folder);
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "clientId")
+                        .param("search", "GRPN-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].cle").value(client.getId().toString()));
+    }
+
+    @Test
+    void groupeParCode_estGroupable() throws Exception {
+        newFolder("GRPO-1", null, new BigDecimal("100.00"));
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "code")
+                        .param("search", "GRPO-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].cle").value("GRPO-1"));
     }
 }

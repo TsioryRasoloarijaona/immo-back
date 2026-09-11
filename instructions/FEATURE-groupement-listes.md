@@ -1,5 +1,11 @@
 # FEATURE — Groupement et agrégats sur les listes
 
+> **⚠️ §2 et §4.1 de ce document sont périmés.** Le lot suivant
+> (`FEATURE-groupement-toutes-colonnes.md`) a renversé deux décisions prises ici :
+> les montants **sont** groupables, et le groupe sans valeur est **écarté par défaut**.
+> Le reste du document — §1 (pourquoi c'est un endpoint), §3, §4.2, §5 (l'invariant) — reste exact
+> et fait toujours foi.
+
 Reproduit la *group-by band* du logiciel de bureau (OMRAN Estate) sur les trois listes
 `Dossiers de vente`, `Prospections vente` et `Pré-Prospections` : l'utilisateur choisit une
 colonne, la liste se replie en groupes, et chaque groupe porte son effectif et ses totaux.

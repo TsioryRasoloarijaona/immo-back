@@ -27,15 +27,20 @@ import java.util.Set;
 public enum ColonneProspection implements Colonne {
 
     // -- Identité. Colonnes historiques, servies depuis ComProspection.
-    ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
+    ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("id")),
+    CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("code")),
     DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true, Source.ENTITE,
             Chemin.date("docDate")),
-    TEMP_DESCRIPTION("tempDescription", "Description saisie", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    PROSPECT_ID("prospectId", "Id prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
+    TEMP_DESCRIPTION("tempDescription", "Description saisie", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("tempDescription")),
+    PROSPECT_ID("prospectId", "Id prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("cfgProspect.id")),
     PROSPECT_NOM("prospectNom", "Prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
             Chemin.tier("cfgProspect")),
-    COMMERCIAL_ID("commercialId", "Id commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
+    COMMERCIAL_ID("commercialId", "Id commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("cfgCommercial.id")),
     COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
             Chemin.tier("cfgCommercial")),
     // `code` et non `description` : c'est ce que sert le mappeur de liste, et c'est aussi ce
@@ -49,13 +54,17 @@ public enum ColonneProspection implements Colonne {
             Chemin.groupable("isClosed")),
 
     // -- Contact et relance.
-    TELEPHONE("telephone", "Téléphone", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE),
-    EMAIL("email", "Email", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE),
+    // Repli fiche > saisie, identique au mappeur de liste — voir Chemin.repli.
+    TELEPHONE("telephone", "Téléphone", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.repli("cfgProspect.mobile", "cfgProspect.phone", "tempTel")),
+    EMAIL("email", "Email", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.repli("cfgProspect.eMail", "tempEMail")),
     DERNIERE_ALERTE_DATE("derniereAlerteDate", "Relance prévue", Groupe.CONTACT, TypeColonne.DATE, true, Source.ENTITE),
     DERNIERE_ALERTE_MESSAGE("derniereAlerteMessage", "Note de relance", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE),
 
     // -- Contexte et financier.
-    TRANCHE_ID("trancheId", "Id tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
+    TRANCHE_ID("trancheId", "Id tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.id")),
     TRANCHE_CODE("trancheCode", "Tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE,
             Chemin.groupable("stkHierarchy.code")),
     TRANCHE_DESCRIPTION("trancheDescription", "Libellé tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE,
@@ -70,9 +79,9 @@ public enum ColonneProspection implements Colonne {
     //    Agrégeables malgré tout : sommer une colonne morte rend 0, ce qui est exact. C'est
     //    l'AFFICHER par défaut qui était le problème, pas la calculer sur demande explicite.
     PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, false, Source.ENTITE,
-            Chemin.agregeable("price")),
+            Chemin.groupableEtAgregeable("price")),
     SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, false, Source.ENTITE,
-            Chemin.agregeable("area")),
+            Chemin.groupableEtAgregeable("area")),
 
     // ------------------------------------------------------------------
     // Colonnes ajoutées au lot B — présentes dans la vue légataire (donc affichables par le
@@ -82,11 +91,16 @@ public enum ColonneProspection implements Colonne {
     // ------------------------------------------------------------------
 
     // Scalaires ou associations déjà déréférencées par la liste : coût nul.
-    PROSPECT_CODE("prospectCode", "Code prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
-    MOBILE_PROSPECT("mobileProspect", "Mobile (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
-    INDICATIF_MOBILE("indicatifMobile", "Indicatif", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
-    EMAIL_FICHE("emailFiche", "Email (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
-    COMMERCIAL_CODE("commercialCode", "Code commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    PROSPECT_CODE("prospectCode", "Code prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgProspect.code")),
+    MOBILE_PROSPECT("mobileProspect", "Mobile (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgProspect.mobile")),
+    INDICATIF_MOBILE("indicatifMobile", "Indicatif", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgProspect.mobileIndicatif")),
+    EMAIL_FICHE("emailFiche", "Email (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgProspect.eMail")),
+    COMMERCIAL_CODE("commercialCode", "Code commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgCommercial.code")),
     ANCIEN_CLIENT("ancienClient", "Ancien client", Groupe.IDENTITE, TypeColonne.BOOLEEN, false, Source.ENTITE,
             Chemin.groupable("isOldCustomer")),
     DATE_FERMETURE("dateFermeture", "Date de clôture", Groupe.CLOTURE, TypeColonne.DATE, false, Source.ENTITE,
@@ -115,7 +129,8 @@ public enum ColonneProspection implements Colonne {
             Chemin.groupable("admCountry.description")),
 
     // Deux jointures de plus (tranche → projet → société), même règle.
-    SOCIETE_ID("societeId", "Id société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+    SOCIETE_ID("societeId", "Id société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.cfgProject.cfgCompany.id")),
     SOCIETE_CODE("societeCode", "Société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
             Chemin.groupable("stkHierarchy.cfgProject.cfgCompany.code")),
     SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
@@ -131,7 +146,8 @@ public enum ColonneProspection implements Colonne {
     // déclenche en revanche la résolution du référentiel — voir exigeLeTypeProspection().
     // Voir instructions/FEATURE-strentity-prospection.md.
     // ------------------------------------------------------------------
-    TYPE_PROSPECTION_ID("typeProspectionId", "Id type", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
+    TYPE_PROSPECTION_ID("typeProspectionId", "Id type", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("strEntityId")),
     TYPE_PROSPECTION_CODE("typeProspectionCode", "Code type", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
     TYPE_PROSPECTION("typeProspection", "Type de prospection", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
 
@@ -142,13 +158,19 @@ public enum ColonneProspection implements Colonne {
     DERNIERE_ACTION_DATE("derniereActionDate", "Dernière action", Groupe.ACTIVITE, TypeColonne.DATE, false, Source.VUE),
     DERNIERE_COMMUNICATION_DATE("derniereCommunicationDate", "Dernier échange", Groupe.ACTIVITE, TypeColonne.DATE, false, Source.VUE),
     DERNIERE_COMMUNICATION_RESULTAT("derniereCommunicationResultat", "Résultat du dernier échange", Groupe.ACTIVITE, TypeColonne.TEXTE, false, Source.VUE),
-    NB_VISITES("nbVisites", "Visites", Groupe.ACTIVITE, TypeColonne.NOMBRE, false, Source.VUE),
-    DERNIERE_VISITE_DATE("derniereVisiteDate", "Dernière visite", Groupe.ACTIVITE, TypeColonne.DATE, false, Source.VUE),
+    NB_VISITES("nbVisites", "Visites", Groupe.ACTIVITE, TypeColonne.NOMBRE, false, Source.VUE,
+            Chemin.groupableEtAgregeable("visites.nbrVisit")),
+    DERNIERE_VISITE_DATE("derniereVisiteDate", "Dernière visite", Groupe.ACTIVITE, TypeColonne.DATE, false, Source.VUE,
+            Chemin.date("visites.lastVisitDate")),
 
-    PROJET_ID("projetId", "Id projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE),
-    PROJET_CODE("projetCode", "Projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE),
-    PROJET_LIBELLE("projetLibelle", "Libellé projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE),
-    CIN("cin", "CIN", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.VUE),
+    PROJET_ID("projetId", "Id projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE,
+            Chemin.groupable("stkHierarchy.cfgProject.id")),
+    PROJET_CODE("projetCode", "Projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE,
+            Chemin.groupable("stkHierarchy.cfgProject.code")),
+    PROJET_LIBELLE("projetLibelle", "Libellé projet", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.VUE,
+            Chemin.groupable("stkHierarchy.cfgProject.description")),
+    CIN("cin", "CIN", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.VUE,
+            Chemin.groupable("cfgProspect.iDNumber")),
 
     // -- Conversion. Renseignées sur 2 % des lignes — c'est le taux de conversion réel.
     DOSSIER_ID("dossierId", "Id dossier", Groupe.CONVERSION, TypeColonne.TEXTE, false, Source.VUE),
