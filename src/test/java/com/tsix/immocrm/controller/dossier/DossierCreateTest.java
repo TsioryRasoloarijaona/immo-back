@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.dossier;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -15,12 +16,14 @@ import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import org.junit.jupiter.api.BeforeEach;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +33,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -49,6 +53,12 @@ class DossierCreateTest {
 
     @Autowired
     private ComProspectionRepository prospectionRepository;
+
+    @Autowired
+    private ComActionMessageRepository actionMessageRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Autowired
     private CfgTierRepository tierRepository;
@@ -155,6 +165,75 @@ class DossierCreateTest {
         org.assertj.core.api.Assertions.assertThat(
                         com.jayway.jsonpath.JsonPath.<String>read(prospectJson, "$.pieceIdentite.numero"))
                 .isEqualTo("101112131415");
+    }
+
+    /**
+     * La vente ferme la prospection et désarme ses relances.
+     *
+     * <p>Sans ça, la prospection reste <strong>active dans le pipeline</strong> après la vente :
+     * elle continue d'apparaître dans {@code GET /api/prospections}, de compter dans les tableaux
+     * de bord, et ses relances restent armées — un commercial est relancé sur une affaire déjà
+     * signée. Mesuré sur les données réelles : <b>354 des 355</b> dossiers liés à une prospection
+     * l'ont fermée, avec {@code ClosingDate} sur 354/354.
+     *
+     * <p>Le désarmement reprend le prédicat exact du logiciel de bureau : alerte présente ET non
+     * rattachée à une échéance. L'interaction liée à une {@code ComDocument} doit rester armée —
+     * c'est un rappel de paiement du dossier qui vient de naître.
+     */
+    @Test
+    void create_fermeLaProspectionEtDesarmeSesRelances() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-CLOTURE-TEST");
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-CLOTURE-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        // Une relance en cours sur la prospection : elle doit être désarmée.
+        ComActionMessage relance = new ComActionMessage();
+        relance.setId(UUID.randomUUID());
+        relance.setComProspection(prospection);
+        relance.setDocDate(LocalDateTime.now());
+        relance.setAlertValidityDate(LocalDateTime.now().plusDays(7));
+        relance.setWithoutRevival(false);
+        actionMessageRepository.save(relance);
+
+        // Une interaction SANS alerte : hors du prédicat, elle ne doit pas être touchée.
+        ComActionMessage sansAlerte = new ComActionMessage();
+        sansAlerte.setId(UUID.randomUUID());
+        sansAlerte.setComProspection(prospection);
+        sansAlerte.setDocDate(LocalDateTime.now());
+        sansAlerte.setWithoutRevival(false);
+        actionMessageRepository.save(sansAlerte);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-CLOTURE"}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        entityManager.flush();
+        entityManager.clear();
+
+        ComProspection fermee = prospectionRepository.findById(prospection.getId()).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(fermee.getIsClosed())
+                .as("la prospection transformée doit sortir du pipeline")
+                .isTrue();
+        org.assertj.core.api.Assertions.assertThat(fermee.getClosingDate()).isNotNull();
+        // Aucun motif : seules 20 des 354 clôtures réelles en portent un (5,6 %). En exiger un
+        // serait plus strict que le légataire ; en inventer un fabriquerait une statistique fausse.
+        org.assertj.core.api.Assertions.assertThat(fermee.getComProspectionClosingReason()).isNull();
+
+        org.assertj.core.api.Assertions.assertThat(
+                        actionMessageRepository.findById(relance.getId()).orElseThrow().getWithoutRevival())
+                .as("la relance armée de la prospection doit être désarmée")
+                .isTrue();
+        org.assertj.core.api.Assertions.assertThat(
+                        actionMessageRepository.findById(sansAlerte.getId()).orElseThrow().getWithoutRevival())
+                .as("une interaction sans alerte est hors du prédicat et ne doit pas bouger")
+                .isFalse();
     }
 
     @Test

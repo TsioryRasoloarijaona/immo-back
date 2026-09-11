@@ -1,9 +1,11 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +42,9 @@ class ProspectionInteractionsTest {
 
     @Autowired
     private ComActionMessageRepository actionMessageRepository;
+
+    @Autowired
+    private CfgTierRepository tierRepository;
 
     @Autowired
     private ComActionMessageCategoryRepository actionMessageCategoryRepository;
@@ -106,6 +112,78 @@ class ProspectionInteractionsTest {
                 .andExpect(jsonPath("$.description").value(org.hamcrest.Matchers.not("Relance telephonique")))
                 .andExpect(jsonPath("$.entrante").value(false))
                 .andExpect(jsonPath("$.id").exists());
+    }
+
+    /**
+     * Les quatre drapeaux du légataire, posés à la création.
+     *
+     * <p><strong>Ce n'est pas de la conformité décorative.</strong>
+     * {@code ComSaleProspectionView} calcule {@code LastCommunicationDate} et
+     * {@code LastCommunicationResult} avec {@code AND IsSystem = 0}, et en SQL un {@code NULL} ne
+     * satisfait pas {@code = 0} : tant que nous laissions la colonne nulle, nos interactions
+     * étaient écartées du « dernier échange » — dans l'écran du logiciel de bureau comme dans notre
+     * propre liste, qui lit cette colonne depuis la vue.
+     *
+     * <p>Mesuré avant correctif sur {@code yesRems} : 14 lignes à {@code IsSystem NULL}, toutes
+     * écrites par cette API, sur 8 prospections. Rattrapage :
+     * {@code db/migration/007_ComActionMessage_drapeaux_api.sql}.
+     */
+    @Test
+    void addInteraction_poseLesDrapeauxDuLegataire() throws Exception {
+        CfgTier prospect = new CfgTier();
+        prospect.setId(UUID.randomUUID());
+        prospect.setCode("TIER-DRAPEAUX");
+        prospect.setLastName("BENNANI");
+        prospect = tierRepository.save(prospect);
+
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-DRAPEAUX");
+        prospection.setCfgProspect(prospect);
+        prospection = prospectionRepository.save(prospection);
+
+        String body = """
+                {"description":"Appel abouti","entrante":true}""";
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id"));
+        ComActionMessage ecrite = actionMessageRepository.findById(id).orElseThrow();
+
+        assertThat(ecrite.getIsSystem())
+                .as("IsSystem doit valoir 0 : c'est ce que la vue légataire exige pour compter "
+                    + "l'interaction dans le dernier échange")
+                .isFalse();
+        assertThat(ecrite.getIsNotRead()).isFalse();
+        assertThat(ecrite.getIsUnpaid()).isFalse();
+        assertThat(ecrite.getWithoutRevival())
+                .as("0 à la création — le passage à 1 est l'affaire de la transformation en vente")
+                .isFalse();
+        assertThat(ecrite.getCfgTier()).isNotNull();
+        assertThat(ecrite.getCfgTier().getId())
+                .as("le tiers de l'interaction est le prospect de la prospection, comme chez le "
+                    + "légataire (96,5 % de ses interactions humaines le portent)")
+                .isEqualTo(prospect.getId());
+    }
+
+    /** Sans prospect lié, le tiers reste nul plutôt qu'inventé — le cas des pré-prospections. */
+    @Test
+    void addInteraction_sansProspect_laisseLeTiersNul() throws Exception {
+        ComProspection prospection = newProspection("PSN-DRAPEAUX-2");
+
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"description":"Lead brut rappele"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id"));
+        ComActionMessage ecrite = actionMessageRepository.findById(id).orElseThrow();
+        assertThat(ecrite.getCfgTier()).isNull();
+        assertThat(ecrite.getIsSystem()).isFalse();
     }
 
     @Test

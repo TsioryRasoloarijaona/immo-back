@@ -41,6 +41,7 @@ import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
@@ -93,6 +94,7 @@ public class DossierService {
     private final AdmSequenceRepository sequenceRepository;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
+    private final ComActionMessageRepository actionMessageRepository;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -102,9 +104,11 @@ public class DossierService {
                            StrFolderStatusHistoryRepository statusHistoryRepository,
                            AdmSequenceRepository sequenceRepository,
                            PerimetreCommercialService perimetreService,
-                           GroupementService groupementService) {
+                           GroupementService groupementService,
+                           ComActionMessageRepository actionMessageRepository) {
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
+        this.actionMessageRepository = actionMessageRepository;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
         this.prospectionRepository = prospectionRepository;
@@ -431,6 +435,8 @@ public class DossierService {
             genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
         }
 
+        cloturerLaProspection(prospection);
+
         List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
         return toDetail(folder, articleDtos);
     }
@@ -716,6 +722,39 @@ public class DossierService {
      * {@code GET /api/dossiers/{id}/historique}). {@code note} is stored as {@code Description},
      * matching real data usage (e.g. "ANNULATION AFFECTATION").
      */
+    /**
+     * Ferme la prospection transformée et désarme ses relances — ce que fait le logiciel de bureau
+     * à chaque vente, et que nous ne faisions pas.
+     *
+     * <h2>Pourquoi c'est nécessaire</h2>
+     *
+     * <p>Sans cette clôture, la prospection reste <strong>active dans le pipeline</strong> après la
+     * vente : elle continue d'apparaître dans {@code GET /api/prospections}, de compter dans les
+     * tableaux de bord, et ses relances restent armées — un commercial est relancé sur une affaire
+     * déjà signée.
+     *
+     * <h2>Ce qui est posé, et ce qui ne l'est pas</h2>
+     *
+     * <p>Mesuré sur les dossiers réels : <strong>354 des 355</strong> dossiers liés à une
+     * prospection l'ont fermée (99,7 % — la seule exception est un dossier de 2022 saisi à la
+     * main), et {@code ClosingDate} est renseignée sur <strong>354/354</strong>.
+     *
+     * <p>En revanche <strong>aucun motif de clôture n'est posé</strong> : seules 20 des 354
+     * prospections fermées en portent un (5,6 %). L'exiger serait plus strict que le légataire, et
+     * inventer une valeur par défaut fabriquerait une statistique fausse.
+     *
+     * <p>Le désarmement des relances reprend exactement le prédicat d'Omran : les interactions
+     * porteuses d'une alerte et <em>non rattachées à une échéance</em>
+     * ({@code ComDocumentId IS NULL}) — celles du dossier qui vient de naître doivent, elles,
+     * rester actives.
+     */
+    private void cloturerLaProspection(ComProspection prospection) {
+        prospection.setIsClosed(true);
+        prospection.setClosingDate(LocalDateTime.now());
+        prospectionRepository.save(prospection);
+        actionMessageRepository.desarmerRelancesDeLaProspection(prospection.getId());
+    }
+
     private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
         StrFolderStatusHistory historique = new StrFolderStatusHistory();
         historique.setId(UUID.randomUUID());

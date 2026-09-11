@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -160,6 +161,42 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
             + ") a WHERE a.rn = 1",
             nativeQuery = true)
     List<DerniereAlerteProjection> dernieresAlertes(@Param("prospectionIds") List<UUID> prospectionIds);
+
+    /**
+     * Désarme les relances d'une prospection transformée en vente.
+     *
+     * <p>Reprend <strong>mot pour mot</strong> le prédicat du logiciel de bureau, relevé dans sa
+     * trace d'audit SQL :
+     *
+     * <pre>{@code
+     * UPDATE ComActionMessage SET WithoutRevival = 1
+     * WHERE (NOT AlertValidityDate IS NULL) AND (ComDocumentId IS NULL)
+     *   AND (ComProspectionId = …)
+     * }</pre>
+     *
+     * <p>Les deux conditions comptent. {@code AlertValidityDate IS NOT NULL} restreint aux
+     * interactions qui portent effectivement une relance — inutile de marquer les autres.
+     * {@code ComDocumentId IS NULL} épargne les alertes rattachées à une <em>échéance</em> : celles
+     * du dossier qui vient de naître doivent rester armées, ce sont les rappels de paiement.
+     *
+     * <p><strong>{@code flushAutomatically} mais surtout PAS {@code clearAutomatically}.</strong>
+     * Le flush garantit que les écritures en attente sont poussées avant cet {@code UPDATE}. Le
+     * <em>clear</em>, lui, viderait le contexte de persistance et <strong>détacherait le dossier
+     * que l'appelant vient de créer</strong> : {@code DossierService.create} construit sa réponse
+     * juste après, en déréférençant les associations paresseuses du dossier — sur une entité
+     * détachée, la sérialisation casse. Trois tests de création sont tombés là-dessus.
+     *
+     * <p>Ne rien vider est sans risque ici : personne ne relit {@code WithoutRevival} dans la
+     * transaction qui le pose.
+     *
+     * @return le nombre de relances désarmées
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE ComActionMessage m SET m.withoutRevival = true "
+            + "WHERE m.comProspection.id = :prospectionId "
+            + "AND m.alertValidityDate IS NOT NULL "
+            + "AND m.comDocument IS NULL")
+    int desarmerRelancesDeLaProspection(@Param("prospectionId") UUID prospectionId);
 
     /** Projection de {@link #dernieresAlertes} — les noms doivent suivre les alias de la requête. */
     interface DerniereAlerteProjection {
