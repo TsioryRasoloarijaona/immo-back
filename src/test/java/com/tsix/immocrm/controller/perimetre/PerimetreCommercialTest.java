@@ -262,6 +262,9 @@ class PerimetreCommercialTest {
         reglement.setDocDate(java.time.LocalDateTime.now());
         reglement.setAmount(new BigDecimal("1000"));
         reglement.setStatus("IN_WORK");
+        // Encaissement : GET /api/encaissements filtre IsCredit = 1 comme l'écran legacy, et un
+        // NULL ne satisfait pas l'égalité. Valeur posée aussi par EcheancierService à la création.
+        reglement.setIsCredit(true);
         settlementRepository.save(reglement);
 
         StlSettlementLine ligne = new StlSettlementLine();

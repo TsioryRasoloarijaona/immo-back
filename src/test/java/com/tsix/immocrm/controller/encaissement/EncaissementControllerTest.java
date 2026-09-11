@@ -1,19 +1,30 @@
 package com.tsix.immocrm.controller.encaissement;
 
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlDeposit;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
+import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
+import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.stl.StlAccountRepository;
 import com.tsix.immocrm.repositories.stl.StlDepositRepository;
@@ -70,8 +81,28 @@ class EncaissementControllerTest {
     private StlSettlementRepository settlementRepository;
     @Autowired
     private StlSettlementLineRepository settlementLineRepository;
+    @Autowired
+    private CfgProjectRepository projectRepository;
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+    @Autowired
+    private StkItemRepository itemRepository;
+    @Autowired
+    private StkItemTypeRepository itemTypeRepository;
+    @Autowired
+    private StkItemCategoryRepository itemCategoryRepository;
+    @Autowired
+    private FixtureReferentielStk fixtureReferentielStk;
 
     private ComDocument newEcheance(String suffix) {
+        return newEcheance(suffix, null);
+    }
+
+    /**
+     * Échéance d'un dossier dont le lot appartient à {@code tranche} — {@code null} pour un
+     * dossier sans article, cas de la majorité des tests de ce fichier.
+     */
+    private ComDocument newEcheance(String suffix, CfgTranche tranche) {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
         vocation.setCode("VOC-ENC-" + suffix);
@@ -81,6 +112,9 @@ class EncaissementControllerTest {
         folder.setId(UUID.randomUUID());
         folder.setCode("DOS-ENC-" + suffix);
         folder.setStkVocation(vocation);
+        if (tranche != null) {
+            folder.setStkItem(newArticle(suffix, vocation, tranche));
+        }
         folderRepository.save(folder);
 
         ComDocument doc = new ComDocument();
@@ -90,7 +124,56 @@ class EncaissementControllerTest {
         return documentRepository.save(doc);
     }
 
+    private CfgTranche newTranche(String suffix) {
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-ENC-" + suffix);
+        project.setDescription("Projet " + suffix);
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-ENC-" + suffix);
+        tranche.setDescription("Tranche " + suffix);
+        tranche.setCfgProject(project);
+        return trancheRepository.save(tranche);
+    }
+
+    private StkItem newArticle(String suffix, StkVocation vocation, CfgTranche tranche) {
+        StkItemType type = new StkItemType();
+        type.setId(UUID.randomUUID());
+        type.setCode("TYPE-ENC-" + suffix);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
+        itemTypeRepository.save(type);
+
+        StkItemCategory category = new StkItemCategory();
+        category.setId(UUID.randomUUID());
+        category.setCode("CAT-ENC-" + suffix);
+        category.setStkKind(fixtureReferentielStk.natureParDefaut());
+        itemCategoryRepository.save(category);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode("ART-ENC-" + suffix);
+        article.setStkVocation(vocation);
+        article.setStkItemType(type);
+        article.setStkItemCategory(category);
+        article.setStkHierarchy(tranche);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
+        return itemRepository.save(article);
+    }
+
     private StlSettlement newSettlement(String suffix, BigDecimal montant, String status, boolean comptabilise) {
+        return newSettlement(suffix, montant, status, comptabilise, true);
+    }
+
+    /**
+     * {@code credit} à faux produit un décaissement (remboursement) : la liste ne doit jamais le
+     * renvoyer. Le défaut est vrai, qui est aussi la valeur posée par {@code EcheancierService} à
+     * la création et la seule présente sur les encaissements réels.
+     */
+    private StlSettlement newSettlement(String suffix, BigDecimal montant, String status,
+                                        boolean comptabilise, boolean credit) {
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setCode("REF-ENC-" + suffix);
@@ -98,6 +181,7 @@ class EncaissementControllerTest {
         settlement.setAmount(montant);
         settlement.setStatus(status);
         settlement.setIsAccounted(comptabilise);
+        settlement.setIsCredit(credit);
         return settlementRepository.save(settlement);
     }
 
@@ -123,6 +207,59 @@ class EncaissementControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id=='" + venteSettlement.getId() + "')]").exists())
                 .andExpect(jsonPath("$.content[?(@.id=='" + horsVente.getId() + "')]").doesNotExist());
+    }
+
+    /**
+     * Clause {@code AND IsCredit = 1} de l'écran legacy (trace du 11/09/2026). Sur les données
+     * réelles une seule pièce en profitait, un remboursement de −470 000 DH qui figurait dans la
+     * liste des encaissements et faussait tout total.
+     */
+    @Test
+    void findAll_excluLeDecaissement() throws Exception {
+        ComDocument echeanceCredit = newEcheance("CRED");
+        StlSettlement encaissement = newSettlement("CRED", new BigDecimal("1000"), "IN_WORK", false, true);
+        linkToEcheance(encaissement, echeanceCredit, new BigDecimal("1000"));
+
+        ComDocument echeanceDebit = newEcheance("DEB");
+        StlSettlement decaissement = newSettlement("DEB", new BigDecimal("-470000"), "IN_WORK", false, false);
+        linkToEcheance(decaissement, echeanceDebit, new BigDecimal("-470000"));
+
+        mockMvc.perform(get("/api/encaissements"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + encaissement.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + decaissement.getId() + "')]").doesNotExist());
+    }
+
+    /**
+     * Sélecteur de tranches de l'écran legacy, que la trace montre alimenté par
+     * {@code StlSettlementRelationView.CfgTrancheId}. Nous l'implémentons par le chemin des lignes
+     * (échéance → dossier → lot → tranche), mesuré équivalent côté Vente.
+     */
+    @Test
+    void findAll_filtreParTranche() throws Exception {
+        CfgTranche trancheA = newTranche("A");
+        CfgTranche trancheB = newTranche("B");
+
+        ComDocument echeanceA = newEcheance("TRA", trancheA);
+        StlSettlement settlementA = newSettlement("TRA", new BigDecimal("100"), "IN_WORK", false);
+        linkToEcheance(settlementA, echeanceA, new BigDecimal("100"));
+
+        ComDocument echeanceB = newEcheance("TRB", trancheB);
+        StlSettlement settlementB = newSettlement("TRB", new BigDecimal("100"), "IN_WORK", false);
+        linkToEcheance(settlementB, echeanceB, new BigDecimal("100"));
+
+        mockMvc.perform(get("/api/encaissements").param("trancheId", trancheA.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + settlementA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + settlementB.getId() + "')]").doesNotExist());
+
+        // Répétable, OR — les deux tranches citées ramènent les deux règlements.
+        mockMvc.perform(get("/api/encaissements")
+                        .param("trancheId", trancheA.getId().toString())
+                        .param("trancheId", trancheB.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id=='" + settlementA.getId() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.id=='" + settlementB.getId() + "')]").exists());
     }
 
     @Test

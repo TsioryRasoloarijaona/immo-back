@@ -37,6 +37,13 @@ import java.util.UUID;
  * au moins une échéance de Dossier de vente ({@code StlSettlementLine.ComDocumentId} non nul) —
  * un {@code StlSettlement} peut en théorie aussi servir des achats/locations (BuyDocumentId/
  * RntDocumentId), hors périmètre de cet endpoint.
+ *
+ * <p>Le filtre réel de l'écran legacy a été relevé dans la trace d'audit SQL Server du 11/09/2026
+ * (écran {@code Yes.Com.Front.Credit.SettlementList}) et est transcrit dans
+ * {@code instructions/FEATURE-encaissements-conformite-legataire.md}. Deux de ses clauses y sont
+ * reproduites — {@code IsCredit = 1} et le filtre par tranche ; une troisième ne l'est pas : le
+ * rattachement au module Vente par {@code AdmModuleId}, qui ferait entrer les encaissements non
+ * affectés. Voir le §4 de la spec, décision produit ouverte.
  */
 @Service
 @Transactional(readOnly = true)
@@ -55,8 +62,8 @@ public class EncaissementService {
     }
 
     public Page<EncaissementDto> findAll(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
-                                          UUID compteId, UUID depotId, UUID dossierId, UUID tierId,
-                                          String reference, String search,
+                                          UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
+                                          UUID tierId, String reference, String search,
                                           Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
                                           ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
                                           Pageable pageable) {
@@ -73,6 +80,12 @@ public class EncaissementService {
                             cb.equal(line.get("stlSettlement"), root),
                             cb.isNotNull(line.get("comDocument"))));
             predicates.add(cb.exists(venteSubquery));
+
+            // Encaissement, jamais décaissement. L'écran legacy pose « AND IsCredit = 1 » sans
+            // condition ; nous le reproduisons à l'identique. Colonne renseignée sur la totalité
+            // des lignes réelles (0 NULL sur 3 243), et EcheancierService pose Boolean.TRUE à la
+            // création, donc le test strict n'escamote rien.
+            predicates.add(cb.isTrue(root.get("isCredit")));
 
             if (!CollectionUtils.isEmpty(entiteIds)) {
                 predicates.add(root.get("cfgCompany").get("id").in(entiteIds));
@@ -101,6 +114,21 @@ public class EncaissementService {
                                 cb.equal(dossierLine.get("stlSettlement"), root),
                                 cb.equal(dossierLine.get("comDocument").get("comFolder").get("id"), dossierId)));
                 predicates.add(cb.exists(dossierSubquery));
+            }
+            if (!CollectionUtils.isEmpty(trancheIds)) {
+                // L'écran legacy passe par StlSettlementRelationView.CfgTrancheId ; le chemin par
+                // les lignes donne exactement le même résultat côté Vente (mesuré : 644 couples
+                // (règlement, tranche) des deux côtés, aucune divergence dans ce sens). Les 5
+                // couples que seule la vue porte sont des relations d'achat et de location, déjà
+                // hors du périmètre de cet endpoint — inutile donc de mapper la vue.
+                Subquery<UUID> trancheSubquery = query.subquery(UUID.class);
+                var trancheLine = trancheSubquery.from(StlSettlementLine.class);
+                trancheSubquery.select(trancheLine.get("id"))
+                        .where(cb.and(
+                                cb.equal(trancheLine.get("stlSettlement"), root),
+                                trancheLine.get("comDocument").get("comFolder").get("stkItem")
+                                        .get("stkHierarchy").get("id").in(trancheIds)));
+                predicates.add(cb.exists(trancheSubquery));
             }
             if (StringUtils.hasText(reference)) {
                 predicates.add(cb.like(cb.lower(root.get("code")), "%" + reference.toLowerCase() + "%"));
