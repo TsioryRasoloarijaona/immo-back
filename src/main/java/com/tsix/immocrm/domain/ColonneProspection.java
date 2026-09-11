@@ -29,15 +29,24 @@ public enum ColonneProspection implements Colonne {
     // -- Identité. Colonnes historiques, servies depuis ComProspection.
     ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
     CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true, Source.ENTITE),
+    DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true, Source.ENTITE,
+            Chemin.date("docDate")),
     TEMP_DESCRIPTION("tempDescription", "Description saisie", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
     PROSPECT_ID("prospectId", "Id prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    PROSPECT_NOM("prospectNom", "Prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
+    PROSPECT_NOM("prospectNom", "Prospect", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.tier("cfgProspect")),
     COMMERCIAL_ID("commercialId", "Id commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    ORIGINE("origine", "Origine", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    ETAPE("etape", "Étape", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
-    FERMEE("fermee", "Fermée", Groupe.IDENTITE, TypeColonne.BOOLEEN, true, Source.ENTITE),
+    COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.tier("cfgCommercial")),
+    // `code` et non `description` : c'est ce que sert le mappeur de liste, et c'est aussi ce
+    // qu'attendent les filtres ?origine= et ?etape=. Grouper sur une autre colonne afficherait
+    // des libellés que le filtre correspondant ne reconnaîtrait pas.
+    ORIGINE("origine", "Origine", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("comProspectionOrigin.code")),
+    ETAPE("etape", "Étape", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("comProspectionKind.code")),
+    FERMEE("fermee", "Fermée", Groupe.IDENTITE, TypeColonne.BOOLEEN, true, Source.ENTITE,
+            Chemin.groupable("isClosed")),
 
     // -- Contact et relance.
     TELEPHONE("telephone", "Téléphone", Groupe.CONTACT, TypeColonne.TEXTE, true, Source.ENTITE),
@@ -47,8 +56,10 @@ public enum ColonneProspection implements Colonne {
 
     // -- Contexte et financier.
     TRANCHE_ID("trancheId", "Id tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
-    TRANCHE_CODE("trancheCode", "Tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
-    TRANCHE_DESCRIPTION("trancheDescription", "Libellé tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE),
+    TRANCHE_CODE("trancheCode", "Tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.code")),
+    TRANCHE_DESCRIPTION("trancheDescription", "Libellé tranche", Groupe.CONTEXTE, TypeColonne.TEXTE, true, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.description")),
     // -- Qualification budgétaire : mesurée morte, donc HORS sélection par défaut.
     //    `Price` est renseigné sur 4 lignes sur 14 114 et vaut 0 partout ailleurs — jamais NULL,
     //    donc non masquable par un test de nullité côté front. `Area` : 0 ligne. Les laisser par
@@ -56,8 +67,12 @@ public enum ColonneProspection implements Colonne {
     //    l'information fausse, plus nuisible que l'absence. Elles restent demandables via
     //    ?colonnes= pour les rares lignes qui portent une valeur.
     //    Voir instructions/INVENTAIRE-colonnes-prospection.md §1.
-    PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, false, Source.ENTITE),
-    SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, false, Source.ENTITE),
+    //    Agrégeables malgré tout : sommer une colonne morte rend 0, ce qui est exact. C'est
+    //    l'AFFICHER par défaut qui était le problème, pas la calculer sur demande explicite.
+    PRIX("prix", "Budget", Groupe.FINANCIER, TypeColonne.MONTANT, false, Source.ENTITE,
+            Chemin.agregeable("price")),
+    SURFACE("surface", "Surface", Groupe.FINANCIER, TypeColonne.NOMBRE, false, Source.ENTITE,
+            Chemin.agregeable("area")),
 
     // ------------------------------------------------------------------
     // Colonnes ajoutées au lot B — présentes dans la vue légataire (donc affichables par le
@@ -72,25 +87,39 @@ public enum ColonneProspection implements Colonne {
     INDICATIF_MOBILE("indicatifMobile", "Indicatif", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
     EMAIL_FICHE("emailFiche", "Email (fiche)", Groupe.CONTACT, TypeColonne.TEXTE, false, Source.ENTITE),
     COMMERCIAL_CODE("commercialCode", "Code commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
-    ANCIEN_CLIENT("ancienClient", "Ancien client", Groupe.IDENTITE, TypeColonne.BOOLEEN, false, Source.ENTITE),
-    DATE_FERMETURE("dateFermeture", "Date de clôture", Groupe.CLOTURE, TypeColonne.DATE, false, Source.ENTITE),
-    CREE_PAR("creePar", "Créée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE),
-    CREE_LE("creeLe", "Créée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE),
-    MODIFIE_PAR("modifiePar", "Modifiée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE),
-    MODIFIE_LE("modifieLe", "Modifiée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE),
+    ANCIEN_CLIENT("ancienClient", "Ancien client", Groupe.IDENTITE, TypeColonne.BOOLEEN, false, Source.ENTITE,
+            Chemin.groupable("isOldCustomer")),
+    DATE_FERMETURE("dateFermeture", "Date de clôture", Groupe.CLOTURE, TypeColonne.DATE, false, Source.ENTITE,
+            Chemin.date("closingDate")),
+    CREE_PAR("creePar", "Créée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("userCreate")),
+    CREE_LE("creeLe", "Créée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE,
+            Chemin.date("userCreateDateTime")),
+    MODIFIE_PAR("modifiePar", "Modifiée par", Groupe.AUDIT, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("userUpdate")),
+    MODIFIE_LE("modifieLe", "Modifiée le", Groupe.AUDIT, TypeColonne.DATE, false, Source.ENTITE,
+            Chemin.date("userUpdateDateTime")),
 
     // Associations supplémentaires : une jointure paresseuse de plus par ligne, payée seulement
     // si la colonne est demandée — le mappeur ne les déréférence pas autrement.
-    TYPE_PROSPECT("typeProspect", "Type de prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
-    RAISON_FERMETURE("raisonFermeture", "Motif de clôture", Groupe.CLOTURE, TypeColonne.TEXTE, false, Source.ENTITE),
-    ORIGINE_SUPPORT("origineSupport", "Support d'origine", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
-    ACTION_COMMERCIALE("actionCommerciale", "Action commerciale", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE),
-    PAYS("pays", "Pays", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+    TYPE_PROSPECT("typeProspect", "Type de prospect", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("cfgProspect.cfgTierType.code")),
+    RAISON_FERMETURE("raisonFermeture", "Motif de clôture", Groupe.CLOTURE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("comProspectionClosingReason.description")),
+    ORIGINE_SUPPORT("origineSupport", "Support d'origine", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("comProspectionOriginSupport.description")),
+    // `comAction`, pas `comActionMessageType` : c'est ce que déréférence le mappeur de liste.
+    ACTION_COMMERCIALE("actionCommerciale", "Action commerciale", Groupe.IDENTITE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("comAction.description")),
+    PAYS("pays", "Pays", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("admCountry.description")),
 
     // Deux jointures de plus (tranche → projet → société), même règle.
     SOCIETE_ID("societeId", "Id société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
-    SOCIETE_CODE("societeCode", "Société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
-    SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE),
+    SOCIETE_CODE("societeCode", "Société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.cfgProject.cfgCompany.code")),
+    SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.CONTEXTE, TypeColonne.TEXTE, false, Source.ENTITE,
+            Chemin.groupable("stkHierarchy.cfgProject.cfgCompany.description")),
 
     // ------------------------------------------------------------------
     // Type de document du légataire (StrEntity) — le discriminant réel entre prospection de
@@ -141,15 +170,23 @@ public enum ColonneProspection implements Colonne {
     private final TypeColonne type;
     private final boolean parDefaut;
     private final Source source;
+    private final Chemin chemin;
 
+    /** Colonne ni groupable ni agrégeable — le cas par défaut, cf. {@link Colonne#chemin()}. */
     ColonneProspection(String nom, String libelle, Groupe groupe, TypeColonne type,
                        boolean parDefaut, Source source) {
+        this(nom, libelle, groupe, type, parDefaut, source, null);
+    }
+
+    ColonneProspection(String nom, String libelle, Groupe groupe, TypeColonne type,
+                       boolean parDefaut, Source source, Chemin chemin) {
         this.nom = nom;
         this.libelle = libelle;
         this.groupe = groupe;
         this.type = type;
         this.parDefaut = parDefaut;
         this.source = source;
+        this.chemin = chemin;
     }
 
     public String nom() {
@@ -174,6 +211,45 @@ public enum ColonneProspection implements Colonne {
 
     public Source source() {
         return source;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>Aucune colonne {@link Source#VUE} n'a de chemin</strong>, et c'est structurel :
+     * leur valeur vient de {@code ComSaleProspectionView}, chargée par une requête distincte par
+     * lot d'identifiants. Elle n'existe pas dans le graphe d'entités de {@code ComProspection},
+     * donc elle ne peut pas figurer dans un {@code GROUP BY} sur cette racine. Grouper par
+     * {@code joursInactivite} ou {@code statutDossier} demanderait d'agréger la vue elle-même —
+     * un autre lot, avec sa propre mesure de coût.
+     *
+     * <p>{@code TYPE_PROSPECTION*} est exclue pour une raison différente : {@code strEntityId} est
+     * un {@code UUID} brut sur l'entité, pas une association — il n'y a rien à joindre vers
+     * {@code StrEntity} pour en tirer un libellé.
+     */
+    @Override
+    public Chemin chemin() {
+        return chemin;
+    }
+
+    /** Colonnes acceptées par {@code ?groupBy=}, dans l'ordre de déclaration. */
+    public static List<ColonneProspection> groupables() {
+        return Colonnes.groupables(ColonneProspection.class);
+    }
+
+    /** Colonnes acceptées par {@code ?agregats=}, dans l'ordre de déclaration. */
+    public static List<ColonneProspection> agregeables() {
+        return Colonnes.agregeables(ColonneProspection.class);
+    }
+
+    /** @throws ColonneInconnueException si le nom n'est pas une colonne groupable de ce catalogue. */
+    public static ColonneProspection resoudreGroupement(String demandee) {
+        return Colonnes.resoudreGroupement(ColonneProspection.class, demandee);
+    }
+
+    /** @throws ColonneInconnueException si un nom n'est pas une colonne agrégeable de ce catalogue. */
+    public static Set<ColonneProspection> resoudreAgregats(List<String> demandees) {
+        return Colonnes.resoudreAgregats(ColonneProspection.class, demandees);
     }
 
     /**

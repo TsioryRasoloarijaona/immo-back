@@ -2,6 +2,9 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.TriGroupe;
+import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
@@ -58,8 +61,10 @@ import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
+import com.tsix.immocrm.web.Groupements;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -237,8 +242,93 @@ public class DossierController {
                     + "avec la liste des noms valides. `id` est toujours servi.",
                     example = "code,statut,projetCode,trancheCode,creePar")
             @RequestParam(required = false) List<String> colonnes,
+            @Parameter(description = "Déplie un groupe : restreint la liste aux dossiers d'un "
+                    + "groupe renvoyé par `GET /api/dossiers/groupes`. Attend le nom de la colonne "
+                    + "qui a servi au groupement.", example = "statut")
+            @RequestParam(required = false) String groupeColonne,
+            @Parameter(description = "Valeur du groupe à déplier — **la `cle` renvoyée telle quelle "
+                    + "par `/groupes`**, sans transformation. Omise alors que `groupeColonne` est "
+                    + "fourni : le groupe des dossiers sans valeur sur cette colonne.",
+                    example = "CONCRETISATION")
+            @RequestParam(required = false) String groupeValeur,
+            @Parameter(description = "Granularité appliquée quand `groupeColonne` est une date. "
+                    + "Doit être identique à celle passée à `/groupes`, sinon la clé ne retombe "
+                    + "pas sur le même groupe. Défaut : MOIS.", example = "MOIS")
+            @RequestParam(required = false) Granularite granularite,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate, dateDebut, dateFin, search, pageable, ColonneDossier.resoudre(colonnes)));
+        ColonneDossier groupe = Groupements.colonneDeDepliage(
+                groupeColonne, groupeValeur, ColonneDossier::resoudreGroupement);
+        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate,
+                dateDebut, dateFin, search, groupe, groupeValeur,
+                Groupements.granularite(groupe, granularite), pageable,
+                ColonneDossier.resoudre(colonnes)));
+    }
+
+    @GetMapping("/groupes")
+    @Operation(
+            summary = "Liste des dossiers repliée en groupes, avec effectifs et totaux",
+            description = """
+                    Reproduit la bande de groupement du logiciel de bureau : au lieu des lignes, \
+                    renvoie **un groupe par valeur distincte** de la colonne `groupBy`, chacun \
+                    portant son effectif et les sommes demandées.
+
+                    **Pourquoi cet endpoint plutôt qu'un groupement côté front** : la liste est \
+                    paginée. Grouper une page ne donnerait que des groupes tronqués et des totaux \
+                    faux. Les effectifs et totaux ci-dessous portent sur **tout le périmètre \
+                    filtré**, pas sur une page.
+
+                    **Les filtres sont exactement ceux de `GET /api/dossiers`** — mêmes noms, même \
+                    sémantique, périmètre commercial compris. Un même jeu de filtres des deux côtés \
+                    garantit que la somme des effectifs des groupes est égale au `totalElements` \
+                    de la liste.
+
+                    **Les groupes sont repliés** : pour obtenir les lignes de l'un d'eux, rappeler \
+                    `GET /api/dossiers` avec `?groupeColonne=<groupBy>&groupeValeur=<la cle du \
+                    groupe>`.
+
+                    Colonnes groupables et agrégeables : `GET /api/referentiels/colonnes/dossiers` \
+                    (booléens `groupable` / `agregeable`). Toutes les colonnes ne le sont pas, et \
+                    c'est mesuré : un montant porte presque autant de valeurs distinctes que de \
+                    lignes, une date exacte aussi — d'où `granularite` pour les dates et le refus \
+                    de grouper un montant.""",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Groupes, paginés comme une liste"),
+                    @ApiResponse(responseCode = "400", description =
+                            "`groupBy` absent, inconnu, ou désignant une colonne non groupable ; "
+                            + "ou `agregats` contenant une colonne non agrégeable. Le corps "
+                            + "(RFC 7807) porte la liste des noms acceptés.", content = @Content)
+            })
+    public PageDto<GroupeDto> grouper(
+            @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau de "
+                    + "groupement est supporté.", example = "statut", required = true)
+            @RequestParam String groupBy,
+            @Parameter(description = "Colonnes à sommer, répétable ou séparées par des virgules. "
+                    + "Absent : seul l'effectif de chaque groupe est renvoyé.",
+                    example = "prix,totalAPayer")
+            @RequestParam(required = false) List<String> agregats,
+            @Parameter(description = "Granularité de regroupement d'une colonne date. Ignorée si "
+                    + "`groupBy` n'est pas une date. Défaut : MOIS — grouper sur la date exacte "
+                    + "rendrait 214 groupes pour 358 dossiers, soit une liste plate.",
+                    example = "MOIS")
+            @RequestParam(required = false) Granularite granularite,
+            @Parameter(description = "Ordre des groupes : LIBELLE (croissant, défaut) ou NOMBRE "
+                    + "(effectif décroissant).", example = "NOMBRE")
+            @RequestParam(required = false) TriGroupe tri,
+            @RequestParam(required = false) List<String> statut,
+            @RequestParam(required = false) UUID commercial,
+            @RequestParam(required = false) UUID projet,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) ChampDateDossier champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+        ColonneDossier groupe = ColonneDossier.resoudreGroupement(groupBy);
+        return PageDto.of(dossierService.grouper(statut, commercial, projet, trancheId, champDate,
+                dateDebut, dateFin, search, groupe,
+                Groupements.granularite(groupe, granularite),
+                ColonneDossier.resoudreAgregats(agregats),
+                tri != null ? tri : TriGroupe.DEFAUT, pageable));
     }
 
     @GetMapping("/{id}")

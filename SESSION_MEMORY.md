@@ -1,10 +1,39 @@
 # Session Memory
-_Last updated: 2026-09-11T09:30+01:00_
+_Last updated: 2026-09-11T12:05+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
+
+**Aligner nos écrans sur le logiciel de bureau**, en partant de ses captures. Le chantier des vues
+(lots 1→F) est clos ; le lot G ouvre celui des **fonctions de grille** du légataire.
+
+| # | Lot | État |
+|---|---|---|
+| **G** | **Groupement et agrégats sur les listes** | **branche en cours** |
+
+Branche **`feat/groupement-listes`**, coupée d'un `main` fraîchement pull (`9891c4a`).
+**789 tests verts** (763 en début de session, +26 écrits ici).
+
+**Ce que le lot G a produit, au-delà de la feature** : `domain/Chemin`, qui porte enfin le
+**chemin JPA** des colonnes de catalogue. Les `Colonne*` ne servaient qu'à filtrer la
+sérialisation Jackson ; elles peuvent désormais bâtir des requêtes. Toute fonction de grille à
+venir (tri multi-colonnes, filtre par colonne, export) s'appuiera dessus.
+
+**Deux décisions prises sur mesure, pas par principe :**
+
+- **Toutes les colonnes ne sont pas groupables.** `Price` porte 190 valeurs distinctes sur 358
+  dossiers, `DocDate` 214, et 16 588 sur les 17 939 prospections. Grouper là-dessus ne produit pas
+  de l'information mais une liste plate avec des en-têtes. D'où `Granularite` (JOUR/MOIS/ANNEE)
+  pour les dates et le refus net de grouper un montant — qui s'additionne.
+- **Le groupement ne peut pas être une affaire de front.** OMRAN est un client lourd : son grid
+  détient tout le jeu de résultats, donc grouper y est local et gratuit. Notre liste est paginée à
+  20 — grouper une page donnerait des groupes tronqués et des totaux faux.
+
+---
+
+## 📜 Chantier précédent (clos) : les 216 vues du légataire
 
 **Exploiter les 216 vues du légataire** pour combler l'écart entre ce que nos `GET` renvoient et
 ce que le logiciel de bureau affiche.
@@ -17,15 +46,20 @@ ce que le logiciel de bureau affiche.
 | A/B/C | Champs morts retirés · 18 colonnes ajoutées à la liste · 15 filtres | **mergé** |
 | D | Enrichissement de la fiche (`GET /api/prospections/{id}`) | **mergé** (PR #39) |
 | E | Marqueurs de tri + pointeur de doublon | **mergé** (PR #41) |
-| **F** | **Fiche dossier alignée sur l'écran légataire** | **branche en cours** |
+| F | Fiche dossier alignée sur l'écran légataire | **mergé** (PR #42) |
 
-Branche : **`feat/fiche-dossier-alignement-ecran`**, coupée d'un `main` fraîchement pull.
-**763 tests verts** (673 en début de session, +90 dont 53 écrits ici).
+Lots 1→F **tous mergés** (jusqu'à la PR #42).
 
 **Le chantier a changé de méthode au lot F, et c'est l'acquis principal.** Jusque-là on partait de
 la vue ; désormais on part de **captures d'écran du logiciel de bureau**, confrontées case par case
 à la base. C'est ce qui a révélé `PriceWithModification` (un booléen, pas un prix) et les ratios
 stockés en fraction — deux erreurs qu'aucune lecture de schéma n'aurait évitées.
+
+**Le bilan des vues, maintenant que les trois écrans principaux sont traités** : sur les quatre
+vues candidates, **une seule a réellement servi** (`ComSaleProspectionView`, lot 1). Les trois
+autres ont été écartées sur mesure — trop plate, trop chère, ou déjà couverte. La leçon qui vaut
+pour la suite : **mesurer la densité d'une vue (taille de définition, nombre de sous-requêtes) et
+son coût sur des lignes distinctes avant de projeter le moindre travail dessus.**
 
 ---
 
@@ -290,9 +324,10 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ## 📁 Important Files & Paths
 
-- **`instructions/FEATURE-fiche-dossier-alignement-ecran.md`** — le lot en cours : §1 pourquoi la
-  vue dossier est écartée (mesures), §2 les deux pièges, §5 **les formules de l'onglet Montants et
-  leur vérification**, plus les deux anomalies de données signalées.
+- **`instructions/FEATURE-fiche-dossier-alignement-ecran.md`** — lot F, **le document à lire avant
+  de toucher au dossier** : §1 pourquoi la vue est écartée (mesures), §2 les deux pièges, §5 **les
+  formules de l'onglet Montants et leur vérification**, §6 ce qui reste hors périmètre, plus les
+  deux anomalies de données signalées.
 - `src/test/.../MontantsSyntheseTest.java` — les chiffres du dossier réel de la capture
   (`ARS 2025/00357`) servent de scénario : s'ils changent, l'API a cessé de dire ce que l'écran dit.
 - `instructions/FEATURE-marqueurs-tri-pre-prospection.md` — lot E : §1 pourquoi la
@@ -322,6 +357,25 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ## 🔧 Environment & Config
 
+- **⚠️ Il y a DEUX bases de test, et `src/test/resources/application.properties` ne pointe pas sur
+  celle que les sessions précédentes utilisaient.** Constaté au lot G :
+
+  | Base | Tables | Rôle |
+  |---|---:|---|
+  | `yesRemsTest` | 86 | **le défaut** du fichier de properties |
+  | `yesRemsCiCheck` | 167 | bâtie depuis `ci/schema/*.sql`, celle des surcharges ci-dessous |
+  | `yesRemsProd` | 462 | schéma complet + données réelles, **lecture seule** |
+
+  Les « 763 tests verts » du lot F ont été obtenus sur `yesRemsCiCheck`. Lancer `./mvnw test` **sans
+  surcharge** partait donc sur `yesRemsTest`, restée au schéma d'il y a plusieurs lots : 163 colonnes
+  manquantes, plus `StrEntity`, `ComSaleProspectionView` et ses deux tables. 54 tests en erreur, tous
+  en `Nom d'objet/de colonne non valide` — un échec qui **ressemble à un bug de mapping** et n'en est
+  pas. C'est exactement le mode d'échec que `CLAUDE.md` annonce.
+
+  `yesRemsTest` a été alignée au lot G (colonnes diffées depuis `yesRemsProd`, objets manquants
+  rejoués depuis `ci/schema/050_views.sql`) : **`./mvnw test` nu fonctionne désormais**. Avant de
+  conclure à une régression sur une colonne absente, comparer d'abord les deux bases.
+
 - **Tests — la commande qui marche** :
   ```powershell
   Set-Location C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm
@@ -342,32 +396,51 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ### État des branches
 
+**`main` = `9891c4a`. Branche en cours : `feat/groupement-listes` (lot G), coupée de ce `main`.**
+Le front reste sur `main`, intact : le lot G est **backend seul**, aucune branche n'a été coupée
+dans `crm-prototype`.
+
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/fiche-dossier-alignement-ecran`** | lot F, 763 tests verts |
+| back | **`feat/groupement-listes`** | **lot G, 789 tests verts — en attente de merge** |
+| back | `feat/fiche-dossier-alignement-ecran` | **mergée (PR #42) — supprimable** (local + `origin`) |
 | back | `feat/contexte-dossier` | **prouvée mergée, 0 commit hors `main` — supprimable** |
 | back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée **mais la branche locale a divergé depuis** (1 commit hors `main`) |
 | back | `docs/memoire-de-session` | 2 commits, sur `origin`, non mergée |
 | back | `feat/remise-dossier` | 1 commit, **aucun remote** |
 | front | `refractor/best-practice` | **11 commits, LOCAL SEUL** — remote supprimé sans merge |
 
-Lots 1→D mergés sur GitHub (PR jusqu'à #39). `sync` **ne supprime pas** la branche mergée — le
-faire à la main (`git branch -d` + `git push origin --delete`, fait pour le lot D). `-d` refuse
-toute branche non mergée : s'en servir comme garde-fou plutôt que `-D`. C'est ce refus qui a
-révélé la divergence de `fix/ci-pollution-doubles-envoi`.
+Lots 1→F mergés sur GitHub (PR jusqu'à #42). `sync` **ne supprime pas** la branche mergée — le
+faire à la main (`git branch -d` + `git push origin --delete`, fait pour les lots D et E). `-d`
+refuse toute branche non mergée : s'en servir comme garde-fou plutôt que `-D`. C'est ce refus qui
+a révélé la divergence de `fix/ci-pollution-doubles-envoi`.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Faire merger la PR `feat/fiche-dossier-alignement-ecran` sur GitHub**, puis
-> `node ..\.claude\scripts\git-flow.mjs sync back` et supprimer la branche à la main.
+> **Attendre la merge de la PR `feat/groupement-listes`** (lot G), puis `sync`. Ne rien démarrer
+> qui en dépende avant. Avant de couper la branche suivante, **demander l'accord de
+> l'utilisateur** — et au passage, deux branches mergées attendent d'être supprimées (voir État
+> des branches).
+>
+> **Le lot G reste à relayer au front**, qui n'a pas été touché (périmètre backend strict) : la
+> bande de groupement, les groupes repliables et les bandes « Total : » sont à construire dans
+> `crm-prototype`. Le contrat est `instructions/FEATURE-groupement-listes.md` §4 et `/api-docs`.
+> Tout est **additif** : `groupBy` absent, les listes répondent comme avant.
+>
+> **La méthode reste celle du lot F : partir des captures du logiciel de bureau.** Deux captures
+> avaient suffi à cadrer le lot F ; une seule a suffi au lot G, et c'est elle qui a fait voir que
+> l'agrégat est un réglage *par colonne* (les `Σ` des en-têtes) et que les groupes sont repliés par
+> défaut. Ne pas repartir de la vue.
+>
+> **Suites naturelles du lot G**, maintenant que `domain/Chemin` existe : le groupement **imbriqué**
+> (la bande d'OMRAN accepte plusieurs colonnes empilées — `groupBy` est resté un paramètre unique
+> pour pouvoir passer en liste sans rompre), les agrégats **min/max/moyenne** (les `Σ` du grid les
+> offrent, la capture ne montrait que des sommes), et le **filtre générique par colonne**, dont
+> `groupeColonne`/`groupeValeur` est déjà la moitié.
 
 ### Backlog
-
-- [ ] **Demander les captures des onglets restants du dossier** — « Dates », « Dates autres »,
-      « Autres montants », « Annulation / Résiliation », « Acquéreurs ». C'est devenu la façon la
-      plus rapide de cadrer un périmètre : deux captures ont suffi pour tout le lot F.
 - [ ] **Comprendre les 8 dossiers qui bloquent `ratioAvance`** (`AdvanceAmount` ≠ total catégorie
       `AVANCE` ; la catégorie `PRÉ-RÉSERVATION` est le suspect). Préalable à livrer le champ.
 - [ ] **Relayer au dépôt frontend** `GUIDE-FRONT-fiche-prospection.md`, rangs **5 et 6** :

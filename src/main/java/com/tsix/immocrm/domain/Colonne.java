@@ -23,4 +23,22 @@ public interface Colonne {
 
     /** Vrai si la colonne est servie quand {@code ?colonnes=} est absent. */
     boolean parDefaut();
+
+    /**
+     * Chemin JPA de la colonne, ou {@code null} si elle n'est ni groupable ni agrégeable.
+     *
+     * <p>Remonté ici — contrairement au groupe d'affichage et au type, qui restent typés par
+     * catalogue — parce que {@link Chemin} est un type <em>partagé</em> : l'exposer sur
+     * l'interface ne dégrade rien en {@code String} et ne coûte donc aucune vérification du
+     * compilateur. C'est ce qui permet à {@link Colonnes#groupables} d'être écrit une seule fois.
+     *
+     * <p><strong>Le défaut {@code null} est le comportement voulu</strong>, pas un trou à combler :
+     * une colonne n'entre au périmètre du groupement que si on l'y met explicitement, après avoir
+     * vérifié son chemin contre l'entité. Les catalogues comptent une soixantaine d'entrées ;
+     * les annoter en masse sans mesurer leur cardinalité produirait des groupements que personne
+     * ne peut exploiter — voir {@code instructions/FEATURE-groupement-listes.md} §2.
+     */
+    default Chemin chemin() {
+        return null;
+    }
 }

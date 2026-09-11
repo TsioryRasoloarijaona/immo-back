@@ -79,4 +79,75 @@ public final class Colonnes {
         }
         return resolues;
     }
+
+    // ------------------------------------------------------------------
+    // Groupement et agrégats — voir instructions/FEATURE-groupement-listes.md
+    //
+    // Même raison d'être que les méthodes ci-dessus : écrites une fois pour les trois catalogues.
+    // La liste blanche n'est plus `parDefaut` mais le Chemin déclaré, donc une colonne sans chemin
+    // est rejetée exactement comme un nom inconnu — du point de vue du client, demander une
+    // colonne qui n'existe pas et en demander une qui ne se groupe pas sont la même erreur.
+    // ------------------------------------------------------------------
+
+    /** Colonnes groupables du catalogue, dans l'ordre de déclaration. */
+    public static <C extends Enum<C> & Colonne> List<C> groupables(Class<C> type) {
+        return Arrays.stream(type.getEnumConstants())
+                .filter(c -> c.chemin() != null && c.chemin().groupable())
+                .toList();
+    }
+
+    /** Colonnes agrégeables du catalogue, dans l'ordre de déclaration. */
+    public static <C extends Enum<C> & Colonne> List<C> agregeables(Class<C> type) {
+        return Arrays.stream(type.getEnumConstants())
+                .filter(c -> c.chemin() != null && c.chemin().agregeable())
+                .toList();
+    }
+
+    private static <C extends Enum<C> & Colonne> List<String> noms(List<C> colonnes) {
+        return colonnes.stream().map(Colonne::nom).toList();
+    }
+
+    /**
+     * Résout la colonne de {@code ?groupBy=}.
+     *
+     * @throws ColonneInconnueException si le nom est absent du catalogue <em>ou</em> présent mais
+     *         non groupable. Le message porte la liste des colonnes groupables — pas celle de
+     *         toutes les colonnes, qui enverrait le client réessayer avec une autre valeur refusée.
+     */
+    public static <C extends Enum<C> & Colonne> C resoudreGroupement(Class<C> type, String demandee) {
+        if (demandee == null || demandee.isBlank()) {
+            throw new ColonneInconnueException("", noms(groupables(type)));
+        }
+        C c = index(type).get(demandee.trim().toLowerCase(Locale.ROOT));
+        if (c == null || c.chemin() == null || !c.chemin().groupable()) {
+            throw new ColonneInconnueException(demandee.trim(), noms(groupables(type)));
+        }
+        return c;
+    }
+
+    /**
+     * Résout la sélection de {@code ?agregats=}. Absente ou vide → aucun agrégat, seul l'effectif
+     * du groupe est renvoyé.
+     *
+     * @throws ColonneInconnueException si un nom est absent du catalogue ou non agrégeable
+     */
+    public static <C extends Enum<C> & Colonne> Set<C> resoudreAgregats(Class<C> type,
+                                                                       List<String> demandees) {
+        if (demandees == null || demandees.isEmpty()) {
+            return Set.of();
+        }
+        Map<String, C> parNom = index(type);
+        Set<C> resolues = new LinkedHashSet<>();
+        for (String demandee : demandees) {
+            if (demandee == null || demandee.isBlank()) {
+                continue;
+            }
+            C c = parNom.get(demandee.trim().toLowerCase(Locale.ROOT));
+            if (c == null || c.chemin() == null || !c.chemin().agregeable()) {
+                throw new ColonneInconnueException(demandee.trim(), noms(agregeables(type)));
+            }
+            resolues.add(c);
+        }
+        return resolues;
+    }
 }

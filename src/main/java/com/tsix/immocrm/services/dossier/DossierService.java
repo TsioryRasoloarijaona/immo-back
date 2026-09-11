@@ -1,11 +1,15 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
+import com.tsix.immocrm.domain.Chemin;
+import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.EtapeMilestone;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
+import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.SyntheseMontantDto;
@@ -46,6 +50,7 @@ import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -87,6 +92,7 @@ public class DossierService {
     private final StrFolderStatusHistoryRepository statusHistoryRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final PerimetreCommercialService perimetreService;
+    private final GroupementService groupementService;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -95,8 +101,10 @@ public class DossierService {
                            ComSettlementCategoryRepository settlementCategoryRepository,
                            StrFolderStatusHistoryRepository statusHistoryRepository,
                            AdmSequenceRepository sequenceRepository,
-                           PerimetreCommercialService perimetreService) {
+                           PerimetreCommercialService perimetreService,
+                           GroupementService groupementService) {
         this.perimetreService = perimetreService;
+        this.groupementService = groupementService;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
         this.prospectionRepository = prospectionRepository;
@@ -184,8 +192,54 @@ public class DossierService {
      */
     public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Pageable pageable, Set<ColonneDossier> colonnes) {
-        Specification<ComFolder> spec = (root, query, cb) -> {
+            String search, ColonneDossier groupeColonne, String groupeValeur,
+            Granularite granularite, Pageable pageable, Set<ColonneDossier> colonnes) {
+        Specification<ComFolder> spec = specDossiers(statuts, commercial, projet, trancheIds,
+                champDate, dateDebut, dateFin, search);
+        if (groupeColonne != null) {
+            // Dépliage d'un groupe : la même expression de clé que /groupes, donc une valeur
+            // réémise telle quelle par le front retombe exactement sur les lignes comptées.
+            spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
+                    root, cb, groupeColonne.chemin(), granularite, groupeValeur));
+        }
+        return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
+                .map(f -> toListItem(f, colonnes));
+    }
+
+    /**
+     * Replie {@code GET /api/dossiers} en groupes — voir
+     * {@code instructions/FEATURE-groupement-listes.md}.
+     *
+     * <p>Réutilise {@link #specDossiers} <strong>à l'identique</strong>, périmètre commercial
+     * compris : c'est ce qui garantit que la somme des effectifs des groupes retombe sur le
+     * {@code totalElements} de la liste non groupée.
+     */
+    public Page<GroupeDto> grouper(List<String> statuts, UUID commercial, UUID projet,
+            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, ColonneDossier groupeBy, Granularite granularite,
+            Set<ColonneDossier> agregats, TriGroupe tri, Pageable pageable) {
+        Specification<ComFolder> spec = specDossiers(statuts, commercial, projet, trancheIds,
+                champDate, dateDebut, dateFin, search)
+                .and(perimetreService.filtreDossiers());
+        Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
+        for (ColonneDossier agregat : agregats) {
+            cheminsAgregats.put(agregat.nom(), agregat.chemin());
+        }
+        return groupementService.grouper(ComFolder.class, spec, groupeBy.chemin(), granularite,
+                cheminsAgregats, tri, pageable);
+    }
+
+    /**
+     * Les filtres de la liste des dossiers, extraits pour être partagés avec le groupement.
+     *
+     * <p>N'inclut délibérément <strong>pas</strong> le périmètre commercial : les deux appelants
+     * l'ajoutent explicitement, ce qui rend son absence visible à la lecture plutôt que cachée
+     * dans une composition.
+     */
+    private static Specification<ComFolder> specDossiers(List<String> statuts, UUID commercial,
+            UUID projet, List<UUID> trancheIds, ChampDateDossier champDate,
+            LocalDateTime dateDebut, LocalDateTime dateFin, String search) {
+        return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (statuts != null && !statuts.isEmpty()) {
                 List<String> statutsLower = statuts.stream().map(String::toLowerCase).toList();
@@ -249,11 +303,6 @@ public class DossierService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        // Périmètre commercial : ne renvoie que les dossiers des projets affectés à l'appelant.
-        // Prédicat neutre (aucune requête supplémentaire) tant qu'aucun projet ne lui est affecté
-        // ou s'il porte un rôle d'exemption — voir PerimetreCommercialService#filtreDossiers.
-        return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
-                .map(f -> toListItem(f, colonnes));
     }
 
     public DossierDetailDto findById(UUID id) {
