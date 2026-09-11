@@ -927,6 +927,7 @@ public class DossierService {
         CfgCompany societe = patrimoine ? societe(f) : null;
         ComProspection prospection = ColonneDossier.exigeLaProspection(colonnes)
                 ? f.getComProspection() : null;
+        StkItem article = ColonneDossier.exigeLArticle(colonnes) ? f.getStkItem() : null;
         return new DossierListItemDto(
                 f.getId(),
                 f.getCode(),
@@ -974,7 +975,34 @@ public class DossierService {
                 f.getUserCreate(),
                 f.getUserCreateDateTime(),
                 f.getUserUpdate(),
-                f.getUserUpdateDateTime()
+                f.getUserUpdateDateTime(),
+                // Article principal : déréférencé seulement s'il est demandé — jusqu'à cinq
+                // jointures paresseuses par ligne sinon (bâtiment, étage, catégorie, type,
+                // présentation), soit cent requêtes sur une page de vingt.
+                article != null ? article.getId() : null,
+                article != null ? article.getCode() : null,
+                article != null ? article.getDescription() : null,
+                article != null ? article.getTitleNumber() : null,
+                article != null && article.getStkBuilding() != null
+                        ? article.getStkBuilding().getDescription() : null,
+                article != null && article.getStkFloor() != null
+                        ? article.getStkFloor().getDescription() : null,
+                article != null && article.getStkItemCategory() != null
+                        ? article.getStkItemCategory().getCode() : null,
+                article != null && article.getStkItemType() != null
+                        ? article.getStkItemType().getCode() : null,
+                article != null && article.getStkPresentationType() != null
+                        ? article.getStkPresentationType().getCode() : null,
+                colonnes.contains(ColonneDossier.RESPONSABLE_VENTE_ID) && f.getCfgSaleManager() != null
+                        ? f.getCfgSaleManager().getId() : null,
+                colonnes.contains(ColonneDossier.RESPONSABLE_VENTE_NOM) && f.getCfgSaleManager() != null
+                        ? TierNomFormatter.nom(f.getCfgSaleManager()) : null,
+                f.getAgreementDate(),
+                f.getDeliveryDateReal(),
+                // Scalaires @Formula : lus avec l'entité, aucun coût conditionnel à gérer.
+                f.getDelaiConcretisation(),
+                f.getDelaiNotaire(),
+                f.getDelaiLivraison()
         );
     }
 
@@ -1034,7 +1062,14 @@ public class DossierService {
                         ? f.getComProspection().getComProspectionKind().getDescription() : null,
                 f.getComProspection() != null && f.getComProspection().getComProspectionOrigin() != null
                         ? f.getComProspection().getComProspectionOrigin().getDescription() : null,
-                f.getComProspection() != null ? f.getComProspection().getDocDate() : null
+                f.getComProspection() != null ? f.getComProspection().getDocDate() : null,
+                f.getCfgSaleManager() != null ? f.getCfgSaleManager().getId() : null,
+                TierNomFormatter.nom(f.getCfgSaleManager()),
+                f.getAgreementDate(),
+                f.getDeliveryDateReal(),
+                f.getDelaiConcretisation(),
+                f.getDelaiNotaire(),
+                f.getDelaiLivraison()
         );
     }
 

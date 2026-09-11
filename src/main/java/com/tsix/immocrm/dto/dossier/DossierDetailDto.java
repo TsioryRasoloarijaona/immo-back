@@ -158,6 +158,41 @@ public record DossierDetailDto(
         String origineProspection,
 
         @Schema(description = "Date de la prospection d'origine. 99,2 %.")
-        LocalDateTime dateProspection
+        LocalDateTime dateProspection,
+
+        // ------------------------------------------------------------------
+        // Responsable de vente et délais de cycle — lot « colonnes de l'écran légataire ».
+        // Trouvés en comparant ComFolder (114 colonnes) à ce que la fiche servait (30).
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Id du responsable de vente (ComFolder.CfgSaleManagerId).")
+        UUID responsableVenteId,
+
+        @Schema(description = "Responsable de vente — acteur **distinct du commercial**, renseigné "
+                + "sur 221 des 358 dossiers réels (61 %). Le second responsable du légataire "
+                + "(`CfgSaleManager2Id`) n'est pas exposé : mesuré à 0 ligne.",
+                example = "Hamza ATCHANY")
+        String responsableVenteNom,
+
+        @Schema(description = "Date du compromis (ComFolder.AgreementDate). 73 / 358.")
+        LocalDateTime dateCompromis,
+
+        @Schema(description = "Date de livraison réelle (ComFolder.DeliveryDateReal). 63 / 358.")
+        LocalDateTime dateLivraisonReelle,
+
+        @Schema(description = "Jours entre l'origine du dossier et sa concrétisation — calculé "
+                + "côté serveur, jamais stocké. L'origine est la date de la **prospection** quand "
+                + "il y en a une, sinon celle du dossier, comme dans le logiciel de bureau. "
+                + "`null` tant que la concrétisation n'a pas eu lieu : 152 / 358.", example = "47")
+        Integer delaiConcretisation,
+
+        @Schema(description = "Jours entre la concrétisation et le compromis. 73 / 358.",
+                example = "112")
+        Integer delaiNotaire,
+
+        @Schema(description = "Jours entre le compromis et la livraison réelle. 63 / 358.\n\n"
+                + "Le délai de crédit du logiciel de bureau n'est pas exposé : il dépend de "
+                + "`CreditPossessionDate`, mesurée à **0 ligne sur 358**.", example = "365")
+        Integer delaiLivraison
 ) {
 }

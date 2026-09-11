@@ -139,10 +139,86 @@ public enum ColonneDossier implements Colonne {
     MODIFIE_PAR("modifiePar", "Modifié par", Groupe.AUDIT, TypeColonne.TEXTE, false,
             Chemin.groupable("userUpdate")),
     MODIFIE_LE("modifieLe", "Modifié le", Groupe.AUDIT, TypeColonne.DATE, false,
-            Chemin.date("userUpdateDateTime"));
+            Chemin.date("userUpdateDateTime")),
 
-    /** Regroupement d'affichage du sélecteur. */
-    public enum Groupe { IDENTITE, ACTEURS, FINANCIER, PATRIMOINE, ORIGINE, AUDIT }
+    // ------------------------------------------------------------------
+    // L'ARTICLE PRINCIPAL. Trouvé par la trace d'audit du logiciel de bureau (sys.fn_get_audit_file
+    // sur C:\backup\*.sqlaudit) : sa liste des dossiers trie par
+    // `ORDER BY ArticleCode, H1Code, H2Code, H3Code`, et nous ne servions AUCUNE de ces colonnes
+    // d'article. H1/H2/H3 sont en revanche déjà servis — ce sont la tranche, le projet et la
+    // société, sous d'autres noms.
+    //
+    // Chaîne `stkItem` → bâtiment / étage / catégorie / type / présentation : une jointure
+    // paresseuse par ligne, payée seulement si demandée (voir exigeLArticle).
+    // ------------------------------------------------------------------
+    ARTICLE_ID("articleId", "Id article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.id")),
+    /** La clé de tri par défaut de l'écran légataire. */
+    ARTICLE_CODE("articleCode", "Article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.code")),
+    ARTICLE_LIBELLE("articleLibelle", "Libellé article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.description")),
+    ARTICLE_TITRE_FONCIER("articleTitreFoncier", "Titre foncier", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.titleNumber")),
+    BLOC("bloc", "Bloc", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkBuilding.description")),
+    ETAGE("etage", "Étage", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkFloor.description")),
+    CATEGORIE_ARTICLE("categorieArticle", "Catégorie", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkItemCategory.code")),
+    TYPE_ARTICLE("typeArticle", "Type", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkItemType.code")),
+    TYPE_PRESENTATION("typePresentation", "Présentation", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkPresentationType.code")),
+
+    // ------------------------------------------------------------------
+    // LE RESPONSABLE DE VENTE — acteur distinct du commercial, renseigné sur 221 des 358 dossiers
+    // (61 %), et que nous n'exposions nulle part. `CfgSaleManager2Id` n'est PAS repris : mesuré à
+    // 0 ligne sur 358.
+    // ------------------------------------------------------------------
+    RESPONSABLE_VENTE_ID("responsableVenteId", "Id responsable de vente", Groupe.ACTEURS, TypeColonne.TEXTE, false,
+            Chemin.groupable("cfgSaleManager.id")),
+    RESPONSABLE_VENTE_NOM("responsableVenteNom", "Responsable de vente", Groupe.ACTEURS, TypeColonne.TEXTE, false,
+            Chemin.tier("cfgSaleManager")),
+
+    // ------------------------------------------------------------------
+    // JALONS ET DÉLAIS DU CYCLE DE VENTE. Les deux dates sont les entrées des délais : les servir
+    // sans elles rendrait un nombre de jours invérifiable à l'écran.
+    //
+    // Les délais sont des @Formula sur l'entité, donc des propriétés ordinaires : groupables et
+    // sommables comme n'importe quelle colonne. `DelayCredit` de la vue est écarté — il dépend de
+    // CreditPossessionDate, mesurée à 0 ligne sur 358.
+    // ------------------------------------------------------------------
+    DATE_COMPROMIS("dateCompromis", "Compromis", Groupe.IDENTITE, TypeColonne.DATE, false,
+            Chemin.date("agreementDate")),
+    DATE_LIVRAISON_REELLE("dateLivraisonReelle", "Livraison réelle", Groupe.IDENTITE, TypeColonne.DATE, false,
+            Chemin.date("deliveryDateReal")),
+    /**
+     * Sommable mais <strong>non groupable</strong>, et ce n'est pas un choix : sa formule contient
+     * une sous-requête corrélée (la date de la prospection d'origine), et SQL Server refuse
+     * « un agrégat ou une sous-requête dans une expression utilisée dans la liste GROUP BY ».
+     * Le mettre groupable produisait une SQLGrammarException en 500.
+     *
+     * <p>Les deux autres délais n'ont pas ce problème : ils n'arithmétisent que des colonnes de
+     * {@code ComFolder}, donc ils sont groupables normalement.
+     */
+    DELAI_CONCRETISATION("delaiConcretisation", "Délai de concrétisation (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
+            Chemin.agregeable("delaiConcretisation")),
+    DELAI_NOTAIRE("delaiNotaire", "Délai notaire (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
+            Chemin.groupableEtAgregeable("delaiNotaire")),
+    DELAI_LIVRAISON("delaiLivraison", "Délai de livraison (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
+            Chemin.groupableEtAgregeable("delaiLivraison"));
+
+    /**
+     * Regroupement d'affichage du sélecteur.
+     *
+     * <p>{@code ARTICLE} et {@code DELAIS} sont ajoutés au lot « colonnes de l'écran légataire ».
+     * {@code ARTICLE} est distinct de {@code PATRIMOINE} pour une raison concrète et non
+     * cosmétique : {@link #exigeLePatrimoine} déclenche la résolution de la chaîne tranche →
+     * projet → société, dont les colonnes d'article n'ont pas besoin. Les confondre ferait payer
+     * trois jointures à qui ne demande qu'un code d'article.
+     */
+    public enum Groupe { IDENTITE, ACTEURS, FINANCIER, PATRIMOINE, ARTICLE, DELAIS, ORIGINE, AUDIT }
 
     /** Type d'affichage, pour que le front aligne et formate sans table de correspondance. */
     public enum TypeColonne { TEXTE, NOMBRE, MONTANT, DATE, BOOLEEN }
@@ -251,5 +327,16 @@ public enum ColonneDossier implements Colonne {
         return selection.contains(ETAPE_PROSPECTION)
                 || selection.contains(ORIGINE_PROSPECTION)
                 || selection.contains(DATE_PROSPECTION);
+    }
+
+    /**
+     * Vrai si la sélection oblige à déréférencer l'article principal.
+     *
+     * <p>Même discipline que les deux gardes ci-dessus : l'article et ses référentiels (bâtiment,
+     * étage, catégorie, type, présentation) sont jusqu'à cinq jointures paresseuses par ligne,
+     * soit cent requêtes inutiles sur une page de vingt quand personne ne les réclame.
+     */
+    public static boolean exigeLArticle(Set<ColonneDossier> selection) {
+        return selection.stream().anyMatch(c -> c.groupe == Groupe.ARTICLE);
     }
 }
