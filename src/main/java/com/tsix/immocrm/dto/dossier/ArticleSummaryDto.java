@@ -59,6 +59,23 @@ public record ArticleSummaryDto(
         String immeubleCode,
 
         @Schema(description = "Libellé de l'immeuble.")
-        String immeubleLibelle
+        String immeubleLibelle,
+
+        // ------------------------------------------------------------------
+        // Champs « Tit. foncier » et « Présentation » de l'écran légataire.
+        // Voir instructions/FEATURE-fiche-dossier-alignement-ecran.md §4.
+        // ------------------------------------------------------------------
+
+        @Schema(description = "Numéro de titre foncier du lot (`StkItem.TitleNumber`). Renseigné "
+                + "sur **69,6 %** des 358 dossiers réels — à afficher conditionnellement.",
+                example = "R/12345")
+        String titreFoncier,
+
+        @Schema(description = "Code du type de présentation du lot (`StkPresentationType`) — la "
+                + "case « Présentation » de l'écran légataire. **23,2 %**.", example = "C")
+        String presentationCode,
+
+        @Schema(description = "Libellé du type de présentation. **23,2 %**.")
+        String presentationLibelle
 ) {
 }

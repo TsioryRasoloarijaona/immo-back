@@ -8,6 +8,7 @@ import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
+import com.tsix.immocrm.dto.dossier.SyntheseMontantDto;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
@@ -28,6 +29,7 @@ import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -45,6 +47,7 @@ import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
@@ -58,6 +61,8 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import static java.util.Objects.requireNonNullElse;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -709,9 +714,8 @@ public class DossierService {
      * from {@code totalSoumisReglePrixTTC}.
      */
     public MontantsDossierDto montants(UUID dossierId) {
-        if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
-        }
+        ComFolder folder = folderRepository.findById(dossierId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
         List<ComDocument> lignes = documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
 
         Map<UUID, BigDecimal> regleParEcheance = new LinkedHashMap<>();
@@ -724,6 +728,9 @@ public class DossierService {
         Map<String, BigDecimal> regleParCategorie = new LinkedHashMap<>();
         BigDecimal totalGeneral = BigDecimal.ZERO;
         BigDecimal totalSoumisReglePrixTTC = BigDecimal.ZERO;
+        BigDecimal fraisExclusDuPrix = BigDecimal.ZERO;
+        BigDecimal regleTotal = BigDecimal.ZERO;
+        BigDecimal regleSoumisAuPrix = BigDecimal.ZERO;
 
         for (ComDocument ligne : lignes) {
             String categorie = ligne.getComSettlementCategory() != null ? ligne.getComSettlementCategory().getCode() : "SANS_CATEGORIE";
@@ -734,8 +741,12 @@ public class DossierService {
             nombreParCategorie.merge(categorie, 1, Integer::sum);
             regleParCategorie.merge(categorie, regle, BigDecimal::add);
             totalGeneral = totalGeneral.add(montant);
-            if (!Boolean.TRUE.equals(ligne.getExcludeFromPrice())) {
+            regleTotal = regleTotal.add(regle);
+            if (Boolean.TRUE.equals(ligne.getExcludeFromPrice())) {
+                fraisExclusDuPrix = fraisExclusDuPrix.add(montant);
+            } else {
                 totalSoumisReglePrixTTC = totalSoumisReglePrixTTC.add(montant);
+                regleSoumisAuPrix = regleSoumisAuPrix.add(regle);
             }
         }
 
@@ -748,7 +759,58 @@ public class DossierService {
                 })
                 .toList();
 
-        return new MontantsDossierDto(parCategorie, totalGeneral, totalSoumisReglePrixTTC);
+        return new MontantsDossierDto(parCategorie, totalGeneral, totalSoumisReglePrixTTC,
+                prixVente(folder, regleSoumisAuPrix),
+                netAPayer(folder, fraisExclusDuPrix, regleTotal),
+                estSorti(folder));
+    }
+
+    /**
+     * Ligne « Prix de vente » de l'onglet Montants du logiciel de bureau.
+     *
+     * <p>Le montant vient de {@code ComFolder.Price} et n'est <strong>pas</strong> re-dérivé de
+     * l'échéancier : les deux coïncident sur 327 des 328 dossiers actifs réels, et c'est le prix
+     * stocké qui fait foi — c'est aussi ce que lit la vue légataire.
+     */
+    private static SyntheseMontantDto prixVente(ComFolder f, BigDecimal regleSoumisAuPrix) {
+        BigDecimal montant = requireNonNullElse(f.getPrice(), BigDecimal.ZERO);
+        return new SyntheseMontantDto(montant, regleSoumisAuPrix, montant.subtract(regleSoumisAuPrix));
+    }
+
+    /**
+     * Ligne « Net à payer » : le prix de vente augmenté des frais exclus du prix.
+     *
+     * <p><strong>Sauf sur un dossier sorti</strong> ({@code ANNULATION} / {@code DESISTEMENT}), où
+     * le net à payer se réduit à ce qui a déjà été encaissé et le reste tombe à zéro — un dossier
+     * annulé ne reste rien devoir. Les deux règles sont vérifiées sans exception sur les 358
+     * dossiers réels : 328/328 pour les actifs, 30/30 pour les sortis. Voir
+     * {@code instructions/FEATURE-fiche-dossier-alignement-ecran.md} §5.
+     */
+    private static SyntheseMontantDto netAPayer(ComFolder f, BigDecimal fraisExclusDuPrix,
+                                                BigDecimal regleTotal) {
+        if (estSorti(f)) {
+            return new SyntheseMontantDto(regleTotal, regleTotal, BigDecimal.ZERO);
+        }
+        BigDecimal montant = requireNonNullElse(f.getPrice(), BigDecimal.ZERO).add(fraisExclusDuPrix);
+        return new SyntheseMontantDto(montant, regleTotal, montant.subtract(regleTotal));
+    }
+
+    /**
+     * Dossier sorti du parcours. Équivaut exactement au {@code IsCancellation} de la vue légataire
+     * — vérifié 30/30 (22 {@code ANNULATION} + 8 {@code DESISTEMENT}), aucune exception —, donc
+     * aucune colonne supplémentaire n'est mappée pour l'obtenir.
+     */
+    private static boolean estSorti(ComFolder f) {
+        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
+            return false;
+        }
+        // fromCode lève sur un code hors référentiel : un statut inconnu ne doit pas faire tomber
+        // le calcul des montants en 500. Même repli défensif que etapesAtteignables.
+        try {
+            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private static StatutDossier tryFromCode(String code) {
@@ -891,6 +953,12 @@ public class DossierService {
                 f.getNotes(),
                 f.getProbabilityOfFinalisation(),
                 f.getComPaymentMethod() != null ? f.getComPaymentMethod().getCode() : null,
+                f.getUnitCost(),
+                f.getPriceHT(),
+                f.getPriceBeforeDiscountHT(),
+                f.getVATRatio(),
+                f.getStatusValidityDate(),
+                f.getPartPercent(),
                 f.getComProspection() != null ? f.getComProspection().getId() : null,
                 f.getComProspection() != null ? f.getComProspection().getCode() : null,
                 // -- Contexte patrimonial. La chaîne article → tranche → projet → société est
@@ -963,7 +1031,10 @@ public class DossierService {
                 item.getStkFloor() != null ? item.getStkFloor().getDescription() : null,
                 item.getStkBuilding() != null ? item.getStkBuilding().getId() : null,
                 item.getStkBuilding() != null ? item.getStkBuilding().getCode() : null,
-                item.getStkBuilding() != null ? item.getStkBuilding().getDescription() : null
+                item.getStkBuilding() != null ? item.getStkBuilding().getDescription() : null,
+                item.getTitleNumber(),
+                Champs.de(item.getStkPresentationType(), StkPresentationType::getCode),
+                Champs.de(item.getStkPresentationType(), StkPresentationType::getDescription)
         );
     }
 }

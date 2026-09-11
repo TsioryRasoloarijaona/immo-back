@@ -257,6 +257,12 @@ public class EcheancierService {
         ComDocument document = new ComDocument();
         document.setId(UUID.randomUUID());
         document.setComFolder(folder);
+        // Renseigné ici parce que l'API expose désormais cette date sous EcheanceDto.creeLe : les
+        // 921 échéances créées par le logiciel de bureau la portent toutes, nos créations la
+        // laissaient nulle. Exposer un champ que notre propre chemin d'écriture ne remplit pas
+        // serait livrer un champ cassé. L'AUTEUR (UserCreate), lui, reste non posé : il exigerait
+        // de faire descendre le principal jusqu'ici, et aucun champ ne l'expose.
+        document.setUserCreateDateTime(LocalDateTime.now());
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
 
@@ -294,6 +300,11 @@ public class EcheancierService {
         }
     }
 
+    /** {@code null} pour une chaîne nulle ou blanche. */
+    private static String videEnNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
     /**
      * Builds the DTO given an already-known règlement total, so callers computing totals in
      * bulk (e.g. {@link DossierService#montants}) don't issue one query per échéance.
@@ -320,7 +331,12 @@ public class EcheancierService {
                 d.getNotes(),
                 regle,
                 reste,
-                statutCalcule.name()
+                statutCalcule.name(),
+                // QuittanceCode n'est JAMAIS null en base — 0 ligne sur 921 — mais vide sur 83,5 %
+                // d'entre elles. Sans cette normalisation l'API répondrait "" là où elle doit
+                // répondre null, et le client afficherait un décompte vide au lieu de masquer.
+                videEnNull(d.getQuittanceCode()),
+                d.getUserCreateDateTime()
         );
     }
 }
