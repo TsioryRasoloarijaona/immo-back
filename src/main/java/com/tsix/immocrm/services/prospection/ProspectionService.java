@@ -9,7 +9,10 @@ import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneProspection;
+import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.MarqueurTriProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
@@ -66,6 +69,8 @@ import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
+import com.tsix.immocrm.dto.common.GroupeDto;
+import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.utils.Champs;
@@ -89,6 +94,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -158,6 +164,7 @@ public class ProspectionService {
     private final StrHistoryRepository historyRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final PerimetreCommercialService perimetreService;
+    private final GroupementService groupementService;
     /** Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}. */
     private final AdmUserRepository userRepository;
     /**
@@ -183,6 +190,7 @@ public class ProspectionService {
                                StrHistoryRepository historyRepository,
                                AdmSequenceRepository sequenceRepository,
                                PerimetreCommercialService perimetreService,
+                               GroupementService groupementService,
                                AdmUserRepository userRepository,
                                ComSaleProspectionViewRepository prospectionViewRepository,
                                StrEntityRepository strEntityRepository,
@@ -192,6 +200,7 @@ public class ProspectionService {
         this.publisher = publisher;
         this.userRepository = userRepository;
         this.perimetreService = perimetreService;
+        this.groupementService = groupementService;
         this.prospectionRepository = prospectionRepository;
         this.prospectService = prospectService;
         this.tierRepository = tierRepository;
@@ -234,16 +243,13 @@ public class ProspectionService {
     public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
             List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
             Boolean ouvertes, FiltresAvancesProspection filtres, Set<ColonneProspection> colonnes,
+            ColonneProspection groupeColonne, String groupeValeur, Granularite granularite,
             Pageable pageable) {
-        Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes)
-                .and(filtresAvances(filtres))
-                .and((root, query, cb) -> cb.or(
-                        cb.isNotNull(root.get("cfgProspect")),
-                        cb.isNotNull(root.get("cfgCommercial"))
-                ))
+        Specification<ComProspection> spec = specProspections(etapes, origines, commerciaux, trancheIds,
+                dateDebut, dateFin, search, ouvertes, filtres)
                 // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
-                .and(perimetreService.filtreProspections());
+                .and(perimetreService.filtreProspections())
+                .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
     }
 
@@ -253,20 +259,94 @@ public class ProspectionService {
      */
     public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes, Pageable pageable) {
-        Specification<ComProspection> spec = buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes)
-                .and((root, query, cb) -> cb.and(
-                        cb.isNull(root.get("cfgProspect")),
-                        cb.isNull(root.get("cfgCommercial"))
-                ))
+            String search, Boolean ouvertes, ColonneProspection groupeColonne, String groupeValeur,
+            Granularite granularite, Pageable pageable) {
+        Specification<ComProspection> spec = specPreProspections(etapes, origines, commerciaux, trancheIds,
+                dateDebut, dateFin, search, ouvertes)
                 // Périmètre commercial : une pré-prospection a par construction un commercial NULL
                 // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
-                .and(perimetreService.filtreProspections());
+                .and(perimetreService.filtreProspections())
+                .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut, sans discussion : ComSaleProspectionView exclut par construction
         // les pré-prospections, donc aucune colonne d'activité ne peut être servie ici. Demander
         // la vue reviendrait à payer une requête pour n'obtenir que des null.
         return versListe(prospectionRepository.findAll(spec, pageable), ColonneProspection.parDefautSet());
+    }
+
+    /**
+     * Replie {@code GET /api/prospections} en groupes — voir
+     * {@code instructions/FEATURE-groupement-listes.md}.
+     */
+    public Page<GroupeDto> grouperProspections(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes, FiltresAvancesProspection filtres,
+            ColonneProspection groupeBy, Granularite granularite, Set<ColonneProspection> agregats,
+            TriGroupe tri, Pageable pageable) {
+        return grouper(specProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
+                search, ouvertes, filtres), groupeBy, granularite, agregats, tri, pageable);
+    }
+
+    /** Replie {@code GET /api/pre-prospections} en groupes, même discriminant que la liste. */
+    public Page<GroupeDto> grouperPreProspections(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
+            Set<ColonneProspection> agregats, TriGroupe tri, Pageable pageable) {
+        return grouper(specPreProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
+                search, ouvertes), groupeBy, granularite, agregats, tri, pageable);
+    }
+
+    private Page<GroupeDto> grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
+            Granularite granularite, Set<ColonneProspection> agregats, TriGroupe tri, Pageable pageable) {
+        Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
+        for (ColonneProspection agregat : agregats) {
+            cheminsAgregats.put(agregat.nom(), agregat.chemin());
+        }
+        return groupementService.grouper(ComProspection.class,
+                spec.and(perimetreService.filtreProspections()),
+                groupeBy.chemin(), granularite, cheminsAgregats, tri, pageable);
+    }
+
+    /**
+     * Prédicat de dépliage, ou prédicat neutre si aucun groupe n'est demandé.
+     *
+     * <p>Neutre plutôt que {@code null} : {@code Specification.and(null)} est licite mais rendrait
+     * la chaîne d'appel illisible dès qu'on en enchaîne plusieurs.
+     */
+    private static Specification<ComProspection> filtreDeGroupe(ColonneProspection groupeColonne,
+            String groupeValeur, Granularite granularite) {
+        if (groupeColonne == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> GroupementService.predicatDeGroupe(
+                root, cb, groupeColonne.chemin(), granularite, groupeValeur);
+    }
+
+    /**
+     * Filtres de {@code GET /api/prospections}, périmètre commercial <strong>exclu</strong> — les
+     * appelants l'ajoutent explicitement, ce qui rend son absence visible à la lecture plutôt que
+     * cachée dans une composition. Partagé avec le groupement pour que la liste et ses groupes
+     * portent exactement les mêmes lignes.
+     */
+    private static Specification<ComProspection> specProspections(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes, FiltresAvancesProspection filtres) {
+        return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
+                .and(filtresAvances(filtres))
+                .and((root, query, cb) -> cb.or(
+                        cb.isNotNull(root.get("cfgProspect")),
+                        cb.isNotNull(root.get("cfgCommercial"))
+                ));
+    }
+
+    /** Idem pour les pré-prospections : le discriminant est l'inverse exact du précédent. */
+    private static Specification<ComProspection> specPreProspections(List<String> etapes, List<String> origines,
+            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+            String search, Boolean ouvertes) {
+        return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
+                .and((root, query, cb) -> cb.and(
+                        cb.isNull(root.get("cfgProspect")),
+                        cb.isNull(root.get("cfgCommercial"))
+                ));
     }
 
     /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */

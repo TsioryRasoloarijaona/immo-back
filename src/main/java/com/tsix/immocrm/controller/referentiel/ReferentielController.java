@@ -422,12 +422,16 @@ public class ReferentielController {
                     + "de la base légataire : les demander déclenche une requête supplémentaire, "
                     + "mesurée à 7 ms pour une page de 20. Ne pas les demander n'en déclenche "
                     + "aucune.\n\n"
+                    + "Porte aussi **`groupable`** et **`agregeable`**, qui pilotent la bande de "
+                    + "groupement et les bandes « Total : » de `/groupes` — le front n'en code "
+                    + "donc aucune liste en dur. Toutes les colonnes ne sont pas groupables : "
+                    + "voir instructions/FEATURE-groupement-listes.md §2.\n\n"
                     + "Référentiel statique, sans paramètre : cacheable côté client."
     )
     public List<ColonneDto> getColonnesProspections() {
         return Arrays.stream(ColonneProspection.values())
-                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
-                        c.parDefaut()))
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
                 .toList();
     }
 
@@ -446,12 +450,16 @@ public class ReferentielController {
                     + "toujours vide ; `kind` l'est sur 14 339 des 14 516 tiers réels. Les "
                     + "**tranches d'intérêt sont absentes du catalogue** : elles exigent une "
                     + "requête par prospect et restent réservées à la fiche.\n\n"
+                    + "Porte aussi **`groupable`** et **`agregeable`**, qui pilotent la bande de "
+                    + "groupement et les bandes « Total : » de `/groupes` — le front n'en code "
+                    + "donc aucune liste en dur. Toutes les colonnes ne sont pas groupables : "
+                    + "voir instructions/FEATURE-groupement-listes.md §2.\n\n"
                     + "Référentiel statique, sans paramètre : cacheable côté client."
     )
     public List<ColonneDto> getColonnesProspects() {
         return Arrays.stream(ColonneProspect.values())
-                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
-                        c.parDefaut()))
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
                 .toList();
     }
 
@@ -471,12 +479,16 @@ public class ReferentielController {
                     + "vivants sur 12, et un bloc `Agreement*` qui diverge du bloc principal sur "
                     + "20 % des lignes sans qu'on sache lequel fait foi) et **`notes`** (mesurée à "
                     + "0 ligne sur 358).\n\n"
+                    + "Porte aussi **`groupable`** et **`agregeable`**, qui pilotent la bande de "
+                    + "groupement et les bandes « Total : » de `/groupes` — le front n'en code "
+                    + "donc aucune liste en dur. Toutes les colonnes ne sont pas groupables : "
+                    + "voir instructions/FEATURE-groupement-listes.md §2.\n\n"
                     + "Référentiel statique, sans paramètre : cacheable côté client."
     )
     public List<ColonneDto> getColonnesDossiers() {
         return Arrays.stream(ColonneDossier.values())
-                .map(c -> new ColonneDto(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
-                        c.parDefaut()))
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
                 .toList();
     }
 }

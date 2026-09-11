@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-11T09:30+01:00_
+_Last updated: 2026-09-11T10:15+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -17,15 +17,21 @@ ce que le logiciel de bureau affiche.
 | A/B/C | Champs morts retirés · 18 colonnes ajoutées à la liste · 15 filtres | **mergé** |
 | D | Enrichissement de la fiche (`GET /api/prospections/{id}`) | **mergé** (PR #39) |
 | E | Marqueurs de tri + pointeur de doublon | **mergé** (PR #41) |
-| **F** | **Fiche dossier alignée sur l'écran légataire** | **branche en cours** |
+| F | Fiche dossier alignée sur l'écran légataire | **mergé** (PR #42) |
 
-Branche : **`feat/fiche-dossier-alignement-ecran`**, coupée d'un `main` fraîchement pull.
-**763 tests verts** (673 en début de session, +90 dont 53 écrits ici).
+**Aucune branche en cours.** `main` = `9891c4a`, synchronisé avec `origin`, arbre propre.
+**763 tests verts** (673 en début de session, +90 dont 53 écrits dans cette session).
 
 **Le chantier a changé de méthode au lot F, et c'est l'acquis principal.** Jusque-là on partait de
 la vue ; désormais on part de **captures d'écran du logiciel de bureau**, confrontées case par case
 à la base. C'est ce qui a révélé `PriceWithModification` (un booléen, pas un prix) et les ratios
 stockés en fraction — deux erreurs qu'aucune lecture de schéma n'aurait évitées.
+
+**Le bilan des vues, maintenant que les trois écrans principaux sont traités** : sur les quatre
+vues candidates, **une seule a réellement servi** (`ComSaleProspectionView`, lot 1). Les trois
+autres ont été écartées sur mesure — trop plate, trop chère, ou déjà couverte. La leçon qui vaut
+pour la suite : **mesurer la densité d'une vue (taille de définition, nombre de sous-requêtes) et
+son coût sur des lignes distinctes avant de projeter le moindre travail dessus.**
 
 ---
 
@@ -290,9 +296,10 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ## 📁 Important Files & Paths
 
-- **`instructions/FEATURE-fiche-dossier-alignement-ecran.md`** — le lot en cours : §1 pourquoi la
-  vue dossier est écartée (mesures), §2 les deux pièges, §5 **les formules de l'onglet Montants et
-  leur vérification**, plus les deux anomalies de données signalées.
+- **`instructions/FEATURE-fiche-dossier-alignement-ecran.md`** — lot F, **le document à lire avant
+  de toucher au dossier** : §1 pourquoi la vue est écartée (mesures), §2 les deux pièges, §5 **les
+  formules de l'onglet Montants et leur vérification**, §6 ce qui reste hors périmètre, plus les
+  deux anomalies de données signalées.
 - `src/test/.../MontantsSyntheseTest.java` — les chiffres du dossier réel de la capture
   (`ARS 2025/00357`) servent de scénario : s'ils changent, l'API a cessé de dire ce que l'écran dit.
 - `instructions/FEATURE-marqueurs-tri-pre-prospection.md` — lot E : §1 pourquoi la
@@ -342,32 +349,39 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ### État des branches
 
+**`main` = `9891c4a`, synchronisé avec `origin`, arbre propre. Aucune branche en cours.**
+
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/fiche-dossier-alignement-ecran`** | lot F, 763 tests verts |
+| back | `feat/fiche-dossier-alignement-ecran` | **mergée (PR #42) — supprimable** (local + `origin`) |
 | back | `feat/contexte-dossier` | **prouvée mergée, 0 commit hors `main` — supprimable** |
 | back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée **mais la branche locale a divergé depuis** (1 commit hors `main`) |
 | back | `docs/memoire-de-session` | 2 commits, sur `origin`, non mergée |
 | back | `feat/remise-dossier` | 1 commit, **aucun remote** |
 | front | `refractor/best-practice` | **11 commits, LOCAL SEUL** — remote supprimé sans merge |
 
-Lots 1→D mergés sur GitHub (PR jusqu'à #39). `sync` **ne supprime pas** la branche mergée — le
-faire à la main (`git branch -d` + `git push origin --delete`, fait pour le lot D). `-d` refuse
-toute branche non mergée : s'en servir comme garde-fou plutôt que `-D`. C'est ce refus qui a
-révélé la divergence de `fix/ci-pollution-doubles-envoi`.
+Lots 1→F mergés sur GitHub (PR jusqu'à #42). `sync` **ne supprime pas** la branche mergée — le
+faire à la main (`git branch -d` + `git push origin --delete`, fait pour les lots D et E). `-d`
+refuse toute branche non mergée : s'en servir comme garde-fou plutôt que `-D`. C'est ce refus qui
+a révélé la divergence de `fix/ci-pollution-doubles-envoi`.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Faire merger la PR `feat/fiche-dossier-alignement-ecran` sur GitHub**, puis
-> `node ..\.claude\scripts\git-flow.mjs sync back` et supprimer la branche à la main.
+> **Demander à l'utilisateur les captures des onglets dossier non vus** — « Dates », « Dates
+> autres », « Autres montants », « Annulation / Résiliation », « Acquéreurs » — puis spécifier le
+> lot G à partir d'elles.
+>
+> C'est devenu la méthode la plus efficace du chantier : **deux captures ont suffi à cadrer tout
+> le lot F**, et elles ont attrapé deux erreurs (`PriceWithModification` booléen, ratios en
+> fraction) qu'aucune lecture de schéma n'aurait évitées. Ne pas repartir de la vue.
+>
+> Rien n'est en cours : `main` est synchronisé, l'arbre est propre. Avant de couper la branche
+> suivante, **demander l'accord de l'utilisateur** — et au passage, deux branches mergées
+> attendent d'être supprimées (voir État des branches).
 
 ### Backlog
-
-- [ ] **Demander les captures des onglets restants du dossier** — « Dates », « Dates autres »,
-      « Autres montants », « Annulation / Résiliation », « Acquéreurs ». C'est devenu la façon la
-      plus rapide de cadrer un périmètre : deux captures ont suffi pour tout le lot F.
 - [ ] **Comprendre les 8 dossiers qui bloquent `ratioAvance`** (`AdvanceAmount` ≠ total catégorie
       `AVANCE` ; la catégorie `PRÉ-RÉSERVATION` est le suspect). Préalable à livrer le champ.
 - [ ] **Relayer au dépôt frontend** `GUIDE-FRONT-fiche-prospection.md`, rangs **5 et 6** :

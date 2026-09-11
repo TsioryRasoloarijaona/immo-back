@@ -34,57 +34,102 @@ import java.util.Set;
 public enum ColonneDossier implements Colonne {
 
     // -- Colonnes historiques : la sélection par défaut, à ne pas modifier.
+    //
+    // Les `*_ID` restent volontairement SANS chemin : leur jumelle `*_NOM` groupe déjà sur
+    // l'identifiant (voir Chemin.tier) et rend un libellé lisible. Les rendre groupables
+    // offrirait deux fois le même groupement, dont une version affichant des UUID.
     ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true),
     CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true),
-    DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true),
-    STATUT("statut", "Statut", Groupe.IDENTITE, TypeColonne.TEXTE, true),
+    DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true,
+            Chemin.date("docDate")),
+    STATUT("statut", "Statut", Groupe.IDENTITE, TypeColonne.TEXTE, true,
+            Chemin.groupable("strStatus.code")),
     CLIENT_ID("clientId", "Id client", Groupe.ACTEURS, TypeColonne.TEXTE, true),
-    CLIENT_NOM("clientNom", "Client", Groupe.ACTEURS, TypeColonne.TEXTE, true),
+    CLIENT_NOM("clientNom", "Client", Groupe.ACTEURS, TypeColonne.TEXTE, true,
+            Chemin.tier("cfgCustomer")),
     COMMERCIAL_ID("commercialId", "Id commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true),
-    COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true),
-    PRIX("prix", "Prix", Groupe.FINANCIER, TypeColonne.MONTANT, true),
-    TOTAL_A_PAYER("totalAPayer", "Total à payer", Groupe.FINANCIER, TypeColonne.MONTANT, true),
-    DATE_CONCRETISATION("dateConcretisation", "Concrétisation", Groupe.IDENTITE, TypeColonne.DATE, true),
+    COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true,
+            Chemin.tier("cfgCommercial")),
+    PRIX("prix", "Prix", Groupe.FINANCIER, TypeColonne.MONTANT, true,
+            Chemin.agregeable("price")),
+    TOTAL_A_PAYER("totalAPayer", "Total à payer", Groupe.FINANCIER, TypeColonne.MONTANT, true,
+            Chemin.agregeable("totalToPay")),
+    DATE_CONCRETISATION("dateConcretisation", "Concrétisation", Groupe.IDENTITE, TypeColonne.DATE, true,
+            Chemin.date("advanceDate")),
     PROSPECTION_ID("prospectionId", "Id prospection", Groupe.ORIGINE, TypeColonne.TEXTE, true),
     PROSPECTION_CODE("prospectionCode", "Prospection", Groupe.ORIGINE, TypeColonne.TEXTE, true),
 
     // -- Financier, déjà servi par la fiche. Scalaires de ComFolder : coût nul.
-    PRIX_AVANT_REMISE("prixAvantRemise", "Prix avant remise", Groupe.FINANCIER, TypeColonne.MONTANT, false),
-    REMISE("remise", "Remise (%)", Groupe.FINANCIER, TypeColonne.NOMBRE, false),
-    REMISE_MONTANT("remiseMontant", "Remise", Groupe.FINANCIER, TypeColonne.MONTANT, false),
-    PRIX_APRES_REMISE("prixApresRemise", "Prix après remise", Groupe.FINANCIER, TypeColonne.MONTANT, false),
-    MONTANT_AVANCE("montantAvance", "Avance", Groupe.FINANCIER, TypeColonne.MONTANT, false),
-    PROBABILITE_FINALISATION("probabiliteFinalisation", "Probabilité", Groupe.FINANCIER, TypeColonne.NOMBRE, false),
+    //
+    // Tous agrégeables, aucun groupable : `Price` porte 190 valeurs distinctes sur 358 dossiers.
+    // `REMISE` et `PROBABILITE_FINALISATION` sont des RATIOS stockés en fraction (1.00 = 100 %) —
+    // leur somme n'a pas de sens métier, mais c'est au client de choisir ce qu'il additionne, et
+    // les exclure ferait une exception à expliquer pour un gain nul.
+    PRIX_AVANT_REMISE("prixAvantRemise", "Prix avant remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            Chemin.agregeable("priceBeforeDiscount")),
+    REMISE("remise", "Remise (%)", Groupe.FINANCIER, TypeColonne.NOMBRE, false,
+            Chemin.agregeable("discount")),
+    REMISE_MONTANT("remiseMontant", "Remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            Chemin.agregeable("discountAmount")),
+    PRIX_APRES_REMISE("prixApresRemise", "Prix après remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            Chemin.agregeable("priceAfterDiscount")),
+    MONTANT_AVANCE("montantAvance", "Avance", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            Chemin.agregeable("agreementAmount")),
+    PROBABILITE_FINALISATION("probabiliteFinalisation", "Probabilité", Groupe.FINANCIER, TypeColonne.NOMBRE, false,
+            Chemin.agregeable("probabilityOfFinalisation")),
 
     // -- Contexte patrimonial. Chaîne article → tranche → projet → société : jointures paresseuses,
     //    payées seulement si demandées.
+    //
+    // Les chemins traversent `stkItem` (l'article principal), qui est NULLABLE. Le moteur de
+    // groupement doit donc les joindre en LEFT explicite : une navigation implicite produirait
+    // des INNER JOIN et ferait disparaître des groupes entiers — le piège déjà rencontré sur le
+    // filtre `trancheId` de DossierService (voir les commentaires de buildSpec).
     PROJET_ID("projetId", "Id projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    PROJET_CODE("projetCode", "Projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    PROJET_LIBELLE("projetLibelle", "Libellé projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
+    PROJET_CODE("projetCode", "Projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.cfgProject.code")),
+    PROJET_LIBELLE("projetLibelle", "Libellé projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.cfgProject.description")),
     TRANCHE_ID("trancheId", "Id tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    TRANCHE_CODE("trancheCode", "Tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    TRANCHE_LIBELLE("trancheLibelle", "Libellé tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
+    TRANCHE_CODE("trancheCode", "Tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.code")),
+    TRANCHE_LIBELLE("trancheLibelle", "Libellé tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.description")),
     SOCIETE_ID("societeId", "Id société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    SOCIETE_CODE("societeCode", "Société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    VOCATION_CODE("vocationCode", "Vocation", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
-    VOCATION_LIBELLE("vocationLibelle", "Libellé vocation", Groupe.PATRIMOINE, TypeColonne.TEXTE, false),
+    SOCIETE_CODE("societeCode", "Société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.cfgProject.cfgCompany.code")),
+    SOCIETE_LIBELLE("societeLibelle", "Libellé société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkItem.stkHierarchy.cfgProject.cfgCompany.description")),
+    VOCATION_CODE("vocationCode", "Vocation", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkVocation.code")),
+    VOCATION_LIBELLE("vocationLibelle", "Libellé vocation", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("stkVocation.description")),
 
     // -- Acteurs.
     AVOCAT_ID("avocatId", "Id notaire", Groupe.ACTEURS, TypeColonne.TEXTE, false),
-    AVOCAT_NOM("avocatNom", "Notaire", Groupe.ACTEURS, TypeColonne.TEXTE, false),
-    MODE_PAIE("modePaie", "Mode de paiement", Groupe.FINANCIER, TypeColonne.TEXTE, false),
+    AVOCAT_NOM("avocatNom", "Notaire", Groupe.ACTEURS, TypeColonne.TEXTE, false,
+            Chemin.tier("cfgLawyer")),
+    MODE_PAIE("modePaie", "Mode de paiement", Groupe.FINANCIER, TypeColonne.TEXTE, false,
+            Chemin.groupable("comPaymentMethod.code")),
 
     // -- Origine, depuis la prospection. 99,2 % des dossiers en ont une.
-    ETAPE_PROSPECTION("etapeProspection", "Étape prospection", Groupe.ORIGINE, TypeColonne.TEXTE, false),
-    ORIGINE_PROSPECTION("origineProspection", "Origine", Groupe.ORIGINE, TypeColonne.TEXTE, false),
-    DATE_PROSPECTION("dateProspection", "Date prospection", Groupe.ORIGINE, TypeColonne.DATE, false),
+    // `etapeProspection` lit bien ComProspectionKind : c'est ce que fait déjà le mappeur de liste.
+    ETAPE_PROSPECTION("etapeProspection", "Étape prospection", Groupe.ORIGINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("comProspection.comProspectionKind.description")),
+    ORIGINE_PROSPECTION("origineProspection", "Origine", Groupe.ORIGINE, TypeColonne.TEXTE, false,
+            Chemin.groupable("comProspection.comProspectionOrigin.description")),
+    DATE_PROSPECTION("dateProspection", "Date prospection", Groupe.ORIGINE, TypeColonne.DATE, false,
+            Chemin.date("comProspection.docDate")),
 
     // -- Piste d'audit. Scalaires, 100 % en base réelle.
-    CREE_PAR("creePar", "Créé par", Groupe.AUDIT, TypeColonne.TEXTE, false),
-    CREE_LE("creeLe", "Créé le", Groupe.AUDIT, TypeColonne.DATE, false),
-    MODIFIE_PAR("modifiePar", "Modifié par", Groupe.AUDIT, TypeColonne.TEXTE, false),
-    MODIFIE_LE("modifieLe", "Modifié le", Groupe.AUDIT, TypeColonne.DATE, false);
+    CREE_PAR("creePar", "Créé par", Groupe.AUDIT, TypeColonne.TEXTE, false,
+            Chemin.groupable("userCreate")),
+    CREE_LE("creeLe", "Créé le", Groupe.AUDIT, TypeColonne.DATE, false,
+            Chemin.date("userCreateDateTime")),
+    MODIFIE_PAR("modifiePar", "Modifié par", Groupe.AUDIT, TypeColonne.TEXTE, false,
+            Chemin.groupable("userUpdate")),
+    MODIFIE_LE("modifieLe", "Modifié le", Groupe.AUDIT, TypeColonne.DATE, false,
+            Chemin.date("userUpdateDateTime"));
 
     /** Regroupement d'affichage du sélecteur. */
     public enum Groupe { IDENTITE, ACTEURS, FINANCIER, PATRIMOINE, ORIGINE, AUDIT }
@@ -100,13 +145,21 @@ public enum ColonneDossier implements Colonne {
     private final Groupe groupe;
     private final TypeColonne type;
     private final boolean parDefaut;
+    private final Chemin chemin;
 
+    /** Colonne ni groupable ni agrégeable — le cas par défaut, cf. {@link Colonne#chemin()}. */
     ColonneDossier(String nom, String libelle, Groupe groupe, TypeColonne type, boolean parDefaut) {
+        this(nom, libelle, groupe, type, parDefaut, null);
+    }
+
+    ColonneDossier(String nom, String libelle, Groupe groupe, TypeColonne type, boolean parDefaut,
+                   Chemin chemin) {
         this.nom = nom;
         this.libelle = libelle;
         this.groupe = groupe;
         this.type = type;
         this.parDefaut = parDefaut;
+        this.chemin = chemin;
     }
 
     @Override
@@ -129,6 +182,31 @@ public enum ColonneDossier implements Colonne {
     @Override
     public boolean parDefaut() {
         return parDefaut;
+    }
+
+    @Override
+    public Chemin chemin() {
+        return chemin;
+    }
+
+    /** Colonnes acceptées par {@code ?groupBy=}, dans l'ordre de déclaration. */
+    public static List<ColonneDossier> groupables() {
+        return Colonnes.groupables(ColonneDossier.class);
+    }
+
+    /** Colonnes acceptées par {@code ?agregats=}, dans l'ordre de déclaration. */
+    public static List<ColonneDossier> agregeables() {
+        return Colonnes.agregeables(ColonneDossier.class);
+    }
+
+    /** @throws ColonneInconnueException si le nom n'est pas une colonne groupable de ce catalogue. */
+    public static ColonneDossier resoudreGroupement(String demandee) {
+        return Colonnes.resoudreGroupement(ColonneDossier.class, demandee);
+    }
+
+    /** @throws ColonneInconnueException si un nom n'est pas une colonne agrégeable de ce catalogue. */
+    public static Set<ColonneDossier> resoudreAgregats(List<String> demandees) {
+        return Colonnes.resoudreAgregats(ColonneDossier.class, demandees);
     }
 
     public static Set<ColonneDossier> parDefautSet() {

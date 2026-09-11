@@ -59,7 +59,19 @@ class PerimetreInterceptorInvarianteTest {
             "/api/dossiers/documents/fiche-trop-percu",
             "/api/prospections",
             "/api/pre-prospections",
-            "/api/encaissements");
+            "/api/encaissements",
+            // Endpoints de groupement (FEATURE-groupement-listes.md). Routes de COLLECTION, sans
+            // identifiant de ressource : elles ne chargent aucune ressource scopée à l'unité, elles
+            // agrègent. Leur périmètre n'est donc pas l'affaire de l'intercepteur mais de la
+            // requête elle-même — chacune applique PerimetreCommercialService#filtreDossiers /
+            // #filtreProspections à la Specification, exactement comme la liste qu'elle replie.
+            //
+            // C'est vérifié, pas supposé : DossierGroupementTest#sommeDesEffectifs_egaleLeTotalDeLaListe
+            // compare l'effectif des groupes au total de la liste à filtres identiques. Un périmètre
+            // appliqué d'un seul côté ferait diverger les deux.
+            "/api/dossiers/groupes",
+            "/api/prospections/groupes",
+            "/api/pre-prospections/groupes");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

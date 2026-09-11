@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.AjouterAutreTrancheRequest;
@@ -43,7 +44,11 @@ import com.tsix.immocrm.services.prospection.document.NdaPdfRenderer;
 import com.tsix.immocrm.services.prospection.document.OffreDevisPdfRenderer;
 import com.tsix.immocrm.services.prospection.document.ProspectionFichePdfRenderer;
 import com.tsix.immocrm.domain.ColonneProspection;
+import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.TriGroupe;
+import com.tsix.immocrm.web.Groupements;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -193,13 +198,86 @@ public class ProspectionController {
                     + "`GET /api/referentiels/colonnes/prospections` pour la liste exacte.",
                     example = "code,prospectNom,joursInactivite,nbInteractions")
             @RequestParam(required = false) List<String> colonnes,
+            @Parameter(description = "Déplie un groupe : restreint la liste aux prospections d'un "
+                    + "groupe renvoyé par `GET /api/prospections/groupes`. Attend le nom de la "
+                    + "colonne qui a servi au groupement.", example = "etape")
+            @RequestParam(required = false) String groupeColonne,
+            @Parameter(description = "Valeur du groupe à déplier — **la `cle` renvoyée telle quelle "
+                    + "par `/groupes`**. Omise alors que `groupeColonne` est fourni : le groupe "
+                    + "des prospections sans valeur sur cette colonne.")
+            @RequestParam(required = false) String groupeValeur,
+            @Parameter(description = "Granularité si `groupeColonne` est une date. Doit être "
+                    + "identique à celle passée à `/groupes`. Défaut : MOIS.")
+            @RequestParam(required = false) Granularite granularite,
             @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         // Résolu ici pour que le 400 parte avant toute requête. L'omission des clés non demandées
         // est appliquée à la sérialisation par SelectionColonnesPropertyFilter.
         Set<ColonneProspection> selection = ColonneProspection.resoudre(colonnes);
+        ColonneProspection groupe = Groupements.colonneDeDepliage(
+                groupeColonne, groupeValeur, ColonneProspection::resoudreGroupement);
         return PageDto.of(prospectionService.findAll(etape, origine, commercial, trancheId, dateDebut, dateFin,
-                search, ouvertes, filtres, selection, pageable));
+                search, ouvertes, filtres, selection, groupe, groupeValeur,
+                Groupements.granularite(groupe, granularite), pageable));
+    }
+
+    @GetMapping("/groupes")
+    @Operation(
+            summary = "Liste des prospections repliée en groupes, avec effectifs et totaux",
+            description = """
+                    Reproduit la bande de groupement du logiciel de bureau : un groupe par valeur \
+                    distincte de `groupBy`, portant son effectif et les sommes demandées.
+
+                    **Les effectifs portent sur tout le périmètre filtré, pas sur une page** — \
+                    c'est la raison d'être de cet endpoint : la liste étant paginée, grouper côté \
+                    front ne grouperait qu'une page et fausserait tous les totaux.
+
+                    **Filtres identiques à `GET /api/prospections`**, filtres avancés et périmètre \
+                    commercial compris. Pour ouvrir un groupe : `GET /api/prospections\
+                    ?groupeColonne=<groupBy>&groupeValeur=<cle>`.
+
+                    **Seules les colonnes servies par l'entité sont groupables.** Les colonnes du \
+                    groupe `ACTIVITE` (`joursInactivite`, `nbInteractions`…) et de `CONVERSION` \
+                    viennent de la vue légataire `ComSaleProspectionView`, chargée par une requête \
+                    distincte : elles n'existent pas dans le graphe d'entités et ne peuvent donc \
+                    pas servir de clé de groupement. `GET /api/referentiels/colonnes/prospections` \
+                    donne la liste exacte via le booléen `groupable`.""",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Groupes, paginés comme une liste"),
+                    @ApiResponse(responseCode = "400", description =
+                            "`groupBy` absent, inconnu ou non groupable ; ou `agregats` contenant "
+                            + "une colonne non agrégeable. Le corps porte la liste des noms "
+                            + "acceptés.", content = @Content)
+            })
+    public PageDto<GroupeDto> grouper(
+            @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau.",
+                    example = "etape", required = true)
+            @RequestParam String groupBy,
+            @Parameter(description = "Colonnes à sommer, répétable ou séparées par des virgules.",
+                    example = "prix")
+            @RequestParam(required = false) List<String> agregats,
+            @Parameter(description = "Granularité si `groupBy` est une date. Défaut : MOIS — "
+                    + "grouper sur la date exacte rendrait 16 588 groupes pour 17 939 lignes.",
+                    example = "MOIS")
+            @RequestParam(required = false) Granularite granularite,
+            @Parameter(description = "LIBELLE (croissant, défaut) ou NOMBRE (effectif décroissant).")
+            @RequestParam(required = false) TriGroupe tri,
+            @RequestParam(required = false) List<String> etape,
+            @RequestParam(required = false) List<String> origine,
+            @RequestParam(required = false) List<UUID> commercial,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean ouvertes,
+            @ModelAttribute FiltresAvancesProspection filtres,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+        ColonneProspection groupe = ColonneProspection.resoudreGroupement(groupBy);
+        return PageDto.of(prospectionService.grouperProspections(etape, origine, commercial, trancheId,
+                dateDebut, dateFin, search, ouvertes, filtres, groupe,
+                Groupements.granularite(groupe, granularite),
+                ColonneProspection.resoudreAgregats(agregats),
+                tri != null ? tri : TriGroupe.DEFAUT, pageable));
     }
 
     @GetMapping("/{id}")

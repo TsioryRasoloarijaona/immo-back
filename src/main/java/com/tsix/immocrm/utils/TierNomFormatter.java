@@ -32,14 +32,30 @@ public final class TierNomFormatter {
         if (tier == null) {
             return null;
         }
-        if (StringUtils.hasText(tier.getSocialReason())) {
-            return tier.getSocialReason();
+        return nom(tier.getSocialReason(), tier.getDescription(), tier.getFirstName(), tier.getLastName());
+    }
+
+    /**
+     * Même priorité, appliquée à des colonnes brutes plutôt qu'à une entité chargée.
+     *
+     * <p>Existe pour le groupement ({@code GET /api/dossiers/groupes?groupBy=clientNom}), qui
+     * sélectionne les colonnes de nom dans une requête d'agrégation et n'a donc jamais de
+     * {@code CfgTier} en main — voir {@link com.tsix.immocrm.domain.Chemin#tier(String)}.
+     *
+     * <p>La surcharge ci-dessus délègue ici : la priorité reste écrite <strong>une seule
+     * fois</strong>. C'est tout l'intérêt de cette classe, qui existe précisément parce que la
+     * règle avait divergé dans une douzaine de services. Un en-tête de groupe libellé autrement
+     * que les lignes qu'il contient serait la même erreur sous une autre forme.
+     */
+    public static String nom(String socialReason, String description, String firstName, String lastName) {
+        if (StringUtils.hasText(socialReason)) {
+            return socialReason;
         }
-        if (StringUtils.hasText(tier.getDescription())) {
-            return tier.getDescription();
+        if (StringUtils.hasText(description)) {
+            return description;
         }
-        String prenom = tier.getFirstName() != null ? tier.getFirstName() : "";
-        String nom = tier.getLastName() != null ? tier.getLastName() : "";
+        String prenom = firstName != null ? firstName : "";
+        String nom = lastName != null ? lastName : "";
         String full = (prenom + " " + nom).trim();
         return full.isEmpty() ? null : full;
     }

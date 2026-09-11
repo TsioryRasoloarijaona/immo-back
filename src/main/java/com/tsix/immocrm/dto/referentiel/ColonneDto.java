@@ -33,6 +33,30 @@ public record ColonneDto(
                 + "L'ensemble des colonnes `parDefaut` reproduit exactement la réponse "
                 + "historique de la liste.",
                 example = "false")
-        boolean parDefaut
+        boolean parDefaut,
+
+        @Schema(description = """
+                Vraie si la colonne peut servir de clé à `?groupBy=` sur l'endpoint `/groupes` \
+                de la liste. Le front pilote sa bande de groupement là-dessus, sans liste en dur.
+
+                **Toutes les colonnes ne le sont pas, et c'est délibéré** : un montant porte \
+                presque autant de valeurs distinctes que de lignes (190 prix pour 358 dossiers), \
+                et les colonnes calculées par la vue légataire n'existent pas dans le graphe \
+                d'entités. Voir `instructions/FEATURE-groupement-listes.md` §2.""",
+                example = "true")
+        boolean groupable,
+
+        @Schema(description = "Vraie si la colonne peut être sommée via `?agregats=` — les bandes "
+                + "« Total : » sous un en-tête de groupe. Concerne les colonnes MONTANT et NOMBRE.",
+                example = "false")
+        boolean agregeable
 ) {
+
+    /** Construit depuis un catalogue : les deux booléens de groupement viennent du chemin déclaré. */
+    public static ColonneDto de(String nom, String libelle, String groupe, String type,
+                                boolean parDefaut, com.tsix.immocrm.domain.Chemin chemin) {
+        return new ColonneDto(nom, libelle, groupe, type, parDefaut,
+                chemin != null && chemin.groupable(),
+                chemin != null && chemin.agregeable());
+    }
 }
