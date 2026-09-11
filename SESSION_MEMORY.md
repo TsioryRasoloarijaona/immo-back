@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-10T20:30+01:00_
+_Last updated: 2026-09-11T09:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -16,14 +16,16 @@ ce que le logiciel de bureau affiche.
 | 3 | Inventaire des 148 colonnes | **mergé** |
 | A/B/C | Champs morts retirés · 18 colonnes ajoutées à la liste · 15 filtres | **mergé** |
 | D | Enrichissement de la fiche (`GET /api/prospections/{id}`) | **mergé** (PR #39) |
-| **E** | **Marqueurs de tri + pointeur de doublon** | **branche en cours** |
+| E | Marqueurs de tri + pointeur de doublon | **mergé** (PR #41) |
+| **F** | **Fiche dossier alignée sur l'écran légataire** | **branche en cours** |
 
-Branche : **`feat/marqueurs-tri-pre-prospection`**, coupée d'un `main` fraîchement pull.
-**748 tests verts** (673 en début de session, +75 dont 38 écrits ici).
+Branche : **`feat/fiche-dossier-alignement-ecran`**, coupée d'un `main` fraîchement pull.
+**763 tests verts** (673 en début de session, +90 dont 53 écrits ici).
 
-**Le chantier « vues du légataire » est terminé côté prospection.** Le lot E a démontré que
-`ComSalePreProspectionView` n'a rien à donner (§Key Points) : la question suivante n'est plus
-« quelle vue exploiter » mais « quel écran ». Voir le backlog.
+**Le chantier a changé de méthode au lot F, et c'est l'acquis principal.** Jusque-là on partait de
+la vue ; désormais on part de **captures d'écran du logiciel de bureau**, confrontées case par case
+à la base. C'est ce qui a révélé `PriceWithModification` (un booléen, pas un prix) et les ratios
+stockés en fraction — deux erreurs qu'aucune lecture de schéma n'aurait évitées.
 
 ---
 
@@ -53,6 +55,15 @@ Branche : **`feat/marqueurs-tri-pre-prospection`**, coupée d'un `main` fraîche
   là où j'allais lancer un lot complet.
 - **Tester une hypothèse de sémantique au lieu de la supposer.** « `TempField10` pointe un
   tiers » se vérifie par un `EXISTS` : **849/849**. Sans ça, on expose une chaîne opaque.
+- **Demander une capture d'écran plutôt que deviner l'usage.** Deux captures de l'écran « Dossier
+  de vente » ont réorienté tout le lot F : l'onglet **Montants** est celui qui s'ouvre par défaut,
+  pas les Dates que je m'apprêtais à livrer en premier. Et la confrontation case↔colonne a attrapé
+  deux pièges invisibles au schéma (voir §Key Points).
+- **Vérifier une formule sur toute la population avant de la coder.** `Total = Prix + Frais`
+  semblait évident sur le dossier de la capture ; il ne tenait qu'à **91,6 %**. Les 30 écarts ont
+  révélé une vraie règle métier (dossiers sortis) qu'on aurait sinon livrée fausse.
+- **Renoncer quand la vérification ne passe pas.** `ratioAvance` tenait 328/328 sur sa formule
+  finale mais 350/358 sur un maillon intermédiaire : non livré, et documenté comme tel.
 - **Vérifier l'unicité avant d'écrire un `findByCode`.** `CfgTier.Code` n'est pas unique — un
   dérivé `Optional` aurait levé `IncorrectResultSizeDataAccessException` en production, sur un
   cas absent des données du jour.
@@ -74,6 +85,11 @@ Branche : **`feat/marqueurs-tri-pre-prospection`**, coupée d'un `main` fraîche
   ponctuelle, mais confirme qu'on ne sert jamais une liste depuis la vue.
 - **Un champ servi « brut » sortait avec ses espaces** (`"  TRAITÉ  "`). Le test a eu raison ;
   j'ai normalisé côté serveur et corrigé le mot « brut » dans le spec, devenu inexact.
+- **Mesurer un coût sur une seule ligne, deux fois de suite** → 14 ms, chiffre faux : c'était le
+  plan mis en cache. Sur **12 lignes distinctes**, la même requête coûte **360 ms**. Toujours
+  échantillonner des lignes différentes.
+- **Croire que l'élagage par sélection de colonnes est une propriété générale** → faux.
+  Il marchait sur `ComSaleProspectionView`, il **ne marche pas** sur `ComSaleFolderView`.
 - **`-Dtest=A+B` n'est pas la syntaxe surefire** — c'est `-Dtest=A,B`. Le `+` échoue sans
   message utile (`BUILD FAILURE` nu).
 - **`SUM(CASE WHEN (SELECT …))` est refusé par SQL Server** (« fonction d'agrégation sur une
@@ -85,6 +101,8 @@ Branche : **`feat/marqueurs-tri-pre-prospection`**, coupée d'un `main` fraîche
 
 | # | Error / Bug | Status | Fix applied |
 |---|-------------|--------|-------------|
+| 52 | **Le legacy double-compte une contre-passation** — `ART 2026/00365` porte une paire −470 000/+470 000 ; la vue rend 1 270 000 au lieu de 330 000 | **Open (défaut legacy)** | **Notre calcul est le juste.** Ne pas aligner l'API sur la vue. Seul dossier concerné sur 358 |
+| 51 | `POST /echeancier` ne posait pas `UserCreateDateTime` → `creeLe` nul sur nos créations | **Fixed** | Posé dans `addEcheance`. `UserCreate` (auteur) reste non posé — même famille que #41 |
 | 50 | **798 pré-prospections (20,9 %) marquées doublon/spam sont servies comme du travail à faire** — 795 encore à « 1 A TRAITER » | **Rendu visible** | `marqueurTri` exposé (lot E). **Filtrer reste une décision produit ouverte** |
 | 49 | `@Schema` d'audit annonçaient « 100 % » sans qualifier la population, alors que le DTO sert prospections **et** pré-prospections (28 % pour `modifieLe`) | **Fixed** | Taux qualifiés par population dans les `@Schema` et le guide front |
 | 48 | `proposeurId`/`proposeurNom` exposés alors que **morts : 1 ligne sur 14 118** | **Documenté** | `@Schema` « ne pas afficher » + §5 de la FEATURE. Retrait = rupture front, non fait |
@@ -122,6 +140,50 @@ ComProspection (56 col.)
 - **Règle tenue :** ne jamais mapper une colonne de plus sur `ComSaleProspectionView`. C'est le
   nombre de colonnes mappées qui décide de l'élagage des sous-requêtes par SQL Server, donc des
   26 ms de la fiche.
+
+### Le dossier : la vue est riche mais **inutilisable**, pour une raison différente
+
+| Vue | Colonnes | Sous-requêtes | Coût / ligne |
+|---|---:|---:|---:|
+| **`ComSaleFolderView`** | **217** | **77** | **~360 ms, sans élagage** |
+| `ComSaleProspectionView` | 148 | 22 | 26 ms (20 col. mappées) |
+| `ComSaleProspectView` (fiche tiers) | 97 | **3** | non mesuré |
+| `ComSalePreProspectionView` | 70 | 0 | — |
+
+**L'élagage par sélection de colonnes ne marche pas sur la vue dossier** : 15 colonnes coûtent
+autant que 217. Et le prix est absurde — 358 dossiers, 921 échéances, 3 243 règlements.
+**89 des 217 colonnes sont directement sur `ComFolder`.** Tout se lit sur les entités.
+
+À noter pour le backlog : `ComSaleProspectView` (fiche tiers) n'a que **3 sous-requêtes** — donc
+elle non plus n'apportera presque rien au-delà des jointures.
+
+### Deux pièges du dossier, invisibles au schéma
+
+- **`PriceWithModification` est un BOOLÉEN**, pas le « Prix contractuel » de l'écran. Ce prix-là,
+  c'est `Price`. Un mapping fait au nom se trompe silencieusement.
+- **Les ratios sont des fractions** : `PartPercent`, `ProbabilityOfFinalisation`, `Advance`,
+  `Discount` valent `1.00` pour 100 %. `probabiliteFinalisation` était **déjà exposé** ainsi sans
+  que rien ne le dise ; son `@Schema` le précise maintenant.
+
+### Les formules de l'onglet Montants, vérifiées sur 358 dossiers
+
+| Règle | Vérifiée |
+|---|---|
+| `netAPayer = prix + frais exclus du prix` (actifs) | **328/328** |
+| `netAPayer = encaissé`, reste **nul** (dossiers **sortis**) | **30/30** |
+| `reste = montant − réglé` | **358/358** |
+| `IsCancellation` ⟺ `StatutDossier.isSortie()` (`ANNULATION`/`DESISTEMENT`) | **30/30** |
+| `ratioAvance` — maillon `AdvanceAmount` = total catégorie `AVANCE` | **350/358 → non livré** |
+
+Population utile de l'en-tête : `UnitCost`/`PriceHT`/`PriceBeforeDiscountHT` **98,3 %**,
+`TitleNumber` 69,6 %, `VATRatio` 42,7 %, présentation 23,2 %, `StatusValidityDate` 11,5 %,
+`PartPercent` 100 % mais **95 % valent 1,00**. **`UnderItemsPrice` : 2,2 % → écarté.**
+Échéancier : `QuittanceCode` (« Décompte ») **16,5 %, jamais NULL mais vide** ;
+`UserCreateDateTime` 100 %. **Pas de facturation vente en base** — la colonne « Facture » de
+l'écran n'a aucune source.
+
+Chronologie du dossier : 32 des 34 dates sont sur `ComFolder`, mais **12 sont à 0 %** et 9
+seulement dépassent 10 %. `ReservationDate` vaut **0,6 %** malgré son nom.
 
 ### `ComSalePreProspectionView` : rien à en tirer, définitivement
 
@@ -228,7 +290,12 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 ## 📁 Important Files & Paths
 
-- **`instructions/FEATURE-marqueurs-tri-pre-prospection.md`** — le lot en cours : §1 pourquoi la
+- **`instructions/FEATURE-fiche-dossier-alignement-ecran.md`** — le lot en cours : §1 pourquoi la
+  vue dossier est écartée (mesures), §2 les deux pièges, §5 **les formules de l'onglet Montants et
+  leur vérification**, plus les deux anomalies de données signalées.
+- `src/test/.../MontantsSyntheseTest.java` — les chiffres du dossier réel de la capture
+  (`ARS 2025/00357`) servent de scénario : s'ils changent, l'API a cessé de dire ce que l'écran dit.
+- `instructions/FEATURE-marqueurs-tri-pre-prospection.md` — lot E : §1 pourquoi la
   vue pré-prospection ne sert à rien, §2 ce que les champs libres contiennent, §3 le contrat et
   pourquoi brut **et** dérivé, §4 le fait opérationnel, §5 les corrections de doc.
 - `domain/MarqueurTriProspection.java` — correspondance **exacte** sur valeur normalisée. Le
@@ -277,7 +344,7 @@ par variables d'environnement** (voir Environment), sinon les tests de vue écho
 
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/marqueurs-tri-pre-prospection`** | lot E, 748 tests verts |
+| back | **`feat/fiche-dossier-alignement-ecran`** | lot F, 763 tests verts |
 | back | `feat/contexte-dossier` | **prouvée mergée, 0 commit hors `main` — supprimable** |
 | back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée **mais la branche locale a divergé depuis** (1 commit hors `main`) |
 | back | `docs/memoire-de-session` | 2 commits, sur `origin`, non mergée |
@@ -293,11 +360,16 @@ révélé la divergence de `fix/ci-pollution-doubles-envoi`.
 
 ## ⏭️ Next Step
 
-> **Faire merger la PR `feat/marqueurs-tri-pre-prospection` sur GitHub**, puis
+> **Faire merger la PR `feat/fiche-dossier-alignement-ecran` sur GitHub**, puis
 > `node ..\.claude\scripts\git-flow.mjs sync back` et supprimer la branche à la main.
 
 ### Backlog
 
+- [ ] **Demander les captures des onglets restants du dossier** — « Dates », « Dates autres »,
+      « Autres montants », « Annulation / Résiliation », « Acquéreurs ». C'est devenu la façon la
+      plus rapide de cadrer un périmètre : deux captures ont suffi pour tout le lot F.
+- [ ] **Comprendre les 8 dossiers qui bloquent `ratioAvance`** (`AdvanceAmount` ≠ total catégorie
+      `AVANCE` ; la catégorie `PRÉ-RÉSERVATION` est le suspect). Préalable à livrer le champ.
 - [ ] **Relayer au dépôt frontend** `GUIDE-FRONT-fiche-prospection.md`, rangs **5 et 6** :
       30 champs **additifs** sur `ProspectionDetailDto`, tous optionnels dans `types.ts`, et pour
       le rang 5 **aux mêmes noms que la liste** — le type de la fiche peut réutiliser les champs
@@ -314,7 +386,9 @@ révélé la divergence de `fix/ci-pollution-doubles-envoi`.
 - [ ] **Décision métier : les 830** (bug #44) — aligner sur `StrEntity.Code` ?
 - [ ] **Décision métier : `StrEntityId` à la création** (bug #43).
 - [ ] `UserCreate` sur `creerProspection` (bug #41) — préalable à un affichage honnête de `creePar`.
-- [ ] Dossier : `ComSaleFolderView` (217 colonnes) — ventilation financière et chronologie.
+- [x] ~~Dossier : `ComSaleFolderView` (217 colonnes)~~ — **traité au lot F**, sans la vue (trop
+      chère). Restent les onglets non vus et la chronologie (12 dates à 0 %, à ne pas livrer en
+      bloc).
 - [ ] Déduplication de l'entrée `FEATURES.md` (bug #47).
 - [ ] **Trancher `refractor/best-practice`** (front, 11 commits orphelins, local seul).
 - [ ] `from_front.md` #10 — filtre `?statut=` des dossiers qui renvoie du vide.

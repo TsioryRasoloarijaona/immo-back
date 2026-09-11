@@ -439,7 +439,37 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/montants")
-    public MontantsDossierDto montants(@PathVariable UUID id) {
+    @Operation(
+            summary = "Synthèse financière du dossier",
+            description = "Reproduit l'onglet « Montants » du logiciel de bureau — l'onglet ouvert "
+                    + "par défaut sur sa fiche dossier.\n\n"
+                    + "**Toujours calculé, jamais stocké** : tout est agrégé à la lecture depuis "
+                    + "l'échéancier (`ComDocument`) et les règlements qui s'y rattachent.\n\n"
+                    + "Trois niveaux de lecture :\n"
+                    + "- `parCategorie` — une ligne Montant / Réglé / Reste par catégorie "
+                    + "d'échéancier (`AVANCE`, `AUTO-FINANCEMENT`, `FRAIS SYNDIC`…) ;\n"
+                    + "- `prixVente` et `netAPayer` — les deux lignes de **synthèse**, qui ne sont "
+                    + "pas des catégories : le prix de vente, puis ce même prix augmenté des frais "
+                    + "exclus du prix ;\n"
+                    + "- `totalGeneral` et `totalSoumisReglePrixTTC` — les totaux bruts.\n\n"
+                    + "La distinction « soumis au prix » repose sur `ComDocument.excludeFromPrice`, "
+                    + "le booléen prévu pour cela dans le schéma, et non sur le libellé de la "
+                    + "catégorie, qui est du texte libre configurable.\n\n"
+                    + "⚠️ **Sur un dossier sorti** (`ANNULATION` / `DESISTEMENT`, signalé par "
+                    + "`dossierSorti`), `netAPayer` se réduit à ce qui a été encaissé et son reste "
+                    + "vaut zéro : un dossier annulé ne reste rien devoir. Règle vérifiée sans "
+                    + "exception sur les 30 dossiers sortis réels."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Synthèse financière. `parCategorie` "
+                    + "est vide sur un dossier sans échéancier ; les lignes de synthèse restent "
+                    + "servies, avec un réglé nul."),
+            @ApiResponse(responseCode = "404", description = "Aucun dossier avec cet id, ou dossier "
+                    + "hors du périmètre commercial de l'appelant.")
+    })
+    public MontantsDossierDto montants(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")
+            @PathVariable UUID id) {
         return dossierService.montants(id);
     }
 
