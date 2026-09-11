@@ -61,6 +61,12 @@ class DossierCreateTest {
     private EntityManager entityManager;
 
     @Autowired
+    private com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository;
+
+    @Autowired
+    private com.tsix.immocrm.repositories.str.StrHistoryRepository strHistoryRepository;
+
+    @Autowired
     private CfgTierRepository tierRepository;
 
     @Autowired
@@ -234,6 +240,63 @@ class DossierCreateTest {
                         actionMessageRepository.findById(sansAlerte.getId()).orElseThrow().getWithoutRevival())
                 .as("une interaction sans alerte est hors du prédicat et ne doit pas bouger")
                 .isFalse();
+    }
+
+    /**
+     * L'historique de statut doit dire <em>qui</em>, et le dossier doit apparaître dans les deux
+     * tables d'historique du légataire.
+     *
+     * <p>{@code StrFolderStatusHistory} était écrite mais amputée de l'auteur et du client —
+     * renseignés sur 1 282 des 1 308 lignes réelles (98 %). {@code StrHistory}, que nous
+     * <em>lisions</em> déjà pour l'onglet « Historique », n'était jamais écrite : nos dossiers n'y
+     * figuraient pas du tout.
+     */
+    @Test
+    void create_historiseLeStatutDansLesDeuxTables() throws Exception {
+        // Sans ce statut, la création n'historise rien du tout : enregistrerHistoriqueStatut est
+        // court-circuité quand RESERVATION est introuvable (garde défensive de genererCodeDossier).
+        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
+        reservation.setId(UUID.randomUUID());
+        reservation.setCode("RESERVATION");
+        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
+        strStatusRepository.save(reservation);
+
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-HISTO-TEST");
+
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-HISTO-TEST");
+        paymentMethodRepository.save(modePaie);
+
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-HISTO"}
+                """.formatted(prospection.getId(), item.getId(), modePaie.getId());
+
+        String json = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID dossierId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        var statuts = statusHistoryRepository.findAll().stream()
+                .filter(h -> h.getComFolder() != null && dossierId.equals(h.getComFolder().getId()))
+                .toList();
+        org.assertj.core.api.Assertions.assertThat(statuts).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(statuts.get(0).getCfgTier())
+                .as("le client doit figurer sur la ligne d'historique, comme chez le légataire")
+                .isNotNull();
+
+        var generiques = strHistoryRepository.findAll().stream()
+                .filter(h -> dossierId.equals(h.getObjectId()))
+                .toList();
+        org.assertj.core.api.Assertions.assertThat(generiques)
+                .as("le dossier doit aussi apparaître dans StrHistory, que l'onglet Historique lit")
+                .hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(generiques.get(0).getStrConfigEntityId())
+                .isEqualTo(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
     }
 
     @Test
