@@ -139,6 +139,27 @@ public class ComProspection {
     private UUID strEntityId;
 
     /**
+     * Activité de visite pré-agrégée, pour le groupement — voir {@link ComProspectionVisites}.
+     *
+     * <p><strong>{@code @ManyToOne} et non {@code @OneToOne}, délibérément.</strong> La relation
+     * est bien un-à-un (même clé), mais un {@code @OneToOne} <em>optionnel</em> ne se proxifie pas :
+     * Hibernate doit interroger la cible pour savoir si elle existe, donc il émet un select par
+     * prospection chargée — un N+1 sur <em>toutes</em> les requêtes du domaine, pas seulement sur
+     * le groupement. Un {@code @ManyToOne} paresseux se contente d'un proxy et ne coûte rien tant
+     * que personne ne le déréférence.
+     *
+     * <p>Personne ne le déréférence : le mappeur de liste sert {@code derniereVisiteDate} depuis
+     * la vue légataire, comme avant. Cette association n'existe que pour que le moteur de
+     * groupement puisse écrire {@code LEFT JOIN} dessus.
+     *
+     * <p>Non insérable et non modifiable : la colonne est déjà portée par {@code @Id}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PKey", referencedColumnName = "ComProspectionId",
+            insertable = false, updatable = false)
+    private ComProspectionVisites visites;
+
+    /**
      * Pays du prospect, tel que la vue légataire l'expose sous {@code AdmCountryId} — renseigné
      * sur <strong>27,3 %</strong> des 14 118 prospections réelles.
      *

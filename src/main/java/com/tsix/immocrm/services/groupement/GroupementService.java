@@ -79,11 +79,12 @@ public class GroupementService {
      * @param granularite non nulle uniquement si la colonne groupée est une date
      * @param agregats    nom de colonne exposé → chemin à sommer ; l'ordre est conservé
      * @param tri         ordre de restitution des groupes
+     * @param inclureSansValeur inclure le groupe des lignes dont la colonne groupée est nulle
      */
     @Transactional(readOnly = true)
     public <E> Page<GroupeDto> grouper(Class<E> racine, Specification<E> spec, Chemin cle,
                                        Granularite granularite, Map<String, Chemin> agregats,
-                                       TriGroupe tri, Pageable pageable) {
+                                       TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
 
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
@@ -123,10 +124,7 @@ public class GroupementService {
         groupBy.addAll(exprLibelle);
 
         cq.multiselect(selections).groupBy(groupBy);
-        Predicate filtres = spec.toPredicate(root, cq, cb);
-        if (filtres != null) {
-            cq.where(filtres);
-        }
+        cq.where(predicats(cb, spec.toPredicate(root, cq, cb), exprCle, inclureSansValeur));
         Expression<?> exprTri = expressionTri(cb, cle, exprCle, exprLibelle, exprNombre, tri);
         cq.orderBy(tri == TriGroupe.NOMBRE ? cb.desc(exprTri) : cb.asc(exprTri));
 
@@ -138,7 +136,26 @@ public class GroupementService {
                 .map(t -> versGroupe(t, cle, granularite, exprLibelle.size(), nomsAgregats))
                 .toList();
 
-        return new PageImpl<>(contenu, pageable, compterGroupes(racine, spec, cle, granularite));
+        return new PageImpl<>(contenu, pageable,
+                compterGroupes(racine, spec, cle, granularite, inclureSansValeur));
+    }
+
+    /**
+     * Compose les filtres de la liste et, si le groupe sans valeur est exclu, le
+     * {@code <clé> IS NOT NULL} qui le retire.
+     *
+     * <p>Le prédicat porte sur l'<strong>expression de clé</strong>, pas sur la colonne brute :
+     * pour une date groupée au mois, la clé est {@code YEAR()*100 + MONTH()}, nulle exactement
+     * quand la date l'est. Tester la colonne séparément marcherait ici mais divergerait de la
+     * requête de comptage, qui compte des clés.
+     */
+    private static Predicate predicats(CriteriaBuilder cb, Predicate filtres, Expression<?> exprCle,
+                                       boolean inclureSansValeur) {
+        if (inclureSansValeur) {
+            return filtres != null ? filtres : cb.conjunction();
+        }
+        Predicate renseignee = cb.isNotNull(exprCle);
+        return filtres != null ? cb.and(filtres, renseignee) : renseignee;
     }
 
     /**
@@ -150,7 +167,7 @@ public class GroupementService {
      * terme, qui ajoute ce groupe s'il est peuplé.
      */
     private <E> long compterGroupes(Class<E> racine, Specification<E> spec, Chemin cle,
-                                    Granularite granularite) {
+                                    Granularite granularite, boolean inclureSansValeur) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<E> root = cq.from(racine);
@@ -159,14 +176,13 @@ public class GroupementService {
         cq.multiselect(
                 cb.countDistinct(exprCle),
                 cb.sum(cb.<Integer>selectCase().when(cb.isNull(exprCle), 1).otherwise(0)));
-        Predicate filtres = spec.toPredicate(root, cq, cb);
-        if (filtres != null) {
-            cq.where(filtres);
-        }
+        cq.where(predicats(cb, spec.toPredicate(root, cq, cb), exprCle, inclureSansValeur));
 
         Tuple t = em.createQuery(cq).getSingleResult();
         long distincts = t.get(0, Long.class);
         Number nuls = t.get(1, Number.class);
+        // Le second terme ne peut être atteint que si le groupe nul est inclus — le prédicat
+        // l'élimine sinon, et la somme vaut alors zéro d'elle-même.
         return distincts + (nuls != null && nuls.longValue() > 0 ? 1 : 0);
     }
 
@@ -189,6 +205,9 @@ public class GroupementService {
      */
     private static Expression<?> expressionCle(CriteriaBuilder cb, Jointures jointures,
                                                Chemin cle, Granularite granularite) {
+        if (cle.typeLibelle() == Chemin.TypeLibelle.REPLI) {
+            return expressionRepli(cb, jointures, cle);
+        }
         Path<?> path = jointures.chemin(cle.cheminCle());
         if (granularite == null) {
             return path;
@@ -202,6 +221,25 @@ public class GroupementService {
                     cb.sum(cb.prod(annee, 10000), cb.prod(mois, 100)),
                     cb.function("day", Integer.class, path));
         };
+    }
+
+    /**
+     * Cascade {@code COALESCE(NULLIF(TRIM(a), ''), NULLIF(TRIM(b), ''), …)}.
+     *
+     * <p>{@code NULLIF(TRIM(...), '')} et non la colonne nue : c'est ce qui reproduit
+     * {@code StringUtils.hasText} du mappeur, qui écarte aussi les chaînes blanches. Un
+     * {@code COALESCE} nu ne neutralise que {@code NULL} et ferait diverger l'en-tête de groupe de
+     * la valeur affichée sur la ligne — voir {@link Chemin#repli}.
+     */
+    private static Expression<String> expressionRepli(CriteriaBuilder cb, Jointures jointures,
+                                                      Chemin cle) {
+        Expression<String> cascade = null;
+        for (String chemin : cle.cheminsLibelle()) {
+            Expression<String> terme = cb.nullif(
+                    cb.trim(jointures.chemin(chemin).as(String.class)), "");
+            cascade = cascade == null ? terme : cb.coalesce(cascade, terme);
+        }
+        return cascade;
     }
 
     private static Expression<?> expressionTri(CriteriaBuilder cb, Chemin cle, Expression<?> exprCle,

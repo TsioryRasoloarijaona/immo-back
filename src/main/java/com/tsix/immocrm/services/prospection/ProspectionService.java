@@ -281,29 +281,30 @@ public class ProspectionService {
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, FiltresAvancesProspection filtres,
             ColonneProspection groupeBy, Granularite granularite, Set<ColonneProspection> agregats,
-            TriGroupe tri, Pageable pageable) {
+            TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
         return grouper(specProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes, filtres), groupeBy, granularite, agregats, tri, pageable);
+                search, ouvertes, filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     /** Replie {@code GET /api/pre-prospections} en groupes, même discriminant que la liste. */
     public Page<GroupeDto> grouperPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
-            Set<ColonneProspection> agregats, TriGroupe tri, Pageable pageable) {
+            Set<ColonneProspection> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
         return grouper(specPreProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes), groupeBy, granularite, agregats, tri, pageable);
+                search, ouvertes), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     private Page<GroupeDto> grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
-            Granularite granularite, Set<ColonneProspection> agregats, TriGroupe tri, Pageable pageable) {
+            Granularite granularite, Set<ColonneProspection> agregats, TriGroupe tri,
+            boolean inclureSansValeur, Pageable pageable) {
         Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
         for (ColonneProspection agregat : agregats) {
             cheminsAgregats.put(agregat.nom(), agregat.chemin());
         }
         return groupementService.grouper(ComProspection.class,
                 spec.and(perimetreService.filtreProspections()),
-                groupeBy.chemin(), granularite, cheminsAgregats, tri, pageable);
+                groupeBy.chemin(), granularite, cheminsAgregats, tri, inclureSansValeur, pageable);
     }
 
     /**

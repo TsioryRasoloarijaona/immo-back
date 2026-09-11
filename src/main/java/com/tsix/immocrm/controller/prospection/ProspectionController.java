@@ -262,6 +262,12 @@ public class ProspectionController {
             @RequestParam(required = false) Granularite granularite,
             @Parameter(description = "LIBELLE (croissant, défaut) ou NOMBRE (effectif décroissant).")
             @RequestParam(required = false) TriGroupe tri,
+            @Parameter(description = "Inclure le groupe des lignes dont la colonne groupée est "
+                    + "vide. **Faux par défaut** : l'écran veut les valeurs qui existent, et sur "
+                    + "une colonne peu renseignée le groupe vide écraserait tous les autres. "
+                    + "Passer `true` pour le récupérer — la somme des effectifs retombe alors sur "
+                    + "le `totalElements` de la liste non groupée.", example = "false")
+            @RequestParam(defaultValue = "false") boolean inclureSansValeur,
             @RequestParam(required = false) List<String> etape,
             @RequestParam(required = false) List<String> origine,
             @RequestParam(required = false) List<UUID> commercial,
@@ -277,7 +283,7 @@ public class ProspectionController {
                 dateDebut, dateFin, search, ouvertes, filtres, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, pageable));
+                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable));
     }
 
     @GetMapping("/{id}")
