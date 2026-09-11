@@ -133,6 +133,73 @@ public record DossierListItemDto(
         String modifiePar,
 
         @Schema(description = "Date de dernière modification. 100 %.")
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+
+        // -- Article principal. Hors sélection par défaut : demander une de ces colonnes coûte
+        //    jusqu'à cinq jointures paresseuses par ligne.
+        @Schema(description = "Id de l'article principal (StkItem.PKey). 100 % des 358 dossiers.")
+        UUID articleId,
+
+        @Schema(description = "Code de l'article principal. **C'est la clé de tri par défaut de la "
+                + "liste du logiciel de bureau** (`ORDER BY ArticleCode, H1Code, H2Code, H3Code`, "
+                + "où H1/H2/H3 sont la tranche, le projet et la société — déjà servis ici sous "
+                + "`trancheCode`, `projetCode` et `societeCode`).", example = "A-203")
+        String articleCode,
+
+        @Schema(description = "Libellé de l'article principal.", example = "Appartement 203")
+        String articleLibelle,
+
+        @Schema(description = "Numéro de titre foncier de l'article.")
+        String articleTitreFoncier,
+
+        @Schema(description = "Bâtiment de l'article (StkBuilding). Renseigné sur 1 063 des 1 068 "
+                + "articles réels.", example = "Bloc B")
+        String bloc,
+
+        @Schema(description = "Étage de l'article (StkFloor). 1 063 / 1 068.", example = "2e étage")
+        String etage,
+
+        @Schema(description = "Code catégorie de l'article.", example = "APPARTEMENT")
+        String categorieArticle,
+
+        @Schema(description = "Code type de l'article.", example = "2 CHAMBRES + SALON")
+        String typeArticle,
+
+        @Schema(description = "Code du type de présentation de l'article.")
+        String typePresentation,
+
+        // -- Acteur supplémentaire.
+        @Schema(description = "Id du responsable de vente (ComFolder.CfgSaleManagerId).")
+        UUID responsableVenteId,
+
+        @Schema(description = "Responsable de vente — acteur **distinct du commercial**, renseigné "
+                + "sur 221 des 358 dossiers réels (61 %). Le second responsable du légataire "
+                + "(`CfgSaleManager2Id`) n'est pas exposé : mesuré à 0 ligne.",
+                example = "Hamza ATCHANY")
+        String responsableVenteNom,
+
+        // -- Jalons et délais du cycle de vente.
+        @Schema(description = "Date du compromis (ComFolder.AgreementDate). 73 / 358.")
+        LocalDateTime dateCompromis,
+
+        @Schema(description = "Date de livraison réelle (ComFolder.DeliveryDateReal). 63 / 358.")
+        LocalDateTime dateLivraisonReelle,
+
+        @Schema(description = "Jours entre l'origine du dossier et sa concrétisation. Calculé "
+                + "côté serveur, jamais stocké. L'origine est la date de la **prospection** quand "
+                + "il y en a une, sinon celle du dossier — même règle que le logiciel de bureau. "
+                + "`null` tant que la concrétisation n'a pas eu lieu : calculable sur 152 / 358.",
+                example = "47")
+        Integer delaiConcretisation,
+
+        @Schema(description = "Jours entre la concrétisation et le compromis. Calculé côté "
+                + "serveur. Calculable sur 73 / 358.", example = "112")
+        Integer delaiNotaire,
+
+        @Schema(description = "Jours entre le compromis et la livraison réelle. Calculé côté "
+                + "serveur. Calculable sur 63 / 358.\n\nLe délai de crédit du logiciel de bureau "
+                + "n'est pas exposé : il dépend de `CreditPossessionDate`, mesurée à **0 ligne sur "
+                + "358**, donc il vaudrait `null` partout.", example = "365")
+        Integer delaiLivraison
 ) {
 }

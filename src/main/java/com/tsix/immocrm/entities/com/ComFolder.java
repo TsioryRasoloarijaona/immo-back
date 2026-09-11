@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.type.SqlTypes;
@@ -396,5 +397,39 @@ public class ComFolder {
     @Column(name = "FinalTitleNumber")
     private String finalTitleNumber;
 
+    // ------------------------------------------------------------------
+    // Délais de cycle de vente — recopiés de ComFolderView, qui les calcule en DATEDIFF.
+    //
+    // En @Formula et non calculés en Java pour une raison précise : ce sont alors des propriétés
+    // ordinaires, donc utilisables comme clé de ?groupBy= et comme colonne de ?colonnes= sans que
+    // le moteur de groupement ait à connaître la notion de « champ calculé ». Un calcul côté Java
+    // aurait produit une colonne affichable mais NON groupable — une incohérence de plus à
+    // expliquer dans le catalogue.
+    //
+    // Coût mesuré sur yesRemsProd : page de 20 dossiers, 1 ms avec les trois formules contre
+    // 0-1 ms sans ; 6 ms sur les 358 dossiers. La sous-requête corrélée de delaiConcretisation
+    // ne change pas l'ordre de grandeur.
+    //
+    // `DelayCredit` de la vue n'est PAS repris : il dépend de CreditPossessionDate, mesurée à
+    // 0 ligne sur 358. Il vaudrait null partout.
+    // ------------------------------------------------------------------
 
+    /**
+     * Jours entre l'origine du dossier et sa concrétisation. Calculable sur 152 des 358 dossiers.
+     *
+     * <p>L'origine est la date de la <strong>prospection</strong> quand il y en a une, sinon celle
+     * du dossier — c'est le {@code IIF(ComProspectionId is null, …)} de la vue, rendu ici par un
+     * {@code COALESCE} qui lui est équivalent : sans prospection, la sous-requête ne rend rien.
+     */
+    @Formula("DATEDIFF(day, COALESCE((SELECT p.DocDate FROM ComProspection p "
+            + "WHERE p.PKey = ComProspectionId), DocDate), AdvanceDate)")
+    private Integer delaiConcretisation;
+
+    /** Jours entre la concrétisation et le compromis. Calculable sur 73 dossiers. */
+    @Formula("DATEDIFF(day, AdvanceDate, AgreementDate)")
+    private Integer delaiNotaire;
+
+    /** Jours entre le compromis et la livraison réelle. Calculable sur 63 dossiers. */
+    @Formula("DATEDIFF(day, AgreementDate, DeliveryDateReal)")
+    private Integer delaiLivraison;
 }
