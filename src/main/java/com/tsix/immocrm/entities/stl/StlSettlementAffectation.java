@@ -36,33 +36,47 @@ import java.util.UUID;
  * base, le mode de panne le plus fréquent de ce dépôt. Un {@code @Subselect} est défini en Java :
  * il n'a besoin que de {@code StlSettlementLine}, qui existe partout.
  *
- * <p>Étroit à dessein — une seule table, une seule colonne agrégée, pas de référentiel joint.
- * C'est la leçon du lot G : la pré-agrégation large coûtait ~1 s, l'étroite 6 ms.
+ * <p>Étroit à dessein — deux tables, une seule colonne agrégée, pas de référentiel joint. C'est la
+ * leçon du lot G : la pré-agrégation large coûtait ~1 s, l'étroite 6 ms. Mesuré ici à 9 ms.
  *
- * <p>{@code @Synchronize} pour qu'Hibernate vide son cache d'écriture sur
- * {@code StlSettlementLine} avant de lire ce sous-select : sans lui, une affectation créée dans la
- * même transaction ne serait pas reflétée — ce qui casserait les tests, qui construisent leurs
- * fixtures puis interrogent dans la même transaction. {@code @Immutable}, comme toute projection.
+ * <h2>Pourquoi partir de {@code StlSettlement} et pas des seules lignes</h2>
+ *
+ * <p>Une première version n'agrégeait que {@code StlSettlementLine}, donc ne portait une ligne que
+ * pour les règlements <em>déjà affectés</em>. C'était un défaut, et il n'était pas théorique : la
+ * clé étrangère de l'association ci-contre est le {@code PKey} du règlement, toujours renseigné,
+ * donc Hibernate fabrique toujours un proxy — et le déréférencer sur un règlement sans ligne levait
+ * {@code ObjectNotFoundException}, soit un <strong>500</strong> sur
+ * {@code GET /api/encaissements/{id}}. Mesuré : <strong>130 règlements sur 3 243</strong> (4 %)
+ * n'ont aucune ligne, dont les encaissements non encore imputés.
+ *
+ * <p>Le {@code LEFT JOIN} depuis {@code StlSettlement} rend donc une ligne pour <em>chaque</em>
+ * règlement. {@code SUM} d'un ensemble vide vaut {@code NULL}, et c'est voulu : la substitution par
+ * zéro se fait en Java, jamais par un littéral en SQL — même règle que dans
+ * {@code GroupementService}.
+ *
+ * <p>{@code @Synchronize} pour qu'Hibernate vide son cache d'écriture sur les deux tables avant de
+ * lire ce sous-select : sans lui, une affectation créée dans la même transaction ne serait pas
+ * reflétée — ce qui casserait les tests, qui construisent leurs fixtures puis interrogent dans la
+ * même transaction. {@code @Immutable}, comme toute projection.
  */
 @Entity
 @Immutable
-@Synchronize("StlSettlementLine")
+@Synchronize({"StlSettlement", "StlSettlementLine"})
 @Subselect("""
-        SELECT l.StlSettlementId AS StlSettlementId,
-               SUM(l.Amount)     AS Affecte
-        FROM StlSettlementLine l
-        WHERE l.StlSettlementId IS NOT NULL
-        GROUP BY l.StlSettlementId
+        SELECT s.PKey        AS StlSettlementId,
+               SUM(l.Amount) AS Affecte
+        FROM StlSettlement s
+        LEFT JOIN StlSettlementLine l ON l.StlSettlementId = s.PKey
+        GROUP BY s.PKey
         """)
 @Getter
 @Setter
 public class StlSettlementAffectation {
 
     /**
-     * {@code StlSettlement.PKey}. Le sous-select ne porte <strong>que</strong> les règlements ayant
-     * au moins une ligne : les autres ressortent avec une association nulle par le {@code LEFT
-     * JOIN}, et leur part affectée vaut alors zéro — substitué en Java, jamais par un
-     * {@code COALESCE} SQL.
+     * {@code StlSettlement.PKey}. Le sous-select porte une ligne pour <strong>chaque</strong>
+     * règlement, y compris ceux sans aucune affectation — voir l'entête : sans cela le proxy de
+     * l'association ne se résolvait pas, et la fiche tombait en 500 sur 4 % des règlements.
      */
     @Id
     @Column(name = "StlSettlementId")

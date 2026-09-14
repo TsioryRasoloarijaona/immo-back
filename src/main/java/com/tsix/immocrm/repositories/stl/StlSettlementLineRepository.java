@@ -96,4 +96,24 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     @Query("SELECT l FROM StlSettlementLine l JOIN l.comDocument d " +
             "WHERE l.stlSettlement.id = :settlementId AND d.comFolder.id = :dossierId")
     List<StlSettlementLine> findBySettlementIdAndDossierId(UUID settlementId, UUID dossierId);
+
+    /**
+     * Toutes les affectations d'un règlement — les échéances qu'il solde — <strong>montant
+     * croissant</strong>, l'ordre de l'écran légataire ({@code ORDER BY Amount ASC}, relevé dans
+     * la trace d'audit du 14/09/2026 à l'ouverture d'une fiche règlement).
+     *
+     * <p>Les trois associations sont chargées en {@code JOIN FETCH} : la fiche les déréférence
+     * toutes, et sans cela une ligne coûterait trois requêtes de plus. Toutes en {@code LEFT} —
+     * une ligne sans échéance, ou une échéance sans dossier, ne doit pas disparaître de la fiche,
+     * elle doit y apparaître incomplète.
+     *
+     * <p>Backs {@code GET /api/encaissements/{id}}.
+     */
+    @Query("SELECT l FROM StlSettlementLine l "
+            + "LEFT JOIN FETCH l.comDocument d "
+            + "LEFT JOIN FETCH d.comFolder "
+            + "LEFT JOIN FETCH d.comSettlementCategory "
+            + "WHERE l.stlSettlement.id = :settlementId "
+            + "ORDER BY l.amount ASC")
+    List<StlSettlementLine> findAffectationsBySettlementId(UUID settlementId);
 }

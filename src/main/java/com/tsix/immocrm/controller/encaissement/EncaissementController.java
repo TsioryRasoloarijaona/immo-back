@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.services.encaissement.EncaissementService;
 import com.tsix.immocrm.web.Groupements;
@@ -255,11 +256,21 @@ public class EncaissementController {
 
     @GetMapping("/{id}")
     @Operation(
-            summary = "Détail d'un encaissement (règlement)",
-            description = "Même forme que les lignes de `GET /api/encaissements` — alimente le "
-                    + "panneau détail \"Pièce de règlement\" côté front (`EncaissementDetail.tsx`). "
-                    + "`montantBrutRestant` et `montantNet` sont recalculés côté serveur, jamais "
-                    + "stockés, comme sur la liste.\n\n"
+            summary = "Fiche d'un encaissement (règlement) et ses affectations",
+            description = "Alimente le panneau détail \"Pièce de règlement\" côté front "
+                    + "(`EncaissementDetail.tsx`). `montantBrutRestant` et `montantNet` sont "
+                    + "recalculés côté serveur, jamais stockés, comme sur la liste.\n\n"
+                    + "**`affectations` : les échéances que ce règlement solde**, montant croissant "
+                    + "— l'ordre de l'écran légataire. C'est la réponse à « ce règlement, il a payé "
+                    + "quoi ? », que la liste ne sait pas donner : elle n'expose qu'un "
+                    + "`dossierCode`, celui de la *première* ligne, et masque donc les autres sur "
+                    + "les 8 règlements réels qui couvrent plusieurs dossiers. La somme des "
+                    + "`montantAffecte` vaut `montantBrut - montantBrutRestant`. Tableau vide = "
+                    + "règlement encaissé mais pas encore imputé.\n\n"
+                    + "**Cette réponse n'est pas filtrée par `?colonnes=`** — une fiche dit tout, "
+                    + "là où une grille laisse choisir ses colonnes. Elle porte donc plus de clés "
+                    + "que les lignes de la liste : celles hors sélection par défaut, plus "
+                    + "`affectations`. Aucune clé ne disparaît et aucune ne change de type.\n\n"
                     + "**Périmètre commercial** : un encaissement hors du périmètre de l'appelant "
                     + "renvoie **404**, et non 403 — un 403 confirmerait son existence et "
                     + "permettrait d'énumérer les identifiants."
@@ -271,7 +282,7 @@ public class EncaissementController {
                     + "volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque "
                     + "l'identifiant fourni n'est pas un UUID valide.")
     })
-    public EncaissementDto findById(
+    public EncaissementDetailDto findById(
             @Parameter(description = "Id du règlement (StlSettlement.id).")
             @PathVariable UUID id) {
         return encaissementService.findById(id);
