@@ -1,6 +1,7 @@
 package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
@@ -43,6 +44,9 @@ public class ColonnesJacksonConfig {
                                 ColonneProspect.nomsParDefaut(), ColonneProspect.ID.nom()))
                 .addFilter(ColonneDossier.FILTRE,
                         new SelectionColonnesPropertyFilter(
-                                ColonneDossier.nomsParDefaut(), ColonneDossier.ID.nom())));
+                                ColonneDossier.nomsParDefaut(), ColonneDossier.ID.nom()))
+                .addFilter(ColonneEncaissement.FILTRE,
+                        new SelectionColonnesPropertyFilter(
+                                ColonneEncaissement.nomsParDefaut(), ColonneEncaissement.ID.nom())));
     }
 }
