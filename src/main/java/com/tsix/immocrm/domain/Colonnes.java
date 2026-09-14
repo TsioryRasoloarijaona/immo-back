@@ -1,5 +1,6 @@
 package com.tsix.immocrm.domain;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -129,25 +130,63 @@ public final class Colonnes {
      * Résout la sélection de {@code ?agregats=}. Absente ou vide → aucun agrégat, seul l'effectif
      * du groupe est renvoyé.
      *
-     * @throws ColonneInconnueException si un nom est absent du catalogue ou non agrégeable
+     * <h2>Deux formes, et pourquoi la première ne bouge pas</h2>
+     *
+     * <p>{@code prix} — nom nu — vaut {@link FonctionAgregat#DEFAUT}, c'est-à-dire la somme, et le
+     * résultat revient sous la clé {@code prix}. C'est <strong>exactement</strong> le comportement
+     * d'avant l'ouverture du menu Σ : les intégrations existantes n'ont rien à changer, et c'est
+     * ce qui rend ce lot non cassant pour les quatre listes.
+     *
+     * <p>{@code prix:AVG} — nom qualifié — applique la fonction nommée et revient sous la clé
+     * {@code prix:AVG}. Les deux formes peuvent coexister dans le même appel : demander
+     * {@code prix} et {@code prix:AVG} rend deux entrées distinctes, ce qu'un dédoublonnage par
+     * colonne aurait écrasé. D'où le dédoublonnage <em>par jeton</em>.
+     *
+     * @throws ColonneInconnueException          si un nom est absent du catalogue
+     * @throws FonctionAgregatInconnueException  si la fonction n'existe pas, ou si la colonne ne
+     *                                           l'autorise pas (sommer une date, agréger une
+     *                                           colonne sans chemin)
      */
-    public static <C extends Enum<C> & Colonne> Set<C> resoudreAgregats(Class<C> type,
-                                                                       List<String> demandees) {
+    public static <C extends Enum<C> & Colonne> List<AgregatDemande> resoudreAgregats(
+            Class<C> type, List<String> demandees) {
         if (demandees == null || demandees.isEmpty()) {
-            return Set.of();
+            return List.of();
         }
         Map<String, C> parNom = index(type);
-        Set<C> resolues = new LinkedHashSet<>();
+        List<AgregatDemande> resolus = new ArrayList<>();
+        Set<String> jetonsVus = new LinkedHashSet<>();
         for (String demandee : demandees) {
             if (demandee == null || demandee.isBlank()) {
                 continue;
             }
-            C c = parNom.get(demandee.trim().toLowerCase(Locale.ROOT));
-            if (c == null || c.chemin() == null || !c.chemin().agregeable()) {
-                throw new ColonneInconnueException(demandee.trim(), noms(agregeables(type)));
+            String jeton = demandee.trim();
+            if (!jetonsVus.add(jeton)) {
+                continue;
             }
-            resolues.add(c);
+            int separateur = jeton.indexOf(FonctionAgregat.SEPARATEUR);
+            String nom = (separateur < 0 ? jeton : jeton.substring(0, separateur)).trim();
+            String suffixe = separateur < 0 ? null : jeton.substring(separateur + 1).trim();
+
+            C colonne = parNom.get(nom.toLowerCase(Locale.ROOT));
+            if (colonne == null) {
+                throw new ColonneInconnueException(nom, noms(agregeables(type)));
+            }
+            List<FonctionAgregat> autorisees = FonctionAgregat.pour(colonne.chemin());
+            FonctionAgregat fonction = FonctionAgregat.DEFAUT;
+            if (suffixe != null) {
+                try {
+                    fonction = FonctionAgregat.valueOf(suffixe.toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException inconnue) {
+                    throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
+                }
+            }
+            // Couvre les deux refus d'un coup : la colonne sans chemin (liste vide, donc rien n'y
+            // passe) et la fonction qui ne s'applique pas à ce genre de colonne.
+            if (!autorisees.contains(fonction)) {
+                throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
+            }
+            resolus.add(new AgregatDemande(jeton, colonne.nom(), colonne.chemin(), fonction));
         }
-        return resolues;
+        return resolus;
     }
 }

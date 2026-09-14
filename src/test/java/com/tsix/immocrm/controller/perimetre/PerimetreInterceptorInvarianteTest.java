@@ -71,7 +71,13 @@ class PerimetreInterceptorInvarianteTest {
             // appliqué d'un seul côté ferait diverger les deux.
             "/api/dossiers/groupes",
             "/api/prospections/groupes",
-            "/api/pre-prospections/groupes");
+            "/api/pre-prospections/groupes",
+            // Même justification, pour les encaissements
+            // (FEATURE-colonnes-groupement-encaissements.md) : EncaissementService#grouper compose
+            // specEncaissements avec PerimetreCommercialService#filtreEncaissements, la même
+            // Specification que la liste. Vérifié par
+            // EncaissementGroupementTest#sommeDesEffectifs_egaleLeTotalDeLaListe.
+            "/api/encaissements/groupes");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

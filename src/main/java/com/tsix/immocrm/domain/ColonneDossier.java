@@ -290,8 +290,13 @@ public enum ColonneDossier implements Colonne {
         return Colonnes.resoudreGroupement(ColonneDossier.class, demandee);
     }
 
-    /** @throws ColonneInconnueException si un nom n'est pas une colonne agrégeable de ce catalogue. */
-    public static Set<ColonneDossier> resoudreAgregats(List<String> demandees) {
+    /**
+     * Résout {@code ?agregats=}, forme {@code colonne} (somme) ou {@code colonne:FONCTION}.
+     *
+     * @throws ColonneInconnueException         si un nom n'est pas une colonne de ce catalogue
+     * @throws FonctionAgregatInconnueException si la colonne n'autorise pas cette fonction
+     */
+    public static List<AgregatDemande> resoudreAgregats(List<String> demandees) {
         return Colonnes.resoudreAgregats(ColonneDossier.class, demandees);
     }
 

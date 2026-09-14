@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.referentiel.ColonneDto;
@@ -487,6 +488,47 @@ public class ReferentielController {
     )
     public List<ColonneDto> getColonnesDossiers() {
         return Arrays.stream(ColonneDossier.values())
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
+                .toList();
+    }
+
+    @GetMapping("/colonnes/encaissements")
+    @Operation(
+            summary = "Catalogue des colonnes de la liste des encaissements",
+            description = "Alimente le **sélecteur de colonnes** de `GET /api/encaissements`, sur "
+                    + "le même contrat que les trois précédents.\n\n"
+                    + "La sélection par défaut reproduit **exactement** les 27 colonnes servies "
+                    + "avant l'introduction du paramètre.\n\n"
+                    + "**Le catalogue a été bâti sur mesure, pas sur la trace.** L'écran légataire "
+                    + "fait un `SELECT StlSettlementView.*` — toute la vue, 107 colonnes, sans en "
+                    + "nommer aucune — et ne stocke pas la disposition de sa grille en base. Les "
+                    + "colonnes retenues sont donc celles qui portent réellement une information "
+                    + "sur le périmètre servi (643 règlements réels).\n\n"
+                    + "Trois réserves utiles au moment de bâtir le sélecteur. `depotId`/`depotCode` "
+                    + "sont mesurés à **0 ligne sur 643**, `compteId`/`compteCode` à 12 (1,9 %) et "
+                    + "`dateReglement` à 10 (1,6 %) : servis parce que le contrat les publie, mais "
+                    + "ils ne doivent pas être proposés comme des filtres utiles. À l'inverse "
+                    + "`description` est renseignée sur les 643 lignes avec 530 valeurs distinctes "
+                    + "— c'est la colonne la plus informative du lot.\n\n"
+                    + "Ne figurent pas au catalogue, et c'est mesuré : `Group1Label`/`Group2Label`/"
+                    + "`Group3Label` (les colonnes de groupement du légataire lui-même, **0 sur "
+                    + "643**), `Category`/`ItemNumber`/`ItemDescription` (renseignées partout mais "
+                    + "**une seule valeur distincte** : des placeholders), et `AmountRS`/"
+                    + "`AmountStamp` (non nulles mais **toujours à zéro**).\n\n"
+                    + "Porte aussi **`groupable`** et **`agregeable`**, qui pilotent la bande de "
+                    + "groupement et les bandes « Total : » de `/groupes` — le front n'en code donc "
+                    + "aucune liste en dur. **`dossierId`, `dossierCode`, `montantBrutRestant`, "
+                    + "`montantNet` et `notes` ne sont pas groupables** : les deux premiers "
+                    + "traverseraient une association to-many (8 règlements portent sur plusieurs "
+                    + "dossiers, la somme des effectifs ne retomberait plus sur le total), les deux "
+                    + "suivants sont calculés en Java, et `notes` est un `nvarchar(max)` que le "
+                    + "`COUNT(DISTINCT)` refuse. Piloter le sélecteur sur le booléen, pas sur une "
+                    + "liste en dur.\n\n"
+                    + "Référentiel statique, sans paramètre : cacheable côté client."
+    )
+    public List<ColonneDto> getColonnesEncaissements() {
+        return Arrays.stream(ColonneEncaissement.values())
                 .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
                         c.parDefaut(), c.chemin()))
                 .toList();

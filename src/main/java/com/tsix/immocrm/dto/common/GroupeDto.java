@@ -2,7 +2,6 @@ package com.tsix.immocrm.dto.common;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.math.BigDecimal;
 import java.util.Map;
 
 @Schema(description = """
@@ -39,10 +38,19 @@ public record GroupeDto(
         long nombre,
 
         @Schema(description = """
-                Sommes des colonnes demandées via `?agregats=`, indexées par le nom de colonne \
-                tel qu'il apparaît dans la liste (`prix`, `totalAPayer`...). Vide si `agregats` \
-                n'est pas fourni. Une colonne dont toutes les lignes du groupe sont nulles vaut \
-                `0`, jamais `null` — c'est un total, pas une valeur absente.""",
-                example = "{\"prix\": 1350000.00}")
-        Map<String, BigDecimal> agregats) {
+                Résultats des agrégats demandés via `?agregats=`, **indexés par le jeton envoyé** \
+                — `prix` pour un nom nu, `prix:AVG` pour un nom qualifié. Vide si `agregats` n'est \
+                pas fourni.
+
+                Un nom nu vaut toujours une somme et revient sous ce nom nu : la réponse d'une \
+                intégration existante est donc inchangée par l'ouverture du menu Σ.
+
+                **Le type de la valeur suit la fonction** : nombre décimal pour `SUM` et `AVG`, \
+                entier pour `COUNT`, et pour `MIN`/`MAX` le type de la colonne — donc une date \
+                ISO-8601 sur une colonne date. Une somme dont toutes les lignes du groupe sont \
+                nulles vaut `0`, jamais `null` : c'est un total, pas une valeur absente. Un \
+                `MIN`/`MAX` sans aucune valeur vaut `null`, lui — il n'existe pas de minimum de \
+                rien, et `0` serait un mensonge.""",
+                example = "{\"prix\": 1350000.00, \"prix:AVG\": 675000.00}")
+        Map<String, Object> agregats) {
 }

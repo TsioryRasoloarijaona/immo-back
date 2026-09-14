@@ -9,6 +9,7 @@ import com.tsix.immocrm.exceptions.UnauthorizedException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import com.tsix.immocrm.domain.ColonneInconnueException;
+import com.tsix.immocrm.domain.FonctionAgregatInconnueException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -45,6 +46,23 @@ public class GlobalExceptionHandler {
         // desormais filtrables, et repondre les colonnes de prospection a une faute de frappe sur
         // un prospect designerait le mauvais ecran.
         probleme.setProperty("colonnesValides", ex.nomsValides());
+        return probleme;
+    }
+
+    /**
+     * Fonction d'agrégat refusée — {@code ?agregats=dateDocument:SUM}, ou un nom de fonction qui
+     * n'existe pas.
+     *
+     * <p>Le corps porte les fonctions acceptées <strong>par la colonne visée</strong>, pas la liste
+     * générale : une date accepte MIN/MAX/COUNT, un montant les cinq. Répondre la liste complète
+     * enverrait réessayer avec une valeur qui sera refusée elle aussi.
+     */
+    @ExceptionHandler(FonctionAgregatInconnueException.class)
+    public ProblemDetail handleFonctionAgregatInconnue(FonctionAgregatInconnueException ex) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        probleme.setProperty("agregat", ex.jeton());
+        probleme.setProperty("colonne", ex.colonne());
+        probleme.setProperty("fonctionsValides", ex.fonctionsValides());
         return probleme;
     }
 

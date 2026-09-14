@@ -269,8 +269,13 @@ public enum ColonneProspection implements Colonne {
         return Colonnes.resoudreGroupement(ColonneProspection.class, demandee);
     }
 
-    /** @throws ColonneInconnueException si un nom n'est pas une colonne agrégeable de ce catalogue. */
-    public static Set<ColonneProspection> resoudreAgregats(List<String> demandees) {
+    /**
+     * Résout {@code ?agregats=}, forme {@code colonne} (somme) ou {@code colonne:FONCTION}.
+     *
+     * @throws ColonneInconnueException         si un nom n'est pas une colonne de ce catalogue
+     * @throws FonctionAgregatInconnueException si la colonne n'autorise pas cette fonction
+     */
+    public static List<AgregatDemande> resoudreAgregats(List<String> demandees) {
         return Colonnes.resoudreAgregats(ColonneProspection.class, demandees);
     }
 

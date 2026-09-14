@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
+import com.tsix.immocrm.domain.AgregatDemande;
 import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.domain.Granularite;
@@ -71,6 +72,7 @@ import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.services.groupement.GroupementService;
+import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.utils.Champs;
@@ -277,34 +279,30 @@ public class ProspectionService {
      * Replie {@code GET /api/prospections} en groupes — voir
      * {@code instructions/FEATURE-groupement-listes.md}.
      */
-    public Page<GroupeDto> grouperProspections(List<String> etapes, List<String> origines,
+    public ResultatGroupement grouperProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, FiltresAvancesProspection filtres,
-            ColonneProspection groupeBy, Granularite granularite, Set<ColonneProspection> agregats,
+            ColonneProspection groupeBy, Granularite granularite, List<AgregatDemande> agregats,
             TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
         return grouper(specProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
                 search, ouvertes, filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     /** Replie {@code GET /api/pre-prospections} en groupes, même discriminant que la liste. */
-    public Page<GroupeDto> grouperPreProspections(List<String> etapes, List<String> origines,
+    public ResultatGroupement grouperPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
-            Set<ColonneProspection> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
+            List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
         return grouper(specPreProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
                 search, ouvertes), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
-    private Page<GroupeDto> grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
-            Granularite granularite, Set<ColonneProspection> agregats, TriGroupe tri,
+    private ResultatGroupement grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
+            Granularite granularite, List<AgregatDemande> agregats, TriGroupe tri,
             boolean inclureSansValeur, Pageable pageable) {
-        Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
-        for (ColonneProspection agregat : agregats) {
-            cheminsAgregats.put(agregat.nom(), agregat.chemin());
-        }
         return groupementService.grouper(ComProspection.class,
                 spec.and(perimetreService.filtreProspections()),
-                groupeBy.chemin(), granularite, cheminsAgregats, tri, inclureSansValeur, pageable);
+                groupeBy.chemin(), granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     /**
