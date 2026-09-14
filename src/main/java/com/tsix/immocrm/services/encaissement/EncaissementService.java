@@ -6,8 +6,13 @@ import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.dto.encaissement.AffectationDto;
+import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlDeposit;
@@ -241,13 +246,45 @@ public class EncaissementService {
      * — un id direct désigne un {@code StlSettlement} précis, peu importe son origine ; en pratique
      * seuls des ids issus de la liste (donc déjà scopés Vente) sont attendus côté front.
      */
-    public EncaissementDto findById(UUID id) {
+    public EncaissementDetailDto findById(UUID id) {
         StlSettlement settlement = settlementRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Encaissement introuvable: " + id));
-        // Toutes les colonnes : la fiche ne connaît pas de sélection côté service, c'est le filtre
-        // Jackson qui décide de ce qui sort. Lui passer autre chose reviendrait à priver d'une
-        // donnée un client qui l'a explicitement demandée par ?colonnes=.
-        return toDto(settlement, EnumSet.allOf(ColonneEncaissement.class));
+        // Toutes les colonnes : une fiche dit tout. Contrairement à la liste, sa forme n'est pas
+        // filtrable — voir l'entête d'EncaissementDetailDto.
+        return EncaissementDetailDto.de(
+                toDto(settlement, EnumSet.allOf(ColonneEncaissement.class)),
+                affectations(id));
+    }
+
+    /**
+     * Les échéances que ce règlement solde, montant croissant.
+     *
+     * <p>C'est la réponse à « ce règlement, il a payé quoi ? », que la forme de liste ne sait pas
+     * donner : elle n'expose qu'un {@code dossierCode}, celui de la première ligne. Sur les 8
+     * règlements réels qui couvrent plusieurs dossiers, ce champ en cache donc un ou deux.
+     */
+    private List<AffectationDto> affectations(UUID settlementId) {
+        return settlementLineRepository.findAffectationsBySettlementId(settlementId).stream()
+                .map(EncaissementService::toAffectation)
+                .toList();
+    }
+
+    private static AffectationDto toAffectation(StlSettlementLine ligne) {
+        ComDocument echeance = ligne.getComDocument();
+        ComFolder dossier = Champs.de(echeance, ComDocument::getComFolder);
+        ComSettlementCategory categorie = Champs.de(echeance, ComDocument::getComSettlementCategory);
+        return new AffectationDto(
+                ligne.getId(),
+                ligne.getAmount(),
+                Champs.de(echeance, ComDocument::getId),
+                Champs.de(echeance, ComDocument::getCode),
+                Champs.de(echeance, ComDocument::getDescription),
+                Champs.de(echeance, ComDocument::getDocDate),
+                Champs.de(echeance, ComDocument::getAmount),
+                Champs.de(categorie, ComSettlementCategory::getId),
+                Champs.de(categorie, ComSettlementCategory::getCode),
+                Champs.de(dossier, ComFolder::getId),
+                Champs.de(dossier, ComFolder::getCode));
     }
 
     /**
