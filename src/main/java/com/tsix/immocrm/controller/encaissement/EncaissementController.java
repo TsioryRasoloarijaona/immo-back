@@ -58,7 +58,10 @@ public class EncaissementController {
             summary = "Liste paginée des encaissements (règlements de Dossiers de vente)",
             description = "Toujours restreint aux règlements liés à au moins une échéance de "
                     + "Dossier de vente (les règlements d'achat/location, s'il y en a, ne "
-                    + "remontent jamais ici). `montantBrutRestant` (calculé : montant brut moins "
+                    + "remontent jamais ici), et aux **encaissements** : un décaissement "
+                    + "(`StlSettlement.IsCredit` faux, typiquement un remboursement à montant "
+                    + "négatif) ne remonte jamais, comme sur l'écran legacy. "
+                    + "`montantBrutRestant` (calculé : montant brut moins "
                     + "la part déjà affectée à une échéance) et `montantNet` (montant brut moins "
                     + "retenue source/timbre) sont calculés côté serveur, jamais stockés. "
                     + "`etat` accepte les 3 valeurs confirmées sur données réelles (IN_WORK, "
@@ -70,7 +73,15 @@ public class EncaissementController {
                     + "(`UtilisateurCourantDto.perimetreRestreint = true`), cette liste ne "
                     + "contient que les règlements portant au moins une ligne rattachée à un "
                     + "dossier d'un de ses projets affectés. Les règlements dont aucune ligne ne "
-                    + "résout de projet restent visibles de tous."
+                    + "résout de projet restent visibles de tous.\n\n"
+                    + "**Encaissements non affectés : volontairement absents.** Un règlement "
+                    + "encaissé mais pas encore imputé à une échéance n'a aucune ligne, donc ne "
+                    + "remonte pas ici. L'écran legacy les affiche (il les reconnaît sous "
+                    + "`StlSettlementRelationView.Origin = 'StlSettlement-NonAffecte'`) : 16 "
+                    + "pièces pour 6 435 400 DH sur les données réelles, toutes à l'état IN_WORK. "
+                    + "Les servir suppose de changer le critère \"Vente\" — décision produit en "
+                    + "attente, voir `instructions/FEATURE-encaissements-conformite-legataire.md` "
+                    + "§4. Ne pas confondre avec un filtre trop strict : c'est un choix assumé."
     )
     public PageDto<EncaissementDto> findAll(
             @Parameter(description = "Id(s) d'entité juridique (CfgCompany). Répétable, OR. Absent = toutes.")
@@ -85,6 +96,10 @@ public class EncaissementController {
             @RequestParam(required = false) UUID depotId,
             @Parameter(description = "Restreint aux règlements d'un seul Dossier (ComFolder.id).")
             @RequestParam(required = false) UUID dossierId,
+            @Parameter(description = "Id(s) de tranche (CfgTranche.id, voir GET /api/patrimoine/tranches). "
+                    + "Répétable, OR. Un règlement remonte dès qu'une de ses échéances porte sur un "
+                    + "lot de l'une des tranches citées. Absent = toutes.")
+            @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Id du tiers réglant (CfgTier.id).")
             @RequestParam(required = false) UUID tierId,
             @Parameter(description = "Sous-chaîne sur la référence (StlSettlement.Code, ex. n° de chèque).")
@@ -105,8 +120,8 @@ public class EncaissementController {
             @Parameter(description = "Borne supérieure (incluse) de la plage sur champDate, format ISO-8601.", example = "2026-08-31T23:59:59")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(encaissementService.findAll(entiteId, typeId, etat, compteId, depotId, dossierId, tierId,
-                reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin, pageable));
+        return PageDto.of(encaissementService.findAll(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId,
+                tierId, reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin, pageable));
     }
 
     @GetMapping("/{id}")
