@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-11T17:40+01:00_
+_Last updated: 2026-09-14T08:10+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -9,64 +9,60 @@ _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\proto
 **Aligner nos endpoints sur ce que le logiciel de bureau (OMRAN Estate) fait réellement**, en
 partant de sa **trace d'audit SQL Server** plutôt que de captures d'écran ou de lectures de vue.
 
-Quatre lots livrés dans cette session, dans cet ordre :
-
 | Lot | Sujet | État |
 |---|---|---|
 | G | Groupement et agrégats sur les listes | **mergé** (PR #43) |
 | H | Groupement sur *toutes* les colonnes + groupe vide écarté | **mergé** (PR #44) |
-| I | Colonnes du dossier vues dans la trace (article, responsable, délais) | **mergé** (PR #45) |
-| **J** | **Conformité au légataire : écritures manquantes** | **branche poussée, PR en attente** |
+| I | Colonnes du dossier vues dans la trace | **mergé** (PR #45) |
+| J | Conformité au légataire : écritures manquantes | **mergé** (PR #46) |
+| K | Encaissements : `IsCredit=1` + filtre par tranche | **mergé** (PR #47) |
+| **L** | **Encaissements : sélecteur de colonnes + groupement** | **poussé, PR en attente** |
 
-**813 tests verts** (763 en début de session, +50).
+**833 tests verts** (815 en début de session, +18).
 
 ---
 
 ## ✅ What Worked
 
-- **Partir de la trace d'audit SQL Server plutôt que du code ou des captures.** C'est la méthode
-  la plus productive de la session :
+- **La trace d'audit est vivante et interrogeable à la demande** — elle couvre désormais
+  jusqu'au 14/09, 4 281 lignes. Requête, depuis `master`, compte `tsix` :
   ```sql
   SELECT event_time, action_id, succeeded, server_principal_name,
          database_name, schema_name, object_name, statement
   FROM sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)
   ORDER BY event_time DESC;
   ```
-  Elle donne la **séquence exacte des écritures** d'Omran (auth, liste, ouverture de dossier,
-  transformation en vente, ajout d'interaction).
-- **Lire `AdmWebHistorics` / `ComActionMessage` en base** pour qualifier une action : l'audit ne
-  montre que `@P1…@Pn`, la table montre les valeurs.
-- **Mesurer le coût avant de choisir une conception.** Le groupement par `derniereVisiteDate` :
-  5 496 ms via la vue légataire, ~1 s via une pré-agrégation large, **6 ms** via une pré-agrégation
-  étroite (`ComProspectionVisites`). Deux ordres de grandeur pour un `WHERE` de plus.
-- **`@Formula` pour les colonnes calculées** (délais de cycle) : elles deviennent des propriétés
-  ordinaires, donc groupables et sommables sans toucher au moteur de groupement. Coût mesuré
-  négligeable (1 ms sur une page de 20).
-- **`@ManyToOne` paresseux vers une entité `@Subselect`**, jamais `@OneToOne` : un `@OneToOne`
-  optionnel ne se proxifie pas et produit un N+1 sur tout le domaine.
-- **Vérifier une régression supposée en remisant ses changements** (`git stash` + rejouer le test)
-  avant d'accuser son propre code. A servi deux fois, et a innocenté le code les deux fois.
+- **Savoir ce que la trace NE peut pas dire.** L'écran encaissements fait
+  `SELECT StlSettlementView.*` — 107 colonnes, aucune nommée — et le légataire **ne stocke pas la
+  disposition de sa grille en base** (aucune table `*Layout*`/`*Grid*`/`*Column*` ; `AdmFormsLog`
+  ne journalise que l'ouverture d'écran). La trace prouve la *séquence* et le *filtre*, jamais
+  l'affichage. Le relais est alors la mesure.
+- **Mesurer distinctes + non-zéro, jamais `COUNT(colonne)`.** Sur les encaissements ça a évité
+  deux erreurs symétriques en une passe : croire `Group1Label/2/3` utiles (0/643) et croire
+  `Category`/`ItemNumber`/`ItemDescription` pleines (643/643 mais **1 seule valeur distincte** —
+  des placeholders `None` / `Non définie`).
+- **Vérifier le type SQL avant de déclarer une colonne groupable.** `Notes` est `nvarchar(max)` :
+  le `COUNT(DISTINCT)` de `compterGroupes` l'aurait refusé en 500. Trouvé avant d'écrire, pas après.
+- **Le moteur de groupement générique tient ses promesses** : le lot L n'a ajouté **aucune ligne**
+  à `GroupementService`, seulement un catalogue porteur de `Chemin`.
+- **Sonder la cardinalité avant d'offrir un axe** : type=10, entité=5, banque=17, auteur=17,
+  tranche=11 — tous bons ; tiers=309 sur 643 — offert quand même, c'est la règle du lot H.
 
 ---
 
 ## ❌ What Failed
 
-- **`COUNT(colonne)` pour mesurer si une colonne est utile** → compte les non-nuls, pas les valeurs
-  utiles. **Trois fois** dans cette session : `PenalityDescription` (non nulle, vide partout),
-  `FinalTitleNumber` (idem), `MapLatitude` (non nulle, **à zéro** sur 14 033 lignes — annoncée à
-  tort comme « le plus gros manque »). **Compter les distinctes ou les non-zéro.**
-- **Compter les colonnes d'une vue pour chiffrer un écart** → surestime massivement.
-  `H1/H2/H3` du tri légataire semblaient absentes ; ce sont la tranche, le projet et la société,
-  **déjà servis** sous d'autres noms. Résoudre chaque colonne vers son origine avant de conclure.
-- **`cb.coalesce(cb.sum(x), BigDecimal.ZERO)`** → tire le type du résultat vers l'échelle du
-  littéral : `100,50 + 90,25` revenait à **191,0**. Somme d'argent arrondie à l'unité, en silence.
-  Substituer le `NULL` en Java, pas en SQL.
-- **`@Modifying(clearAutomatically = true)`** → vide le contexte de persistance et détache
-  l'entité que l'appelant vient de créer. Trois tests de création sont tombés dessus.
-  `flushAutomatically` suffit.
-- **Une grosse pré-agrégation couvrant six colonnes d'un coup** → ~1 s. L'étroite, 6 ms.
-- **`GROUP BY` sur une expression contenant une sous-requête** → SQL Server refuse. D'où
-  `delaiConcretisation` sommable mais non groupable.
+- **`COUNT(colonne)` pour juger une colonne utile** → compte les non-nuls. Cinq occurrences
+  cumulées : `PenalityDescription`, `FinalTitleNumber`, `MapLatitude`, puis `Category` /
+  `ItemNumber` / `ItemDescription` côté encaissements.
+- **Compter les colonnes d'une vue pour chiffrer un écart** → surestime massivement (`H1/H2/H3`).
+- **`cb.coalesce(cb.sum(x), BigDecimal.ZERO)`** → arrondit la somme d'argent à l'unité en silence.
+  Substituer le `NULL` en Java. Test de non-régression rejoué sur le catalogue encaissements.
+- **`@Modifying(clearAutomatically = true)`** → détache l'entité que l'appelant vient de créer.
+- **`GROUP BY` sur une expression contenant une sous-requête** → SQL Server refuse.
+- **Piper `sqlcmd` dans `head`** → tronque silencieusement la sortie et fait croire qu'une section
+  de requête n'a rien rendu. Rediriger vers un fichier, puis lire.
+- **`sqlcmd -W` et `-y` sont mutuellement exclusifs** — l'un des deux, jamais les deux.
 
 ---
 
@@ -74,22 +70,23 @@ Quatre lots livrés dans cette session, dans cet ordre :
 
 | # | Erreur / Bug | Statut | Correctif |
 |---|---|---|---|
-| 1 | 54 tests en erreur, `Nom d'objet/de colonne non valide` | **Fixed** | Dérive de `yesRemsTest` (163 colonnes, `StrEntity`, `ComSaleProspectionView` manquants). Base réalignée depuis `yesRemsProd` et `ci/schema/050_views.sql` |
-| 2 | Somme d'argent arrondie à l'unité (190,75 → 191,0) | **Fixed** | `COALESCE` SQL retiré, substitution du `NULL` en Java. Test `sommeDesMontants_conserveLesCentimes` |
-| 3 | `PerimetreInterceptorInvarianteTest` — 3 routes `/groupes` non déclarées | **Fixed** | Ajoutées à `ROUTES_SANS_ID_AUTORISEES` avec justification (scopées par la Specification, pas par l'intercepteur) |
-| 4 | `@Formula` rendant `null` dans les tests | **Fixed** | Une formule n'est peuplée qu'au **chargement** : `flush` + `clear` avant l'appel HTTP (`relireDepuisLaBase()`) |
-| 5 | `GROUP BY` avec sous-requête → `SQLGrammarException` en 500 | **Fixed** | `delaiConcretisation` déclaré `agregeable` seulement → 400 lisible |
+| 1 | 54 tests en erreur, `Nom d'objet/de colonne non valide` | **Fixed** | Dérive de `yesRemsTest`, base réalignée depuis `yesRemsProd` |
+| 2 | Somme d'argent arrondie à l'unité (190,75 → 191,0) | **Fixed** | `COALESCE` SQL retiré, substitution en Java |
+| 3 | `PerimetreInterceptorInvarianteTest` — routes `/groupes` non déclarées | **Fixed** | Ajoutées à `ROUTES_SANS_ID_AUTORISEES` avec justification (dont `/api/encaissements/groupes` au lot L) |
+| 4 | `@Formula` rendant `null` dans les tests | **Fixed** | `flush` + `clear` avant l'appel HTTP |
+| 5 | `GROUP BY` avec sous-requête → 500 | **Fixed** | Colonne déclarée `agregeable` seulement → 400 lisible |
 | 6 | `clearAutomatically` détachant le dossier créé | **Fixed** | `flushAutomatically` |
-| 7 | `TransientPropertyValueException` dans les tests | **Fixed** | `save()` renvoie l'instance **gérée** (identifiant assigné à la main → `merge`) ; réutiliser sa valeur de retour |
-| 8 | **Nos interactions exclues du « dernier échange »** | **Fixed** | `IsSystem` n'était pas posé ; la vue filtre `AND IsSystem = 0` et `NULL` ne satisfait pas `= 0`. 14 lignes en base, 8 prospections. Script `007_…sql` |
-| 9 | Prospection restée active après la vente | **Fixed** | `IsClosed`/`ClosingDate` + désarmement des relances dans `DossierService.create` |
-| 10 | Dossiers absents de `StrHistory` | **Fixed** | Table lue pour l'onglet Historique mais jamais écrite |
+| 7 | `TransientPropertyValueException` dans les tests | **Fixed** | Réutiliser la valeur de retour de `save()` |
+| 8 | Nos interactions exclues du « dernier échange » | **Fixed** | `IsSystem` non posé ; script `007_…sql` |
+| 9 | Prospection restée active après la vente | **Fixed** | `IsClosed`/`ClosingDate` dans `DossierService.create` |
+| 10 | Dossiers absents de `StrHistory` | **Fixed** | Table lue mais jamais écrite |
+| 11 | Décaissement de −470 000 DH faussant les totaux | **Fixed** | `IsCredit = 1` (lot K), étendu au groupement au lot L |
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### ⚠️ Il y a QUATRE bases locales, et elles ne disent pas la même chose
+### ⚠️ QUATRE bases locales, qui ne disent pas la même chose
 
 | Base | Tables | Rôle |
 |---|---:|---|
@@ -98,148 +95,121 @@ Quatre lots livrés dans cette session, dans cet ordre :
 | `yesRemsCiCheck` | 167 | bâtie depuis `ci/schema/*.sql` |
 | `yesRemsTest` | 86+ | **le défaut** de `src/test/resources/application.properties` |
 
-`yesRems` ≠ `yesRemsProd` : 387 dossiers contre 358, 17 678 prospections contre 17 939. Même
-schéma, deux restaurations différentes, **ni l'une ni l'autre n'est un sous-ensemble**. Vérifier
-`database_name` dans l'audit avant de rapporter une mesure à une trace.
+`yesRems` ≠ `yesRemsProd` : 387 dossiers contre 358. Vérifier `database_name` dans l'audit avant
+de rapporter une mesure à une trace. **`StlSettlementView` n'existe pas dans `yesRemsTest`** (0
+colonne) — raison de plus pour bâtir les catalogues sur les entités, jamais sur la vue.
 
 ### L'audit SQL et ses limites
 
-- Il est **vivant** : une requête lancée maintenant y apparaît en quelques secondes.
-- Il **tronque les requêtes à 4 000 caractères**.
-- Il **ne montre pas les valeurs** : `INSERT ComFolder(112 colonnes) VALUES (@P1…@P112)`. La liste
-  de colonnes est celle de l'ORM d'Omran, **pas** les champs réellement renseignés. Ce qu'il prouve,
-  c'est la **séquence des effets de bord**.
-- **Décalage d'une heure** : audit en UTC, application en heure locale.
-- Les requêtes sur `sys.all_objects` / `clmns.` sont l'introspection de l'IDE, **pas Omran**.
+- **Vivant** : une requête lancée maintenant y apparaît en quelques secondes. L'utilisateur peut
+  rejouer un écran à la demande pour en produire la trace.
+- **Tronque à 4 000 caractères**, **ne montre pas les valeurs** (`@P1…@Pn`), **décalage d'une
+  heure** (UTC vs local). Les requêtes sur `sys.all_objects` sont l'IDE, pas Omran.
+- **Un `SELECT vue.*` ne dit rien de l'affichage.** C'est le cas de l'écran encaissements.
 
-### La séquence de transformation prospection → vente (relevée le 11/09)
+### La séquence transformation prospection → vente
 
-1. `UPDATE ComProspection` — clôture ✅ *(livré lot J)*
-2. `INSERT AdmAttachedFile` ❌
-3. `UPDATE AdmSequence SeqValue+1` ✅
-4. `INSERT ComFolder` ✅
-5. `INSERT ComDocument` ×3 (schéma de financement) ✅
-6. `INSERT ComActionMessage` ×4 + `AdmAlertData` ×4 — **alertes de jalon** ❌ *(reste)*
-7. `INSERT StrHistory` ✅ *(lot J)*
-8. `UPDATE AdmAlertData Active=0` + `ComActionMessage WithoutRevival=1` ✅ *(lot J)*
-9. `UPDATE StkItem comFolderId` ✅
-10. `INSERT StrFolderStatusHistory` ✅ *(enrichi lot J)*
-11. `UPDATE CfgTier` — **re-normalisation, pas une transition**
+1. `UPDATE ComProspection` ✅ · 2. `INSERT AdmAttachedFile` ❌ · 3. `AdmSequence` ✅ ·
+4. `INSERT ComFolder` ✅ · 5. `ComDocument` ×3 ✅ · 6. **`ComActionMessage` ×4 + `AdmAlertData` ×4
+— alertes de jalon ❌ (reste, bloqué sur décision produit)** · 7. `StrHistory` ✅ ·
+8. désarmement des relances ✅ · 9. `StkItem.comFolderId` ✅ · 10. `StrFolderStatusHistory` ✅ ·
+11. `UPDATE CfgTier` — re-normalisation, **pas** une transition.
 
 ### `UPDATE CfgTier` : le statut client est DÉRIVÉ, jamais stocké
 
-La requête force le type à `PROSPECT` pour **tout tiers sans dossier actif**. Après une vente, le
-tiers sort du `WHERE` et n'est donc plus ramené à prospect. **Ne jamais écrire un « type client »
-à la création** — ce serait inventer un état que le légataire ne stocke pas.
+Ne jamais écrire un « type client » à la création — ce serait inventer un état que le légataire ne
+stocke pas.
 
 ### Deux couches de permissions chez Omran, une seule chez nous
 
-En plus du périmètre par société (`AdmUserHabilitation`, que nous avons), Omran filtre les dossiers
-**par statut visible** via `StrStatusIntervener` × `StrIntervener`, par rôle *ou* par utilisateur
-nommé. `PerimetreCommercialService` ne connaît que le projet. **Non implémenté.**
+En plus du périmètre par société, Omran filtre **par statut visible** via `StrStatusIntervener` ×
+`StrIntervener`. **Non implémenté.**
 
-### Le catalogue `Colonne*` pilote DEUX features
+### Les catalogues `Colonne*` pilotent DEUX features
 
-`ColonneDossier` / `ColonneProspection` alimentent **le sélecteur de colonnes ET le groupement**.
-Toute entrée ajoutée doit avoir son champ dans le DTO correspondant, sinon le sélecteur annonce une
-colonne absente de la réponse. Une colonne avec un `Chemin` devient groupable **sans une ligne dans
-le moteur**.
+`ColonneDossier` / `ColonneProspection` / `ColonneProspect` / **`ColonneEncaissement`** alimentent
+le sélecteur de colonnes **ET** le groupement. Toute entrée ajoutée doit avoir son champ dans le
+DTO, sinon le sélecteur annonce une colonne absente. Une colonne avec un `Chemin` devient groupable
+**sans une ligne dans le moteur**.
 
-### Couverture de groupement atteinte
+### La règle qui décide de ce qui est groupable
 
-`ColonneDossier` **40/40** puis 56/56 après le lot I · `ColonneProspection` **44/56** — les 12
-restantes sont exclues **sur mesure de coût**, pas sur opinion (5 colonnes agrégeant 46 667 lignes
-à ~1 s, 2 colonnes d'alerte en `ROW_NUMBER` à 0,7–4,7 s, 3 colonnes de dossier dont l'association
-inverse n'est pas proxifiable, `typeProspection` à 4 lignes sur 17 939).
+Un chemin qui traverse une association **to-many** n'est jamais groupable : il compte plusieurs
+fois les lignes multi-rattachées et brise l'invariant « somme des effectifs = `totalElements` ».
+C'est ce qui exclut `dossierId`/`dossierCode` des encaissements (654 couples pour 643 règlements,
+8 multi-dossiers). Les colonnes **calculées en Java** (`montantBrutRestant`, `montantNet`) sont
+exclues pour une autre raison : elles n'existent pas en base.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- **`instructions/FEATURE-conformite-legataire.md`** — le lot en cours (J). §1 le défaut `IsSystem`
-  prouvé, §2 la clôture de la prospection, §4 **ce qui ne sera pas ajouté et pourquoi**, §5 le reste.
-- `instructions/FEATURE-groupement-listes.md` — lot G. ⚠️ **§2 et §4.1 sont périmés**, un bandeau le
-  dit en tête.
-- `instructions/FEATURE-groupement-toutes-colonnes.md` — lot H, renverse deux décisions du lot G.
-- `instructions/FEATURE-colonnes-dossier-ecran-legataire.md` — lot I. §1 explique l'erreur
-  `H1/H2/H3`.
+- **`instructions/FEATURE-colonnes-groupement-encaissements.md`** — le lot en cours (L). §1 ce que
+  la trace ne peut pas dire, §3 les colonnes ajoutées avec leur mesure, §4 les écartées et
+  pourquoi, §5.2 le refus structurel du groupement par dossier.
+- `instructions/FEATURE-encaissements-conformite-legataire.md` — lot K. §4 la décision produit
+  ouverte sur les encaissements non affectés.
+- `instructions/FEATURE-conformite-legataire.md` — lot J. §5 le reste (alertes de jalon).
+- `instructions/FEATURE-groupement-listes.md` — lot G. ⚠️ **§2 et §4.1 périmés**, bandeau en tête.
+- `src/main/java/.../domain/ColonneEncaissement.java` — catalogue du lot L, chaque entrée porte sa
+  mesure en javadoc.
+- `src/main/java/.../domain/Chemin.java` — le chemin JPA des colonnes de catalogue.
+- `src/main/java/.../services/groupement/GroupementService.java` — moteur générique des **quatre**
+  listes désormais.
 - `src/main/resources/db/migration/007_ComActionMessage_drapeaux_api.sql` — **à appliquer à la
-  main**, rattrape les 14 interactions écrites sans drapeaux.
-- `src/main/java/.../domain/Chemin.java` — le chemin JPA des colonnes de catalogue, pièce centrale
-  du groupement.
-- `src/main/java/.../entities/com/ComProspectionVisites.java` — `@Subselect` étroit, 6 ms contre
-  5 496 ms par la vue.
-- `src/main/java/.../services/groupement/GroupementService.java` — moteur générique des trois listes.
-- `target/audit-full.json`, `target/audit-transfo.json` — traces exportées (gitignored).
+  main**, rattrape 14 interactions écrites sans drapeaux.
 
 ---
 
 ## 🔧 Environment & Config
 
 - **Lire l'audit d'Omran** : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)`
-  depuis `master`, compte `tsix`. L'audit est **scopé sur la base `yesRems`**.
-- **Tests** : `./mvnw.cmd test` fonctionne nu depuis le réalignement de `yesRemsTest`
-  (11/09). Avant de suspecter le code sur une colonne absente, **comparer les bases** :
-  ```sql
-  SELECT COUNT(*) FROM yesRemsProd.INFORMATION_SCHEMA.COLUMNS p
-  JOIN yesRemsTest.INFORMATION_SCHEMA.TABLES tt ON tt.TABLE_NAME = p.TABLE_NAME
-  WHERE NOT EXISTS (SELECT 1 FROM yesRemsTest.INFORMATION_SCHEMA.COLUMNS t
-                    WHERE t.TABLE_NAME = p.TABLE_NAME AND t.COLUMN_NAME = p.COLUMN_NAME);
-  ```
-- **Mesurer une requête** : ouvrir **une seule** `SqlConnection` .NET et boucler — le cache est
-  froid aux deux premières passes (vu 1 238 → 627 → **6 ms** sur la même requête). **Toujours
-  mesurer trois fois** avant de conclure sur une performance.
+  depuis `master`, compte `tsix`. Scopé sur la base `yesRems`.
+- **Mesurer** : `sqlcmd -S localhost,49687 -U tsix -P securePassword123 -d yesRemsProd -C`.
+  Rediriger vers un fichier plutôt que de piper dans `head`. `-W` et `-y` sont exclusifs.
+- **Tests** : `./mvnw.cmd test` fonctionne nu. Avant de suspecter le code sur une colonne absente,
+  **comparer les bases** (`INFORMATION_SCHEMA.COLUMNS`).
+- **Mesurer une requête** : boucler sur **une seule** connexion, le cache est froid aux deux
+  premières passes. **Toujours mesurer trois fois.**
 - ⚠️ **Ne jamais réécrire un fichier source via PowerShell** (encodage cassé plusieurs fois).
-  Les heredocs Bash contenant du Python à triple quote cassent aussi — préférer l'outil d'édition.
-- ⚠️ Identifiants de service échangés en clair au fil des sessions — dette connue, non traitée ici.
+- ⚠️ Identifiants de service en clair au fil des sessions — dette connue, non traitée.
 
 ### État des branches
 
-**Branche en cours : `feat/conformite-legataire`, 2 commits, poussée, PR en attente de merge.**
-Le front (`crm-prototype`) est sur `main`, intact — **tous ces lots sont backend seul**.
+**Branche en cours : `feat/colonnes-groupement-encaissements`, 1 commit, poussée, PR en attente.**
+Le front (`crm-prototype`) n'est pas touché — **tous ces lots sont backend seul**.
 
 | Repo | Branche | État |
 |---|---|---|
-| back | **`feat/conformite-legataire`** | lot J, 813 tests verts — **en attente de merge** |
-| back | `feat/groupement-listes`, `feat/groupement-toutes-colonnes`, `feat/colonnes-dossier-ecran-legataire` | **mergées (PR #43/#44/#45) — supprimables** |
-| back | `feat/fiche-dossier-alignement-ecran`, `feat/contexte-dossier` | mergées — supprimables |
-| back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée mais la locale a divergé (1 commit hors `main`) |
-| back | `docs/memoire-de-session` (2 commits), `feat/remise-dossier` (1 commit, aucun remote) | non mergées |
-| front | `feat/groupement-listes` | **construit par une autre session** — consomme le lot G |
-| front | `refractor/best-practice` | **11 commits, LOCAL SEUL** — remote supprimé sans merge |
+| back | **`feat/colonnes-groupement-encaissements`** | lot L, 833 tests verts — **en attente de merge** |
+| back | `feat/groupement-listes`, `feat/groupement-toutes-colonnes`, `feat/colonnes-dossier-ecran-legataire`, `feat/conformite-legataire`, `feat/encaissements-conformite-legataire` | **mergées — supprimables** (`git branch -d`, jamais `-D`) |
+| back | `fix/ci-pollution-doubles-envoi` | PR #38 mergée mais la locale a divergé |
+| back | `docs/memoire-de-session`, `feat/remise-dossier` | non mergées |
 
 ---
 
 ## ⏭️ Next Step
 
-> **Attendre la merge de la PR `feat/conformite-legataire`**, puis `sync`. Ne rien démarrer qui en
-> dépende avant.
+> **Attendre la merge de la PR `feat/colonnes-groupement-encaissements`**, puis `sync`.
 >
 > **Puis demander à l'utilisateur sa politique d'alertes de jalon** — c'est ce qui bloque l'étape 4
 > du lot J, et c'est une décision **produit, pas technique** : quels jalons déclenchent une alerte,
-> à quelle échéance, avec quel libellé. La trace donne la forme
-> (« l'état RESERVATION du dossier… » à +7 j, « FRAIS SYNDIC (16 800 DH) arrivé à échéance »), pas
-> la règle.
->
-> **Impact front à relayer** (aucune rupture de contrat, mais un changement de comportement voulu) :
-> après `POST /api/dossiers`, la prospection transformée **disparaît de `GET /api/prospections`**.
-> Un écran qui la cherchait après la vente ne la trouvera plus.
+> à quelle échéance, avec quel libellé. La trace donne la forme (« l'état RESERVATION du dossier… »
+> à +7 j, « FRAIS SYNDIC (16 800 DH) arrivé à échéance »), pas la règle.
 
 ### Backlog
 
 - [ ] **Alertes de jalon du dossier** — 4 `ComActionMessage` + 4 `AdmAlertData` à la vente.
       Bloqué sur la décision produit ci-dessus.
-- [ ] **Diff sémantique de `ComSaleProspectionView`** — 148 colonnes contre nos 56. À faire en
-      résolvant chaque colonne vers son origine réelle, **jamais par comptage brut** (leçon
-      `H1/H2/H3`).
+- [ ] **Encaissements non affectés** — 16 pièces, 6 435 400 DH, invisibles car sans ligne.
+      Décision produit ouverte (`FEATURE-encaissements-conformite-legataire.md` §4).
 - [ ] **Seconde couche de permissions** — filtrage par statut visible
       (`StrStatusIntervener` × `StrIntervener`). Le plus structurant des restes.
-- [ ] **Verrous pessimistes** `AdmWebLockEntities` + `AdmWebSessions` : deux utilisateurs ne peuvent
-      pas ouvrir le même dossier en écriture chez Omran.
+- [ ] **Diff sémantique de `ComSaleProspectionView`** — 148 colonnes contre nos 56, en résolvant
+      chaque colonne vers son origine réelle, **jamais par comptage brut**.
+- [ ] **Verrous pessimistes** `AdmWebLockEntities` + `AdmWebSessions`.
 - [ ] **Journalisation d'usage** `AdmWebHistorics` / `AdmFormsLog`.
-- [ ] **Onglets « Dates » / « Autres montants » du dossier** — attendent leurs captures
-      (`FEATURE-fiche-dossier-alignement-ecran.md` §6).
-- [ ] **Décision produit : filtrer les doublons de pré-prospection ?** 798 sur 3 818 (20,9 %) sont
-      du déchet marqué.
+- [ ] **Onglets « Dates » / « Autres montants » du dossier** — attendent leurs captures.
+- [ ] **Décision produit : filtrer les doublons de pré-prospection ?** 798 sur 3 818 (20,9 %).
 - [ ] **Fiche tiers** — `ProspectDetailDto` 52 champs contre 97 dans `ComSaleProspectView`.
-- [ ] Supprimer les branches mergées (`git branch -d`, jamais `-D`).
+- [ ] Supprimer les branches mergées.
