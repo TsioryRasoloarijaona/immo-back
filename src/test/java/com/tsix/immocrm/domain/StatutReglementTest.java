@@ -36,20 +36,20 @@ class StatutReglementTest {
      * lecture — d'où la variante tolérante.
      */
     @Test
-    void lectureTolerante_rendNullSurValeurInconnueOuAbsente() {
-        assertThat(StatutReglement.depuisCodeOuNull(null)).isNull();
-        assertThat(StatutReglement.depuisCodeOuNull("")).isNull();
-        assertThat(StatutReglement.depuisCodeOuNull("   ")).isNull();
+    void lectureTolerante_rendVideSurValeurInconnueOuAbsente() {
+        assertThat(StatutReglement.lireCode(null)).isEmpty();
+        assertThat(StatutReglement.lireCode("")).isEmpty();
+        assertThat(StatutReglement.lireCode("   ")).isEmpty();
         // UNPAID/LOST existent dans les filtres legacy documentés mais ne portent aucune ligne
         // réelle : délibérément absents de l'enum, donc inconnus ici.
-        assertThat(StatutReglement.depuisCodeOuNull("UNPAID")).isNull();
-        assertThat(StatutReglement.depuisCodeOuNull("n'importe quoi")).isNull();
+        assertThat(StatutReglement.lireCode("UNPAID")).isEmpty();
+        assertThat(StatutReglement.lireCode("n'importe quoi")).isEmpty();
     }
 
     @Test
     void lectureTolerante_accepteCasseEtEspaces() {
-        assertThat(StatutReglement.depuisCodeOuNull("pointed")).isEqualTo(POINTED);
-        assertThat(StatutReglement.depuisCodeOuNull(" IN_WORK ")).isEqualTo(IN_WORK);
+        assertThat(StatutReglement.lireCode("pointed")).contains(POINTED);
+        assertThat(StatutReglement.lireCode(" IN_WORK ")).contains(IN_WORK);
     }
 
     /** Côté requête client, en revanche, une valeur inconnue est une erreur — pas une donnée à tolérer. */

@@ -693,16 +693,14 @@ public class DossierService {
             throw new InvalidRequestException("Statut inconnu: " + request.statut());
         }
 
-        StatutDossier actuel = folder.getStrStatus() != null && folder.getStrStatus().getCode() != null
-                ? tryFromCode(folder.getStrStatus().getCode())
-                : null;
-
-        if (actuel != null && !TransitionsValidees.estValide(actuel, cible)) {
-            List<String> autorisees = TransitionsValidees.transitionsAutorisees(actuel).stream()
+        Optional<StatutDossier> actuel = statutActuel(folder);
+        if (actuel.isPresent() && !TransitionsValidees.estValide(actuel.get(), cible)) {
+            StatutDossier depuis = actuel.get();
+            List<String> autorisees = TransitionsValidees.transitionsAutorisees(depuis).stream()
                     .map(StatutDossier::getCode)
                     .toList();
             throw new InvalidStatutTransitionException(
-                    "Transition invalide: " + actuel.getCode() + " -> " + cible.getCode(), autorisees);
+                    "Transition invalide: " + depuis.getCode() + " -> " + cible.getCode(), autorisees);
         }
 
         StrStatus strStatus = strStatusRepository.findByStrConfigEntityIdAndCode(StatutDossier.CONFIG_ENTITY_ID, cible.getCode());
@@ -957,11 +955,27 @@ public class DossierService {
         }
     }
 
-    private static StatutDossier tryFromCode(String code) {
+    /**
+     * Le statut courant du dossier, ou {@link Optional#empty()} si le dossier n'en porte pas — ou
+     * s'il porte un code que {@link StatutDossier} ne connaît pas. Les deux cas se traitent
+     * identiquement chez tous les appelants, d'où un seul type de retour pour les deux.
+     */
+    private static Optional<StatutDossier> statutActuel(ComFolder folder) {
+        return folder.getStrStatus() == null
+                ? Optional.empty()
+                : tryFromCode(folder.getStrStatus().getCode());
+    }
+
+    /**
+     * Lecture tolérante d'un code de statut legacy : {@link Optional#empty()} pour une valeur
+     * absente <b>ou inconnue</b>. {@code StrStatus.Code} reste alimenté par l'application de
+     * bureau, une valeur inattendue ne doit pas faire échouer la lecture d'un dossier.
+     */
+    private static Optional<StatutDossier> tryFromCode(String code) {
         try {
-            return StatutDossier.fromCode(code);
+            return Optional.ofNullable(code).map(StatutDossier::fromCode);
         } catch (IllegalArgumentException e) {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -975,19 +989,15 @@ public class DossierService {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + id));
 
-        StatutDossier actuel = folder.getStrStatus() != null && folder.getStrStatus().getCode() != null
-                ? tryFromCode(folder.getStrStatus().getCode())
-                : null;
-        if (actuel == null) {
-            return List.of();
-        }
-        return TransitionsValidees.transitionsAutorisees(actuel).stream()
-                .map(statut -> {
-                    EtapeMilestone.Info info = EtapeMilestone.of(statut);
-                    return new EtapeSuivanteDto(
-                            statut.getCode(), info.champ(), info.libelle(), info.confiance().name());
-                })
-                .toList();
+        return statutActuel(folder)
+                .map(actuel -> TransitionsValidees.transitionsAutorisees(actuel).stream()
+                        .map(statut -> {
+                            EtapeMilestone.Info info = EtapeMilestone.of(statut);
+                            return new EtapeSuivanteDto(
+                                    statut.getCode(), info.champ(), info.libelle(), info.confiance().name());
+                        })
+                        .toList())
+                .orElseGet(List::of);
     }
 
     private static List<String> etapesAtteignables(ComFolder folder) {

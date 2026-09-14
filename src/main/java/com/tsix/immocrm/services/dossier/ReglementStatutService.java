@@ -93,10 +93,8 @@ public class ReglementStatutService {
 
         // Une valeur legacy absente ou inconnue est traitée comme IN_WORK : c'est le statut des
         // 3 218 lignes réelles saisies, et les 9 lignes à Status NULL n'ont jamais été pointées.
-        StatutReglement actuel = StatutReglement.depuisCodeOuNull(settlement.getStatus());
-        if (actuel == null) {
-            actuel = StatutReglement.IN_WORK;
-        }
+        StatutReglement actuel = StatutReglement.lireCode(settlement.getStatus())
+                .orElse(StatutReglement.IN_WORK);
 
         if (!StatutReglement.estValide(actuel, cible)) {
             throw new InvalidStatutTransitionException(

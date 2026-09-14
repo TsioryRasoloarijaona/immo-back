@@ -448,12 +448,13 @@ public class ConfirmationVisiteService {
             if (!Boolean.TRUE.equals(piece.getHasFile()) || !estUnPlan(piece)) {
                 continue;
             }
-            Optional<AppFileObject> objet =
+            Optional<AppFileObject> trouve =
                     fileObjectRepository.findByAdmAttachedFileIdAndDeletedAtIsNull(piece.getId());
-            if (objet.isEmpty()) {
+            if (trouve.isEmpty()) {
                 continue;
             }
-            long taille = objet.get().getSizeBytes() != null ? objet.get().getSizeBytes() : 0L;
+            AppFileObject objet = trouve.orElseThrow();
+            long taille = objet.getSizeBytes() != null ? objet.getSizeBytes() : 0L;
             if (cumul + taille > plafond) {
                 log.info("Plan « {} » écarté de la confirmation de visite : {} octets porteraient "
                                 + "le total au-delà du plafond de {} Mo.",
@@ -461,7 +462,7 @@ public class ConfirmationVisiteService {
                 continue;
             }
 
-            lire(objet.get(), piece).ifPresent(retenues::add);
+            lire(objet, piece).ifPresent(retenues::add);
             cumul += taille;
         }
         return retenues;
