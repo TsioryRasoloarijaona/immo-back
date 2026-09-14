@@ -2,7 +2,7 @@ package com.tsix.immocrm.domain;
 
 /**
  * Contrat commun aux catalogues de colonnes sélectionnables ({@link ColonneProspection},
- * {@link ColonneProspect}, {@link ColonneDossier}).
+ * {@link ColonneProspect}, {@link ColonneDossier}, {@link ColonneEncaissement}).
  *
  * <p>Existe pour que la résolution d'un {@code ?colonnes=} soit écrite <strong>une seule
  * fois</strong>, dans {@link Colonnes}, plutôt que recopiée par catalogue. Trois copies d'une
@@ -16,7 +16,8 @@ package com.tsix.immocrm.domain;
  *
  * <p>Sans JPA, comme le reste de {@code domain/}.
  */
-public interface Colonne {
+public sealed interface Colonne
+        permits ColonneDossier, ColonneEncaissement, ColonneProspect, ColonneProspection {
 
     /** Nom technique, tel qu'il est passé dans {@code ?colonnes=} et sérialisé en JSON. */
     String nom();

@@ -3,6 +3,7 @@ package com.tsix.immocrm.domain;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -59,21 +60,24 @@ public enum StatutReglement {
     }
 
     /**
-     * Lecture tolérante de la colonne : {@code null} pour une valeur absente <b>ou inconnue</b>,
-     * jamais d'exception. Indispensable parce que {@code Status} est du texte libre alimenté par
-     * l'application desktop, qui continue d'écrire dans {@code yesRems} — une valeur inattendue ne
-     * doit pas faire échouer {@code GET /api/encaissements}, qui lit ce champ tel quel.
+     * Lecture tolérante de la colonne : {@link Optional#empty()} pour une valeur absente <b>ou
+     * inconnue</b>, jamais d'exception. Indispensable parce que {@code Status} est du texte libre
+     * alimenté par l'application desktop, qui continue d'écrire dans {@code yesRems} — une valeur
+     * inattendue ne doit pas faire échouer {@code GET /api/encaissements}, qui lit ce champ tel quel.
+     *
+     * <p>L'absence est portée par le type et non par un {@code null} : l'appelant qui l'ignore ne
+     * compile pas, là où il obtenait auparavant un {@code null} silencieux.
      */
-    public static StatutReglement depuisCodeOuNull(String code) {
+    public static Optional<StatutReglement> lireCode(String code) {
         if (code == null || code.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         for (StatutReglement statut : values()) {
             if (statut.name().equalsIgnoreCase(code.trim())) {
-                return statut;
+                return Optional.of(statut);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -81,10 +85,7 @@ public enum StatutReglement {
      * une valeur inconnue est une erreur de requête, pas une donnée legacy à tolérer.
      */
     public static StatutReglement depuisCode(String code) {
-        StatutReglement statut = depuisCodeOuNull(code);
-        if (statut == null) {
-            throw new IllegalArgumentException("Statut de règlement inconnu: " + code);
-        }
-        return statut;
+        return lireCode(code).orElseThrow(() ->
+                new IllegalArgumentException("Statut de règlement inconnu: " + code));
     }
 }

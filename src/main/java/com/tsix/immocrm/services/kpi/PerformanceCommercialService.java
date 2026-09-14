@@ -11,6 +11,7 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -27,7 +28,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -114,7 +114,9 @@ public class PerformanceCommercialService {
      * puis les prospections puis les dossiers ; le tri définitif est appliqué par l'appelant.
      */
     private Map<UUID, PerformanceCommercialDto> assembler(Periode periode) {
-        Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
+        // L'Optional du service de périmètre est résolu ici, une fois : « pas de restriction »
+        // se transporte ensuite comme un null explicite, jamais comme un Optional en paramètre.
+        List<UUID> perimetre = perimetreService.perimetreCourant().orElse(null);
         Map<UUID, Accumulateur> parCommercial = new LinkedHashMap<>();
 
         for (Object[] ligne : activite(periode, perimetre)) {
@@ -161,32 +163,35 @@ public class PerformanceCommercialService {
         return resultat;
     }
 
-    private List<Object[]> activite(Periode periode, Optional<List<UUID>> perimetre) {
-        return perimetre
-                .map(projetIds -> messageRepository.agregerActiviteParCommercialDansPerimetre(
-                        periode.debut(), periode.fin(),
-                        InteractionKpi.TYPE_APPEL_SORTANT, InteractionKpi.TYPE_APPEL_ENTRANT,
-                        InteractionKpi.TYPE_VISITE, InteractionKpi.RESULTAT_VISITE_DECROCHEE,
-                        InteractionKpi.RESULTAT_RDV_PRIS, projetIds))
-                .orElseGet(() -> messageRepository.agregerActiviteParCommercial(
-                        periode.debut(), periode.fin(),
-                        InteractionKpi.TYPE_APPEL_SORTANT, InteractionKpi.TYPE_APPEL_ENTRANT,
-                        InteractionKpi.TYPE_VISITE, InteractionKpi.RESULTAT_VISITE_DECROCHEE,
-                        InteractionKpi.RESULTAT_RDV_PRIS));
+    private List<Object[]> activite(Periode periode, @Nullable List<UUID> perimetre) {
+        if (perimetre == null) {
+            return messageRepository.agregerActiviteParCommercial(
+                    periode.debut(), periode.fin(),
+                    InteractionKpi.TYPE_APPEL_SORTANT, InteractionKpi.TYPE_APPEL_ENTRANT,
+                    InteractionKpi.TYPE_VISITE, InteractionKpi.RESULTAT_VISITE_DECROCHEE,
+                    InteractionKpi.RESULTAT_RDV_PRIS);
+        }
+        return messageRepository.agregerActiviteParCommercialDansPerimetre(
+                periode.debut(), periode.fin(),
+                InteractionKpi.TYPE_APPEL_SORTANT, InteractionKpi.TYPE_APPEL_ENTRANT,
+                InteractionKpi.TYPE_VISITE, InteractionKpi.RESULTAT_VISITE_DECROCHEE,
+                InteractionKpi.RESULTAT_RDV_PRIS, perimetre);
     }
 
-    private List<Object[]> prospections(Periode periode, Optional<List<UUID>> perimetre) {
-        return perimetre
-                .map(projetIds -> prospectionRepository.projeterPourKpiDansPerimetre(
-                        periode.debut(), periode.fin(), projetIds))
-                .orElseGet(() -> prospectionRepository.projeterPourKpi(periode.debut(), periode.fin()));
+    private List<Object[]> prospections(Periode periode, @Nullable List<UUID> perimetre) {
+        if (perimetre == null) {
+            return prospectionRepository.projeterPourKpi(periode.debut(), periode.fin());
+        }
+        return prospectionRepository.projeterPourKpiDansPerimetre(
+                periode.debut(), periode.fin(), perimetre);
     }
 
-    private List<Object[]> dossiers(Periode periode, Optional<List<UUID>> perimetre) {
-        return perimetre
-                .map(projetIds -> folderRepository.projeterPourKpiDansPerimetre(
-                        periode.debut(), periode.fin(), projetIds))
-                .orElseGet(() -> folderRepository.projeterPourKpi(periode.debut(), periode.fin()));
+    private List<Object[]> dossiers(Periode periode, @Nullable List<UUID> perimetre) {
+        if (perimetre == null) {
+            return folderRepository.projeterPourKpi(periode.debut(), periode.fin());
+        }
+        return folderRepository.projeterPourKpiDansPerimetre(
+                periode.debut(), periode.fin(), perimetre);
     }
 
     private Map<UUID, String> nomsDe(Iterable<UUID> ids) {

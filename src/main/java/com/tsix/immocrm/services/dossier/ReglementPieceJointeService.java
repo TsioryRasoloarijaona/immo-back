@@ -132,7 +132,9 @@ public class ReglementPieceJointeService {
         StlSettlement settlement = reglementDuDossier(dossierId, reglementId);
         AppFileObject objet = support.exigerFichier(reglementId, pieceId, "ce règlement");
 
-        boolean pointe = StatutReglement.POINTED == StatutReglement.depuisCodeOuNull(settlement.getStatus());
+        boolean pointe = StatutReglement.lireCode(settlement.getStatus())
+                .filter(statut -> statut == StatutReglement.POINTED)
+                .isPresent();
         if (pointe && support.nombreDeFichiers(reglementId) <= 1) {
             throw new ConflictException("Ce règlement est pointé : sa dernière preuve de paiement "
                     + "ne peut pas être supprimée. Déposez d'abord une autre pièce jointe, ou "

@@ -19,6 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -130,14 +131,15 @@ public class PerimetreInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        UUID id = parseUuid(((Map<String, String>) variables).get(nomVariable(segments[3])));
-        if (id == null) {
+        Optional<UUID> resolu = parseUuid(((Map<String, String>) variables).get(nomVariable(segments[3])));
+        if (resolu.isEmpty()) {
             // Aucun UUID résoluble sur une route scopée : on refuse. Ne JAMAIS transformer ceci en
             // « return true » au motif que le contrôleur échouerait de toute façon à lier la
             // valeur — c'est exactement le pari qui a produit les contournements %2D puis %20.
             refuser(collection, response);
             return false;
         }
+        UUID id = resolu.orElseThrow();
 
         switch (collection) {
             case "dossiers" -> perimetreService.verifierAccesDossier(id);
@@ -210,14 +212,19 @@ public class PerimetreInterceptor implements HandlerInterceptor {
         return separateurRegex >= 0 ? nom.substring(0, separateurRegex) : nom;
     }
 
-    private static UUID parseUuid(String valeur) {
+    /**
+     * L'id de la route, ou {@link Optional#empty()} si la variable est absente ou n'est pas un
+     * UUID. Le type porte l'absence délibérément : sur une route scopée, oublier de traiter le cas
+     * « pas d'id résoluble » revient à laisser passer la requête sans contrôle de périmètre.
+     */
+    private static Optional<UUID> parseUuid(String valeur) {
         if (valeur == null) {
-            return null;
+            return Optional.empty();
         }
         try {
-            return UUID.fromString(valeur);
+            return Optional.of(UUID.fromString(valeur));
         } catch (IllegalArgumentException e) {
-            return null;
+            return Optional.empty();
         }
     }
 }
