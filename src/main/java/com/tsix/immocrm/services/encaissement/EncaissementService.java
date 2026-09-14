@@ -1,11 +1,11 @@
 package com.tsix.immocrm.services.encaissement;
 
+import com.tsix.immocrm.domain.AgregatDemande;
 import com.tsix.immocrm.domain.ChampDateEncaissement;
-import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
-import com.tsix.immocrm.dto.common.GroupeDto;
+import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -35,9 +35,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -108,24 +106,20 @@ public class EncaissementService {
      * ferait diverger au premier ajout — et pour le périmètre, ferait apparaître dans un total des
      * règlements que l'appelant n'a pas le droit de lire.
      */
-    public Page<GroupeDto> grouper(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
-                                    UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
-                                    UUID tierId, String reference, String search,
-                                    Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
-                                    ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-                                    ColonneEncaissement groupeBy, Granularite granularite,
-                                    Set<ColonneEncaissement> agregats, TriGroupe tri,
-                                    boolean inclureSansValeur, Pageable pageable) {
+    public ResultatGroupement grouper(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
+                                       UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
+                                       UUID tierId, String reference, String search,
+                                       Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
+                                       ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
+                                       ColonneEncaissement groupeBy, Granularite granularite,
+                                       List<AgregatDemande> agregats, TriGroupe tri,
+                                       boolean inclureSansValeur, Pageable pageable) {
         Specification<StlSettlement> spec = specEncaissements(entiteIds, typeIds, etats, compteId,
                 depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
                 montantA, champDate, dateDebut, dateFin)
                 .and(perimetreService.filtreEncaissements());
-        Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
-        for (ColonneEncaissement agregat : agregats) {
-            cheminsAgregats.put(agregat.nom(), agregat.chemin());
-        }
         return groupementService.grouper(StlSettlement.class, spec, groupeBy.chemin(), granularite,
-                cheminsAgregats, tri, inclureSansValeur, pageable);
+                agregats, tri, inclureSansValeur, pageable);
     }
 
     /**
@@ -278,14 +272,24 @@ public class EncaissementService {
         }
 
         BigDecimal montantBrut = s.getAmount() != null ? s.getAmount() : BigDecimal.ZERO;
-        BigDecimal montantBrutRestant = null;
-        if (colonnes.contains(ColonneEncaissement.MONTANT_BRUT_RESTANT)) {
-            BigDecimal affecte = settlementLineRepository.sumAmountByStlSettlementId(s.getId());
-            montantBrutRestant = montantBrut.subtract(affecte != null ? affecte : BigDecimal.ZERO);
-        }
-        BigDecimal montantNet = montantBrut
-                .subtract(s.getAmountRS() != null ? s.getAmountRS() : BigDecimal.ZERO)
-                .subtract(s.getAmountStamp() != null ? s.getAmountStamp() : BigDecimal.ZERO);
+
+        // La part affectée vient désormais de l'association pré-agrégée, plus d'une requête par
+        // ligne : c'est ce qui rend la colonne sommable par /groupes, et c'est un N+1 de moins.
+        // La soustraction reste en Java — le total de groupe applique exactement la même, sur
+        // SUM(amount) - SUM(affecte), donc la ligne et sa bande « Total : » ne peuvent pas diverger.
+        BigDecimal affecte = s.getAffectation() != null && s.getAffectation().getMontantAffecte() != null
+                ? s.getAffectation().getMontantAffecte()
+                : BigDecimal.ZERO;
+        BigDecimal montantBrutRestant = montantBrut.subtract(affecte);
+
+        // Portée par la @Formula de l'entité, pour la même raison. Le repli sur le calcul Java
+        // couvre l'entité construite en mémoire et non relue — une formule n'est peuplée qu'au
+        // chargement, jamais à la construction.
+        BigDecimal montantNet = s.getMontantNetCalcule() != null
+                ? s.getMontantNetCalcule()
+                : montantBrut
+                        .subtract(s.getAmountRS() != null ? s.getAmountRS() : BigDecimal.ZERO)
+                        .subtract(s.getAmountStamp() != null ? s.getAmountStamp() : BigDecimal.ZERO);
 
         StlSettlementType type = s.getStlSettlementType();
         CfgCompany entite = s.getCfgCompany();

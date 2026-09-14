@@ -7,10 +7,10 @@ import java.util.List;
  *
  * <h2>Pourquoi ce type existe</h2>
  *
- * <p>Les catalogues ({@link ColonneDossier}, {@link ColonneProspection}, {@link ColonneProspect})
- * servaient jusqu'ici à <strong>filtrer la sérialisation</strong> : ils disent quel champ du DTO
- * renvoyer, pas où le lire. Le mappeur {@code toListItem} est positionnel et n'expose aucune
- * correspondance nom → chemin.
+ * <p>Les catalogues ({@link ColonneDossier}, {@link ColonneProspection}, {@link ColonneProspect},
+ * {@link ColonneEncaissement}) servaient jusqu'ici à <strong>filtrer la sérialisation</strong> :
+ * ils disent quel champ du DTO renvoyer, pas où le lire. Le mappeur {@code toListItem} est
+ * positionnel et n'expose aucune correspondance nom → chemin.
  *
  * <p>Grouper exige exactement cette correspondance : {@code ?groupBy=statut} doit se traduire en
  * {@code GROUP BY strStatus.code}. C'est la seule pièce qui manquait — voir
@@ -42,17 +42,22 @@ import java.util.List;
  * exacte n'a pas de sens — d'où {@link Granularite}, qui n'est pas une option mais le seul mode
  * de groupement d'une date.
  *
+ * <p>Quelles <em>fonctions</em> d'agrégat un chemin autorise se déduit d'ici et de nulle part
+ * ailleurs : voir {@link FonctionAgregat#pour(Chemin)}.
+ *
  * <p>Sans JPA, comme le reste de {@code domain/} : ce sont des chaînes de navigation, résolues par
  * la couche service.
  *
- * @param cheminCle      chemin de la clé de groupe, tel qu'attendu par {@code Path#get} en
- *                       navigation pointée ({@code "stkItem.stkHierarchy.code"})
- * @param cheminsLibelle chemins à sélectionner en plus pour reconstituer le libellé affiché ;
- *                       identique à {@code cheminCle} pour {@link TypeLibelle#DIRECT}
- * @param typeLibelle    comment reconstituer le libellé à partir des valeurs sélectionnées
- * @param groupable      exposé au paramètre {@code ?groupBy=}
- * @param agregeable     exposé au paramètre {@code ?agregats=} (somme)
- * @param temporel       colonne date : la clé de groupe passe par une {@link Granularite}
+ * @param cheminCle       chemin de la clé de groupe, tel qu'attendu par {@code Path#get} en
+ *                        navigation pointée ({@code "stkItem.stkHierarchy.code"})
+ * @param cheminsLibelle  chemins à sélectionner en plus pour reconstituer le libellé affiché ;
+ *                        identique à {@code cheminCle} pour {@link TypeLibelle#DIRECT}
+ * @param typeLibelle     comment reconstituer le libellé à partir des valeurs sélectionnées
+ * @param groupable       exposé au paramètre {@code ?groupBy=}
+ * @param agregeable      exposé au paramètre {@code ?agregats=}
+ * @param temporel        colonne date : la clé de groupe passe par une {@link Granularite}
+ * @param cheminSoustrait chemin à retrancher de {@code cheminCle} pour former la valeur agrégée,
+ *                        ou {@code null} pour le cas courant — voir {@link #difference}
  */
 public record Chemin(
         String cheminCle,
@@ -60,7 +65,8 @@ public record Chemin(
         TypeLibelle typeLibelle,
         boolean groupable,
         boolean agregeable,
-        boolean temporel) {
+        boolean temporel,
+        String cheminSoustrait) {
 
     /** Comment le libellé d'un groupe se reconstitue à partir des colonnes sélectionnées. */
     public enum TypeLibelle {
@@ -83,18 +89,18 @@ public record Chemin(
      * <p>La clé de groupe rejoue donc la même cascade en SQL. Elle doit la rejouer
      * <em>exactement</em> : le Java teste {@code StringUtils.hasText}, qui rejette aussi les
      * chaînes blanches, là où un {@code COALESCE} nu ne rejette que {@code NULL}. D'où le
-     * {@code NULLIF(TRIM(...), '')} appliqué à chaque terme — sans lui, une fiche au mobile vide
+     * {@code NULLIF} sur chaîne vide appliqué à chaque terme — sans lui, une fiche au mobile vide
      * mais non nul formerait son propre groupe alors que la ligne affiche le numéro temporaire.
      *
      * @param chemins les colonnes dans l'ordre de priorité
      */
     public static Chemin repli(String... chemins) {
-        return new Chemin(chemins[0], List.of(chemins), TypeLibelle.REPLI, true, false, false);
+        return new Chemin(chemins[0], List.of(chemins), TypeLibelle.REPLI, true, false, false, null);
     }
 
     /** Colonne groupable dont la valeur affichée est la clé — le cas courant. */
     public static Chemin groupable(String chemin) {
-        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, false, false);
+        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, false, false, null);
     }
 
     /**
@@ -105,9 +111,12 @@ public record Chemin(
      * {@code ColonneProspection.TypeColonne} sont deux types distincts), donc illisible depuis du
      * code générique. Le porter sur {@link Chemin}, qui est partagé, évite d'avoir à dégrader ces
      * enums en {@code String} — le compromis que le javadoc de {@link Colonne} refuse.
+     *
+     * <p>C'est aussi ce qui permet à une date d'offrir {@code MIN}/{@code MAX} sans offrir
+     * {@code SUM}, cf. {@link FonctionAgregat#pour(Chemin)}.
      */
     public static Chemin date(String chemin) {
-        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, false, true);
+        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, false, true, null);
     }
 
     /**
@@ -129,12 +138,13 @@ public record Chemin(
                 TypeLibelle.TIER,
                 true,
                 false,
-                false);
+                false,
+                null);
     }
 
     /** Colonne sommable seulement — réservée aux cas où grouper n'a pas de sens exprimable. */
     public static Chemin agregeable(String chemin) {
-        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, false, true, false);
+        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, false, true, false, null);
     }
 
     /**
@@ -144,6 +154,40 @@ public record Chemin(
      * des deux rôles.
      */
     public static Chemin groupableEtAgregeable(String chemin) {
-        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, true, false);
+        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, true, true, false, null);
+    }
+
+    /**
+     * Colonne dont la valeur est la <strong>différence de deux colonnes</strong>, dont l'une vit
+     * sur une association pré-agrégée.
+     *
+     * <h2>Pourquoi ce détour plutôt qu'une {@code @Formula}</h2>
+     *
+     * <p>C'est le cas de {@code montantBrutRestant} : montant du règlement moins la part déjà
+     * affectée à une échéance, cette part étant elle-même une somme de lignes. La voie évidente
+     * serait une {@code @Formula} portant une sous-requête corrélée, comme
+     * {@code ComFolder.delaiConcretisation}. <strong>Elle ne marche pas</strong> : SQL Server
+     * refuse {@code SUM()} sur une expression contenant une sous-requête — erreur 130,
+     * « impossible d'effectuer une fonction d'agrégation sur une expression contenant une
+     * agrégation ou une sous-requête ». Mesuré, pas supposé.
+     *
+     * <p>La part affectée est donc pré-agrégée dans une entité {@code @Subselect} joignable, et la
+     * différence s'exprime sur <em>deux chemins joints</em>. Mesuré à 7 ms sur les 643 règlements.
+     *
+     * <h2>Ni groupable, ni minimisable</h2>
+     *
+     * <p>Non groupable : même statut que {@code delaiConcretisation}, et sur données réelles cette
+     * colonne vaut zéro partout — le groupement rendrait un groupe unique.
+     *
+     * <p>{@link FonctionAgregat#pour(Chemin)} n'offre ici <strong>ni MIN ni MAX</strong> : le
+     * moteur agrège les deux termes séparément puis soustrait, ce qui est exact pour un total et
+     * une moyenne (les deux sont linéaires) et faux pour un extremum.
+     *
+     * @param chemin          le terme positif ({@code "amount"})
+     * @param cheminSoustrait le terme retranché ({@code "affectation.montantAffecte"})
+     */
+    public static Chemin difference(String chemin, String cheminSoustrait) {
+        return new Chemin(chemin, List.of(chemin), TypeLibelle.DIRECT, false, true, false,
+                cheminSoustrait);
     }
 }

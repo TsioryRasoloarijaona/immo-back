@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.AgregatDemande;
 import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.Granularite;
@@ -56,6 +57,7 @@ import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.services.groupement.GroupementService;
+import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -231,19 +233,15 @@ public class DossierService {
      * compris : c'est ce qui garantit que la somme des effectifs des groupes retombe sur le
      * {@code totalElements} de la liste non groupée.
      */
-    public Page<GroupeDto> grouper(List<String> statuts, UUID commercial, UUID projet,
+    public ResultatGroupement grouper(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, ColonneDossier groupeBy, Granularite granularite,
-            Set<ColonneDossier> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
+            List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
         Specification<ComFolder> spec = specDossiers(statuts, commercial, projet, trancheIds,
                 champDate, dateDebut, dateFin, search)
                 .and(perimetreService.filtreDossiers());
-        Map<String, Chemin> cheminsAgregats = new LinkedHashMap<>();
-        for (ColonneDossier agregat : agregats) {
-            cheminsAgregats.put(agregat.nom(), agregat.chemin());
-        }
         return groupementService.grouper(ComFolder.class, spec, groupeBy.chemin(), granularite,
-                cheminsAgregats, tri, inclureSansValeur, pageable);
+                agregats, tri, inclureSansValeur, pageable);
     }
 
     /**

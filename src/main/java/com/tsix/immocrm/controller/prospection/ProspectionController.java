@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.AjouterAutreTrancheRequest;
 import com.tsix.immocrm.dto.prospection.AjouterCategorieRequest;
@@ -249,12 +250,25 @@ public class ProspectionController {
                             + "une colonne non agrégeable. Le corps porte la liste des noms "
                             + "acceptés.", content = @Content)
             })
-    public PageDto<GroupeDto> grouper(
+    public PageGroupesDto grouper(
             @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau.",
                     example = "etape", required = true)
             @RequestParam String groupBy,
-            @Parameter(description = "Colonnes à sommer, répétable ou séparées par des virgules.",
-                    example = "prix")
+            @Parameter(description = "Agrégats à calculer, répétable ou séparés par des virgules.\n\n"
+                    + "Deux formes. Un **nom nu** (`prix`) vaut une **somme** et revient sous ce nom "
+                    + "nu — c'est le comportement historique, inchangé. Un nom **qualifié** "
+                    + "(`prix:AVG`) applique la fonction nommée et revient sous le jeton complet "
+                    + "`prix:AVG`. Les deux formes peuvent coexister dans le même appel.\n\n"
+                    + "Fonctions : `SUM`, `AVG`, `MIN`, `MAX`, `COUNT` — mais **pas sur toutes les "
+                    + "colonnes**. Sommer une date n'a pas de sens, et une colonne calculée par "
+                    + "différence n'a pas d'extremum exprimable. La liste autorisée par colonne est "
+                    + "publiée par le catalogue (`fonctions`) : le menu Σ doit s'y piloter, pas sur "
+                    + "une liste en dur. Une fonction refusée rend 400 avec les fonctions acceptées "
+                    + "par cette colonne-là.\n\n"
+                    + "`AVG` est calculée à partir de la somme et de l'effectif renseigné, en "
+                    + "décimal exact et arrondie au centime — jamais en virgule flottante.\n\n"
+                    + "Absent : seul l'effectif de chaque groupe est renvoyé.",
+                    example = "prix,prix:MAX")
             @RequestParam(required = false) List<String> agregats,
             @Parameter(description = "Granularité si `groupBy` est une date. Défaut : MOIS — "
                     + "grouper sur la date exacte rendrait 16 588 groupes pour 17 939 lignes.",
@@ -279,11 +293,11 @@ public class ProspectionController {
             @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneProspection groupe = ColonneProspection.resoudreGroupement(groupBy);
-        return PageDto.of(prospectionService.grouperProspections(etape, origine, commercial, trancheId,
+        return prospectionService.grouperProspections(etape, origine, commercial, trancheId,
                 dateDebut, dateFin, search, ouvertes, filtres, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable));
+                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
     }
 
     @GetMapping("/{id}")

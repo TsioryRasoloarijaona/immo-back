@@ -15,6 +15,8 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
+import jakarta.persistence.EntityManager;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +69,25 @@ class EncaissementColonnesEtGroupementTest {
     private StlSettlementRepository settlementRepository;
     @Autowired
     private StlSettlementLineRepository settlementLineRepository;
+    @Autowired
+    private EntityManager entityManager;
+
+    /**
+     * Vide le contexte de persistance avant l'appel HTTP.
+     *
+     * <p>Indispensable dès qu'un test lit une valeur portée par la base plutôt que par le code :
+     * une {@code @Formula} n'est peuplée qu'au <strong>chargement</strong>, et une association vers
+     * un {@code @Subselect} n'est résolue qu'à ce moment-là. Sans ce vidage, la requête rend
+     * l'instance déjà gérée — celle que le test vient de construire, dont ces champs sont nuls.
+     *
+     * <p>Ce n'est pas un artefact gênant en production : chaque requête HTTP y ouvre sa propre
+     * transaction et charge donc toujours des entités fraîches. C'est le test, transactionnel de
+     * bout en bout, qui est le cas particulier. Même remède qu'au lot des délais de cycle.
+     */
+    private void relireDepuisLaBase() {
+        entityManager.flush();
+        entityManager.clear();
+    }
 
     // ------------------------------------------------------------------
     // Fixtures
@@ -406,14 +432,31 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(status().isBadRequest());
     }
 
-    /** Calculés en Java, absents de la base : ni groupables ni sommables. */
+    /**
+     * {@code montantBrutRestant} est sommable mais <strong>pas groupable</strong> : sa valeur est
+     * une différence entre le montant et une pré-agrégation jointe, et le moteur agrège les deux
+     * termes séparément — ce qui donne un total juste et ne donne aucune clé de groupe.
+     */
     @Test
-    void groupBy_surMontantCalcule_rend400() throws Exception {
+    void groupBy_surMontantBrutRestant_rend400() throws Exception {
         mockMvc.perform(get("/api/encaissements/groupes").param("groupBy", "montantBrutRestant"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Et ni {@code MIN} ni {@code MAX} dessus : {@code MIN(a - b)} ne se déduit pas de
+     * {@code MIN(a)} et {@code MIN(b)}. Le total et la moyenne, eux, restent exacts — la
+     * soustraction est linéaire.
+     */
+    @Test
+    void extremumSurUneDifference_rend400() throws Exception {
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrutRestant:MIN"))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/encaissements/groupes")
                         .param("groupBy", "typeLibelle")
-                        .param("agregats", "montantNet"))
+                        .param("agregats", "montantBrutRestant:MAX"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -443,6 +486,276 @@ class EncaissementColonnesEtGroupementTest {
     }
 
     // ------------------------------------------------------------------
+    // La bande « Total : » de l'écran légataire
+    // ------------------------------------------------------------------
+
+    /**
+     * Reproduit littéralement la capture de l'écran <em>Encaissements Vente</em> : la grille y est
+     * groupée par <strong>Montant brut</strong>, chaque en-tête annonce
+     * « Montant brut : 8 400.00 DH (14 items) », et la bande jaune juste en dessous totalise deux
+     * colonnes — « Montant brut rest » à 0 DH et « Montant net » à 117 600 DH.
+     *
+     * <p>Ce sont exactement les deux colonnes que le lot précédent avait écartées, faute de les
+     * avoir en base. Si ce test casse, c'est que la bande « Total : » a cessé d'être calculable.
+     */
+    @Test
+    void totauxDeGroupe_reproduisentLaBandeTotalDuLegataire() throws Exception {
+        BigDecimal montant = new BigDecimal("8400.00");
+        for (int i = 1; i <= 3; i++) {
+            newEncaissement("CGE-IMG-" + i, montant);
+        }
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "montantBrut")
+                        .param("agregats", "montantBrutRestant,montantNet")
+                        .param("reference", "CGE-IMG-"))
+                .andExpect(status().isOk())
+                // Un seul groupe : toutes les pièces portent le même montant brut.
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value(3))
+                // « Montant net » : 3 x 8 400, les deux retenues étant nulles.
+                .andExpect(jsonPath("$.content[0].agregats.montantNet").value(25200.00))
+                // « Montant brut rest » : les pièces sont intégralement affectées, donc zéro —
+                // ce que la capture montre aussi, ligne à ligne.
+                .andExpect(jsonPath("$.content[0].agregats.montantBrutRestant").value(0))
+                // Et le total général, que le légataire ne sait obtenir qu'en chargeant tout.
+                .andExpect(jsonPath("$.totaux.montantNet").value(25200.00))
+                .andExpect(jsonPath("$.nombreTotal").value(3));
+    }
+
+    /**
+     * La ligne et son total viennent de la même expression.
+     *
+     * <p>{@code montantBrutRestant} est calculé ligne à ligne depuis l'association pré-agrégée et
+     * totalisé par {@code SUM(amount) - SUM(affecte)}. Un total qui ne retombe pas sur la somme de
+     * ses propres lignes est le défaut d'écran le plus difficile à voir — d'où ce test qui compare
+     * les deux bouts sur une pièce partiellement affectée.
+     */
+    @Test
+    void ligneEtTotal_saccordentSurLeMontantRestant() throws Exception {
+        StlSettlement partiel = newEncaissement("CGE-ACC-1", new BigDecimal("1000.00"));
+        StlSettlementLine ligne = settlementLineRepository.findAll().stream()
+                .filter(l -> l.getStlSettlement() != null
+                        && l.getStlSettlement().getId().equals(partiel.getId()))
+                .findFirst().orElseThrow();
+        ligne.setAmount(new BigDecimal("400.00"));
+        settlementLineRepository.save(ligne);
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements").param("reference", "CGE-ACC-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].montantBrutRestant").value(600.00));
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "montantBrut")
+                        .param("agregats", "montantBrutRestant")
+                        .param("reference", "CGE-ACC-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].agregats.montantBrutRestant").value(600.00));
+    }
+
+    // ------------------------------------------------------------------
+    // Le menu Σ
+    // ------------------------------------------------------------------
+
+    /**
+     * Un nom nu vaut toujours une somme et revient sous ce nom nu.
+     *
+     * <p>C'est la preuve de non-rupture de l'ouverture du menu Σ : une intégration écrite avant ce
+     * lot envoie des noms nus et doit retrouver exactement les mêmes clés.
+     */
+    @Test
+    void nomNu_resteUneSommeSousLaMemeCle() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-NU", "NU CGE");
+        for (Object[] couple : new Object[][]{{"CGE-NU-1", new BigDecimal("100.00")},
+                                              {"CGE-NU-2", new BigDecimal("300.00")}}) {
+            StlSettlement s = newEncaissement((String) couple[0], (BigDecimal) couple[1]);
+            s.setStlSettlementType(type);
+            settlementRepository.save(s);
+        }
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut")
+                        .param("reference", "CGE-NU-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].agregats.montantBrut").value(400.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:SUM']").doesNotExist());
+    }
+
+    /** Les cinq fonctions sur une colonne qui les autorise, dans le même appel. */
+    @Test
+    void menuSigma_appliqueChaqueFonctionSousSonPropreJeton() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-SIG", "SIGMA CGE");
+        for (Object[] couple : new Object[][]{{"CGE-SIG-1", new BigDecimal("100.00")},
+                                              {"CGE-SIG-2", new BigDecimal("200.00")},
+                                              {"CGE-SIG-3", new BigDecimal("600.00")}}) {
+            StlSettlement s = newEncaissement((String) couple[0], (BigDecimal) couple[1]);
+            s.setStlSettlementType(type);
+            settlementRepository.save(s);
+        }
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut,montantBrut:AVG,montantBrut:MIN,"
+                                + "montantBrut:MAX,montantBrut:COUNT")
+                        .param("reference", "CGE-SIG-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].agregats.montantBrut").value(900.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:AVG']").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:MIN']").value(100.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:MAX']").value(600.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:COUNT']").value(3));
+    }
+
+    /**
+     * La moyenne ne passe jamais par un {@code double} — le pendant de
+     * {@link #sommeDesMontants_conserveLesCentimes} pour la division.
+     *
+     * <p>0,615 n'est pas représentable en binaire : il vaut 0,614999… en {@code double}. Trois
+     * pièces à ce montant font 1,845 exactement en décimal, donc une moyenne de 0,615, qui
+     * s'arrondit au centime supérieur à <strong>0,62</strong>. Un {@code cb.avg()} aurait rendu
+     * 0,614999… et donc 0,61. C'est un centime, et c'est le genre d'écart qui ne se remarque que
+     * sur un rapprochement comptable.
+     */
+    @Test
+    void moyenne_neDerivePasEnVirguleFlottante() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-AVG", "AVG CGE");
+        for (int i = 1; i <= 3; i++) {
+            StlSettlement s = newEncaissement("CGE-AVG-" + i, new BigDecimal("0.615"));
+            s.setStlSettlementType(type);
+            settlementRepository.save(s);
+        }
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut,montantBrut:AVG")
+                        .param("reference", "CGE-AVG-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].agregats.montantBrut").value(1.845))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:AVG']").value(0.62));
+    }
+
+    /** Une date offre un extremum, jamais une somme : additionner des dates n'a pas de sens. */
+    @Test
+    void dates_offrentMinEtMaxMaisPasLaSomme() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-DT", "DATES CGE");
+        StlSettlement ancien = newEncaissement("CGE-DT-1", new BigDecimal("100.00"));
+        ancien.setStlSettlementType(type);
+        ancien.setDocDate(LocalDateTime.of(2025, 1, 5, 10, 0));
+        settlementRepository.save(ancien);
+        StlSettlement recent = newEncaissement("CGE-DT-2", new BigDecimal("200.00"));
+        recent.setStlSettlementType(type);
+        recent.setDocDate(LocalDateTime.of(2025, 3, 20, 16, 30));
+        settlementRepository.save(recent);
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "dateDocument:MIN,dateDocument:MAX")
+                        .param("reference", "CGE-DT-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].agregats['dateDocument:MIN']")
+                        .value(Matchers.startsWith("2025-01-05")))
+                .andExpect(jsonPath("$.content[0].agregats['dateDocument:MAX']")
+                        .value(Matchers.startsWith("2025-03-20")));
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "dateDocument"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void fonctionInconnue_rend400AvecLesFonctionsAcceptees() throws Exception {
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut:MEDIANE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fonctionsValides",
+                        Matchers.hasItems("SUM", "AVG", "MIN", "MAX", "COUNT")));
+    }
+
+    /** Une colonne sans chemin n'est agrégeable par aucune fonction. */
+    @Test
+    void agregatSurColonneSansChemin_rend400() throws Exception {
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "dossierCode:COUNT"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fonctionsValides").isEmpty());
+    }
+
+    // ------------------------------------------------------------------
+    // Total général
+    // ------------------------------------------------------------------
+
+    /**
+     * Le total général porte sur tout le périmètre filtré, pas sur la page.
+     *
+     * <p>Vérifié en ne demandant qu'un seul groupe par page alors qu'il y en a trois : les totaux
+     * doivent quand même couvrir les trois, sans quoi un front qui affiche un pied de grille
+     * annoncerait un chiffre plausible et faux.
+     */
+    @Test
+    void totalGeneral_couvreToutLePerimetreEtPasLaPage() throws Exception {
+        StlSettlementType a = newType("TYPE-CGE-TGA", "TG-A CGE");
+        StlSettlementType b = newType("TYPE-CGE-TGB", "TG-B CGE");
+
+        StlSettlement s1 = newEncaissement("CGE-TG-1", new BigDecimal("100.00"));
+        s1.setStlSettlementType(a);
+        settlementRepository.save(s1);
+        StlSettlement s2 = newEncaissement("CGE-TG-2", new BigDecimal("200.00"));
+        s2.setStlSettlementType(b);
+        settlementRepository.save(s2);
+        // Sans type : le groupe à clé nulle, qu'il faut inclure pour que les deux comptes
+        // désignent la même population.
+        newEncaissement("CGE-TG-3", new BigDecimal("400.00"));
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut")
+                        .param("inclureSansValeur", "true")
+                        .param("reference", "CGE-TG-")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                // Une seule ligne servie, mais les totaux portent sur les trois groupes.
+                .andExpect(jsonPath("$.totaux.montantBrut").value(700.00))
+                .andExpect(jsonPath("$.nombreTotal").value(3));
+    }
+
+    /**
+     * Et il suit {@code inclureSansValeur} : le groupe sans valeur entre ou sort des deux comptes
+     * à la fois, jamais d'un seul.
+     */
+    @Test
+    void totalGeneral_suitInclureSansValeur() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-ISV", "ISV CGE");
+        StlSettlement avecType = newEncaissement("CGE-ISV-1", new BigDecimal("100.00"));
+        avecType.setStlSettlementType(type);
+        settlementRepository.save(avecType);
+        newEncaissement("CGE-ISV-2", new BigDecimal("900.00"));
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut")
+                        .param("reference", "CGE-ISV-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totaux.montantBrut").value(100.00))
+                .andExpect(jsonPath("$.nombreTotal").value(1));
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut")
+                        .param("inclureSansValeur", "true")
+                        .param("reference", "CGE-ISV-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totaux.montantBrut").value(1000.00))
+                .andExpect(jsonPath("$.nombreTotal").value(2));
+    }
+
+    // ------------------------------------------------------------------
     // Catalogue
     // ------------------------------------------------------------------
 
@@ -454,11 +767,53 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(jsonPath("$[?(@.nom=='description')].parDefaut").value(false))
                 .andExpect(jsonPath("$[?(@.nom=='montantBrut')].agregeable").value(true))
                 .andExpect(jsonPath("$[?(@.nom=='dossierCode')].groupable").value(false))
-                .andExpect(jsonPath("$[?(@.nom=='montantNet')].groupable").value(false))
+                // Portée par une @Formula depuis ce lot : groupable ET agrégeable.
+                .andExpect(jsonPath("$[?(@.nom=='montantNet')].groupable").value(true))
+                .andExpect(jsonPath("$[?(@.nom=='montantNet')].agregeable").value(true))
+                // Sommable par jointure, mais sans clé de groupe exprimable.
+                .andExpect(jsonPath("$[?(@.nom=='montantBrutRestant')].groupable").value(false))
+                .andExpect(jsonPath("$[?(@.nom=='montantBrutRestant')].agregeable").value(true))
                 .andExpect(jsonPath("$[?(@.nom=='notes')].groupable").value(false))
                 // Mesurées à 0/643 ou à une seule valeur distincte : jamais au catalogue.
                 .andExpect(jsonPath("$[?(@.nom=='group1Label')]").doesNotExist())
                 .andExpect(jsonPath("$[?(@.nom=='categorie')]").doesNotExist())
                 .andExpect(jsonPath("$[?(@.nom=='itemNumber')]").doesNotExist());
+    }
+
+    /**
+     * Le menu Σ se pilote sur {@code fonctions}, jamais sur une liste en dur — et cette liste n'est
+     * pas la même d'une colonne à l'autre.
+     *
+     * <p>Assertions en Java plutôt qu'en JSONPath : un filtre JSONPath rend une liste de listes,
+     * que les matchers Hamcrest traversent de façon ambiguë. Ici la lecture est directe.
+     */
+    @Test
+    void catalogue_publieLesFonctionsAutoriseesParColonne() throws Exception {
+        String corps = mockMvc.perform(get("/api/referentiels/colonnes/encaissements"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode catalogue = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(corps);
+
+        Map<String, List<String>> fonctionsParColonne = new HashMap<>();
+        for (JsonNode colonne : catalogue) {
+            List<String> fonctions = new ArrayList<>();
+            colonne.get("fonctions").forEach(f -> fonctions.add(f.asText()));
+            fonctionsParColonne.put(colonne.get("nom").asText(), fonctions);
+        }
+
+        // Un montant : les cinq.
+        assertThat(fonctionsParColonne.get("montantBrut"))
+                .containsExactly("SUM", "AVG", "MIN", "MAX", "COUNT");
+        // Une date : extremums et comptage, mais sommer des dates n'a pas de sens.
+        assertThat(fonctionsParColonne.get("dateDocument"))
+                .containsExactly("MIN", "MAX", "COUNT");
+        // Une différence : ni minimum ni maximum, le moteur agrège ses deux termes séparément.
+        assertThat(fonctionsParColonne.get("montantBrutRestant"))
+                .containsExactly("SUM", "AVG", "COUNT");
+        // Une colonne sans chemin n'existe pas en base : rien à agréger.
+        assertThat(fonctionsParColonne.get("dossierCode")).isEmpty();
+        // Et le booléen historique reste vrai exactement quand SUM est offert.
+        assertThat(fonctionsParColonne.get("etat")).containsExactly("COUNT");
     }
 }

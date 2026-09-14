@@ -93,6 +93,26 @@ class EncaissementControllerTest {
     private StkItemCategoryRepository itemCategoryRepository;
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    /**
+     * Vide le contexte de persistance avant l'appel HTTP.
+     *
+     * <p>{@code montantBrutRestant} et {@code montantNet} sont désormais portés par la base — une
+     * association vers un {@code @Subselect} pour le premier, une {@code @Formula} pour le second —
+     * et ces deux mécanismes ne sont peuplés qu'au <strong>chargement</strong>. Sans ce vidage, la
+     * requête rend l'instance déjà gérée, celle que le test vient de construire, dont ces champs
+     * sont nuls.
+     *
+     * <p>Sans effet en production : chaque requête HTTP y ouvre sa propre transaction et charge
+     * donc des entités fraîches. C'est le test, transactionnel de bout en bout, qui est le cas
+     * particulier. Même remède qu'au lot des délais de cycle.
+     */
+    private void relireDepuisLaBase() {
+        entityManager.flush();
+        entityManager.clear();
+    }
 
     private ComDocument newEcheance(String suffix) {
         return newEcheance(suffix, null);
@@ -267,10 +287,11 @@ class EncaissementControllerTest {
         ComDocument echeance = newEcheance("3");
         StlSettlement settlement = newSettlement("3", new BigDecimal("1000"), "IN_WORK", false);
         linkToEcheance(settlement, echeance, new BigDecimal("400"));
+        relireDepuisLaBase();
 
         mockMvc.perform(get("/api/encaissements"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.id=='" + settlement.getId() + "')].montantBrut").value(Matchers.hasItem(1000)))
+                .andExpect(jsonPath("$.content[?(@.id=='" + settlement.getId() + "')].montantBrut").value(Matchers.hasItem(Matchers.closeTo(1000.0, 0.01))))
                 .andExpect(jsonPath("$.content[?(@.id=='" + settlement.getId() + "')].montantBrutRestant").value(Matchers.hasItem(Matchers.closeTo(600.0, 0.01))));
     }
 
@@ -378,6 +399,7 @@ class EncaissementControllerTest {
         ComDocument echeance = newEcheance("7");
         StlSettlement settlement = newSettlement("7", new BigDecimal("1000"), "IN_WORK", true);
         linkToEcheance(settlement, echeance, new BigDecimal("400"));
+        relireDepuisLaBase();
 
         mockMvc.perform(get("/api/encaissements/" + settlement.getId()))
                 .andExpect(status().isOk())

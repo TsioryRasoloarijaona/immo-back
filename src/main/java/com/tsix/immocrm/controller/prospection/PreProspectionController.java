@@ -5,6 +5,7 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
@@ -130,11 +131,24 @@ public class PreProspectionController {
                             "`groupBy` absent, inconnu ou non groupable ; ou `agregats` contenant "
                             + "une colonne non agrégeable.", content = @Content)
             })
-    public PageDto<GroupeDto> grouper(
+    public PageGroupesDto grouper(
             @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau.",
                     example = "origine", required = true)
             @RequestParam String groupBy,
-            @Parameter(description = "Colonnes à sommer, répétable ou séparées par des virgules.")
+            @Parameter(description = "Agrégats à calculer, répétable ou séparés par des virgules.\n\n"
+                    + "Deux formes. Un **nom nu** (`prix`) vaut une **somme** et revient sous ce nom "
+                    + "nu — c'est le comportement historique, inchangé. Un nom **qualifié** "
+                    + "(`prix:AVG`) applique la fonction nommée et revient sous le jeton complet "
+                    + "`prix:AVG`. Les deux formes peuvent coexister dans le même appel.\n\n"
+                    + "Fonctions : `SUM`, `AVG`, `MIN`, `MAX`, `COUNT` — mais **pas sur toutes les "
+                    + "colonnes**. Sommer une date n'a pas de sens, et une colonne calculée par "
+                    + "différence n'a pas d'extremum exprimable. La liste autorisée par colonne est "
+                    + "publiée par le catalogue (`fonctions`) : le menu Σ doit s'y piloter, pas sur "
+                    + "une liste en dur. Une fonction refusée rend 400 avec les fonctions acceptées "
+                    + "par cette colonne-là.\n\n"
+                    + "`AVG` est calculée à partir de la somme et de l'effectif renseigné, en "
+                    + "décimal exact et arrondie au centime — jamais en virgule flottante.\n\n"
+                    + "Absent : seul l'effectif de chaque groupe est renvoyé.")
             @RequestParam(required = false) List<String> agregats,
             @Parameter(description = "Granularité si `groupBy` est une date. Défaut : MOIS.")
             @RequestParam(required = false) Granularite granularite,
@@ -156,11 +170,11 @@ public class PreProspectionController {
             @RequestParam(required = false) Boolean ouvertes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneProspection groupe = ColonneProspection.resoudreGroupement(groupBy);
-        return PageDto.of(prospectionService.grouperPreProspections(etape, origine, commercial, trancheId,
+        return prospectionService.grouperPreProspections(etape, origine, commercial, trancheId,
                 dateDebut, dateFin, search, ouvertes, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable));
+                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
     }
 
     @PostMapping("/{id}/creer-prospect")

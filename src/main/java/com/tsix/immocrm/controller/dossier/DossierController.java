@@ -6,6 +6,7 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
@@ -298,13 +299,25 @@ public class DossierController {
                             + "ou `agregats` contenant une colonne non agrégeable. Le corps "
                             + "(RFC 7807) porte la liste des noms acceptés.", content = @Content)
             })
-    public PageDto<GroupeDto> grouper(
+    public PageGroupesDto grouper(
             @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau de "
                     + "groupement est supporté.", example = "statut", required = true)
             @RequestParam String groupBy,
-            @Parameter(description = "Colonnes à sommer, répétable ou séparées par des virgules. "
+            @Parameter(description = "Agrégats à calculer, répétable ou séparés par des virgules.\n\n"
+                    + "Deux formes. Un **nom nu** (`prix`) vaut une **somme** et revient sous ce nom "
+                    + "nu — c'est le comportement historique, inchangé. Un nom **qualifié** "
+                    + "(`prix:AVG`) applique la fonction nommée et revient sous le jeton complet "
+                    + "`prix:AVG`. Les deux formes peuvent coexister dans le même appel.\n\n"
+                    + "Fonctions : `SUM`, `AVG`, `MIN`, `MAX`, `COUNT` — mais **pas sur toutes les "
+                    + "colonnes**. Sommer une date n'a pas de sens, et une colonne calculée par "
+                    + "différence n'a pas d'extremum exprimable. La liste autorisée par colonne est "
+                    + "publiée par le catalogue (`fonctions`) : le menu Σ doit s'y piloter, pas sur "
+                    + "une liste en dur. Une fonction refusée rend 400 avec les fonctions acceptées "
+                    + "par cette colonne-là.\n\n"
+                    + "`AVG` est calculée à partir de la somme et de l'effectif renseigné, en "
+                    + "décimal exact et arrondie au centime — jamais en virgule flottante.\n\n"
                     + "Absent : seul l'effectif de chaque groupe est renvoyé.",
-                    example = "prix,totalAPayer")
+                    example = "prix,totalAPayer,prix:AVG")
             @RequestParam(required = false) List<String> agregats,
             @Parameter(description = "Granularité de regroupement d'une colonne date. Ignorée si "
                     + "`groupBy` n'est pas une date. Défaut : MOIS — grouper sur la date exacte "
@@ -330,11 +343,11 @@ public class DossierController {
             @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneDossier groupe = ColonneDossier.resoudreGroupement(groupBy);
-        return PageDto.of(dossierService.grouper(statut, commercial, projet, trancheId, champDate,
+        return dossierService.grouper(statut, commercial, projet, trancheId, champDate,
                 dateDebut, dateFin, search, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneDossier.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable));
+                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
     }
 
     @GetMapping("/{id}")

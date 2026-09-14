@@ -175,9 +175,91 @@ Les deux colonnes restent **sélectionnables** (elles le sont déjà) ; elles ne
 `groupable`. Le front le lit sur `GET /api/referentiels/colonnes/encaissements`, il n'a aucune
 liste à coder en dur.
 
-`montantBrutRestant` et `montantNet` ne sont ni groupables ni sommables : **calculés en Java**,
-ligne par ligne, ils n'existent pas en base. Les rendre groupables demanderait une `@Formula`,
-comme les délais de cycle du lot I — mesure à faire, autre lot.
+> **§5.3 — corrigé par le lot suivant.** Ce paragraphe disait que `montantBrutRestant` et
+> `montantNet`, calculés en Java, n'étaient « ni groupables ni sommables ». C'était vrai de
+> l'implémentation, pas du besoin : la capture de l'écran légataire montre que la bande
+> `Total :` totalise **exactement ces deux colonnes**. Elles sont désormais portées par la base.
+> Voir §7.
+
+---
+
+## 7. Totaux de groupe et menu Σ
+
+### 7.1 Ce que la trace dit du groupement lui-même
+
+Relevé sur les 4 528 lignes d'audit : **Omran n'émet aucune requête de groupement ni
+d'agrégation** pour cette grille. Sa dernière instruction SQL précède la capture d'une heure. Des
+14 `GROUP BY` de toute la trace, 12 sont des requêtes d'enquête, 1 est un trigger, et la seule
+d'Omran est un comptage d'interactions pour un tableau de bord.
+
+**Le légataire charge tout et laisse sa grille DevExpress calculer côté client.** Il n'y a pas de
+mécanisme à copier ; notre liste étant paginée, le calcul doit rester serveur.
+
+### 7.2 Les deux colonnes de la bande « Total : »
+
+| Colonne | Mécanisme | Pourquoi pas l'autre |
+|---|---|---|
+| `montantNet` | `@Formula` sur `StlSettlement` | arithmétique sur la même ligne : `SUM()` l'accepte |
+| `montantBrutRestant` | entité `@Subselect` jointe | une `@Formula` à sous-requête **casse** `SUM()` |
+
+La mesure qui tranche : `SUM()` sur une expression contenant une sous-requête est refusé par SQL
+Server — **erreur 130**. La part affectée est donc pré-agrégée dans `StlSettlementAffectation` et
+retranchée par jointure. Mesuré à **7 ms** sur les 643 règlements, et le SQL émis porte bien deux
+`sum()` distincts sur un `LEFT JOIN`, jamais `SUM(a - b)`.
+
+`@Subselect` et non la vue légataire `StlSettlementAmountAffectedView` : celle-ci **n'existe pas
+dans `yesRemsTest`**, comme `StlSettlementView`. Un sous-select défini en Java ne dépend que de
+`StlSettlementLine`, qui existe partout.
+
+`montantBrutRestant` est **sommable mais pas groupable**, et n'offre ni `MIN` ni `MAX` : le moteur
+agrège ses deux termes séparément, ce qui est exact pour un total et une moyenne — toutes deux
+linéaires — et faux pour un extremum.
+
+**Sur données réelles, ces deux colonnes ne révèlent rien de neuf** : `montantBrutRestant` vaut 0
+sur les 643 lignes et `montantNet` égale `montantBrut` partout. C'est aussi ce que la capture
+montre. Le lot corrige le mécanisme, pas les chiffres.
+
+### 7.3 Le menu Σ, sans rupture
+
+`?agregats=` accepte désormais `colonne` **ou** `colonne:FONCTION` parmi `SUM`, `AVG`, `MIN`,
+`MAX`, `COUNT`. La clé de réponse est **le jeton envoyé** : un nom nu vaut toujours une somme et
+revient sous ce nom nu, donc les intégrations existantes des quatre listes n'ont rien à changer.
+C'est vérifié par `nomNu_resteUneSommeSousLaMemeCle`, et par les 34 tests de groupement des
+dossiers et prospections qui passent **sans modification**.
+
+Les fonctions autorisées se déduisent du `Chemin` et sont publiées par colonne dans le catalogue
+(`fonctions`) : un montant les cinq, une date `MIN`/`MAX`/`COUNT`, une différence sans extremum,
+une colonne sans chemin aucune.
+
+**`AVG` est calculée en Java** à partir de la somme et de l'effectif renseigné, en `BigDecimal`
+arrondi au centime. Jamais `cb.avg()`, qui rend un `double` : c'est la même famille de piège que
+le `COALESCE` qui avait ramené `100,50 + 90,25` à `191,0`. Le test
+`moyenne_neDerivePasEnVirguleFlottante` le verrouille sur un cas où les deux voies divergent d'un
+centime.
+
+### 7.4 Total général
+
+`/groupes` rend en plus `totaux` et `nombreTotal`, sur **tout le périmètre filtré**. Une requête de
+plus par appel, et elle est nécessaire : la réponse est paginée, donc sommer les groupes reçus
+donnerait un total faux dès la page 2 — et faux silencieusement. Le total suit `inclureSansValeur`
+à l'identique, sinon les deux comptes désigneraient deux populations.
+
+### 7.5 Un effet de bord à connaître en test
+
+Ces deux colonnes ne sont plus calculées par le code mais **peuplées au chargement** de l'entité.
+Un test transactionnel qui construit ses fixtures puis interroge dans la même transaction reçoit
+l'instance déjà gérée, dont ces champs sont nuls : il faut un `flush` + `clear` avant l'appel HTTP
+(`relireDepuisLaBase()`, le remède déjà employé au lot I). Sans effet en production, où chaque
+requête ouvre sa propre transaction.
+
+### 7.6 Impact front (aucune rupture)
+
+1. `?agregats=` accepte `nom:FONCTION` ; un nom nu reste une somme sous la même clé.
+2. `/groupes` rend en plus `totaux` et `nombreTotal` — champs additionnels.
+3. Le catalogue publie `fonctions` par colonne : piloter le menu Σ dessus.
+4. Une valeur d'agrégat peut désormais être une **date** (`MIN`/`MAX`) ou un **entier** (`COUNT`),
+   plus seulement un décimal.
+5. `montantNet` devient groupable et agrégeable ; `montantBrutRestant` devient agrégeable.
 
 ---
 

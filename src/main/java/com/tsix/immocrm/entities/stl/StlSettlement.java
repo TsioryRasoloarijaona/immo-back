@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
@@ -210,4 +211,40 @@ public class StlSettlement {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlDepositId")
     private StlDeposit stlDeposit;
+
+    // ------------------------------------------------------------------
+    // Colonnes calculées — les deux que la bande « Total : » du légataire totalise.
+    //
+    // En @Formula et en association plutôt qu'en Java pour une raison précise : ce sont alors des
+    // propriétés ordinaires, donc sommables par le moteur de groupement générique. Calculées dans
+    // le mappeur, elles n'existaient nulle part en base et aucun total n'était exprimable.
+    // Voir instructions/FEATURE-colonnes-groupement-encaissements.md.
+    // ------------------------------------------------------------------
+
+    /**
+     * "Montant net" — brut moins retenue à la source et droit de timbre.
+     *
+     * <p>Arithmétique sur la même ligne, donc une {@code @Formula} suffit et {@code SUM()} dessus
+     * est accepté. Mesuré sur les 643 règlements réels : {@code AmountRS} et {@code AmountStamp}
+     * sont non nuls mais <strong>valent zéro partout</strong>, donc ce montant égale aujourd'hui le
+     * montant brut sur la totalité des lignes. La formule est juste ; ce sont les données qui n'ont
+     * pas encore de retenue.
+     */
+    @Formula("Amount - ISNULL(AmountRS, 0) - ISNULL(AmountStamp, 0)")
+    private BigDecimal montantNetCalcule;
+
+    /**
+     * Part déjà affectée à des échéances, pré-agrégée — le terme retranché de
+     * {@code montantBrutRestant}.
+     *
+     * <p><strong>{@code @ManyToOne} et non {@code @OneToOne}</strong>, bien que la cardinalité soit
+     * un-à-un : un {@code @OneToOne} optionnel ne se proxifie pas et Hibernate irait le charger sur
+     * chaque ligne, produisant le N+1 que cette association existe justement pour supprimer.
+     *
+     * <p>Nulle pour un règlement sans aucune ligne — le sous-select ne porte que ceux qui en ont.
+     * La part affectée vaut alors zéro, substitué en Java.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PKey", insertable = false, updatable = false)
+    private StlSettlementAffectation affectation;
 }

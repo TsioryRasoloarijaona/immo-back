@@ -56,10 +56,11 @@ import java.util.Set;
  * une tranche ou un projet, qui se résolvent par le même chemin. Les deux colonnes restent
  * <em>sélectionnables</em> ; elles ne sont pas groupables.
  *
- * <p>{@link #MONTANT_BRUT_RESTANT} et {@link #MONTANT_NET} non plus : ils sont
- * <strong>calculés en Java</strong> ligne par ligne et n'existent nulle part en base. Les rendre
- * groupables demanderait une {@code @Formula}, comme les délais de cycle du lot I — avec sa propre
- * mesure de coût.
+ * <p>{@link #MONTANT_BRUT_RESTANT} et {@link #MONTANT_NET} l'étaient aussi, et ne le sont plus :
+ * ce sont les deux colonnes que la bande « Total : » du légataire totalise, donc les laisser hors
+ * d'atteinte revenait à ne pas reproduire l'écran. Ils sont désormais portés par la base — une
+ * {@code @Formula} pour l'un, une pré-agrégation joignable pour l'autre — et leur javadoc explique
+ * pourquoi les deux mécanismes diffèrent.
  *
  * <p>Sans JPA, comme le reste de {@code domain/}.
  */
@@ -101,11 +102,31 @@ public enum ColonneEncaissement implements Colonne {
 
     MONTANT_BRUT("montantBrut", "Montant brut", Groupe.FINANCIER, TypeColonne.MONTANT, true,
             Chemin.groupableEtAgregeable("amount")),
-    /** Calculé en Java (brut − affecté) : ni groupable ni agrégeable, cf. entête. */
+    /**
+     * Brut moins la part déjà affectée à des échéances.
+     *
+     * <p><strong>Sommable, pas groupable.</strong> La part affectée est pré-agrégée dans
+     * {@code StlSettlementAffectation} et retranchée par jointure — une {@code @Formula} à
+     * sous-requête corrélée aurait donné la valeur ligne à ligne mais aurait rendu tout
+     * {@code SUM()} impossible (SQL Server, erreur 130). Voir {@link Chemin#difference}.
+     *
+     * <p>Ni {@code MIN} ni {@code MAX} : le moteur agrège les deux termes séparément, ce qui est
+     * exact pour un total et une moyenne, faux pour un extremum. Mesuré à <strong>zéro sur les 643
+     * règlements réels</strong> — tous sont intégralement affectés, ce que l'écran légataire
+     * affiche d'ailleurs aussi (« 0.00 DH » sur chaque ligne).
+     */
     MONTANT_BRUT_RESTANT("montantBrutRestant", "Montant brut restant", Groupe.FINANCIER,
-            TypeColonne.MONTANT, true),
-    /** Calculé en Java (brut − RS − timbre) : ni groupable ni agrégeable, cf. entête. */
-    MONTANT_NET("montantNet", "Montant net", Groupe.FINANCIER, TypeColonne.MONTANT, true),
+            TypeColonne.MONTANT, true,
+            Chemin.difference("amount", "affectation.montantAffecte")),
+    /**
+     * Brut moins retenue à la source et droit de timbre.
+     *
+     * <p>Porté par une {@code @Formula} sur {@code StlSettlement}, donc une propriété ordinaire :
+     * groupable <em>et</em> agrégeable sans une ligne dans le moteur. Mesuré <strong>égal au
+     * montant brut sur les 643 lignes</strong>, les deux retenues valant zéro partout.
+     */
+    MONTANT_NET("montantNet", "Montant net", Groupe.FINANCIER, TypeColonne.MONTANT, true,
+            Chemin.groupableEtAgregeable("montantNetCalcule")),
 
     COMPTABILISE("comptabilise", "Comptabilisé", Groupe.SUIVI, TypeColonne.BOOLEEN, true,
             Chemin.groupable("isAccounted")),
@@ -286,8 +307,13 @@ public enum ColonneEncaissement implements Colonne {
         return Colonnes.resoudreGroupement(ColonneEncaissement.class, demandee);
     }
 
-    /** @throws ColonneInconnueException si un nom n'est pas une colonne agrégeable de ce catalogue. */
-    public static Set<ColonneEncaissement> resoudreAgregats(List<String> demandees) {
+    /**
+     * Résout {@code ?agregats=}, forme {@code colonne} (somme) ou {@code colonne:FONCTION}.
+     *
+     * @throws ColonneInconnueException         si un nom n'est pas une colonne de ce catalogue
+     * @throws FonctionAgregatInconnueException si la colonne n'autorise pas cette fonction
+     */
+    public static List<AgregatDemande> resoudreAgregats(List<String> demandees) {
         return Colonnes.resoudreAgregats(ColonneEncaissement.class, demandees);
     }
 
