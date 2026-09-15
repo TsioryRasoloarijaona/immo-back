@@ -6,9 +6,11 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dashboard.DashboardDto;
 import com.tsix.immocrm.dto.dashboard.NouveauPreProspectDto;
 import com.tsix.immocrm.dto.dashboard.RelanceProspectionDto;
+import com.tsix.immocrm.dto.dashboard.SyntheseAnnuelleDto;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.dashboard.DashboardService;
 import com.tsix.immocrm.services.dashboard.RelanceDashboardService;
+import com.tsix.immocrm.services.dashboard.SyntheseAnnuelleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -48,11 +50,14 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
     private final RelanceDashboardService relanceDashboardService;
+    private final SyntheseAnnuelleService syntheseAnnuelleService;
 
     public DashboardController(DashboardService dashboardService,
-                               RelanceDashboardService relanceDashboardService) {
+                               RelanceDashboardService relanceDashboardService,
+                               SyntheseAnnuelleService syntheseAnnuelleService) {
         this.dashboardService = dashboardService;
         this.relanceDashboardService = relanceDashboardService;
+        this.syntheseAnnuelleService = syntheseAnnuelleService;
     }
 
     @GetMapping
@@ -164,5 +169,30 @@ public class DashboardController {
 
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(relanceDashboardService.nouveauxPreProspects(jour, pageable));
+    }
+
+    @GetMapping("/annuel")
+    @Operation(
+            summary = "Synthese annuelle facon logiciel de bureau",
+            description = """
+                    Reprend l'ecran d'accueil d'OMRAN : l'echeancier mois par mois, les ventes                     concretisees et les encaissements de l'annee. L'assiette de chaque bloc est                     celle du logiciel de bureau, pour que les chiffres restent comparables poste                     a poste pendant la transition.
+
+                    **`echeancier` n'est pas un realise.** Il somme les montants *dus*                     (`ComDocument.Amount`), pas ce qui est entre en caisse. Des mois a venir y                     sont donc renseignes : en septembre 2026, octobre et novembre portaient deja                     380 000 et 50 000 DH. Une courbe qui s'arreterait au mois courant masquerait                     de la donnee vraie. Pour l'argent reellement encaisse, c'est le bloc                     `encaissements`.
+
+                    **`ventesConcretisees` ne couvre pas tous les dossiers.** L'assiette est la                     date d'avance (`ComFolder.AdvanceDate`), et **232 des 387 dossiers reels n'en                     ont pas** : ils sont structurellement absents, quelle que soit l'annee. Le                     champ `dossiersSansDateAvance` donne ce nombre pour que l'ecart soit                     affichable plutot que subi.
+
+                    **Les 12 mois sont toujours servis**, un mois vide valant zero : le client                     n'a jamais a deviner quels points manquent.
+
+                    **Perimetre commercial** : les trois blocs y sont soumis, comme le logiciel                     de bureau qui pose le meme filtre d'habilitation sur chacune de ses requetes.""")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Synthese calculee. Des compteurs a "
+                    + "zero signifient qu'aucun dossier n'entre dans le perimetre de l'appelant "
+                    + "sur cette annee, pas une erreur."),
+            @ApiResponse(responseCode = "400", description = "`annee` non numerique.")
+    })
+    public SyntheseAnnuelleDto annuel(
+            @Parameter(description = "Annee observee. Defaut : l'annee courante.", example = "2026")
+            @RequestParam(required = false) Integer annee) {
+        return syntheseAnnuelleService.get(annee);
     }
 }
