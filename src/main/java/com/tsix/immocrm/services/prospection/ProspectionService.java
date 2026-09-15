@@ -1230,8 +1230,12 @@ public class ProspectionService {
      * premier contact. Mesuré sur les 8 613 prospections ouvertes — 5 034 par la fiche, 7 596
      * par le champ temporaire, <b>8 591 par l'une ou l'autre</b> : aucune des deux sources ne
      * suffit seule, le repli n'est pas une commodité.
+     *
+     * <p><b>Publique parce qu'elle est la seule</b>, comme {@link #emailProspect}. Le tableau de
+     * bord des relances sert le même numéro dans sa tuile ; en recopier une variante ferait
+     * diverger deux règles mesurées sur la même donnée.
      */
-    private static String telephoneProspect(CfgTier prospect, ComProspection p) {
+    public static String telephoneProspect(CfgTier prospect, ComProspection p) {
         if (prospect != null) {
             if (StringUtils.hasText(prospect.getMobile())) {
                 return prospect.getMobile();
