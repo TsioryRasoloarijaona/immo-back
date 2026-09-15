@@ -14,6 +14,213 @@
 
 ## Demandes en cours
 
+### 11. Filtre par colonne servi par le serveur — `ColonneDto.filtrable`/`operateurs` + `?filtreColonne=` (15/09/2026)
+
+> **Priorité annoncée par le front : au-dessus du reste de ce fichier.** C'est la
+> seule demande en cours dont l'absence produit un **résultat faux présenté comme
+> complet**, sur les dix listes de l'application — et non une fonctionnalité
+> manquante.
+
+**Contexte** : la ligne de filtres de la grille existe sur les dix listes et elle
+est **entièrement côté front**. Elle ne filtre que les lignes déjà chargées,
+c'est-à-dire la page courante. Ce n'était pas une limite laissée traîner : c'est
+ce que fait la grille DevExpress du logiciel de bureau, et c'était suffisant tant
+que l'écran était une maquette.
+
+**Ce que l'utilisateur obtient aujourd'hui**, mesuré sur `/api/encaissements`
+(332 lignes, page de 20), colonne « Type » :
+
+| Saisie | Affiché | Réellement en base |
+|---|---|---|
+| `cheque` | **0 ligne** | 21 |
+| `chèque` (l'orthographe correcte) | **0 ligne** | 0 — la base écrit `CHÉQUE` |
+| en ignorant les accents | — | **180 sur 332** |
+
+Valeurs réelles de la colonne : `CHÉQUE` 159 (accent aigu, orthographe fautive du
+légataire), `VIREMENT` 149, `CHEQUE SYNDIC` 14 (sans accent), `CHEQUE NOTAIRE` 6,
+puis quatre valeurs à 1.
+
+Deux défauts se cumulent, et chacun suffirait :
+
+1. **La portée.** Le filtre ne voit que les 20 lignes chargées ; les 312 autres
+   sont hors de portée et rien ne le dit. « Aucun résultat » se lit comme « il n'y
+   en a pas », jamais comme « il n'y en a pas *sur cette page* ».
+2. **Les accents.** Un commercial qui écrit correctement « chèque » ne trouve
+   **rien**, alors que 180 lignes correspondent.
+
+### Endpoint souhaité
+
+La forme demandée épouse ce que le catalogue de colonnes fait déjà, plutôt que
+d'ouvrir un mécanisme parallèle : `ColonneDto` porte déjà `groupable`,
+`agregeable` et `fonctions`, et le front pilote sa bande de groupement et son menu
+Σ à partir de ces trois champs. Le filtre par colonne est le même problème.
+
+**1. Deux champs sur `ColonneDto`**
+
+```jsonc
+{
+  "nom": "typeLibelle",
+  "filtrable": true,
+  "operateurs": ["CONTIENT", "EGAL"]   // dans l'ordre où le front doit les proposer
+}
+```
+
+`filtrable` n'existe pas aujourd'hui — vérifié sur les quatre catalogues
+(`prospections` 56 colonnes, `dossiers` 56, `prospects` 47, `encaissements` 40).
+Sans ce drapeau, le front ne peut qu'afficher une case sur **toutes** les colonnes
+et découvrir au 400 celles que le serveur refuse.
+
+**2. Un paramètre à jetons, même grammaire que `?agregats=`**
+
+```
+GET /api/encaissements?filtreColonne=typeLibelle:CONTIENT:cheque
+                      &filtreColonne=montantBrut:SUP:10000
+```
+
+Répétable, combiné en **ET**. `?agregats=prix:AVG` existe déjà et le front sait le
+composer et le décomposer (`lib/groupement.ts`).
+
+Une colonne non `filtrable`, un opérateur qu'elle n'accepte pas, ou une valeur non
+parsable pour son type → **400 nommant la colonne**, jamais un 200 silencieux sur
+un périmètre plus large. Le précédent compte : `?statut=Concrétisation` rend
+aujourd'hui **0 dossier en HTTP 200** là où `?statut=CONCRETISATION` en rend 68
+(demande #10) — un filtre ignoré sans bruit est pire qu'une erreur.
+
+**3. Opérateurs par type**
+
+| `type` | Opérateurs | Valeur attendue |
+|---|---|---|
+| `TEXTE` | `CONTIENT`, `EGAL`, `COMMENCE_PAR` | chaîne brute |
+| `NOMBRE`, `MONTANT` | `EGAL`, `SUP`, `INF`, `ENTRE` | nombre, `ENTRE` = `min..max` |
+| `DATE` | `EGAL`, `AVANT`, `APRES`, `ENTRE` | **ISO-8601** |
+| `BOOLEEN` | `EGAL` | `true` / `false` |
+
+**`CONTIENT` et `EGAL` sur `TEXTE` : insensibles à la casse ET aux accents.** C'est
+le point qui fait passer la colonne Type de 0 à 180 résultats. Le précédent existe
+déjà côté serveur : `GET /api/hotline/recherche` documente `nom` comme
+« sous-chaîne, insensible à la casse **et aux accents** ».
+
+**4. Les dates arrivent en ISO, pas en `JJ/MM/AAAA`**
+
+Le front compare aujourd'hui sur la forme affichée ; il ne demande **pas** de
+reproduire ça. Un serveur qui accepterait `09/09` s'occuperait de mise en forme et
+devrait deviner si c'est un jour, un mois ou un préfixe. La conversion reste au
+front, qui sait ce qu'il affiche.
+
+### Pourquoi
+
+Au-delà du filtre lui-même :
+
+- **le lot de 500 lignes sur `/dossiers` disparaît** — il n'existe que pour
+  contourner le filtre statut côté client (demande #10) ;
+- **groupement et filtre cessent de s'exclure.** Aujourd'hui le front désactive la
+  bande de groupement dès qu'un statut est filtré : `/groupes` renvoie des
+  effectifs déjà calculés qu'un filtre client ne peut pas recompter, et les
+  afficher donnerait des totaux faux présentés comme exacts ;
+- **le filtre devient paginable**, donc utilisable sur les 9 654 prospections.
+
+### Contournement actuel côté front
+
+Comparaison « contient », insensible à la casse, **sensible aux accents**, portant
+sur la **forme affichée** et non sur la valeur stockée — une date se compare en
+`JJ/MM/AAAA`, un booléen en `oui`/`non`. Les glyphes `A` et `=` de l'en-tête
+annoncent un mode de comparaison mais **ne l'ouvrent pas au choix** : les deux font
+un `contient`.
+
+### Ce que le front fera une fois servi
+
+1. la ligne de filtres n'apparaît que sur les colonnes `filtrable` ;
+2. le glyphe d'en-tête cesse d'être décoratif et ouvre le choix d'opérateur, tiré
+   de `operateurs` ;
+3. la saisie est débouncée et envoyée au serveur ; pagination et compteurs
+   redeviennent justes ;
+4. le tri et le Σ côté client restent tels quels sur la page chargée — ils
+   répondent à une autre question et ne doivent pas être « unifiés ».
+
+---
+
+### 12. `ModifierProspectionRequest` — les quatre champs éditables d'une pré-prospection (10/09/2026)
+
+**Contexte** : `ModifierProspectionRequest` porte quatorze champs, dont huit
+mesurés morts (prix, surface, avance, financements). Il **ne porte pas** les quatre
+seuls champs qu'un commercial a besoin de corriger sur un lead non transformé.
+
+| Champ | Servi par le GET | Modifiable |
+|---|---|---|
+| `tempDescription` | oui, 14/14 mesuré | **non** |
+| `tempTel` | oui, 14/14 | **non** |
+| `tempEmail` | oui, 5/14 | **non** |
+| `commercialId` | oui (nul sur 14/14) | **non** |
+
+Ce sont exactement les champs que le logiciel de bureau rend éditables sur son
+écran « Pré-Prospections » — Description, Téléphone, Email, Commercial.
+
+**Contournement actuel côté front** : les champs sont affichés avec un cadenas —
+un champ qui accepte la frappe et perd la saisie au rechargement est pire qu'un
+champ grisé. La seule façon de corriger un numéro mal saisi est de promouvoir le
+lead en fiche tiers via `POST /api/pre-prospections/{id}/creer-prospect`, ce qui
+**change le sens du geste** : sur un doublon avéré, c'est précisément ce qu'on ne
+veut pas faire.
+
+**Demandé** : ajouter `tempDescription`, `tempTel`, `tempEmail` et `commercialId`.
+Rien sur les huit champs morts.
+
+**Explicitement non demandé** : `ancienClient` (même cas, mais se déduit du tiers) ;
+les « Donnée 2 » à « Donnée 9 » (`TempField2` à `TempField9`) — le serveur
+interprète déjà `TempField1` et `TempField10` (`noteQualification`,
+`doublonDeCode`) au lieu de les servir brutes, et c'est le bon arbitrage.
+
+---
+
+### 13. Quatre écarts de contrat relevés par l'audit `types.ts` vs spec (14/09/2026)
+
+Aucun n'est bloquant ; tous demandent un arbitrage backend.
+
+**a. Les treize nouveaux champs du DTO encaissement n'ont aucune description
+springdoc** — contraire à la règle 10 du `CLAUDE.md`. Le front a dû **mesurer** les
+taux de population au lieu de les lire : `description` 332/332 (327 valeurs
+distinctes, la plus informative), `montantBase` et `tierPayeurNom` 332/332, mais
+`recuCode` 12/332, `dateRemiseAuCentre` et `dateBordereau` 1/332, `bordereauCode`
+**0/332**.
+
+**b. `titreFoncier` : même donnée, deux chemins, deux taux.** La colonne
+`articleTitreFoncier` de `GET /api/dossiers` le sert sur **33 dossiers sur 116**.
+Sur huit de ces dossiers-là, `GET /api/dossiers/{id}` ne le porte que **cinq
+fois** — les trois autres n'ont pas la clé dans leur article. Quand les deux sont
+présents, ils sont identiques. À confirmer côté backend.
+
+**c. `CreerReglementRequest.dateReglement` : le spec la publie, le serveur la
+refuse** (400). Le front a raison de ne pas l'envoyer — elle se renseigne au
+passage à POINTED, qui exige une preuve de paiement, donc impossible avant que le
+règlement existe. Mais **le contrat et le comportement se contredisent** : c'est au
+backend de trancher, pas au front de suivre le spec à l'aveugle.
+
+**d. Le catalogue prospects décrit une capacité qu'il n'a pas.** Sa description
+annonce que `groupable`/`agregeable` « pilotent la bande de groupement », or il
+compte **0 groupable et 0 agrégeable** sur 47 colonnes, et il n'existe pas de
+`GET /api/prospects/groupes`. Formulation à corriger, sans conséquence
+fonctionnelle.
+
+---
+
+### 14. Ordre de pagination non déterministe (11/09/2026)
+
+**Mesuré** : le groupe « 2024 » des dossiers, trié sur la seule `docDate`,
+ressortait dans un ordre **différent d'un appel à l'autre** — les ex æquo sont
+départagés par le plan SQL du moment, et le désordre est intermittent.
+
+Absorbé côté front sur le groupement en passant un tri qui tranche
+(`sort=docDate,desc` **plus** `sort=id,asc`, accepté 200 sur les trois endpoints ;
+préfixe stable vérifié 15 fois sur trois groupes).
+
+**Le même aléa existe sur la pagination ordinaire des listes**, où il peut
+**cacher ou dupliquer une ligne entre deux pages**. Non touché côté front — ce
+serait changer l'ordre d'affichage actuel sans que personne ne l'ait demandé —
+mais c'est un défaut latent réel, et il se corrige côté serveur en départageant
+les ex æquo par défaut.
+
+---
+
 ### 10. `GET /api/dossiers?statut=…` renvoie 0 résultat pour la plupart des statuts filtrés
 
 **Contexte** : remonté par le métier — le filtre "Statut" de `/dossiers`
