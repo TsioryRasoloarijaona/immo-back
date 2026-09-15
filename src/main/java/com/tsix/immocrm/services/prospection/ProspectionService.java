@@ -50,13 +50,13 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.mail.VisiteEffectuee;
 import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
-import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository.DerniereAlerteProjection;
+import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComActionRepository;
@@ -75,6 +75,7 @@ import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
+import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -159,12 +160,20 @@ public class ProspectionService {
     private final StkVocationRepository vocationRepository;
     private final ComActionMessageTypeRepository actionMessageTypeRepository;
     private final ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository;
+    private final ComActionMessageCategoryRepository actionMessageCategoryRepository;
+
+    /**
+     * {@code ComActionMessageCategory.Code} porté par les interactions de création — 2 250 des
+     * 2 634 mesurées. Les 384 autres sont catégorisées « Dossier de vente (Réservation) » et
+     * relèvent de la transformation en vente, pas de la création.
+     */
+    private static final String CATEGORIE_PROSPECTION = "Prospection";
     private final AdmEventRepository admEventRepository;
     private final ComActionRepository actionRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository stkItemRepository;
     private final StrHistoryRepository historyRepository;
-    private final AdmSequenceRepository sequenceRepository;
+    private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
     /** Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}. */
@@ -185,12 +194,13 @@ public class ProspectionService {
                                StkVocationRepository vocationRepository,
                                ComActionMessageTypeRepository actionMessageTypeRepository,
                                ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository,
+                               ComActionMessageCategoryRepository actionMessageCategoryRepository,
                                AdmEventRepository admEventRepository,
                                ComActionRepository actionRepository,
                                CfgTrancheRepository trancheRepository,
                                StkItemRepository stkItemRepository,
                                StrHistoryRepository historyRepository,
-                               AdmSequenceRepository sequenceRepository,
+                               GenerateurCodeSequence generateurCode,
                                PerimetreCommercialService perimetreService,
                                GroupementService groupementService,
                                AdmUserRepository userRepository,
@@ -214,12 +224,13 @@ public class ProspectionService {
         this.vocationRepository = vocationRepository;
         this.actionMessageTypeRepository = actionMessageTypeRepository;
         this.actionMessageSubCategoryRepository = actionMessageSubCategoryRepository;
+        this.actionMessageCategoryRepository = actionMessageCategoryRepository;
         this.admEventRepository = admEventRepository;
         this.actionRepository = actionRepository;
         this.trancheRepository = trancheRepository;
         this.stkItemRepository = stkItemRepository;
         this.historyRepository = historyRepository;
-        this.sequenceRepository = sequenceRepository;
+        this.generateurCode = generateurCode;
     }
 
     /**
@@ -749,6 +760,7 @@ public class ProspectionService {
         if (request.notes() != null) prospection.setNotes(request.notes());
 
         prospection = prospectionRepository.save(prospection);
+        ecrireInteractionDeCreation(prospection);
         enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + TierNomFormatter.nom(prospect));
         return detailEnrichi(prospection);
     }
@@ -763,28 +775,7 @@ public class ProspectionService {
      * counter, no "APF"/"ART"-style prefix on Prospection codes).
      */
     private String genererCodeProspection() {
-        AdmSequence sequence = sequenceRepository.findByCode("Prospection").orElseGet(() -> {
-            // Self-heals if the seed row is ever missing (e.g. a fresh test database) — bootstraps
-            // at 0 rather than blocking Prospection creation entirely.
-            AdmSequence nouvelle = new AdmSequence();
-            nouvelle.setId(UUID.randomUUID());
-            nouvelle.setCode("Prospection");
-            nouvelle.setSeqValue(0);
-            nouvelle.setSeqValueNumber(5);
-            nouvelle.setSeqYearNumber(2);
-            nouvelle.setBasedOnSystemYear(true);
-            return nouvelle;
-        });
-        int prochain = (sequence.getSeqValue() != null ? sequence.getSeqValue() : 0) + 1;
-        sequence.setSeqValue(prochain);
-        sequenceRepository.save(sequence);
-
-        int largeurAnnee = sequence.getSeqYearNumber() != null ? sequence.getSeqYearNumber() : 2;
-        int largeurNumero = sequence.getSeqValueNumber() != null ? sequence.getSeqValueNumber() : 5;
-        int annee = LocalDateTime.now().getYear() % (int) Math.pow(10, largeurAnnee);
-        String anneeFormatee = String.format("%0" + largeurAnnee + "d", annee);
-        String numero = String.format("%0" + largeurNumero + "d", prochain);
-        return anneeFormatee + "/" + numero;
+        return generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_PROSPECTION, 2, 5);
     }
 
     /**
@@ -1118,6 +1109,60 @@ public class ProspectionService {
      * traîner un « null » : certains contextes n'ont pas de principal authentifié, et une
      * interaction sans auteur vaut mieux qu'une exception.
      */
+    /**
+     * L'interaction que le logiciel de bureau écrit <b>systématiquement</b> juste après avoir créé
+     * une prospection — relevée dans sa trace d'audit : {@code INSERT INTO ComProspection} suivi,
+     * dans la même seconde, d'un {@code INSERT INTO ComActionMessage}.
+     *
+     * <p>Nous ne l'écrivions pas, et une prospection naissait donc sans aucun échange. Tout ce qui
+     * se fonde sur les interactions s'en trouvait faussé dès la création : dernier échange, délai
+     * de prise en charge, compteurs d'activité de {@code /api/kpi/commerciaux}.
+     *
+     * <h2>Les drapeaux, et pourquoi ils s'écartent de {@code creerInteraction}</h2>
+     *
+     * <p>{@code IsSystem = 1} et {@code WithoutRevival = 1}, à l'inverse d'une interaction saisie.
+     * Ce n'est pas une incohérence : {@code ComSaleProspectionView} calcule le dernier échange avec
+     * {@code AND IsSystem = 0}, et cette ligne-ci <b>doit</b> en être exclue — créer une
+     * prospection n'est pas un échange avec le client. Le légataire fait exactement ce choix,
+     * mesuré sur les 2 634 interactions de création réelles.
+     *
+     * <p>{@code AlertMessage} reprend les notes de la prospection (identique au caractère près sur
+     * 1 507 des 2 634, les écarts restants n'étant que des espaces), et {@code AlertValidityDate}
+     * reste nulle : ce n'est pas une relance.
+     *
+     * <p>Le type reprend celui de la prospection (83 % des cas réels) et la catégorie est
+     * {@code Prospection}. Une catégorie introuvable ne fait pas échouer la création : la ligne
+     * part sans, ce qui vaut mieux que de refuser une prospection pour un référentiel incomplet.
+     */
+    private void ecrireInteractionDeCreation(ComProspection prospection) {
+        LocalDateTime maintenant = LocalDateTime.now();
+        AdmUser auteur = auteurCourant();
+        String nomAuteur = auteur != null ? auteur.getDescription() : null;
+
+        ComActionMessage message = new ComActionMessage();
+        message.setId(UUID.randomUUID());
+        message.setComProspection(prospection);
+        message.setDocDate(maintenant);
+        message.setDescription(libelleInteraction(maintenant, nomAuteur));
+        message.setUserName(nomAuteur);
+        message.setUserCreate(nomAuteur);
+        message.setUserCreateDateTime(maintenant);
+        message.setAdmUser(auteur);
+        message.setCfgTier(prospection.getCfgProspect());
+        message.setComActionMessageType(prospection.getComActionMessageType());
+        actionMessageCategoryRepository.findByCode(CATEGORIE_PROSPECTION)
+                .ifPresent(message::setComActionMessageCategory);
+
+        message.setIsSystem(true);
+        message.setWithoutRevival(true);
+        message.setIsNotRead(false);
+        message.setIsUnpaid(false);
+        message.setAlertValidityDate(null);
+        message.setAlertMessage(prospection.getNotes());
+
+        actionMessageRepository.save(message);
+    }
+
     private static String libelleInteraction(LocalDateTime date, String nomAuteur) {
         String horodatage = date.format(FORMAT_LIBELLE);
         return StringUtils.hasText(nomAuteur) ? horodatage + " " + nomAuteur : horodatage;

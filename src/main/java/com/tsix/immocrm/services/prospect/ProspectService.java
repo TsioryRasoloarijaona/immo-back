@@ -22,6 +22,7 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
 import com.tsix.immocrm.repositories.adm.AdmFamilySituationRepository;
@@ -91,6 +92,7 @@ public class ProspectService {
     private final AdmIdentityDocumentTypeRepository identityDocumentTypeRepository;
     /** Contrôle indicatif + numéro — voir {@code FEATURE-indicatif-telephone.md}. */
     private final NumeroTelephoneSupport numeroSupport;
+    private final GenerateurCodeSequence generateurCode;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -106,9 +108,11 @@ public class ProspectService {
                             AdmSalaryRepository salaryRepository,
                             AdmIdentityDocumentTypeRepository identityDocumentTypeRepository,
                             CfgTrancheRepository trancheRepository,
-                            NumeroTelephoneSupport numeroSupport) {
+                            NumeroTelephoneSupport numeroSupport,
+                            GenerateurCodeSequence generateurCode) {
         this.trancheRepository = trancheRepository;
         this.numeroSupport = numeroSupport;
+        this.generateurCode = generateurCode;
         this.tierRepository = tierRepository;
         this.tierTypeRepository = tierTypeRepository;
         this.tierKindRepository = tierKindRepository;
@@ -184,6 +188,12 @@ public class ProspectService {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);
+        // Numérotation sur le compteur du logiciel de bureau. Sans elle, chaque prospect créé
+        // par l'API rejoignait une anomalie marginale : sur 13 913 prospects et clients
+        // réels, 12 seulement n'ont pas de code. Couvre les deux chemins de création, celui-ci
+        // étant partagé par POST /api/prospects et
+        // POST /api/pre-prospections/{id}/creer-prospect.
+        tier.setCode(generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
         applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
                 request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
                 request.email(), request.adresse(), request.ville(), request.codePostal(),

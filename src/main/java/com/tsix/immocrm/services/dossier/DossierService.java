@@ -42,7 +42,6 @@ import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
@@ -59,6 +58,7 @@ import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -100,7 +100,7 @@ public class DossierService {
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final StrFolderStatusHistoryRepository statusHistoryRepository;
-    private final AdmSequenceRepository sequenceRepository;
+    private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
     private final ComActionMessageRepository actionMessageRepository;
@@ -113,7 +113,7 @@ public class DossierService {
                            ComPaymentMethodRepository paymentMethodRepository, CfgTierRepository tierRepository,
                            ComSettlementCategoryRepository settlementCategoryRepository,
                            StrFolderStatusHistoryRepository statusHistoryRepository,
-                           AdmSequenceRepository sequenceRepository,
+                           GenerateurCodeSequence generateurCode,
                            PerimetreCommercialService perimetreService,
                            GroupementService groupementService,
                            ComActionMessageRepository actionMessageRepository,
@@ -134,7 +134,7 @@ public class DossierService {
         this.paymentMethodRepository = paymentMethodRepository;
         this.tierRepository = tierRepository;
         this.statusHistoryRepository = statusHistoryRepository;
-        this.sequenceRepository = sequenceRepository;
+        this.generateurCode = generateurCode;
     }
 
     /**
@@ -148,33 +148,13 @@ public class DossierService {
      * in real data, so it can't be used directly.
      */
     private String genererCodeDossier(StkItem premierArticle) {
-        AdmSequence sequence = sequenceRepository.findByCode("Dossier de vente").orElseGet(() -> {
-            // Self-heals if the seed row is ever missing (e.g. a fresh test database) — bootstraps
-            // at 0 rather than blocking Dossier creation entirely.
-            AdmSequence nouvelle = new AdmSequence();
-            nouvelle.setId(UUID.randomUUID());
-            nouvelle.setCode("Dossier de vente");
-            nouvelle.setSeqValue(0);
-            nouvelle.setSeqValueNumber(5);
-            nouvelle.setSeqYearNumber(4);
-            nouvelle.setBasedOnSystemYear(true);
-            return nouvelle;
-        });
-        int prochain = (sequence.getSeqValue() != null ? sequence.getSeqValue() : 0) + 1;
-        sequence.setSeqValue(prochain);
-        sequenceRepository.save(sequence);
-
         String prefixe = "DOS";
         if (premierArticle.getStkHierarchy() != null && premierArticle.getStkHierarchy().getCfgProject() != null
                 && premierArticle.getStkHierarchy().getCfgProject().getCode() != null) {
             prefixe = premierArticle.getStkHierarchy().getCfgProject().getCode();
         }
-
-        int largeurAnnee = sequence.getSeqYearNumber() != null ? sequence.getSeqYearNumber() : 4;
-        int largeurNumero = sequence.getSeqValueNumber() != null ? sequence.getSeqValueNumber() : 5;
-        String annee = String.format("%0" + largeurAnnee + "d", LocalDateTime.now().getYear());
-        String numero = String.format("%0" + largeurNumero + "d", prochain);
-        return prefixe + " " + annee + "/" + numero;
+        // Année sur 4 chiffres ici, contrairement au tiers et à la prospection : « APF 2026/00380 ».
+        return prefixe + " " + generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_DOSSIER, 4, 5);
     }
 
     /**
