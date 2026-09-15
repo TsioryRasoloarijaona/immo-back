@@ -143,4 +143,58 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
     List<Object[]> projeterPourKpiDansPerimetre(@Param("debut") LocalDateTime debut,
                                                 @Param("fin") LocalDateTime fin,
                                                 @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Bloc B de {@code GET /api/dashboard/annuel} — les ventes concrétisées de l'année.
+     * Tuple : [nombre de dossiers, somme des prix].
+     *
+     * <p>Assiette du légataire, reprise telle quelle : la <b>date d'avance</b>
+     * ({@code ComFolder.AdvanceDate}) tombe dans l'année, le statut a atteint le seuil de
+     * concrétisation, et les sorties sont écartées. Un dossier sans date d'avance n'y entre
+     * jamais — c'est le cas de 232 des 387 dossiers réels, comptés à part par
+     * {@link #compterDossiersSansDateAvance()}.
+     *
+     * <p>La somme est rendue éventuellement {@code null} : pas de {@code COALESCE} en SQL, où le
+     * littéral entier dégrade silencieusement l'échelle d'une somme d'argent. La substitution se
+     * fait en Java, en {@code BigDecimal}.
+     */
+    @Query("SELECT COUNT(f), SUM(f.price) FROM ComFolder f JOIN f.strStatus s "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> ventesConcretisees(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                      List<String> sorties);
+
+    /** Variante de {@link #ventesConcretisees} restreinte au périmètre — même tuple. */
+    @Query("SELECT COUNT(f), SUM(f.price) FROM ComFolder f JOIN f.strStatus s "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> ventesConcretiseesDansPerimetre(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                                   List<String> sorties, List<UUID> projetIds);
+
+    /**
+     * Les dossiers écartés du bloc B faute de date d'avance, <b>toutes années confondues</b> —
+     * une date absente n'appartient à aucune année, la borner n'aurait pas de sens.
+     *
+     * <p>232 sur 387 en base réelle. Ce compteur existe pour que le trou d'assiette soit
+     * affichable plutôt que subi : sans lui, « 4 ventes en 2026 » se lit comme un effondrement.
+     */
+    @Query("SELECT COUNT(f) FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate IS NULL AND (soc.isActive = true OR soc.id IS NULL)")
+    long compterDossiersSansDateAvance();
+
+    /** Variante de {@link #compterDossiersSansDateAvance()} restreinte au périmètre. */
+    @Query("SELECT COUNT(f) FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate IS NULL "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) AND (soc.isActive = true OR soc.id IS NULL)")
+    long compterDossiersSansDateAvanceDansPerimetre(List<UUID> projetIds);
 }

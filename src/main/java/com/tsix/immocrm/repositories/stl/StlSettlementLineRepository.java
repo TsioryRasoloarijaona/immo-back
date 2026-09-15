@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 public interface StlSettlementLineRepository extends JpaRepository<StlSettlementLine, UUID> {
 
@@ -116,4 +117,84 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
             + "WHERE l.stlSettlement.id = :settlementId "
             + "ORDER BY l.amount ASC")
     List<StlSettlementLine> findAffectationsBySettlementId(UUID settlementId);
+
+    /**
+     * Bloc B de {@code GET /api/dashboard/annuel} — ce qui a déjà été réglé sur les ventes
+     * concrétisées de l'année. Rend {@code null} quand rien n'a été réglé.
+     *
+     * <p>Le montant est <b>signé</b> par le sens de la catégorie, comme la sous-requête corrélée
+     * du légataire : une catégorie qui n'est pas au crédit compte en négatif. Seuls l'avance, le
+     * crédit et l'autofinancement entrent — pas les frais.
+     */
+    @Query("SELECT SUM(CASE WHEN cat.isCredit = true THEN l.amount ELSE -l.amount END) "
+            + "FROM StlSettlementLine l JOIN l.comDocument d JOIN d.comSettlementCategory cat "
+            + "JOIN d.comFolder f JOIN f.strStatus s JOIN l.stlSettlement st "
+            + "JOIN st.stlSettlementType sty "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleAdvance = true OR cat.isSaleCredit = true OR cat.isSaleAutoFinancment = true) "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
+    BigDecimal montantReglePourVentes(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                      List<String> sorties);
+
+    /** Variante de {@link #montantReglePourVentes} restreinte au périmètre. */
+    @Query("SELECT SUM(CASE WHEN cat.isCredit = true THEN l.amount ELSE -l.amount END) "
+            + "FROM StlSettlementLine l JOIN l.comDocument d JOIN d.comSettlementCategory cat "
+            + "JOIN d.comFolder f JOIN f.strStatus s JOIN l.stlSettlement st "
+            + "JOIN st.stlSettlementType sty "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleAdvance = true OR cat.isSaleCredit = true OR cat.isSaleAutoFinancment = true) "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) AND (soc.isActive = true OR soc.id IS NULL)")
+    BigDecimal montantReglePourVentesDansPerimetre(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                                    List<String> sorties, List<UUID> projetIds);
+
+    /**
+     * Bloc C de {@code GET /api/dashboard/annuel} — les encaissements de l'année.
+     * Tuple : [nombre de lignes, somme].
+     *
+     * <p>L'année est celle de la <b>date de règlement si le règlement est pointé, de l'échéance
+     * sinon</b> : {@code SettlementDate} n'est renseignée que sur les pointés (14 lignes réelles
+     * sur 3 244), le reste tombe sur {@code EcheanceDate}.
+     *
+     * <p><b>Une jointure du légataire est volontairement absente.</b> Sa requête joint
+     * {@code StkItem ON ComFolder.PKey = StkItem.ComFolderId} avec {@code IsUnderItem = 0}. Cette
+     * jointure ne change rien aujourd'hui — mesuré : 82 lignes et 7 623 785 DH avec comme sans —
+     * mais elle <em>double</em> les lignes des 3 dossiers portant deux articles principaux et
+     * <em>exclut</em> les 37 qui n'en portent aucun. La reprendre importerait une
+     * double-comptabilisation latente pour zéro gain.
+     */
+    @Query("SELECT COUNT(l), SUM(l.amount) "
+            + "FROM StlSettlementLine l JOIN l.stlSettlement st JOIN st.stlSettlementType sty "
+            + "JOIN l.comDocument d JOIN d.comSettlementCategory cat JOIN d.comFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE st.isCredit = true "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleExpense IS NULL OR cat.isSaleExpense = false) "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) >= :debut "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) < :fin "
+            + "AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> encaissementsDeLAnnee(LocalDateTime debut, LocalDateTime fin);
+
+    /** Variante de {@link #encaissementsDeLAnnee} restreinte au périmètre — même tuple. */
+    @Query("SELECT COUNT(l), SUM(l.amount) "
+            + "FROM StlSettlementLine l JOIN l.stlSettlement st JOIN st.stlSettlementType sty "
+            + "JOIN l.comDocument d JOIN d.comSettlementCategory cat JOIN d.comFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE st.isCredit = true "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleExpense IS NULL OR cat.isSaleExpense = false) "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) >= :debut "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) < :fin "
+            + "AND (pr.id IN :projetIds OR pr.id IS NULL) AND (soc.isActive = true OR soc.id IS NULL)")
+    List<Object[]> encaissementsDeLAnneeDansPerimetre(LocalDateTime debut, LocalDateTime fin,
+                                                       List<UUID> projetIds);
 }
