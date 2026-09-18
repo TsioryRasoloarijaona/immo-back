@@ -73,19 +73,45 @@ LECTURES   →  la copie locale du backend
 comportement d'avant la feature. C'est ce qui permet aux 890 tests de passer sans modification —
 la suite n'a pas de seconde base.
 
-## Vérifié / non vérifié
+## Vérifié de bout en bout
+
+Contre la paire locale `yesRems` (source) / `yesRemsProd` (copie), par `POST /api/prospects`
+authentifié :
 
 | | |
 |---|---|
-| ✅ 890 tests verts en mono-base, suite inchangée | |
-| ✅ Routage en lecture | transaction `readOnly` → `Routage -> LECTURE`, ouverture du pool `hikari-lecture`, sessions créées sur la copie |
-| ✅ Routage hors transaction | 8 décisions au démarrage, toutes `ECRITURE` |
-| ⚠️ **Écriture métier de bout en bout** | **non vérifiée** — demande un appel authentifié |
-| ⚠️ **Rapatriement immédiat** | **non vérifié** — même raison |
+| ✅ Suite inchangée en mono-base | 890 tests verts |
+| ✅ Routage en lecture | `Routage -> LECTURE`, ouverture du pool `hikari-lecture`, sessions sur la copie |
+| ✅ **Le numéro vient de la source** | code `26/14434` — suivant du compteur **source** (14433), pas de celui de la copie (14503) |
+| ✅ **Le compteur n'avance que d'un côté** | source 14434, copie **14503 inchangée** |
+| ✅ **Rapatriement immédiat** | la ligne est dans la copie sans attendre de synchronisation |
 
-Les deux derniers points se vérifient d'un `POST /api/prospects` avec un compte valide :
-le compteur `Tier` ne doit avancer que côté source, et la ligne doit apparaître dans la copie
-sans attendre la synchronisation périodique.
+### Trois défauts que seule cette vérification a révélés
+
+1. **401 sur toute requête authentifiée.** `JwtAuthenticationFilter` interroge la base à chaque
+   requête, or un filtre ne porte pas de transaction — et la transactionnalité par défaut de
+   Spring Data ne couvre <b>pas</b> les requêtes dérivées. La lecture partait donc sur la source
+   pendant que la connexion lisait la copie. Corrigé par `@Transactional(readOnly = true)` sur
+   `AppUserCredentialRepository#findByAdmUserId`.
+2. **Le rapatriement ne partait jamais.** Le vidage de session d'Hibernate a lieu *dans*
+   `doCommit()`, donc après les `beforeCommit` de Spring : la publication y voyait une collecte
+   vide. Déplacée dans `afterCommit`, ce qui interdit du même coup un
+   `@TransactionalEventListener` — voir le javadoc de `RemonteeLectureListener`.
+3. **`AdmSequence` était collectée pour rapatriement.** Recopier le compteur dans la copie y
+   réinstallerait exactement la divergence que cette feature supprime. Exclusion explicite dans
+   `CollecteurLignesEcrites`.
+
+### Données de test à retirer
+
+Trois prospects créés dans `yesRems` par la vérification :
+
+```sql
+DELETE FROM dbo.CfgTier WHERE LastName = 'A-SUPPRIMER';
+-- 26/14432 VERIF-ROUTAGE · 26/14433 VERIF-REMONTEE · 26/14434 VERIF-REMONTEE-2
+```
+
+Le compteur `Tier` de `yesRems` est passé de 14431 à 14434 et ne redescend pas — sans
+conséquence, la série tolère les trous.
 
 ## Impact front
 

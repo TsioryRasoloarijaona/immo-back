@@ -57,6 +57,16 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
             "ComActionMessage", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile");
 
+    /**
+     * Tables que le rapatriement ne doit <b>jamais</b> toucher.
+     *
+     * <p>{@code AdmSequence} porte les compteurs de numérotation. Toute cette architecture existe
+     * pour qu'un <b>seul</b> compteur serve — le recopier dans la copie y réinstallerait la
+     * divergence qu'on vient d'éteindre. Elle est bien écrite à chaque création (Hibernate la
+     * collecte, c'est mesuré), d'où cette exclusion explicite plutôt qu'implicite.
+     */
+    private static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
+
     /** {@code @Table(name = ...)} par classe d'entité — résolu une fois, relu souvent. */
     private static final Map<Class<?>, String> TABLES = new ConcurrentHashMap<>();
 
@@ -85,7 +95,7 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
             return;
         }
         String table = tableDe(entite.getClass());
-        if (table == null) {
+        if (table == null || JAMAIS_RAPATRIEES.contains(table)) {
             return;
         }
 
@@ -101,6 +111,7 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
             TransactionSynchronizationManager.registerSynchronization(new Publication());
         }
         collecte.add(new LigneEcrite(table, pkey));
+        log.debug("Collecte : {} {}", table, pkey);
     }
 
     private static String tableDe(Class<?> classe) {
@@ -127,22 +138,32 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
     }
 
     /**
-     * Publie la collecte avant la validation, et nettoie la variable de fil quoi qu'il advienne.
+     * Publie la collecte une fois la validation acquise, et nettoie la variable de fil quoi
+     * qu'il advienne.
      *
-     * <p>Publier dans {@code beforeCommit} plutôt que dans {@code afterCommit} permet à
-     * l'écouteur d'être un {@code @TransactionalEventListener(AFTER_COMMIT)} ordinaire — le
-     * motif déjà employé par {@code mail/EmailVisiteListener}. Une transaction annulée ne
-     * déclenche alors rien, ce qui est exactement voulu : sa ligne n'existe nulle part.
+     * <p><b>Pourquoi {@code afterCommit} et non {@code beforeCommit}</b>, contrairement au motif
+     * employé ailleurs dans le dépôt : le vidage de session d'Hibernate — celui qui déclenche
+     * {@code POST_INSERT} — a lieu à l'intérieur de {@code doCommit()}, donc <b>après</b> que
+     * Spring a déjà déroulé tous les {@code beforeCommit}. Publier là serait publier une
+     * collecte vide, et la synchronisation enregistrée au premier {@code POST_INSERT} arriverait
+     * de toute façon trop tard pour recevoir ce rappel. Mesuré : la collecte fonctionnait, la
+     * publication ne partait jamais.
+     *
+     * <p>Corollaire : l'écouteur ne peut pas être un
+     * {@code @TransactionalEventListener(AFTER_COMMIT)} — enregistré à ce stade, il ne serait
+     * pas appelé non plus. C'est un {@code @EventListener} ordinaire, et la garantie
+     * « seulement si la transaction a été validée » vient de ce rappel-ci, pas de l'annotation.
      */
     private final class Publication implements TransactionSynchronization {
 
         @Override
-        public void beforeCommit(boolean readOnly) {
+        public void afterCommit() {
             List<LigneEcrite> lignes = new ArrayList<>(collecteCourante());
             if (lignes.isEmpty()) {
                 return;
             }
             lignes.sort(Comparator.comparingInt(Publication::rang));
+            log.debug("Publication de {} ligne(s) ecrite(s) : {}", lignes.size(), lignes);
             evenements.publishEvent(new EcrituresValidees(List.copyOf(lignes)));
         }
 

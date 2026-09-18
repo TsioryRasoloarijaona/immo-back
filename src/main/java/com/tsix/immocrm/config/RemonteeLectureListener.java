@@ -3,29 +3,33 @@ package com.tsix.immocrm.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Déclenche le rapatriement une fois l'écriture réellement validée sur la source de vérité.
+ * Déclenche le rapatriement une fois l'écriture validée sur la source de vérité.
  *
- * <p>Mêmes deux annotations que {@code mail/EmailVisiteListener}, pour les mêmes raisons :
- * {@code AFTER_COMMIT} pour qu'une transaction annulée ne recopie rien — sa ligne n'existe
- * nulle part — et {@code @Async} pour que la latence de la copie sorte du temps de réponse.
+ * <p>{@code @Async} pour la même raison que {@code mail/EmailVisiteListener} : la latence de la
+ * copie n'a pas à compter dans le temps de réponse de l'utilisateur.
  *
- * <p>Cet écouteur ne contient <b>aucune règle</b> : il ne fait que passer la main à
- * {@link RemonteeLecture}, qu'un futur travail de rattrapage pourra appeler directement. Toute
- * logique posée ici serait une logique que ce rattrapage n'appliquerait pas.
+ * <p><b>Mais un {@code @EventListener} ordinaire, et non un
+ * {@code @TransactionalEventListener(AFTER_COMMIT)}</b> comme ailleurs dans le dépôt. Ce n'est
+ * pas une inattention : {@link CollecteurLignesEcrites} publie déjà depuis le rappel
+ * {@code afterCommit} d'une synchronisation de transaction, parce que les lignes écrites ne sont
+ * connues qu'après le vidage de session d'Hibernate — lequel a lieu <i>dans</i>
+ * {@code doCommit()}, donc après que Spring a déroulé ses {@code beforeCommit}. Un écouteur
+ * transactionnel enregistré à ce moment-là ne serait jamais appelé.
  *
- * <p><b>À savoir pour les tests</b> : un écouteur {@code AFTER_COMMIT} ne se déclenche
- * <b>jamais</b> sous la suite de ce dépôt, qui est {@code @Transactional} donc annulée. La
- * publication de l'événement se vérifie avec {@code @RecordApplicationEvents} ; le rapatriement
- * lui-même s'éprouve en appelant {@link RemonteeLecture} directement.
+ * <p>La garantie « seulement si la transaction a été validée » est donc portée par le point de
+ * publication, pas par l'annotation. Une transaction annulée ne publie rien.
  *
- * <p>Conditionné comme {@link RemonteeLecture}, dont il dépend : en mode mono-base il n'existe
- * pas, et {@code EcrituresValidees} n'est de toute façon jamais publié.
+ * <p>Cet écouteur ne contient <b>aucune règle</b> : il passe la main à {@link RemonteeLecture},
+ * qu'un futur travail de rattrapage pourra appeler directement.
+ *
+ * <p><b>À savoir pour les tests</b> : ce rappel ne se déclenche <b>jamais</b> sous la suite de ce
+ * dépôt, qui est {@code @Transactional} donc annulée — même limite que les écouteurs de
+ * {@code mail/}. Le rapatriement s'éprouve en appelant {@link RemonteeLecture} directement.
  */
 @Component
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -40,7 +44,7 @@ public class RemonteeLectureListener {
     }
 
     @Async("remonteeExecutor")
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @EventListener
     public void surEcrituresValidees(EcrituresValidees evenement) {
         try {
             remonteeLecture.remonter(evenement.lignes());
