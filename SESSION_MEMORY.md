@@ -1,13 +1,20 @@
 # Session Memory
-_Last updated: 2026-09-15T16:20+01:00_
+_Last updated: 2026-09-16T10:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-**Aligner nos endpoints sur ce que fait réellement le logiciel de bureau (OMRAN Estate)**, en
-partant de sa **trace d'audit SQL Server** plutôt que de captures d'écran ou de lectures de vue.
+Deux chantiers parallèles, l'infrastructure ayant pris le pas le 16/09 :
+
+**A — INFRASTRUCTURE (actif).** Remplacer la **redirection de port du routeur**, qui expose
+aujourd'hui `192.168.11.115:1433` à tout internet, par un **VPN NetBird auto-hébergé sur le
+VPS**. Motif déclencheur : l'ancien admin est parti en laissant ce montage, et 6 utilisateurs
+distants en dépendent.
+
+**B — BACKEND (en attente).** Aligner les endpoints sur ce que fait réellement OMRAN Estate,
+via sa trace d'audit SQL Server. Lots G→R mergés, **881 tests verts**.
 
 | Lot | Sujet | État |
 |---|---|---|
@@ -16,63 +23,74 @@ partant de sa **trace d'audit SQL Server** plutôt que de captures d'écran ou d
 | K | Encaissements : `IsCredit=1` + filtre par tranche | mergé (PR #47) |
 | L–M | Encaissements : colonnes, groupement, totaux, menu Σ | mergés (PR #48) |
 | N | Fiche encaissement : affectations + un 500 corrigé | mergés (PR #49/#51) |
-| O | Conformité Java 21 (demande ponctuelle, hors trame OMRAN) | mergé (PR #50) |
-| P | Tableau de bord : relances du jour + leads du jour | mergé (PR #53) |
-| Q | Tableau de bord d'OMRAN porté (`/api/dashboard/annuel`) | mergé (PR #54) |
-| R | Créations prospect/prospection : code + interaction manquants | mergé (PR #55) |
+| O | Conformité Java 21 | mergé (PR #50) |
+| P | Tableau de bord : relances + leads du jour | mergé (PR #53) |
+| Q | Tableau de bord d'OMRAN porté | mergé (PR #54) |
+| R | Créations prospect/prospection : code + interaction | mergé (PR #55) |
+| S | **Filtre par colonne** — demande front consignée, **non commencé** | branche `docs/memoire-et-demande-front` **poussée, PR en attente de merge** |
 
-**881 tests verts.** `main` = `c14c897`, propre, aucune PR en attente.
+⚠️ **Deux PR documentaires attendent la merge de l'utilisateur sur GitHub** :
+`immo-crm` → `docs/memoire-et-demande-front` · `crm-prototype` → `docs/demande-filtre-colonne`.
 
 ---
 
 ## ✅ What Worked
 
-- **Lire la trace d'audit en filtrant sur `application_name`.** C'est LE discriminant : le compte
-  SQL est `tsix` pour tout le monde, **nos propres `sqlcmd` y apparaissent aussi** (vus comme
-  `SQLCMD`, IP du poste, contre `OMRAN estate` en 127.0.0.1). Sans ce filtre on lit ses propres
-  requêtes en croyant lire celles d'Omran — c'est arrivé.
-- **Caler le décalage horaire par une requête-sonde** plutôt que par déduction : lancer une requête
-  horodatée sur `yesRems`, la relire dans l'audit, comparer. Résultat : `event_time` est en **UTC**,
-  heure locale = UTC + 1.
-- **Mesurer la conformité avant de refactorer** (lot O). Demandé comme « huge refactor » ; l'audit a
-  montré 115 DTO sur 115 déjà en `record`, 0 `@Data`, 0 switch ancien style, 0 thread brut. Le
-  livrable honnête était 6 changements, pas une passe massive.
-- **Lire le message du commit de refactor antérieur** (`d20362c`) : il porte les *principes* du
-  dépôt, introuvables ailleurs, et sa section « Hors perimetre volontaire » vaut contrat.
-- **Vérifier qu'une table existe dans `yesRemsTest` AVANT de la mapper.** A évité de mapper
-  `AdmParamsGuid` (absente) : une table absente ne se règle pas par une fixture, contrairement à une
-  ligne non semée. Le seuil a été résolu autrement, sans toucher au schéma CI.
-- **Compter avant de conclure, même sur une jointure qui « ne change rien ».** La jointure `StkItem`
-  du bloc C d'OMRAN rend les mêmes 82 lignes avec ou sans — mais elle **double** les 3 dossiers à
-  deux articles principaux et **exclut** les 37 sans article. Retirée.
-- **Tester les hypothèses séduisantes.** « Une interaction plus récente périme la relance
-  précédente » : faux, mesuré (3 701 des 3 765 relances armées sont portées par la dernière
-  interaction). Deux minutes de SQL contre une conception fausse.
-- **Dater les fixtures de test d'une année dédiée (2077)** plutôt que mesurer des deltas : la base de
-  test est partagée entre classes, une année à nous permet d'asserter des valeurs **exactes**. Un
-  test qui dit « le total vaut 300 000 » attrape une double-comptabilisation ; « le total a
-  augmenté » ne l'attrape pas.
-- **Écrire les retouches de source en Python depuis un fichier**, avec `assert old in s` avant chaque
-  `replace`. L'assertion transforme un motif introuvable en échec immédiat.
+### Session du 16/09 (infrastructure)
+
+- **Mesurer avant de recommander, systématiquement.** Chaque affirmation de cette session a
+  été vérifiée par requête : édition SQL, tailles, latences disque, ports d'écoute, divergence
+  entre bases. Trois recommandations ont changé après mesure.
+- **Aller chercher la doc officielle plutôt que d'écrire de mémoire.** `WebFetch` sur
+  `docs.netbird.io` a corrigé trois erreurs que j'aurais livrées : le proxy embarqué de NetBird
+  est **Traefik** (pas Caddy), l'installeur propose une option **« External Caddy »** toute
+  faite, et **la plage de ports TURN n'existe plus** (WebSocket/QUIC via 443, seul 3478/udp
+  reste requis).
+- **`sys.dm_io_virtual_file_stats` pour diagnostiquer une lenteur** plutôt que supposer. C'est
+  elle qui a désigné le disque de 115, chiffres à l'appui.
+- **`sys.dm_tcp_listener_states`** pour savoir si SQL Server acceptera une interface future :
+  il écoute sur `0.0.0.0:1433`, donc le VPN ne demandera **aucune reconfiguration SQL**.
+- **Anti-jointure sur `PKey` plutôt que filigrane d'horloge** pour la synchro (conception
+  retenue, non implémentée) : exacte, insensible à la dérive d'horloge et à l'ordre de
+  validation, **idempotente et auto-réparante**.
+
+### Sessions précédentes (backend) — toujours valable
+
+- **Lire la trace d'audit en filtrant sur `application_name = 'OMRAN estate'`.** Le compte SQL
+  est `tsix` pour tout le monde et **nos propres `sqlcmd` y apparaissent aussi**.
+- **Caler le décalage horaire par une requête-sonde** : `event_time` est en **UTC**, local = +1.
+- **Vérifier qu'une table existe dans `yesRemsTest` AVANT de la mapper.**
+- **Compter avant de conclure, même sur une jointure qui « ne change rien ».**
+- **Dater les fixtures de test d'une année dédiée (2077)** pour asserter des valeurs exactes.
+- **Écrire les retouches de source en Python depuis un fichier**, avec `assert old in s`.
 
 ---
 
 ## ❌ What Failed
 
-- **Les heredocs Bash portant un document long** (accents, guillemets français, backticks) cassent
-  en `unexpected EOF`. Confirmé 3 fois cette session. → outil d'écriture dédié, ou script Python
-  dans un fichier.
-- **`sqlcmd` ne comprend pas les chemins MSYS** (`/c/Users/...`) → `cygpath -w` pour `-i` et `-o`.
-- **`sqlcmd` : `-W` et `-y` sont exclusifs**, et **`-h` et `-y 0` aussi** (nouveau).
-- **Un script Python qui écrit le fichier en fin de course** ne persiste rien s'il échoue en
-  chemin — ce qui est heureux, mais il faut le savoir avant de diagnostiquer un état à moitié appliqué.
-- **Convertir en `Optional` un parseur dont l'unique appelant déballe en `.orElse(null)`** →
-  recrée le motif que `d20362c` avait supprimé sur 49 sites. Reverti (`MarqueurTriProspection`).
+### Session du 16/09
+
+- **Avoir annoncé un mur imminent sur la limite des 10 Go d'Express** → **faux**. Les données
+  **FILESTREAM ne comptent pas** dans cette limite : 115 est à 1 718 Mo sur 10 Go (17 %), avec
+  8 248 Mo de FILESTREAM à côté. Corrigé après mesure — mais la recommandation d'achat en
+  dépendait.
+- **Avoir mal lu la correspondance des bases**, deux tours de suite. L'utilisateur a dû répéter
+  quatre fois. Leçon : quand une clarification est répétée à l'identique, **relire la précédente
+  réponse plutôt que d'en produire une nouvelle**.
+- **Avoir présumé un flux de synchronisation depuis la trace d'audit** → elle ne porte **aucune
+  valeur** (318/318 `INSERT` en `@P1…@Pn`) et trace la base **locale**, pas 115.
+- **`sqlcmd`** : `-W` et `-y` exclusifs (reconfirmé), colonnes inventées (`is_change_tracking_on`
+  n'existe pas dans `sys.databases` ; `AdmSequence` n'a ni `LastValue`, ni `Prefix`, ni `Suffix`).
+
+### Sessions précédentes — toujours valable
+
+- **Les heredocs Bash portant un document long** (accents, guillemets français, backticks)
+  cassent en `unexpected EOF`. → outil `Write`, ou script Python dans un fichier.
+- **`sqlcmd` ne comprend pas les chemins MSYS** → `cygpath -w` pour `-i` et `-o`.
 - **`COUNT(colonne)` pour juger une colonne utile** → compte les non-nuls.
 - **`SUM(expression contenant une sous-requête)`** → SQL Server, erreur 130.
-- **`cb.coalesce(cb.sum(x), ZERO)` / `COALESCE(SUM(x), 0)`** → arrondit l'argent à l'unité.
-  Substituer en Java, en `BigDecimal`.
-- **Pousser la mémoire de session APRÈS la merge de sa PR** → commit orphelin (arrivé à `55997f6`).
+- **`COALESCE(SUM(x), 0)`** → arrondit l'argent à l'unité. Substituer en Java, en `BigDecimal`.
+- **Pousser la mémoire de session APRÈS la merge de sa PR** → commit orphelin.
 
 ---
 
@@ -80,254 +98,229 @@ partant de sa **trace d'audit SQL Server** plutôt que de captures d'écran ou d
 
 | # | Erreur / Bug | Statut | Correctif |
 |---|---|---|---|
-| 1–11 | (lots G–K : dérive `yesRemsTest`, arrondi monétaire, routes `/groupes`, `@Formula` en test, `GROUP BY` + sous-requête, `clearAutomatically`, `TransientPropertyValue`, `IsSystem` non posé, prospection non fermée, `StrHistory`, décaissement) | **Fixed** | voir PR #43–#47 |
-| 12 | 500 sur `GET /api/encaissements/{id}` — `ObjectNotFoundException` | **Fixed** | Sous-select en `LEFT JOIN` depuis `StlSettlement` |
-| 13 | Mémoire de session orpheline sur une branche post-merge | **Fixed** | PR #51/#52 |
-| 14 | **Prospect créé sans `Code`** par l'API (12 anomalies sur 13 913 réels) | **Fixed** | `GenerateurCodeSequence` sur `AdmSequence.Code='Tier'` (PR #55) |
-| 15 | **Prospection créée sans aucune interaction** — dernier échange, délai de prise en charge et KPI faussés dès la naissance | **Fixed** | `ecrireInteractionDeCreation` (PR #55) |
+| 1–13 | (lots G–N : dérive `yesRemsTest`, arrondi monétaire, `@Formula` en test, `GROUP BY` + sous-requête, `TransientPropertyValue`, 500 sur la fiche encaissement, mémoire orpheline…) | **Fixed** | PR #43–#52 |
+| 14 | Prospect créé sans `Code` par l'API | **Fixed** | `GenerateurCodeSequence` (PR #55) |
+| 15 | Prospection créée sans aucune interaction | **Fixed** | `ecrireInteractionDeCreation` (PR #55) |
+| 16 | **`192.168.11.115:1433` exposé à internet** par redirection totale du routeur | **Ouvert — chantier en cours** | VPN NetBird, voir `../infra/NETBIRD-VPS.md` |
+| 17 | **Écriture disque à 100 ms sur 115** (lecture 5,5 ms) — disque mécanique | **Ouvert — non traité** | décision prise de **garder 115 tel quel** |
 
-**Aucun bug ouvert.** Ce qui reste est **bloqué sur décision produit**.
+**Aucun bug applicatif ouvert.** Le reste est bloqué sur décision produit.
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### La trace d'audit : la lire sans se tromper de client
+### ⚠️ Le parc réel, mesuré le 16/09
 
-`sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)` depuis `master`, compte `tsix`.
-Scopée sur `yesRems`. **Vivante** : l'utilisateur peut rejouer un écran à la demande, et l'a fait
-plusieurs fois cette session.
+| Machine | Ce qu'elle est |
+|---|---|
+| **`192.168.11.115`** (`DESKTOP-7ESOL53\SQLEXPRESS`) | **la production vivante du client**, lecture seule stricte. Compte `sasa` — mot de passe fourni en session, **non consigné ici** |
+| **VPS** | Contabo, Ubuntu, **Caddy en service système** (pas en conteneur), backend `immo-crm` + MinIO (`s3.tsiory.tech`), base `yesRemsDev` |
+| **`localhost,49687`** | `yesRems` (OMRAN local + tracé par l'audit), `yesRemsProd` (mesure), `yesRemsCiCheck`, `yesRemsTest` |
 
-- **Filtrer sur `application_name = 'OMRAN estate'`** — sinon on lit ses propres `sqlcmd`.
-- **`event_time` est en UTC**, local = UTC + 1 (vérifié par sonde, pas déduit).
-- Tronque à 4 000 caractères, masque les valeurs (`@P1…@Pn`).
-- **Un `SELECT vue.*` ne dit rien de l'affichage** ; le groupement et les totaux d'Omran sont
-  calculés **côté client** (grille DevExpress).
-- **Un `INSERT` ne dit rien des données obligatoires** : l'ORM écrit toutes les colonnes de
-  l'entité, renseignées ou non. L'obligation vit dans les `SELECT` qui le précèdent.
+### 115 — la fiche technique complète
+
+```
+Édition      : SQL Server 2019 Express, RTM (15.0.2000.5) — jamais mis à jour
+Matériel     : 2 cœurs, 8 Go de RAM  (jamais éteint)
+Données      : ROWS 1 718 Mo (1 352 Mo utilisés) · FILESTREAM 8 248 Mo · LOG 121 Mo
+Disque       : lecture 5,5 ms / écriture 100,1 ms  → signature d'un disque mécanique
+Écoute       : 0.0.0.0:1433 et [::]:1433, port fixe
+```
+
+**Trois conséquences non déductibles du code :**
+
+1. **Les données FILESTREAM ne comptent PAS dans la limite des 10 Go d'Express.** 115 est à
+   17 % du plafond, pas au bord. Ne pas refaire l'erreur inverse.
+2. **La lenteur vient du disque, pas de l'édition ni du volume.** Donc **acheter SQL Server
+   Standard ne réglerait rien**, et un VPS à 24 Go de RAM non plus — Express plafonne son cache
+   à ~1,4 Go quelle que soit la machine. Le jeu de données utilisé (1 352 Mo) est **à 96 % de
+   ce plafond**.
+3. **SQL Server écoute sur toutes les interfaces** → il acceptera l'interface VPN
+   automatiquement, **sans aucune reconfiguration**.
+
+### OMRAN : comment il se connecte (déterminant pour le VPN)
+
+Configuration en **IP + utilisateur + mot de passe + nom de base**. Donc :
+
+- connexion **par IP**, pas par nom d'instance → **SQL Browser (UDP 1434) jamais sollicité**,
+  seul TCP 1433 est à ouvrir ;
+- **authentification SQL**, pas Windows → **aucune dépendance à un contrôleur de domaine**,
+  ce qui aurait été le point dur d'un accès Kerberos à travers un VPN ;
+- migrer un poste = **remplacer un champ**.
+
+Reste à vérifier sur le premier poste : ce champ accepte-t-il un **nom d'hôte** ou strictement
+une **IP** ? Si IP seulement, la réservation d'adresse VPN fixe pour 115 devient obligatoire.
+
+### La décision d'architecture du 16/09, et pourquoi
+
+Le parcours a tourné avant de se poser — le noter pour ne pas le refaire :
+
+1. *Synchroniser deux bases* → étudié en détail, **conception arrêtée mais non construite** ;
+2. *Base unique, backend joignant 115* → écarté : **l'utilisateur ne veut pas que le backend
+   dépende de 115** (lenteur, fichiers en binaire) ;
+3. *Déménager OMRAN sur le VPS* → écarté : latence Maroc→Europe sur un client lourd bavard,
+   et responsabilité de la production du client ;
+4. **Retenu : garder 115 tel quel, et ne faire que le VPN.**
+
+**Le VPN est donc le seul chantier d'infrastructure actif.** La synchro est *parquée*, pas
+abandonnée.
+
+### Conception de synchro arrêtée (si elle repart un jour)
+
+- **`PKey` est un `uniqueidentifier` partout** → deux bases qui insèrent ne peuvent pas
+  produire la même identité. Insertions seules + UUID = **aucun conflit possible**.
+- **Détection** : filigrane `UserCreateDateTime` pour *restreindre* (posé à ~100 % : 17 938/17 939,
+  14 515/14 516, 48 163/48 163, 358/358, 3 243/3 243 — **y compris sur les lignes `n8n`, qui
+  n'ont pourtant pas de `UserCreate`**), puis **anti-jointure `PKey` pour décider**.
+- **`AdmWebHistorics` est inutilisable seul** : 564 653 lignes, mais **0 des 12 prospections
+  créées en août** y ont une ligne `Added`. Il ne voit pas les injections automatisées.
+- ⚠️ **`AdmSequence` est LE danger irréversible.** Compteurs `Tier` 14 503, `Prospection` 5 949,
+  `Dossier de vente` 379 ; **aucun index unique sur `Code`** (les 8 index trouvés sont des
+  artefacts `_dta_index_*`, tous `is_unique = 0`) ; **6 doublons existent déjà sur `CfgTier`,
+  49 sur `ComProspection`**. À partitionner par préfixe **avant** toute insertion croisée.
+- **Fermeture FK des 5 tables métier = 118 tables** (sur 1 219 FK). Le référentiel `Cfg*`/`Adm*`/
+  `Str*` s'aligne une fois, seul le transactionnel circule.
+- **`ComFolder` porte 2 déclencheurs actifs** (`trgAfterComFolderInsert`/`Update`) — à lire
+  avant de l'inclure.
+- Divergence locale mesurée (`yesRems` → `yesRemsProd`) : ComProspection 8/267, CfgTier 30/107,
+  ComActionMessage 33/208, ComFolder 31/2. Schéma **identique**, 0 colonne divergente.
+- **Les pièces jointes sont le point dur** : binaire sur 115, S3 sur le VPS.
+  `migration/migrate_blobs_to_s3.py` deviendrait un composant **permanent**, pas ponctuel.
+
+### La trace d'audit : ce qu'elle est et n'est pas
+
+`sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)` depuis `master`.
+
+**Elle sert à savoir quelles colonnes un écran d'OMRAN cible** — rien d'autre. Elle **ne peut
+pas** servir de flux de synchronisation : **318 `INSERT` sur 318 sont en `@P1…@Pn`**, sans
+aucune valeur, et elle trace le `yesRems` **local**, pas 115.
+
+- Filtrer sur `application_name = 'OMRAN estate'` — sinon on lit ses propres `sqlcmd`.
+- `event_time` en **UTC**, local = +1. Tronque à 4 000 caractères.
+- Spec `Audit_DML_DDL_Spec`, tous principaux, SELECT/INSERT/UPDATE/DELETE.
+- ⚠️ **Si un agent écrit un jour dans `yesRems`, lui donner son propre `Application Name`**
+  pour qu'il se retire de ces lectures.
 
 ### La doctrine `Optional` du dépôt (posée par `d20362c`)
 
 > « Un `Optional` exprime l'absence dans un **type de retour**, pas dans une **expression
-> intermédiaire**. »
-
-**Test avant toute conversion : un appelant déballe-t-il vers `null` ?** Si oui, laisser le `null`.
-`utils/Champs.de` est l'idiome maison pour *naviguer* un graphe nullable (~220 sites) — ce n'est pas
-la même chose qu'un parseur.
+> intermédiaire**. » **Test : un appelant déballe-t-il vers `null` ?** Si oui, laisser le `null`.
 
 ### Ce qui ne doit PAS être refactoré
 
-Entités JPA (pas de `record` possible, `@Getter @Setter` imposés) · `requireNonNull` sur les
-constructeurs injectés (Spring échoue déjà au démarrage) · `CompletableFuture`/threads virtuels
-(aucun éventail d'E/S ; le mail est déjà `@Async` sur un pool géré) · le `ThreadLocal` de
-`web/ColonnesSelection` (délibéré, Jackson 3 vs `MappingJacksonValue` typé Jackson 2, nettoyé en
-`finally`).
+Entités JPA · `requireNonNull` sur les constructeurs injectés · `CompletableFuture`/threads
+virtuels · le `ThreadLocal` de `web/ColonnesSelection`.
 
 ### `IsSystem` : deux conventions opposées, toutes deux justes
 
-`ComSaleProspectionView` calcule le dernier échange avec `AND IsSystem = 0`.
+Interaction **saisie** → `IsSystem = 0`. Interaction **de création de prospection** →
+`IsSystem = 1`, `WithoutRevival = 1`, exclue du dernier échange par `ComSaleProspectionView`.
+**Ne pas « harmoniser ».**
 
-- **Interaction saisie** (`creerInteraction`) → `IsSystem = 0`, `WithoutRevival = 0`. C'est un
-  échange, il compte.
-- **Interaction de création de prospection** (`ecrireInteractionDeCreation`) → `IsSystem = 1`,
-  `WithoutRevival = 1`, pas d'échéance, `AlertMessage` = les notes. Créer une prospection n'est pas
-  un échange : OMRAN l'exclut volontairement, mesuré sur ses 2 634 interactions de création.
+### Autres règles backend acquises
 
-Ne pas « harmoniser » les deux.
-
-### Numérotation : un seul générateur, et on incrémente la ligne d'OMRAN
-
-`services/sequence/GenerateurCodeSequence` sert les trois : `Tier` (`26/14431`), `Prospection`
-(`26/05935`), `Dossier de vente` (`APF 2026/00380`, préfixe projet à la charge de l'appelant).
-**C'est la même ligne `AdmSequence` que le logiciel de bureau incrémente** — un compteur parallèle
-produirait des collisions, les deux applications écrivant dans `yesRems`.
-
-### Le schéma légataire n'impose presque rien
-
-`CfgTier`, `ComProspection`, `ComActionMessage` : **la seule colonne `NOT NULL` est `PKey`**. Toute
-obligation est applicative. Les contrôles d'OMRAN à la création (non implémentés, voir backlog) :
-SOUNDEX sur prénom+nom, unicité (nom+prénom+mobile) et (+email), une seule prospection ouverte par
-couple prospect/tranche.
-
-### `BoolField002`/`BoolField003` == `StatutDossier.isSortie()`
-
-Vérifié sur les 13 statuts de l'entité de config du dossier (`E7C73F70-…`) : `BoolField002=1`
-seulement sur ANNULATION, `BoolField003=1` seulement sur DESISTEMENT. **Rien à mapper.** Les
-`CLÔTURE` qui portent le drapeau relèvent d'autres modules — d'où l'importance de filtrer sur
-`StrConfigEntityId` avant de conclure.
-
-### Le tableau de bord d'OMRAN (lot Q)
-
-Trois blocs, sept requêtes. **Les tables de prévision sont vides des deux côtés** (`CfgPrevision`,
-`ComPrevision`, `ComPrevisionVersion` = 0) — non mappées. La courbe restante somme
-`ComDocument.Amount`, c'est-à-dire **l'échéancier, pas l'encaissé** : des mois futurs y figurent.
-`ventesConcretisees` s'indexe sur `AdvanceDate`, que **232 des 387 dossiers n'ont pas** → compteur
-`dossiersSansDateAvance`.
-
-La requête légataire écrit `(… OR IsSaleExpense=1) AND IsSaleExpense=0` — deux clauses qui
-s'annulent. **Écrire l'intention (« frais exclus »), pas le bug.**
-
-### Les règles de groupabilité / agrégeabilité
-
-1. Un chemin traversant une association **to-many** n'est jamais groupable (brise « somme des
-   effectifs = `totalElements` »).
-2. Un **`nvarchar(max)`** n'est pas groupable (`COUNT(DISTINCT)` le refuse).
-3. Une valeur calculée doit être **portée par la base** — `@Formula` si arithmétique sur la même
-   ligne, **pré-agrégation `@Subselect` joignable** si un terme est une somme (erreur 130).
-4. Les fonctions autorisées se déduisent du `Chemin` (`FonctionAgregat.pour`).
-
-### Le piège des colonnes « pleines »
-
-`Group1Label/2/3` à 0/643 · `Category`/`ItemNumber`/`ItemDescription` à 643/643 mais **une seule
-valeur distincte** · `AmountRS`/`AmountStamp` non nulles mais toujours à zéro. → **Mesurer distinct
-et non-zéro, jamais `COUNT(colonne)`.**
-
-### `@Formula` et `@Subselect` ne sont peuplés qu'au chargement
-
-Un test transactionnel reçoit l'instance gérée, champs nuls. Remède : `flush` + `clear` avant
-l'appel HTTP. Sans effet en production.
-
-### ⚠️ Quatre bases locales, et `yesRemsTest` dérive
-
-| Base | Rôle |
-|---|---|
-| `yesRems` | celle qu'Omran utilise — c'est elle que l'audit trace |
-| `yesRemsProd` | restauration légataire, celle qui sert à mesurer (prescrite par `CLAUDE.md`) |
-| `yesRemsCiCheck` | bâtie depuis `ci/schema/*.sql` |
-| `yesRemsTest` | **le défaut** de `src/test/resources/application.properties` |
-
-**Absentes de `yesRemsTest`** : `StlSettlementView`, `StlSettlementAmountAffectedView`,
-`StlSettlementHistory`, `StlDeduction`, **`AdmParamsGuid`**. Et **0 statut de dossier semé** — les
-tests fabriquent leurs `StrStatus`.
-
-`ci/schema/010_tables.sql` est **généré**, sa graine étant « les tables mappées par une entité JPA ».
-Mapper une table neuve oblige donc à toucher le schéma CI **et** la base de test locale.
-
-### Conventions de commit
-
-Sujets et corps **en ASCII pur, sans accents** — vérifié sur tout l'historique. Préfixes français
-`feat(scope):` / `fix(scope):` / `docs(scope):` / `refactor(scope):`. Corps détaillé, souvent avec
-une section **« Hors perimetre volontaire »** qui vaut contrat. Trailers `Co-Authored-By:` et
-`Claude-Session:`.
+- **Numérotation** : `services/sequence/GenerateurCodeSequence` sert `Tier`, `Prospection` et
+  `Dossier de vente`, et incrémente **la même ligne `AdmSequence` que le logiciel de bureau**.
+- **`BoolField002`/`BoolField003` == `StatutDossier.isSortie()`** — rien à mapper.
+- **Groupabilité** : pas de chemin to-many, pas de `nvarchar(max)`, valeur calculée portée par
+  la base (`@Formula` ou `@Subselect` joignable).
+- **Piège des colonnes « pleines »** : mesurer **distinct et non-zéro**, jamais `COUNT(colonne)`.
+- **`@Formula`/`@Subselect` ne sont peuplés qu'au chargement** → `flush` + `clear` en test.
+- **Commits en ASCII pur, sans accents.** Préfixes `feat(scope):` / `fix(scope):` / `docs(scope):`.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- `instructions/FIX-creation-prospect-prospection.md` — lot R. §2 « seule `PKey` est NOT NULL »,
-  §5 les trois contrôles non implémentés et pourquoi.
-- `instructions/FEATURE-dashboard-omran.md` — lot Q. §2 prévisions vides, §5 pourquoi
-  `AdmParamsGuid` n'est pas mappée.
-- `instructions/FEATURE-dashboard-relances.md` — lot P. §3 le mur des retards, §4 les 108 non
-  affectées.
-- `instructions/FEATURE-affectations-encaissement.md` · `…-colonnes-groupement-encaissements.md` ·
-  `…-encaissements-conformite-legataire.md` — lots L à N.
-- `src/main/java/.../services/sequence/GenerateurCodeSequence.java` — numérotation partagée.
-- `src/main/java/.../domain/{Chemin,FonctionAgregat,Colonnes,Colonne}.java` — contrat de groupement.
-  `Colonne` est **`sealed`** depuis le lot O.
-- `src/main/java/.../services/groupement/GroupementService.java` — moteur des quatre listes.
-- `src/main/java/.../utils/{Champs,Requis,TierNomFormatter}.java` — idiomes maison.
+- **`../infra/NETBIRD-VPS.md`** — **le livrable du 16/09**. Runbook NetBird complet adapté au
+  VPS (Caddy service système, option `[4] External Caddy`), chaque commande et chaque ligne de
+  Caddyfile expliquée. ⚠️ `prototype/` **n'est pas un dépôt git** : ce fichier n'est pas versionné.
+- `instructions/from_front.md` — canal officiel front→backend. **Entrée n° 11 = le filtre par
+  colonne**, priorité annoncée au-dessus du reste.
+- `instructions/FIX-creation-prospect-prospection.md` — §5, les trois contrôles non implémentés.
+- `instructions/FEATURE-dashboard-omran.md` · `…-dashboard-relances.md` · `…-affectations-encaissement.md`
+- `migration/migrate_blobs_to_s3.py` + `README.md` — **le moule maison** pour tout outil de
+  données hors build : Python hors Maven, `.env`, `--verify`, confirmation explicite, log.
+  ⚠️ `tsix` n'a **pas** `CREATE TABLE` sur `yesRems`.
+- `src/main/java/.../services/sequence/GenerateurCodeSequence.java`
+- `src/main/java/.../domain/{Chemin,FonctionAgregat,Colonnes,Colonne}.java` — `Colonne` est `sealed`.
 - `src/main/resources/db/migration/007_ComActionMessage_drapeaux_api.sql` — **à appliquer à la main**.
-- `../FEATURES.md` — index dérivé (33 routes, 169 endpoints). *Où* vit une feature ; la mémoire dit
-  *pourquoi*. ⚠️ Son détecteur « endpoints sans appelant » **invente 16 faux positifs** (défaut de
-  correspondance sur les chemins à paramètres) — signalé par le front, outil à corriger.
+- `../FEATURES.md` — index dérivé. ⚠️ son détecteur « endpoints sans appelant » **invente 16 faux
+  positifs**.
 
 ---
 
 ## 🔧 Environment & Config
 
+- **Mesurer** : `sqlcmd -S localhost,49687 -U tsix -P <voir CLAUDE.md> -d yesRemsProd -C`.
+  Chemins `-i`/`-o` via `cygpath -w`. `-W`/`-y` exclusifs, `-h`/`-y 0` exclusifs.
+- **115** : `sqlcmd -S 192.168.11.115 -U sasa -P <demander à l'utilisateur> -d YesRems -C`.
+  **Lecture seule stricte.**
 - **Audit** : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)` depuis `master`.
-  Filtrer `application_name = 'OMRAN estate'`. `event_time` en UTC (local = +1).
-- **Mesurer** : `sqlcmd -S localhost,49687 -d yesRemsProd -C` (identifiants dans `CLAUDE.md`).
-  Chemins `-i`/`-o` via `cygpath -w`. `-W`/`-y` exclusifs, `-h`/`-y 0` exclusifs. Rediriger vers un
-  fichier plutôt que piper dans `head`.
-- **Tests** : `./mvnw.cmd test` fonctionne nu, ~3 min 30 pour 881 tests. SQL Server doit tourner.
+- **Tests** : `./mvnw.cmd test` nu, ~3 min 30 pour 881 tests. SQL Server doit tourner.
 - **Git** : tout via `node .claude/scripts/git-flow.mjs {status,start,commit,push,sync}` depuis
-  `prototype/`. `guard-branch.mjs` **interdit toute écriture sur `main`** — demander une branche à
-  l'utilisateur avant d'écrire quoi que ce soit, **y compris ce fichier**. Avant `push` :
+  `prototype/`. `guard-branch.mjs` **interdit toute écriture sur `main`**. Avant `push` :
   `feature-index.mjs add <slug>` puis `generate`.
 - ⚠️ Ne jamais réécrire un fichier source via PowerShell (encodage). Heredocs Bash longs → cassent.
-- ⚠️ Identifiants de service en clair au fil des sessions — dette connue.
+- ⚠️ **Identifiants de service en clair au fil des sessions et dans `CLAUDE.md`** — dette connue,
+  non traitée. Le mot de passe de 115 n'est volontairement pas écrit ici.
 
-### État des branches
+### État des branches au 16/09
 
-**`main` = `c14c897`, propre, en phase avec `origin`. Aucune PR en attente.**
-Le front (`crm-prototype`) n'est jamais touché — **tous ces lots sont backend seul**.
+| Repo | Branche | État |
+|---|---|---|
+| `immo-crm` | `docs/memoire-et-demande-front` | 1 commit, **poussée, PR en attente de merge** |
+| `crm-prototype` | `docs/demande-filtre-colonne` | 2 commits, **poussée, PR en attente de merge** |
 
 Branches mergées supprimables : `feat/java-21-conformite`, `feat/affectations-encaissement`,
 `docs/memoire-session-lot-O`, `feat/dashboard-relances`, `feat/dashboard-omran`,
-`fix/creation-prospect-prospection`. Anciennes non mergées : `docs/memoire-de-session`,
-`feat/remise-dossier`, `fix/ci-pollution-doubles-envoi`.
+`fix/creation-prospect-prospection`.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Traiter la demande front du 15/09 : le filtre par colonne.** Le document complet a été fourni
-> en fin de session et **n'est pas encore consigné dans `instructions/from_front.md`** — le faire
-> en premier, c'est le canal officiel front→backend.
+> **Créer l'enregistrement DNS `vpn.tsiory.tech` → IP publique du VPS**, et vérifier sa
+> propagation (`dig +short vpn.tsiory.tech`) avant toute autre chose.
 >
-> Le front l'annonce « au-dessus du reste » et la raison est solide : c'est la seule demande dont
-> l'absence produit un **résultat faux présenté comme complet**, sur les dix listes.
-
-### Ce que la demande contient (résumé fidèle)
-
-1. **`ColonneDto.filtrable` + `operateurs`** — n'existent pas aujourd'hui, vérifié sur les quatre
-   catalogues. Sans eux le front ne peut qu'afficher une case sur toutes les colonnes et découvrir
-   au 400 celles que le serveur refuse.
-2. **`?filtreColonne=col:OPERATEUR:valeur`**, répétable, combiné en ET — même grammaire que
-   `?agregats=prix:AVG` que le front sait déjà composer. Une colonne non filtrable, un opérateur
-   refusé ou une valeur non parsable → **400 nommant la colonne**, jamais un 200 silencieux.
-3. **Opérateurs par type** : TEXTE `CONTIENT|EGAL|COMMENCE_PAR` ; NOMBRE/MONTANT
-   `EGAL|SUP|INF|ENTRE` ; DATE `EGAL|AVANT|APRES|ENTRE` (**valeurs ISO-8601**, la mise en forme
-   reste au front) ; BOOLEEN `EGAL`.
-4. **`CONTIENT`/`EGAL` sur TEXTE insensibles à la casse ET aux accents.** C'est le cœur : la colonne
-   Type des encaissements contient `CHÉQUE` (159, accent aigu fautif du légataire), `CHEQUE SYNDIC`
-   (14), `CHEQUE NOTAIRE` (6)… Taper « cheque » rend **0 ligne** aujourd'hui, « chèque » aussi,
-   alors que **180 sur 332** correspondent. Précédent existant : `GET /api/hotline/recherche`
-   documente déjà « insensible à la casse **et aux accents** ».
-
-### Ce que ça débloque
-
-Le lot de 500 lignes sur `/dossiers` disparaît · groupement et filtre cessent de s'exclure · le
-filtre devient paginable (utilisable sur 9 654 prospections).
+> C'est l'étape 1 de `../infra/NETBIRD-VPS.md` : tout le reste en dépend, et la propagation
+> prend le temps qu'elle prend. Lancer le script d'installation avant que le DNS réponde fait
+> échouer la validation ACME de Caddy, avec des erreurs de certificat qu'on prend à tort pour
+> un problème de configuration.
 
 ### Backlog
 
-- [ ] **Filtre `?statut=` sur `/api/dossiers` par libellé** — demandé depuis le 10/09, remonté en
-      priorité le 11/09. Mesure inchangée : `statut=CONCRETISATION` → 68, `statut=Concrétisation` →
-      **0 en HTTP 200**. Aucune normalisation naïve ne rattrape (« Remise des clés » se code
-      `REMISE DES CLEFS`, « Annulé » → `ANNULATION`). **Vraisemblablement résolu par le filtre par
-      colonne ci-dessus** — vérifier avant de traiter séparément.
-- [ ] **`ModifierProspectionRequest`** — ajouter `tempDescription`, `tempTel`, `tempEmail`,
-      `commercialId` (servis par le GET, non modifiables ; ce sont les 4 champs éditables de
-      l'écran légataire). Rien sur les 8 champs mesurés morts.
-- [ ] **Les 13 nouveaux champs du DTO encaissement n'ont aucune description springdoc** — viole la
-      règle 10 du `CLAUDE.md`. Taux mesurés par le front, pas lus : `bordereauCode` 0/332,
-      `dateRemiseAuCentre` 1/332, `recuCode` 12/332.
-- [ ] **Écart serveur sur `titreFoncier`** : la colonne de liste le sert sur 33/116 dossiers, la
-      fiche ne le porte que 5 fois sur 8 de ces mêmes dossiers. Même donnée, deux chemins, taux
-      différents — à confirmer.
-- [ ] **`CreerReglementRequest.dateReglement`** : le spec la publie, le serveur la refuse (400).
-      Contrat et comportement se contredisent — trancher côté backend.
-- [ ] **Catalogue prospects** : sa description annonce que les drapeaux « pilotent la bande de
-      groupement », or il a 0 groupable et il n'existe pas de `/api/prospects/groupes`. Formulation
-      à corriger, sans conséquence fonctionnelle.
-- [ ] **Les trois contrôles de création d'OMRAN** (SOUNDEX, unicité, prospection ouverte unique) —
-      **décision produit** : bloquant (409, rupture de contrat à annoncer au front) ou consultatif ?
-      Voir `FIX-creation-prospect-prospection.md` §5.
-- [ ] **Alertes de jalon du dossier** — 4 `ComActionMessage` + 4 `AdmAlertData` à la vente. Bloqué
-      sur décision produit : quels jalons, quelle échéance, quel libellé.
-- [ ] **Encaissements non affectés** — 16 pièces, 6 435 400 DH, invisibles car sans ligne. L'écran
-      légataire les affiche ; un opérateur qui compare les totaux voit 6,4 MDH d'écart.
-- [ ] **Verrous pessimistes** `AdmWebLockEntities` + `AdmWebSessions` — séquence connue par la trace.
-- [ ] **Seconde couche de permissions** — filtrage par statut visible (`StrStatusIntervener` ×
-      `StrIntervener`). Le plus structurant des restes.
-- [ ] **Ordre de pagination non déterministe** — signalé par le front : les ex æquo sur `docDate`
-      sont départagés par le plan SQL du moment, ce qui peut cacher ou dupliquer une ligne entre
-      deux pages. Absorbé côté front sur le groupement (`sort=docDate,desc&sort=id,asc`), **pas
-      corrigé côté serveur**. Défaut latent réel.
-- [ ] **Les 8 onglets absents de la fiche dossier** (Sous-articles, Modifications, Cadeaux,
-      Dépenses, Factures proforma, Factures, Avoirs, Réclamations) — aucune demande immédiate, à
-      prioriser avec le métier ; la facturation porte vraisemblablement le plus de valeur.
+**Infrastructure**
+- [ ] Suivre `../infra/NETBIRD-VPS.md` : DNS → 3478/udp → script (option `[4]`) → Caddyfile →
+      compte admin → tableau de bord → 115 → les 6 postes → fermer la redirection **en dernier**.
+- [ ] **Sur le premier poste migré** : le champ « IP » d'OMRAN accepte-t-il un nom d'hôte ?
+- [ ] **Mesurer la latence** poste utilisateur → VPS.
+- [ ] Versionner `infra/NETBIRD-VPS.md` quelque part (demander le repo et une branche).
+- [ ] **Vérifier ce que les conteneurs du VPS exposent déjà** — Docker court-circuite `ufw`.
+
+**Backend**
+- [ ] **Merger les deux PR documentaires**, puis `sync` des deux repos.
+- [ ] **Lot S — le filtre par colonne** (`instructions/from_front.md` n° 11). `ColonneDto.filtrable`
+      + `operateurs`, `?filtreColonne=col:OPERATEUR:valeur` répétable, 400 nommant la colonne,
+      **`CONTIENT`/`EGAL` insensibles à la casse ET aux accents** (la base écrit `CHÉQUE`,
+      « cheque » rend 0 ligne sur 180 correspondantes). Absorbe probablement le vieux `?statut=`.
+- [ ] `ModifierProspectionRequest` — ajouter `tempDescription`, `tempTel`, `tempEmail`, `commercialId`.
+- [ ] **Les 13 nouveaux champs du DTO encaissement n'ont aucune description springdoc** — viole
+      la règle 10 du `CLAUDE.md`.
+- [ ] Écart serveur sur `titreFoncier` (liste 33/116, fiche 5/8) — à confirmer.
+- [ ] `CreerReglementRequest.dateReglement` : le spec la publie, le serveur la refuse (400).
+- [ ] Catalogue prospects : description mensongère sur la bande de groupement.
+- [ ] **Les trois contrôles de création d'OMRAN** (SOUNDEX, unicité, prospection ouverte unique)
+      — **décision produit** : bloquant ou consultatif ?
+- [ ] Alertes de jalon du dossier — **décision produit**.
+- [ ] Encaissements non affectés — 16 pièces, 6 435 400 DH, invisibles.
+- [ ] Verrous pessimistes `AdmWebLockEntities` + `AdmWebSessions`.
+- [ ] Seconde couche de permissions (`StrStatusIntervener` × `StrIntervener`) — le plus structurant.
+- [ ] **Ordre de pagination non déterministe** — défaut latent réel, absorbé côté front seulement.
+- [ ] Les 8 onglets absents de la fiche dossier.
 - [ ] Supprimer les six branches mergées.
+
+**Parqué**
+- [ ] **La synchro 115 ↔ VPS** — conception arrêtée (voir §Key Points), rien de construit.
+      Ne repart que si la décision « garder 115 tel quel » est révisée.
