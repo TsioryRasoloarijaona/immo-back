@@ -689,6 +689,13 @@ public class ProspectionService {
         prospection.setCode(genererCodeProspection());
         prospection.setDocDate(LocalDateTime.now());
         prospection.setCfgProspect(prospect);
+        // `IsClosed` à false, et c'est le défaut qui rendait invisible dans le logiciel de
+        // bureau toute prospection créée par le CRM : sa vue de travail filtre en
+        // `IsClosed = 0`, et `NULL = 0` n'est jamais vrai en SQL. La ligne était pourtant bien
+        // écrite — elle n'apparaissait simplement dans aucune liste. Vérifié en comparant une
+        // prospection du CRM à une prospection saisie dans le logiciel.
+        prospection.setIsClosed(false);
+        prospection.setIsOldCustomer(false);
 
         if (request.commercialId() != null) {
             CfgTier commercial = tierRepository.findById(request.commercialId())

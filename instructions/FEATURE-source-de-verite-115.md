@@ -101,6 +101,37 @@ authentifié :
    réinstallerait exactement la divergence que cette feature supprime. Exclusion explicite dans
    `CollecteurLignesEcrites`.
 
+### Un quatrième défaut, trouvé en testant depuis le front
+
+Une prospection créée par le CRM **n'apparaissait pas dans OMRAN** — alors que la donnée était
+bien arrivée dans les deux bases. Ce n'était donc pas la synchronisation.
+
+`ComSaleProspectionView`, la vue de travail du logiciel de bureau, **écarte systématiquement les
+lignes dont `IsClosed` est `NULL`** — `NULL` ne satisfait aucune comparaison. Mesuré sur
+`yesRems`, jointure sur `PKey` :
+
+| `IsClosed` | lignes | dans la vue |
+|---|---:|---:|
+| `0` | 7 418 | 4 712 |
+| `1` | 9 325 | 9 324 |
+| **`NULL`** | **938** | **0** |
+
+Corrigé à la source : `ProspectionService` pose `IsClosed = 0`, `ProspectService` pose les cinq
+drapeaux hérités de `CfgTier`. Deux tests dans `CreationConformiteLegataireTest` empêchent le
+retour — ils assertent `isFalse()` et non `isNotNull()`, parce que c'est la distinction entre
+`false` et `NULL` qui compte.
+
+**Et une découverte qui ne nous concerne pas** : sur ces 938 lignes, **2 seulement viennent de
+notre API**. Les **936 autres ont été créées dans le logiciel de bureau** par de vrais
+utilisateurs entre juillet 2024 et juillet 2026 — elles sont invisibles dans l'écran de leur
+propre logiciel. `db/migration/008_ComProspection_IsClosed.sql` répare les 2 et laisse les 936
+en commentaire : les faire apparaître est une décision métier, pas une correction technique.
+
+**Laissé de côté, faute d'évidence** : `UtilisateurAdminService` crée un `CfgTier` de type
+EMPLOYÉ sans `IsVisibleInList`, or c'est exactement la colonne sur laquelle l'écran employés
+filtre (`= 1`). Mais chez OMRAN la répartition est **58 à `0` contre 9 à `1`** : c'est un choix
+par personne, pas un défaut. À trancher avec le métier.
+
 ### Données de test à retirer
 
 Trois prospects créés dans `yesRems` par la vérification :

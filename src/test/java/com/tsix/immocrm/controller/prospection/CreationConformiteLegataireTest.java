@@ -3,8 +3,10 @@ package com.tsix.immocrm.controller.prospection;
 import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +49,9 @@ class CreationConformiteLegataireTest {
 
     @Autowired
     private ComActionMessageRepository actionMessageRepository;
+
+    @Autowired
+    private ComProspectionRepository prospectionRepository;
 
     // ---------------------------------------------------------------- le code du prospect
 
@@ -129,6 +134,58 @@ class CreationConformiteLegataireTest {
         assertThat(creation.getIsNotRead()).isFalse();
         // Notes absentes : le message l'est aussi, plutôt qu'une chaîne vide.
         assertThat(creation.getAlertMessage()).isNull();
+    }
+
+    // ---------------------------------------------------------------- les drapeaux hérités
+
+    /**
+     * <b>Le défaut qui rendait invisible tout ce que le CRM créait.</b>
+     *
+     * <p>{@code ComSaleProspectionView} — la vue de travail du logiciel de bureau — filtre en
+     * {@code IsClosed = 0}. Or {@code NULL = 0} n'est <b>jamais</b> vrai en SQL : une prospection
+     * laissée à {@code NULL} était bien écrite en base, et n'apparaissait dans aucune liste.
+     *
+     * <p>Diagnostiqué en comparant une prospection créée par le CRM à une prospection saisie dans
+     * le logiciel : la seconde figurait dans la vue, la première non, et {@code IsClosed} était
+     * leur seul écart.
+     */
+    @Test
+    void creationProspection_estOuverteEtNonNulle() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        ComProspection prospection = prospectionRepository.findById(prospectionId).orElseThrow();
+
+        // isFalse() et non isNotNull() : c'est la distinction entre false et NULL qui compte,
+        // et elle seule. Un assert sur la non-nullité laisserait passer le retour du défaut.
+        assertThat(prospection.getIsClosed()).isFalse();
+        assertThat(prospection.getIsOldCustomer()).isFalse();
+    }
+
+    /**
+     * Même raison sur le tiers : les écrans du légataire filtrent ses drapeaux en {@code = 0}.
+     * C'est ainsi qu'il remplit ses propres lignes — aucune n'a ces colonnes à {@code NULL}.
+     */
+    @Test
+    void creationProspect_poseLesDrapeauxHerites() throws Exception {
+        String reponse = mockMvc.perform(post("/api/prospects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"prenom":"Drapeaux","nom":"HERITES-TEST"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(JsonPath.parse(reponse).read("$.id", String.class));
+        CfgTier tier = tierRepository.findById(id).orElseThrow();
+
+        assertThat(tier.getIsOldCustomer()).isFalse();
+        assertThat(tier.getIsExtern()).isFalse();
+        assertThat(tier.getIsRntCustomer()).isFalse();
+        assertThat(tier.getIsVisibleInList()).isFalse();
+        assertThat(tier.getIsFundReader()).isFalse();
+        // Celui-ci reste à true : c'est un prospect, et c'est le seul de la famille que le
+        // légataire ne pose pas à 0. Laissé tel quel faute de savoir ce que la colonne signifie
+        // pour lui — à trancher avec le métier, pas ici.
+        assertThat(tier.getIsProspect()).isTrue();
     }
 
     // ---------------------------------------------------------------- fixtures
