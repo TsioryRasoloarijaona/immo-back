@@ -168,6 +168,19 @@ public class ProspectionService {
      * relèvent de la transformation en vente, pas de la création.
      */
     private static final String CATEGORIE_PROSPECTION = "Prospection";
+
+    /**
+     * Type de document du legataire pour une prospection de vente — {@code StrEntity.Code}.
+     * Voir {@code instructions/FEATURE-strentity-prospection.md}.
+     */
+    private static final String CODE_STR_ENTITY_PROSPECTION_VENTE = "ComProspection";
+
+    /**
+     * Repli si le referentiel ne repond pas. Identique dans yesRems, yesRemsProd et yesRemsTest —
+     * c'est du referentiel legataire restaure de la meme source, pas une valeur inventee ici.
+     */
+    private static final UUID ID_STR_ENTITY_PROSPECTION_VENTE =
+            UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601");
     private final AdmEventRepository admEventRepository;
     private final ComActionRepository actionRepository;
     private final CfgTrancheRepository trancheRepository;
@@ -696,6 +709,12 @@ public class ProspectionService {
         // prospection du CRM à une prospection saisie dans le logiciel.
         prospection.setIsClosed(false);
         prospection.setIsOldCustomer(false);
+        // Le discriminant de type de document du legataire. Sans lui, la ligne n'existe pour
+        // aucun ecran du logiciel de bureau : sa vue de travail l'ecarte par
+        // `StrEntityId <> <pre-prospection>` et son ecran refiltre par `StrEntityId = <vente>`,
+        // deux comparaisons qu'un NULL ne satisfait jamais. Le manque etait connu et
+        // documente sur ComProspection.strEntityId ; il se referme ici.
+        prospection.setStrEntityId(idProspectionDeVente());
 
         if (request.commercialId() != null) {
             CfgTier commercial = tierRepository.findById(request.commercialId())
@@ -781,6 +800,21 @@ public class ProspectionService {
      * {@code DossierService#genererCodeDossier}, but with no per-project prefix (a single global
      * counter, no "APF"/"ART"-style prefix on Prospection codes).
      */
+    /**
+     * Identifiant du type « Prospection vente » dans {@code StrEntity}.
+     *
+     * <p>Resolu par code plutot que code en dur, pour que le jour ou une base porterait un autre
+     * identifiant la resolution suive. Le repli sur la constante couvre le cas inverse — un
+     * referentiel incomplet — parce que rendre une prospection invisible en silence serait pire
+     * que de la rattacher a l'identifiant connu : c'est le meme dans les trois bases du projet.
+     */
+    private UUID idProspectionDeVente() {
+        return strEntityRepository.findByCodeIn(List.of(CODE_STR_ENTITY_PROSPECTION_VENTE)).stream()
+                .findFirst()
+                .map(StrEntity::getId)
+                .orElse(ID_STR_ENTITY_PROSPECTION_VENTE);
+    }
+
     private String genererCodeProspection() {
         return generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_PROSPECTION, 2, 5);
     }

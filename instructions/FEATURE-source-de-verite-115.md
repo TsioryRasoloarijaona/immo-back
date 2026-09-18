@@ -103,34 +103,56 @@ authentifié :
 
 ### Un quatrième défaut, trouvé en testant depuis le front
 
-Une prospection créée par le CRM **n'apparaissait pas dans OMRAN** — alors que la donnée était
-bien arrivée dans les deux bases. Ce n'était donc pas la synchronisation.
+Une prospection créée par le CRM **n'apparaissait pas dans le logiciel de bureau** — alors que la
+donnée était bien arrivée dans les deux bases. Ce n'était donc pas la synchronisation.
 
-`ComSaleProspectionView`, la vue de travail du logiciel de bureau, **écarte systématiquement les
-lignes dont `IsClosed` est `NULL`** — `NULL` ne satisfait aucune comparaison. Mesuré sur
-`yesRems`, jointure sur `PKey` :
+La requête réelle de son écran, relevée dans sa trace d'audit pendant la consultation :
 
-| `IsClosed` | lignes | dans la vue |
-|---|---:|---:|
-| `0` | 7 418 | 4 712 |
-| `1` | 9 325 | 9 324 |
-| **`NULL`** | **938** | **0** |
+```sql
+SELECT * FROM (SELECT * FROM ComSaleProspectionView) AS ComProspection
+ WHERE (1 = 1)
+   AND (StrEntityId = @P1)
+   AND (StkHierarchyId IN ('c273dec7-…', '5eee12f0-…'))
+   AND ((ComFolderId IS NULL) OR (… StatusIsCancellation=1 OR StatusIsClosing=1))
+   AND (IsClosed = 0)
+   AND (DocDate >= @P2) AND (DocDate < @P3)
+```
 
-Corrigé à la source : `ProspectionService` pose `IsClosed = 0`, `ProspectService` pose les cinq
-drapeaux hérités de `CfgTier`. Deux tests dans `CreationConformiteLegataireTest` empêchent le
-retour — ils assertent `isFalse()` et non `isNotNull()`, parce que c'est la distinction entre
-`false` et `NULL` qui compte.
+Et la vue se termine par `WHERE ComProspection.StrEntityId <> '<pré-prospection>'`.
 
-**Et une découverte qui ne nous concerne pas** : sur ces 938 lignes, **2 seulement viennent de
-notre API**. Les **936 autres ont été créées dans le logiciel de bureau** par de vrais
-utilisateurs entre juillet 2024 et juillet 2026 — elles sont invisibles dans l'écran de leur
-propre logiciel. `db/migration/008_ComProspection_IsClosed.sql` répare les 2 et laisse les 936
-en commentaire : les faire apparaître est une décision métier, pas une correction technique.
+Nos lignes échouaient sur **deux** conditions, l'une et l'autre parce qu'en SQL un `NULL` ne
+satisfait aucune comparaison :
+
+| Colonne | Notre valeur | Écartée par |
+|---|---|---|
+| `StrEntityId` | `NULL` | le `<>` de la vue **et** le `=` de l'écran |
+| `IsClosed` | `NULL` | `IsClosed = 0` |
+
+`StrEntityId` explique **100 %** de l'appartenance à la vue : 14 036 lignes avec un type valide y
+sont toutes, les 3 641 pré-prospections et les 5 lignes à `NULL` n'y sont jamais.
+
+**Une fausse piste, pour mémoire** : j'ai d'abord attribué le défaut au seul `IsClosed`, sur une
+comparaison à deux lignes. Le croisement à l'échelle a montré que les 938 lignes incriminées
+étaient simplement, par coïncidence, celles dont le `StrEntityId` était exclu. `IsClosed` compte
+bien — c'est un filtre de l'écran — mais il n'explique pas l'appartenance à la vue.
+
+Corrigé à la source : `ProspectionService` pose `StrEntityId` (« Prospection vente »),
+`IsClosed` et `IsOldCustomer` ; `ProspectService` pose les cinq drapeaux hérités de `CfgTier`.
+Le manque sur `StrEntityId` était **connu et documenté** sur `ComProspection.strEntityId` — il se
+referme ici.
+
+Quatre tests dans `CreationConformiteLegataireTest`, dont un qui asserte la **présence dans la
+vue** plutôt que la valeur d'une colonne : c'est le résultat métier qui compte. Vérifié qu'ils
+échouent sans le correctif.
+
+**Et une découverte qui ne nous concerne pas** : 936 prospections créées *dans le logiciel de
+bureau* entre 2024 et 2026 ont `IsClosed` à `NULL` et sont écartées par le filtre de l'écran.
+`db/migration/008_ComProspection_visibilite_legataire.sql` répare les nôtres et laisse celles-là
+en commentaire — les faire apparaître est une décision métier.
 
 **Laissé de côté, faute d'évidence** : `UtilisateurAdminService` crée un `CfgTier` de type
-EMPLOYÉ sans `IsVisibleInList`, or c'est exactement la colonne sur laquelle l'écran employés
-filtre (`= 1`). Mais chez OMRAN la répartition est **58 à `0` contre 9 à `1`** : c'est un choix
-par personne, pas un défaut. À trancher avec le métier.
+EMPLOYÉ sans `IsVisibleInList`, la colonne sur laquelle l'écran employés filtre (`= 1`). Mais
+chez OMRAN la répartition est **58 à `0` contre 9 à `1`** : un choix par personne, pas un défaut.
 
 ### Données de test à retirer
 

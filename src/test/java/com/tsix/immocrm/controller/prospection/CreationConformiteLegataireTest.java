@@ -7,6 +7,8 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +54,12 @@ class CreationConformiteLegataireTest {
 
     @Autowired
     private ComProspectionRepository prospectionRepository;
+
+    @Autowired
+    private ComSaleProspectionViewRepository vueRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     // ---------------------------------------------------------------- le code du prospect
 
@@ -186,6 +194,45 @@ class CreationConformiteLegataireTest {
         // légataire ne pose pas à 0. Laissé tel quel faute de savoir ce que la colonne signifie
         // pour lui — à trancher avec le métier, pas ici.
         assertThat(tier.getIsProspect()).isTrue();
+    }
+
+    /**
+     * <b>Le test qui compte : la prospection existe-t-elle pour le logiciel de bureau ?</b>
+     *
+     * <p>Assertion sur le résultat métier, pas sur une colonne. {@code ComSaleProspectionView}
+     * est la vue sur laquelle s'appuient ses écrans ; une ligne qui n'y figure pas n'existe pour
+     * lui nulle part, quelle que soit la qualité du reste.
+     *
+     * <p>Ce qui l'en écartait : {@code StrEntityId} laissé à {@code NULL}. La vue filtre par
+     * {@code StrEntityId <> <pré-prospection>} et l'écran refiltre par
+     * {@code StrEntityId = <vente>} — deux comparaisons qu'un {@code NULL} ne satisfait jamais.
+     * Diagnostiqué sur la requête réelle du logiciel, relevée dans sa trace d'audit.
+     *
+     * <p>{@code flush} puis {@code clear} sont indispensables : une vue n'est peuplée qu'au
+     * chargement, et sans vidage la prospection n'est encore qu'en session.
+     */
+    @Test
+    void creationProspection_estVisibleDuLogicielDeBureau() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(vueRepository.findById(prospectionId))
+                .as("La prospection doit figurer dans ComSaleProspectionView, sans quoi elle "
+                        + "n'apparait dans aucun ecran du logiciel de bureau.")
+                .isPresent();
+    }
+
+    /** Le type de document du légataire : « prospection de vente », et non {@code NULL}. */
+    @Test
+    void creationProspection_porteLeTypeDeDocumentDuLegataire() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        ComProspection prospection = prospectionRepository.findById(prospectionId).orElseThrow();
+
+        assertThat(prospection.getStrEntityId())
+                .isEqualTo(UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601"));
     }
 
     // ---------------------------------------------------------------- fixtures
