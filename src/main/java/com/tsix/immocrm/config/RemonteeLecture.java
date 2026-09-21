@@ -46,7 +46,7 @@ public class RemonteeLecture {
      * Colonne d'identité par table, quand ce n'est pas {@code PKey}. {@code AppFileObject} est en
      * relation 1:1 avec sa ligne {@code AdmAttachedFile} et en partage la clé sous un autre nom.
      */
-    private static final Map<String, String> CLES_PRIMAIRES = Map.of("AppFileObject", "AdmAttachedFileId");
+    static final Map<String, String> CLES_PRIMAIRES = Map.of("AppFileObject", "AdmAttachedFileId");
 
     /**
      * Colonnes que la source possède mais que la copie n'a <b>volontairement</b> pas — à ne pas
@@ -94,7 +94,7 @@ public class RemonteeLecture {
         List<LigneEcrite> absentes = new ArrayList<>();
         for (LigneEcrite ligne : lignes) {
             try {
-                if (!remonterUne(ligne)) {
+                if (!fusionner(ligne)) {
                     absentes.add(ligne);
                 }
             } catch (RuntimeException e) {
@@ -105,7 +105,7 @@ public class RemonteeLecture {
         }
         for (LigneEcrite ligne : absentes.reversed()) {
             try {
-                supprimerUne(ligne);
+                supprimer(ligne);
             } catch (RuntimeException e) {
                 log.error("Suppression non repercutee dans la base de lecture : {} {}. "
                                 + "La synchronisation periodique la reprendra.",
@@ -114,8 +114,13 @@ public class RemonteeLecture {
         }
     }
 
-    /** {@code true} si la ligne existe sur la source et a été fusionnée dans la copie. */
-    private boolean remonterUne(LigneEcrite ligne) {
+    /**
+     * {@code true} si la ligne existe sur la source et a été fusionnée dans la copie.
+     * Package-private : {@link SynchronisationDescendante} rejoue exactement ce chemin pour les
+     * deltas du Change Tracking — un seul {@code MERGE} dans le dépôt, quel que soit le sens
+     * d'arrivée de la ligne.
+     */
+    boolean fusionner(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
         List<Map<String, Object>> trouvees = depuisEcriture.queryForList(
                 selections.computeIfAbsent(ligne.table(), t -> selection(t, cle)), ligne.pkey());
@@ -135,8 +140,10 @@ public class RemonteeLecture {
     /**
      * Répercute une suppression. Idempotente par nature ({@code DELETE} d'une ligne déjà
      * absente : zéro ligne, zéro erreur) — le cas d'une ligne jamais rapatriée est donc gratuit.
+     * Package-private pour {@link SynchronisationDescendante}, même raison que
+     * {@link #fusionner}.
      */
-    private void supprimerUne(LigneEcrite ligne) {
+    void supprimer(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
         int lignes = versLecture.update(
                 "DELETE FROM dbo." + crochets(ligne.table()) + " WHERE " + crochets(cle) + " = ?",
@@ -144,6 +151,41 @@ public class RemonteeLecture {
         log.debug("Suppression repercutee dans la copie : {} {} ({} ligne).",
                 ligne.table(), ligne.pkey(), lignes);
     }
+
+    /**
+     * Fusionne dans la copie <b>toutes</b> les lignes de la table telles que la source les porte
+     * — le régime « baseline » de {@link SynchronisationDescendante}, pris quand le filigrane
+     * Change Tracking est absent ou périmé. <b>Ne supprime jamais rien</b> : la copie peut
+     * porter des lignes que la source n'a pas (héritées d'avant la bascule), et seule une
+     * suppression explicitement rapportée par le Change Tracking fait foi.
+     *
+     * <p>Par lots de {@value #TAILLE_LOT_BASELINE}, sur le même {@code MERGE} que le reste :
+     * une table de 14 000 lignes se traverse en quelques dizaines d'aller-retours, pas 14 000.
+     *
+     * @return le nombre de lignes fusionnées
+     */
+    int fusionnerTout(String table) {
+        String cle = CLES_PRIMAIRES.getOrDefault(table, "PKey");
+        String selection = selections.computeIfAbsent(table, t -> selection(t, cle));
+        List<Map<String, Object>> lignes = depuisEcriture.queryForList(
+                selection.substring(0, selection.lastIndexOf(" WHERE ")));
+        if (lignes.isEmpty()) {
+            return 0;
+        }
+
+        List<String> colonnes = new ArrayList<>(lignes.get(0).keySet());
+        String fusion = fusions.computeIfAbsent(table, t -> fusion(t, cle, colonnes));
+        List<Object[]> parametres = lignes.stream()
+                .map(valeurs -> parametres(cle, colonnes, valeurs, valeurs.get(cle)))
+                .toList();
+        for (int depuis = 0; depuis < parametres.size(); depuis += TAILLE_LOT_BASELINE) {
+            versLecture.batchUpdate(fusion,
+                    parametres.subList(depuis, Math.min(depuis + TAILLE_LOT_BASELINE, parametres.size())));
+        }
+        return parametres.size();
+    }
+
+    private static final int TAILLE_LOT_BASELINE = 500;
 
     /**
      * {@code SELECT *} pour le cas courant ; une liste explicite de colonnes, lue sur la source,

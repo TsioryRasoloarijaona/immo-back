@@ -54,7 +54,7 @@ public class CollecteurLignesEcrites
      * tenter et journaliser un échec que taire silencieusement une écriture. La synchronisation
      * périodique reste le filet.
      */
-    private static final List<String> ORDRE_CLES_ETRANGERES = List.of(
+    static final List<String> ORDRE_CLES_ETRANGERES = List.of(
             "CfgProject", "CfgTranche", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
@@ -69,7 +69,7 @@ public class CollecteurLignesEcrites
      * divergence qu'on vient d'éteindre. Elle est bien écrite à chaque création (Hibernate la
      * collecte, c'est mesuré), d'où cette exclusion explicite plutôt qu'implicite.
      */
-    private static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
+    static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
 
     /** {@code @Table(name = ...)} par classe d'entité — résolu une fois, relu souvent. */
     private static final Map<Class<?>, String> TABLES = new ConcurrentHashMap<>();

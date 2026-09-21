@@ -286,6 +286,44 @@ disparaît du CRM. Sur la source, la ligne `AdmAttachedFile` et son binaire rest
 logiciel de bureau continue donc d'afficher une pièce supprimée dans le CRM.** Aligner les deux
 (supprimer la ligne côté légataire ?) est une décision métier, pas prise ici.
 
+## Synchronisation descendante : ce qu'OMRAN écrit rejoint la copie
+
+Le rapatriement immédiat ne couvre que **nos** écritures. Ce que le logiciel de bureau saisit
+sur la source n'atteignait jamais la copie — un dossier créé au bureau restait invisible du
+CRM. `SynchronisationDescendante` ferme ce trou : un cycle **toutes les 5 minutes**
+(`SOURCE_DB_SYNC_MINUTES`, défaut 5), porté par le **Change Tracking** de SQL Server (activé
+sur la source par `prototype/ct-activer-yesRems.sql`, rétention 7 jours ; disponible sur
+Express, aucune colonne ni déclencheur ajouté — OMRAN ne voit rien).
+
+La conception reprend `prototype/sync-ct-descendant.sql` (la version T-SQL parquée, qui exigeait
+un seul serveur) :
+
+- **deux régimes par table** — `BASELINE` (filigrane absent ou périmé : fusion de toutes les
+  lignes par lots de 500, **sans jamais supprimer** — la copie porte des lignes que la source
+  n'a jamais eues) et `DELTA` (`CHANGETABLE` donne les clés touchées ; l'opération I/U/D
+  rapportée n'est pas consultée, **la relecture fait foi** : présent → fusion, absent →
+  suppression) ;
+- **filigrane par table**, côté copie (`AppSyncEtat`, migration `009`) : une table en échec
+  rejoue depuis son propre point sans bloquer les autres ; le filigrane n'avance que si la
+  passe a réussi ;
+- fusions dans l'ordre des FK, suppressions après et en ordre inverse — même logique que le
+  rapatriement immédiat, **même `MERGE`** (le code est partagé avec `RemonteeLecture`) ;
+- la liste des tables est lue sur la source (`sys.change_tracking_tables`) à chaque cycle —
+  suivre une table de plus ne demande aucun redéploiement ;
+- nos propres écritures reviennent par ce canal : refusionnées à l'identique, no-op idempotent.
+
+**Vérifié sur le banc** (cycle réglé à 1 min) : INSERT, UPDATE et DELETE faits par `sqlcmd`
+directement dans la source (simulant OMRAN) arrivent chacun dans la copie au cycle suivant ;
+baseline exercée sur `ComProspectionType` (24 lignes) ; un échec de table (le cast UUID du
+pilote, corrigé) a bien laissé son filigrane en arrière et rejoué au cycle suivant. Un cycle
+vide coûte ~2 s sur le banc, l'essentiel en allers-retours `CHANGETABLE`.
+
+**Au déploiement (côté utilisateur)** : appliquer `009_AppSyncEtat.sql` sur les **copies**
+(`yesRemsDev` VPS — jamais sur 115), activer le Change Tracking sur 115 (`ct-activer-yesRems.sql`
+adapté), et si la copie vient d'une restauration fraîche de la source, **pré-remplir les
+filigranes à la version courante** (script en tête de la migration 009) pour éviter une
+baseline intégrale inutile. En recette, `SOURCE_DB_SYNC_MINUTES=1` raccourcit l'attente.
+
 ## Impact front
 
 **Aucun.** Ni les chemins d'URL, ni les DTO, ni les codes de statut ne changent. La seule
@@ -294,7 +332,6 @@ aller-retour réseau par requête SQL d'écriture.
 
 ## Hors périmètre
 
-- La **synchronisation descendante périodique** par Change Tracking (déjà activé sur 23 tables,
-  cf. `prototype/ct-activer-yesRems.sql`), qui rapatrie ce qu'OMRAN écrit de son côté.
+- ~~La synchronisation descendante périodique~~ — **faite**, voir la section dédiée ci-dessus.
 - La **reprise du stock existant de binaires** entre 115 et S3 dans les deux sens — le flux du
   dépôt est traité ci-dessus (section Pièces jointes), pas le rattrapage de l'historique.

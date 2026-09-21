@@ -16,6 +16,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -55,9 +56,12 @@ import java.util.Map;
  * code futur : une méthode d'écriture annotée {@code readOnly} écrirait dans la copie, où sa
  * ligne serait écrasée au prochain rapatriement — sans erreur et sans trace.
  */
+// @EnableScheduling ici et pas sur l'application : la seule tâche planifiée du dépôt est la
+// synchronisation descendante, qui n'existe qu'en deux-bases. En mono-base, aucun scheduler.
 @Configuration
 @EnableConfigurationProperties(SourceDeVeriteProperties.class)
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
+@EnableScheduling
 public class DataSourceConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceConfig.class);

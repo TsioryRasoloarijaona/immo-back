@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-21T10:30+01:00_
+_Last updated: 2026-09-21T12:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -9,8 +9,9 @@ _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\proto
 **La source de vérité unique (branche `feat/source-de-verite-115`, PR ouverte, non mergée).**
 Une seule base est écrite (celle d'OMRAN, à terme 115) ; le backend lit sa copie locale.
 Le routage, le rapatriement, la conformité légataire (`StrEntityId`/`IsClosed`), **les pièces
-jointes** et **la propagation des suppressions** sont implémentés et vérifiés de bout en bout
-sur la paire locale. L'utilisateur applique lui-même migrations et variables côté prod/115.
+jointes**, **la propagation des suppressions** et **la synchronisation descendante par Change
+Tracking (cycle 5 min, `SynchronisationDescendante`)** sont implémentés et vérifiés de bout en
+bout sur la paire locale. L'utilisateur applique lui-même migrations et variables côté prod/115.
 
 Chantier infra parallèle (inchangé depuis le 16/09) : VPN NetBird sur le VPS pour remplacer la
 redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-VPS.md`.
@@ -86,6 +87,12 @@ redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-
   colonnes exclues dès le `SELECT` (`AdmAttachedFile.AttachedFile`), **absence sur la source =
   suppression dans la copie** (après les fusions, ordre inverse — la copie porte 1 219 FK), et
   `DepotBinaireSource` (+2 impl.) pour le binaire des pièces jointes.
+- **Synchro descendante** (`SynchronisationDescendante`, cycle `SOURCE_DB_SYNC_MINUTES:5`) :
+  Change Tracking, filigrane par table dans `AppSyncEtat` (copie, migration `009` — pré-remplir
+  à la version courante sur une copie fraîchement restaurée), régimes BASELINE (jamais de
+  suppression) / DELTA (la relecture fait foi, pas le code I/U/D). Un cycle vide ne logge rien.
+  ⚠️ Le pilote mssql livre `uniqueidentifier` en `String`, pas en `UUID`.
+  Vérifié : INSERT/UPDATE/DELETE simulés par sqlcmd dans la source arrivent au cycle suivant.
 - **Toute ligne référencée par une création doit exister sur la source** : la validation lit
   dans la transaction d'écriture. Face à 115 (sur-ensemble) c'est automatique, SAUF pour ce que
   le CRM crée seul → **rattrapage obligatoire avant activation : `AppUserCredential`,
@@ -156,7 +163,9 @@ redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-
 - [ ] Merge PR + `sync back` ; nettoyage des données de test (script dans le FEATURE).
 - [ ] Côté 115 (utilisateur) : migrations 001/002/003/006, rattrapage `App*`, variables prod.
 - [ ] VPN NetBird : DNS `vpn.tsiory.tech` → étapes de `../infra/NETBIRD-VPS.md`.
-- [ ] Synchro descendante périodique (Change Tracking) — le rattrapage de ce qu'OMRAN écrit.
+- [x] ~~Synchro descendante périodique~~ — faite et vérifiée le 21/09 (cycle 5 min).
+- [ ] Sur le banc : `AppSyncEtat` existe désormais dans `yesRemsProd` (22 filigranes posés,
+      baseline passée sur `ComProspectionType`) — c'est l'état nominal de la copie, à garder.
 - [ ] Reprise de l'historique des binaires (115 ↔ S3) — les deux sens.
 - [ ] Décision métier : répercuter ou non la suppression d'une pièce côté légataire.
 
