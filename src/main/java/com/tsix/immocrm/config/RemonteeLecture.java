@@ -61,14 +61,37 @@ public class RemonteeLecture {
     private static final Map<String, Set<String>> COLONNES_ABSENTES_DE_LA_COPIE =
             Map.of("AdmAttachedFile", Set.of("AttachedFile"));
 
+    /**
+     * Colonnes dont la valeur (non nulle) désigne une ligne rattachée à un <b>module hors du
+     * périmètre répliqué</b> : la ligne référence alors une table non suivie, jamais présente dans
+     * la copie, et son {@code MERGE} échouerait sur la clé étrangère. On l'écarte de la copie
+     * plutôt que de faire échouer toute la table en boucle (son filigrane resterait figé et aucune
+     * autre ligne ne passerait).
+     *
+     * <p>{@code StlSettlementLine} : une ligne d'encaissement porte le document réglé par
+     * exactement une clé — {@code ComDocumentId} (vente, dans le périmètre) OU {@code BuyDocumentId}
+     * (achat) / {@code RntDocumentId} (location) / {@code StlDocumentId} (hors périmètre). Mesuré
+     * sur 3 227 lignes réelles : les 665 lignes de vente ({@code ComDocumentId} renseigné) ont ces
+     * trois colonnes nulles ; les 2 562 autres pointent vers un module non répliqué. Les exclure
+     * garde exactement les lignes de vente — les seules dont la copie a les parents.
+     *
+     * <p>Distinct de {@link #COLONNES_ABSENTES_DE_LA_COPIE} (qui retire une <i>colonne</i> de
+     * toutes les lignes) : ici on retire des <i>lignes entières</i>, sur critère de contenu.
+     */
+    static final Map<String, List<String>> COLONNES_HORS_PERIMETRE =
+            Map.of("StlSettlementLine", List.of("BuyDocumentId", "RntDocumentId", "StlDocumentId"));
+
     private final JdbcTemplate versLecture;
     private final JdbcTemplate depuisEcriture;
 
     /** Instruction {@code MERGE} par table — construite une fois, réutilisée ensuite. */
     private final Map<String, String> fusions = new ConcurrentHashMap<>();
 
-    /** Instruction {@code SELECT} par table à colonnes exclues — même régime que {@link #fusions}. */
+    /** {@code SELECT} d'une ligne (par clé) par table — même régime que {@link #fusions}. */
     private final Map<String, String> selections = new ConcurrentHashMap<>();
+
+    /** {@code SELECT} de toutes les lignes (baseline) par table — même régime que {@link #fusions}. */
+    private final Map<String, String> selectionsTout = new ConcurrentHashMap<>();
 
     public RemonteeLecture(@Qualifier("jdbcLecture") JdbcTemplate versLecture,
                            @Qualifier("ecriture") DataSource ecriture) {
@@ -166,9 +189,8 @@ public class RemonteeLecture {
      */
     int fusionnerTout(String table) {
         String cle = CLES_PRIMAIRES.getOrDefault(table, "PKey");
-        String selection = selections.computeIfAbsent(table, t -> selection(t, cle));
         List<Map<String, Object>> lignes = depuisEcriture.queryForList(
-                selection.substring(0, selection.lastIndexOf(" WHERE ")));
+                selectionsTout.computeIfAbsent(table, this::selectionTout));
         if (lignes.isEmpty()) {
             return 0;
         }
@@ -188,12 +210,12 @@ public class RemonteeLecture {
     private static final int TAILLE_LOT_BASELINE = 500;
 
     /**
-     * {@code SELECT *} pour le cas courant ; une liste explicite de colonnes, lue sur la source,
-     * pour les tables dont la copie ne possède pas tout (cf.
-     * {@link #COLONNES_ABSENTES_DE_LA_COPIE}) — la colonne écartée ne quitte alors jamais la
-     * source.
+     * {@code SELECT … FROM dbo.[table]} — la projection sans clause {@code WHERE}. {@code SELECT *}
+     * pour le cas courant ; une liste explicite de colonnes, lue sur la source, pour les tables
+     * dont la copie ne possède pas tout (cf. {@link #COLONNES_ABSENTES_DE_LA_COPIE}) — la colonne
+     * écartée ne quitte alors jamais la source.
      */
-    private String selection(String table, String cle) {
+    private String projection(String table) {
         Set<String> exclues = COLONNES_ABSENTES_DE_LA_COPIE.get(table);
         String colonnes = "*";
         if (exclues != null) {
@@ -204,8 +226,39 @@ public class RemonteeLecture {
                     .map(RemonteeLecture::crochets)
                     .collect(Collectors.joining(", "));
         }
-        return "SELECT " + colonnes + " FROM dbo." + crochets(table)
-                + " WHERE " + crochets(cle) + " = ?";
+        return "SELECT " + colonnes + " FROM dbo." + crochets(table);
+    }
+
+    /**
+     * {@code SELECT} d'une ligne par sa clé, filtré hors-périmètre le cas échéant : une ligne
+     * écartée par {@link #predicatPerimetre} renvoie zéro tuple, donc {@link #fusionner} la voit
+     * « absente » et ne la copie pas (au pire un {@code DELETE} sans objet côté copie).
+     */
+    private String selection(String table, String cle) {
+        String sql = projection(table) + " WHERE " + crochets(cle) + " = ?";
+        String filtre = predicatPerimetre(table);
+        return filtre == null ? sql : sql + " AND " + filtre;
+    }
+
+    /** {@code SELECT} de toutes les lignes (baseline), filtré hors-périmètre le cas échéant. */
+    private String selectionTout(String table) {
+        String filtre = predicatPerimetre(table);
+        return filtre == null ? projection(table) : projection(table) + " WHERE " + filtre;
+    }
+
+    /**
+     * Prédicat {@code WHERE} qui écarte les lignes hors périmètre (cf.
+     * {@link #COLONNES_HORS_PERIMETRE}), ou {@code null} si la table n'en a pas. Chaque colonne
+     * listée doit être {@code NULL} pour que la ligne soit répliquée.
+     */
+    static String predicatPerimetre(String table) {
+        List<String> colonnes = COLONNES_HORS_PERIMETRE.get(table);
+        if (colonnes == null) {
+            return null;
+        }
+        return colonnes.stream()
+                .map(c -> crochets(c) + " IS NULL")
+                .collect(Collectors.joining(" AND "));
     }
 
     /**
