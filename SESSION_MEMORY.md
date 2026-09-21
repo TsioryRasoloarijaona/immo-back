@@ -1,65 +1,62 @@
 # Session Memory
-_Last updated: 2026-09-21T12:30+01:00_
+_Last updated: 2026-09-21T16:40+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-**La source de vérité unique (branche `feat/source-de-verite-115`, PR ouverte, non mergée).**
-Une seule base est écrite (celle d'OMRAN, à terme 115) ; le backend lit sa copie locale.
-Le routage, le rapatriement, la conformité légataire (`StrEntityId`/`IsClosed`), **les pièces
-jointes**, **la propagation des suppressions** et **la synchronisation descendante par Change
-Tracking (cycle 5 min, `SynchronisationDescendante`)** sont implémentés et vérifiés de bout en
-bout sur la paire locale. L'utilisateur applique lui-même migrations et variables côté prod/115.
-
-Chantier infra parallèle (inchangé depuis le 16/09) : VPN NetBird sur le VPS pour remplacer la
-redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-VPS.md`.
+**Source de vérité unique + synchro bidirectionnelle (branche `feat/source-de-verite-115`, PR ouverte, non mergée).**
+Une seule base est écrite (OMRAN/115) ; le backend lit sa copie locale. Implémenté et vérifié :
+routage, rapatriement immédiat (INSERT/UPDATE/DELETE), conformité légataire, pièces jointes,
+**synchro descendante par Change Tracking (cycle 2 min + endpoint manuel)**. Cette session a aussi
+**mis à niveau `yesRemsDev` (VPS) depuis 115** et **prouvé que la synchro descendante propage
+bien les UPDATE d'OMRAN** (pas seulement les INSERT).
 
 ---
 
 ## ✅ What Worked
 
-### Session du 21/09 (pièces jointes + campagne de test deux-bases)
+### Session du 21/09 (suite)
 
-- **Le flux pièces jointes retenu** : S3 → source (métadonnées par JPA routé + **binaire par
-  `UPDATE` natif via `EntityManager`, même transaction donc même connexion routée** —
-  `Propagation.MANDATORY`) → copie par rapatriement (sans colonne binaire, `AppFileObject`
-  entier). Le `PKey` est frappé côté application (`UUID.randomUUID()`) : **aucun risque de
-  collision, pas d'aller-retour d'identifiants** — pas de compteur `AdmSequence` sur ce flux.
-- **Campagne `/postman:test` en direct** (Postman MCP non connecté) : backend en deux-bases
-  local (`yesRems` source / `yesRemsProd` copie), compte `Khadija`, 14 endpoints d'écriture,
-  vérification SQL des deux côtés après chaque appel. Tout conforme, compteurs de la copie
-  jamais bougés. Détail complet : FEATURE, section « Vérifié de bout en bout (21/09) ».
-- **Faire tourner ma propre instance sur :8081** (`--server.port=8081 --management.server.port=9092`)
-  pour avoir les logs — c'est ce qui a résolu les 401 nus.
-- **Lire `.env` avec l'outil Read**, pas `cat` : le fichier sans saut de ligne final s'était
-  concaténé avec la sortie suivante → clé S3 fausse → 403 signature MinIO.
+- **Endpoint manuel `POST /api/synchronisation`** (rôle Administrateur), synchrone, `ReentrantLock`
+  anti-recouvrement partagé avec le cycle planifié (409 si déjà en cours / mono-base). Vérifié.
+- **Test de la synchro descendante sur banc local** (`yesRems`=115, `yesRemsProd`=VPS) : INSERT,
+  UPDATE **et** DELETE d'un prospect + prospection faits par SQL direct dans `yesRems` sont tous
+  arrivés dans `yesRemsProd` (fusions v60/61/63, suppression v65). **La preuve = `AppSyncEtat`
+  (filigranes), pas le log** — le log Maven est bufferisé et retarde de plusieurs minutes.
+- **Mise à niveau `yesRemsDev` depuis 115** : CT activé sur 115 (base + 20 tables), baselines par
+  l'outil pour les grosses tables (`CfgTier` 14553, `ComProspection` 17976…), puis **insertion
+  ciblée** pour le reste (StrHistory +262, ComActionMessage +68, AdmAttachedFile +2) — plus rapide
+  et gère proprement les FK hors périmètre. Suppression de 38 lignes VPS-only (test + orphelins).
+- **Recherche OMRAN Estate** : éditeur **Yasmine Engineering Systems** (Tunis), .NET desktop, **SQL
+  Server exclusif** (uniqueidentifier, FILESTREAM, Change Tracking, triggers). **Incompatible MySQL**
+  sans re-plateformage par l'éditeur ; migration MySQL possible seulement après retrait d'OMRAN.
+- **Connexion au VPS via tunnel** : `Encrypt=True` obligatoire (le SQL du VPS impose TLS) — sinon
+  la poignée de main échoue en silence. Tunnel = `ssh vps-db -N` → `localhost:1433` = `yesRemsDev`.
 
-### Sessions précédentes — toujours valable
+### Acquis antérieurs (toujours valables)
 
-- Mesurer avant de recommander ; compter avant de conclure ; vérifier qu'une colonne existe
-  avant de la mapper ; fixtures datées 2077 ; retouches de source en Python depuis un fichier.
-- Trace d'audit : filtrer `application_name = 'OMRAN estate'` ; `event_time` en UTC.
+- Mesurer avant de conclure ; connexion persistante pour benchmarker (pas sqlcmd par requête).
+- Le pilote mssql livre `uniqueidentifier` en `String`, pas `UUID`.
 
 ---
 
 ## ❌ What Failed
 
-### Session du 21/09
+### Session du 21/09 (suite)
 
-- **`401` nu sur les uploads multipart** → deux causes successives, aucune liée à l'auth :
-  (1) colonne `DeletedBy` absente de `yesRems.AppFileObject` (migration 006 non appliquée sur la
-  source du banc) ; (2) clé S3 tronquée/faussée par ma lecture de `.env`. **Leçon : une exception
-  dans la chaîne part dans le dispatch d'erreur et ressort en 401 sans corps** — ne pas chercher
-  côté JWT.
-- **Les `DELETE` ne voyageaient pas** (collecteur limité à `POST_INSERT`/`POST_UPDATE`) → fantômes
-  dans la copie, contact supprimé toujours affiché. Corrigé (voir Key Points).
-- **`PATCH /prospects` avec un champ inexistant (`notes`)** → 200 no-op silencieux (Jackson ignore
-  les champs inconnus). Vérifier le DTO avant de conclure à un bug de routage.
-- **`sqlcmd` par ligne dans une boucle shell** → une connexion par itération, timeout : faire un
-  seul `IN (...)`.
-- **`VAR=val` quoté en préfixe bash** (`'S3_SECRET_KEY=...'`) → « command not found » : `export`.
+- **Baseline de masse sur lien lent/FK non closes** → `ComActionMessage` 48k tirées ~30 min pour
+  +88, et `StlSettlementLine` échoue en boucle (FK vers `BuyDocument`/`RntDocument` hors périmètre).
+  **Leçon : le noyau ~23 tables n'est PAS FK-clos** ; pour un backfill ponctuel, l'**insertion
+  ciblée des PKey manquants** (en sautant les FK hors périmètre) bat la baseline de l'outil.
+- **Croire le log de sync** → il est bufferisé par Maven (retard de minutes). Vérifier `AppSyncEtat`
+  et l'état des tables, jamais le log seul.
+- **Anti-jointure PowerShell qui échoue en silence** (colonne inexistante `Description` sur
+  `ComProspection`) → affiche « 0 » à tort. Toujours revérifier un « 0 » suspect.
+- **Écrire directement sur 115 via IP publique** pour tester → l'utilisateur veut du **local**
+  (`yesRems`/`yesRemsProd`), la prod n'étant pas déployée. Un prospect de test avait été inséré sur
+  115 et propagé au vrai VPS — nettoyé des deux côtés.
 
 ---
 
@@ -67,122 +64,92 @@ redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-
 
 | # | Erreur / Bug | Statut | Correctif |
 |---|---|---|---|
-| 1–15 | (lots G–R + créations, voir historique) | **Fixed** | PR #43–#55 |
-| 16 | `192.168.11.115:1433` exposé à internet | **Ouvert** | VPN NetBird, `../infra/NETBIRD-VPS.md` |
-| 17 | Écriture disque 100 ms sur 115 | **Ouvert — assumé** | garder 115 tel quel |
-| 18 | Prospection CRM invisible dans OMRAN (`StrEntityId`/`IsClosed` NULL) | **Fixed** | commits `f83ba18`/`a54208d` |
-| 19 | `DELETE` non rapatriés → fantômes dans la copie | **Fixed** | `POST_DELETE` + absence = suppression (commit `366a2bc`) |
-| 20 | Upload pièce jointe en 401 (colonne `DeletedBy` absente de la source) | **Fixed (banc)** | 006 appliquée sur `yesRems` ; sur 115 = check-list utilisateur |
+| 19 | `DELETE` non rapatriés (fantômes) | **Fixed** | `POST_DELETE` + absence=suppression |
+| 20 | Upload pièce jointe 401 (colonne absente) | **Fixed** | migration 006 sur la source |
+| 21 | Synchro descendante : UUID livré en String | **Fixed** | conversion `UUID.fromString` |
+| 22 | `yesRemsDev` : baseline `StlSettlementLine`/`ComActionMessage` échoue sur FK hors périmètre | **Contourné** | insertion ciblée ; 13 lignes irréductibles laissées (modules achat/location) |
+| 23 | Tunnel VPS : poignée de main échoue | **Fixed** | `Encrypt=True` dans la chaîne de connexion |
+| — | **« OMRAN n'atterrit pas sur la nouvelle app »** | **Non-bug** | le code marche (INSERT/UPDATE/DELETE testés OK) ; cause = **la synchro n'est pas déployée en prod** (backend pas en mode deux-bases) |
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### L'architecture deux-bases (branche courante)
+### Synchro descendante — état réel
 
-- Routage sur le drapeau `readOnly` (`DataSourceConfig`), rapatriement par `MERGE` après commit
-  (`CollecteurLignesEcrites` → `RemonteeLecture`). **`SOURCE_DB_HOST` vide = mono-base**, aucun
-  bean n'existe, comportement d'avant — c'est ce qui garde les 895 tests verts.
-- **Depuis le 21/09** : clé d'identité par table (`AppFileObject` → `AdmAttachedFileId`),
-  colonnes exclues dès le `SELECT` (`AdmAttachedFile.AttachedFile`), **absence sur la source =
-  suppression dans la copie** (après les fusions, ordre inverse — la copie porte 1 219 FK), et
-  `DepotBinaireSource` (+2 impl.) pour le binaire des pièces jointes.
-- **Synchro descendante** (`SynchronisationDescendante`, cycle `SOURCE_DB_SYNC_MINUTES:2`) :
-  Change Tracking, filigrane par table dans `AppSyncEtat` (copie, migration `009` — pré-remplir
-  à la version courante sur une copie fraîchement restaurée), régimes BASELINE (jamais de
-  suppression) / DELTA (la relecture fait foi, pas le code I/U/D). Un cycle vide ne logge rien.
-  ⚠️ Le pilote mssql livre `uniqueidentifier` en `String`, pas en `UUID`.
-  Vérifié : INSERT/UPDATE/DELETE simulés par sqlcmd dans la source arrivent au cycle suivant.
-- **Déclenchement manuel** : `POST /api/synchronisation` (rôle Administrateur), synchrone, rend
-  le bilan. `ReentrantLock.tryLock` partagé avec le cycle planifié → 409 si un cycle tourne ;
-  409 aussi en mono-base (contrôleur présent via `ObjectProvider`, service absent). Vérifié en
-  deux-bases (200+fusion, 2 appels → 200/409) et en mono-base (409/403, tests auto).
-- ⚠️ **Coût fixe par cycle = ~23 tables × 3 requêtes × RTT.** Sur 115 (queue de latence) un
-  cycle vide = quelques secondes. Ne PAS descendre bien en dessous de 1–2 min sans agréger les
-  filigranes en une requête. Décision honnête livrée à l'utilisateur : garder les deux bases,
-  la base unique 115 ferait payer la latence + sa queue à **toutes** les lectures (mesuré :
-  liste 50 prospects p50 20 ms copie vs 77 ms / p90 300 ms sur 115).
-- **Toute ligne référencée par une création doit exister sur la source** : la validation lit
-  dans la transaction d'écriture. Face à 115 (sur-ensemble) c'est automatique, SAUF pour ce que
-  le CRM crée seul → **rattrapage obligatoire avant activation : `AppUserCredential`,
-  `AppFileObject`, employés créés par l'API**.
-- **Check-list 115 (l'utilisateur s'en charge)** : appliquer `001`, `002`, `003`, `006` —
-  **jamais la 004** (elle supprime la colonne que le légataire lit) — puis recopier les lignes
-  `App*` existantes ; variables `SOURCE_DB_*`.
-- Décision métier laissée ouverte : une pièce supprimée par le CRM reste visible dans OMRAN
-  (la ligne source et son binaire ne sont pas touchés).
-- Hors périmètre restant : synchro descendante périodique (Change Tracking, 23 tables déjà
-  activées) ; reprise de l'historique des binaires 115 ↔ S3.
+- **Le code marche pour INSERT/UPDATE/DELETE** (prouvé sur banc local). Le listener Hibernate
+  écoute `POST_INSERT/UPDATE/DELETE` mais ne sert QUE app→115 ; ce qui capte OMRAN c'est le
+  **Change Tracking** (`CHANGETABLE` renvoie tous les types, MERGE réapplique l'UPDATE).
+- **Pourquoi OMRAN « n'atterrit pas » en réel** : (1) la synchro ne tourne QUE si le backend est
+  lancé en **deux-bases** (`SOURCE_DB_HOST`=115) — **pas encore déployé en prod** ; (2) CT activé
+  sur 115 seulement aujourd'hui ; (3) **seules 20 tables sont suivies** — les sous-tables de
+  prospection (`ComProspectionCity`, `…Profil`, `…TypeBien`) **ne remontent pas**. À ajouter au CT
+  si ces détails doivent remonter.
+- ⚠️ **Vérifier l'état via `AppSyncEtat` et les comptes de tables, JAMAIS via le log** (bufferisé).
 
-### Le banc de test deux-bases local
+### Parc réel (mesuré)
 
-- Source `yesRems`, copie `yesRemsProd`, les deux sur `localhost,49687` (tsix). Compte HTTP :
-  `Khadija` (copie seulement !) — `t.admin` aussi. Sur la source : `tsiory`, `t.nahoma`, etc.
-- Lancer une instance : exporter `DB_*`→copie, `SOURCE_DB_*`→source, `JWT_SECRET`, `S3_*`
-  (valeurs dans `.env` — le lire avec Read, il n'a pas de saut de ligne final),
-  `--server.port=8081 --management.server.port=9092` si l'instance de l'utilisateur tourne.
-- **Données de test à purger** : script complet dans le FEATURE, section « Données de test à
-  retirer (21/09) » — à passer sur les deux bases. Compteurs source avancés (14442/5942/409),
-  toléré.
+- `yesRems` (localhost,49687) = **rôle 115** en local ; `yesRemsProd` = **rôle VPS** en local. CT
+  actif sur `yesRems` (23 tables). `AppSyncEtat` sur `yesRemsProd`.
+- **115 réel** = `197.230.172.136:1433` (public), compte `sasa`/`Azerty123+-`, db_owner. **CT
+  maintenant actif** (base + 20 tables, réversible `SET CHANGE_TRACKING = OFF`).
+- **VPS réel** = tunnel `ssh vps-db -N` → `localhost:1433`, base `yesRemsDev`, `dev`/`pro*0803`,
+  db_owner, **`Encrypt=True` requis**. SQL Server dans Docker (`ports: 127.0.0.1:1433:1433`).
+- Migration `009_AppSyncEtat` appliquée sur `yesRemsDev` ; 20 filigranes posés.
 
-### Parc, doctrine, conventions (inchangé)
+### OMRAN Estate
 
-- 115 = production vivante, lecture seule stricte (compte `sasa`, mdp non consigné) ; FILESTREAM
-  ne compte pas dans la limite Express ; lenteur = disque. `AdmSequence` : `SeqValue` est le
-  compteur (`SeqValueNumber` = largeur de format).
-- Doctrine `Optional`, `IsSystem` (deux conventions justes), commits ASCII `feat(scope):`,
-  ne jamais réécrire un fichier source via PowerShell.
+- Éditeur **Yasmine Engineering Systems** (Tunis, 2005), .NET desktop, **SQL Server exclusif**.
+  **Pas migrable vers MySQL** sauf par l'éditeur. Tant qu'OMRAN vit → SQL Server obligatoire.
+
+### Backend (rappels)
+
+- Mode deux-bases : `SOURCE_DB_HOST` vide = mono-base (comportement d'avant, tests verts). CT sur
+  la source requis pour la synchro descendante. Cycle `SOURCE_DB_SYNC_MINUTES:2`.
+- Insertion ciblée > baseline pour un backfill ponctuel sur lien lent / FK non closes.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- `instructions/FEATURE-source-de-verite-115.md` — **le document de référence de la branche** :
-  conception, pièges, vérifications 18/09 et 21/09, check-list 115, script de nettoyage.
-- `src/main/java/.../config/{DataSourceConfig,CollecteurLignesEcrites,RemonteeLecture,RemonteeLectureListener,EnregistrementCollecteur,SourceDeVeriteProperties}.java`
-- `src/main/java/.../services/piecejointe/{DepotBinaireSource,DepotBinaireAbsent,DepotBinaireVersSource,PieceJointeSupport}.java`
-- `src/main/resources/db/migration/00{1,2,3,6}*.sql` — à appliquer sur 115 (jamais la 004) ;
-  `008_ComProspection_visibilite_legataire.sql` — à appliquer à la main.
-- `../infra/NETBIRD-VPS.md` — runbook VPN (non versionné, `prototype/` n'est pas un repo).
-- `instructions/from_front.md` n° 11 — le filtre par colonne, backlog front prioritaire.
+- `instructions/FEATURE-source-de-verite-115.md` — **document de référence de la branche** (toutes
+  sections : routage, pièces jointes, synchro descendante, cadence 2 min + endpoint manuel).
+- `src/main/java/.../config/SynchronisationDescendante.java` — cycle + `executer()` + `ResultatSync`.
+- `src/main/java/.../controller/synchronisation/SynchronisationController.java` — endpoint manuel.
+- `src/main/java/.../config/{RemonteeLecture,CollecteurLignesEcrites,EnregistrementCollecteur,DataSourceConfig}.java`
+- `src/main/resources/db/migration/009_AppSyncEtat.sql` — filigranes (copies uniquement, jamais 115).
+- `prototype/ct-activer-yesRems.sql` · `prototype/sync-ct-descendant.sql` — scripts CT / conception.
+- Scratchpad `vps_deletions_audit.txt` — audit des PKey supprimés sur `yesRemsDev` (hors repo).
 
 ---
 
 ## 🔧 Environment & Config
 
-- Mesure : `sqlcmd -S localhost,49687 -U tsix -P <voir CLAUDE.md> -d <base> -C`. `-W`/`-y`
-  exclusifs, chemins via `cygpath -w`, préférer un seul `IN (...)` aux boucles.
-- Tests : `./mvnw.cmd test` (~4 min, 895). SQL Server requis.
-- Git : `node .claude/scripts/git-flow.mjs` depuis `prototype/`. Branche courante
-  `feat/source-de-verite-115`, **poussée, PR ouverte, en attente de merge**.
-- ⚠️ L'instance backend de l'utilisateur (:8080) date d'avant les correctifs du 21/09 —
-  redémarrer après pull pour retester.
+- Banc local deux-bases : `DB_*`=yesRemsProd, `SOURCE_DB_*`=yesRems, tous `localhost,49687` (tsix).
+  Lancer : `./mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=808X
+  --management.server.port=909X"` (varier les ports, 9091/9092 souvent occupés).
+- Tests : `./mvnw.cmd test` (~4 min, 901 verts au dernier passage).
+- Git : `node .claude/scripts/git-flow.mjs` depuis `prototype/`. Branche `feat/source-de-verite-115`
+  **poussée, PR ouverte** (3 commits de la session : `366a2bc`, `680a1a4`, `c00447b` + docs).
+- ⚠️ Identifiants VPS/115 en clair au fil des sessions — dette connue.
 
 ---
 
 ## ⏭️ Next Step
 
-> **Attendre la merge de la PR `feat/source-de-verite-115`** (l'utilisateur la fait sur GitHub),
-> puis `node .claude/scripts/git-flow.mjs sync back`. Ensuite, passer le script de nettoyage
-> des données de test (FEATURE, section 21/09) sur `yesRems` et `yesRemsProd`.
+> **Décider avec l'utilisateur du déploiement prod de la synchro descendante** : pour qu'OMRAN
+> atterrisse réellement sur la nouvelle app, il faut lancer le backend de prod en **mode deux-bases**
+> (`SOURCE_DB_HOST`=115). Le code, le CT sur 115 et les filigranes du VPS sont déjà prêts.
 
 ### Backlog
 
-**Source de vérité / infra (l'utilisateur pilote)**
-- [ ] Merge PR + `sync back` ; nettoyage des données de test (script dans le FEATURE).
-- [ ] Côté 115 (utilisateur) : migrations 001/002/003/006, rattrapage `App*`, variables prod.
-- [ ] VPN NetBird : DNS `vpn.tsiory.tech` → étapes de `../infra/NETBIRD-VPS.md`.
-- [x] ~~Synchro descendante périodique~~ — faite et vérifiée le 21/09 (cycle 5 min).
-- [ ] Sur le banc : `AppSyncEtat` existe désormais dans `yesRemsProd` (22 filigranes posés,
-      baseline passée sur `ComProspectionType`) — c'est l'état nominal de la copie, à garder.
-- [ ] Reprise de l'historique des binaires (115 ↔ S3) — les deux sens.
-- [ ] Décision métier : répercuter ou non la suppression d'une pièce côté légataire.
-
-**Backend (backlog stable)**
-- [ ] Lot S — filtre par colonne (`from_front.md` n° 11), insensible casse ET accents.
-- [ ] 13 champs du DTO encaissement sans description springdoc (règle 10).
-- [ ] `ModifierProspectionRequest` : `tempDescription`, `tempTel`, `tempEmail`, `commercialId`.
-- [ ] `CreerReglementRequest.dateReglement` publiée par le spec mais refusée (400).
-- [ ] Ordre de pagination non déterministe ; encaissements non affectés (16 pièces, 6,4 MDH) ;
-      verrous pessimistes ; seconde couche de permissions ; onglets fiche dossier ;
-      contrôles de création OMRAN (décision produit) ; branches mergées à supprimer.
+- [ ] **Ajouter les sous-tables de prospection au Change Tracking** (`ComProspectionCity`, `…Profil`,
+      `…TypeBien`…) + à la liste synchronisée, si ces détails doivent remonter d'OMRAN.
+- [ ] Les **13 lignes irréductibles** sur `yesRemsDev` (12 `StlSettlementLine` + 1 `ComActionMessage`,
+      FK vers modules achat/location) : les laisser, ou étendre le périmètre à ces modules ?
+- [ ] Décider si le **CT reste actif sur 115** en attendant le déploiement (laissé actif ; réversible).
+- [ ] **Merger la PR `feat/source-de-verite-115`**, puis `sync back`.
+- [ ] Décision métier : répercuter ou non la suppression d'une pièce jointe côté légataire.
+- [ ] Backlog stable : filtre par colonne (`from_front.md` n°11), 13 champs encaissement sans
+      description springdoc, `ModifierProspectionRequest` (tempDescription/tempTel/tempEmail),
+      pagination non déterministe, encaissements non affectés, verrous pessimistes.
