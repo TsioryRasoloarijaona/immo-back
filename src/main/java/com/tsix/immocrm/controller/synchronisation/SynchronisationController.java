@@ -25,7 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Synchronisation", description = "Rapatriement, à la demande, de ce que le logiciel "
         + "de bureau écrit sur la base de référence vers la copie de lecture du CRM. En temps "
         + "normal un cycle automatique s'en charge toutes les deux minutes ; cet endpoint permet "
-        + "de le déclencher immédiatement. Réservé au rôle Administrateur.")
+        + "de le déclencher immédiatement. Ouvert à l'Administrateur et aux commerciaux "
+        + "(Commercial, Commercial Chef, Commercial Aide) — l'opération est idempotente, sans "
+        + "risque de doublon, et un seul cycle tourne à la fois.")
 @RestController
 @RequestMapping("/api/synchronisation")
 public class SynchronisationController {
@@ -37,7 +39,7 @@ public class SynchronisationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('Administrateur')")
+    @PreAuthorize("hasAnyRole('Administrateur', 'Commercial', 'Commercial Chef', 'Commercial Aide')")
     @Operation(
             summary = "Déclenche immédiatement un cycle de synchronisation descendante",
             description = "Rapatrie sur-le-champ, dans la copie de lecture, ce que le logiciel de "
@@ -48,13 +50,15 @@ public class SynchronisationController {
                     + "secondes en régime normal ; plus long si une table doit repartir d'une "
                     + "reconstruction complète). **Un seul cycle à la fois** : si un cycle "
                     + "automatique ou manuel tourne déjà, l'appel renvoie 409 sans rien relancer. "
-                    + "L'opération est idempotente et sans risque de doublon. Réservé au rôle "
-                    + "Administrateur."
+                    + "L'opération est idempotente et sans risque de doublon. Ouvert à "
+                    + "l'Administrateur et aux commerciaux (Commercial, Commercial Chef, "
+                    + "Commercial Aide)."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Cycle exécuté ; le corps décrit ce "
                     + "qui a été rapatrié."),
-            @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
+            @ApiResponse(responseCode = "403", description = "L'appelant n'est ni Administrateur "
+                    + "ni commercial."),
             @ApiResponse(responseCode = "409", description = "Soit un cycle est déjà en cours, "
                     + "soit l'application tourne en mono-base (aucune base de référence "
                     + "distincte) : rien n'est déclenché. Le message précise le cas.")
