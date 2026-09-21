@@ -194,11 +194,31 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}/contacts")
+    @Operation(
+            summary = "Contacts du prospect",
+            description = "Contacts (conjoint, notaire, apporteur…) liés au prospect — lignes "
+                    + "`CfgTierContact` jointes au `CfgTier` de chaque personne (nom, mobile, "
+                    + "téléphone, e-mail) et à son type de relation."
+    )
     public List<ContactProspectDto> getContacts(@PathVariable UUID id) {
         return subResourcesService.contacts(id);
     }
 
     @PostMapping("/{id}/contacts")
+    @Operation(
+            summary = "Ajoute un contact au prospect",
+            description = "La personne-contact est soit un `CfgTier` existant (`contactProspectId`), "
+                    + "soit **créée à la volée** (`nouveauContact`) puis liée — comme l'écran "
+                    + "légataire, qui insère un nouveau `CfgTier` puis le lien `CfgTierContact`. "
+                    + "Fournir l'un **ou** l'autre ; `relationTypeId` est obligatoire."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contact créé/lié et rattaché."),
+            @ApiResponse(responseCode = "400", description = "`relationTypeId` manquant ; ni "
+                    + "`contactProspectId` ni `nouveauContact` (ou les deux) ; ou référentiel "
+                    + "introuvable."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
     public ContactProspectDto ajouterContact(@PathVariable UUID id, @RequestBody CreerContactProspectRequest request) {
         return subResourcesService.ajouterContact(id, request);
     }

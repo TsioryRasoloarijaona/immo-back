@@ -57,6 +57,7 @@ public class ProspectSubResourcesService {
     private final CfgTierContactRepository tierContactRepository;
     private final CfgRelationTypeRepository relationTypeRepository;
     private final PerimetreCommercialService perimetreService;
+    private final ProspectService prospectService;
 
     public ProspectSubResourcesService(CfgTierRepository tierRepository,
                                         ComProspectionRepository prospectionRepository,
@@ -66,7 +67,8 @@ public class ProspectSubResourcesService {
                                         StrHistoryRepository historyRepository,
                                         CfgTierContactRepository tierContactRepository,
                                         CfgRelationTypeRepository relationTypeRepository,
-                                        PerimetreCommercialService perimetreService) {
+                                        PerimetreCommercialService perimetreService,
+                                        ProspectService prospectService) {
         this.perimetreService = perimetreService;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
@@ -76,6 +78,7 @@ public class ProspectSubResourcesService {
         this.historyRepository = historyRepository;
         this.tierContactRepository = tierContactRepository;
         this.relationTypeRepository = relationTypeRepository;
+        this.prospectService = prospectService;
     }
 
     private void requireProspect(UUID id) {
@@ -162,17 +165,34 @@ public class ProspectSubResourcesService {
                 .map(ProspectSubResourcesService::toContactDto).toList();
     }
 
+    /**
+     * Ajoute un contact au tiers. La personne-contact est soit un {@code CfgTier} existant
+     * ({@code contactProspectId}), soit créée à la volée ({@code nouveauContact}) — comme le fait
+     * OMRAN, qui insère un nouveau {@code CfgTier} puis le lien {@code CfgTierContact}. Fournir
+     * exactement l'un des deux ; {@code relationTypeId} est requis.
+     */
     @Transactional
     public ContactProspectDto ajouterContact(UUID prospectId, CreerContactProspectRequest request) {
         CfgTier prospect = tierRepository.findById(prospectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + prospectId));
-        if (request.contactProspectId() == null || request.relationTypeId() == null) {
-            throw new InvalidRequestException("contactProspectId et relationTypeId sont requis");
+        if (request.relationTypeId() == null) {
+            throw new InvalidRequestException("relationTypeId est requis");
         }
-        CfgTier contact = tierRepository.findById(request.contactProspectId())
-                .orElseThrow(() -> new InvalidRequestException("Contact (CfgTier) introuvable: " + request.contactProspectId()));
+        boolean lienExistant = request.contactProspectId() != null;
+        boolean creation = request.nouveauContact() != null;
+        if (lienExistant == creation) {
+            throw new InvalidRequestException(
+                    "Fournir soit contactProspectId (tiers existant), soit nouveauContact (à créer), mais pas les deux.");
+        }
         CfgRelationType relationType = relationTypeRepository.findById(request.relationTypeId())
                 .orElseThrow(() -> new InvalidRequestException("CfgRelationType introuvable: " + request.relationTypeId()));
+
+        CfgTier contact = lienExistant
+                ? tierRepository.findById(request.contactProspectId())
+                        .orElseThrow(() -> new InvalidRequestException(
+                                "Contact (CfgTier) introuvable: " + request.contactProspectId()))
+                // Même chemin que POST /api/prospects : code séquentiel + drapeaux hérités posés.
+                : prospectService.createEntity(request.nouveauContact());
 
         CfgTierContact link = new CfgTierContact();
         link.setId(UUID.randomUUID());
@@ -180,6 +200,38 @@ public class ProspectSubResourcesService {
         link.setCfgContact(contact);
         link.setCfgRelationType(relationType);
         return toContactDto(tierContactRepository.save(link));
+    }
+
+    /**
+     * {@code GET /api/prospections/{id}/contacts} — les contacts du prospect de cette prospection.
+     * Une pré-prospection (sans prospect lié) n'a par construction aucun contact : liste vide,
+     * jamais 400. 404 si la prospection est inconnue.
+     */
+    public List<ContactProspectDto> contactsDeProspection(UUID prospectionId) {
+        ComProspection prospection = prospectionRepository.findById(prospectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+        if (prospection.getCfgProspect() == null) {
+            return List.of();
+        }
+        return contacts(prospection.getCfgProspect().getId());
+    }
+
+    /**
+     * {@code POST /api/prospections/{id}/contacts} — ajoute un contact au prospect de la
+     * prospection. 404 si la prospection est inconnue, 400 si elle n'a pas encore de prospect
+     * (pré-prospection : créer d'abord le prospect via
+     * {@code POST /api/pre-prospections/{id}/creer-prospect}).
+     */
+    @Transactional
+    public ContactProspectDto ajouterContactAProspection(UUID prospectionId, CreerContactProspectRequest request) {
+        ComProspection prospection = prospectionRepository.findById(prospectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+        if (prospection.getCfgProspect() == null) {
+            throw new InvalidRequestException(
+                    "Cette prospection n'a pas de prospect : créer d'abord le prospect "
+                    + "(POST /api/pre-prospections/{id}/creer-prospect) avant d'ajouter un contact.");
+        }
+        return ajouterContact(prospection.getCfgProspect().getId(), request);
     }
 
     @Transactional
@@ -220,11 +272,14 @@ public class ProspectSubResourcesService {
     }
 
     private static ContactProspectDto toContactDto(CfgTierContact link) {
+        CfgTier contact = link.getCfgContact();
         return new ContactProspectDto(
                 link.getId(),
-                link.getCfgContact() != null ? link.getCfgContact().getId() : null,
-                TierNomFormatter.nom(link.getCfgContact()),
-                link.getCfgContact() != null ? link.getCfgContact().getPhone() : null,
+                contact != null ? contact.getId() : null,
+                TierNomFormatter.nom(contact),
+                contact != null ? contact.getMobile() : null,
+                contact != null ? contact.getPhone() : null,
+                contact != null ? contact.getEMail() : null,
                 link.getCfgRelationType() != null ? link.getCfgRelationType().getId() : null,
                 link.getCfgRelationType() != null ? link.getCfgRelationType().getDescription() : null
         );

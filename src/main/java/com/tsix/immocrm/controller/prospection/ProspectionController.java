@@ -3,6 +3,8 @@ package com.tsix.immocrm.controller.prospection;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.prospect.ContactProspectDto;
+import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.AjouterAutreTrancheRequest;
 import com.tsix.immocrm.dto.prospection.AjouterCategorieRequest;
@@ -38,6 +40,7 @@ import com.tsix.immocrm.services.prospection.OffrePrixService;
 import com.tsix.immocrm.services.prospection.DevisService;
 import com.tsix.immocrm.services.prospection.NdaService;
 import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
+import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.services.prospection.ProspectionQualificationService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospection.ProspectionFicheService;
@@ -128,6 +131,7 @@ public class ProspectionController {
     private final ProspectionFichePdfRenderer prospectionFichePdfRenderer;
     private final ConfirmationVisiteService confirmationVisiteService;
     private final OffrePrixService offrePrixService;
+    private final ProspectSubResourcesService subResourcesService;
 
     public ProspectionController(ProspectionService prospectionService,
                                   ProspectionQualificationService qualificationService,
@@ -139,7 +143,8 @@ public class ProspectionController {
                                   ProspectionFicheService prospectionFicheService,
                                   ProspectionFichePdfRenderer prospectionFichePdfRenderer,
                                   ConfirmationVisiteService confirmationVisiteService,
-                                  OffrePrixService offrePrixService) {
+                                  OffrePrixService offrePrixService,
+                                  ProspectSubResourcesService subResourcesService) {
         this.confirmationVisiteService = confirmationVisiteService;
         this.offrePrixService = offrePrixService;
         this.prospectionService = prospectionService;
@@ -151,6 +156,7 @@ public class ProspectionController {
         this.ndaPdfRenderer = ndaPdfRenderer;
         this.prospectionFicheService = prospectionFicheService;
         this.prospectionFichePdfRenderer = prospectionFichePdfRenderer;
+        this.subResourcesService = subResourcesService;
     }
 
     @GetMapping
@@ -740,6 +746,47 @@ public class ProspectionController {
     public ResponseEntity<Void> retirerAutreTranche(@PathVariable UUID id, @PathVariable UUID itemId) {
         qualificationService.retirerAutreTranche(id, itemId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/contacts")
+    @Operation(
+            summary = "Contacts du prospect de la prospection",
+            description = "Les contacts (conjoint, notaire, apporteur…) du prospect lié à cette "
+                    + "prospection — lignes `CfgTierContact`, jointes au `CfgTier` de chaque "
+                    + "personne pour le nom, le mobile, le téléphone et l'e-mail. Destiné à "
+                    + "accompagner l'affichage du détail de la prospection.\n\n"
+                    + "Une pré-prospection (sans prospect encore lié) renvoie une **liste vide**, "
+                    + "jamais une erreur : le lead n'est pas perdu."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste des contacts (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public List<ContactProspectDto> getContacts(@PathVariable UUID id) {
+        return subResourcesService.contactsDeProspection(id);
+    }
+
+    @PostMapping("/{id}/contacts")
+    @Operation(
+            summary = "Ajoute un contact au prospect de la prospection",
+            description = "Rattache un contact au prospect lié à la prospection. La personne-contact "
+                    + "est soit un `CfgTier` existant (`contactProspectId`), soit **créée à la "
+                    + "volée** (`nouveauContact` : nom, prénom, mobile, téléphone, e-mail…) puis "
+                    + "liée — c'est ce que fait l'écran légataire, qui insère un nouveau `CfgTier` "
+                    + "puis le lien `CfgTierContact`. Fournir l'un **ou** l'autre. `relationTypeId` "
+                    + "(type de relation, p.ex. « Conjoint ») est obligatoire.\n\n"
+                    + "Même effet que `POST /api/prospects/{prospectId}/contacts`, mais adressé par "
+                    + "la prospection : le prospect est résolu depuis elle."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contact créé/lié et rattaché."),
+            @ApiResponse(responseCode = "400", description = "`relationTypeId` manquant ; ni "
+                    + "`contactProspectId` ni `nouveauContact` (ou les deux) ; référentiel "
+                    + "introuvable ; ou la prospection n'a pas encore de prospect."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public ContactProspectDto ajouterContact(@PathVariable UUID id, @RequestBody CreerContactProspectRequest request) {
+        return subResourcesService.ajouterContactAProspection(id, request);
     }
 
     // -- GAP-07 (low priority): devis --
