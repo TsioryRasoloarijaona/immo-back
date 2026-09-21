@@ -33,8 +33,23 @@ class SynchronisationControllerTest {
     }
 
     @Test
-    @WithMockUser // rôle USER par défaut, pas Administrateur
-    void sansLeRoleAdministrateurCEst403() throws Exception {
+    @WithMockUser(roles = "Commercial")
+    void leCommercialEstAutorise_409EnMonoBase() throws Exception {
+        // Autorisé (sinon 403) : en mono-base il tombe sur le 409, comme l'Administrateur.
+        mockMvc.perform(post("/api/synchronisation"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @WithMockUser(roles = "Commercial Chef")
+    void leCommercialChefEstAutorise_409EnMonoBase() throws Exception {
+        mockMvc.perform(post("/api/synchronisation"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @WithMockUser(roles = "Comptabilité") // ni admin ni commercial
+    void unAutreRoleReste403() throws Exception {
         mockMvc.perform(post("/api/synchronisation"))
                 .andExpect(status().isForbidden());
     }
