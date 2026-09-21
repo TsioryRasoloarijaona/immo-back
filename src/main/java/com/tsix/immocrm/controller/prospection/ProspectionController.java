@@ -439,6 +439,30 @@ public class ProspectionController {
     }
 
     @PostMapping("/{id}/transformer")
+    @Operation(
+            summary = "Transforme une pré-prospection en prospection (commercial + tranche)",
+            description = "Dernière étape de qualification d'un lead : affecte le commercial et "
+                    + "**garantit qu'une tranche (projet) est rattachée**. Requiert qu'un prospect "
+                    + "soit déjà lié via `POST /api/pre-prospections/{id}/creer-prospect` — 400 sinon.\n\n"
+                    + "**La tranche est obligatoire.** Règle métier plus stricte que le légataire "
+                    + "(qui n'impose rien au niveau base — seule `PKey` est NOT NULL sur "
+                    + "`ComProspection`), justifiée sur données réelles : 99,83 % des prospections "
+                    + "qualifiées (14 700/14 725) portent déjà une tranche. Fournir `trancheId` pour "
+                    + "la poser/remplacer ici (avec périmètre commercial et cohérence `articleId`, "
+                    + "comme `PATCH .../tranche-principale`) ; si `trancheId` est omis, la "
+                    + "prospection doit **déjà** en porter une, faute de quoi la transformation "
+                    + "est refusée (400)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospection transformée : commercial "
+                    + "affecté et tranche garantie."),
+            @ApiResponse(responseCode = "400", description = "`commercialId` manquant ; aucun "
+                    + "prospect lié ; commercial/tranche/article introuvable ; l'article ne "
+                    + "appartient pas à la tranche ; ou aucune tranche fournie ni déjà présente."),
+            @ApiResponse(responseCode = "403", description = "Le projet de la tranche fournie n'est "
+                    + "pas dans le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
     public ProspectionDetailDto transformer(@PathVariable UUID id, @RequestBody TransformerProspectionRequest request) {
         return prospectionService.transformer(id, request);
     }

@@ -1,8 +1,12 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,12 +44,29 @@ class ProspectionHistoriqueTest {
     @Autowired
     private CfgTierRepository tierRepository;
 
+    @Autowired
+    private CfgProjectRepository projectRepository;
+
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+
     @Test
     void historique_tracePassageProspectPuisProspection() throws Exception {
         ComProspection pre = new ComProspection();
         pre.setId(UUID.randomUUID());
         pre.setCode("PSN-HIST-1");
         prospectionRepository.save(pre);
+
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-HIST-1");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-HIST-1");
+        tranche.setCfgProject(project);
+        tranche = trancheRepository.save(tranche);
 
         // 1) pré-prospect -> prospect.
         mockMvc.perform(post("/api/pre-prospections/{id}/creer-prospect", pre.getId())
@@ -59,10 +80,11 @@ class ProspectionHistoriqueTest {
         commercial.setLastName("Commercial Hist");
         tierRepository.save(commercial);
 
-        // 2) prospect -> prospection (commercial assigné).
+        // 2) prospect -> prospection (commercial assigné + tranche obligatoire).
         mockMvc.perform(post("/api/prospections/{id}/transformer", pre.getId())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"commercialId\":\"" + commercial.getId() + "\"}"))
+                        .content("{\"commercialId\":\"" + commercial.getId() + "\",\"trancheId\":\""
+                                + tranche.getId() + "\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/prospections/{id}/historique", pre.getId()))

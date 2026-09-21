@@ -841,9 +841,20 @@ public class ProspectionService {
     }
 
     /**
-     * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, by
-     * assigning the commercial. Requires a prospect to already be linked (via
-     * {@link #creerProspect}) — 400 otherwise.
+     * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, en affectant
+     * le commercial <b>et</b> en garantissant qu'une tranche (projet) est rattachée. Requiert
+     * qu'un prospect soit déjà lié (via {@link #creerProspect}) — 400 sinon.
+     *
+     * <p><b>La tranche est obligatoire à la sortie.</b> Règle métier plus stricte que le légataire
+     * (qui n'impose rien au niveau base) mais fondée sur les données réelles : 99,83 % des
+     * prospections qualifiées (14 700/14 725) portent déjà une tranche. Deux cas :
+     * <ul>
+     *   <li>{@code trancheId} fourni → la tranche est posée/remplacée ici, avec contrôle de
+     *       périmètre commercial (403 sur un projet non affecté) et validation croisée de
+     *       {@code articleId} (il doit appartenir à la tranche), exactement comme
+     *       {@link #modifierTranchePrincipale} ;</li>
+     *   <li>{@code trancheId} omis → la prospection doit <b>déjà</b> porter une tranche, sinon 400.</li>
+     * </ul>
      */
     @Transactional
     public ProspectionDetailDto transformer(UUID id, TransformerProspectionRequest request) {
@@ -858,6 +869,37 @@ public class ProspectionService {
 
         CfgTier commercial = tierRepository.findById(request.commercialId())
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
+
+        // Tranche obligatoire : fournie ici (on la pose, avec périmètre + cohérence article), ou
+        // déjà présente sur la prospection. Sinon la transformation est refusée.
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            perimetreService.verifierEcritureSurTranche(tranche,
+                    "Transformation de prospection sur la tranche " + tranche.getCode());
+            if (request.articleId() != null) {
+                StkItem article = stkItemRepository.findById(request.articleId())
+                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                    throw new InvalidRequestException(
+                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+                }
+                prospection.setStkItem(article);
+            } else if (prospection.getStkItem() != null
+                    && (prospection.getStkItem().getStkHierarchy() == null
+                        || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
+                // L'article déjà assigné appartenait à l'ancienne tranche : on le désassigne
+                // plutôt que de laisser trancheId/articleId incohérents (voir modifierTranchePrincipale).
+                prospection.setStkItem(null);
+            }
+            prospection.setStkHierarchy(tranche);
+        } else if (request.articleId() != null) {
+            throw new InvalidRequestException("articleId nécessite trancheId");
+        } else if (prospection.getStkHierarchy() == null) {
+            throw new InvalidRequestException(
+                    "Une tranche (projet) est obligatoire pour transformer en prospection : "
+                    + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
+        }
 
         prospection.setCfgCommercial(commercial);
         prospection = prospectionRepository.save(prospection);
