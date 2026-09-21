@@ -347,10 +347,15 @@ public class ProspectionController {
             summary = "Crée une prospection qualifiée pour un prospect existant",
             description = "instructions/from_front.md demande #9 — le point d'entrée du bouton "
                     + "\"Nouvelle prospection\", pour le cas où le prospect existe déjà (créé au "
-                    + "préalable via `POST /api/prospects`, déjà câblé côté front). `prospectId` "
-                    + "est **obligatoire** ; tous les autres champs sont optionnels et suivent la "
-                    + "même sémantique que `PATCH /api/prospections/{id}` (mise à jour uniquement "
-                    + "des champs fournis). `code` est toujours généré serveur (compteur "
+                    + "préalable via `POST /api/prospects`, déjà câblé côté front).\n\n"
+                    + "**Champs obligatoires (alignés sur l'écran légataire OMRAN)** : `prospectId`, "
+                    + "`notes` (Notes, non vide), `origineId` (Source de contact), `typeContactId` "
+                    + "(Type — attention, c'est `ComActionMessageType`, à ne pas confondre avec la "
+                    + "vocation `vocationId`), `etapeId` (Nature) et `trancheId` (Tranche). Un de "
+                    + "ces champs manquant ⟶ 400 nommant le champ. `commercialId` reste optionnel "
+                    + "(OMRAN ne le bloque pas à la création). Les autres champs sont optionnels et "
+                    + "suivent la même sémantique que `PATCH /api/prospections/{id}` (mise à jour "
+                    + "uniquement des champs fournis). `code` est toujours généré serveur (compteur "
                     + "`AdmSequence` \"Prospection\", format \"AA/NNNNN\"), jamais fourni par le "
                     + "client. `commercialId` peut être fourni directement ici pour obtenir une "
                     + "prospection immédiatement complète en un seul appel — sinon "
@@ -364,9 +369,11 @@ public class ProspectionController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospection créée."),
-            @ApiResponse(responseCode = "400", description = "`prospectId` manquant, ou un id "
-                    + "fourni (prospect/commercial/tranche/article/origine/...) est introuvable, "
-                    + "ou l'article fourni n'appartient pas à la tranche fournie."),
+            @ApiResponse(responseCode = "400", description = "Un champ obligatoire est manquant "
+                    + "(`prospectId`, `notes`, `origineId`, `typeContactId`, `etapeId`, "
+                    + "`trancheId`), ou un id fourni "
+                    + "(prospect/commercial/tranche/article/origine/type/nature/...) est "
+                    + "introuvable, ou l'article fourni n'appartient pas à la tranche fournie."),
             @ApiResponse(responseCode = "403", description = "Le projet de la `trancheId` fournie "
                     + "n'est pas dans le périmètre commercial de l'appelant (403 et non 404 : "
                     + "c'est l'appelant qui a nommé la tranche).")

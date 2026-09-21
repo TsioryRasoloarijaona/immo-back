@@ -75,10 +75,48 @@ sur `ComProspection` (IN/UP) confirmées pour la session du 21/09. C'est cette t
 qui a servi de source de vérité sur les colonnes réellement écrites par l'écran de
 prospection et sur le fait qu'OMRAN n'impose pas la tranche.
 
+## Champs obligatoires à la création — `POST /api/prospections`
+
+Deuxième volet, même branche. La liste des champs obligatoires vient directement du
+**message de validation de l'écran OMRAN** (prospection `26/05946`) :
+
+> La valeur du champ [Notes] est obligatoire — [Source de contact] — [Type] —
+> [Nature] — [Tranche].
+
+Mapping libellé → colonne **vérifié sur la trace d'audit réelle** (au brouillon de
+17:02 la ligne n'avait que `StkVocationId` + `TempDescription` ; les 5 colonnes
+passées de `NULL` → remplies à 17:23 sont exactement celles réclamées) :
+
+| Champ OMRAN | Colonne SQL | Champ API | Valeur test (26/05946) |
+|---|---|---|---|
+| Notes | `Notes` | `notes` | « note de omran » |
+| Source de contact | `ComProspectionOriginId` | `origineId` | FACEBOOK |
+| Type | `ComActionMessageTypeId` | `typeContactId` | Message entrant |
+| Nature | `ComProspectionKindId` | `etapeId` | 1 A TRAITER |
+| Tranche | `StkHierarchyId` | `trancheId` | AYAD PRIVATE FERME BRETONE |
+
+`POST /api/prospections` exige désormais ces 5 (+ `prospectId`). Absents ⟶ **400**
+nommant le champ ; `notes` vide/blanc est refusé (passe par `texteLibre()`).
+`commercialId` **reste optionnel** — OMRAN ne le bloque pas à la création (il peut
+être posé plus tard par `transformer`).
+
+**Piège vérifié** : « Type » = `ComActionMessageType` (`typeContactId`), **pas** la
+vocation (`StkVocationId` = VENTE, déjà présente au brouillon donc non réclamée). Le
+front doit brancher le libellé « Type » sur `typeContactId`, jamais `vocationId`.
+
+### Impact front (2)
+
+`POST /api/prospections` avec seulement `{prospectId}` renvoie maintenant **400**. Le
+formulaire « Nouvelle prospection » doit fournir Notes + Source de contact + Type +
+Nature + Tranche. Source de vérité : `/api-docs` (DTO annoté `requiredMode = REQUIRED`).
+
 ## Fichiers
 
 - `dto/prospection/TransformerProspectionRequest.java` — `trancheId` + `articleId`, `@Schema`.
-- `services/prospection/ProspectionService.java` — `transformer()` : invariant tranche.
-- `controller/prospection/ProspectionController.java` — annotations springdoc sur `transformer`.
+- `dto/prospection/CreerProspectionRequest.java` — `@Schema requiredMode` sur les 5 champs obligatoires.
+- `services/prospection/ProspectionService.java` — `transformer()` (invariant tranche) + `creerProspection()` (5 champs requis).
+- `controller/prospection/ProspectionController.java` — springdoc sur `transformer` et `POST /api/prospections`.
 - `test/.../ProspectionTransformerTest.java` — 7 cas (dont 400 sans tranche, 400 article incohérent).
 - `test/.../ProspectionHistoriqueTest.java` — mis à jour (fournit `trancheId`).
+- `test/.../ProspectionCreationTest.java` — 12 cas (un « manquant → 400 » par champ + notes vide).
+- `test/.../CreationConformiteLegataireTest.java` — helper de création alimente les 5 champs.

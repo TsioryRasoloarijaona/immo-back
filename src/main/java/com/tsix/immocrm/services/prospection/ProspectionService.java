@@ -687,15 +687,36 @@ public class ProspectionService {
     /**
      * {@code POST /api/prospections}: creates a fully-qualified prospection in one call, for a
      * prospect that already exists — see {@link CreerProspectionRequest}'s javadoc for how this
-     * differs from the pré-prospection flow. {@code prospectId} is required; every other field is
-     * optional and validated for existence only when provided, same convention as
-     * {@link #modifierProspection}.
+     * differs from the pré-prospection flow.
+     *
+     * <p><b>Champs obligatoires alignés sur l'écran légataire.</b> OMRAN refuse d'enregistrer une
+     * prospection sans ces cinq valeurs (message de validation constaté sur l'écran, prospection
+     * {@code 26/05946}) : <b>Notes</b> ({@code notes}), <b>Source de contact</b> ({@code origineId}
+     * → {@code ComProspectionOriginId}), <b>Type</b> ({@code typeContactId} →
+     * {@code ComActionMessageTypeId}), <b>Nature</b> ({@code etapeId} → {@code ComProspectionKindId})
+     * et <b>Tranche</b> ({@code trancheId} → {@code StkHierarchyId}). On les exige donc ici aussi.
+     * Le mapping libellé→colonne a été vérifié sur les traces d'audit réelles : au brouillon, ces
+     * cinq colonnes étaient {@code NULL} et sont exactement celles qu'OMRAN a réclamées puis
+     * remplies. {@code prospectId} reste requis ; {@code commercialId} reste optionnel (posé
+     * immédiatement, ou plus tard par {@code POST .../transformer}) — OMRAN ne le compte pas parmi
+     * les champs bloquants de l'écran de création. Les autres champs sont optionnels et validés
+     * pour existence uniquement quand fournis, comme {@link #modifierProspection}.
      */
     @Transactional
     public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
         Requis.champ(request.prospectId(), "prospectId est requis");
         CfgTier prospect = tierRepository.findById(request.prospectId())
                 .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
+
+        // Champs obligatoires de l'écran légataire (Notes, Source de contact, Type, Nature,
+        // Tranche). Validés en amont pour un 400 clair et par champ ; l'existence des référentiels
+        // reste contrôlée par les blocs ci-dessous. `notes` passe par texteLibre() pour refuser
+        // aussi une chaîne vide/blanche, pas seulement null.
+        String notes = Requis.champ(texteLibre(request.notes()), "notes est requis (champ Notes)");
+        Requis.champ(request.origineId(), "origineId est requis (champ Source de contact)");
+        Requis.champ(request.typeContactId(), "typeContactId est requis (champ Type)");
+        Requis.champ(request.etapeId(), "etapeId est requis (champ Nature)");
+        Requis.champ(request.trancheId(), "trancheId est requis (champ Tranche)");
 
         ComProspection prospection = new ComProspection();
         prospection.setId(UUID.randomUUID());
@@ -783,7 +804,7 @@ public class ProspectionService {
         if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
         if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
         if (request.ancienClient() != null) prospection.setIsOldCustomer(request.ancienClient());
-        if (request.notes() != null) prospection.setNotes(request.notes());
+        prospection.setNotes(notes);
 
         prospection = prospectionRepository.save(prospection);
         ecrireInteractionDeCreation(prospection);
