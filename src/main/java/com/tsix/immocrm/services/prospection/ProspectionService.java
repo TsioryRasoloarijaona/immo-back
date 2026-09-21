@@ -687,15 +687,36 @@ public class ProspectionService {
     /**
      * {@code POST /api/prospections}: creates a fully-qualified prospection in one call, for a
      * prospect that already exists — see {@link CreerProspectionRequest}'s javadoc for how this
-     * differs from the pré-prospection flow. {@code prospectId} is required; every other field is
-     * optional and validated for existence only when provided, same convention as
-     * {@link #modifierProspection}.
+     * differs from the pré-prospection flow.
+     *
+     * <p><b>Champs obligatoires alignés sur l'écran légataire.</b> OMRAN refuse d'enregistrer une
+     * prospection sans ces cinq valeurs (message de validation constaté sur l'écran, prospection
+     * {@code 26/05946}) : <b>Notes</b> ({@code notes}), <b>Source de contact</b> ({@code origineId}
+     * → {@code ComProspectionOriginId}), <b>Type</b> ({@code typeContactId} →
+     * {@code ComActionMessageTypeId}), <b>Nature</b> ({@code etapeId} → {@code ComProspectionKindId})
+     * et <b>Tranche</b> ({@code trancheId} → {@code StkHierarchyId}). On les exige donc ici aussi.
+     * Le mapping libellé→colonne a été vérifié sur les traces d'audit réelles : au brouillon, ces
+     * cinq colonnes étaient {@code NULL} et sont exactement celles qu'OMRAN a réclamées puis
+     * remplies. {@code prospectId} reste requis ; {@code commercialId} reste optionnel (posé
+     * immédiatement, ou plus tard par {@code POST .../transformer}) — OMRAN ne le compte pas parmi
+     * les champs bloquants de l'écran de création. Les autres champs sont optionnels et validés
+     * pour existence uniquement quand fournis, comme {@link #modifierProspection}.
      */
     @Transactional
     public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
         Requis.champ(request.prospectId(), "prospectId est requis");
         CfgTier prospect = tierRepository.findById(request.prospectId())
                 .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
+
+        // Champs obligatoires de l'écran légataire (Notes, Source de contact, Type, Nature,
+        // Tranche). Validés en amont pour un 400 clair et par champ ; l'existence des référentiels
+        // reste contrôlée par les blocs ci-dessous. `notes` passe par texteLibre() pour refuser
+        // aussi une chaîne vide/blanche, pas seulement null.
+        String notes = Requis.champ(texteLibre(request.notes()), "notes est requis (champ Notes)");
+        Requis.champ(request.origineId(), "origineId est requis (champ Source de contact)");
+        Requis.champ(request.typeContactId(), "typeContactId est requis (champ Type)");
+        Requis.champ(request.etapeId(), "etapeId est requis (champ Nature)");
+        Requis.champ(request.trancheId(), "trancheId est requis (champ Tranche)");
 
         ComProspection prospection = new ComProspection();
         prospection.setId(UUID.randomUUID());
@@ -783,7 +804,7 @@ public class ProspectionService {
         if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
         if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
         if (request.ancienClient() != null) prospection.setIsOldCustomer(request.ancienClient());
-        if (request.notes() != null) prospection.setNotes(request.notes());
+        prospection.setNotes(notes);
 
         prospection = prospectionRepository.save(prospection);
         ecrireInteractionDeCreation(prospection);
@@ -841,9 +862,20 @@ public class ProspectionService {
     }
 
     /**
-     * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, by
-     * assigning the commercial. Requires a prospect to already be linked (via
-     * {@link #creerProspect}) — 400 otherwise.
+     * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, en affectant
+     * le commercial <b>et</b> en garantissant qu'une tranche (projet) est rattachée. Requiert
+     * qu'un prospect soit déjà lié (via {@link #creerProspect}) — 400 sinon.
+     *
+     * <p><b>La tranche est obligatoire à la sortie.</b> Règle métier plus stricte que le légataire
+     * (qui n'impose rien au niveau base) mais fondée sur les données réelles : 99,83 % des
+     * prospections qualifiées (14 700/14 725) portent déjà une tranche. Deux cas :
+     * <ul>
+     *   <li>{@code trancheId} fourni → la tranche est posée/remplacée ici, avec contrôle de
+     *       périmètre commercial (403 sur un projet non affecté) et validation croisée de
+     *       {@code articleId} (il doit appartenir à la tranche), exactement comme
+     *       {@link #modifierTranchePrincipale} ;</li>
+     *   <li>{@code trancheId} omis → la prospection doit <b>déjà</b> porter une tranche, sinon 400.</li>
+     * </ul>
      */
     @Transactional
     public ProspectionDetailDto transformer(UUID id, TransformerProspectionRequest request) {
@@ -858,6 +890,37 @@ public class ProspectionService {
 
         CfgTier commercial = tierRepository.findById(request.commercialId())
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
+
+        // Tranche obligatoire : fournie ici (on la pose, avec périmètre + cohérence article), ou
+        // déjà présente sur la prospection. Sinon la transformation est refusée.
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            perimetreService.verifierEcritureSurTranche(tranche,
+                    "Transformation de prospection sur la tranche " + tranche.getCode());
+            if (request.articleId() != null) {
+                StkItem article = stkItemRepository.findById(request.articleId())
+                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                    throw new InvalidRequestException(
+                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+                }
+                prospection.setStkItem(article);
+            } else if (prospection.getStkItem() != null
+                    && (prospection.getStkItem().getStkHierarchy() == null
+                        || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
+                // L'article déjà assigné appartenait à l'ancienne tranche : on le désassigne
+                // plutôt que de laisser trancheId/articleId incohérents (voir modifierTranchePrincipale).
+                prospection.setStkItem(null);
+            }
+            prospection.setStkHierarchy(tranche);
+        } else if (request.articleId() != null) {
+            throw new InvalidRequestException("articleId nécessite trancheId");
+        } else if (prospection.getStkHierarchy() == null) {
+            throw new InvalidRequestException(
+                    "Une tranche (projet) est obligatoire pour transformer en prospection : "
+                    + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
+        }
 
         prospection.setCfgCommercial(commercial);
         prospection = prospectionRepository.save(prospection);

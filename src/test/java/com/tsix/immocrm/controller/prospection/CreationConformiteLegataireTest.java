@@ -1,14 +1,25 @@
 package com.tsix.immocrm.controller.prospection;
 
 import com.jayway.jsonpath.JsonPath;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComProspectionKind;
+import com.tsix.immocrm.entities.com.ComProspectionOrigin;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -59,7 +70,56 @@ class CreationConformiteLegataireTest {
     private ComSaleProspectionViewRepository vueRepository;
 
     @Autowired
+    private CfgProjectRepository projectRepository;
+    @Autowired
+    private CfgTrancheRepository trancheRepository;
+    @Autowired
+    private ComProspectionOriginRepository prospectionOriginRepository;
+    @Autowired
+    private ComActionMessageTypeRepository actionMessageTypeRepository;
+    @Autowired
+    private ComProspectionKindRepository prospectionKindRepository;
+
+    @Autowired
     private EntityManager entityManager;
+
+    // Référentiels obligatoires à la création (Source de contact, Type, Nature, Tranche).
+    private CfgTranche tranche;
+    private ComProspectionOrigin origine;
+    private ComActionMessageType typeContact;
+    private ComProspectionKind nature;
+
+    @BeforeEach
+    void setUpReferentiels() {
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-CC-" + UUID.randomUUID());
+        projectRepository.save(project);
+
+        tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-CC-" + UUID.randomUUID());
+        tranche.setCfgProject(project);
+        trancheRepository.save(tranche);
+
+        origine = new ComProspectionOrigin();
+        origine.setId(UUID.randomUUID());
+        origine.setCode("ORI-CC-" + UUID.randomUUID());
+        origine.setDescription("Facebook");
+        prospectionOriginRepository.save(origine);
+
+        typeContact = new ComActionMessageType();
+        typeContact.setId(UUID.randomUUID());
+        typeContact.setCode("TYP-CC-" + UUID.randomUUID());
+        typeContact.setDescription("Message entrant");
+        actionMessageTypeRepository.save(typeContact);
+
+        nature = new ComProspectionKind();
+        nature.setId(UUID.randomUUID());
+        nature.setCode("NAT-CC-" + UUID.randomUUID());
+        nature.setDescription("1 A TRAITER");
+        prospectionKindRepository.save(nature);
+    }
 
     // ---------------------------------------------------------------- le code du prospect
 
@@ -109,7 +169,7 @@ class CreationConformiteLegataireTest {
     @Test
     void creationProspection_ecritSonInteraction() throws Exception {
         CfgTier prospect = newProspect();
-        UUID prospectionId = creerProspection(prospect, "\"notes\":\"note de creation\"");
+        UUID prospectionId = creerProspection(prospect, "note de creation");
 
         List<ComActionMessage> interactions = interactionsDe(prospectionId);
         assertThat(interactions).hasSize(1);
@@ -135,13 +195,15 @@ class CreationConformiteLegataireTest {
      */
     @Test
     void interactionDeCreation_estExclueDuDernierEchange() throws Exception {
-        UUID prospectionId = creerProspection(newProspect(), null);
+        UUID prospectionId = creerProspection(newProspect(), "note de conformite");
         ComActionMessage creation = interactionsDe(prospectionId).get(0);
 
         assertThat(creation.getIsSystem()).isTrue();
         assertThat(creation.getIsNotRead()).isFalse();
-        // Notes absentes : le message l'est aussi, plutôt qu'une chaîne vide.
-        assertThat(creation.getAlertMessage()).isNull();
+        // `notes` étant désormais obligatoire à la création, l'interaction reprend toujours la
+        // note (le cas "notes absentes → message null" n'est plus atteignable par l'endpoint ;
+        // la branche défensive côté service reste, mais n'est plus exercée ici).
+        assertThat(creation.getAlertMessage()).isEqualTo("note de conformite");
     }
 
     // ---------------------------------------------------------------- les drapeaux hérités
@@ -237,9 +299,19 @@ class CreationConformiteLegataireTest {
 
     // ---------------------------------------------------------------- fixtures
 
-    private UUID creerProspection(CfgTier prospect, String champSupplementaire) throws Exception {
+    /**
+     * Crée une prospection avec les cinq champs obligatoires (Source de contact, Type, Nature,
+     * Tranche + Notes). {@code notes} peut être précisé par le test ; à {@code null}, une valeur par
+     * défaut non vide est posée — car depuis l'alignement légataire, {@code notes} est obligatoire.
+     */
+    private UUID creerProspection(CfgTier prospect, String notes) throws Exception {
+        String valeurNotes = notes != null ? notes : "note de conformite";
         String body = "{\"prospectId\":\"" + prospect.getId() + "\""
-                + (champSupplementaire != null ? "," + champSupplementaire : "") + "}";
+                + ",\"trancheId\":\"" + tranche.getId() + "\""
+                + ",\"origineId\":\"" + origine.getId() + "\""
+                + ",\"typeContactId\":\"" + typeContact.getId() + "\""
+                + ",\"etapeId\":\"" + nature.getId() + "\""
+                + ",\"notes\":\"" + valeurNotes + "\"}";
         String reponse = mockMvc.perform(post("/api/prospections")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())

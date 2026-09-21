@@ -140,6 +140,48 @@ class ProspectSubResourcesTest {
     }
 
     @Test
+    void contacts_creationInline_creeNouveauTierEtLien() throws Exception {
+        CfgTier prospect = newProspect("PROS-SUB-5");
+        CfgRelationType relationType = new CfgRelationType();
+        relationType.setId(UUID.randomUUID());
+        relationType.setCode("CONJOINT-INLINE");
+        relationType.setDescription("Conjoint");
+        relationTypeRepository.save(relationType);
+
+        // Flux OMRAN : on ne fournit pas de contactProspectId, mais la personne à créer.
+        String body = "{\"nouveauContact\":{\"prenom\":\"Kennedy\",\"nom\":\"CONJOINT\","
+                + "\"email\":\"kennedy.conjoint@example.com\"},"
+                + "\"relationTypeId\":\"" + relationType.getId() + "\"}";
+
+        mockMvc.perform(post("/api/prospects/{id}/contacts", prospect.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contactProspectId").isNotEmpty())
+                .andExpect(jsonPath("$.nomContact").value("Kennedy CONJOINT"))
+                .andExpect(jsonPath("$.emailContact").value("kennedy.conjoint@example.com"))
+                .andExpect(jsonPath("$.relationType").value("Conjoint"));
+
+        mockMvc.perform(get("/api/prospects/{id}/contacts", prospect.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.nomContact=='Kennedy CONJOINT')]").exists());
+    }
+
+    @Test
+    void contacts_niLienNiCreation_returns400() throws Exception {
+        CfgTier prospect = newProspect("PROS-SUB-6");
+        CfgRelationType relationType = new CfgRelationType();
+        relationType.setId(UUID.randomUUID());
+        relationType.setCode("REL-400");
+        relationType.setDescription("Notaire");
+        relationTypeRepository.save(relationType);
+
+        mockMvc.perform(post("/api/prospects/{id}/contacts", prospect.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"relationTypeId\":\"" + relationType.getId() + "\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getProspections_unknownProspect_returns404() throws Exception {
         mockMvc.perform(get("/api/prospects/{id}/prospections", UUID.randomUUID()))
                 .andExpect(status().isNotFound());

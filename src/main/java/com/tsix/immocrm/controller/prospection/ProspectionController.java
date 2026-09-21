@@ -3,6 +3,8 @@ package com.tsix.immocrm.controller.prospection;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.prospect.ContactProspectDto;
+import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.AjouterAutreTrancheRequest;
 import com.tsix.immocrm.dto.prospection.AjouterCategorieRequest;
@@ -38,6 +40,7 @@ import com.tsix.immocrm.services.prospection.OffrePrixService;
 import com.tsix.immocrm.services.prospection.DevisService;
 import com.tsix.immocrm.services.prospection.NdaService;
 import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
+import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.services.prospection.ProspectionQualificationService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospection.ProspectionFicheService;
@@ -128,6 +131,7 @@ public class ProspectionController {
     private final ProspectionFichePdfRenderer prospectionFichePdfRenderer;
     private final ConfirmationVisiteService confirmationVisiteService;
     private final OffrePrixService offrePrixService;
+    private final ProspectSubResourcesService subResourcesService;
 
     public ProspectionController(ProspectionService prospectionService,
                                   ProspectionQualificationService qualificationService,
@@ -139,7 +143,8 @@ public class ProspectionController {
                                   ProspectionFicheService prospectionFicheService,
                                   ProspectionFichePdfRenderer prospectionFichePdfRenderer,
                                   ConfirmationVisiteService confirmationVisiteService,
-                                  OffrePrixService offrePrixService) {
+                                  OffrePrixService offrePrixService,
+                                  ProspectSubResourcesService subResourcesService) {
         this.confirmationVisiteService = confirmationVisiteService;
         this.offrePrixService = offrePrixService;
         this.prospectionService = prospectionService;
@@ -151,6 +156,7 @@ public class ProspectionController {
         this.ndaPdfRenderer = ndaPdfRenderer;
         this.prospectionFicheService = prospectionFicheService;
         this.prospectionFichePdfRenderer = prospectionFichePdfRenderer;
+        this.subResourcesService = subResourcesService;
     }
 
     @GetMapping
@@ -347,10 +353,15 @@ public class ProspectionController {
             summary = "Crée une prospection qualifiée pour un prospect existant",
             description = "instructions/from_front.md demande #9 — le point d'entrée du bouton "
                     + "\"Nouvelle prospection\", pour le cas où le prospect existe déjà (créé au "
-                    + "préalable via `POST /api/prospects`, déjà câblé côté front). `prospectId` "
-                    + "est **obligatoire** ; tous les autres champs sont optionnels et suivent la "
-                    + "même sémantique que `PATCH /api/prospections/{id}` (mise à jour uniquement "
-                    + "des champs fournis). `code` est toujours généré serveur (compteur "
+                    + "préalable via `POST /api/prospects`, déjà câblé côté front).\n\n"
+                    + "**Champs obligatoires (alignés sur l'écran légataire OMRAN)** : `prospectId`, "
+                    + "`notes` (Notes, non vide), `origineId` (Source de contact), `typeContactId` "
+                    + "(Type — attention, c'est `ComActionMessageType`, à ne pas confondre avec la "
+                    + "vocation `vocationId`), `etapeId` (Nature) et `trancheId` (Tranche). Un de "
+                    + "ces champs manquant ⟶ 400 nommant le champ. `commercialId` reste optionnel "
+                    + "(OMRAN ne le bloque pas à la création). Les autres champs sont optionnels et "
+                    + "suivent la même sémantique que `PATCH /api/prospections/{id}` (mise à jour "
+                    + "uniquement des champs fournis). `code` est toujours généré serveur (compteur "
                     + "`AdmSequence` \"Prospection\", format \"AA/NNNNN\"), jamais fourni par le "
                     + "client. `commercialId` peut être fourni directement ici pour obtenir une "
                     + "prospection immédiatement complète en un seul appel — sinon "
@@ -364,9 +375,11 @@ public class ProspectionController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospection créée."),
-            @ApiResponse(responseCode = "400", description = "`prospectId` manquant, ou un id "
-                    + "fourni (prospect/commercial/tranche/article/origine/...) est introuvable, "
-                    + "ou l'article fourni n'appartient pas à la tranche fournie."),
+            @ApiResponse(responseCode = "400", description = "Un champ obligatoire est manquant "
+                    + "(`prospectId`, `notes`, `origineId`, `typeContactId`, `etapeId`, "
+                    + "`trancheId`), ou un id fourni "
+                    + "(prospect/commercial/tranche/article/origine/type/nature/...) est "
+                    + "introuvable, ou l'article fourni n'appartient pas à la tranche fournie."),
             @ApiResponse(responseCode = "403", description = "Le projet de la `trancheId` fournie "
                     + "n'est pas dans le périmètre commercial de l'appelant (403 et non 404 : "
                     + "c'est l'appelant qui a nommé la tranche).")
@@ -439,6 +452,30 @@ public class ProspectionController {
     }
 
     @PostMapping("/{id}/transformer")
+    @Operation(
+            summary = "Transforme une pré-prospection en prospection (commercial + tranche)",
+            description = "Dernière étape de qualification d'un lead : affecte le commercial et "
+                    + "**garantit qu'une tranche (projet) est rattachée**. Requiert qu'un prospect "
+                    + "soit déjà lié via `POST /api/pre-prospections/{id}/creer-prospect` — 400 sinon.\n\n"
+                    + "**La tranche est obligatoire.** Règle métier plus stricte que le légataire "
+                    + "(qui n'impose rien au niveau base — seule `PKey` est NOT NULL sur "
+                    + "`ComProspection`), justifiée sur données réelles : 99,83 % des prospections "
+                    + "qualifiées (14 700/14 725) portent déjà une tranche. Fournir `trancheId` pour "
+                    + "la poser/remplacer ici (avec périmètre commercial et cohérence `articleId`, "
+                    + "comme `PATCH .../tranche-principale`) ; si `trancheId` est omis, la "
+                    + "prospection doit **déjà** en porter une, faute de quoi la transformation "
+                    + "est refusée (400)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospection transformée : commercial "
+                    + "affecté et tranche garantie."),
+            @ApiResponse(responseCode = "400", description = "`commercialId` manquant ; aucun "
+                    + "prospect lié ; commercial/tranche/article introuvable ; l'article ne "
+                    + "appartient pas à la tranche ; ou aucune tranche fournie ni déjà présente."),
+            @ApiResponse(responseCode = "403", description = "Le projet de la tranche fournie n'est "
+                    + "pas dans le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
     public ProspectionDetailDto transformer(@PathVariable UUID id, @RequestBody TransformerProspectionRequest request) {
         return prospectionService.transformer(id, request);
     }
@@ -709,6 +746,47 @@ public class ProspectionController {
     public ResponseEntity<Void> retirerAutreTranche(@PathVariable UUID id, @PathVariable UUID itemId) {
         qualificationService.retirerAutreTranche(id, itemId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/contacts")
+    @Operation(
+            summary = "Contacts du prospect de la prospection",
+            description = "Les contacts (conjoint, notaire, apporteur…) du prospect lié à cette "
+                    + "prospection — lignes `CfgTierContact`, jointes au `CfgTier` de chaque "
+                    + "personne pour le nom, le mobile, le téléphone et l'e-mail. Destiné à "
+                    + "accompagner l'affichage du détail de la prospection.\n\n"
+                    + "Une pré-prospection (sans prospect encore lié) renvoie une **liste vide**, "
+                    + "jamais une erreur : le lead n'est pas perdu."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste des contacts (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public List<ContactProspectDto> getContacts(@PathVariable UUID id) {
+        return subResourcesService.contactsDeProspection(id);
+    }
+
+    @PostMapping("/{id}/contacts")
+    @Operation(
+            summary = "Ajoute un contact au prospect de la prospection",
+            description = "Rattache un contact au prospect lié à la prospection. La personne-contact "
+                    + "est soit un `CfgTier` existant (`contactProspectId`), soit **créée à la "
+                    + "volée** (`nouveauContact` : nom, prénom, mobile, téléphone, e-mail…) puis "
+                    + "liée — c'est ce que fait l'écran légataire, qui insère un nouveau `CfgTier` "
+                    + "puis le lien `CfgTierContact`. Fournir l'un **ou** l'autre. `relationTypeId` "
+                    + "(type de relation, p.ex. « Conjoint ») est obligatoire.\n\n"
+                    + "Même effet que `POST /api/prospects/{prospectId}/contacts`, mais adressé par "
+                    + "la prospection : le prospect est résolu depuis elle."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contact créé/lié et rattaché."),
+            @ApiResponse(responseCode = "400", description = "`relationTypeId` manquant ; ni "
+                    + "`contactProspectId` ni `nouveauContact` (ou les deux) ; référentiel "
+                    + "introuvable ; ou la prospection n'a pas encore de prospect."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+    })
+    public ContactProspectDto ajouterContact(@PathVariable UUID id, @RequestBody CreerContactProspectRequest request) {
+        return subResourcesService.ajouterContactAProspection(id, request);
     }
 
     // -- GAP-07 (low priority): devis --
