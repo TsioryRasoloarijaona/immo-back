@@ -87,12 +87,21 @@ redirection de port qui expose `192.168.11.115:1433` — voir `../infra/NETBIRD-
   colonnes exclues dès le `SELECT` (`AdmAttachedFile.AttachedFile`), **absence sur la source =
   suppression dans la copie** (après les fusions, ordre inverse — la copie porte 1 219 FK), et
   `DepotBinaireSource` (+2 impl.) pour le binaire des pièces jointes.
-- **Synchro descendante** (`SynchronisationDescendante`, cycle `SOURCE_DB_SYNC_MINUTES:5`) :
+- **Synchro descendante** (`SynchronisationDescendante`, cycle `SOURCE_DB_SYNC_MINUTES:2`) :
   Change Tracking, filigrane par table dans `AppSyncEtat` (copie, migration `009` — pré-remplir
   à la version courante sur une copie fraîchement restaurée), régimes BASELINE (jamais de
   suppression) / DELTA (la relecture fait foi, pas le code I/U/D). Un cycle vide ne logge rien.
   ⚠️ Le pilote mssql livre `uniqueidentifier` en `String`, pas en `UUID`.
   Vérifié : INSERT/UPDATE/DELETE simulés par sqlcmd dans la source arrivent au cycle suivant.
+- **Déclenchement manuel** : `POST /api/synchronisation` (rôle Administrateur), synchrone, rend
+  le bilan. `ReentrantLock.tryLock` partagé avec le cycle planifié → 409 si un cycle tourne ;
+  409 aussi en mono-base (contrôleur présent via `ObjectProvider`, service absent). Vérifié en
+  deux-bases (200+fusion, 2 appels → 200/409) et en mono-base (409/403, tests auto).
+- ⚠️ **Coût fixe par cycle = ~23 tables × 3 requêtes × RTT.** Sur 115 (queue de latence) un
+  cycle vide = quelques secondes. Ne PAS descendre bien en dessous de 1–2 min sans agréger les
+  filigranes en une requête. Décision honnête livrée à l'utilisateur : garder les deux bases,
+  la base unique 115 ferait payer la latence + sa queue à **toutes** les lectures (mesuré :
+  liste 50 prospects p50 20 ms copie vs 77 ms / p90 300 ms sur 115).
 - **Toute ligne référencée par une création doit exister sur la source** : la validation lit
   dans la transaction d'écriture. Face à 115 (sur-ensemble) c'est automatique, SAUF pour ce que
   le CRM crée seul → **rattrapage obligatoire avant activation : `AppUserCredential`,

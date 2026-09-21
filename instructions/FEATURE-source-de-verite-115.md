@@ -318,6 +318,25 @@ baseline exercée sur `ComProspectionType` (24 lignes) ; un échec de table (le 
 pilote, corrigé) a bien laissé son filigrane en arrière et rejoué au cycle suivant. Un cycle
 vide coûte ~2 s sur le banc, l'essentiel en allers-retours `CHANGETABLE`.
 
+### Cadence 2 min + déclenchement manuel
+
+- **Défaut ramené à 2 minutes** (`SOURCE_DB_SYNC_MINUTES`, était 5). Un cycle vide reste
+  quasi gratuit ; le seul coût récurrent est un balayage des ~23 tables (une lecture de
+  filigrane + `CHANGE_TRACKING_MIN_VALID_VERSION` + `CHANGETABLE` par table). Ce coût fixe
+  **croît avec le nombre de tables × le RTT** — sur 115 et sa queue de latence, un cycle vide
+  peut prendre quelques secondes ; c'est acceptable à 2 min, à surveiller si on descend plus bas.
+- **`POST /api/synchronisation`** — « synchroniser maintenant », réservé au rôle
+  Administrateur. Synchrone, renvoie le bilan (`fusions`, `suppressions`, `tablesTraitees`,
+  `tablesEnEchec`, `dureeMs`). **Un seul cycle à la fois** : un `ReentrantLock.tryLock`
+  partagé avec le cycle planifié — le second arrivant reçoit **409** au lieu de doubler le
+  travail. En **mono-base**, le service n'existe pas : le contrôleur reste présent (injection
+  par `ObjectProvider`) et répond **409** avec un message explicite, plutôt que de faire
+  échouer le démarrage.
+
+  Vérifié sur le banc : une ligne insérée dans la source apparaît dans la copie **au
+  déclenchement** (200, `fusions:1`) sans attendre le cycle ; deux appels concurrents → un 200,
+  un 409 ; en mono-base et sans le rôle, 409 et 403 (tests `SynchronisationControllerTest`).
+
 **Au déploiement (côté utilisateur)** : appliquer `009_AppSyncEtat.sql` sur les **copies**
 (`yesRemsDev` VPS — jamais sur 115), activer le Change Tracking sur 115 (`ct-activer-yesRems.sql`
 adapté), et si la copie vient d'une restauration fraîche de la source, **pré-remplir les

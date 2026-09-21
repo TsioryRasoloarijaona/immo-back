@@ -89,6 +89,16 @@ public class SynchronisationDescendante {
     private final JdbcTemplate surCopie;
     private final RemonteeLecture remontee;
 
+    /**
+     * Un seul cycle à la fois. Le cycle planifié et un déclenchement manuel
+     * ({@code POST /api/synchronisation}) partagent ce verrou : le second arrivant est
+     * écarté plutôt que de doubler le travail — inutile (les opérations sont idempotentes) et
+     * coûteux sur une source lente. {@code tryLock} sans attente : on refuse, on ne fait pas
+     * patienter.
+     */
+    private final java.util.concurrent.locks.ReentrantLock verrou =
+            new java.util.concurrent.locks.ReentrantLock();
+
     public SynchronisationDescendante(@Qualifier("ecriture") DataSource source,
                                       @Qualifier("jdbcLecture") JdbcTemplate surCopie,
                                       RemonteeLecture remontee) {
@@ -98,31 +108,70 @@ public class SynchronisationDescendante {
     }
 
     /**
-     * Le cycle. 5 minutes par défaut ({@code SOURCE_DB_SYNC_MINUTES}) : le Change Tracking rend
-     * un cycle vide quasi gratuit, et c'est le retard maximal qu'un utilisateur du CRM voit sur
-     * ce que le bureau vient de saisir.
+     * Résumé d'un cycle — de quoi répondre au déclenchement manuel et tracer l'automatique.
+     *
+     * @param declenchee {@code false} si un autre cycle tournait déjà : rien n'a été fait.
+     * @param version    version Change Tracking atteinte ({@code null} si le CT est inactif).
+     */
+    public record ResultatSync(boolean declenchee, Long version, int fusions, int suppressions,
+                               int tablesTraitees, int tablesEnEchec, long dureeMs) {
+
+        static ResultatSync ignoree() {
+            return new ResultatSync(false, null, 0, 0, 0, 0, 0);
+        }
+    }
+
+    /**
+     * Le cycle planifié : 2 minutes par défaut ({@code SOURCE_DB_SYNC_MINUTES}), le retard
+     * maximal qu'un utilisateur du CRM voit sur ce que le bureau vient de saisir. Le Change
+     * Tracking rend un cycle vide quasi gratuit. Un chevauchement (cycle précédent encore en
+     * cours, ou déclenchement manuel simultané) est simplement sauté.
      */
     @Scheduled(fixedDelayString = "${app.source-de-verite.sync-minutes}",
             initialDelayString = "1", timeUnit = TimeUnit.MINUTES)
     public void cycle() {
+        executer();
+    }
+
+    /**
+     * Exécute un cycle et rend son résumé. Point d'entrée du déclenchement manuel comme du
+     * planifié. Ne lève rien pour un cycle vide ou déjà en cours ; les échecs par table sont
+     * absorbés et comptés, jamais propagés — une table en erreur rejoue au cycle suivant.
+     */
+    public ResultatSync executer() {
+        if (!verrou.tryLock()) {
+            log.debug("Cycle de synchronisation deja en cours : declenchement ignore.");
+            return ResultatSync.ignoree();
+        }
+        try {
+            return executerSousVerrou();
+        } finally {
+            verrou.unlock();
+        }
+    }
+
+    private ResultatSync executerSousVerrou() {
         long debut = System.nanoTime();
         Long versionCourante = surSource.queryForObject(
                 "SELECT CHANGE_TRACKING_CURRENT_VERSION()", Long.class);
         if (versionCourante == null) {
             log.error("Change Tracking inactif sur la source : la synchronisation descendante "
                     + "ne peut rien faire. Voir prototype/ct-activer-yesRems.sql.");
-            return;
+            return new ResultatSync(true, null, 0, 0, 0, 0,
+                    (System.nanoTime() - debut) / 1_000_000);
         }
 
         List<LigneEcrite> suppressions = new ArrayList<>();
         List<String> tablesReussies = new ArrayList<>();
         int fusionnees = 0;
+        int enEchec = 0;
 
         for (String table : tablesSuivies()) {
             try {
                 fusionnees += passeDeFusion(table, versionCourante, suppressions);
                 tablesReussies.add(table);
             } catch (RuntimeException e) {
+                enEchec++;
                 log.error("Synchronisation de {} en echec — filigrane inchange, "
                         + "la table sera rejouee au prochain cycle.", table, e);
             }
@@ -139,18 +188,23 @@ public class SynchronisationDescendante {
                 // suffit — l'ordre inter-tables converge normalement au cycle suivant.
                 log.error("Suppression non repercutee dans la copie : {} {}.",
                         ligne.table(), ligne.pkey(), e);
-                tablesReussies.remove(ligne.table());
+                if (tablesReussies.remove(ligne.table())) {
+                    enEchec++;
+                }
             }
         }
 
         for (String table : tablesReussies) {
             enregistrerFiligrane(table, versionCourante);
         }
-        if (fusionnees > 0 || supprimees > 0) {
+        long dureeMs = (System.nanoTime() - debut) / 1_000_000;
+        if (fusionnees > 0 || supprimees > 0 || enEchec > 0) {
             log.info("Synchronisation descendante : {} fusion(s), {} suppression(s), "
-                            + "version {}, en {} ms.", fusionnees, supprimees, versionCourante,
-                    (System.nanoTime() - debut) / 1_000_000);
+                            + "{} table(s) en echec, version {}, en {} ms.",
+                    fusionnees, supprimees, enEchec, versionCourante, dureeMs);
         }
+        return new ResultatSync(true, versionCourante, fusionnees, supprimees,
+                tablesReussies.size(), enEchec, dureeMs);
     }
 
     /** Fusionne ce que la table doit à la copie ; collecte les suppressions pour la fin de cycle. */
