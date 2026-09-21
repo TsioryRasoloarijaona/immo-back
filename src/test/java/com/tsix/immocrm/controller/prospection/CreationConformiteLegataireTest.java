@@ -3,8 +3,12 @@ package com.tsix.immocrm.controller.prospection;
 import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +51,15 @@ class CreationConformiteLegataireTest {
 
     @Autowired
     private ComActionMessageRepository actionMessageRepository;
+
+    @Autowired
+    private ComProspectionRepository prospectionRepository;
+
+    @Autowired
+    private ComSaleProspectionViewRepository vueRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     // ---------------------------------------------------------------- le code du prospect
 
@@ -129,6 +142,97 @@ class CreationConformiteLegataireTest {
         assertThat(creation.getIsNotRead()).isFalse();
         // Notes absentes : le message l'est aussi, plutôt qu'une chaîne vide.
         assertThat(creation.getAlertMessage()).isNull();
+    }
+
+    // ---------------------------------------------------------------- les drapeaux hérités
+
+    /**
+     * <b>Le défaut qui rendait invisible tout ce que le CRM créait.</b>
+     *
+     * <p>{@code ComSaleProspectionView} — la vue de travail du logiciel de bureau — filtre en
+     * {@code IsClosed = 0}. Or {@code NULL = 0} n'est <b>jamais</b> vrai en SQL : une prospection
+     * laissée à {@code NULL} était bien écrite en base, et n'apparaissait dans aucune liste.
+     *
+     * <p>Diagnostiqué en comparant une prospection créée par le CRM à une prospection saisie dans
+     * le logiciel : la seconde figurait dans la vue, la première non, et {@code IsClosed} était
+     * leur seul écart.
+     */
+    @Test
+    void creationProspection_estOuverteEtNonNulle() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        ComProspection prospection = prospectionRepository.findById(prospectionId).orElseThrow();
+
+        // isFalse() et non isNotNull() : c'est la distinction entre false et NULL qui compte,
+        // et elle seule. Un assert sur la non-nullité laisserait passer le retour du défaut.
+        assertThat(prospection.getIsClosed()).isFalse();
+        assertThat(prospection.getIsOldCustomer()).isFalse();
+    }
+
+    /**
+     * Même raison sur le tiers : les écrans du légataire filtrent ses drapeaux en {@code = 0}.
+     * C'est ainsi qu'il remplit ses propres lignes — aucune n'a ces colonnes à {@code NULL}.
+     */
+    @Test
+    void creationProspect_poseLesDrapeauxHerites() throws Exception {
+        String reponse = mockMvc.perform(post("/api/prospects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"prenom":"Drapeaux","nom":"HERITES-TEST"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(JsonPath.parse(reponse).read("$.id", String.class));
+        CfgTier tier = tierRepository.findById(id).orElseThrow();
+
+        assertThat(tier.getIsOldCustomer()).isFalse();
+        assertThat(tier.getIsExtern()).isFalse();
+        assertThat(tier.getIsRntCustomer()).isFalse();
+        assertThat(tier.getIsVisibleInList()).isFalse();
+        assertThat(tier.getIsFundReader()).isFalse();
+        // Celui-ci reste à true : c'est un prospect, et c'est le seul de la famille que le
+        // légataire ne pose pas à 0. Laissé tel quel faute de savoir ce que la colonne signifie
+        // pour lui — à trancher avec le métier, pas ici.
+        assertThat(tier.getIsProspect()).isTrue();
+    }
+
+    /**
+     * <b>Le test qui compte : la prospection existe-t-elle pour le logiciel de bureau ?</b>
+     *
+     * <p>Assertion sur le résultat métier, pas sur une colonne. {@code ComSaleProspectionView}
+     * est la vue sur laquelle s'appuient ses écrans ; une ligne qui n'y figure pas n'existe pour
+     * lui nulle part, quelle que soit la qualité du reste.
+     *
+     * <p>Ce qui l'en écartait : {@code StrEntityId} laissé à {@code NULL}. La vue filtre par
+     * {@code StrEntityId <> <pré-prospection>} et l'écran refiltre par
+     * {@code StrEntityId = <vente>} — deux comparaisons qu'un {@code NULL} ne satisfait jamais.
+     * Diagnostiqué sur la requête réelle du logiciel, relevée dans sa trace d'audit.
+     *
+     * <p>{@code flush} puis {@code clear} sont indispensables : une vue n'est peuplée qu'au
+     * chargement, et sans vidage la prospection n'est encore qu'en session.
+     */
+    @Test
+    void creationProspection_estVisibleDuLogicielDeBureau() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(vueRepository.findById(prospectionId))
+                .as("La prospection doit figurer dans ComSaleProspectionView, sans quoi elle "
+                        + "n'apparait dans aucun ecran du logiciel de bureau.")
+                .isPresent();
+    }
+
+    /** Le type de document du légataire : « prospection de vente », et non {@code NULL}. */
+    @Test
+    void creationProspection_porteLeTypeDeDocumentDuLegataire() throws Exception {
+        UUID prospectionId = creerProspection(newProspect(), null);
+
+        ComProspection prospection = prospectionRepository.findById(prospectionId).orElseThrow();
+
+        assertThat(prospection.getStrEntityId())
+                .isEqualTo(UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601"));
     }
 
     // ---------------------------------------------------------------- fixtures

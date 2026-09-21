@@ -188,6 +188,16 @@ public class ProspectService {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);
+        // Drapeaux hérités posés à `false` plutôt que laissés à NULL, et ce n'est pas de la
+        // cosmétique : les écrans du logiciel de bureau filtrent en « = 0 », et en SQL
+        // `NULL = 0` n'est JAMAIS vrai. Une ligne laissée à NULL est donc silencieusement
+        // absente de leurs listes — mesuré sur CfgTier comme sur ComProspection.
+        // C'est ainsi qu'OMRAN remplit ses propres lignes ; on s'aligne.
+        tier.setIsOldCustomer(false);
+        tier.setIsExtern(false);
+        tier.setIsRntCustomer(false);
+        tier.setIsVisibleInList(false);
+        tier.setIsFundReader(false);
         // Numérotation sur le compteur du logiciel de bureau. Sans elle, chaque prospect créé
         // par l'API rejoignait une anomalie marginale : sur 13 913 prospects et clients
         // réels, 12 seulement n'ont pas de code. Couvre les deux chemins de création, celui-ci
