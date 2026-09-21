@@ -1,6 +1,8 @@
 package com.tsix.immocrm.config;
 
 import jakarta.persistence.Table;
+import org.hibernate.event.spi.PostDeleteEvent;
+import org.hibernate.event.spi.PostDeleteEventListener;
 import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.event.spi.PostUpdateEvent;
@@ -39,7 +41,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>L'événement est publié dans {@code beforeCommit}, donc <b>avec</b> sa charge utile : son
  * écouteur est {@code @Async} et s'exécutera sur un autre fil, où cette variable n'existe plus.
  */
-public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpdateEventListener {
+public class CollecteurLignesEcrites
+        implements PostInsertEventListener, PostUpdateEventListener, PostDeleteEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(CollecteurLignesEcrites.class);
 
@@ -55,7 +58,8 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
             "CfgProject", "CfgTranche", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
-            "ComActionMessage", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile");
+            "ComActionMessage", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
+            "AppFileObject");
 
     /**
      * Tables que le rapatriement ne doit <b>jamais</b> toucher.
@@ -85,6 +89,17 @@ public class CollecteurLignesEcrites implements PostInsertEventListener, PostUpd
 
     @Override
     public void onPostUpdate(PostUpdateEvent evenement) {
+        noter(evenement.getEntity(), evenement.getId());
+    }
+
+    /**
+     * Une suppression se collecte comme une écriture : le rapatriement relit la ligne sur la
+     * source, et c'est son <b>absence</b> qui déclenche la suppression dans la copie (voir
+     * {@code RemonteeLecture#remonter}). Sans cette collecte, un {@code DELETE} validé sur la
+     * source laissait un fantôme dans la copie — que le CRM continuait d'afficher.
+     */
+    @Override
+    public void onPostDelete(PostDeleteEvent evenement) {
         noter(evenement.getEntity(), evenement.getId());
     }
 

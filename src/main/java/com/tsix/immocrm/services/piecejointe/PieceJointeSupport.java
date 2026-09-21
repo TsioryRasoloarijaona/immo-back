@@ -60,6 +60,7 @@ public class PieceJointeSupport {
     private final StockageFichiers stockage;
     private final StockageProperties stockageProperties;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final DepotBinaireSource depotBinaireSource;
 
     public PieceJointeSupport(AdmAttachedFileSummaryRepository summaryRepository,
                               AdmAttachedFileRepository fileRepository,
@@ -67,7 +68,8 @@ public class PieceJointeSupport {
                               AppFileObjectRepository fileObjectRepository,
                               StockageFichiers stockage,
                               StockageProperties stockageProperties,
-                              UtilisateurAffiche utilisateurAffiche) {
+                              UtilisateurAffiche utilisateurAffiche,
+                              DepotBinaireSource depotBinaireSource) {
         this.summaryRepository = summaryRepository;
         this.fileRepository = fileRepository;
         this.typeRepository = typeRepository;
@@ -75,6 +77,7 @@ public class PieceJointeSupport {
         this.stockage = stockage;
         this.stockageProperties = stockageProperties;
         this.utilisateurAffiche = utilisateurAffiche;
+        this.depotBinaireSource = depotBinaireSource;
     }
 
     /**
@@ -193,6 +196,10 @@ public class PieceJointeSupport {
         entity.setUserCreateDateTime(LocalDateTime.now());
         entity.setUserCreate(utilisateurAffiche.nom(principal));
         entity = fileRepository.save(entity);
+
+        // En deux-bases, le logiciel de bureau ne lit que la colonne binaire de la source ;
+        // en mono-base c'est un no-op. Voir DepotBinaireSource.
+        depotBinaireSource.deposer(pieceId, contenu);
 
         AppFileObject objet = new AppFileObject();
         objet.setAdmAttachedFileId(pieceId);

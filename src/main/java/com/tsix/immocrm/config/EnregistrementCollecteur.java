@@ -35,6 +35,7 @@ public class EnregistrementCollecteur {
                 .getEventListenerRegistry();
         registre.appendListeners(EventType.POST_INSERT, collecteur);
         registre.appendListeners(EventType.POST_UPDATE, collecteur);
-        log.info("Collecte des lignes ecrites activee (POST_INSERT, POST_UPDATE).");
+        registre.appendListeners(EventType.POST_DELETE, collecteur);
+        log.info("Collecte des lignes ecrites activee (POST_INSERT, POST_UPDATE, POST_DELETE).");
     }
 }

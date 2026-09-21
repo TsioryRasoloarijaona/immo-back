@@ -166,6 +166,126 @@ DELETE FROM dbo.CfgTier WHERE LastName = 'A-SUPPRIMER';
 Le compteur `Tier` de `yesRems` est passé de 14431 à 14434 et ne redescend pas — sans
 conséquence, la série tolère les trous.
 
+## Pièces jointes : le seul flux qui déroge au routage automatique
+
+Le cas ne pouvait pas passer tel quel en deux-bases, pour trois raisons mesurées :
+
+1. **le binaire n'est pas mappé** — `AttachedFile` est FILESTREAM côté légataire, supprimée de
+   la copie par la migration 004 (FILESTREAM n'existe pas sur SQL Server Linux). Or le logiciel
+   de bureau **ne lit que cette colonne** : sans elle, une pièce déposée par le CRM serait pour
+   lui une case de checklist vide ;
+2. **`AppFileObject` n'a pas de `PKey`** — sa clé est `AdmAttachedFileId`, or le rapatriement
+   supposait `PKey` partout ;
+3. **le rapatriement exigeait que la copie ait toutes les colonnes de la source** — juste pour
+   une dérive de schéma, faux pour une divergence voulue comme `AttachedFile`.
+
+### Le flux retenu (S3 → source → copie, mêmes identifiants partout)
+
+```
+1. S3                     l'objet, comme avant — un échec ultérieur ne laisse qu'un orphelin balayable
+2. source de vérité       AdmAttachedFile (métadonnées, par JPA routé) + le binaire
+                          (UPDATE natif via DepotBinaireVersSource, MÊME transaction, même connexion)
+                          + AppFileObject (par JPA routé)
+3. copie                  par le rapatriement ordinaire : AdmAttachedFile SANS la colonne binaire,
+                          AppFileObject entier
+```
+
+Aucun aller-retour d'identifiants : le `PKey` est frappé **côté application**
+(`UUID.randomUUID()`, `PieceJointeSupport`) et posé tel quel dans les trois écritures. Pas de
+compteur `AdmSequence` sur ce flux — le risque de collision qui a motivé la feature n'existe pas
+ici (UUID aléatoire, et une collision improbable serait rejetée bruyamment par la clé primaire).
+
+### Ce que ça a changé dans le code
+
+| Où | Quoi |
+|---|---|
+| `RemonteeLecture` | clé d'identité par table (`AppFileObject` → `AdmAttachedFileId`) ; colonnes volontairement absentes de la copie, exclues **dès le `SELECT`** pour que le binaire ne repasse jamais sur le réseau |
+| `CollecteurLignesEcrites` | `AppFileObject` dans l'ordre des clés étrangères, après son parent `AdmAttachedFile` |
+| `DepotBinaireSource` (+ 2 impl.) | l'UPDATE natif du binaire sur la source. `Propagation.MANDATORY` : même transaction, donc même connexion routée que l'INSERT des métadonnées — sur une connexion séparée, l'UPDATE attendrait le verrou de l'INSERT non validé. En mono-base : no-op, comportement d'avant |
+| `PieceJointeSupport.deposer` | l'appel au dépôt du binaire, entre les deux `save` |
+
+La colonne est sondée une fois (`COL_LENGTH`) : une source qui ne l'a pas est tolérée avec un
+avertissement, pour que le montage reste testable sur une paire locale quelconque.
+
+### À faire à la main sur 115 avant d'activer (côté utilisateur)
+
+- appliquer `001_AppUserCredential.sql`, `002_AppFileObject.sql`, `003_AppFileMigrationFailure.sql`,
+  `006_AppFileObject_DeletedBy.sql` — **pas la 004** (elle supprimerait la colonne que le
+  légataire lit) ;
+- recopier depuis la copie les lignes `AppUserCredential` et `AppFileObject` existantes : en
+  deux-bases, les transactions d'écriture **lisent aussi** sur la source (changement de mot de
+  passe, suppression d'une pièce), et une ligne absente y ferait un 404 à tort.
+
+Sur la paire locale de vérification (`yesRems` source / `yesRemsProd` copie), tout est déjà en
+place : `yesRems` a les trois tables `App*` et sa colonne `AttachedFile` (varbinaire, nullable).
+
+### Vérifié de bout en bout (21/09, banc `yesRems` source / `yesRemsProd` copie)
+
+Campagne menée par HTTP authentifié (compte `Khadija`), vérification SQL des deux côtés après
+chaque appel :
+
+| Endpoint | Constat |
+|---|---|
+| `POST/PATCH /api/prospects`, contacts | ✅ ligne + rapatriement, code `26/14441` frappé sur la source, compteur copie intact |
+| `POST /api/prospections` + étape/interaction/ville/tranche-principale | ✅ des deux côtés, **présente dans `ComSaleProspectionView` des deux côtés** |
+| `POST /api/dossiers` (`ARS 2026/00409`) | ✅ dossier + lot lié (`StkItem.ComFolderId`) + historique de statut, compteur copie intact |
+| `POST échéancier` + `POST règlement` | ✅ des deux côtés |
+| `PATCH statut règlement` | 409 attendu (transition refusée) — le garde-fou traverse le montage |
+| **`POST pièce jointe`** | ✅ **binaire 72 o dans la source**, métadonnées des deux côtés, `AppFileObject` rapatrié, téléchargement S3 conforme |
+| **`DELETE pièce jointe`** | ✅ `DeletedAt`/`DeletedBy` rapatriés |
+| `POST /api/mon-compte/changer-mot-de-passe` | ❌ **404 attendu** : `Khadija` absente d'`AppUserCredential` **sur la source** — la preuve du rattrapage à faire (§ ci-dessus) |
+
+**Deux défauts trouvés et corrigés par cette campagne :**
+
+1. **Les `DELETE` ne voyageaient pas** — le collecteur n'écoutait que `POST_INSERT`/`POST_UPDATE` :
+   un contact supprimé restait affiché par le CRM (fantôme dans la copie). Corrigé : collecte de
+   `POST_DELETE`, et au rapatriement **l'absence sur la source vaut suppression dans la copie**,
+   traitée après les fusions et en ordre inverse (enfants d'abord — la copie porte les 1 219 FK).
+2. **`yesRems.AppFileObject` n'avait pas `DeletedBy`** (006 non appliquée sur la source du banc) :
+   l'INSERT échouait et ressortait en **401 nu** — l'exception d'un filtre part dans le dispatch
+   d'erreur, pas dans le `ProblemDetail`. Migration appliquée au banc ; sur 115 c'est le point
+   « appliquer 006 » de la check-list. Un 401 inattendu sur un endpoint d'écriture doit faire
+   penser à ça.
+
+**Prérequis confirmé par l'échec `ELKORRI`** : toute ligne référencée par une création doit
+exister **sur la source** (la validation lit dans la transaction d'écriture). Sur le banc local
+la copie est plus récente que la source, d'où l'échec ; face à 115, la source est le
+sur-ensemble et le cas ne se produit pas — sauf pour les lignes créées par le CRM seul
+(`AppUserCredential`, employés créés par l'API) : c'est le rattrapage documenté plus haut.
+
+### Données de test à retirer (campagne du 21/09)
+
+Sur **les deux bases** (`yesRems` et `yesRemsProd`), dans cet ordre :
+
+```sql
+DELETE FROM dbo.AppFileObject   WHERE AdmAttachedFileId IN ('98243728-F16B-486F-843A-02BC65FCF468','A509C1DC-909A-4503-854F-99E03259DE1F');
+DELETE FROM dbo.AdmAttachedFile WHERE PKey IN ('98243728-F16B-486F-843A-02BC65FCF468','A509C1DC-909A-4503-854F-99E03259DE1F');
+DELETE FROM dbo.StlSettlementRelation WHERE StlSettlementId = '616D7CA1-F2B4-4A5A-8E2F-41D3AC7EB8E6';
+DELETE FROM dbo.StlSettlementLine     WHERE StlSettlementId = '616D7CA1-F2B4-4A5A-8E2F-41D3AC7EB8E6';
+DELETE FROM dbo.StlSettlement   WHERE PKey = '616D7CA1-F2B4-4A5A-8E2F-41D3AC7EB8E6';
+DELETE FROM dbo.ComDocument     WHERE PKey = '14EBE3ED-2943-4EE9-B970-76266A49B57C';
+UPDATE dbo.StkItem SET ComFolderId = NULL WHERE PKey = 'FAC8B2CA-1E78-4EF5-AE9C-18194C09C0E4'; -- libérer ARS0934
+DELETE FROM dbo.ComFolderItem   WHERE ComFolderId = '620C0A88-EDA3-4AE7-91E8-A4E489ACBADE';
+DELETE FROM dbo.StrFolderStatusHistory WHERE ComFolderId = '620C0A88-EDA3-4AE7-91E8-A4E489ACBADE';
+DELETE FROM dbo.ComFolder       WHERE PKey = '620C0A88-EDA3-4AE7-91E8-A4E489ACBADE';
+DELETE FROM dbo.ComActionMessage WHERE ComProspectionId = 'AE957C63-99CD-477C-B93B-CE7FC47D5938';
+DELETE FROM dbo.ComProspectionCity WHERE ComProspectionId = 'AE957C63-99CD-477C-B93B-CE7FC47D5938';
+DELETE FROM dbo.ComProspection  WHERE PKey = 'AE957C63-99CD-477C-B93B-CE7FC47D5938';
+DELETE FROM dbo.CfgTierContact  WHERE PKey = '3CF302C9-B403-4F59-AAF1-A5559895AB91'; -- fantôme pré-correctif, copie seulement
+DELETE FROM dbo.CfgTier         WHERE LastName = 'A-SUPPRIMER';
+```
+
+Les deux objets S3 (`pieces-jointes/dossier/620c0a88-…/*.txt`) relèvent du balayage habituel.
+Compteurs source avancés (`Tier` 14442, `Prospection` 5942, `Dossier de vente` 409) — la série
+tolère les trous, rien à faire.
+
+### Décision laissée ouverte : la suppression côté légataire
+
+Notre suppression est logique (`AppFileObject.DeletedAt`), rapatriée dans la copie : la pièce
+disparaît du CRM. Sur la source, la ligne `AdmAttachedFile` et son binaire restent — **le
+logiciel de bureau continue donc d'afficher une pièce supprimée dans le CRM.** Aligner les deux
+(supprimer la ligne côté légataire ?) est une décision métier, pas prise ici.
+
 ## Impact front
 
 **Aucun.** Ni les chemins d'URL, ni les DTO, ni les codes de statut ne changent. La seule
@@ -176,6 +296,5 @@ aller-retour réseau par requête SQL d'écriture.
 
 - La **synchronisation descendante périodique** par Change Tracking (déjà activé sur 23 tables,
   cf. `prototype/ct-activer-yesRems.sql`), qui rapatrie ce qu'OMRAN écrit de son côté.
-- Le **pipeline des pièces jointes** : `AdmAttachedFile.AttachedFile` est une colonne FILESTREAM
-  côté OMRAN, et FILESTREAM n'existe pas sur Linux — d'où `AppFileObject` et S3. Le backend ne
-  mappe plus cette colonne.
+- La **reprise du stock existant de binaires** entre 115 et S3 dans les deux sens — le flux du
+  dépôt est traité ci-dessus (section Pièces jointes), pas le rattrapage de l'historique.
