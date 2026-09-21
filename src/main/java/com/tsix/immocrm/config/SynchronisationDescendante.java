@@ -88,6 +88,7 @@ public class SynchronisationDescendante {
     private final JdbcTemplate surSource;
     private final JdbcTemplate surCopie;
     private final RemonteeLecture remontee;
+    private final MoniteurSynchronisation moniteur;
 
     /**
      * Un seul cycle à la fois. Le cycle planifié et un déclenchement manuel
@@ -101,10 +102,12 @@ public class SynchronisationDescendante {
 
     public SynchronisationDescendante(@Qualifier("ecriture") DataSource source,
                                       @Qualifier("jdbcLecture") JdbcTemplate surCopie,
-                                      RemonteeLecture remontee) {
+                                      RemonteeLecture remontee,
+                                      MoniteurSynchronisation moniteur) {
         this.surSource = new JdbcTemplate(source);
         this.surCopie = surCopie;
         this.remontee = remontee;
+        this.moniteur = moniteur;
     }
 
     /**
@@ -203,8 +206,29 @@ public class SynchronisationDescendante {
                             + "{} table(s) en echec, version {}, en {} ms.",
                     fusionnees, supprimees, enEchec, versionCourante, dureeMs);
         }
-        return new ResultatSync(true, versionCourante, fusionnees, supprimees,
+        ResultatSync resultat = new ResultatSync(true, versionCourante, fusionnees, supprimees,
                 tablesReussies.size(), enEchec, dureeMs);
+        // Le moniteur ne doit jamais faire échouer un cycle : ses métriques sont un observateur.
+        try {
+            moniteur.enregistrerCycle(resultat, retardsParTable(versionCourante));
+        } catch (RuntimeException e) {
+            log.warn("Metriques de synchronisation non mises a jour pour ce cycle.", e);
+        }
+        return resultat;
+    }
+
+    /**
+     * Retard par table pour le tableau de suivi : {@code versionCourante} moins le filigrane de
+     * chaque table dans {@code AppSyncEtat} ({@code 0} = à jour). Une table jamais synchronisée
+     * (sans filigrane) n'apparaît pas encore ici — elle le fera dès sa première baseline.
+     */
+    private Map<String, Long> retardsParTable(long versionCourante) {
+        Map<String, Long> retards = new java.util.LinkedHashMap<>();
+        surCopie.query("SELECT TableNom, DerniereVersion FROM dbo.AppSyncEtat", rs -> {
+            long filigrane = rs.getLong("DerniereVersion");
+            retards.put(rs.getString("TableNom"), Math.max(0L, versionCourante - filigrane));
+        });
+        return retards;
     }
 
     /** Fusionne ce que la table doit à la copie ; collecte les suppressions pour la fin de cycle. */
