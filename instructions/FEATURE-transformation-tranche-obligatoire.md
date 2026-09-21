@@ -110,6 +110,44 @@ front doit brancher le libellé « Type » sur `typeContactId`, jamais `vocation
 formulaire « Nouvelle prospection » doit fournir Notes + Source de contact + Type +
 Nature + Tranche. Source de vérité : `/api-docs` (DTO annoté `requiredMode = REQUIRED`).
 
+## Autres tranches (`ComProspectionProject`) — synchro descendante manquante
+
+Constaté sur la trace d'audit (21/09, 17:46) : OMRAN écrit les « autres tranches »
+d'une prospection dans **`ComProspectionProject`** — `INSERT INTO
+ComProspectionProject(stkHierarchyId, comProspectionId, stkItemId, userCreate, …)`,
+une ligne par tranche secondaire (pas un batch). Pour lister, il fait
+`SELECT PKey FROM ComProspectionProject WHERE ComProspectionId = …` ; le choix des
+tranches disponibles vient du référentiel `CfgTranche`.
+
+**Côté app la fonctionnalité existe déjà** : `GET/POST/DELETE
+/api/prospections/{id}/autres-tranches` (mapping identique). Le problème était
+**la synchro** : `ComProspectionProject` n'avait pas de Change Tracking sur la
+source, et la synchro descendante lit la liste des tables suivies **dynamiquement**
+depuis `sys.change_tracking_tables` (`SynchronisationDescendante.tablesSuivies()`,
+ligne 260) — une table sans CT lui est donc invisible. **Aucun code à changer.**
+
+Tables de détail de prospection qui étaient hors CT (idem : villes, profils) :
+
+```sql
+ALTER TABLE ComProspectionProject         ENABLE CHANGE_TRACKING;
+ALTER TABLE ComProspectionCity            ENABLE CHANGE_TRACKING;
+ALTER TABLE ComProspectionProfile         ENABLE CHANGE_TRACKING;
+ALTER TABLE ComProspectionSelectedProfile ENABLE CHANGE_TRACKING;
+ALTER TABLE ComProspectionProfileCategory ENABLE CHANGE_TRACKING;
+```
+
+(`ComProspectionCategory` et `ComProspectionType` étaient déjà suivies.) À appliquer
+sur la source réelle (115) au déploiement ; réversible par `SET CHANGE_TRACKING = OFF`.
+
+**Preuve sur banc local (21/09)** : CT activé sur `yesRems`, une instance backend
+deux-bases tournant. Au cycle suivant, `ComProspectionProject` est entré dans le
+périmètre (`AppSyncEtat` créé, baseline) puis a suivi en incrémental — les lignes
+d'autres-tranches créées par un utilisateur OMRAN (« Macire Kamara ») sur la source
+`yesRems` sont arrivées dans la copie `yesRemsProd` (INSERT, UPDATE et DELETE),
+convergence source = copie vérifiée via `AppSyncEtat` et le contenu des tables (pas
+le log, bufferisé). Les échecs transitoires observés au démarrage sont la
+convergence FK normale (enfant avant parent → rejoué au cycle suivant).
+
 ## Fichiers
 
 - `dto/prospection/TransformerProspectionRequest.java` — `trancheId` + `articleId`, `@Schema`.
