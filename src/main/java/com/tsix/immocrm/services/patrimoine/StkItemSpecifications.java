@@ -25,6 +25,28 @@ public final class StkItemSpecifications {
     }
 
     /**
+     * Écarte les <b>annexes</b> de la sélection d'articles — la règle du légataire, relevée dans
+     * sa trace d'audit le 22/09/2026 (écran Articles rejoué) : {@code IsUnderItem = 0}, en plus
+     * de {@code ParentId IS NULL} (le {@code topLevelOnly} de {@link #build}). Les deux critères
+     * sont nécessaires : <b>241 parkings sont des racines</b> (sans parent) mais portent
+     * {@code IsUnderItem = 1} — c'est le drapeau, pas la parenté ni la catégorie, qui marque
+     * l'annexe. Mesuré sur les 1 068 articles réels : PARKING/TERRASSE/JARDIN tous à 1,
+     * APPARTEMENT/COMMERCE/LOT DE TERRAIN tous à 0, zéro NULL — et l'article principal des 358
+     * dossiers est toujours un APPARTEMENT (353) ou un COMMERCE (5).
+     *
+     * <p>Un {@code NULL} (inexistant en base réelle) est traité comme « pas une annexe » :
+     * écarter en silence un lot légitime sur une donnée incomplète serait pire que d'afficher
+     * une annexe de trop. Composable avec {@link #build}, appliqué à la sélection uniquement
+     * ({@code GET /api/referentiels/articles}) : le listing de tranche, le catalogue et le
+     * dropdown des sous-articles continuent de tout montrer.
+     */
+    public static Specification<StkItem> horsAnnexes() {
+        return (root, query, cb) -> cb.or(
+                cb.isNull(root.get("isUnderItem")),
+                cb.isFalse(root.get("isUnderItem")));
+    }
+
+    /**
      * @param trancheId    restricts to one tranche ({@code StkItem.stkHierarchy.id}); null = no restriction
      * @param parentId     restricts to the sous-articles of one article ({@code StkItem.parent.id}); null = no restriction
      * @param topLevelOnly when true, excludes sous-articles ({@code StkItem.parent IS NULL})

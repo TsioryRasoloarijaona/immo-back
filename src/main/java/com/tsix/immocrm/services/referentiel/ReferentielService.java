@@ -551,9 +551,14 @@ public class ReferentielService {
      * (défaut: DISPONIBLE) et optionnellement sur la catégorie/le type — même cascade de cases à
      * cocher (Tranche → Catégorie → Type → Article) que {@code GET /api/tranches/{id}/articles}.
      * N'inclut que les articles racine (pas les sous-articles — ceux-ci ont leur propre dropdown,
-     * voir {@link #sousArticles}). Renvoie {@link ArticleListItemDto} (pas le générique
-     * {@link ReferentielItemDto}) pour exposer le nom (`description`) et la catégorie/le type de
-     * chaque article, pas seulement son code.
+     * voir {@link #sousArticles}), et écarte les <b>annexes</b> ({@code IsUnderItem = 1} — la
+     * règle exacte de l'écran Articles du légataire, relevée dans sa trace d'audit ; voir
+     * {@link StkItemSpecifications#horsAnnexes}) : jamais un lot principal sur les 358 dossiers
+     * réels, mais 241 parkings racine noyaient la sélection. L'exclusion tombe dès qu'une
+     * {@code categorieId} est demandée explicitement — cocher PARKING dans la cascade doit
+     * rendre les parkings, pas une liste vide. Renvoie {@link ArticleListItemDto} (pas le
+     * générique {@link ReferentielItemDto}) pour exposer le nom (`description`) et la
+     * catégorie/le type de chaque article, pas seulement son code.
      */
     public List<ArticleListItemDto> articles(UUID trancheId, StatutArticle statut,
                                               List<UUID> categorieIds, List<UUID> typeIds) {
@@ -562,6 +567,9 @@ public class ReferentielService {
         }
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;
         var spec = StkItemSpecifications.build(trancheId, null, true, effectiveStatut, categorieIds, typeIds);
+        if (categorieIds == null || categorieIds.isEmpty()) {
+            spec = spec.and(StkItemSpecifications.horsAnnexes());
+        }
         return stkItemRepository.findAll(spec).stream()
                 .map(item -> ArticleService.toListItem(item, Collections.emptyMap(), Collections.emptyMap()))
                 .toList();
