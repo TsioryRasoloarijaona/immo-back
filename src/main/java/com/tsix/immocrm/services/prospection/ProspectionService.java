@@ -1286,6 +1286,26 @@ public class ProspectionService {
         return null;
     }
 
+    /**
+     * Nom d'affichage de l'auteur d'une interaction : l'employé lié quand il existe, sinon
+     * {@code UserName} puis {@code UserCreate}. Mesuré sur les 48 278 interactions réelles :
+     * {@code CfgEmployeeId} n'est renseigné que sur 77 % d'entre elles — et jamais par les
+     * comptes créés par cette plateforme, qui n'ont pas d'employé — quand {@code UserName} et
+     * {@code UserCreate} le sont à 99,996 %. Ne lire que l'employé, comme avant, affichait
+     * « Système » sur un quart du journal, nos propres saisies comprises, alors que le
+     * logiciel de bureau retrace l'auteur en lisant {@code UserName}.
+     *
+     * <p>Partagé avec {@code HotlineService} : les deux mappeurs d'interactions ont déjà
+     * divergé une fois, la règle ne doit vivre qu'ici.
+     */
+    public static String nomAuteur(ComActionMessage m) {
+        String employe = TierNomFormatter.nom(m.getCfgEmployee());
+        if (StringUtils.hasText(employe)) {
+            return employe;
+        }
+        return StringUtils.hasText(m.getUserName()) ? m.getUserName() : m.getUserCreate();
+    }
+
     private static InteractionDto toInteractionDto(ComActionMessage m) {
         // Contexte projet/tranche : déduit, jamais stocké sur ComActionMessage — voir
         // ContexteInteraction, qui reproduit la règle de la vue légataire.
@@ -1300,10 +1320,7 @@ public class ProspectionService {
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
-                m.getCfgEmployee() != null
-                        ? ((m.getCfgEmployee().getFirstName() != null ? m.getCfgEmployee().getFirstName() + " " : "")
-                        + (m.getCfgEmployee().getLastName() != null ? m.getCfgEmployee().getLastName() : "")).trim()
-                        : null,
+                nomAuteur(m),
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,

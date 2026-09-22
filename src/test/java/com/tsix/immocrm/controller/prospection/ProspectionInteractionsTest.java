@@ -91,6 +91,56 @@ class ProspectionInteractionsTest {
                 .andExpect(jsonPath("$.content[?(@.id=='" + message.getId() + "')]").exists());
     }
 
+    /**
+     * L'auteur affiché ne peut pas dépendre du seul employé lié : {@code CfgEmployeeId} n'est
+     * renseigné que sur 77 % des 48 278 interactions réelles — et jamais par les comptes créés
+     * par cette plateforme, qui n'ont pas d'employé — quand {@code UserName} l'est à 99,996 %.
+     * Sans le repli, le client affichait « Système » à la place de la personne connectée,
+     * alors que le logiciel de bureau, lui, retrace l'auteur.
+     */
+    @Test
+    void findInteractions_sansEmploye_lAuteurVientDeUserName() throws Exception {
+        ComProspection prospection = newProspection("PSN-AUTEUR-1");
+
+        ComActionMessage message = new ComActionMessage();
+        message.setId(UUID.randomUUID());
+        message.setComProspection(prospection);
+        message.setDocDate(LocalDateTime.now());
+        message.setUserName("Khadija ELKORRI");
+        message.setUserCreate("Khadija ELKORRI");
+        actionMessageRepository.save(message);
+
+        mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].employeNom").value("Khadija ELKORRI"))
+                .andExpect(jsonPath("$.content[0].employeId").doesNotExist());
+    }
+
+    /** L'employé lié reste prioritaire quand il existe — le repli ne s'applique qu'à son absence. */
+    @Test
+    void findInteractions_avecEmploye_lEmployeResteLAuteurAffiche() throws Exception {
+        CfgTier employe = new CfgTier();
+        employe.setId(UUID.randomUUID());
+        employe.setCode("EMP-AUTEUR");
+        employe.setFirstName("Hamza");
+        employe.setLastName("ATCHANY");
+        employe = tierRepository.save(employe);
+
+        ComProspection prospection = newProspection("PSN-AUTEUR-2");
+
+        ComActionMessage message = new ComActionMessage();
+        message.setId(UUID.randomUUID());
+        message.setComProspection(prospection);
+        message.setDocDate(LocalDateTime.now());
+        message.setCfgEmployee(employe);
+        message.setUserName("compte.generique");
+        actionMessageRepository.save(message);
+
+        mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].employeNom").value("Hamza ATCHANY"));
+    }
+
     @Test
     void findInteractions_unknownProspection_returns404() throws Exception {
         mockMvc.perform(get("/api/prospections/{id}/interactions", UUID.randomUUID()))

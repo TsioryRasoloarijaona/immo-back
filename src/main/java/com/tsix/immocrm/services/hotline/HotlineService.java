@@ -19,7 +19,6 @@ import com.tsix.immocrm.services.prospection.ContexteInteraction;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
-import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -229,7 +228,9 @@ public class HotlineService {
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
-                TierNomFormatter.nom(m.getCfgEmployee()),
+                // Même règle d'auteur que le journal de prospection — employé, puis UserName :
+                // sans le repli, un quart des interactions s'affichait « Système ».
+                ProspectionService.nomAuteur(m),
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,
                 m.getComActionMessageSubCategory() != null ? m.getComActionMessageSubCategory().getId() : null,
