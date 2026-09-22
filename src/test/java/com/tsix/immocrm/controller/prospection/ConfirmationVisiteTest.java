@@ -5,7 +5,6 @@ import com.tsix.immocrm.dto.prospection.ResultatEnvoiVisiteDto;
 import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmEvent;
-import com.tsix.immocrm.entities.app.AppFileObject;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -13,17 +12,11 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComProspection;
-import com.tsix.immocrm.entities.stk.StkItem;
-import com.tsix.immocrm.entities.stk.StkItemCategory;
-import com.tsix.immocrm.entities.stk.StkItemType;
-import com.tsix.immocrm.entities.stk.StkVocation;
-import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.mail.EnvoiEmailMemoire;
 import com.tsix.immocrm.mail.MessageEmail;
 import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
-import com.tsix.immocrm.repositories.app.AppFileObjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -31,10 +24,6 @@ import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageSubCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
-import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
-import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
-import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
 import com.tsix.immocrm.storage.FixturePieceJointe;
 import com.tsix.immocrm.whatsapp.EnvoiWhatsAppMemoire;
@@ -85,6 +74,10 @@ class ConfirmationVisiteTest {
     private static final String MOBILE_VALIDE = "6 61 22 48 57";
     private static final String ATTENDU_E164 = "+212661224857";
 
+    /** Le lien Google Maps attendu pour l'adresse nominale « 100 BD ZERKTOUNI, 20000 Casablanca ». */
+    private static final String LIEN_CARTE_BEL_AIR =
+            "https://www.google.com/maps/search/?api=1&query=100+BD+ZERKTOUNI%2C+20000+Casablanca";
+
     @Autowired private MockMvc mockMvc;
     @Autowired private ApplicationEvents evenements;
     @Autowired private EnvoiEmailMemoire envoiEmail;
@@ -100,14 +93,7 @@ class ConfirmationVisiteTest {
     @Autowired private CfgTrancheRepository trancheRepository;
     @Autowired private CfgProjectRepository projectRepository;
     @Autowired private AdmAttachedFileTypeRepository attachedFileTypeRepository;
-    @Autowired private AppFileObjectRepository fileObjectRepository;
     @Autowired private FixturePieceJointe fixturePieceJointe;
-
-    @Autowired private FixtureReferentielStk fixtureReferentielStk;
-    @Autowired private StkVocationRepository vocationRepository;
-    @Autowired private StkItemTypeRepository itemTypeRepository;
-    @Autowired private StkItemCategoryRepository itemCategoryRepository;
-    @Autowired private StkItemRepository itemRepository;
 
     /**
      * Les deux doubles d'envoi sont des singletons du contexte : leur état survivrait au rollback
@@ -224,34 +210,6 @@ class ConfirmationVisiteTest {
 
     private LocalDateTime leRdv() {
         return LocalDateTime.of(2026, 9, 15, 15, 30);
-    }
-
-    private StkItem newArticle() {
-        StkVocation vocation = new StkVocation();
-        vocation.setId(UUID.randomUUID());
-        vocation.setCode("VOC-CV-" + UUID.randomUUID());
-        vocationRepository.save(vocation);
-
-        StkItemType type = new StkItemType();
-        type.setId(UUID.randomUUID());
-        type.setCode("TYPE-CV-" + UUID.randomUUID());
-        type.setStkKind(fixtureReferentielStk.natureParDefaut());
-        itemTypeRepository.save(type);
-
-        StkItemCategory categorie = new StkItemCategory();
-        categorie.setId(UUID.randomUUID());
-        categorie.setCode("CAT-CV-" + UUID.randomUUID());
-        categorie.setStkKind(fixtureReferentielStk.natureParDefaut());
-        itemCategoryRepository.save(categorie);
-
-        StkItem article = new StkItem();
-        article.setId(UUID.randomUUID());
-        article.setCode("ART-CV-" + UUID.randomUUID());
-        article.setStkItemType(type);
-        article.setStkItemCategory(categorie);
-        article.setStkVocation(vocation);
-        article.setStkKind(fixtureReferentielStk.natureParDefaut());
-        return itemRepository.save(article);
     }
 
     private AdmAttachedFileType newTypePiece(String code) {
@@ -468,11 +426,11 @@ class ConfirmationVisiteTest {
     }
 
     /**
-     * Le WhatsApp ne doit pas annoncer de plan : il n'en porte aucun, faute d'URL publique
-     * durable. Promettre une pièce jointe absente serait pire que se taire.
+     * Le changement de FEATURE-mail-visite-localisation.md : un plan déposé n'est <b>plus</b>
+     * joint — sur aucun canal — et c'est l'adresse avec sa localisation qui voyage à la place.
      */
     @Test
-    void leTexteWhatsAppNAnnoncePasDePlanMemeQuandLeMailEnPorte() {
+    void unPlanDepose_nEstPlusJoint_laLocalisationVoyageALaPlace() {
         CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
         CfgTranche tranche = newTranche(projet, "Tranche 1", null);
         ComProspection p = newProspection(newProspectComplet(), tranche);
@@ -481,9 +439,13 @@ class ConfirmationVisiteTest {
         ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
                 newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
+        assertThat(r.email().envoye()).isTrue();
+        assertThat(r.email().nombrePiecesJointes()).isZero();
         assertThat(r.whatsapp().nombrePiecesJointes()).isZero();
-        assertThat(envoiWhatsApp.dernier().texte()).doesNotContain("pièce jointe");
+        assertThat(envoiEmail.dernier().piecesJointes()).isEmpty();
+        assertThat(envoiEmail.dernier().corpsTexte()).doesNotContain("pièce jointe");
+        assertThat(envoiEmail.dernier().variables())
+                .containsEntry("lienCarte", LIEN_CARTE_BEL_AIR);
     }
 
     // ------------------------------------------------------------------ R3/R4 lieu et adresse
@@ -546,87 +508,38 @@ class ConfirmationVisiteTest {
         assertThat(envoiEmail.dernier().variables()).containsEntry("nomCommercial", "Khadija ELKORRI");
     }
 
-    // ------------------------------------------------------------------ R6/R7 pièces jointes
+    // ------------------------------------------------------------------ localisation
 
+    /** Le lien suit l'adresse retenue par R4 : ici celle du projet, la tranche n'en ayant pas. */
     @Test
-    void planDeLarticle_estJoint() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newProspectComplet(), tranche);
-        StkItem article = newArticle();
-        p.setStkItem(article);
-        prospectionRepository.save(p);
-        newPiece(article.getId(), "PLAN RDC", "PLAN");
+    void lAdresseValide_produitLeLienDeLocalisation() {
+        ComProspection p = prospectionNominale();
 
-        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, leRdv()).getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
-        assertThat(envoiEmail.dernier().piecesJointes()).hasSize(1);
-        assertThat(envoiEmail.dernier().piecesJointes().get(0).nom()).isEqualTo("PLAN RDC.pdf");
-        assertThat(envoiEmail.dernier().piecesJointes().get(0).contenu())
-                .isEqualTo("PLAN-PDF".getBytes(StandardCharsets.UTF_8));
+        assertThat(envoiEmail.dernier().variables())
+                .containsEntry("lienCarte", LIEN_CARTE_BEL_AIR);
+        assertThat(envoiEmail.dernier().corpsTexte())
+                .contains("Localisation : " + LIEN_CARTE_BEL_AIR);
+        assertThat(envoiWhatsApp.dernier().texte())
+                .contains("*Localisation* : " + LIEN_CARTE_BEL_AIR);
     }
 
     /**
-     * La protection qui compte : sans le filtre par type, le niveau projet enverrait au prospect
-     * n'importe quel document déposé, contrats signés compris — et il existe précisément une
-     * telle ligne en base réelle.
+     * Une adresse rejetée par R4 ne produit pas de lien : chercher « adresse » sur une carte
+     * enverrait le prospect n'importe où — le lien suit l'adresse, il ne la remplace pas.
      */
     @Test
-    void pieceQuiNestPasUnPlan_estIgnoree() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
+    void sansAdresseValide_aucunLienDeLocalisation() {
+        CfgProject projet = newProjet("YESTEST", "adresse", "VIlle");
+        CfgTranche tranche = newTranche(projet, "Tranche test", null);
         ComProspection p = newProspection(newProspectComplet(), tranche);
-        StkItem article = newArticle();
-        p.setStkItem(article);
-        prospectionRepository.save(p);
-        newPiece(article.getId(), "CONTRAT SIGNE", "CONTRAT");
 
-        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, leRdv()).getId());
+        confirmationVisiteService.envoyer(newInteractionAvecRdv(p, leRdv()).getId());
 
-        assertThat(r.email().envoye()).isTrue();
-        assertThat(r.email().nombrePiecesJointes()).isZero();
-    }
-
-    /** Les plans déposés au niveau du projet servent quand l'article n'est pas connu (97 % des cas). */
-    @Test
-    void sansArticle_lesPlansDuProjetSontJoints() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newProspectComplet(), tranche);
-        newPiece(projet.getId(), "PLAN DE MASSE", "PLAN");
-
-        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, leRdv()).getId());
-
-        assertThat(r.email().nombrePiecesJointes()).isEqualTo(1);
-        assertThat(envoiEmail.dernier().piecesJointes().get(0).nom()).isEqualTo("PLAN DE MASSE.pdf");
-    }
-
-    /**
-     * R7 — un plan trop lourd est abandonné, le message part sans lui. Un {@code PLAN_ETAGE}
-     * réel monte à 5 Mo ; deux suffisent presque à saturer le plafond de 10 Mo.
-     */
-    @Test
-    void planAuDelaDuPlafond_estAbandonneEtLeMessagePart() {
-        CfgProject projet = newProjet("AYAD RESIDENCE BEL AIR", "100 BD ZERKTOUNI", "Casablanca");
-        CfgTranche tranche = newTranche(projet, "Tranche 1", null);
-        ComProspection p = newProspection(newProspectComplet(), tranche);
-        AdmAttachedFile piece = newPiece(projet.getId(), "PLAN ENORME", "PLAN_ETAGE");
-
-        // La taille déclarée est ce que consulte la règle — c'est délibéré : plafonner après
-        // lecture obligerait à charger en mémoire le fichier qu'on cherche justement à écarter.
-        AppFileObject objet = fileObjectRepository.findById(piece.getId()).orElseThrow();
-        objet.setSizeBytes(64L * 1024 * 1024);
-        fileObjectRepository.saveAndFlush(objet);
-
-        ResultatEnvoiVisiteDto r = confirmationVisiteService.envoyer(
-                newInteractionAvecRdv(p, leRdv()).getId());
-
-        assertThat(r.email().envoye()).isTrue();
-        assertThat(r.email().nombrePiecesJointes()).isZero();
+        assertThat(envoiEmail.dernier().variables()).containsEntry("lienCarte", null);
+        assertThat(envoiEmail.dernier().corpsTexte()).doesNotContain("Localisation");
+        assertThat(envoiWhatsApp.dernier().texte()).doesNotContain("*Localisation*");
     }
 
     // ------------------------------------------------------------------ endpoint de renvoi

@@ -7,10 +7,11 @@
   styles EN LIGNE : Outlook et les webmails ignorent largement les feuilles de style.
 
   Toutes les sections sauf la date sont conditionnelles, et ce n'est pas de la prudence
-  décorative : l'adresse est omise quand la donnée n'est pas exploitable (règle R4), le
-  commercial peut manquer (28 prospections réelles sur 5 078), et les plans sont l'exception.
-  Un bloc vide serait pire qu'un bloc absent — il donnerait l'impression d'une information
-  perdue en route.
+  décorative : l'adresse — et le lien de localisation qui la suit — est omise quand la donnée
+  n'est pas exploitable (règle R4), et le commercial peut manquer (28 prospections réelles sur
+  5 078). Un bloc vide serait pire qu'un bloc absent — il donnerait l'impression d'une
+  information perdue en route. Le message n'emporte plus de pièce jointe : les plans ont été
+  remplacés par l'adresse et sa localisation (FEATURE-mail-visite-localisation.md).
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="fr">
 <head>
@@ -83,6 +84,10 @@
                                 <td style="padding:0 20px 18px 20px; font-size:15px; line-height:1.5;">
                                     <span th:text="${adresse}">100 BD ZERKTOUNI</span>
                                     <span th:if="${ville}"><br><span th:text="${ville}">20000 Casablanca</span></span>
+                                    <span th:if="${lienCarte}"><br>
+                                        <a th:href="${lienCarte}" style="color:#2563eb; font-weight:600; text-decoration:underline;"
+                                           target="_blank" rel="noopener">Voir la localisation sur la carte</a>
+                                    </span>
                                 </td>
                             </tr>
 
@@ -107,9 +112,6 @@
                         <ul style="margin:0 0 16px 0; padding-left:20px; color:#52606d;">
                             <li style="margin-bottom:6px;">munissez-vous d'une pièce d'identité ;</li>
                             <li style="margin-bottom:6px;">prévoyez environ une heure sur place ;</li>
-                            <li th:if="${plans != null and !plans.isEmpty()}" style="margin-bottom:6px;">
-                                le ou les plans sont joints à ce message.
-                            </li>
                         </ul>
                     </td>
                 </tr>
