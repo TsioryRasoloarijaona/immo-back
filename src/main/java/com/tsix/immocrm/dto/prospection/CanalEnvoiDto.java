@@ -21,9 +21,11 @@ public record CanalEnvoiDto(
                 example = "+212661224857", nullable = true)
         String destinataire,
 
-        @Schema(description = "Nombre de plans joints. Toujours 0 sur le canal WhatsApp : "
-                + "l'envoi d'un document par UltraMsg exige une URL publique, or les URL du "
-                + "stockage expirent en quinze minutes.", example = "1")
+        @Schema(description = "Nombre de pièces jointes. **Toujours 0 désormais** : la "
+                + "confirmation de visite n'emporte plus de plan — elle porte l'adresse du "
+                + "projet et un lien de localisation (voir "
+                + "FEATURE-mail-visite-localisation.md). Champ conservé pour ne pas casser "
+                + "les clients existants.", example = "0")
         int nombrePiecesJointes
 ) {
 

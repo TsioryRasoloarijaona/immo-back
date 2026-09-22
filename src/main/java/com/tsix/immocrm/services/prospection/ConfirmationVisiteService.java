@@ -3,27 +3,17 @@ package com.tsix.immocrm.services.prospection;
 import com.tsix.immocrm.domain.MotifEnvoiVisite;
 import com.tsix.immocrm.dto.prospection.CanalEnvoiDto;
 import com.tsix.immocrm.dto.prospection.ResultatEnvoiVisiteDto;
-import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
-import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmEvent;
-import com.tsix.immocrm.entities.app.AppFileObject;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
-import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.mail.EmailProperties;
 import com.tsix.immocrm.mail.EnvoiEmail;
 import com.tsix.immocrm.mail.MessageEmail;
-import com.tsix.immocrm.mail.PieceJointeEmail;
-import com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository;
-import com.tsix.immocrm.repositories.app.AppFileObjectRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
-import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
-import com.tsix.immocrm.storage.StockageFichiers;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import com.tsix.immocrm.whatsapp.EnvoiWhatsApp;
@@ -35,14 +25,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -78,36 +68,16 @@ public class ConfirmationVisiteService {
      */
     private static final int LONGUEUR_MINIMALE_ADRESSE = 8;
 
-    /**
-     * Seuls les types de pièce jointe dont le code commence ainsi sont expédiables (R6) —
-     * {@code PLAN}, {@code PLAN_ARCHITECTE}, {@code PLAN_ETAGE}. Ce n'est pas un confort de
-     * filtrage : sans lui, le niveau projet enverrait au prospect n'importe quel document qu'un
-     * utilisateur y aurait déposé, contrats signés compris.
-     */
-    private static final String PREFIXE_TYPE_PLAN = "PLAN";
-
     private final ComActionMessageRepository actionMessageRepository;
-    private final AdmAttachedFileSummaryRepository attachedFileSummaryRepository;
-    private final AppFileObjectRepository fileObjectRepository;
-    private final StockageFichiers stockage;
     private final EnvoiEmail envoiEmail;
     private final EnvoiWhatsApp envoiWhatsApp;
-    private final EmailProperties properties;
 
     public ConfirmationVisiteService(ComActionMessageRepository actionMessageRepository,
-                                     AdmAttachedFileSummaryRepository attachedFileSummaryRepository,
-                                     AppFileObjectRepository fileObjectRepository,
-                                     StockageFichiers stockage,
                                      EnvoiEmail envoiEmail,
-                                     EnvoiWhatsApp envoiWhatsApp,
-                                     EmailProperties properties) {
+                                     EnvoiWhatsApp envoiWhatsApp) {
         this.actionMessageRepository = actionMessageRepository;
-        this.attachedFileSummaryRepository = attachedFileSummaryRepository;
-        this.fileObjectRepository = fileObjectRepository;
-        this.stockage = stockage;
         this.envoiEmail = envoiEmail;
         this.envoiWhatsApp = envoiWhatsApp;
-        this.properties = properties;
     }
 
     /**
@@ -181,9 +151,6 @@ public class ConfirmationVisiteService {
         Adresse adresse = adresse(tranche, projet);
 
         return new ContenuVisite(
-                prospection,
-                projet,
-                tranche,
                 TierNomFormatter.nom(prospect),
                 email(prospect, prospection),
                 numeroWhatsApp(prospect),
@@ -193,8 +160,30 @@ public class ConfirmationVisiteService {
                 lieu(projet, tranche),
                 adresse != null ? adresse.ligne() : null,
                 adresse != null ? adresse.ville() : null,
+                lienCarte(adresse),
                 commercial != null ? TierNomFormatter.nom(commercial) : null,
                 commercial != null ? nettoyer(commercial.getMobile()) : null);
+    }
+
+    /**
+     * R4 bis — la « localisation exacte », sous la seule forme que les données permettent :
+     * un lien de recherche Google Maps construit sur l'adresse retenue. Aucune coordonnée GPS
+     * n'existe en base ({@code MapLatitude}/{@code MapLongitude} : 0 ligne sur 1 068
+     * {@code StkItem}, et les colonnes n'existent ni sur le projet ni sur la tranche) — le
+     * jour où elles seront saisies, ce lien pourra devenir un {@code query=lat,long}.
+     *
+     * <p>Le lien suit l'adresse : validée par {@link #adresseValide} ou absente. Construire un
+     * lien sur une adresse rejetée enverrait le prospect chercher « adresse » sur une carte.
+     */
+    private static String lienCarte(Adresse adresse) {
+        if (adresse == null) {
+            return null;
+        }
+        String requete = adresse.ville() != null
+                ? adresse.ligne() + ", " + adresse.ville()
+                : adresse.ligne();
+        return "https://www.google.com/maps/search/?api=1&query="
+                + URLEncoder.encode(requete, StandardCharsets.UTF_8);
     }
 
     /**
@@ -316,10 +305,6 @@ public class ConfirmationVisiteService {
             return CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.SERVICE_INACTIF, contenu.email());
         }
 
-        // Les plans ne sont lus qu'ici : le téléchargement depuis le stockage coûte cher, et il
-        // serait absurde de le payer pour un prospect sans adresse email.
-        List<PieceJointeEmail> plans = plans(contenu);
-
         Map<String, Object> variables = new LinkedHashMap<>();
         variables.put("nomProspect", contenu.nomProspect());
         variables.put("date", contenu.date());
@@ -327,14 +312,16 @@ public class ConfirmationVisiteService {
         variables.put("lieu", contenu.lieu());
         variables.put("adresse", contenu.adresse());
         variables.put("ville", contenu.ville());
+        variables.put("lienCarte", contenu.lienCarte());
         variables.put("nomCommercial", contenu.nomCommercial());
         variables.put("mobileCommercial", contenu.mobileCommercial());
-        variables.put("plans", plans.stream().map(PieceJointeEmail::nom).toList());
 
+        // Aucune pièce jointe, et c'est un choix : le message n'emporte plus de plan — il
+        // porte l'adresse et sa localisation. Voir FEATURE-mail-visite-localisation.md.
         envoiEmail.envoyer(new MessageEmail(contenu.email(), sujet(contenu), TEMPLATE,
-                variables, corpsTexte(contenu, !plans.isEmpty()), plans));
+                variables, corpsTexte(contenu), List.of()));
 
-        return CanalEnvoiDto.envoye(contenu.email(), plans.size());
+        return CanalEnvoiDto.envoye(contenu.email(), 0);
     }
 
     private static String sujet(ContenuVisite contenu) {
@@ -371,10 +358,8 @@ public class ConfirmationVisiteService {
     /**
      * Le message WhatsApp reprend les mêmes informations que le mail, dans une forme adaptée au
      * canal : court, sans salutation cérémonieuse, et avec la mise en gras {@code *…*} que
-     * WhatsApp interprète.
-     *
-     * <p>Il ne mentionne pas les plans, puisqu'il n'en porte aucun — annoncer une pièce jointe
-     * absente serait pire que se taire.
+     * WhatsApp interprète. Le lien de localisation y est particulièrement à sa place — le
+     * message se lit sur le téléphone qui servira à s'y rendre.
      */
     private static String texteWhatsApp(ContenuVisite contenu) {
         StringBuilder texte = new StringBuilder();
@@ -395,6 +380,9 @@ public class ConfirmationVisiteService {
             }
             texte.append('\n');
         }
+        if (contenu.lienCarte() != null) {
+            texte.append("*Localisation* : ").append(contenu.lienCarte()).append('\n');
+        }
         if (contenu.nomCommercial() != null) {
             texte.append("*Votre conseiller* : ").append(contenu.nomCommercial());
             if (contenu.mobileCommercial() != null) {
@@ -407,96 +395,13 @@ public class ConfirmationVisiteService {
         return texte.toString();
     }
 
-    // ------------------------------------------------------------------ pièces jointes
-
-    /**
-     * R6 — les plans de l'article s'il est connu, sinon ceux du projet puis de la tranche. On
-     * s'arrête au premier niveau qui donne quelque chose : cumuler enverrait au prospect le plan
-     * de son lot <i>et</i> celui d'un autre.
-     *
-     * <p>L'article n'est renseigné que sur 3,4 % des prises de rendez-vous ; le repli est donc le
-     * cas courant, et il est aujourd'hui vide — voir §7 de la spec, qui décrit ce qu'il reste à
-     * téléverser pour que ce chemin produise enfin quelque chose.
-     */
-    private List<PieceJointeEmail> plans(ContenuVisite contenu) {
-        StkItem article = contenu.prospection() != null ? contenu.prospection().getStkItem() : null;
-        if (article != null) {
-            List<PieceJointeEmail> depuisArticle = plansDe(article.getId());
-            if (!depuisArticle.isEmpty()) {
-                return depuisArticle;
-            }
-        }
-        if (contenu.projet() != null) {
-            List<PieceJointeEmail> depuisProjet = plansDe(contenu.projet().getId());
-            if (!depuisProjet.isEmpty()) {
-                return depuisProjet;
-            }
-        }
-        return contenu.tranche() != null ? plansDe(contenu.tranche().getId()) : List.of();
-    }
-
-    /**
-     * Les pièces d'un porteur qui sont des plans réellement téléchargeables, dans la limite du
-     * plafond de taille (R7).
-     */
-    private List<PieceJointeEmail> plansDe(UUID porteurId) {
-        List<PieceJointeEmail> retenues = new ArrayList<>();
-        long cumul = 0;
-        long plafond = properties.piecesJointesMaxOctets();
-
-        for (AdmAttachedFileSummary piece : attachedFileSummaryRepository.findByCategoryId(porteurId)) {
-            if (!Boolean.TRUE.equals(piece.getHasFile()) || !estUnPlan(piece)) {
-                continue;
-            }
-            Optional<AppFileObject> trouve =
-                    fileObjectRepository.findByAdmAttachedFileIdAndDeletedAtIsNull(piece.getId());
-            if (trouve.isEmpty()) {
-                continue;
-            }
-            AppFileObject objet = trouve.orElseThrow();
-            long taille = objet.getSizeBytes() != null ? objet.getSizeBytes() : 0L;
-            if (cumul + taille > plafond) {
-                log.info("Plan « {} » écarté de la confirmation de visite : {} octets porteraient "
-                                + "le total au-delà du plafond de {} Mo.",
-                        piece.getDescription(), taille, properties.getPiecesJointesMaxMo());
-                continue;
-            }
-
-            lire(objet, piece).ifPresent(retenues::add);
-            cumul += taille;
-        }
-        return retenues;
-    }
-
-    /**
-     * R8 — un plan illisible ne doit pas priver le client de l'heure de son rendez-vous. Le
-     * stockage est un service distant, hors de la transaction et hors de notre contrôle ; qu'il
-     * soit indisponible est une éventualité normale, pas un cas exceptionnel.
-     */
-    private Optional<PieceJointeEmail> lire(AppFileObject objet, AdmAttachedFileSummary piece) {
-        try {
-            byte[] contenu = stockage.lire(objet.getStorageKey());
-            String nom = PieceJointeSupport.nomTelechargement(piece.getDescription(), piece.getExtension());
-            return Optional.of(new PieceJointeEmail(nom, objet.getContentType(), contenu));
-        } catch (RuntimeException e) {
-            log.error("Plan « {} » (clé {}) illisible : la confirmation de visite part sans lui.",
-                    piece.getDescription(), objet.getStorageKey(), e);
-            return Optional.empty();
-        }
-    }
-
-    private static boolean estUnPlan(AdmAttachedFileSummary piece) {
-        String code = Champs.de(piece.getType(), AdmAttachedFileType::getCode);
-        return code != null && code.trim().toUpperCase(Locale.ROOT).startsWith(PREFIXE_TYPE_PLAN);
-    }
-
     // ------------------------------------------------------------------ divers
 
     /**
      * Alternative texte brut du mail, construite en Java comme celle du mot de passe temporaire —
      * un second résolveur Thymeleaf en mode TEXT serait beaucoup de plomberie pour quinze lignes.
      */
-    private static String corpsTexte(ContenuVisite contenu, boolean avecPlans) {
+    private static String corpsTexte(ContenuVisite contenu) {
         StringBuilder texte = new StringBuilder();
         texte.append("Bonjour");
         if (contenu.nomProspect() != null) {
@@ -514,6 +419,9 @@ public class ConfirmationVisiteService {
             }
             texte.append('\n');
         }
+        if (contenu.lienCarte() != null) {
+            texte.append("Localisation : ").append(contenu.lienCarte()).append('\n');
+        }
         if (contenu.nomCommercial() != null) {
             texte.append("Votre conseiller : ").append(contenu.nomCommercial());
             if (contenu.mobileCommercial() != null) {
@@ -523,9 +431,6 @@ public class ConfirmationVisiteService {
         }
         texte.append("\nMerci de vous munir d'une pièce d'identité. Prévoyez environ une heure ")
                 .append("sur place.\n");
-        if (avecPlans) {
-            texte.append("\nVous trouverez le ou les plans en pièce jointe.\n");
-        }
         texte.append("\nPour modifier ou annuler ce rendez-vous, contactez votre conseiller au ")
                 .append("numéro ci-dessus.\n");
         return texte.toString();
@@ -547,18 +452,12 @@ public class ConfirmationVisiteService {
     /**
      * Le contenu de la confirmation, résolu une fois pour tous les canaux.
      *
-     * <p>Porte aussi les trois entités dont dépend la résolution des pièces jointes
-     * ({@code prospection}, {@code projet}, {@code tranche}) : elles ne sont traversées que si le
-     * canal email aboutit, et les garder ici évite de refaire la remontée
-     * prospection → tranche → projet une seconde fois.
-     *
      * @param aUnMobileBrut la fiche porte un mobile, exploitable ou non — permet de distinguer
      *                      « pas de numéro » de « numéro impossible à composer »
+     * @param lienCarte     lien Google Maps sur l'adresse retenue — la « localisation exacte »,
+     *                      dans la seule forme que les données permettent (aucun GPS en base)
      */
     private record ContenuVisite(
-            ComProspection prospection,
-            CfgProject projet,
-            CfgTranche tranche,
             String nomProspect,
             String email,
             String numeroWhatsApp,
@@ -568,6 +467,7 @@ public class ConfirmationVisiteService {
             String lieu,
             String adresse,
             String ville,
+            String lienCarte,
             String nomCommercial,
             String mobileCommercial) {
     }
