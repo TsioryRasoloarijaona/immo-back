@@ -38,7 +38,17 @@ public record InteractionDto(
         @Schema(description = "true si entrante, false si sortante.")
         Boolean entrante,
 
+        @Schema(description = "Id de l'employé lié (`CfgEmployeeId`). Renseigné sur 77 % des "
+                + "interactions réelles seulement — `null` ne veut pas dire auteur inconnu, "
+                + "voir `employeNom`.")
         UUID employeId,
+
+        @Schema(description = "**Nom d'affichage de l'auteur — toujours renseigné quand la "
+                + "base le connaît (99,996 % des lignes réelles).** L'employé lié quand il "
+                + "existe, sinon le compte qui a saisi l'interaction (`UserName`, puis "
+                + "`UserCreate`) — c'est ce que le logiciel de bureau affiche. Ne PAS afficher "
+                + "de repli type « Système » côté client sur la seule absence d'`employeId`.",
+                example = "Khadija ELKORRI")
         String employeNom,
 
         @Schema(description = "Id de l'\"Action\" (nature de l'interaction). null si non "
