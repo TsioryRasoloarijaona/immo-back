@@ -1,0 +1,346 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "La source Prometheus qui scrape immo-back sur :9091/actuator/prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "annotations": { "list": [] },
+  "description": "Vue générale du backend AyadERP (immo-crm) : santé, trafic HTTP, synchronisation deux-bases, pools de connexions, JVM. Le détail du pipeline de synchro vit dans le dashboard 'Pipeline de synchronisation' (uid sync-pipeline).",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["immo-back", "ayaderp", "vue-generale"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "AyadERP — Vue générale (immo-back)",
+  "uid": "immo-back-general",
+  "panels": [
+    {
+      "type": "row", "title": "Santé — l'essentiel en un coup d'œil", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 100, "panels": []
+    },
+    {
+      "type": "stat", "title": "Uptime", "id": 1,
+      "description": "Âge du processus. 'No data' = Prometheus ne scrape plus l'API : c'est l'alerte la plus grave de la page.",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "max(process_uptime_seconds)", "legendFormat": "uptime", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "noValue": "API DOWN", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 300 }, { "color": "green", "value": 3600 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Requêtes / s", "id": 2,
+      "description": "Débit HTTP global (moyenne 5 min).",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "req/s", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Erreurs 5xx", "id": 3,
+      "description": "Part des réponses 5xx sur 5 min. Vert < 1 %, rouge ≥ 5 %.",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "100 * sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "5xx %", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 2, "noValue": "0", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Latence p95", "id": 4,
+      "description": "95e percentile toutes routes confondues (5 min).",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Erreurs loggées (1 h)", "id": 5,
+      "description": "logback level=error — attrape ce que le HTTP ne voit pas (synchro, mail, WhatsApp, tâches planifiées).",
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "sum(increase(logback_events_total{level=\"error\"}[1h]))", "legendFormat": "erreurs", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "noValue": "0", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Synchro : âge du dernier cycle", "id": 6,
+      "description": "time() − sync_last_success_timestamp_seconds. Cadence attendue : 2 min. Rouge > 15 min = pipeline muet. 'No data' = backend en mono-base (métriques sync_* absentes).",
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "time() - max(sync_last_success_timestamp_seconds)", "legendFormat": "âge", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "noValue": "MONO-BASE ?", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "red", "value": 900 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Synchro : tables en échec", "id": 7,
+      "description": "Au dernier cycle. 1-2 pendant un cycle = convergence FK normale ; une valeur qui PERSISTE = table bloquée (voir dashboard sync-pipeline).",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "max(sync_tables_failed)", "legendFormat": "tables", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "noValue": "-", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat", "title": "Heap JVM", "id": 8,
+      "description": "Mémoire heap utilisée / max.",
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "100 * sum(jvm_memory_used_bytes{area=\"heap\"}) / sum(jvm_memory_max_bytes{area=\"heap\"})", "legendFormat": "heap %", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 0, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 75 }, { "color": "red", "value": 90 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+
+    {
+      "type": "row", "title": "Trafic HTTP", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }, "id": 101, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "Débit par code de statut", "id": 10,
+      "description": "Empilé. Une bande 4xx qui gonfle = clients ou front cassés ; du 5xx = nous.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "sum by (status) (rate(http_server_requests_seconds_count[5m]))", "legendFormat": "{{status}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 40, "stacking": { "mode": "normal" }, "lineWidth": 1 } }, "overrides": [
+        { "matcher": { "id": "byRegexp", "options": "5.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+        { "matcher": { "id": "byRegexp", "options": "4.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+        { "matcher": { "id": "byRegexp", "options": "2.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Latence globale p50 / p95 / p99", "id": 11,
+      "description": "Quantiles calculés sur les buckets (percentiles-histogram activé côté app).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "table", "title": "Top 10 endpoints les plus appelés (période affichée)", "id": 12,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "topk(10, sum by (method, uri) (increase(http_server_requests_seconds_count[$__range])))", "legendFormat": "{{method}} {{uri}}", "refId": "A", "instant": true, "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "Appels" }] }
+      ] },
+      "options": { "sortBy": [{ "displayName": "Appels", "desc": true }] },
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": {} } }]
+    },
+    {
+      "type": "table", "title": "Top 10 endpoints les plus lents — p95 (période affichée)", "id": 13,
+      "description": "Où part le temps. Un p95 élevé sur une route de liste = requête SQL à revoir.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "topk(10, histogram_quantile(0.95, sum by (method, uri, le) (rate(http_server_requests_seconds_bucket[$__range]))))", "legendFormat": "{{method}} {{uri}}", "refId": "A", "instant": true, "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "p95" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] } }, { "id": "custom.cellOptions", "value": { "type": "color-background" } }] }
+      ] },
+      "options": { "sortBy": [{ "displayName": "p95", "desc": true }] },
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": {} } }]
+    },
+    {
+      "type": "timeseries", "title": "Erreurs 5xx par endpoint", "id": 14,
+      "description": "Vide en temps normal. La légende nomme le coupable directement.",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "sum by (method, uri) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m]))", "legendFormat": "{{method}} {{uri}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars", "fillOpacity": 60 }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "type": "row", "title": "Synchronisation deux-bases (résumé — détail : dashboard 'sync-pipeline')", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 }, "id": 102, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "Retard par table (versions CT)", "id": 20,
+      "description": "sync_watermark_lag : version source − filigrane copie. 0 = à jour. Un plateau qui ne redescend pas = table bloquée (FK, périmètre) — voir FIX-synchro-lignes-hors-perimetre.md.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "max by (table) (sync_watermark_lag) > 0", "legendFormat": "{{table}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Lignes fusionnées / supprimées (par 10 min)", "id": 21,
+      "description": "L'activité réellement transportée depuis OMRAN. Plate à zéro pendant les heures ouvrées = suspect.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "increase(sync_rows_merged_total[10m])", "legendFormat": "fusionnées", "refId": "A" },
+        { "expr": "increase(sync_rows_deleted_total[10m])", "legendFormat": "supprimées", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "supprimées" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Durée moyenne d'un cycle", "id": 22,
+      "description": "rate(sum)/rate(count) — le timer n'a pas d'histogramme, donc moyenne, pas p95. Une dérive continue = source lente (VPN, disque du 115) ou baseline en cours.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "rate(sync_cycle_duration_seconds_sum[15m]) / rate(sync_cycle_duration_seconds_count[15m])", "legendFormat": "durée moyenne", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Passes de table en échec (par heure)", "id": 23,
+      "description": "increase(sync_table_failures_total). Quelques échecs isolés = convergence FK normale ; un rythme soutenu = boucle (ligne hors périmètre ?).",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "increase(sync_table_failures_total[1h])", "legendFormat": "échecs / h", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 }, "color": { "mode": "fixed", "fixedColor": "orange" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "type": "row", "title": "Base de données — pools de connexions", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 }, "id": 103, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "Connexions actives par pool", "id": 30,
+      "description": "hikari-lecture = copie locale (tout le trafic de consultation) ; hikari-source-de-verite = le 115 via VPN (écritures + synchro). Un pool collé à son max = saturation.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "hikaricp_connections_active", "legendFormat": "{{pool}} actives", "refId": "A" },
+        { "expr": "hikaricp_connections_max", "legendFormat": "{{pool}} max", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [
+        { "matcher": { "id": "byRegexp", "options": ".* max" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [8, 8], "fill": "dash" } }, { "id": "custom.fillOpacity", "value": 0 }] }
+      ] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Attente de connexion : en file + timeouts", "id": 31,
+      "description": "pending > 0 en continu = threads qui attendent une connexion ; timeout > 0 = requêtes qui ont ÉCHOUÉ faute de connexion (le 115 injoignable, typiquement).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "hikaricp_connections_pending", "legendFormat": "{{pool}} en file", "refId": "A" },
+        { "expr": "increase(hikaricp_connections_timeout_total[5m])", "legendFormat": "{{pool}} timeouts (5m)", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 } }, "overrides": [
+        { "matcher": { "id": "byRegexp", "options": ".*timeouts.*" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }, { "id": "custom.drawStyle", "value": "bars" }] }
+      ] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Temps moyen d'acquisition d'une connexion", "id": 32,
+      "description": "Par pool. La source de vérité traverse le VPN : une dérive ici précède les timeouts.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "rate(hikaricp_connections_acquire_seconds_sum[5m]) / rate(hikaricp_connections_acquire_seconds_count[5m])", "legendFormat": "{{pool}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "table", "title": "Top 10 requêtes repository (période affichée)", "id": 33,
+      "description": "Invocations Spring Data les plus fréquentes — les points chauds SQL du code.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "topk(10, sum by (repository, method) (increase(spring_data_repository_invocations_seconds_count[$__range])))", "legendFormat": "{{repository}}.{{method}}", "refId": "A", "instant": true, "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "Invocations" }] }
+      ] },
+      "options": { "sortBy": [{ "displayName": "Invocations", "desc": true }] },
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": {} } }]
+    },
+
+    {
+      "type": "row", "title": "JVM & système", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 62 }, "id": 104, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "Mémoire heap", "id": 40,
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 63 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})", "legendFormat": "utilisée", "refId": "A" },
+        { "expr": "sum(jvm_memory_committed_bytes{area=\"heap\"})", "legendFormat": "réservée", "refId": "B" },
+        { "expr": "sum(jvm_memory_max_bytes{area=\"heap\"})", "legendFormat": "max", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "max" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [8, 8], "fill": "dash" } }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Pauses GC", "id": 41,
+      "description": "Temps passé en pause par seconde, et pire pause. Des pauses longues = latence API en dents de scie.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 63 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(jvm_gc_pause_seconds_sum[5m]))", "legendFormat": "temps GC / s", "refId": "A" },
+        { "expr": "max(jvm_gc_pause_seconds_max)", "legendFormat": "pire pause", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Threads JVM", "id": 42,
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 63 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "jvm_threads_live_threads", "legendFormat": "vivants", "refId": "A" },
+        { "expr": "sum(jvm_threads_states_threads{state=\"blocked\"})", "legendFormat": "bloqués", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "bloqués" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "CPU", "id": 43,
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 70 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "100 * max(process_cpu_usage)", "legendFormat": "processus", "refId": "A" },
+        { "expr": "100 * max(system_cpu_usage)", "legendFormat": "machine", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Disque", "id": 44,
+      "description": "Espace libre vu par l'application. Le VPS héberge aussi MinIO et les images Docker.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 70 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "max(disk_free_bytes)", "legendFormat": "libre", "refId": "A" },
+        { "expr": "max(disk_total_bytes)", "legendFormat": "total", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "total" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [8, 8], "fill": "dash" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Logs par niveau (par 5 min)", "id": 45,
+      "description": "logback_events_total. Le fond de warn est normal ; toute barre d'erreur mérite un coup d'œil aux logs du conteneur.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 70 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "sum by (level) (increase(logback_events_total{level=~\"error|warn\"}[5m]))", "legendFormat": "{{level}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+        { "matcher": { "id": "byName", "options": "warn" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}
