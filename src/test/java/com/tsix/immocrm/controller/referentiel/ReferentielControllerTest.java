@@ -507,14 +507,15 @@ class ReferentielControllerTest {
     }
 
     /**
-     * Les catégories annexes (parking, terrasse, jardin) ne sont jamais un lot principal —
-     * mesuré : 0 des 358 dossiers réels — mais 241 parkings RACINE existent au parc et noyaient
-     * la sélection (10 des 11 disponibles de FERME BRETONE). Ils sont donc écartés du dropdown
-     * Article... sauf si l'appelant demande explicitement leur catégorie : cocher PARKING doit
-     * rendre les parkings, pas une liste vide.
+     * Les annexes ({@code IsUnderItem = 1}) ne sont jamais un lot principal — mesuré : 0 des
+     * 358 dossiers réels — mais 241 parkings RACINE (sans parent, drapeau à 1) existent au parc
+     * et noyaient la sélection (10 des 11 disponibles de FERME BRETONE). Même règle que l'écran
+     * Articles du légataire (trace d'audit du 22/09/2026 : {@code IsUnderItem = 0} en plus de
+     * {@code ParentId IS NULL}). Écartés du dropdown Article... sauf si l'appelant demande
+     * explicitement leur catégorie : cocher PARKING doit rendre les parkings, pas une liste vide.
      */
     @Test
-    void getArticles_ecarteLesCategoriesAnnexes_saufDemandeExplicite() throws Exception {
+    void getArticles_ecarteLesAnnexes_saufDemandeExpliciteDeCategorie() throws Exception {
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-REF-ANNEXE");
@@ -529,8 +530,10 @@ class ReferentielControllerTest {
         StkItem appartement = newArticleTestItem("ART-REF-ANNEXE-APP", tranche, null);
         stkItemRepository.save(appartement);
 
-        // Un parking RACINE (sans parent), disponible — le cas réel AP-PARKING-xx d'APF.
+        // Un parking RACINE (sans parent) disponible, marqué annexe par son drapeau —
+        // le cas réel AP-PARKING-xx d'APF.
         StkItem parking = newArticleTestItem("ART-REF-ANNEXE-PARKING", tranche, null);
+        parking.setIsUnderItem(true);
         parking.getStkItemCategory().setCode("PAR");
         stkItemCategoryRepository.save(parking.getStkItemCategory());
         stkItemRepository.save(parking);
