@@ -1,59 +1,82 @@
 # Session Memory
-_Last updated: 2026-09-21T21:15+01:00_
+_Last updated: 2026-09-22T10:45+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
 
-**Aligner l'app sur les règles de l'écran légataire OMRAN et fiabiliser/observer la synchro
-descendante deux-bases** (celle de `source-de-verite-115`, désormais **mergée dans `main`**).
-Cette session a livré 5 branches (prospection : tranche + champs obligatoires + contacts ;
-synchro : moniteur Micrometer, fix StlSettlementLine, ouverture aux commerciaux).
+**Préserver et exploiter la trace d'audit OMRAN, et fiabiliser/observer la synchro descendante
+deux-bases.** Cette session : feature `feat/archivage-trace-omran` — l'audit SQL Server tourne
+sur 20 fichiers × 100 Mo et supprime les plus anciens ; un cycle planifié archive la part OMRAN
+avant la rotation. Les 3 PRs de la session précédente restent à merger.
 
 ---
 
 ## ✅ What Worked
 
-### Méthode (répétée tout le tour)
-- **La trace d'audit OMRAN `C:\backup\*.sqlaudit`** (via `sys.fn_get_audit_file`) est LA source de
-  vérité sur ce qu'OMRAN écrit : `application_name = 'OMRAN estate'` isole ses requêtes. On lit
-  l'INSERT/UPDATE (colonnes) + la ligne réelle créée pour mapper libellé → colonne.
-- **Mesurer avant de décider** (taux de population) justifie chaque règle. Ex. tranche obligatoire :
-  14 700/14 725 prospections qualifiées ont une tranche (99,83 %).
-- **Vérifier la synchro via `AppSyncEtat` et le contenu des tables, JAMAIS le log** (bufferisé).
+### Feature livrée : archivage de la trace OMRAN (930 tests verts)
+- `config/ArchivageTraceOmran` (moule de `SynchronisationDescendante`) : lit
+  `sys.fn_get_audit_file` **sur la source**, filtre `application_name = 'OMRAN estate'` côté
+  serveur, écrit `AppTraceOmran` **sur la copie** via `jdbcLecture` (migration
+  `010_AppTraceOmran.sql`, appliquée sur yesRemsProd le 22/09).
+- Activation : deux-bases **ET** `AUDIT_TRACE_PATH` non vide (défaut vide = rien n'existe,
+  la suite de tests boote inchangée). Cadence `AUDIT_TRACE_MINUTES` (60).
+- **Vérifié sur banc** : 1re passe T-SQL = 42 852 lignes = compte brut de l'audit à bornes
+  identiques ; 2e passe purge-et-rejeu : comptes inchangés (idempotence prouvée).
 
-### Features livrées (toutes tests verts, 921 au dernier passage)
-1. **Tranche obligatoire à `POST /api/prospections/{id}/transformer`** (`TransformerProspectionRequest`
-   gagne `trancheId`/`articleId` ; invariant : une tranche à la sortie, sinon 400).
-2. **5 champs obligatoires à `POST /api/prospections`** (alignés OMRAN, prospection `26/05946`) :
-   `notes`, `origineId` (Source de contact→`ComProspectionOriginId`), `typeContactId`
-   (Type→`ComActionMessageTypeId`), `etapeId` (Nature→`ComProspectionKindId`), `trancheId`
-   (Tranche→`StkHierarchyId`). **Piège : « Type » = `ComActionMessageType`, PAS la vocation.**
-3. **Contacts** : `CfgTierContact` (lien vers un autre `CfgTier` + `CfgRelationType`). OMRAN crée
-   la personne à la volée → `ajouterContact` gagne `nouveauContact` (via `ProspectService.createEntity`).
-   `ContactProspectDto` enrichi (mobile, email). Nouveaux `GET/POST /api/prospections/{id}/contacts`.
-4. **Moniteur de pipeline (Micrometer)** : `MoniteurSynchronisation` expose `sync_*` sur
-   `/actuator/prometheus:9091` (déjà câblé, 0 dépendance). Signal central `sync_watermark_lag{table}`.
-5. **Fix StlSettlementLine** (voir bug #24) et **ouverture de la synchro manuelle aux commerciaux**.
+### Insertion directe de 7 pré-prospections FERME BRETONNE sur le vrai 115 (22/09)
+- **Le pipeline n8n est à l'arrêt depuis le 08/09** (dernier lead injecté) — d'où l'insertion
+  manuelle des soumissions du 21–22/09, demandée explicitement par l'utilisateur.
+- Motif n8n copié (2 725 leads mesurés) : `Code='50'`, `TempDescription/TempEMail/TempTel`
+  (tél. 9 chiffres sans le 0), `IsClosed=0`, `StrEntityId=ComPreProspection`
+  (`b92df3d8-...`), `DocDate=UserCreateDateTime`, `UserCreate NULL`, origine FACEBOOK,
+  vocation VENTE, type WEB, nature « 1 A TRAITER », tranche APF
+  (`c273dec7-08d1-4256-9e3c-efa1485c4ee8`, AYAD PRIVATE FERME BRETONE).
+- Script idempotent (PKey figées + NOT EXISTS) :
+  `scratchpad/insert-preprospections-ferme-bretonne.sql`. 7 insérées, 7 visibles dans
+  `ComSalePreProspectionView` (la vue de l'écran OMRAN).
+- 6 des 7 personnes existaient déjà (soumissions antérieures) — une ligne PAR soumission est
+  le comportement légataire (amakssa 4×), donc inséré quand même.
 
-### Change Tracking étendu + prouvé
-- CT activé sur `ComProspectionProject` (autres tranches) + `City`/`Profile`/`SelectedProfile`/
-  `ProfileCategory`. La synchro lit `sys.change_tracking_tables` **dynamiquement**
-  (`SynchronisationDescendante.tablesSuivies()`) → **aucun code à changer**, activer le CT suffit.
-- Propagation prouvée sur banc local : lignes d'autres-tranches écrites par OMRAN → arrivées dans
-  la copie (INSERT/UPDATE/DELETE), convergence via `AppSyncEtat`.
+### Fix auteur des interactions (branche `fix/auteur-interactions`, 932 tests verts)
+- Symptôme : une action saisie dans le CRM s'affichait « Système » ; OMRAN, lui, retrace.
+- **L'écriture était déjà bonne** (AdmUserId/UserName/UserCreate posés depuis le jeton).
+  Le bug était **à la lecture** : `employeNom` dérivé du seul `CfgEmployeeId` (77 % des
+  48 278 interactions réelles, jamais nos comptes) alors qu'`UserName` est à 99,996 %.
+- Correctif : `ProspectionService.nomAuteur` (employé → UserName → UserCreate), partagé avec
+  `HotlineService` (leurs mappeurs avaient déjà divergé une fois). `@Schema` mis à jour :
+  le front ne doit plus afficher « Système » sur la seule absence d'`employeId`.
+- PR : https://github.com/TsioryRasoloarijaona/immo-back/pull/new/fix/auteur-interactions
+
+### Confirmation de visite : localisation au lieu des plans (même branche `fix/auteur-interactions`)
+- Demande utilisateur : plus de plan joint ; envoyer l'adresse + « localisation exacte si
+  disponible ». **Aucun GPS en base** (0/1 068 StkItem ; rien sur CfgProject/CfgTranche) →
+  lien Google Maps construit sur l'adresse R4 (tranche → projet, fausses adresses rejetées).
+- Supprimé tout le mécanisme plans (filtre PLAN*, plafond, lecture S3) ; `lienCarte` dans le
+  mail HTML + corps texte + WhatsApp. `nombrePiecesJointes` = toujours 0 (champ conservé).
+- RDV : l'heure n'est captée nulle part — front `type="date"` (à changer côté front) ; OMRAN
+  non plus (2 454 RDV réels, AlertValidityDate 100 % à minuit, l'heure en texte libre).
+  `AdmEvent` est VIDE sur le 115 : OMRAN ne structure pas ses RDV.
+
+### Méthode (toujours payante)
+- **Mesurer avant de concevoir** a invalidé deux designs successifs (voir What Failed) :
+  toujours compter les doublons dans les données réelles avant de choisir une clé.
+- `git commit -F <fichier scratchpad>` pour les messages multilignes (le here-string PS casse).
 
 ---
 
 ## ❌ What Failed
 
-- **Here-string PowerShell `@'...'@`** pour `git commit -m` : se découpe mal (blank lines →
-  pathspec error). **Solution : `git commit -F <fichier>`** (message écrit dans le scratchpad).
-- **Test contact avec `mobile`** → 400 : `numeroSupport.valider` exige un mobile au bon format
-  (« 600000001 » refusé). Retiré le mobile du test (email suffit à prouver l'enrichissement).
-- **Croire que « OMRAN n'atterrit pas »** = bug de code : non, c'est la synchro pas déployée /
-  table hors CT. Toujours vérifier le périmètre CT et le mode deux-bases d'abord.
+- **Clé naturelle `(file_name, audit_file_offset, sequence_number)` pour dédupliquer l'audit**
+  → 1 044 groupes en doublon : un bloc tampon partage son offset entre plusieurs
+  enregistrements, et une requête sur une vue produit **un enregistrement par objet référencé**.
+- **Clé étendue (+ object_name, action_id)** → 18 848 lignes du fichier brut **strictement
+  identiques sur toutes les colonnes** : il n'existe AUCUNE clé naturelle dans
+  `sys.fn_get_audit_file`. Dédupliquer perdrait de vrais enregistrements.
+- **Filigrane strict (`>`) + lots coupés aux frontières de tick** → cassé par `batchUpdate`
+  qui commite instruction par instruction : un échec à mi-lot laisse un tick à moitié archivé.
+  **Design final : purge-et-rejeu de la borne en `>=`, lecture ordonnée, borne haute −5 min.**
 
 ---
 
@@ -61,84 +84,70 @@ synchro : moniteur Micrometer, fix StlSettlementLine, ouverture aux commerciaux)
 
 | # | Erreur / Bug | Statut | Correctif |
 |---|---|---|---|
-| 24 | `StlSettlementLine` MERGE viole FK `BuyDocument` → table en échec **en boucle**, filigrane figé | **Fixed** (branche `fix/synchro-lignes-hors-perimetre`) | `RemonteeLecture.COLONNES_HORS_PERIMETRE` : exclut les lignes où `BuyDocumentId`/`RntDocumentId`/`StlDocumentId` non-null (achat/location, hors périmètre). Garde 665 lignes vente / 3227. |
-| 25 | Autres tranches OMRAN non synchronisées | **Fixed** | `ComProspectionProject` n'avait pas de CT → activé sur la source. Aucun code. |
-| — | Déploiement `deploy.yml` YAML error L83-84 | **Réglé par l'utilisateur** (hors périmètre de moi) |
+| — | Aucun bug nouveau cette session (26 → voir sessions précédentes : #24 StlSettlementLine et #25 CT autres-tranches, fixés, PRs en attente) | — | — |
 
 ---
 
 ## 🔑 Key Points to Remember
 
-### Git / déploiement
-- **Repo `immo-crm` = remote `TsioryRasoloarijaona/immo-back`.** Cette session a commité en git
-  direct (pas git-flow) : `git checkout main && git pull` pour sync, `git checkout -b <branche>`
-  depuis main, `git commit -F <fichier>`, `git push -u origin <branche>`.
-- **`deploy.yml`** (GitHub Actions) : push sur `main` → build image GHCR → deploy VPS via SSH,
-  écrit `IMMO_BACK_TAG` dans le `.env` du VPS, `docker compose up -d immo-back`. Healthcheck sur
-  `127.0.0.1:9091/actuator/health` (actuator sur **9091**, pas 8080).
-- **PRs en attente de merge** (ordre de priorité) : `fix/synchro-lignes-hors-perimetre` (débloque
-  la prod !), `chore/monitoring-dashboard`, `feat/sync-manuel-commerciaux`.
+### Audit OMRAN
+- `Audit_Global` → `C:\backup\`, **rotation 20 fichiers × 100 Mo** ; la spec
+  (`Audit_DML_DDL_Spec` sur `yesRems`) capte TOUT le DML — le bruit (synchro JDBC : 24 k
+  lignes, Workbench : 10 k) consomme la fenêtre, d'où l'urgence d'archiver.
+- `action_id` arrive complété d'espaces (`'SL  '`) — normalisé au trim dans l'archive.
+- L'audit horodate en **UTC** (colonne `EventTimeUtc`).
+- **En prod (source = 115) : vérifier qu'un audit y est configuré avant de poser
+  `AUDIT_TRACE_PATH`** — le chemin est résolu par l'instance SQL du 115, pas par le conteneur.
+  `sys.fn_get_audit_file` exige `CONTROL SERVER`.
 
-### Monitoring
-- Prometheus scrape déjà l'actuator (job `immo-back`). Grafana **déjà en place sur le VPS** (logs +
-  métriques). Dashboard prêt : `monitoring/grafana-sync-pipeline.json` (branche monitoring).
-- **Les `sync_*` n'existent que si le backend tourne en DEUX-BASES** (`SOURCE_DB_HOST` défini).
-  Vérif : `curl -s http://127.0.0.1:9091/actuator/prometheus | grep '^sync_'`. Vérifié :
-  l'instance qui tournait n'avait PAS les `sync_` → soit ancien build, soit mono-base.
-- Timer sans histogramme → durée **moyenne** (`rate(_sum)/rate(_count)`), pas p95.
+### Git / PRs en attente de merge (ordre de priorité)
+1. `fix/synchro-lignes-hors-perimetre` (**débloque la synchro en prod**)
+2. `chore/monitoring-dashboard`
+3. `feat/sync-manuel-commerciaux`
+4. `feat/archivage-trace-omran` (cette session) —
+   https://github.com/TsioryRasoloarijaona/immo-back/pull/new/feat/archivage-trace-omran
 
-### Rôles / sécurité
-- Rôles = `ROLE_<AdmRole.Code>` (`JwtAuthenticationFilter`), `@PreAuthorize("hasRole('...')")`.
-  Codes commerciaux réels : `Commercial`, `Commercial Chef`, `Commercial Aide`, `Assistante
-  Commerciale`, `Direction fonciere`, `Niveua remise 2`. Sync manuelle ouverte aux 3 premiers + admin.
-
-### Synchro — invariants
-- `SynchronisationDescendante` : deux régimes par table (BASELINE si filigrane absent/périmé, DELTA
-  via `CHANGETABLE`). Filigrane par table dans `AppSyncEtat` (côté copie). Échec d'une table = son
-  filigrane fige et elle rejoue ; la **convergence FK** (enfant avant parent) est normale sur 1-2 cycles.
-- **Le noyau ~23 tables n'est PAS FK-clos** → certaines lignes réfèrent des modules hors périmètre
-  (achat/location). Pour une table qui boucle : ajouter à `COLONNES_HORS_PERIMETRE`.
+### Synchro — invariants (inchangés, voir sessions précédentes)
+- Filigrane par table dans `AppSyncEtat` ; vérifier la synchro via `AppSyncEtat` + contenu
+  des tables, jamais le log. `sync_*` sur `:9091/actuator/prometheus` seulement en deux-bases.
+- Rôles = `ROLE_<AdmRole.Code>` ; sync manuelle ouverte à `Commercial`, `Commercial Chef`,
+  `Commercial Aide` + admin.
 
 ---
 
 ## 📁 Important Files & Paths
 
-- `instructions/FEATURE-transformation-tranche-obligatoire.md` — tranche oblig. + 5 champs oblig. + CT autres tranches.
-- `instructions/FEATURE-contacts-prospection.md` — contacts (création OMRAN + endpoints prospection).
-- `instructions/FEATURE-moniteur-pipeline-synchro.md` — métriques + PromQL/alertes.
-- `instructions/FIX-synchro-lignes-hors-perimetre.md` — le fix StlSettlementLine.
-- `src/main/java/.../config/MoniteurSynchronisation.java` — mètres Micrometer.
-- `src/main/java/.../config/RemonteeLecture.java` — `COLONNES_HORS_PERIMETRE`/`predicatPerimetre` (sur la branche fix uniquement).
-- `src/main/java/.../controller/synchronisation/SynchronisationController.java` — `hasAnyRole(...)`.
-- `monitoring/grafana-sync-pipeline.json` + `monitoring/README.md` — dashboard (branche monitoring).
+- `instructions/FEATURE-archivage-trace-omran.md` — la spec de cette session (mesures + design).
+- `src/main/java/.../config/ArchivageTraceOmran.java` — le cycle d'archivage.
+- `src/main/resources/db/migration/010_AppTraceOmran.sql` — la table (copies uniquement,
+  appliquée sur yesRemsProd ; **à appliquer sur yesRemsDev au déploiement**).
+- `src/test/java/.../config/ArchivageTraceOmranTest.java` — 7 tests unitaires purs.
+- `instructions/FEATURE-moniteur-pipeline-synchro.md`, `FIX-synchro-lignes-hors-perimetre.md`
+  — sessions précédentes, PRs en attente.
 
 ---
 
 ## 🔧 Environment & Config
 
-- Banc local deux-bases : `DB_*`=yesRemsProd (copie), `SOURCE_DB_*`=yesRems (source/rôle 115), tous
-  `localhost,49687` (tsix / securePassword123). CT actif sur `yesRems` (28 tables au dernier relevé).
-- Interroger la trace : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', default, default)`.
-- Tests : `./mvnw.cmd test` (~4 min, **921 verts**). RemonteeLecture/Synchro/Moniteur = beans
-  conditionnels deux-bases → **non instanciés en test mono-base** ; testés en unitaire pur
-  (`SimpleMeterRegistry`, `predicatPerimetre` statique).
-- ⚠️ Identifiants VPS/115/tsix en clair au fil des sessions — dette connue.
+- Banc local deux-bases : `DB_*`=yesRemsProd (copie), `SOURCE_DB_*`=yesRems (source), tous
+  `localhost,49687` (tsix). Audit : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', DEFAULT, DEFAULT)`.
+- Nouvelles variables : `AUDIT_TRACE_PATH` (vide = inactif), `AUDIT_TRACE_MINUTES` (60).
+- Tests : `./mvnw.cmd test` (~4 min, **930 verts**). ArchivageTraceOmran = bean conditionnel
+  deux-bases+chemin → non instancié en test ; testé en unitaire pur (requête, paramètres, trim).
+- `AppTraceOmran` sur yesRemsProd contient déjà les 42 852 lignes du banc (11/09 → 22/09).
 
 ---
 
 ## ⏭️ Next Step
 
-> **Merger `fix/synchro-lignes-hors-perimetre` en priorité** (il débloque la synchro en prod :
-> `StlSettlementLine` cesse d'échouer en boucle), puis vérifier sur le dashboard que
-> `sync_tables_failed` retombe à 0 et `sync_watermark_lag{table="StlSettlementLine"}` repasse à 0.
+> **Merger les 4 PRs sur GitHub** (ordre : fix hors-périmètre → monitoring → sync commerciaux →
+> archivage trace), puis `git checkout main && git pull` et supprimer les branches mergées.
 
 ### Backlog
-- [ ] Merger `chore/monitoring-dashboard` et `feat/sync-manuel-commerciaux`.
-- [ ] **Confirmer que le backend prod tourne en deux-bases** (`SOURCE_DB_HOST`=115) — sinon les
-      `sync_*` n'apparaissent pas dans Grafana et OMRAN n'atterrit pas.
-- [ ] Décider si d'autres rôles commerciaux (`Assistante Commerciale`, `Direction fonciere`,
-      `Niveua remise 2`) doivent aussi déclencher la synchro manuelle.
-- [ ] Sous-tables restantes hors CT (`ComProspectionClosingReason`, référentiels) — à ajouter si
-      leurs détails doivent remonter d'OMRAN.
-- [ ] `ComActionMessage` : 1 ligne irréductible (FK vers module externe) — ne boucle pas, laissée.
+- [ ] Appliquer `010_AppTraceOmran.sql` sur **yesRemsDev** (VPS) au déploiement.
+- [ ] Vérifier/poser un audit SQL Server **sur le 115** avant d'activer `AUDIT_TRACE_PATH`
+      en prod (compte `sasa`, mot de passe détenu par l'utilisateur).
+- [ ] Confirmer que le backend prod tourne en deux-bases (`SOURCE_DB_HOST`=115).
+- [ ] Décider si d'autres rôles commerciaux doivent déclencher la synchro manuelle.
+- [ ] Sous-tables restantes hors CT (`ComProspectionClosingReason`, référentiels).
 - [ ] Décision métier : répercuter ou non la suppression d'une pièce jointe côté légataire.

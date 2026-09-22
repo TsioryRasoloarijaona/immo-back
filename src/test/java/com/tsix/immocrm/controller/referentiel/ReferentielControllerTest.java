@@ -506,6 +506,48 @@ class ReferentielControllerTest {
                 .andExpect(jsonPath("$[?(@.id=='" + sousArticle.getId() + "')]").doesNotExist());
     }
 
+    /**
+     * Les catégories annexes (parking, terrasse, jardin) ne sont jamais un lot principal —
+     * mesuré : 0 des 358 dossiers réels — mais 241 parkings RACINE existent au parc et noyaient
+     * la sélection (10 des 11 disponibles de FERME BRETONE). Ils sont donc écartés du dropdown
+     * Article... sauf si l'appelant demande explicitement leur catégorie : cocher PARKING doit
+     * rendre les parkings, pas une liste vide.
+     */
+    @Test
+    void getArticles_ecarteLesCategoriesAnnexes_saufDemandeExplicite() throws Exception {
+        CfgProject project = new CfgProject();
+        project.setId(UUID.randomUUID());
+        project.setCode("PRJ-REF-ANNEXE");
+        projectRepository.save(project);
+
+        CfgTranche tranche = new CfgTranche();
+        tranche.setId(UUID.randomUUID());
+        tranche.setCode("TR-REF-ANNEXE");
+        tranche.setCfgProject(project);
+        trancheRepository.save(tranche);
+
+        StkItem appartement = newArticleTestItem("ART-REF-ANNEXE-APP", tranche, null);
+        stkItemRepository.save(appartement);
+
+        // Un parking RACINE (sans parent), disponible — le cas réel AP-PARKING-xx d'APF.
+        StkItem parking = newArticleTestItem("ART-REF-ANNEXE-PARKING", tranche, null);
+        parking.getStkItemCategory().setCode("PAR");
+        stkItemCategoryRepository.save(parking.getStkItemCategory());
+        stkItemRepository.save(parking);
+
+        mockMvc.perform(get("/api/referentiels/articles").param("trancheId", tranche.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + appartement.getId() + "')]").exists())
+                .andExpect(jsonPath("$[?(@.id=='" + parking.getId() + "')]").doesNotExist());
+
+        // Demande explicite de la catégorie PARKING : l'exclusion tombe.
+        mockMvc.perform(get("/api/referentiels/articles")
+                        .param("trancheId", tranche.getId().toString())
+                        .param("categorieId", parking.getStkItemCategory().getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + parking.getId() + "')]").exists());
+    }
+
     @Test
     void getArticles_unknownTranche_returns404() throws Exception {
         mockMvc.perform(get("/api/referentiels/articles").param("trancheId", UUID.randomUUID().toString()))

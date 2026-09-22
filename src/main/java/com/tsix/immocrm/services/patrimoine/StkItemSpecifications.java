@@ -2,6 +2,9 @@ package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.CollectionUtils;
@@ -10,6 +13,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -22,6 +26,34 @@ import java.util.UUID;
 public final class StkItemSpecifications {
 
     private StkItemSpecifications() {
+    }
+
+    /**
+     * Codes des catégories qui ne sont <b>jamais un lot principal</b> — mesuré sur les 358
+     * dossiers réels : l'article principal est toujours un APPARTEMENT (353) ou un COMMERCE (5),
+     * et parkings/terrasses/jardins n'apparaissent sur un dossier que comme annexes, toujours en
+     * sous-articles (PARKING 19, TERRASSE 49, JARDIN 7 — zéro racine). 241 parkings <b>racine</b>
+     * existent pourtant au parc, jamais vendus seuls : sans exclusion, ils noient la sélection
+     * d'articles (10 des 11 disponibles de FERME BRETONE étaient des parkings). {@code TER NC}
+     * (terrasse non couverte) ne porte aucun article aujourd'hui — même famille, exclue par
+     * cohérence.
+     */
+    public static final Set<String> CATEGORIES_ANNEXES = Set.of("PAR", "TER", "TER NC", "JDN");
+
+    /**
+     * Écarte les articles de catégorie annexe. Composable avec {@link #build}, appliqué à la
+     * <b>sélection</b> d'articles uniquement ({@code GET /api/referentiels/articles}) : le
+     * listing de tranche, le catalogue et le dropdown des sous-articles continuent de tout
+     * montrer — un parking rattaché à un lot reste choisissable comme annexe.
+     */
+    public static Specification<StkItem> horsCategoriesAnnexes() {
+        return (root, query, cb) -> {
+            // LEFT + test de nullité : un article sans catégorie reste sélectionnable —
+            // l'écarter en silence perdrait un lot légitime sur une donnée incomplète.
+            Join<StkItem, StkItemCategory> categorie = root.join("stkItemCategory", JoinType.LEFT);
+            return cb.or(cb.isNull(categorie.get("id")),
+                    cb.not(categorie.get("code").in(CATEGORIES_ANNEXES)));
+        };
     }
 
     /**
