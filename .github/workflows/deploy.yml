@@ -127,13 +127,31 @@ jobs:
           fi
 
           docker compose pull immo-back
-          # Un recreate interrompu laisse l'ancien conteneur renommé `<id>_immo-back` ; au
-          # recreate suivant compose veut réutiliser ce nom et échoue en "Conflict. The
-          # container name is already in use". Le conteneur courant s'appelle `immo-back`
-          # sans préfixe, donc le filtre ne touche que les orphelins.
-          docker ps -aq --filter 'name=_immo-back$' | xargs -r docker rm -f
+
+          # Pendant un recreate, compose renomme l'ancien conteneur en `<id>_immo-back`
+          # (12 hex + suffixe) le temps de créer le nouveau. Un recreate interrompu, ou un
+          # `docker compose up` lancé à la main pendant que celui-ci tourne, laisse ce nom
+          # pris et le recreate suivant échoue en "Conflict. The container name is already
+          # in use". Le conteneur courant s'appelle `immo-back` sans préfixe : le motif ne
+          # touche que les orphelins. Noms filtrés en grep plutôt que par `--filter name=`,
+          # pour que le motif soit exactement celui qu'on lit ici.
+          # `|| true` : sous `set -o pipefail`, un grep sans résultat (le cas normal) rendrait
+          # le pipeline non nul et `set -e` couperait le déploiement.
+          nettoyer_orphelins() {
+            docker ps -a --format '{{.Names}}' \
+              | { grep -E '^[0-9a-f]{12}_immo-back$' || true; } \
+              | xargs -r docker rm -f
+          }
+          nettoyer_orphelins
+
           # Nom du service explicite : sans lui, up -d recréerait aussi minio et sqlserver.
-          docker compose up -d immo-back
+          # Second essai unique : un orphelin peut apparaître PENDANT le up (cas du up
+          # concurrent ci-dessus), donc le nettoyage préalable ne suffit pas toujours.
+          if ! docker compose up -d immo-back; then
+            echo "up en échec : nettoyage des orphelins puis second essai"
+            nettoyer_orphelins
+            docker compose up -d immo-back
+          fi
           REMOTE
 
       - name: Vérifier que l'application répond

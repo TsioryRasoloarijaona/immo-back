@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-24T01:30+01:00_
+_Last updated: 2026-09-24T02:15+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -62,16 +62,23 @@ d'auteur ; déploiement vers un second VPS en attente.
      des fichiers aux mauvais droits) ; `.bak` restaurés depuis `~/arpent/myssql-backups` monté en
      `/var/backups` ; `docker login ghcr.io` fait pour `nahoma`.
 
-### En cours — branche `fix/cors-ayaddeveloppement` (24/09)
-- `CorsConfig` : origine exacte `https://arpent.ayaddeveloppement.com` (nom donné par
+5. **PR #76 `fix/cors-ayaddeveloppement`** (7a70370) — mergée, run `sha-eb6bed4` : `vps_tsiory`
+   vert (tag SHA + nettoyage OK), `vps_ayad` rouge (voir bug #42).
+   - `CorsConfig` : origine exacte `https://arpent.ayaddeveloppement.com` (nom donné par
   l'utilisateur ; pas de joker, convention « chaque origine de prod listée »). Même domaine
   enregistrable que l'API du 2nd VPS → SameSite=Strict tient. 4 tests ajoutés (`CorsConfigTest`,
   8 verts : origine acceptée, autre sous-domaine refusé, http refusé, domaine sosie refusé).
-- `deploy.yml` : tag immuable calculé (`sha-${GITHUB_SHA::7}`) au lieu de `meta.outputs.version`
-  qui renvoyait `latest` (priorité raw 200 > sha 100 — **tous les déploiements passés tournaient
-  sur `latest`**) ; `docker rm -f` des `*_immo-back` orphelins avant `up`.
-- `ProspectionFiltresAvancesTest` rendu indépendant de l'heure (bug #41, hors périmètre CORS mais
-  bloquait la porte « suite verte »).
+   - `deploy.yml` : tag immuable calculé (`sha-${GITHUB_SHA::7}`) au lieu de `meta.outputs.version`
+     qui renvoyait `latest` (priorité raw 200 > sha 100 — **tous les déploiements passés tournaient
+     sur `latest`**) ; `docker rm -f` des `*_immo-back` orphelins avant `up`.
+   - `ProspectionFiltresAvancesTest` rendu indépendant de l'heure (bug #41).
+
+### En cours — branche `ci/nettoyage-conteneur-immo-back` (24/09)
+- `deploy.yml` : fonction `nettoyer_orphelins` (noms via `docker ps -a --format` + grep
+  `^[0-9a-f]{12}_immo-back$`, plus `--filter name=`), appelée avant `up` **et** une seconde fois
+  après un `up` en échec, suivi d'un unique nouvel essai. Motif : sur `vps_ayad` l'orphelin est
+  apparu PENDANT le `up` (aucun listé au nettoyage préalable) — signature d'un `docker compose up`
+  manuel concurrent du pipeline.
 
 ### Méthode
 - **Trace d'audit** : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', …)` depuis `master`, filtrer
@@ -125,7 +132,8 @@ d'auteur ; déploiement vers un second VPS en attente.
 | 38 | `vps_tsiory` : `Conflict. The container name "/770947ff125a_immo-back" is already in use` | **Open** côté serveur (`docker rm -f 42eebfb0a7f3` à faire) ; prévention dans `deploy.yml` (branche fix) | nettoyage des orphelins avant `up` |
 | 39 | `IMMO_BACK_TAG=latest` écrit à chaque déploiement (rollback par tag impossible) | **Fix sur branche** `fix/cors-ayaddeveloppement` | étape `Calculer le tag immuable` |
 | 40 | `sqlserver` du 2nd VPS `unhealthy` après `ALTER LOGIN sa` sans reporter le `.env` | **Fixed** (à la main) | `.env` aligné + `up -d` |
-| 41 | `ProspectionFiltresAvancesTest` : 2 échecs (`expected:<1> but was:<0>`) entre 23 h et minuit — écart d'1 h JVM (+01:00) / SQL Server (+00:00) | **Fixed** (branche fix/cors) — pré-existant sur `main`, vérifié par `git stash` | fixture `DocDate = now().minusDays(1)` |
+| 41 | `ProspectionFiltresAvancesTest` : 2 échecs (`expected:<1> but was:<0>`) entre 23 h et minuit — écart d'1 h JVM (+01:00) / SQL Server (+00:00) | **Fixed** (PR #76) — pré-existant sur `main`, vérifié par `git stash` | fixture `DocDate = now().minusDays(1)` |
+| 42 | `vps_ayad`, run `sha-eb6bed4` : `Conflict … "/eb3b00a85e4d_immo-back" already in use` alors que le nettoyage préalable n'a rien trouvé | **Fix sur branche** `ci/nettoyage-conteneur-immo-back` | nettoyage grep + second essai après échec |
 
 ---
 
@@ -172,11 +180,10 @@ d'auteur ; déploiement vers un second VPS en attente.
 
 ## ⏭️ Next Step
 
-> PR `fix/cors-ayaddeveloppement` poussée : l'utilisateur la merge, puis `git-flow sync back`.
-> Le merge redéploie les deux VPS ; le script SSH de ce run contient déjà le nettoyage des
-> orphelins, donc `vps_tsiory` doit passer sans intervention manuelle (sinon : `docker rm -f
-> 42eebfb0a7f3` sur le serveur et Re-run). Vérifier ensuite que `IMMO_BACK_TAG` dans les `.env`
-> vaut bien `sha-…`, puis supprimer les `VPS_*` au niveau dépôt GitHub.
+> PR `ci/nettoyage-conteneur-immo-back` poussée : l'utilisateur la merge, puis `git-flow sync
+> back`. Le merge redéploie les deux VPS ; vérifier `vps_ayad` (bug #42). Ne PAS lancer de
+> `docker compose up` à la main pendant qu'un run tourne. Ensuite : `IMMO_BACK_TAG=sha-…` dans
+> les deux `.env`, puis supprimer les `VPS_*` au niveau dépôt GitHub.
 
 ### Backlog
 - [ ] `vps_ayad` : `docker login ghcr.io` (PAT `read:packages`), `.env` complet (`JWT_SECRET`
