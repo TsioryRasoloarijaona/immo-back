@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-24T00:30+01:00_
+_Last updated: 2026-09-24T01:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -50,15 +50,28 @@ d'auteur ; déploiement vers un second VPS en attente.
 
 3. **PR #74** (`48836a9`) : retrait de `qodana.yaml` et du workflow Qodana embarqués par erreur.
 
-### En cours — branche `ci/deploiement-second-vps` (24/09)
-- `deploy.yml` : job `deploy` en **matrice** `cible: [vps_tsiory, vps_ayad]`, `environment:
+4. **PR #75 `ci/deploiement-second-vps`** (29acecd) :
+   - `deploy.yml` : job `deploy` en **matrice** `cible: [vps_tsiory, vps_ayad]`, `environment:
   ${{ matrix.cible }}`, `fail-fast: false`. Build une fois, déploiement parallèle, mêmes 4 secrets
   (`VPS_HOST/USER/SSH_KEY/PATH`) lus dans l'Environment du nom de la cible. `TOKEN` reste au dépôt.
-- **Second VPS préparé à la main** (`vps.ayaddeveloppement.com`, user `nahoma`, compose dans
+   - **1er run** : `vps_ayad` vert (sonde 200 en 37 s) ; `vps_tsiory` rouge — conteneur orphelin
+     `770947ff125a_immo-back` d'un recreate interrompu (à supprimer à la main, cf. bug #38).
+   - **Second VPS préparé à la main** (`vps.ayaddeveloppement.com`, user `nahoma`, compose dans
   `~/arpent`) : SQL Server 2022 Express en conteneur, MinIO, stack Grafana/Loki/Prometheus.
-  Volume `arpent_mssql_data` recréé propre (un conteneur `compose run` orphelin le tenait avec des
-  fichiers aux mauvais droits) ; `.bak` restaurés depuis `~/arpent/myssql-backups` monté en
-  `/var/backups`.
+     Volume `arpent_mssql_data` recréé propre (un conteneur `compose run` orphelin le tenait avec
+     des fichiers aux mauvais droits) ; `.bak` restaurés depuis `~/arpent/myssql-backups` monté en
+     `/var/backups` ; `docker login ghcr.io` fait pour `nahoma`.
+
+### En cours — branche `fix/cors-ayaddeveloppement` (24/09)
+- `CorsConfig` : origine exacte `https://arpent.ayaddeveloppement.com` (nom donné par
+  l'utilisateur ; pas de joker, convention « chaque origine de prod listée »). Même domaine
+  enregistrable que l'API du 2nd VPS → SameSite=Strict tient. 4 tests ajoutés (`CorsConfigTest`,
+  8 verts : origine acceptée, autre sous-domaine refusé, http refusé, domaine sosie refusé).
+- `deploy.yml` : tag immuable calculé (`sha-${GITHUB_SHA::7}`) au lieu de `meta.outputs.version`
+  qui renvoyait `latest` (priorité raw 200 > sha 100 — **tous les déploiements passés tournaient
+  sur `latest`**) ; `docker rm -f` des `*_immo-back` orphelins avant `up`.
+- `ProspectionFiltresAvancesTest` rendu indépendant de l'heure (bug #41, hors périmètre CORS mais
+  bloquait la porte « suite verte »).
 
 ### Méthode
 - **Trace d'audit** : `sys.fn_get_audit_file('C:\backup\*.sqlaudit', …)` depuis `master`, filtrer
@@ -87,6 +100,12 @@ d'auteur ; déploiement vers un second VPS en attente.
 - `docker compose restart` ne relit pas le `.env` → `up -d` ; et `SA_PASSWORD` n'est appliqué qu'à
   la **première** initialisation du volume.
 - `!` dans un mot de passe passé en ligne de commande bash → expansion d'historique (`set +H`).
+- **Horloges qui divergent d'1 h sur le poste** : Windows « Morocco Standard Time » = **+00:00**
+  (et `GETDATE()` de SQL Server suit Windows), la JVM résout la même zone en `Africa/Casablanca`
+  = **+01:00**. Tout test qui écrit `LocalDateTime.now()` puis compare à `GETDATE()` en jours
+  (`DATEDIFF`) échoue **entre 23 h et minuit heure Windows**. Vu sur `ProspectionFiltresAvancesTest`
+  (`inactiviteMin=0` → vue `InactivityTimeout = -1`). Parade : fixtures datées d'hier, jamais
+  « maintenant » quand une vue calcule un écart en jours.
 
 ---
 
@@ -103,6 +122,10 @@ d'auteur ; déploiement vers un second VPS en attente.
 | 35 | Fichiers Qodana committés par erreur | **Fixed** (PR #74) | suppression |
 | 36 | SQL Server du 2nd VPS en boucle (`Access is denied` sur `master.mdf`) | **Fixed** (à la main) | conteneur orphelin supprimé, volume recréé |
 | 37 | `RESTORE` : `Cannot open backup device` (`.bak` en `700 nahoma:nahoma`) | **Fixed** (à la main) | `nahoma:10001`, `2770`/`660` |
+| 38 | `vps_tsiory` : `Conflict. The container name "/770947ff125a_immo-back" is already in use` | **Open** côté serveur (`docker rm -f 42eebfb0a7f3` à faire) ; prévention dans `deploy.yml` (branche fix) | nettoyage des orphelins avant `up` |
+| 39 | `IMMO_BACK_TAG=latest` écrit à chaque déploiement (rollback par tag impossible) | **Fix sur branche** `fix/cors-ayaddeveloppement` | étape `Calculer le tag immuable` |
+| 40 | `sqlserver` du 2nd VPS `unhealthy` après `ALTER LOGIN sa` sans reporter le `.env` | **Fixed** (à la main) | `.env` aligné + `up -d` |
+| 41 | `ProspectionFiltresAvancesTest` : 2 échecs (`expected:<1> but was:<0>`) entre 23 h et minuit — écart d'1 h JVM (+01:00) / SQL Server (+00:00) | **Fixed** (branche fix/cors) — pré-existant sur `main`, vérifié par `git stash` | fixture `DocDate = now().minusDays(1)` |
 
 ---
 
@@ -149,19 +172,16 @@ d'auteur ; déploiement vers un second VPS en attente.
 
 ## ⏭️ Next Step
 
-> PR `ci/deploiement-second-vps` poussée : l'utilisateur la merge, puis `git-flow sync back`.
-> **Avant le merge**, côté GitHub : les deux Environments `vps_tsiory` et `vps_ayad` doivent
-> exister avec chacun leurs 4 secrets (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PATH`) — le
-> nom `vps_tsiory` pour le VPS actuel est une proposition, non confirmée par l'utilisateur.
-> Le merge déclenche le premier déploiement double ; vérifier les deux jobs, puis supprimer les
-> `VPS_*` au niveau dépôt.
+> PR `fix/cors-ayaddeveloppement` poussée : l'utilisateur la merge, puis `git-flow sync back`.
+> Le merge redéploie les deux VPS ; le script SSH de ce run contient déjà le nettoyage des
+> orphelins, donc `vps_tsiory` doit passer sans intervention manuelle (sinon : `docker rm -f
+> 42eebfb0a7f3` sur le serveur et Re-run). Vérifier ensuite que `IMMO_BACK_TAG` dans les `.env`
+> vaut bien `sha-…`, puis supprimer les `VPS_*` au niveau dépôt GitHub.
 
 ### Backlog
 - [ ] `vps_ayad` : `docker login ghcr.io` (PAT `read:packages`), `.env` complet (`JWT_SECRET`
       différent, `APP_JWT_COOKIE_SECURE=true`, `MAIL_ENABLED`/`WP_ENABLED` à `false` si les deux
       serveurs partagent une base), clé publique du runner dans `authorized_keys`.
-- [ ] Nettoyer les branches locales mergées (`feat/creation-pre-prospection`,
-      `feat/suivi-actions`) — `git-flow sync back` ne les a pas encore supprimées.
 - [ ] Script SQL (appliqué par l'utilisateur) pour rattacher les 13 actions anonymes du 18→22/09.
 - [ ] Synchroniser les comptes (`AdmUser`/`AppUserCredential`) vers la source avant le passage
       deux-bases en prod.

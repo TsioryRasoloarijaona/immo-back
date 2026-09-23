@@ -51,6 +51,36 @@ class CorsConfigTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** Second déploiement (VPS Ayad) : l'origine exacte du frontend, listée comme la première. */
+    @Test
+    void apiEndpoint_echoesAyadFrontendOriginInCorsHeader() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "https://arpent.ayaddeveloppement.com"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://arpent.ayaddeveloppement.com"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    /** Pas de joker : un autre sous-domaine du même domaine n'est pas autorisé pour autant. */
+    @Test
+    void apiEndpoint_rejectsOtherAyadSubdomain() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "https://s3.ayaddeveloppement.com"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Le schéma fait partie de l'origine : le HTTP en clair reste refusé. */
+    @Test
+    void apiEndpoint_rejectsAyadOriginOverPlainHttp() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "http://arpent.ayaddeveloppement.com"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Un domaine sosie qui finit par le même suffixe n'est pas l'origine listée. */
+    @Test
+    void apiEndpoint_rejectsLookalikeDomain() throws Exception {
+        mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "https://arpent.evil-ayaddeveloppement.com"))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void preflight_allowsPatchFromLocalhostOrigin() throws Exception {
         mockMvc.perform(options("/api/dossiers/{id}/statut", "00000000-0000-0000-0000-000000000000")

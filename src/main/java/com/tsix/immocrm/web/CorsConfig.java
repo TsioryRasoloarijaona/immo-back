@@ -53,6 +53,10 @@ public class CorsConfig implements WebMvcConfigurer {
                         // le frontend ailleurs — un *.vercel.app, par exemple — le rendrait
                         // cross-site et casserait l'authentification en silence.
                         "https://immo.tsiory.tech",
+                        // Second déploiement (VPS Ayad). Même domaine enregistrable que l'API de
+                        // ce serveur (ayaddeveloppement.com), donc same-site : la contrainte
+                        // SameSite=Strict ci-dessus tient toujours.
+                        "https://arpent.ayaddeveloppement.com",
                         "http://192.168.11.114:5473", "http://localhost:*", "http://192.168.11.*:*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
