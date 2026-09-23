@@ -56,82 +56,63 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
                                                   @Param("fin") LocalDateTime fin);
 
     /**
-     * Agrégat d'activité par commercial pour {@code GET /api/kpi/commerciaux[/moi]} — une ligne par
-     * commercial, colonnes dans l'ordre : {@code commercialId}, appels sortants, appels entrants,
-     * visites consignées, visites décrochées, rendez-vous pris, interactions totales, prospections
-     * distinctes travaillées.
+     * Les actions d'une période pour {@code GET /api/kpi/commerciaux[/moi]}, <b>une ligne par
+     * action</b>, colonnes dans l'ordre : compte auteur ({@code AdmUserId}), employé de ce compte,
+     * {@code UserName}, code du type, libellé du type, code du résultat, prospection.
      *
-     * <p><b>Le regroupement se fait sur l'employé du compte auteur</b>
-     * ({@code ComActionMessage.AdmUserId} → {@code AdmUser.CfgEmployeeId}), jamais sur
-     * {@code ComActionMessage.CfgEmployeeId} : cette dernière n'est renseignée qu'à 77 % et désigne
-     * une personne différente sur 844 lignes réelles — c'est l'employé <i>concerné</i>, pas
-     * l'auteur. Voir {@code FEATURE-kpi-performance-commerciaux.md} §3 et la doc du champ.
+     * <p>Une projection plutôt qu'un agrégat SQL, parce que l'attribution suit désormais la règle
+     * du « Suivi des actions » ({@code FEATURE-suivi-actions.md} §3bis) : le compte quand il est
+     * là, <b>sinon le nom</b> écrit sur l'action — une résolution par nom que le service fait en
+     * Java, sur les seuls noms portés par un compte unique. Un {@code GROUP BY} par employé ne
+     * sait pas l'exprimer, et additionner des {@code COUNT(DISTINCT)} de groupes différents
+     * fausserait le nombre de prospections traitées. Volume : quelques milliers de lignes sur une
+     * année ({@code ~6 400} actions sur 12 mois).
      *
-     * <p>Regrouper par employé et non par compte est délibéré : un employé porte parfois deux
-     * comptes, dont les chiffres doivent s'additionner sur une seule ligne.
+     * <p><b>Les actions « Système » sont exclues</b> : générées pendant une session, OMRAN ne les
+     * attribue pas à l'utilisateur. Elles gonflaient le KPI — 212 des 228 interactions de Hamza
+     * ATCHANY sur 12 mois, presque toutes des notes.
      *
      * <p>La visibilité par entité résout la société <b>prospection d'abord, dossier ensuite</b>
      * ({@code COALESCE}), même ordre que {@link #findEvenementsVisibles} et que
-     * {@code VisibiliteEntites.depuisDeuxProjets} — sans quoi la même interaction serait rattachée
-     * à des sociétés différentes selon l'écran. Une interaction ne résolvant aucune société reste
+     * {@code VisibiliteEntites.depuisDeuxProjets}. Une action ne résolvant aucune société reste
      * comptée (R2).
      */
-    @Query("SELECT u.cfgEmployee.id, "
-            + "SUM(CASE WHEN mt.code = :typeAppelSortant THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN mt.code = :typeAppelEntrant THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN mt.code = :typeVisite THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN sc.code = :resultatVisiteDecrochee THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN sc.code = :resultatRdvPris THEN 1 ELSE 0 END), "
-            + "COUNT(m), COUNT(DISTINCT p.id) "
-            + "FROM ComActionMessage m JOIN m.admUser u "
+    @Query("SELECT u.id, ue.id, m.userName, mt.code, mt.description, sc.code, p.id "
+            + "FROM ComActionMessage m LEFT JOIN m.admUser u LEFT JOIN u.cfgEmployee ue "
             + "LEFT JOIN m.comActionMessageType mt LEFT JOIN m.comActionMessageSubCategory sc "
             + "LEFT JOIN m.comProspection p LEFT JOIN p.stkHierarchy tp LEFT JOIN tp.cfgProject prp "
             + "LEFT JOIN prp.cfgCompany socp "
             + "LEFT JOIN m.comFolder f LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy tf "
             + "LEFT JOIN tf.cfgProject prf LEFT JOIN prf.cfgCompany socf "
-            + "WHERE m.docDate BETWEEN :debut AND :fin AND u.cfgEmployee.id IS NOT NULL "
+            + "WHERE m.docDate BETWEEN :debut AND :fin "
+            + "AND (m.userName IS NULL OR m.userName <> :systeme) "
             + "AND (COALESCE(socp.isActive, socf.isActive) = true "
-            + "     OR COALESCE(socp.id, socf.id) IS NULL) "
-            + "GROUP BY u.cfgEmployee.id")
-    List<Object[]> agregerActiviteParCommercial(@Param("debut") LocalDateTime debut,
-                                                @Param("fin") LocalDateTime fin,
-                                                @Param("typeAppelSortant") String typeAppelSortant,
-                                                @Param("typeAppelEntrant") String typeAppelEntrant,
-                                                @Param("typeVisite") String typeVisite,
-                                                @Param("resultatVisiteDecrochee") String resultatVisiteDecrochee,
-                                                @Param("resultatRdvPris") String resultatRdvPris);
+            + "     OR COALESCE(socp.id, socf.id) IS NULL)")
+    List<Object[]> projeterActionsPourKpi(@Param("debut") LocalDateTime debut,
+                                          @Param("fin") LocalDateTime fin,
+                                          @Param("systeme") String systeme);
 
     /**
-     * Variante de {@link #agregerActiviteParCommercial} restreinte au périmètre commercial de
+     * Variante de {@link #projeterActionsPourKpi} restreinte au périmètre commercial de
      * l'appelant. Même {@code COALESCE} prospection-puis-dossier pour le projet, et même règle
-     * §6.4 : une interaction dont aucun projet ne se résout reste comptée.
+     * §6.4 : une action dont aucun projet ne se résout reste comptée.
      */
-    @Query("SELECT u.cfgEmployee.id, "
-            + "SUM(CASE WHEN mt.code = :typeAppelSortant THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN mt.code = :typeAppelEntrant THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN mt.code = :typeVisite THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN sc.code = :resultatVisiteDecrochee THEN 1 ELSE 0 END), "
-            + "SUM(CASE WHEN sc.code = :resultatRdvPris THEN 1 ELSE 0 END), "
-            + "COUNT(m), COUNT(DISTINCT p.id) "
-            + "FROM ComActionMessage m JOIN m.admUser u "
+    @Query("SELECT u.id, ue.id, m.userName, mt.code, mt.description, sc.code, p.id "
+            + "FROM ComActionMessage m LEFT JOIN m.admUser u LEFT JOIN u.cfgEmployee ue "
             + "LEFT JOIN m.comActionMessageType mt LEFT JOIN m.comActionMessageSubCategory sc "
             + "LEFT JOIN m.comProspection p LEFT JOIN p.stkHierarchy tp LEFT JOIN tp.cfgProject prp "
             + "LEFT JOIN prp.cfgCompany socp "
             + "LEFT JOIN m.comFolder f LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy tf "
             + "LEFT JOIN tf.cfgProject prf LEFT JOIN prf.cfgCompany socf "
-            + "WHERE m.docDate BETWEEN :debut AND :fin AND u.cfgEmployee.id IS NOT NULL "
+            + "WHERE m.docDate BETWEEN :debut AND :fin "
+            + "AND (m.userName IS NULL OR m.userName <> :systeme) "
             + "AND (COALESCE(socp.isActive, socf.isActive) = true "
             + "     OR COALESCE(socp.id, socf.id) IS NULL) "
-            + "AND (COALESCE(prp.id, prf.id) IN :projetIds OR COALESCE(prp.id, prf.id) IS NULL) "
-            + "GROUP BY u.cfgEmployee.id")
-    List<Object[]> agregerActiviteParCommercialDansPerimetre(@Param("debut") LocalDateTime debut,
-                                                             @Param("fin") LocalDateTime fin,
-                                                             @Param("typeAppelSortant") String typeAppelSortant,
-                                                             @Param("typeAppelEntrant") String typeAppelEntrant,
-                                                             @Param("typeVisite") String typeVisite,
-                                                             @Param("resultatVisiteDecrochee") String resultatVisiteDecrochee,
-                                                             @Param("resultatRdvPris") String resultatRdvPris,
-                                                             @Param("projetIds") List<UUID> projetIds);
+            + "AND (COALESCE(prp.id, prf.id) IN :projetIds OR COALESCE(prp.id, prf.id) IS NULL)")
+    List<Object[]> projeterActionsPourKpiDansPerimetre(@Param("debut") LocalDateTime debut,
+                                                       @Param("fin") LocalDateTime fin,
+                                                       @Param("systeme") String systeme,
+                                                       @Param("projetIds") List<UUID> projetIds);
 
     /**
      * Dernière alerte de relance posée sur chacune des prospections données — <b>une seule

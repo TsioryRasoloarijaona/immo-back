@@ -47,11 +47,13 @@ public class PerformanceCommercialController {
     @Operation(
             summary = "Mes performances commerciales",
             description = "Les indicateurs du commercial rattaché au compte connecté, sur la "
-                    + "période demandée.\n\n"
+                    + "période demandée — ou ceux du **compte lui-même** s'il n'est rattaché à aucun "
+                    + "employé (`commercialId` nul, `utilisateurId` renseigné, pas de portefeuille).\n\n"
+                    + "**L'activité compte toutes les actions**, détaillées dans `actionsParType`, "
+                    + "actions « Système » exclues ; l'auteur suit la règle du suivi des actions.\n\n"
                     + "**Renvoie 200 avec tous les compteurs à zéro** quand rien n'a été fait sur "
-                    + "la période — pas une erreur. Le 404 est réservé au cas où le compte n'est "
-                    + "rattaché à aucun employé, auquel cas il n'y a pas de commercial dont "
-                    + "parler.\n\n"
+                    + "la période — pas une erreur. Le 404 est réservé à un appel sans compte "
+                    + "applicatif identifiable.\n\n"
                     + "Les taux valent `null`, jamais `0`, quand leur dénominateur est nul : "
                     + "« aucun appel passé » et « des appels, aucun rendez-vous » sont deux "
                     + "situations opposées. Afficher « — » plutôt que « 0 % »."
@@ -59,7 +61,7 @@ public class PerformanceCommercialController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Performances du commercial connecté."),
             @ApiResponse(responseCode = "400", description = "`du` postérieure à `au`, ou date non parsable."),
-            @ApiResponse(responseCode = "404", description = "Le compte connecté n'est rattaché à aucun employé.")
+            @ApiResponse(responseCode = "404", description = "Aucun compte applicatif identifiable dans le jeton.")
     })
     public PerformanceCommercialDto moi(
             @Parameter(description = "Premier jour pris en compte, inclus. Défaut : il y a 30 jours.",

@@ -53,8 +53,6 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.mail.VisiteEffectuee;
 import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
-import com.tsix.immocrm.repositories.adm.AdmUserRepository;
-import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -74,6 +72,7 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.dto.common.GroupeDto;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -93,8 +92,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -195,8 +192,11 @@ public class ProspectionService {
     private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
-    /** Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}. */
-    private final AdmUserRepository userRepository;
+    /**
+     * Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}, et
+     * {@code FEATURE-suivi-actions.md} §6 pour un compte absent de la base d'écriture.
+     */
+    private final UtilisateurAffiche utilisateurAffiche;
     /**
      * Publie {@link VisitePlanifiee} — voir {@code FEATURE-mail-confirmation-visite.md}. Un
      * événement plutôt qu'un appel direct : le mail ne doit partir que si l'interaction est
@@ -222,14 +222,14 @@ public class ProspectionService {
                                GenerateurCodeSequence generateurCode,
                                PerimetreCommercialService perimetreService,
                                GroupementService groupementService,
-                               AdmUserRepository userRepository,
+                               UtilisateurAffiche utilisateurAffiche,
                                ComSaleProspectionViewRepository prospectionViewRepository,
                                StrEntityRepository strEntityRepository,
                                ApplicationEventPublisher publisher) {
         this.prospectionViewRepository = prospectionViewRepository;
         this.strEntityRepository = strEntityRepository;
         this.publisher = publisher;
-        this.userRepository = userRepository;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
         this.prospectionRepository = prospectionRepository;
@@ -942,8 +942,7 @@ public class ProspectionService {
         // de travail OMRAN (IsClosed = 0) sans dépendre de transformer.
         p.setIsClosed(false);
         p.setIsOldCustomer(false);
-        AdmUser auteur = auteurCourant();
-        p.setUserCreate(auteur != null ? auteur.getDescription() : null);
+        p.setUserCreate(utilisateurAffiche.courant().nom());
         p.setUserCreateDateTime(maintenant);
 
         if (request.trancheId() != null) {
@@ -1284,8 +1283,9 @@ public class ProspectionService {
         }
 
         LocalDateTime maintenant = LocalDateTime.now();
-        AdmUser auteur = auteurCourant();
-        String nomAuteur = auteur != null ? auteur.getDescription() : null;
+        UtilisateurAffiche.Auteur resolu = utilisateurAffiche.courant();
+        AdmUser auteur = resolu.compte();
+        String nomAuteur = resolu.nom();
 
         ComActionMessage message = new ComActionMessage();
         message.setId(UUID.randomUUID());
@@ -1417,8 +1417,9 @@ public class ProspectionService {
      */
     private void ecrireInteractionDeCreation(ComProspection prospection) {
         LocalDateTime maintenant = LocalDateTime.now();
-        AdmUser auteur = auteurCourant();
-        String nomAuteur = auteur != null ? auteur.getDescription() : null;
+        UtilisateurAffiche.Auteur resolu = utilisateurAffiche.courant();
+        AdmUser auteur = resolu.compte();
+        String nomAuteur = resolu.nom();
 
         ComActionMessage message = new ComActionMessage();
         message.setId(UUID.randomUUID());
@@ -1447,20 +1448,6 @@ public class ProspectionService {
     private static String libelleInteraction(LocalDateTime date, String nomAuteur) {
         String horodatage = date.format(FORMAT_LIBELLE);
         return StringUtils.hasText(nomAuteur) ? horodatage + " " + nomAuteur : horodatage;
-    }
-
-    /**
-     * Compte authentifié, ou {@code null} hors contexte web. {@code @WithMockUser} et les
-     * endpoints ouverts portent un principal d'un autre type : traités comme « pas d'auteur »,
-     * jamais comme une erreur.
-     */
-    private AdmUser auteurCourant() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser utilisateur
-                && utilisateur.admUserId() != null) {
-            return userRepository.findById(utilisateur.admUserId()).orElse(null);
-        }
-        return null;
     }
 
     /**

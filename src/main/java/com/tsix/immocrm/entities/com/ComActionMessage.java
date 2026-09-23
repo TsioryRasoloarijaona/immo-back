@@ -4,10 +4,12 @@ import com.tsix.immocrm.entities.adm.AdmEvent;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JoinFormula;
 import org.hibernate.annotations.Nationalized;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
@@ -160,5 +162,23 @@ public class ComActionMessage {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmEventId")
     private AdmEvent admEvent;
+
+    /**
+     * Tranche de l'action <b>telle que la résout la vue OMRAN {@code ComActionMessageView}</b> :
+     * catégorie Prospection → tranche de la prospection, sinon tranche de l'article. C'est la
+     * colonne sur laquelle l'écran « Suivi des actions » filtre ({@code CfgTrancheId IN (…)}).
+     *
+     * <p>Lecture seule, portée par une formule de jointure plutôt que par la vue elle-même : la vue
+     * coûte 6,6 s pour une page de 50 (son {@code DISTINCT} et son rang corrélé sont calculés sur
+     * toutes les lignes), cette jointure quelques dizaines de millisecondes. Les sous-requêtes sont
+     * dans la condition de jointure, pas dans un {@code GROUP BY} : grouper sur
+     * {@code trancheResolue.code} reste légal pour SQL Server. Résolue sur 46 559 des 48 213
+     * actions réelles. Voir {@code instructions/FEATURE-suivi-actions.md} §1.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinFormula("(CASE WHEN ComActionMessageCategoryId = '69F8E7D6-1111-1111-1111-1AA8B1F02008' "
+            + "THEN (SELECT p.StkHierarchyId FROM ComProspection p WHERE p.PKey = ComProspectionId) "
+            + "ELSE (SELECT i.StkHierarchyId FROM StkItem i WHERE i.PKey = StkItemId) END)")
+    private CfgTranche trancheResolue;
 
 }
