@@ -65,7 +65,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@WithMockUser
+@WithMockUser(roles = "Administrateur")
 class SuiviActionControllerTest {
 
     private static final UUID ID_CATEGORIE_PROSPECTION = UUID.fromString("69F8E7D6-1111-1111-1111-1AA8B1F02008");
@@ -350,12 +350,80 @@ class SuiviActionControllerTest {
         h.setCfgProject(projet);
         habilitationRepository.save(h);
 
-        mockMvc.perform(get(URL).param("utilisateur", utilisateur).with(connecte(commercial.getId(), commercial.getCode())))
+        // Administrateur par le jeton mais restreint par ses habilitations : le périmètre s'applique.
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur)
+                        .with(connecte(commercial.getId(), commercial.getCode(), "Administrateur")))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].trancheCode").value(tranche.getCode()));
         mockMvc.perform(get(URL + "/groupes").param("utilisateur", utilisateur).param("groupBy", "utilisateur")
-                        .with(connecte(commercial.getId(), commercial.getCode())))
+                        .with(connecte(commercial.getId(), commercial.getCode(), "Administrateur")))
                 .andExpect(jsonPath("$.content[0].nombre").value(1));
+    }
+
+    // ---------------------------------------------------------------- qui voit quoi (§3bis)
+
+    /**
+     * Un utilisateur non administrateur ne voit que ses actions : par son nom, et par son compte
+     * hors lignes « Système ». Filtrer sur quelqu'un d'autre ne rend rien.
+     */
+    @Test
+    void nonAdministrateur_neVoitQueSesActions() throws Exception {
+        String s = UUID.randomUUID().toString().substring(0, 8);
+        AdmUser moi = newUser("moi." + s, "Moi " + s);
+        ComProspection p = newProspection(tranche);
+
+        ComActionMessage parNom = action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 9, 0));
+        parNom.setUserName("Moi " + s);
+        messageRepository.saveAndFlush(parNom);
+        // Écrite sous l'identifiant de connexion (cas réel c.aittagadirt) : rattrapée par le compte.
+        ComActionMessage parCompte = action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 10, 0));
+        parCompte.setUserName("moi." + s);
+        parCompte.setAdmUser(moi);
+        messageRepository.saveAndFlush(parCompte);
+        // Générée pendant ma session : OMRAN l'attribue à « Système », pas à moi.
+        ComActionMessage systeme = action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 11, 0));
+        systeme.setUserName("Système");
+        systeme.setAdmUser(moi);
+        messageRepository.saveAndFlush(systeme);
+        // Celle d'un autre (utilisateur du @BeforeEach).
+        ComActionMessage autre = action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 12, 0));
+
+        String json = mockMvc.perform(get(URL).param("dateDebut", "2026-09-21T00:00:00")
+                        .param("dateFin", "2026-09-22T00:00:00").param("size", "200")
+                        .with(connecte(moi.getId(), moi.getCode(), "Commercial")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<String> ids = JsonPath.read(json, "$.content[*].id");
+        assertThat(ids).contains(parNom.getId().toString(), parCompte.getId().toString())
+                .doesNotContain(systeme.getId().toString(), autre.getId().toString());
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur)
+                        .with(connecte(moi.getId(), moi.getCode(), "Commercial")))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get(URL + "/groupes").param("groupBy", "utilisateur")
+                        .param("dateDebut", "2026-09-21T00:00:00").param("dateFin", "2026-09-22T00:00:00")
+                        .with(connecte(moi.getId(), moi.getCode(), "Commercial")))
+                .andExpect(jsonPath("$.content[?(@.cle=='" + utilisateur + "')]").isEmpty());
+    }
+
+    /** L'administrateur voit le suivi général, toutes personnes confondues. */
+    @Test
+    void administrateur_voitToutLeMonde() throws Exception {
+        ComProspection p = newProspection(tranche);
+        action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 9, 0));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    /** Sans rôle administrateur ni jeton applicatif : rien — jamais tout. */
+    @Test
+    @WithMockUser
+    void sansIdentiteExploitable_rienPlutotQueTout() throws Exception {
+        action(prospection, appel, newProspection(tranche), null, LocalDateTime.of(2026, 9, 21, 9, 0));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur))
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     // ---------------------------------------------------------------- correctif auteur (§6)
@@ -368,7 +436,7 @@ class SuiviActionControllerTest {
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"appel\"}")
-                        .with(connecte(compte.getId(), compte.getCode())))
+                        .with(connecte(compte.getId(), compte.getCode(), "Commercial")))
                 .andExpect(status().isCreated());
 
         ComActionMessage ecrite = derniereInteraction(p);
@@ -387,7 +455,7 @@ class SuiviActionControllerTest {
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"appel\"}")
-                        .with(connecte(UUID.randomUUID(), "fantome")))
+                        .with(connecte(UUID.randomUUID(), "fantome", "Commercial")))
                 .andExpect(status().isCreated());
 
         ComActionMessage ecrite = derniereInteraction(p);
@@ -411,9 +479,9 @@ class SuiviActionControllerTest {
         return userRepository.save(user);
     }
 
-    private static RequestPostProcessor connecte(UUID admUserId, String username) {
+    private static RequestPostProcessor connecte(UUID admUserId, String username, String role) {
         AuthenticatedUser principal = new AuthenticatedUser(admUserId, username, null, false, true, 0);
         return authentication(new UsernamePasswordAuthenticationToken(principal, null,
-                List.of(new SimpleGrantedAuthority("ROLE_Commercial"))));
+                List.of(new SimpleGrantedAuthority("ROLE_" + role))));
     }
 }

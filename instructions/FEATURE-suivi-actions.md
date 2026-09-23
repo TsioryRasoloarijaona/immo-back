@@ -117,6 +117,28 @@ moteur que les autres listes. **Appels exacts par jour d'un commercial** :
 Le catalogue, forme `ColonneDto` (nom, libellé, groupe, type, parDefaut, groupable, agregeable,
 fonctions).
 
+### 3bis. Qui voit quoi — demande utilisateur du 23/09
+
+| Rôle | Voit |
+|---|---|
+| `Administrateur` | le suivi **général** : toutes les actions (dans son périmètre commercial) |
+| tout autre rôle | **ses propres actions** seulement — liste **et** groupes |
+
+« Mes actions » = `UserName` égal à mon nom **ou** `AdmUserId` = mon compte, hors lignes
+`UserName = 'Système'`. Mesures sur 48 214 actions :
+
+| Cas | Lignes | Traitement |
+|---|---:|---|
+| compte et nom concordent | 46 823 | à moi par les deux règles |
+| compte renseigné, `UserName = 'Système'` | ~1 330 (Hamza ATCHANY 1 083, 11 autres comptes) | **pas à moi** : générées pendant la session, OMRAN les affiche sous « Système » |
+| compte renseigné, `UserName` = identifiant de connexion (`c.aittagadirt`) | 36 | à moi par le compte |
+| sans compte, avec un nom | 1 (+ celles du correctif §6) | à moi par le nom |
+
+Non administrateur : le filtre `utilisateur` se combine en ET — demander quelqu'un d'autre rend
+une page vide (pas de 403, qui confirmerait l'existence de ses actions). Sans identité exploitable
+(pas de jeton applicatif) : rien, jamais tout. Rôle testé : `ROLE_Administrateur` du jeton — le
+même qui garde `GET /api/kpi/commerciaux`.
+
 ### Périmètre commercial
 
 `/api/suivi-actions` n'est pas une collection de `PerimetreInterceptor` : le service applique
@@ -177,3 +199,5 @@ comptes vers la source reste nécessaire.
   `GET /api/referentiels/colonnes/suivi-actions`. Aucun endpoint existant modifié.
 - Liste des utilisateurs du filtre : `GET /api/suivi-actions/groupes?groupBy=utilisateur`
   (les valeurs réellement présentes, avec leur effectif).
+- **Accès** : écran général pour `Administrateur` ; pour tout autre rôle, le même écran ne montre
+  que ses propres actions — masquer le sélecteur d'utilisateur hors administrateur.

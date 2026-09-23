@@ -48,6 +48,14 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
         est le nombre d'actions ; la somme des effectifs égale le `totalElements` de la liste aux \
         mêmes filtres.
 
+        **Qui voit quoi.** Le suivi **général** est réservé au rôle `Administrateur`. Tout autre \
+        utilisateur ne voit que **ses propres actions** — sur la liste comme dans les groupes : \
+        celles écrites à son nom (`UserName`), plus celles de son compte hors lignes « Système » \
+        (actions générées pendant sa session, qu'OMRAN attribue à « Système »). Pour lui, le \
+        filtre `utilisateur` ne peut que restreindre : demander quelqu'un d'autre rend une page \
+        vide, jamais un 403 qui confirmerait l'existence de ses actions. Le front masque donc le \
+        sélecteur d'utilisateur hors administrateur.
+
         **Périmètre commercial** : appliqué par le service, liste et groupes — une action dont le \
         projet (par la prospection, puis par le dossier) est hors périmètre n'apparaît ni dans la \
         liste ni dans un effectif. Actions d'entités juridiques inactives exclues, comme partout.""")
@@ -98,7 +106,9 @@ public class SuiviActionController {
             @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Utilisateur(s) — `UserName` de l'action, **égalité exacte**, la "
                     + "colonne que filtre OMRAN. Valeurs présentes : "
-                    + "`/api/suivi-actions/groupes?groupBy=utilisateur`. Répétable, OU.",
+                    + "`/api/suivi-actions/groupes?groupBy=utilisateur`. Répétable, OU. **Utile à "
+                    + "l'administrateur seulement** : pour un autre rôle, la liste est déjà réduite à "
+                    + "ses propres actions et ce filtre ne peut que la restreindre davantage.",
                     example = "Khadija ELKORRI")
             @RequestParam(required = false) List<String> utilisateur,
             @Parameter(description = "Type(s) d'action (ComActionMessageType.id). Répétable, OU.")

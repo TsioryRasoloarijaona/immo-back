@@ -7,6 +7,8 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.suivi.SuiviActionDto;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -17,6 +19,8 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -63,14 +67,27 @@ public class SuiviActionService {
     private final ComActionMessageRepository messageRepository;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
+    private final UtilisateurAffiche utilisateurAffiche;
     private final EntityManager em;
+
+    /** Rôle qui voit le suivi <b>général</b> — celui qui garde déjà {@code GET /api/kpi/commerciaux}. */
+    static final String ROLE_ADMINISTRATEUR = "ROLE_Administrateur";
+
+    /**
+     * {@code UserName} des actions générées. 1 083 actions liées au compte de Hamza ATCHANY — et
+     * d'autres pour 11 comptes — portent cette valeur : générées pendant sa session, OMRAN les
+     * affiche sous « Système », pas sous son nom.
+     */
+    static final String UTILISATEUR_SYSTEME = "Système";
 
     public SuiviActionService(ComActionMessageRepository messageRepository,
                               PerimetreCommercialService perimetreService,
-                              GroupementService groupementService, EntityManager em) {
+                              GroupementService groupementService,
+                              UtilisateurAffiche utilisateurAffiche, EntityManager em) {
         this.messageRepository = messageRepository;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.em = em;
     }
 
@@ -83,7 +100,8 @@ public class SuiviActionService {
     public Page<SuiviActionDto> findAll(Filtres filtres, ColonneSuiviAction groupeColonne,
                                         String groupeValeur, Granularite granularite,
                                         Set<ColonneSuiviAction> colonnes, Pageable pageable) {
-        Specification<ComActionMessage> spec = spec(filtres).and(perimetreService.filtreInteractions());
+        Specification<ComActionMessage> spec = spec(filtres).and(portee())
+                .and(perimetreService.filtreInteractions());
         if (groupeColonne != null) {
             spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
                     root, cb, groupeColonne.chemin(), granularite, groupeValeur));
@@ -106,9 +124,52 @@ public class SuiviActionService {
     public ResultatGroupement grouper(Filtres filtres, ColonneSuiviAction groupeBy, Granularite granularite,
                                       List<AgregatDemande> agregats, TriGroupe tri,
                                       boolean inclureSansValeur, Pageable pageable) {
-        Specification<ComActionMessage> spec = spec(filtres).and(perimetreService.filtreInteractions());
+        Specification<ComActionMessage> spec = spec(filtres).and(portee())
+                .and(perimetreService.filtreInteractions());
         return groupementService.grouper(ComActionMessage.class, spec, groupeBy.chemin(), granularite,
                 agregats, tri, inclureSansValeur, pageable);
+    }
+
+    /**
+     * <b>Qui voit quoi.</b> L'administrateur voit le suivi général ; tout autre utilisateur ne voit
+     * que <b>ses</b> actions — le filtre {@code utilisateur} n'élargit rien, il se combine en ET.
+     * Voir {@code instructions/FEATURE-suivi-actions.md} §3bis.
+     *
+     * <p>« Mes actions » = {@code UserName} égal à mon nom (la règle de l'écran OMRAN, et le
+     * libellé que {@link UtilisateurAffiche} écrit même quand le compte manque en base
+     * d'écriture), <b>ou</b> mon compte ({@code AdmUserId}) hors lignes « Système ». Le compte
+     * rattrape les 36 actions réelles écrites sous l'identifiant de connexion
+     * ({@code c.aittagadirt}) au lieu du nom ; l'exclusion de « Système » écarte les actions
+     * générées pendant la session, qu'OMRAN n'attribue pas à l'utilisateur non plus.
+     *
+     * <p>Un appelant non administrateur sans identité exploitable (hors jeton applicatif) ne voit
+     * rien — jamais tout.
+     */
+    private Specification<ComActionMessage> portee() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean administrateur = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> ROLE_ADMINISTRATEUR.equals(a.getAuthority()));
+        if (administrateur) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUser moi)) {
+            return (root, query, cb) -> cb.disjunction();
+        }
+        String monNom = utilisateurAffiche.nom(moi);
+        UUID monCompte = moi.admUserId();
+        return (root, query, cb) -> {
+            List<Predicate> miennes = new ArrayList<>();
+            if (StringUtils.hasText(monNom)) {
+                miennes.add(cb.equal(root.get("userName"), monNom));
+            }
+            if (monCompte != null) {
+                miennes.add(cb.and(
+                        cb.equal(root.get("admUser").get("id"), monCompte),
+                        cb.or(cb.isNull(root.get("userName")),
+                                cb.notEqual(root.get("userName"), UTILISATEUR_SYSTEME))));
+            }
+            return miennes.isEmpty() ? cb.disjunction() : cb.or(miennes.toArray(new Predicate[0]));
+        };
     }
 
     /**
