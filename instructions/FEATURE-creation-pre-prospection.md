@@ -118,6 +118,11 @@ normalisé (9 derniers chiffres, normalisation de la hotline) **et** même **ema
 un champ absent des deux côtés compte comme égal. Recherche sur toutes les `ComProspection`,
 50 résultats au plus.
 
+**Périmètre commercial.** Seuls les doublons **visibles de l'appelant** sont renvoyés — même
+prédicat que les listes (`filtreProspections` : projets affectés, entités actives). Nommer un
+doublon hors périmètre révélerait qu'un contact existe sur un projet non affecté, ce que le reste
+de l'API masque en 404. Test : `PreProspectionImportTest#doublonHorsPerimetre_nEstJamaisNomme`.
+
 Réponse **201** `PreProspectionCreeeDto` :
 
 ```json
@@ -151,6 +156,80 @@ une pré-prospection avec prospect existe en base (261), le lien ne suffit pas �
 
 ---
 
+## 5. Import CSV des leads — `POST /api/pre-prospections/import` (+ `/apercu`)
+
+Demande utilisateur du 23/09, même branche. Source : l'export CSV des leads (Meta / Leads Center).
+
+```
+Créé,Nom,Adresse e-mail,Source,Formulaire,Canal,Étape,Propriétaire,Étiquettes,Téléphone,Numéro de téléphone secondaire,Numéro WhatsApp
+09/23/2026 1:45am,Imane Bennis,Imanebennis68@gmail.com,Payé,APF FORM 02*2026 - GISK,E-mail,À évaluer,Unassigned,,+212663434434,,
+```
+
+### Règle centrale : un fichier = une tranche
+
+L'export ne porte aucune tranche exploitable. Le parcours est donc en deux temps :
+
+1. **`POST /api/pre-prospections/import/apercu`** (multipart `fichier`) — extrait **toutes** les
+   informations, ligne par ligne, et le sort de chacune. **N'écrit rien.** Propose
+   `trancheSuggereeId` : la tranche dont le code est le premier mot du formulaire
+   (`APF FORM 02*2026 - GISK` → `APF`), si tous les formulaires du fichier désignent la même.
+2. L'écran **demande la tranche** (liste déroulante, pré-sélectionnée sur la suggestion).
+3. **`POST /api/pre-prospections/import`** (multipart `fichier` + `trancheId` **obligatoire**) — le
+   même fichier ; **toutes** les lignes sont rattachées à cette tranche. Un fichier dont les
+   formulaires désignent plusieurs tranches revient avec un `avertissements` : le découper.
+
+Deux appels sans état plutôt qu'un import « en attente » côté serveur : rien à nettoyer si
+l'utilisateur abandonne, et le rapport de l'aperçu est exactement celui de l'import.
+
+### Colonnes
+
+| Colonne | Pré-prospection |
+|---|---|
+| Créé (`M/d/yyyy h:mma`, **mois en premier**, heure sur 12 ; ISO accepté) | `DocDate` = date de soumission du lead |
+| Nom | `TempDescription` — **indispensable** (colonne absente : 400 ; vide : ligne en ERREUR) |
+| Adresse e-mail | `TempEMail` |
+| Téléphone → à défaut WhatsApp → à défaut secondaire | `TempTel`, tel qu'écrit |
+| Formulaire, Source, Canal, Étape, Étiquettes, Propriétaire (sauf `Unassigned`), autres numéros | `Notes` |
+
+Tolérances : colonnes reconnues par leur nom (casse/accents ignorés, ordre libre, colonnes
+inconnues ignorées) ; séparateur `,` ou `;` ; UTF-8 avec/sans BOM, sinon Windows-1252 ; 5 000
+lignes au plus. Pas de bibliothèque CSV (pas de modification du `pom.xml`) : lecteur RFC 4180
+maison, `LecteurCsvLeads`.
+
+### Valeurs posées
+
+Chaque ligne passe par le même chemin que `POST /api/pre-prospections` (`ecrirePreProspection`) :
+code `AA/NNNNN`, `ComPreProspection`, `IsClosed = false`, auteur, vocation VENTE. Référentiels
+par défaut = **le motif des 2 700+ leads injectés par n8n depuis les mêmes formulaires** (mesuré
+sur `yesRemsProd`) : Nature `1 A TRAITER`, source `FACEBOOK`, type `WEB` — chacun remplaçable
+(`etapeId`, `origineId`, `typeContactId`, `origineSupportId`, `actionCommercialeId`). Un défaut
+absent du référentiel reste vide.
+
+### Doublons — le réimport ne crée rien deux fois
+
+| Statut | Condition | Effet |
+|---|---|---|
+| `NOUVELLE` | aucun contact identique | créée |
+| `DOUBLON` | même contact (règle §3), **autre date** — en base ou plus haut dans le fichier | créée et signalée (une ligne par soumission, comme OMRAN) |
+| `DEJA_IMPORTEE` | même contact **et même date à la minute** | **ignorée** : c'est le même lead réimporté |
+| `ERREUR` | nom vide, date vide/illisible, champ > 255 | ignorée, les autres passent |
+
+Le couple *contact + date de soumission* identifie un lead de l'export : réimporter le fichier, ou
+un export qui chevauche le précédent, est donc sans effet.
+
+Périmètre : `DEJA_IMPORTEE` se juge sur **toute** la table (sinon un commercial restreint
+recréerait un lead déjà importé sur un autre projet), mais n'y nomme que les lignes visibles —
+hors périmètre, le message est « Lead déjà importé », sans code ni id. `DOUBLON`, lui, ne se
+déclenche que sur des lignes visibles : hors périmètre, la ligne est `NOUVELLE`. Les deux routes
+sont inscrites dans `PerimetreInterceptorInvarianteTest.ROUTES_SANS_ID_AUTORISEES` avec cette
+justification. Une date `23/09/2026 03:00` (jour en
+premier) est **refusée** plutôt que devinée : `09/10` serait ambigu.
+
+Tout ou rien pour les erreurs de requête (tranche inconnue → 400, hors périmètre → 403 : aucune
+ligne écrite).
+
+---
+
 ## Impact front
 
 - **`POST /api/pre-prospections`** : nouveau. Réponse enveloppée `{ preProspection, doublons }`,
@@ -163,3 +242,7 @@ une pré-prospection avec prospect existe en base (261), le lien ne suffit pas �
 - Compteurs du dashboard (prospections, prospections ouvertes) : baisse du même ordre.
 - Après `transformer`, la ligne passe de la liste des pré-prospections à celle des prospections
   (avant : elle y passait dès qu'un prospect était lié).
+- **Import CSV** (nouveau) : écran en deux temps — envoi du fichier à `/import/apercu`, tableau
+  des lignes (statut par ligne, compteurs), **liste déroulante de tranche** pré-sélectionnée sur
+  `trancheSuggereeId`, confirmation qui renvoie le même fichier à `/import` avec `trancheId`.
+  Multipart, champ `fichier`. Les deux réponses ont la forme `RapportImportPreProspectionsDto`.

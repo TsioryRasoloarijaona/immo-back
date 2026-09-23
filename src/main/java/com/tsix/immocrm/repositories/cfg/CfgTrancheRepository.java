@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
@@ -54,4 +55,7 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
             ORDER BY t.description
             """)
     List<CfgTranche> tranchesInteret(@Param("prospectId") UUID prospectId);
+
+    /** Par code exact — sert la tranche suggérée à l'import CSV des leads. */
+    Optional<CfgTranche> findFirstByCode(String code);
 }

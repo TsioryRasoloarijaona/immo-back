@@ -861,6 +861,63 @@ public class ProspectionService {
      */
     @Transactional
     public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
+        ComProspection p = ecrirePreProspection(request, LocalDateTime.now());
+        List<DoublonPreProspectionDto> doublons = visibles(doublonsContact(p)).stream()
+                .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
+                .toList();
+        return new PreProspectionCreeeDto(detailEnrichi(p), doublons);
+    }
+
+    /**
+     * Les prospections existantes au même contact que {@code p} (elle exclue) — la règle de
+     * doublon de {@link #creerPreProspection}, partagée avec l'import CSV.
+     */
+    public List<ComProspection> doublonsContact(ComProspection p) {
+        return doublonsContact(p.getId(), p.getTempDescription(), p.getTempEMail(), p.getTempTel());
+    }
+
+    /** Même règle, pour un contact pas encore écrit (aperçu d'import) — {@code exclu} peut être nul. */
+    public List<ComProspection> doublonsContact(UUID exclu, String nom, String email, String telephone) {
+        return prospectionRepository.trouverDoublonsContact(
+                exclu != null ? exclu : new UUID(0, 0),
+                cleContact(nom),
+                cleContact(email),
+                PhoneNumberUtils.normalize(telephone),
+                PageRequest.of(0, DOUBLONS_MAX));
+    }
+
+    /**
+     * Ne garde que les prospections que l'appelant a le droit de voir — même prédicat que les
+     * listes (périmètre commercial et entités juridiques actives). Un doublon hors périmètre
+     * n'est jamais nommé : le signaler révélerait l'existence d'un contact sur un projet non
+     * affecté, ce que le reste de l'API masque en 404.
+     */
+    public List<ComProspection> visibles(List<ComProspection> prospections) {
+        if (prospections.isEmpty()) {
+            return prospections;
+        }
+        List<UUID> ids = prospections.stream().map(ComProspection::getId).toList();
+        Set<UUID> autorises = prospectionRepository.findAll(
+                        Specification.<ComProspection>where((root, query, cb) -> root.get("id").in(ids))
+                                .and(perimetreService.filtreProspections())).stream()
+                .map(ComProspection::getId)
+                .collect(Collectors.toSet());
+        return prospections.stream().filter(p -> autorises.contains(p.getId())).toList();
+    }
+
+    private static String cleContact(String valeur) {
+        return valeur == null ? "" : valeur.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Écrit une pré-prospection et renvoie la ligne — le cœur de {@link #creerPreProspection},
+     * partagé avec {@code ImportPreProspectionService}.
+     *
+     * @param dateDocument {@code DocDate} : maintenant pour une saisie, la date de soumission du
+     *                     lead pour un import (colonne « Créé » de l'export).
+     */
+    @Transactional
+    public ComProspection ecrirePreProspection(CreerPreProspectionRequest request, LocalDateTime dateDocument) {
         String nom = Requis.champ(texteLibre(request.nom()), "nom est requis (champ Nom)");
         String telephone = texteLibre(request.telephone());
         String email = texteLibre(request.email());
@@ -874,7 +931,7 @@ public class ProspectionService {
         p.setId(UUID.randomUUID());
         p.setCode(genererCodeProspection());
         LocalDateTime maintenant = LocalDateTime.now();
-        p.setDocDate(maintenant);
+        p.setDocDate(dateDocument);
         p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         p.setTempDescription(nom);
         p.setTempTel(telephone);
@@ -937,16 +994,7 @@ public class ProspectionService {
 
         p = prospectionRepository.save(p);
         enregistrerHistorique(p.getId(), "Pré-prospection créée : " + nom);
-
-        List<DoublonPreProspectionDto> doublons = prospectionRepository.trouverDoublonsContact(
-                        p.getId(),
-                        nom.toLowerCase(Locale.ROOT),
-                        email != null ? email.toLowerCase(Locale.ROOT) : "",
-                        PhoneNumberUtils.normalize(telephone),
-                        PageRequest.of(0, DOUBLONS_MAX)).stream()
-                .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
-                .toList();
-        return new PreProspectionCreeeDto(detailEnrichi(p), doublons);
+        return p;
     }
 
     /** 400 plutôt que l'erreur de contrainte de la base au flush. */

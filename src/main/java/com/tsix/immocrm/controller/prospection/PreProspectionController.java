@@ -11,6 +11,8 @@ import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
 import com.tsix.immocrm.dto.prospection.PreProspectionCreeeDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.dto.prospection.RapportImportPreProspectionsDto;
+import com.tsix.immocrm.services.prospection.ImportPreProspectionService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.web.Groupements;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -58,9 +62,12 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 public class PreProspectionController {
 
     private final ProspectionService prospectionService;
+    private final ImportPreProspectionService importService;
 
-    public PreProspectionController(ProspectionService prospectionService) {
+    public PreProspectionController(ProspectionService prospectionService,
+                                    ImportPreProspectionService importService) {
         this.prospectionService = prospectionService;
+        this.importService = importService;
     }
 
     @GetMapping
@@ -197,7 +204,9 @@ public class PreProspectionController {
                     **Doublons signalés, jamais refusés.** La réponse liste les prospections \
                     existantes au même contact (même nom, même téléphone sur ses 9 derniers \
                     chiffres, même email — un champ absent des deux côtés compte comme égal). \
-                    OMRAN enregistre lui aussi une ligne par soumission ; à l'écran d'avertir.
+                    OMRAN enregistre lui aussi une ligne par soumission ; à l'écran d'avertir. \
+                    Seuls les doublons **visibles de l'appelant** (périmètre commercial) sont \
+                    listés : un contact hors périmètre n'est jamais révélé.
 
                     La ligne créée apparaît aussitôt dans `GET /api/pre-prospections` et dans le \
                     logiciel de bureau.""")
@@ -213,6 +222,124 @@ public class PreProspectionController {
     })
     public ResponseEntity<PreProspectionCreeeDto> creer(@RequestBody CreerPreProspectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerPreProspection(request));
+    }
+
+    private static final String REGLES_IMPORT = """
+            **Format attendu** — l'export CSV des leads (Meta / Leads Center), en-tête : \
+            `Créé, Nom, Adresse e-mail, Source, Formulaire, Canal, Étape, Propriétaire, Étiquettes, \
+            Téléphone, Numéro de téléphone secondaire, Numéro WhatsApp`.
+            - Colonnes reconnues **par leur nom** (casse et accents ignorés), dans n'importe quel \
+            ordre ; les colonnes inconnues sont ignorées. Seule `Nom` est indispensable (400 sinon).
+            - Séparateur `,` ou `;` (un fichier réenregistré par Excel en français), déduit de \
+            l'en-tête. Encodage UTF-8 (avec ou sans BOM), à défaut Windows-1252.
+            - 5 000 lignes au plus (400 au-delà) ; lignes vides ignorées.
+
+            **Ce que devient chaque colonne**
+            | Colonne | Pré-prospection |
+            |---|---|
+            | Créé (`09/23/2026 1:45am`, mois en premier) | date du document `DocDate` — la date de soumission du lead |
+            | Nom | `TempDescription` |
+            | Adresse e-mail | `TempEMail` |
+            | Téléphone (à défaut WhatsApp, à défaut secondaire) | `TempTel`, tel qu'écrit |
+            | Formulaire, Source, Canal, Étape, Étiquettes, Propriétaire (sauf « Unassigned »), autres numéros | recopiés dans `Notes` |
+
+            **Sort de chaque ligne** (`statut`) :
+            - `NOUVELLE` — créée.
+            - `DOUBLON` — même contact (nom, téléphone sur ses 9 derniers chiffres, email ; casse \
+            ignorée) qu'une prospection existante ou qu'une ligne plus haut, mais **autre date** : \
+            c'est une nouvelle soumission, **créée quand même** et signalée.
+            - `DEJA_IMPORTEE` — même contact **et même date** (à la minute) : le même lead \
+            réimporté, **ignoré**. Réimporter un fichier, ou un export qui chevauche le précédent, \
+            ne crée donc rien deux fois.
+
+            **Périmètre commercial** : seuls les doublons visibles de l'appelant sont nommés \
+            (`doublonIds`, codes dans `message`). Un lead déjà importé sur un projet hors \
+            périmètre est bien ignoré, avec le message « Lead déjà importé » et rien d'autre ; un \
+            simple homonyme hors périmètre ne fait pas un `DOUBLON`.
+            - `ERREUR` — nom vide, date vide ou illisible, champ trop long : **ignorée**, les \
+            autres lignes passent.""";
+
+    @PostMapping(value = "/import/apercu", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Import CSV de leads — étape 1 : aperçu (rien n'est écrit)",
+            description = """
+                    Première étape de l'import : envoie le fichier, reçoit **tout ce qui en a été \
+                    extrait**, ligne par ligne, avec le sort que l'import réservera à chacune. \
+                    **Rien n'est écrit.**
+
+                    **Un fichier = une tranche.** L'export ne dit pas à quelle tranche les leads \
+                    appartiennent : après l'aperçu, l'écran **demande la tranche** (liste \
+                    déroulante), et cette tranche unique vaudra pour toutes les lignes du fichier. \
+                    Pour la pré-sélectionner, l'aperçu propose `trancheSuggereeId` : la tranche dont \
+                    le code est le premier mot du formulaire (`APF FORM 02*2026 - GISK` → `APF`), \
+                    quand tous les formulaires du fichier désignent la même. Un fichier qui mêle \
+                    plusieurs tranches revient avec un `avertissements` : le découper.
+
+                    Étape 2 : `POST /api/pre-prospections/import` avec **le même fichier** et la \
+                    tranche choisie.
+
+                    """ + REGLES_IMPORT)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Rapport d'aperçu (`importe = false`, "
+                    + "`preProspectionId` toujours null)."),
+            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide, colonne `Nom` "
+                    + "introuvable, plus de 5 000 lignes.", content = @Content)
+    })
+    public RapportImportPreProspectionsDto apercuImport(
+            @Parameter(description = "Le fichier CSV exporté, tel quel.")
+            @RequestParam("fichier") MultipartFile fichier) {
+        return importService.apercu(fichier);
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Import CSV de leads — étape 2 : création, toutes lignes sur une seule tranche",
+            description = """
+                    Crée une pré-prospection par ligne `NOUVELLE` ou `DOUBLON` du fichier, **toutes \
+                    rattachées à `trancheId`** — la tranche choisie par l'utilisateur après \
+                    l'aperçu (`POST /api/pre-prospections/import/apercu`). **Une seule tranche par \
+                    fichier** : un fichier qui en mêle plusieurs doit être découpé avant l'import.
+
+                    Chaque ligne créée est une pré-prospection complète, exactement comme \
+                    `POST /api/pre-prospections` : code `AA/NNNNN` du compteur « Prospection », type \
+                    `ComPreProspection`, `IsClosed = false`, auteur = utilisateur connecté, \
+                    vocation `VENTE`. Référentiels posés par défaut — le motif des leads déjà \
+                    injectés depuis ces formulaires — chacun remplaçable par son paramètre : \
+                    Nature `1 A TRAITER` (`etapeId`), source `FACEBOOK` (`origineId`), type `WEB` \
+                    (`typeContactId`). Un défaut absent du référentiel est laissé vide.
+
+                    **Tout ou rien** pour les erreurs de requête (tranche inconnue ou hors \
+                    périmètre : aucune ligne écrite). Les lignes en `ERREUR` n'empêchent pas les \
+                    autres. Le rapport renvoyé a la forme de l'aperçu, avec `importe = true` et \
+                    l'identifiant et le code de chaque pré-prospection créée.
+
+                    """ + REGLES_IMPORT)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Import effectué ; rapport ligne par ligne."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` absent ou inconnu ; "
+                    + "fichier absent, vide, sans colonne `Nom` ou de plus de 5 000 lignes ; "
+                    + "référentiel fourni inconnu.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "La tranche appartient à un projet hors "
+                    + "du périmètre commercial de l'appelant — rien n'est écrit.", content = @Content)
+    })
+    public RapportImportPreProspectionsDto importer(
+            @Parameter(description = "Le fichier CSV exporté — le même que pour l'aperçu.")
+            @RequestParam("fichier") MultipartFile fichier,
+            @Parameter(description = "Tranche (CfgTranche.id) choisie dans la liste déroulante. "
+                    + "**Obligatoire** : toutes les lignes du fichier y sont rattachées.")
+            @RequestParam(required = false) UUID trancheId,
+            @Parameter(description = "Nature (ComProspectionKind). Défaut : `1 A TRAITER`.")
+            @RequestParam(required = false) UUID etapeId,
+            @Parameter(description = "Source de contact (ComProspectionOrigin). Défaut : `FACEBOOK`.")
+            @RequestParam(required = false) UUID origineId,
+            @Parameter(description = "Support d'origine (ComProspectionOriginSupport). Défaut : aucun.")
+            @RequestParam(required = false) UUID origineSupportId,
+            @Parameter(description = "Type (ComActionMessageType). Défaut : `WEB`.")
+            @RequestParam(required = false) UUID typeContactId,
+            @Parameter(description = "Action commerciale / campagne (ComAction). Défaut : aucune.")
+            @RequestParam(required = false) UUID actionCommercialeId) {
+        return importService.importer(fichier, trancheId, new ImportPreProspectionService.Rattachement(
+                etapeId, origineId, origineSupportId, typeContactId, actionCommercialeId));
     }
 
     @PostMapping("/{id}/creer-prospect")
