@@ -29,8 +29,9 @@ public record RelanceProspectionDto(
         UUID prospectionId,
 
         @Schema(description = "`true` s'il s'agit d'une pré-prospection — un lead non encore "
-                + "qualifié, sans prospect ni commercial (`CfgProspectId` et `CfgCommercialId` "
-                + "nuls). Une telle relance est toujours `nonAffectee`.")
+                + "transformé, de type légataire `ComPreProspection`, même discriminant que "
+                + "`GET /api/pre-prospections`. Une pré-prospection saisie dans OMRAN peut déjà "
+                + "porter un commercial : `nonAffectee` n'est donc pas systématique.")
         boolean preProspection,
 
         @Schema(description = "Nom du prospect. `null` sur une pré-prospection dont le prospect "

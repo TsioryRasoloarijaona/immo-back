@@ -16,7 +16,7 @@ import java.util.List;
  *       set and its paired {@code ValidityDate} is in the past — assumed to mean "the
  *       follow-up's validity window has expired unaddressed". Not confirmed by a spec doc.</li>
  *   <li>{@code prospectionsOuvertes}/{@code prospectionsTotal} exclude pré-prospections
- *       (CfgProspectId IS NULL AND CfgCommercialId IS NULL), consistent with
+ *       ({@code StrEntity.Code = 'ComPreProspection'}), consistent with
  *       {@code GET /api/prospections} — "ouvertes" means {@code IsClosed} is false or null.</li>
  * </ul>
  */

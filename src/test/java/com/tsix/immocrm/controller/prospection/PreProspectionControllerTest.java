@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -57,12 +58,14 @@ class PreProspectionControllerTest {
         ComProspection preA = new ComProspection();
         preA.setId(UUID.randomUUID());
         preA.setCode("PRE-TRANCHE-A");
+        preA.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         preA.setStkHierarchy(trancheA);
         prospectionRepository.save(preA);
 
         ComProspection preB = new ComProspection();
         preB.setId(UUID.randomUUID());
         preB.setCode("PRE-TRANCHE-B");
+        preB.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         preB.setStkHierarchy(trancheB);
         prospectionRepository.save(preB);
 
@@ -77,6 +80,7 @@ class PreProspectionControllerTest {
         ComProspection pre = new ComProspection();
         pre.setId(UUID.randomUUID());
         pre.setCode("PRE-LIST-1");
+        pre.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         prospectionRepository.save(pre);
 
         mockMvc.perform(get("/api/pre-prospections"))
@@ -89,6 +93,7 @@ class PreProspectionControllerTest {
         ComProspection pre = new ComProspection();
         pre.setId(UUID.randomUUID());
         pre.setCode("PRE-TEMP-1");
+        pre.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         pre.setTempDescription("Jean Doe (lead brut)");
         pre.setTempTel("0341234567");
         pre.setTempEMail("jean.doe@example.com");

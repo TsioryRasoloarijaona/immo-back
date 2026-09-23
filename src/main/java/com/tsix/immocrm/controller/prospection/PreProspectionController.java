@@ -7,6 +7,8 @@ import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
+import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
+import com.tsix.immocrm.dto.prospection.PreProspectionCreeeDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.services.prospection.ProspectionService;
@@ -37,8 +39,10 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
-@Tag(name = "Pré-prospections", description = "Leads bruts non encore qualifiés (ComProspection "
-        + "sans CfgProspectId ni CfgCommercialId) — même forme que /api/prospections.\n\n"
+@Tag(name = "Pré-prospections", description = "Leads bruts non encore qualifiés : ComProspection de "
+        + "type légataire `ComPreProspection` (`StrEntity`), le discriminant d'OMRAN lui-même — une "
+        + "pré-prospection peut donc déjà porter un prospect ou un commercial tant qu'elle n'a pas "
+        + "été transformée. Même forme que /api/prospections.\n\n"
         + "Collection soumise au périmètre commercial : sur **toutes** les routes portant un "
         + "identifiant, une ressource hors du périmètre de l'appelant renvoie 404 (jamais 403 — un "
         + "403 confirmerait son existence), et un identifiant qui n'est pas un UUID valide renvoie "
@@ -66,11 +70,10 @@ public class PreProspectionController {
                     + "tranche(s), plage de dates, recherche libre, ouvertes) appliqués aux leads "
                     + "non encore qualifiés. Voir instructions/filtres-avances.md point 5.\n\n"
                     + "**Périmètre commercial** : si l'appelant est restreint, cette liste ne "
-                    + "contient que les pré-prospections de ses projets affectés. À noter — une "
-                    + "pré-prospection n'a par construction **aucun commercial** (c'est justement "
-                    + "ce qui la définit) : seul le projet de sa tranche visée peut la scoper, le "
-                    + "filtre `commercial` ne renverra jamais rien ici. Les pré-prospections sans "
-                    + "tranche restent visibles de tous."
+                    + "contient que les pré-prospections de ses projets affectés, scopées par le "
+                    + "projet de leur tranche visée. Les pré-prospections sans tranche restent "
+                    + "visibles de tous. Le filtre `commercial` s'applique : une pré-prospection "
+                    + "saisie dans OMRAN peut déjà porter un commercial (~780 en base réelle)."
     )
     public PageDto<ProspectionListItemDto> findAll(
             @Parameter(description = "Code(s) ComProspectionKind (\"Nature\"/étape) à filtrer. "
@@ -115,16 +118,14 @@ public class PreProspectionController {
             summary = "Liste des pré-prospections repliée en groupes, avec effectifs et totaux",
             description = """
                     Même mécanique que `GET /api/prospections/groupes`, appliquée au périmètre des \
-                    pré-prospections (`CfgProspectId IS NULL AND CfgCommercialId IS NULL`).
+                    pré-prospections (type légataire `ComPreProspection`).
 
                     **Les effectifs portent sur tout le périmètre filtré, pas sur une page.** Pour \
                     ouvrir un groupe : `GET /api/pre-prospections?groupeColonne=<groupBy>\
                     &groupeValeur=<cle>`.
 
-                    Deux colonnes n'ont ici aucun intérêt et rendront un groupe unique à valeur \
-                    nulle : `prospectNom` et `commercialNom`, nuls par définition sur ce \
-                    périmètre. Elles restent acceptées plutôt que refusées par un cas particulier \
-                    — le résultat est exact, simplement sans information.""",
+                    `prospectNom` et `commercialNom` sont nuls sur la plupart des lignes (leads \
+                    non encore qualifiés) : grouper dessus donne surtout le groupe sans valeur.""",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Groupes, paginés comme une liste"),
                     @ApiResponse(responseCode = "400", description =
@@ -175,6 +176,43 @@ public class PreProspectionController {
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @PostMapping
+    @Operation(
+            summary = "Crée une pré-prospection (lead brut)",
+            description = """
+                    Équivalent de l'écran « Pré-prospection » d'OMRAN, dont la trace d'audit fixe \
+                    la séquence : code tiré du compteur `AdmSequence` « Prospection » (format \
+                    `AA/NNNNN`, **le même compteur que les prospections**), type de document \
+                    `ComPreProspection`, contact saisi en champs libres (`TempDescription`, \
+                    `TempTel`, `TempEMail`) — **aucune fiche prospect n'est créée**.
+
+                    Seul `nom` est obligatoire. Posés par le serveur : code, date du document \
+                    (maintenant), `IsClosed = false`, auteur (utilisateur connecté), vocation \
+                    `VENTE` si aucune n'est fournie. Jamais de prospect ni de commercial : c'est \
+                    l'objet de `POST /api/pre-prospections/{id}/creer-prospect` puis \
+                    `POST /api/prospections/{id}/transformer`.
+
+                    **Doublons signalés, jamais refusés.** La réponse liste les prospections \
+                    existantes au même contact (même nom, même téléphone sur ses 9 derniers \
+                    chiffres, même email — un champ absent des deux côtés compte comme égal). \
+                    OMRAN enregistre lui aussi une ligne par soumission ; à l'écran d'avertir.
+
+                    La ligne créée apparaît aussitôt dans `GET /api/pre-prospections` et dans le \
+                    logiciel de bureau.""")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Pré-prospection créée ; `doublons` vide "
+                    + "si aucun contact identique n'existe."),
+            @ApiResponse(responseCode = "400", description = "`nom` absent ou blanc ; champ trop long "
+                    + "(nom/telephone/email 255, notes 1 000) ; référentiel inconnu (tranche, article, "
+                    + "étape, origine, support, type, action, vocation) ; `articleId` sans `trancheId` "
+                    + "ou hors de la tranche.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "La tranche fournie appartient à un projet "
+                    + "hors du périmètre commercial de l'appelant.", content = @Content)
+    })
+    public ResponseEntity<PreProspectionCreeeDto> creer(@RequestBody CreerPreProspectionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerPreProspection(request));
     }
 
     @PostMapping("/{id}/creer-prospect")

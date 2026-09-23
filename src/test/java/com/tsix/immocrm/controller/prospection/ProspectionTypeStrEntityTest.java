@@ -60,10 +60,9 @@ class ProspectionTypeStrEntityTest {
     /**
      * Prospection visible de {@code GET /api/prospections}, quel que soit son type légataire.
      *
-     * <p>Le prospect rattaché n'est pas décoratif : la liste exclut les prospections sans prospect
-     * ni commercial. C'est justement ce qui permet de fabriquer le cas des 830 — une ligne de type
-     * {@code ComPreProspection} qui, portant un prospect, passe l'heuristique et se retrouve dans
-     * la liste de vente.
+     * <p>Le prospect rattaché reproduit le cas des ~830 : une ligne de type
+     * {@code ComPreProspection} qui porte déjà un prospect. L'ancienne heuristique la classait en
+     * vente ; le discriminant {@code StrEntity} la garde en pré-prospection (décision #44).
      *
      * <p>Le code porté par la ligne sert de {@code ?search=} pour que {@code content[0]} soit
      * déterministe — la base de test est partagée entre les classes.
@@ -186,38 +185,30 @@ class ProspectionTypeStrEntityTest {
     // ------------------------------------------------------------------
 
     /**
-     * <b>Le test qui fige le bug #44.</b> Une prospection de type {@code ComPreProspection} qui
-     * porte un prospect passe l'heuristique et se retrouve dans la liste de <em>vente</em> — c'est
-     * le cas des 830 lignes mesurées en base réelle.
-     *
-     * <p>Ce lot expose l'écart sans le corriger. Si ce test échoue un jour, ce n'est pas une
-     * régression : c'est que le discriminant a été changé, ce qui est une décision métier et doit
-     * s'accompagner de la mise à jour de cette classe.
+     * <b>Décision #44, appliquée.</b> Une pré-prospection OMRAN qui porte déjà un prospect — le cas
+     * des ~830 lignes réelles — quitte la liste de vente pour celle des pré-prospections. Voir
+     * {@code FEATURE-creation-pre-prospection.md} §4.
      */
     @Test
-    void listeDeVente_contientEncoreLesPreProspections() throws Exception {
+    void preProspectionAvecProspect_resteDansLaListeDesPreProspections() throws Exception {
         String code = prospectionVisible(ENTITE_PRE_PROSPECTION).getCode();
 
-        mockMvc.perform(get("/api/prospections")
-                        .param("colonnes", "code,typeProspectionCode")
-                        .param("search", code))
+        mockMvc.perform(get("/api/prospections").param("search", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+
+        mockMvc.perform(get("/api/pre-prospections").param("search", code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
-                .andExpect(jsonPath("$.content[0].typeProspectionCode").value("ComPreProspection"));
+                .andExpect(jsonPath("$.content[0].prospectNom").value("Type TEST"));
     }
 
     @Test
-    void filtre_isoleLesPreProspectionsDeLaListeDeVente() throws Exception {
+    void filtre_typePreProspection_neRendPlusRienSurLaListeDeVente() throws Exception {
         String code = prospectionVisible(ENTITE_PRE_PROSPECTION).getCode();
 
         mockMvc.perform(get("/api/prospections")
                         .param("typeProspection", "ComPreProspection")
-                        .param("search", code))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(1));
-
-        mockMvc.perform(get("/api/prospections")
-                        .param("typeProspection", "ComProspection")
                         .param("search", code))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(0));

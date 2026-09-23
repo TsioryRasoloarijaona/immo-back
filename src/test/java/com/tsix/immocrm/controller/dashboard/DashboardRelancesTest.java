@@ -9,6 +9,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -96,6 +97,7 @@ class DashboardRelancesTest {
         ComProspection p = new ComProspection();
         p.setId(UUID.randomUUID());
         p.setCode("DR-PRE-" + UUID.randomUUID());
+        p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         p.setTempDescription("Lead TEST");
         p.setTempTel("0611223344");
         p.setTempEMail("lead@test.local");

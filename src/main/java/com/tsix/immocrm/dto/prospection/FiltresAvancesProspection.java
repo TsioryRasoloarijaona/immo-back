@@ -62,12 +62,10 @@ public record FiltresAvancesProspection(
         Boolean ancienClient,
 
         @Schema(description = "Code(s) de type de document légataire (`StrEntity.Code`). "
-                + "Répétable. Filtre sur le **discriminant réel** du logiciel de bureau, et non "
-                + "sur l'heuristique que cette liste applique par ailleurs.\n\n"
-                + "C'est ce qui rend l'écart mesurable : `?typeProspection=ComPreProspection` "
-                + "isole les **830 pré-prospections** que l'heuristique laisse dans la liste de "
-                + "vente, et `RntProspection` les 4 prospections de location qui s'y trouvent "
-                + "aussi. Valeurs connues : `ComProspection`, `ComPreProspection`, "
+                + "Répétable. La liste écarte déjà `ComPreProspection` (servies par "
+                + "`GET /api/pre-prospections`) : ce filtre sert surtout à isoler "
+                + "`RntProspection`, les 4 prospections de location présentes dans la liste de "
+                + "vente. Valeurs connues : `ComProspection`, `ComPreProspection`, "
                 + "`RntProspection`, `PrmProspection`, `RomProspection`.\n\n"
                 + "Un code inconnu ne provoque pas d'erreur : il ne correspond à aucune "
                 + "prospection et le résultat est vide. Les 4 lignes sans `StrEntityId` sont "

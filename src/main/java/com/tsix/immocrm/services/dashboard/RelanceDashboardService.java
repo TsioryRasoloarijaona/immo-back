@@ -11,6 +11,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Join;
@@ -180,7 +181,7 @@ public class RelanceDashboardService {
         return new RelanceProspectionDto(
                 message.getId(),
                 prospection.getId(),
-                estPreProspection(prospection),
+                DiscriminantPreProspection.estPreProspection(prospection),
                 TierNomFormatter.nom(prospect),
                 ProspectionService.telephoneProspect(prospect, prospection),
                 dateRelance,
@@ -197,8 +198,8 @@ public class RelanceDashboardService {
     /**
      * Les leads créés dans la journée.
      *
-     * <p>Pas de {@code portee} ici : une pré-prospection n'a pas de commercial par construction,
-     * {@code MOI} n'aurait aucun sens. Seul le périmètre par projet s'applique, comme partout.
+     * <p>Pas de {@code portee} ici : un lead du jour n'a pas encore de commercial, {@code MOI}
+     * n'aurait aucun sens. Seul le périmètre par projet s'applique, comme partout.
      *
      * <p>Une page vide est le cas courant — les leads arrivent par rafales, week-end compris.
      */
@@ -209,10 +210,9 @@ public class RelanceDashboardService {
         LocalDateTime finExclue = cible.plusDays(1).atStartOfDay();
 
         Specification<ComProspection> spec = perimetreService.filtreProspections()
+                // Discriminant de GET /api/pre-prospections, partagé à l'identique.
+                .and(DiscriminantPreProspection.estPreProspection())
                 .and((root, query, cb) -> cb.and(
-                        // Discriminant de GET /api/pre-prospections, repris à l'identique.
-                        cb.isNull(root.get("cfgProspect")),
-                        cb.isNull(root.get("cfgCommercial")),
                         cb.greaterThanOrEqualTo(root.get("userCreateDateTime"), debut),
                         cb.lessThan(root.get("userCreateDateTime"), finExclue)));
 
@@ -232,8 +232,4 @@ public class RelanceDashboardService {
                 p.getUserCreateDateTime());
     }
 
-    /** Le discriminant de {@code GET /api/pre-prospections}, mot pour mot. */
-    private static boolean estPreProspection(ComProspection p) {
-        return p.getCfgProspect() == null && p.getCfgCommercial() == null;
-    }
 }

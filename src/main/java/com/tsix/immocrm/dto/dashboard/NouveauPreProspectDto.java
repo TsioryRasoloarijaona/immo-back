@@ -8,9 +8,9 @@ import java.util.UUID;
 /**
  * Un lead arrivé dans la journée, servi par {@code GET /api/dashboard/nouveaux-pre-prospects}.
  *
- * <p>Une pré-prospection se définit par {@code CfgProspectId IS NULL AND CfgCommercialId IS NULL}
- * — le même discriminant que {@code GET /api/pre-prospections}. Elle n'a donc <b>jamais</b> de
- * commercial : c'est structurel, pas une donnée manquante.
+ * <p>Une pré-prospection se définit par son type légataire ({@code StrEntity.Code =
+ * 'ComPreProspection'}) — le même discriminant que {@code GET /api/pre-prospections}, voir
+ * {@code DiscriminantPreProspection}.
  */
 @Schema(description = "Un lead non encore qualifié, créé aujourd'hui. Les arrivées se font par "
         + "rafales (injection automatique depuis le serveur legacy) et **le week-end n'est pas "
