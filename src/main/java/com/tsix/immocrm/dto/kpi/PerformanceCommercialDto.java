@@ -4,11 +4,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Schema(description = """
         Performance d'un commercial sur une période. Trois familles d'indicateurs : l'activité \
-        réalisée (appels, visites, interactions), le portefeuille confié (prospections, dossiers, \
+        réalisée (toutes les actions, détaillées par type), le portefeuille confié (prospections, dossiers, \
         réactivité) et le résultat (montants, taux de transformation).
 
         Deux attributions différentes cohabitent volontairement, et il faut le savoir pour lire les \
@@ -23,8 +24,16 @@ public record PerformanceCommercialDto(
 
         @Schema(description = "Identifiant du commercial (CfgTier.PKey), et non celui de son compte "
                 + "utilisateur — un même employé peut porter deux comptes, dont les chiffres sont "
-                + "additionnés ici.")
+                + "additionnés ici. **Null** pour un compte rattaché à aucun employé (16 comptes sur "
+                + "75) : la ligne est alors celle du compte, identifié par `utilisateurId`.")
         UUID commercialId,
+
+        @Schema(description = "Compte (AdmUser.PKey) — renseigné **seulement** quand le compte n'est "
+                + "rattaché à aucun employé, et qu'il n'y a donc pas de `commercialId`. Ces comptes "
+                + "n'apparaissaient pas avant que l'attribution suive le suivi des actions : leurs "
+                + "actions n'étaient comptées nulle part. Ils n'ont pas de portefeuille (prospections, "
+                + "dossiers), assigné à un commercial.")
+        UUID utilisateurId,
 
         @Schema(description = "Nom affiché : `Description` du tier, à défaut « prénom nom », à défaut son code.",
                 example = "Faycal SAOUD")
@@ -57,9 +66,16 @@ public record PerformanceCommercialDto(
         @Schema(description = "Appels dont le résultat est « Rendez vous pris ».", example = "18")
         long rdvObtenus,
 
-        @Schema(description = "Toutes interactions confondues sur la période, y compris notes et messages.",
-                example = "384")
+        @Schema(description = "Toutes les actions de la période, **actions « Système » exclues** : "
+                + "appels, visites, notes, messages, mails, WEB. Les actions générées pendant une "
+                + "session (quasi toutes des notes) ne sont pas celles de l'utilisateur — elles "
+                + "gonflaient ce total, jusqu'à 212 sur 228 pour un compte réel.", example = "384")
         long interactionsTotal,
+
+        @Schema(description = "Le détail de `interactionsTotal` **par type d'action**, du plus au moins "
+                + "fréquent — tous les types du référentiel, pas seulement les appels. La somme des "
+                + "`nombre` égale `interactionsTotal`. Liste vide si aucune action.")
+        List<ActionParTypeDto> actionsParType,
 
         @Schema(description = "Prospections **distinctes** sur lesquelles il a saisi au moins une "
                 + "interaction. Mesure le travail réellement effectué, indépendamment de qui la "
@@ -110,6 +126,11 @@ public record PerformanceCommercialDto(
         @Schema(description = "`rdvObtenus / appelsPasses`, entre 0 et 1 — l'efficacité au téléphone. "
                 + "`null` si aucun appel passé.", example = "0.058")
         BigDecimal tauxAppelVersRdv,
+
+        @Schema(description = "`rdvObtenus / interactionsTotal`, entre 0 et 1 — les rendez-vous "
+                + "rapportés à **toute** l'activité, pas seulement au téléphone. `null` si aucune "
+                + "action.", example = "0.047")
+        BigDecimal tauxActionVersRdv,
 
         @Schema(description = "`dossiersCrees / prospectionsAssignees`, entre 0 et 1. `null` si aucune "
                 + "prospection assignée. **À lire avec son effectif** : sur une période courte le "

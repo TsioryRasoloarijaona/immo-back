@@ -193,11 +193,43 @@ comptes vers la source reste nécessaire.
 
 ---
 
+## 7. KPI commerciaux sur toutes les actions — demande du 23/09
+
+`GET /api/kpi/commerciaux[/moi]` s'appuyait sur les appels : compteurs d'appels et de visites, taux
+de rendez-vous sur les appels. Il s'appuie désormais sur **toutes les actions**.
+
+**Mesures (12 mois, `yesRemsProd`)** — types : téléphone sortant 5 336, visite 518, note 309,
+téléphone entrant 104, message entrant 64, message sortant 46, WEB 34, sans type 9, mail 6. Les
+**actions « Système » sont presque toutes des notes** (296 / 309) et gonflaient le total :
+Hamza ATCHANY 212 sur 228, Amine DIOURI 28 sur 28, Houria ENNAGIM 24 sur 26. Aucun appel système.
+
+| Changement | Détail |
+|---|---|
+| `actionsParType` (nouveau) | une entrée par type du référentiel, du plus au moins fréquent ; somme = `interactionsTotal` |
+| `interactionsTotal` | **hors actions « Système »** |
+| `tauxActionVersRdv` (nouveau) | `rdvObtenus / interactionsTotal` ; `tauxAppelVersRdv` inchangé à côté |
+| attribution | règle du suivi (§3bis) : le compte, sinon le **nom** écrit sur l'action résolu vers le compte **seul** à le porter (« admin » : 2 comptes, jamais deviné) ; « Système » à personne |
+| compte sans employé | **sa propre ligne** (`commercialId` nul, `utilisateurId` renseigné) — 16 comptes sur 75, dont Macire Kamara, dont les actions n'étaient comptées nulle part |
+| `/moi` sans employé | **200** avec l'activité du compte (était 404) |
+
+Inchangé : classement (dossiers créés, puis appels passés), portefeuille attribué au commercial
+assigné, compteurs historiques (`appelsPasses`, `visitesRealisees`…).
+
+Implémentation : l'agrégat SQL groupé par employé est remplacé par une projection ligne à ligne
+des actions de la période (`projeterActionsPourKpi`), agrégée en Java — un `GROUP BY` ne sait pas
+exprimer l'attribution par nom, et additionner des `COUNT(DISTINCT)` de groupes fausserait
+`prospectionsTraitees`. Environ 6 400 lignes sur 12 mois.
+
+---
+
 ## Impact front
 
 - Nouvel écran « Suivi des actions » : `GET /api/suivi-actions` (+ `/groupes`), catalogue
   `GET /api/referentiels/colonnes/suivi-actions`. Aucun endpoint existant modifié.
 - Liste des utilisateurs du filtre : `GET /api/suivi-actions/groupes?groupBy=utilisateur`
   (les valeurs réellement présentes, avec leur effectif).
+- **KPI** (`/api/kpi/commerciaux[/moi]`) : nouveaux champs `actionsParType`, `tauxActionVersRdv`,
+  `utilisateurId` ; `commercialId` peut être nul (compte sans employé) ; `interactionsTotal` baisse
+  (hors « Système ») ; `/moi` ne renvoie plus 404 pour un compte sans employé.
 - **Accès** : écran général pour `Administrateur` ; pour tout autre rôle, le même écran ne montre
   que ses propres actions — masquer le sélecteur d'utilisateur hors administrateur.

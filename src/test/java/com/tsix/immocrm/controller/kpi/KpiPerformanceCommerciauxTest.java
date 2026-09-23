@@ -453,12 +453,111 @@ class KpiPerformanceCommerciauxTest {
                 .andExpect(jsonPath("$.montantTotal").value(0.00));
     }
 
+    /**
+     * Un compte sans employé (16 sur 75) a désormais sa propre ligne : ses actions n'étaient
+     * comptées nulle part. Plus de 404 — voir {@code FEATURE-suivi-actions.md} §7.
+     */
     @Test
-    void moi_compteSansEmploye_renvoie404() throws Exception {
+    void moi_compteSansEmploye_aSaPropreActivite() throws Exception {
         AdmUser compte = newUser("kpi.sansemploye", null);
+        ComProspection prospection = newProspection(newTier("KPI-AUTRE"), trancheActive, MAINTENANT);
+        appel(compte, prospection, resultatRdvPris);
 
         mockMvc.perform(get("/api/kpi/commerciaux/moi").with(connecte(compte, "Commercial")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commercialId").doesNotExist())
+                .andExpect(jsonPath("$.utilisateurId").value(compte.getId().toString()))
+                .andExpect(jsonPath("$.commercialNom").value("kpi.sansemploye"))
+                .andExpect(jsonPath("$.appelsPasses").value(1))
+                .andExpect(jsonPath("$.rdvObtenus").value(1));
+    }
+
+    // ------------------------------------------------------------------ toutes les actions (§7)
+
+    /**
+     * L'activité compte toutes les actions, détaillées par type, et le taux de rendez-vous se lit
+     * aussi sur l'ensemble de l'activité.
+     */
+    @Test
+    void actionsParType_detailleToutesLesActions() throws Exception {
+        CfgTier commercial = newTier("KPI-TYPES");
+        AdmUser compte = newUser("kpi.types", commercial);
+        ComProspection prospection = newProspection(commercial, trancheActive, MAINTENANT);
+        ComActionMessageType note = newType("Note");
+        ComActionMessageType messageSortant = newType("Message sortant");
+
+        appel(compte, prospection, resultatRdvPris);
+        appel(compte, prospection, null);
+        visite(compte, prospection);
+        newInteraction(compte, prospection, note, null, MAINTENANT);
+        newInteraction(compte, prospection, messageSortant, null, MAINTENANT);
+
+        mockMvc.perform(get("/api/kpi/commerciaux/moi").with(connecte(compte, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interactionsTotal").value(5))
+                .andExpect(jsonPath("$.actionsParType[0].type").value(InteractionKpi.TYPE_APPEL_SORTANT))
+                .andExpect(jsonPath("$.actionsParType[0].nombre").value(2))
+                .andExpect(jsonPath("$.actionsParType.length()").value(4))
+                .andExpect(jsonPath("$.actionsParType[?(@.type=='Note')].nombre").value(org.hamcrest.Matchers.hasItem(1)))
+                .andExpect(jsonPath("$.tauxAppelVersRdv").value(0.5))
+                .andExpect(jsonPath("$.tauxActionVersRdv").value(0.2));
+    }
+
+    /**
+     * Une action « Système » écrite sous le compte n'est pas celle de l'utilisateur : générée
+     * pendant sa session, OMRAN l'affiche sous « Système ». Elle gonflait le total (212 des 228
+     * interactions d'un compte réel sur 12 mois).
+     */
+    @Test
+    void actionSysteme_nestComptee_pourPersonne() throws Exception {
+        CfgTier commercial = newTier("KPI-SYS");
+        AdmUser compte = newUser("kpi.sys", commercial);
+        ComProspection prospection = newProspection(commercial, trancheActive, MAINTENANT);
+        ComActionMessageType note = newType("Note");
+
+        appel(compte, prospection, null);
+        ComActionMessage generee = newInteraction(compte, prospection, note, null, MAINTENANT);
+        generee.setUserName("Système");
+        messageRepository.save(generee);
+
+        mockMvc.perform(get("/api/kpi/commerciaux/moi").with(connecte(compte, "Commercial")))
+                .andExpect(jsonPath("$.interactionsTotal").value(1))
+                .andExpect(jsonPath("$.actionsParType.length()").value(1));
+    }
+
+    /**
+     * Sans compte sur l'action, l'auteur est le compte <b>seul</b> à porter le nom écrit dessus —
+     * le cas des actions sauvées par le correctif d'auteur. Un nom porté par deux comptes n'est
+     * jamais deviné.
+     */
+    @Test
+    void actionSansCompte_attribueeParLeNom_seulementSIlEstUnique() throws Exception {
+        CfgTier commercial = newTier("KPI-NOM");
+        AdmUser compte = newUser("kpi.nom", commercial);
+        compte.setDescription("Nom Unique " + UUID.randomUUID());
+        userRepository.save(compte);
+        AdmUser homonyme1 = newUser("kpi.homo.a", null);
+        AdmUser homonyme2 = newUser("kpi.homo.b", null);
+        String partage = "Nom Partage " + UUID.randomUUID();
+        homonyme1.setDescription(partage);
+        homonyme2.setDescription(partage);
+        userRepository.save(homonyme1);
+        userRepository.save(homonyme2);
+        ComProspection prospection = newProspection(commercial, trancheActive, MAINTENANT);
+
+        ComActionMessage parNom = newInteraction(compte, prospection, typeAppelSortant, null, MAINTENANT);
+        parNom.setAdmUser(null);
+        parNom.setUserName(compte.getDescription());
+        messageRepository.save(parNom);
+        ComActionMessage ambigue = newInteraction(compte, prospection, typeAppelSortant, null, MAINTENANT);
+        ambigue.setAdmUser(null);
+        ambigue.setUserName(partage);
+        messageRepository.save(ambigue);
+
+        mockMvc.perform(get("/api/kpi/commerciaux/moi").with(connecte(compte, "Commercial")))
+                .andExpect(jsonPath("$.appelsPasses").value(1));
+        mockMvc.perform(get("/api/kpi/commerciaux/moi").with(connecte(homonyme1, "Commercial")))
+                .andExpect(jsonPath("$.appelsPasses").value(0));
     }
 
     // ------------------------------------------------------------------ fixtures
