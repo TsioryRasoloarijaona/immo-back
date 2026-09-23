@@ -14,10 +14,8 @@ import java.util.UUID;
 
 public interface ComProspectionRepository extends JpaRepository<ComProspection, UUID>, JpaSpecificationExecutor<ComProspection> {
 
-    // Pré-prospection: CfgProspectId IS NULL AND CfgCommercialId IS NULL (confirmed).
-    List<ComProspection> findByCfgProspectIsNullAndCfgCommercialIsNull();
-
-    Page<ComProspection> findByCfgProspectIsNullAndCfgCommercialIsNull(Pageable pageable);
+    // Pré-prospection : StrEntity.Code = 'ComPreProspection' — voir DiscriminantPreProspection.
+    // Les requêtes ci-dessous en portent le complément exact, NULL compris.
 
     /**
      * Real prospections (excludes pré-prospections), for {@code GET /api/dashboard} — restreint aux
@@ -25,14 +23,14 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
      */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
-            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspections();
 
     /** Real, non-closed prospections, for {@code GET /api/dashboard} — même restriction d'entité. */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
-            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
             + "AND (p.isClosed IS NULL OR p.isClosed = false) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countOpenExcludingPreProspections();
@@ -47,7 +45,7 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
      */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
-            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
             + "AND (pr.id IN :projetIds OR pr.id IS NULL) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
@@ -55,7 +53,7 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     /** Variante de {@link #countOpenExcludingPreProspections()} restreinte au périmètre commercial. */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
-            + "WHERE NOT (p.cfgProspect IS NULL AND p.cfgCommercial IS NULL) "
+            + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
             + "AND (p.isClosed IS NULL OR p.isClosed = false) "
             + "AND (pr.id IN :projetIds OR pr.id IS NULL) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
@@ -181,4 +179,25 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     List<ComProspection> rechercherPreProspectionsParNomDansPerimetre(@Param("motif") String motif,
                                                                        @Param("projetIds") List<UUID> projetIds,
                                                                        @Param("limite") int limite);
+
+    /**
+     * Doublons d'une pré-prospection qu'on vient de créer — {@code POST /api/pre-prospections},
+     * voir {@code FEATURE-creation-pre-prospection.md} §3.
+     *
+     * <p>Même contrôle qu'OMRAN (nom + email + téléphone, trace d'audit du 21/09), rendu
+     * tolérant : casse et espaces de bord ignorés, téléphone normalisé comme la hotline (9
+     * derniers chiffres), et un champ absent des deux côtés compte comme égal — l'égalité SQL
+     * stricte d'OMRAN ne se déclenche jamais dès qu'un des trois est {@code NULL}.
+     *
+     * <p>Les paramètres arrivent déjà normalisés : nom et email en minuscules sans espaces de
+     * bord ({@code ""} si absents), téléphone par {@code PhoneNumberUtils.normalize}.
+     */
+    @Query("SELECT p FROM ComProspection p WHERE p.id <> :exclu "
+            + "AND lower(trim(coalesce(p.tempDescription, ''))) = :nom "
+            + "AND lower(trim(coalesce(p.tempEMail, ''))) = :email "
+            + "AND right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :telephone "
+            + "ORDER BY p.userCreateDateTime DESC")
+    List<ComProspection> trouverDoublonsContact(@Param("exclu") UUID exclu, @Param("nom") String nom,
+                                                @Param("email") String email,
+                                                @Param("telephone") String telephone, Pageable pageable);
 }

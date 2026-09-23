@@ -10,6 +10,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,6 +74,7 @@ class ProspectionControllerTest {
         ComProspection pre = new ComProspection();
         pre.setId(UUID.randomUUID());
         pre.setCode("PSN-PRE-1");
+        pre.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         prospectionRepository.save(pre);
 
         mockMvc.perform(get("/api/prospections"))
@@ -86,6 +88,7 @@ class ProspectionControllerTest {
         ComProspection pre = new ComProspection();
         pre.setId(UUID.randomUUID());
         pre.setCode("PSN-PRE-2");
+        pre.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         prospectionRepository.save(pre);
 
         CfgTier prospect = newTier("PROS-P2", "Assigned", "One");

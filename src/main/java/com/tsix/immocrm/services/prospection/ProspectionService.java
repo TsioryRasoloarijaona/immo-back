@@ -5,7 +5,9 @@ import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospection.ArchiverProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ChangerEtapeRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
+import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
 import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
+import com.tsix.immocrm.dto.prospection.DoublonPreProspectionDto;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
@@ -17,6 +19,7 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.MarqueurTriProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
+import com.tsix.immocrm.dto.prospection.PreProspectionCreeeDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
@@ -76,6 +79,7 @@ import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
+import com.tsix.immocrm.utils.PhoneNumberUtils;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -86,6 +90,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -99,6 +104,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -247,8 +253,8 @@ public class ProspectionService {
     }
 
     /**
-     * {@code GET /api/prospections}. Excludes pré-prospections (CfgProspectId IS NULL AND
-     * CfgCommercialId IS NULL) — those are exposed separately by
+     * {@code GET /api/prospections}. Excludes pré-prospections ({@link DiscriminantPreProspection})
+     * — those are exposed separately by
      * {@link #findPreProspections(List, List, List, List, LocalDateTime, LocalDateTime, String, Boolean, Pageable)}
      * to avoid the two endpoints returning overlapping rows.
      *
@@ -280,7 +286,8 @@ public class ProspectionService {
     }
 
     /**
-     * {@code GET /api/pre-prospections}: CfgProspectId IS NULL AND CfgCommercialId IS NULL. Same
+     * {@code GET /api/pre-prospections}: {@code StrEntity.Code = 'ComPreProspection'} — voir
+     * {@link DiscriminantPreProspection}. Same
      * filter set as {@link #findAll} — see {@code instructions/filtres-avances.md} point 5.
      */
     public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
@@ -289,8 +296,7 @@ public class ProspectionService {
             Granularite granularite, Pageable pageable) {
         Specification<ComProspection> spec = specPreProspections(etapes, origines, commerciaux, trancheIds,
                 dateDebut, dateFin, search, ouvertes)
-                // Périmètre commercial : une pré-prospection a par construction un commercial NULL
-                // (0 sur 2800 en base réelle), donc seul le projet peut la scoper.
+                // Périmètre commercial : scopé par le projet de la tranche, comme les prospections.
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut, sans discussion : ComSaleProspectionView exclut par construction
@@ -355,10 +361,7 @@ public class ProspectionService {
             String search, Boolean ouvertes, FiltresAvancesProspection filtres) {
         return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
                 .and(filtresAvances(filtres))
-                .and((root, query, cb) -> cb.or(
-                        cb.isNotNull(root.get("cfgProspect")),
-                        cb.isNotNull(root.get("cfgCommercial"))
-                ));
+                .and(DiscriminantPreProspection.nEstPasPreProspection());
     }
 
     /** Idem pour les pré-prospections : le discriminant est l'inverse exact du précédent. */
@@ -366,10 +369,7 @@ public class ProspectionService {
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes) {
         return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
-                .and((root, query, cb) -> cb.and(
-                        cb.isNull(root.get("cfgProspect")),
-                        cb.isNull(root.get("cfgCommercial"))
-                ));
+                .and(DiscriminantPreProspection.estPreProspection());
     }
 
     /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
@@ -840,6 +840,170 @@ public class ProspectionService {
         return generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_PROSPECTION, 2, 5);
     }
 
+    /** Code de la vocation posée par défaut sur une pré-prospection — 3 801 sur 3 801 en base réelle. */
+    private static final String CODE_VOCATION_VENTE = "VENTE";
+
+    /** Plafond de la liste de doublons renvoyée à la création. */
+    private static final int DOUBLONS_MAX = 50;
+
+    /**
+     * {@code POST /api/pre-prospections} : crée un lead brut, comme l'écran « Pré-prospection »
+     * d'OMRAN — voir {@code instructions/FEATURE-creation-pre-prospection.md}.
+     *
+     * <p>Rejoue la séquence relevée dans la trace d'audit (création de {@code 26/05948}) : code
+     * tiré du compteur {@code AdmSequence} « Prospection » (le même que les prospections), puis
+     * {@code INSERT ComProspection} typé {@code ComPreProspection}, le contact dans les champs
+     * {@code Temp*}. Jamais de prospect ni de commercial : ce sont les étapes suivantes
+     * ({@link #creerProspect}, {@link #transformer}).
+     *
+     * <p>Le contrôle de doublon d'OMRAN est repris mais <b>ne bloque pas</b> (décision
+     * utilisateur) : les doublons sont renvoyés avec la ligne créée.
+     */
+    @Transactional
+    public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
+        ComProspection p = ecrirePreProspection(request, LocalDateTime.now());
+        List<DoublonPreProspectionDto> doublons = visibles(doublonsContact(p)).stream()
+                .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
+                .toList();
+        return new PreProspectionCreeeDto(detailEnrichi(p), doublons);
+    }
+
+    /**
+     * Les prospections existantes au même contact que {@code p} (elle exclue) — la règle de
+     * doublon de {@link #creerPreProspection}, partagée avec l'import CSV.
+     */
+    public List<ComProspection> doublonsContact(ComProspection p) {
+        return doublonsContact(p.getId(), p.getTempDescription(), p.getTempEMail(), p.getTempTel());
+    }
+
+    /** Même règle, pour un contact pas encore écrit (aperçu d'import) — {@code exclu} peut être nul. */
+    public List<ComProspection> doublonsContact(UUID exclu, String nom, String email, String telephone) {
+        return prospectionRepository.trouverDoublonsContact(
+                exclu != null ? exclu : new UUID(0, 0),
+                cleContact(nom),
+                cleContact(email),
+                PhoneNumberUtils.normalize(telephone),
+                PageRequest.of(0, DOUBLONS_MAX));
+    }
+
+    /**
+     * Ne garde que les prospections que l'appelant a le droit de voir — même prédicat que les
+     * listes (périmètre commercial et entités juridiques actives). Un doublon hors périmètre
+     * n'est jamais nommé : le signaler révélerait l'existence d'un contact sur un projet non
+     * affecté, ce que le reste de l'API masque en 404.
+     */
+    public List<ComProspection> visibles(List<ComProspection> prospections) {
+        if (prospections.isEmpty()) {
+            return prospections;
+        }
+        List<UUID> ids = prospections.stream().map(ComProspection::getId).toList();
+        Set<UUID> autorises = prospectionRepository.findAll(
+                        Specification.<ComProspection>where((root, query, cb) -> root.get("id").in(ids))
+                                .and(perimetreService.filtreProspections())).stream()
+                .map(ComProspection::getId)
+                .collect(Collectors.toSet());
+        return prospections.stream().filter(p -> autorises.contains(p.getId())).toList();
+    }
+
+    private static String cleContact(String valeur) {
+        return valeur == null ? "" : valeur.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Écrit une pré-prospection et renvoie la ligne — le cœur de {@link #creerPreProspection},
+     * partagé avec {@code ImportPreProspectionService}.
+     *
+     * @param dateDocument {@code DocDate} : maintenant pour une saisie, la date de soumission du
+     *                     lead pour un import (colonne « Créé » de l'export).
+     */
+    @Transactional
+    public ComProspection ecrirePreProspection(CreerPreProspectionRequest request, LocalDateTime dateDocument) {
+        String nom = Requis.champ(texteLibre(request.nom()), "nom est requis (champ Nom)");
+        String telephone = texteLibre(request.telephone());
+        String email = texteLibre(request.email());
+        String notes = texteLibre(request.notes());
+        longueurMax(nom, 255, "nom");
+        longueurMax(telephone, 255, "telephone");
+        longueurMax(email, 255, "email");
+        longueurMax(notes, 1000, "notes");
+
+        ComProspection p = new ComProspection();
+        p.setId(UUID.randomUUID());
+        p.setCode(genererCodeProspection());
+        LocalDateTime maintenant = LocalDateTime.now();
+        p.setDocDate(dateDocument);
+        p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
+        p.setTempDescription(nom);
+        p.setTempTel(telephone);
+        p.setTempEMail(email);
+        p.setNotes(notes);
+        // false plutôt que le NULL d'OMRAN : les deux coexistent en base (2 884 / 937) et
+        // notre filtre `ouvertes` accepte les deux, mais false survit à la bascule vers la vue
+        // de travail OMRAN (IsClosed = 0) sans dépendre de transformer.
+        p.setIsClosed(false);
+        p.setIsOldCustomer(false);
+        AdmUser auteur = auteurCourant();
+        p.setUserCreate(auteur != null ? auteur.getDescription() : null);
+        p.setUserCreateDateTime(maintenant);
+
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+            perimetreService.verifierEcritureSurTranche(tranche,
+                    "Création de pré-prospection sur la tranche " + tranche.getCode());
+            if (request.articleId() != null) {
+                StkItem article = stkItemRepository.findById(request.articleId())
+                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+                    throw new InvalidRequestException(
+                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+                }
+                p.setStkItem(article);
+            }
+            p.setStkHierarchy(tranche);
+        } else if (request.articleId() != null) {
+            throw new InvalidRequestException("articleId nécessite trancheId");
+        }
+        if (request.etapeId() != null) {
+            p.setComProspectionKind(prospectionKindRepository.findById(request.etapeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId())));
+        }
+        if (request.origineId() != null) {
+            p.setComProspectionOrigin(prospectionOriginRepository.findById(request.origineId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId())));
+        }
+        if (request.origineSupportId() != null) {
+            p.setComProspectionOriginSupport(prospectionOriginSupportRepository.findById(request.origineSupportId())
+                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId())));
+        }
+        if (request.typeContactId() != null) {
+            p.setComActionMessageType(actionMessageTypeRepository.findById(request.typeContactId())
+                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId())));
+        }
+        if (request.actionCommercialeId() != null) {
+            p.setComAction(actionRepository.findById(request.actionCommercialeId())
+                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId())));
+        }
+        if (request.vocationId() != null) {
+            p.setStkVocation(vocationRepository.findById(request.vocationId())
+                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId())));
+        } else {
+            // Défaut silencieux : une base sans référentiel de vocation (yesRemsTest) laisse NULL.
+            vocationRepository.findFirstByCode(CODE_VOCATION_VENTE).ifPresent(p::setStkVocation);
+        }
+
+        p = prospectionRepository.save(p);
+        enregistrerHistorique(p.getId(), "Pré-prospection créée : " + nom);
+        return p;
+    }
+
+    /** 400 plutôt que l'erreur de contrainte de la base au flush. */
+    private static void longueurMax(String valeur, int max, String champ) {
+        if (valeur != null && valeur.length() > max) {
+            throw new InvalidRequestException(champ + " dépasse " + max + " caractères");
+        }
+    }
+
     /**
      * {@code POST /api/pre-prospections/{id}/creer-prospect}: creates a {@code CfgTier} and
      * links it as the prospection's {@code CfgProspectId}. Only valid on a pré-prospection
@@ -923,6 +1087,19 @@ public class ProspectionService {
         }
 
         prospection.setCfgCommercial(commercial);
+        // Bascule de type, en place, comme OMRAN : trace d'audit de 26/05947, où l'ORM
+        // prospection réécrit la même ligne avec strEntityId = ComProspection. Sans elle, la
+        // ligne transformée resterait dans GET /api/pre-prospections. Une ligne sans type est
+        // typée au passage — elle était invisible du logiciel de bureau. Un type d'une autre
+        // nature (location…) n'est pas touché.
+        if (prospection.getStrEntityId() == null || DiscriminantPreProspection.estPreProspection(prospection)) {
+            prospection.setStrEntityId(idProspectionDeVente());
+        }
+        // La vue de travail OMRAN filtre en IsClosed = 0 ; une pré-prospection saisie dans OMRAN
+        // porte souvent NULL (937 sur 3 823), qu'OMRAN corrige lui aussi à la bascule.
+        if (prospection.getIsClosed() == null) {
+            prospection.setIsClosed(false);
+        }
         prospection = prospectionRepository.save(prospection);
         enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + TierNomFormatter.nom(commercial));
         return detailEnrichi(prospection);

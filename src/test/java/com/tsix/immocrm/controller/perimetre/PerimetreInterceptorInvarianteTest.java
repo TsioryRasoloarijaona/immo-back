@@ -77,7 +77,15 @@ class PerimetreInterceptorInvarianteTest {
             // specEncaissements avec PerimetreCommercialService#filtreEncaissements, la même
             // Specification que la liste. Vérifié par
             // EncaissementGroupementTest#sommeDesEffectifs_egaleLeTotalDeLaListe.
-            "/api/encaissements/groupes");
+            "/api/encaissements/groupes",
+            // Import CSV de leads (FEATURE-creation-pre-prospection.md §5). Aucune ressource
+            // chargée par identifiant : un fichier en entrée. Le périmètre est contrôlé dans le
+            // service — la tranche cible par verifierEcritureSurTranche (403, rien d'écrit), et les
+            // doublons signalés passent par ProspectionService#visibles, le même filtre que la
+            // liste : un contact hors périmètre n'est jamais nommé. Vérifié par
+            // PreProspectionImportTest#doublonHorsPerimetre_nEstJamaisNomme.
+            "/api/pre-prospections/import",
+            "/api/pre-prospections/import/apercu");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

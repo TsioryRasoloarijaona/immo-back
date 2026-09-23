@@ -19,6 +19,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -150,6 +151,7 @@ class ProspectionGroupementTest {
         ComProspection p = new ComProspection();
         p.setId(UUID.randomUUID());
         p.setCode(code);
+        p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         p.setComProspectionOrigin(origine);
         return prospectionRepository.save(p);
     }

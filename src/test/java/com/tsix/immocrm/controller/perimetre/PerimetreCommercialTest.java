@@ -39,6 +39,7 @@ import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -244,6 +245,7 @@ class PerimetreCommercialTest {
         ComProspection prospection = new ComProspection();
         prospection.setId(UUID.randomUUID());
         prospection.setCode(code);
+        prospection.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         prospection.setStkHierarchy(tranche);
         return prospectionRepository.save(prospection);
     }

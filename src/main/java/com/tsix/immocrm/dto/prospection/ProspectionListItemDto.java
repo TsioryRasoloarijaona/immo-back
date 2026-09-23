@@ -215,11 +215,10 @@ public record ProspectionListItemDto(
 
         @Schema(description = "Code du type de document — **c'est ce champ qu'il faut tester**, "
                 + "jamais le libellé. `ComProspection`, `ComPreProspection`, `RntProspection`.\n\n"
-                + "Attention : cette liste applique une **heuristique** "
-                + "(`CfgProspectId`/`CfgCommercialId`) qui n'est pas celle du légataire. Elle y "
-                + "laisse donc **830 lignes de code `ComPreProspection`** et 4 de code "
-                + "`RntProspection` (location). Ce champ est précisément ce qui rend l'écart "
-                + "visible et comptable ; il ne le corrige pas.",
+                + "Sur `GET /api/pre-prospections`, toujours `ComPreProspection` ; sur "
+                + "`GET /api/prospections`, jamais — les deux listes se partagent les lignes sur "
+                + "ce seul critère. Cette dernière garde les 4 prospections de location "
+                + "(`RntProspection`) et les 4 lignes sans type (`null`).",
                 example = "ComProspection")
         String typeProspectionCode,
 

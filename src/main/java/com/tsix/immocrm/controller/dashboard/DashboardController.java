@@ -144,8 +144,8 @@ public class DashboardController {
             summary = "Les leads arrivés dans la journée",
             description = """
                     Les pré-prospections créées le jour demandé — un lead non encore qualifié, \
-                    sans prospect ni commercial (`CfgProspectId` et `CfgCommercialId` nuls), même \
-                    discriminant que `GET /api/pre-prospections`.
+                    de type légataire `ComPreProspection`, même discriminant que \
+                    `GET /api/pre-prospections`.
 
                     **Les arrivées se font par rafales, pas en continu**, l'injection des leads \
                     étant automatique : sur les 21 derniers jours mesurés, la plupart sont à zéro \

@@ -131,9 +131,9 @@ public class ComProspection {
      * JPA dans ce dépôt, et {@code StrStatus.StrConfigEntityId} suit déjà exactement cette
      * convention.
      *
-     * <p>Mappé pour que les tests puissent produire des prospections visibles de
-     * {@code ComSaleProspectionView}. <strong>{@code ProspectionService.creerProspection} ne le
-     * renseigne toujours pas</strong> — voir {@code FEATURE-vues-legacy-prospection.md} §8.
+     * <p>Posé à la création ({@code ComProspection} ou {@code ComPreProspection}) et basculé
+     * par la transformation, comme OMRAN. C'est aussi notre discriminant pré-prospection —
+     * voir {@code DiscriminantPreProspection}.
      */
     @Column(name = "StrEntityId")
     private UUID strEntityId;
