@@ -62,7 +62,13 @@ class ProspectionFiltresAvancesTest {
         ComProspection p = new ComProspection();
         p.setId(UUID.randomUUID());
         p.setCode(code);
-        p.setDocDate(LocalDateTime.now());
+        // Hier, pas maintenant : InactivityTimeout = DATEDIFF(DAY, DocDate, GETDATE()) côté vue.
+        // Sur ce poste Windows compte « Morocco Standard Time » à +00:00 (et SQL Server suit
+        // GETDATE()), alors que la JVM résout la même zone en Africa/Casablanca à +01:00.
+        // Entre 23 h et minuit heure serveur, now() de la JVM tombe donc le lendemain et le
+        // DATEDIFF vaut -1 : les tests à inactiviteMin=0 échouaient une heure par jour.
+        // Avec un DocDate d'hier l'inactivité vaut 1 ou 2 selon l'horloge, jamais négative.
+        p.setDocDate(LocalDateTime.now().minusDays(1));
         p.setStrEntityId(entite);
         p.setCfgProspect(prospect);
         p.setIsOldCustomer(ancienClient);
