@@ -72,10 +72,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Un job par VPS, tous depuis la même image (l'étape build ne tourne qu'une fois).
+  # `environment` sélectionne l'Environment GitHub du même nom : les quatre secrets
+  # VPS_HOST / VPS_USER / VPS_SSH_KEY / VPS_PATH y sont définis séparément pour chaque
+  # serveur, et les étapes ci-dessous les lisent sans savoir sur quel VPS elles tournent.
+  # Attention : un secret absent d'un Environment retombe en silence sur le secret de
+  # dépôt du même nom — d'où la consigne de définir les quatre dans CHAQUE Environment
+  # et de ne plus garder de VPS_* au niveau du dépôt une fois les deux cibles validées.
+  # fail-fast: false — la panne d'un VPS ne doit pas annuler le déploiement de l'autre.
   deploy:
-    name: Déployer sur le VPS
+    name: Déployer sur ${{ matrix.cible }}
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cible: [vps_tsiory, vps_ayad]
+    environment: ${{ matrix.cible }}
     steps:
       - name: Préparer la clé SSH
         run: |
