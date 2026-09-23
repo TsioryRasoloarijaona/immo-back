@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.referentiel;
 
+import com.tsix.immocrm.domain.ColonneSuiviAction;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
@@ -533,6 +534,30 @@ public class ReferentielController {
     )
     public List<ColonneDto> getColonnesEncaissements() {
         return Arrays.stream(ColonneEncaissement.values())
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
+                .toList();
+    }
+
+    @GetMapping("/colonnes/suivi-actions")
+    @Operation(
+            summary = "Catalogue des colonnes du suivi des actions",
+            description = "Colonnes de `GET /api/suivi-actions` : nom (à passer dans `?colonnes=`), "
+                    + "libellé, groupe d'affichage, type, sélection par défaut, et les booléens "
+                    + "`groupable` / `agregeable` qui pilotent `/groupes`.\n\n"
+                    + "**Établi sur l'écran OMRAN** : les colonnes de la vue `ComActionMessageView` "
+                    + "que lit l'écran « Suivi des actions » et que liste sa documentation, "
+                    + "**filtrées par la mesure** sur les 48 213 actions réelles. Désistement, "
+                    + "transfert client, transfert produit (0 ligne), SAV (2), location, offre et "
+                    + "syndic (0) n'y figurent pas.\n\n"
+                    + "**Non groupables** : `rang`, `alerteActive`, `etat`, `personnel` — calculées "
+                    + "pour la page servie seulement — et `message`, un `nvarchar(max)`. **Aucune "
+                    + "colonne agrégeable** : la mesure d'un groupe est son effectif, le nombre "
+                    + "d'actions.\n\n"
+                    + "Référentiel statique, sans paramètre : cacheable côté client."
+    )
+    public List<ColonneDto> getColonnesSuiviActions() {
+        return Arrays.stream(ColonneSuiviAction.values())
                 .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
                         c.parDefaut(), c.chemin()))
                 .toList();

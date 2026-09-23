@@ -51,10 +51,10 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
-import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -66,9 +66,6 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import com.tsix.immocrm.security.AuthenticatedUser;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -105,7 +102,7 @@ public class DossierService {
     private final GroupementService groupementService;
     private final ComActionMessageRepository actionMessageRepository;
     private final StrHistoryRepository strHistoryRepository;
-    private final AdmUserRepository admUserRepository;
+    private final UtilisateurAffiche utilisateurAffiche;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -118,12 +115,12 @@ public class DossierService {
                            GroupementService groupementService,
                            ComActionMessageRepository actionMessageRepository,
                            StrHistoryRepository strHistoryRepository,
-                           AdmUserRepository admUserRepository) {
+                           UtilisateurAffiche utilisateurAffiche) {
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
         this.actionMessageRepository = actionMessageRepository;
         this.strHistoryRepository = strHistoryRepository;
-        this.admUserRepository = admUserRepository;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
         this.prospectionRepository = prospectionRepository;
@@ -763,7 +760,7 @@ public class DossierService {
      * 21 % de ses lignes qui n'en portent pas montrent que c'est un cas admis.
      */
     private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
-        AdmUser auteur = auteurCourant();
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
         LocalDateTime maintenant = LocalDateTime.now();
 
         StrFolderStatusHistory historique = new StrFolderStatusHistory();
@@ -772,7 +769,7 @@ public class DossierService {
         historique.setComFolder(folder);
         historique.setStrFolderStatus(nouveauStatut);
         historique.setDescription(note);
-        historique.setAdmUserId(auteur != null ? auteur.getId() : null);
+        historique.setAdmUserId(auteur.compteId());
         historique.setCfgTier(folder.getCfgCustomer());
         statusHistoryRepository.save(historique);
 
@@ -782,21 +779,12 @@ public class DossierService {
         generique.setUserDate(maintenant);
         generique.setObjectId(folder.getId());
         generique.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
-        generique.setAdmUserId(auteur != null ? auteur.getId() : null);
-        generique.setAdmUserDescription(auteur != null ? auteur.getDescription() : null);
+        generique.setAdmUserId(auteur.compteId());
+        generique.setAdmUserDescription(auteur.nom());
         generique.setStrStatusId(nouveauStatut != null ? nouveauStatut.getId() : null);
         generique.setStrStatusDescription(nouveauStatut != null ? nouveauStatut.getCode() : null);
         generique.setDescription(note);
         strHistoryRepository.save(generique);
-    }
-
-    private AdmUser auteurCourant() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser utilisateur
-                && utilisateur.admUserId() != null) {
-            return admUserRepository.findById(utilisateur.admUserId()).orElse(null);
-        }
-        return null;
     }
 
     private static void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {

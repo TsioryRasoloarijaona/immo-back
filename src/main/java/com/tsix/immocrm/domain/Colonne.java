@@ -17,7 +17,8 @@ package com.tsix.immocrm.domain;
  * <p>Sans JPA, comme le reste de {@code domain/}.
  */
 public sealed interface Colonne
-        permits ColonneDossier, ColonneEncaissement, ColonneProspect, ColonneProspection {
+        permits ColonneDossier, ColonneEncaissement, ColonneProspect, ColonneProspection,
+                ColonneSuiviAction {
 
     /** Nom technique, tel qu'il est passé dans {@code ?colonnes=} et sérialisé en JSON. */
     String nom();
