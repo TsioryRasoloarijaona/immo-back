@@ -40,22 +40,7 @@ public class CorsConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOriginPatterns(
-                        // Frontend déployé, servi en HTTPS par Caddy : l'Origin envoyée par le
-                        // navigateur porte le schéma https, jamais http.
-                        //
-                        // Le schéma n'est pas facultatif : ces motifs sont comparés à l'en-tête
-                        // Origin, qui vaut toujours scheme://host[:port]. Un motif réduit au nom
-                        // d'hôte ne correspond jamais, et l'échec se présente comme un préflight
-                        // en 403 — pas comme une erreur de configuration.
-                        //
-                        // Ce domaine partage `tsiory.tech` avec l'API : les deux sont same-site,
-                        // ce dont dépend SameSite=Strict sur le cookie (voir CookieJwt). Héberger
-                        // le frontend ailleurs — un *.vercel.app, par exemple — le rendrait
-                        // cross-site et casserait l'authentification en silence.
                         "https://immo.tsiory.tech",
-                        // Second déploiement (VPS Ayad). Même domaine enregistrable que l'API de
-                        // ce serveur (ayaddeveloppement.com), donc same-site : la contrainte
-                        // SameSite=Strict ci-dessus tient toujours.
                         "https://arpent.ayaddeveloppement.com",
                         "http://192.168.11.114:5473", "http://localhost:*", "http://192.168.11.*:*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
