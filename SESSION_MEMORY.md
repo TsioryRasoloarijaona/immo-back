@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-24T02:45+01:00_
+_Last updated: 2026-09-24T11:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -37,6 +37,15 @@ moment (décision utilisateur du 24/09, centralisation étudiée puis abandonné
    `^[0-9a-f]{12}_immo-back$`, `|| true` obligatoire sous `pipefail`), appelée avant `up` et une
    seconde fois après un `up` en échec, puis un unique nouvel essai. Vérifié hors ligne : `bash -n`
    + simulation avec un faux `docker` (3 cas). **Run `sha-9f109b8` : `vps_tsiory` vert** et à jour.
+
+7. **`feat/desarchiver-prospection`** (6af2a7d, **poussée, PR à merger**) — `PATCH
+   /api/prospections/{id}/desarchiver` (IsClosed→false, date et raison de clôture **conservées**,
+   409 si pas archivée) + `archiver` désarme désormais les relances (`WithoutRevival`) et pose
+   `UserUpdate`. Source : trace OMRAN du 24/09 sur `26/05947` — désarchivage =
+   `[["IsClosed","True","False"]]` et rien d'autre ; 88 prospections vente ouvertes en prod portent
+   encore date+raison. **« Archivée » = `fermee` seul**, jamais `dateFermeture != null`. Spec
+   `FEATURE-desarchiver-prospection.md`, 12 tests, suite 974 verte. PR :
+   https://github.com/TsioryRasoloarijaona/immo-back/compare/main...feat%2Fdesarchiver-prospection
 
 ### Second VPS préparé à la main (`vps.ayaddeveloppement.com`, user `nahoma`, `~/arpent`)
 - Compose identique à `vps_tsiory` (`/home/prod/app`) : SQL Server 2022 Express, MinIO, Loki,
@@ -160,14 +169,12 @@ moment (décision utilisateur du 24/09, centralisation étudiée puis abandonné
 
 ## ⏭️ Next Step
 
-> Le dépôt est encore sur la branche locale `ci/nettoyage-conteneur-immo-back` (mergée, PR #78),
-> `main` local en retard de 4 commits — l'utilisateur a interrompu le `sync`. Reprendre par
-> `node <prototype>/.claude/scripts/git-flow.mjs sync back` **depuis la racine du dépôt**, puis
-> vérifier `vps_ayad` : `docker inspect immo-back --format '{{.Config.Image}}'` doit donner
-> `sha-9f109b8`, et le preflight `OPTIONS /api/auth/connexion` avec
-> `Origin: https://arpent.ayaddeveloppement.com` doit répondre 200 avec
-> `Access-Control-Allow-Origin` (bug #43). Si le `curl` local passe mais pas le navigateur → config
-> Caddy de `api.ayaddeveloppement.com`.
+> Branche `feat/desarchiver-prospection` poussée, **en attente du merge GitHub par l'utilisateur**.
+> Après confirmation : `node <prototype>/.claude/scripts/git-flow.mjs sync back` depuis la racine
+> du dépôt, puis demander avant toute nouvelle branche. Impact front (additif) : bouton
+> « Désarchiver » sur fiche `fermee = true` ; badge « Archivée » à brancher sur `fermee`.
+> Reste à vérifier sur `vps_ayad` (bug #43) : `docker inspect immo-back` = `sha-…` courant et
+> preflight `OPTIONS /api/auth/connexion` avec `Origin: https://arpent.ayaddeveloppement.com` → 200.
 
 ### Backlog
 - [ ] Supprimer les 4 `VPS_*` au niveau dépôt GitHub une fois `vps_ayad` vert sur un run.
