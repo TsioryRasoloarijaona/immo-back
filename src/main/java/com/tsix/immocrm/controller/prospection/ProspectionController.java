@@ -486,8 +486,52 @@ public class ProspectionController {
     }
 
     @PatchMapping("/{id}/archiver")
+    @Operation(
+            summary = "Archive une prospection (clôture avec motif)",
+            description = "Sort la prospection du pipeline : `fermee = true`, `dateFermeture` = "
+                    + "maintenant, motif posé depuis `raisonId` (référentiel `ComProspectionClosingReason`) "
+                    + "et/ou `raisonTexte` (libre) — **au moins l'un des deux est requis** (400 sinon).\n\n"
+                    + "Reproduit la séquence du légataire relevée dans sa trace d'audit : les "
+                    + "**relances en cours de la prospection sont désarmées** (`WithoutRevival`), "
+                    + "comme lors d'une transformation en vente — elles disparaissent du tableau de "
+                    + "bord des relances. Les relances rattachées à une échéance de dossier ne sont "
+                    + "pas touchées.\n\n"
+                    + "Réversible par `PATCH /api/prospections/{id}/desarchiver`."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospection archivée (`fermee = true`)."),
+            @ApiResponse(responseCode = "400", description = "Ni `raisonId` ni `raisonTexte` fourni, "
+                    + "ou `raisonId` inconnu."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
+                    + "prospection hors du périmètre commercial de l'appelant.")
+    })
     public ProspectionDetailDto archiver(@PathVariable UUID id, @RequestBody ArchiverProspectionRequest request) {
         return prospectionService.archiver(id, request);
+    }
+
+    @PatchMapping("/{id}/desarchiver")
+    @Operation(
+            summary = "Désarchive une prospection (la rouvre dans le pipeline)",
+            description = "Inverse de `archiver` : `fermee` repasse à `false` et la prospection "
+                    + "réapparaît dans la liste `?ouvertes=true`. Sans corps.\n\n"
+                    + "**Fidèle au légataire : seule `fermee` change.** `dateFermeture`, "
+                    + "`raisonFermeture*` sont **conservés** (OMRAN ne les efface pas — 88 prospections "
+                    + "vente ouvertes en base réelle portent encore date et motif de clôture, ce sont "
+                    + "des désarchivées), et les relances désarmées à l'archivage ne sont pas "
+                    + "réarmées. **Le badge « Archivée » doit donc se brancher sur `fermee`, jamais "
+                    + "sur la présence de `dateFermeture`.**"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospection rouverte (`fermee = false`, "
+                    + "date et motif de clôture toujours renseignés)."),
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
+                    + "prospection hors du périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409", description = "La prospection n'est pas archivée "
+                    + "(`fermee` false ou absent) — rien à rouvrir.")
+    })
+    public ProspectionDetailDto desarchiver(
+            @Parameter(description = "Id de la prospection archivée.") @PathVariable UUID id) {
+        return prospectionService.desarchiver(id);
     }
 
     @GetMapping("/{id}/interactions")
