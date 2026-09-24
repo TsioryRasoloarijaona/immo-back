@@ -146,15 +146,31 @@ public record ProspectionDetailDto(
         @Schema(description = "Autre financement. **Mort : 0 ligne.** Ne pas afficher.")
         BigDecimal financementAutre,
 
+        @Schema(description = "Prospection archivée (`ComProspection.IsClosed`). **Seul indicateur "
+                + "fiable de l'état archivé** : après un désarchivage, `dateFermeture` et "
+                + "`raisonFermeture*` restent renseignés (88 prospections vente ouvertes en base "
+                + "réelle en portent). `null` équivaut à `false` (saisie OMRAN ancienne). Bascule "
+                + "par `PATCH .../archiver` et `PATCH .../desarchiver`.")
         Boolean fermee,
+
+        @Schema(description = "Date du dernier archivage. **Conservée après désarchivage** — ne pas "
+                + "s'en servir pour déduire `fermee`. 62,9 %.")
         LocalDateTime dateFermeture,
+
+        @Schema(description = "Id du motif de clôture (`ComProspectionClosingReason`). Conservé "
+                + "après désarchivage.")
         UUID raisonFermetureId,
+
+        @Schema(description = "Libellé du motif de clôture. 60,5 %. Conservé après désarchivage.",
+                example = "Hors budget")
         String raisonFermeture,
 
         @Schema(description = "Code du motif de clôture. 60,5 % — ne vaut quelque chose que sur "
                 + "une prospection fermée.")
         String raisonFermetureCode,
 
+        @Schema(description = "Motif de clôture saisi librement (`ClosingReasonText`), complément "
+                + "ou substitut du motif référentiel. Conservé après désarchivage.")
         String raisonFermetureTexte,
         Boolean ancienClient,
         // -- Tranche principale et article principal (ComProspection.StkHierarchyId/StkItemId).

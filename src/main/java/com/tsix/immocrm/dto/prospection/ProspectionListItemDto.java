@@ -34,6 +34,10 @@ public record ProspectionListItemDto(
         String commercialNom,
         String origine,
         String etape,
+
+        @Schema(description = "Prospection archivée (`IsClosed`). **Seul indicateur fiable** : "
+                + "`dateFermeture`/`raisonFermeture` survivent à un désarchivage. `null` équivaut "
+                + "à `false`. `?ouvertes=true` ne renvoie que `false`/`null`.")
         Boolean fermee,
 
         @Schema(description = "Budget déclaré du prospect. **Mesuré mort : renseigné sur 4 lignes "
@@ -162,7 +166,8 @@ public record ProspectionListItemDto(
                 + "la liste jusqu'ici.")
         Boolean ancienClient,
 
-        @Schema(description = "Date de clôture de la prospection. 62,9 %.")
+        @Schema(description = "Date du dernier archivage. 62,9 %. **Conservée après désarchivage** "
+                + "— lire `fermee` pour l'état.")
         LocalDateTime dateFermeture,
 
         @Schema(description = "Motif de clôture. 60,5 %.", example = "Hors budget")

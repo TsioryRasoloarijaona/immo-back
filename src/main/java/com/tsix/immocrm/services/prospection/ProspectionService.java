@@ -48,6 +48,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrHistory;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.mail.VisiteEffectuee;
@@ -1239,7 +1240,15 @@ public class ProspectionService {
         return detailEnrichi(prospectionRepository.save(prospection));
     }
 
-    /** {@code PATCH /api/prospections/{id}/archiver}: closes the prospection with a reason. */
+    /**
+     * {@code PATCH /api/prospections/{id}/archiver}: closes the prospection with a reason.
+     *
+     * <p>Reproduit la séquence relevée dans la trace d'audit OMRAN (24/09/2026, prospection
+     * 26/05947) : {@code IsClosed = 1}, {@code ClosingDate}, raison, <b>puis désarmement des
+     * relances</b> de la prospection — le même {@code UPDATE ComActionMessage SET WithoutRevival = 1}
+     * que la transformation en vente. Sans lui, une prospection archivée continuait d'alimenter
+     * le tableau de bord des relances. Voir {@code FEATURE-desarchiver-prospection.md}.
+     */
     @Transactional
     public ProspectionDetailDto archiver(UUID id, ArchiverProspectionRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
@@ -1257,10 +1266,51 @@ public class ProspectionService {
         if (StringUtils.hasText(request.raisonTexte())) {
             prospection.setClosingReasonText(request.raisonTexte());
         }
+        LocalDateTime maintenant = LocalDateTime.now();
         prospection.setIsClosed(true);
-        prospection.setClosingDate(LocalDateTime.now());
+        prospection.setClosingDate(maintenant);
+        marquerModification(prospection, maintenant);
+
+        ComProspection sauvee = prospectionRepository.save(prospection);
+        actionMessageRepository.desarmerRelancesDeLaProspection(sauvee.getId());
+        return detailEnrichi(sauvee);
+    }
+
+    /**
+     * {@code PATCH /api/prospections/{id}/desarchiver}: rouvre une prospection archivée.
+     *
+     * <p>Strictement ce qu'OMRAN écrit (historique {@code AdmWebHistorics} du 24/09/2026 :
+     * {@code [["IsClosed","True","False"]]}, rien d'autre) : {@code IsClosed} repasse à false,
+     * <b>la date et la raison de clôture sont conservées</b>, les relances désarmées à
+     * l'archivage ne sont pas réarmées. Mesuré sur {@code yesRemsProd} : 88 prospections vente
+     * ouvertes portent encore date et raison de clôture — ce sont des désarchivées. L'état
+     * « archivée » se lit donc sur {@code IsClosed} seul, jamais sur {@code ClosingDate}.
+     *
+     * @throws ConflictException si la prospection n'est pas archivée (409) — OMRAN ne refuse
+     *         rien, mais un désarchivage sans archivage est un appel incohérent côté API
+     */
+    @Transactional
+    public ProspectionDetailDto desarchiver(UUID id) {
+        ComProspection prospection = prospectionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+
+        if (!Boolean.TRUE.equals(prospection.getIsClosed())) {
+            throw new ConflictException("La prospection " + id + " n'est pas archivée");
+        }
+
+        prospection.setIsClosed(false);
+        marquerModification(prospection, LocalDateTime.now());
 
         return detailEnrichi(prospectionRepository.save(prospection));
+    }
+
+    /**
+     * {@code UserUpdate} / {@code UserUpdateDateTime}, qu'OMRAN réécrit à chaque modification
+     * d'une prospection (visible sur les deux {@code UPDATE} de la trace du 24/09/2026).
+     */
+    private void marquerModification(ComProspection prospection, LocalDateTime quand) {
+        prospection.setUserUpdate(utilisateurAffiche.courant().nom());
+        prospection.setUserUpdateDateTime(quand);
     }
 
     /** {@code GET /api/prospections/{id}/interactions}: journal, most recent first. */
