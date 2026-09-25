@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
 import com.tsix.immocrm.dto.prospection.CreerProspectionRequest;
 import com.tsix.immocrm.dto.prospection.DoublonPreProspectionDto;
 import com.tsix.immocrm.dto.prospection.InteractionDto;
+import com.tsix.immocrm.dto.prospection.LierProspectRequest;
 import com.tsix.immocrm.dto.prospection.ModifierProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ModifierTranchePrincipaleRequest;
 import com.tsix.immocrm.domain.AgregatDemande;
@@ -21,6 +22,7 @@ import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
 import com.tsix.immocrm.dto.prospection.PreProspectionCreeeDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
+import com.tsix.immocrm.dto.prospection.ProspectionExistanteDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmCountry;
@@ -50,6 +52,7 @@ import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.exceptions.ProspectionExistanteException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.mail.VisiteEffectuee;
 import com.tsix.immocrm.mail.VisitePlanifiee;
@@ -782,6 +785,8 @@ public class ProspectionService {
             // Périmètre commercial : créer une prospection sur un projet non affecté est refusé (403).
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de prospection sur la tranche " + tranche.getCode());
+            // Règle « une prospection ouverte par prospect × projet » — 409 avec l'existante.
+            verifierUniciteProspectProjet(prospect, tranche, null);
             if (request.articleId() != null) {
                 StkItem article = stkItemRepository.findById(request.articleId())
                         .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
@@ -1026,6 +1031,80 @@ public class ProspectionService {
     }
 
     /**
+     * {@code POST /api/pre-prospections/{id}/lier-prospect} : pose un {@code CfgTier}
+     * <b>existant</b> comme prospect de la pré-prospection — la réponse « c'est l'une de ces
+     * personnes » à la liste de doublons de {@link #creerProspect}, voir
+     * {@code instructions/FEATURE-doublons-prospect-projet.md} §2. Mêmes conditions que
+     * {@code creerProspect} (400 si un prospect est déjà lié) ; seuls les tiers de type
+     * prospect/client sont acceptés (400 sinon) — le même sous-ensemble que
+     * {@code GET /api/prospects/doublons}.
+     *
+     * <p>Si la pré-prospection porte déjà une tranche, le couple (prospect, projet) se forme ici :
+     * la règle d'unicité s'applique (409 avec la prospection ouverte existante).
+     */
+    @Transactional
+    public ProspectionDetailDto lierProspect(UUID prospectionId, LierProspectRequest request) {
+        ComProspection prospection = prospectionRepository.findById(prospectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+
+        if (prospection.getCfgProspect() != null) {
+            throw new InvalidRequestException("Cette prospection a déjà un prospect lié: " + prospectionId);
+        }
+        Requis.champ(request.prospectId(), "prospectId est requis");
+        CfgTier tier = tierRepository.findById(request.prospectId())
+                .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
+        if (!ProspectService.estProspectOuClient(tier)) {
+            throw new InvalidRequestException("Le tiers " + TierNomFormatter.nom(tier)
+                    + " n'est pas une fiche prospect ou client (type "
+                    + (tier.getCfgTierType() != null ? tier.getCfgTierType().getCode() : "absent") + ")");
+        }
+
+        verifierUniciteProspectProjet(tier, prospection.getStkHierarchy(), prospectionId);
+
+        prospection.setCfgProspect(tier);
+        prospection = prospectionRepository.save(prospection);
+        enregistrerHistorique(prospectionId, "Prospect existant rattaché : " + TierNomFormatter.nom(tier));
+        return detailEnrichi(prospection);
+    }
+
+    /**
+     * Règle « une prospection ouverte par prospect × projet » —
+     * {@code instructions/FEATURE-doublons-prospect-projet.md} §3. Sur 14 113 prospections réelles
+     * avec prospect et projet, un seul couple porte deux prospections ouvertes à la fois, saisies
+     * dans OMRAN par deux commerciaux à un mois d'écart ; les 216 autres répétitions sont des
+     * re-prospections après clôture, que la règle laisse passer.
+     *
+     * <p>Sans prospect, sans tranche ou sans projet sur la tranche, rien à contrôler. {@code exclu}
+     * est la prospection en cours de modification ({@code null} à la création).
+     */
+    private void verifierUniciteProspectProjet(CfgTier prospect, CfgTranche tranche, UUID exclu) {
+        UUID projetId = projetDe(tranche);
+        if (prospect == null || projetId == null) {
+            return;
+        }
+        List<ComProspection> ouvertes = prospectionRepository.trouverOuvertesMemeProspectMemeProjet(
+                prospect.getId(), projetId, exclu != null ? exclu : new UUID(0L, 0L));
+        if (ouvertes.isEmpty()) {
+            return;
+        }
+        ComProspection existante = ouvertes.get(0);
+        CfgTranche trancheExistante = existante.getStkHierarchy();
+        throw new ProspectionExistanteException(TierNomFormatter.nom(prospect), new ProspectionExistanteDto(
+                existante.getId(),
+                existante.getCode(),
+                existante.getDocDate(),
+                existante.getComProspectionKind() != null ? existante.getComProspectionKind().getDescription() : null,
+                TierNomFormatter.nom(existante.getCfgCommercial()),
+                trancheExistante != null ? trancheExistante.getCode() : null,
+                trancheExistante != null && trancheExistante.getCfgProject() != null
+                        ? trancheExistante.getCfgProject().getCode() : null));
+    }
+
+    private static UUID projetDe(CfgTranche tranche) {
+        return tranche != null && tranche.getCfgProject() != null ? tranche.getCfgProject().getId() : null;
+    }
+
+    /**
      * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, en affectant
      * le commercial <b>et</b> en garantissant qu'une tranche (projet) est rattachée. Requiert
      * qu'un prospect soit déjà lié (via {@link #creerProspect}) — 400 sinon.
@@ -1085,6 +1164,11 @@ public class ProspectionService {
                     "Une tranche (projet) est obligatoire pour transformer en prospection : "
                     + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
         }
+
+        // La tranche effective est maintenant connue : un prospect n'a qu'une prospection ouverte
+        // par projet, et c'est ici que le couple (prospect, projet) devient une prospection. La
+        // ligne elle-même est exclue du contrôle.
+        verifierUniciteProspectProjet(prospection.getCfgProspect(), prospection.getStkHierarchy(), id);
 
         prospection.setCfgCommercial(commercial);
         // Bascule de type, en place, comme OMRAN : trace d'audit de 26/05947, où l'ORM
@@ -1219,6 +1303,12 @@ public class ProspectionService {
         // (403) — sinon le périmètre se contournerait en sortant la ressource de son projet.
         perimetreService.verifierEcritureSurTranche(tranche,
                 "Rattachement de prospection à la tranche " + tranche.getCode());
+        // Changer de tranche au sein du même projet ne forme aucun nouveau couple (prospect,
+        // projet) ; changer de projet, si — et le prospect ne doit pas y avoir déjà une
+        // prospection ouverte. La ligne elle-même est exclue du contrôle.
+        if (projetDe(tranche) != null && !projetDe(tranche).equals(projetDe(prospection.getStkHierarchy()))) {
+            verifierUniciteProspectProjet(prospection.getCfgProspect(), tranche, id);
+        }
 
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())

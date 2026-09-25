@@ -2,10 +2,12 @@ package com.tsix.immocrm.services.prospect;
 
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
+import com.tsix.immocrm.dto.prospect.CritereDoublon;
 import com.tsix.immocrm.dto.prospect.ModifierProspectRequest;
 import com.tsix.immocrm.dto.prospect.PieceIdentiteDto;
 import com.tsix.immocrm.dto.prospect.PieceIdentiteRequest;
 import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
+import com.tsix.immocrm.dto.prospect.ProspectDoublonDto;
 import com.tsix.immocrm.dto.prospect.ProspectListItemDto;
 import com.tsix.immocrm.dto.prospect.TrancheInteretDto;
 import com.tsix.immocrm.entities.adm.AdmCountry;
@@ -21,6 +23,7 @@ import com.tsix.immocrm.entities.adm.AdmTierTitle;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
+import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -41,6 +44,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -49,7 +53,9 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -67,6 +73,16 @@ public class ProspectService {
      */
     private static final List<String> CODES_TYPE_PROSPECT = List.of("pro", "prornt");
     private static final String CODE_TYPE_PROSPECT_PAR_DEFAUT = "PRO";
+    /**
+     * Les fiches candidates au contrôle de doublon — prospects <em>et</em> clients, comme le
+     * contrôle d'OMRAN (types PRO et CLI dans la trace d'audit) : un client qui revient est le
+     * doublon le plus coûteux à créer. Voir {@code FEATURE-doublons-prospect-projet.md} §2.
+     */
+    private static final Set<String> CODES_TYPE_PROSPECT_OU_CLIENT = Set.of("pro", "prornt", "cli", "clirnt");
+    /** Plafond de la liste de doublons ({@code GET /api/prospects/doublons} et le 409). */
+    private static final int PLAFOND_DOUBLONS = 50;
+    /** Un téléphone se compare sur ses 9 derniers chiffres — la normalisation de la hotline. */
+    private static final int CHIFFRES_TELEPHONE = 9;
 
     private final CfgTierRepository tierRepository;
     /**
@@ -184,6 +200,16 @@ public class ProspectService {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
+        // Contrôle d'identité avant toute écriture : une fiche existante au même nom, téléphone
+        // ou email arrête la création en 409 tant que l'appelant n'a pas confirmé « nouveau
+        // contact ». Voir FEATURE-doublons-prospect-projet.md §2.
+        if (!Boolean.TRUE.equals(request.ignorerDoublons())) {
+            List<ProspectDoublonDto> doublons = rechercherDoublons(request.prenom(), request.nom(),
+                    request.raisonSociale(), request.telephone(), request.mobile(), request.email());
+            if (!doublons.isEmpty()) {
+                throw new DoublonsProspectException(doublons);
+            }
+        }
 
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
@@ -221,6 +247,119 @@ public class ProspectService {
         }
 
         return tierRepository.save(tier);
+    }
+
+    /**
+     * {@code GET /api/prospects/doublons} et le 409 de {@link #createEntity} : les fiches
+     * prospect/client correspondant à l'identité saisie sur au moins un critère, avec ces
+     * critères — voir {@code FEATURE-doublons-prospect-projet.md} §2 pour les règles et les
+     * mesures (244 groupes d'homonymes sur 14 040 fiches, mais 6 seulement à nom <em>et</em>
+     * téléphone identiques : l'homonyme au contact différent est le cas courant, d'où une liste à
+     * arbitrer plutôt qu'un refus).
+     *
+     * <p>Les valeurs bidon ne sont pas des critères : téléphone de moins de 9 chiffres ou à 9
+     * chiffres identiques ({@code 000000000} et {@code 111111111} portent 17 fiches chacun), email
+     * sans {@code @} ({@code -}, {@code nd}, {@code .}). Aucun critère utilisable ⟶ liste vide.
+     *
+     * <p>Tri : les fiches qui correspondent sur le plus de critères d'abord, puis les plus
+     * récentes ; 50 au plus.
+     */
+    public List<ProspectDoublonDto> rechercherDoublons(String prenom, String nom, String raisonSociale,
+                                                       String telephone, String mobile, String email) {
+        String cle = cleNom(prenom, nom, raisonSociale);
+        String tel1 = critereTelephone(telephone);
+        String tel2 = critereTelephone(mobile);
+        String mail = critereEmail(email);
+        if (cle.isEmpty() && tel1.isEmpty() && tel2.isEmpty() && mail.isEmpty()) {
+            return List.of();
+        }
+        return tierRepository.trouverDoublons(cle, tel1, tel2, mail, PageRequest.of(0, PLAFOND_DOUBLONS)).stream()
+                .map(t -> toDoublon(t, cle, tel1, tel2, mail))
+                .filter(d -> !d.criteres().isEmpty())
+                .sorted(Comparator.comparingInt((ProspectDoublonDto d) -> d.criteres().size()).reversed()
+                        .thenComparing(ProspectDoublonDto::dateCreation,
+                                Comparator.nullsLast(Comparator.<LocalDateTime>reverseOrder())))
+                .toList();
+    }
+
+    /** Vrai si au moins un des six champs d'identité constitue un critère utilisable. */
+    public static boolean aUnCritereDeDoublon(String prenom, String nom, String raisonSociale,
+                                              String telephone, String mobile, String email) {
+        return !cleNom(prenom, nom, raisonSociale).isEmpty() || !critereTelephone(telephone).isEmpty()
+                || !critereTelephone(mobile).isEmpty() || !critereEmail(email).isEmpty();
+    }
+
+    /** Le sous-ensemble de tiers concerné par le contrôle de doublon et par {@code lier-prospect}. */
+    public static boolean estProspectOuClient(CfgTier tier) {
+        return tier.getCfgTierType() != null && tier.getCfgTierType().getCode() != null
+                && CODES_TYPE_PROSPECT_OU_CLIENT.contains(tier.getCfgTierType().getCode().toLowerCase(Locale.ROOT));
+    }
+
+    private ProspectDoublonDto toDoublon(CfgTier t, String cle, String tel1, String tel2, String mail) {
+        List<CritereDoublon> criteres = new ArrayList<>();
+        if (!cle.isEmpty() && (cle.equals(sansEspaces(chaine(t.getFirstName()) + chaine(t.getLastName())))
+                || cle.equals(sansEspaces(chaine(t.getLastName()) + chaine(t.getFirstName())))
+                || cle.equals(sansEspaces(t.getDescription()))
+                || cle.equals(sansEspaces(t.getSocialReason())))) {
+            criteres.add(CritereDoublon.NOM);
+        }
+        List<String> telephonesFiche = List.of(neufDerniers(t.getPhone()), neufDerniers(t.getPhone1()),
+                neufDerniers(t.getPhone2()), neufDerniers(t.getMobile()));
+        if ((!tel1.isEmpty() && telephonesFiche.contains(tel1)) || (!tel2.isEmpty() && telephonesFiche.contains(tel2))) {
+            criteres.add(CritereDoublon.TELEPHONE);
+        }
+        if (!mail.isEmpty() && mail.equals(chaine(t.getEMail()).trim().toLowerCase(Locale.ROOT))) {
+            criteres.add(CritereDoublon.EMAIL);
+        }
+        return new ProspectDoublonDto(t.getId(), t.getCode(), TierNomFormatter.nom(t), t.getFirstName(),
+                t.getLastName(), t.getSocialReason(), t.getPhone(), t.getMobile(), t.getEMail(), t.getCity(),
+                t.getCfgTierType() != null ? t.getCfgTierType().getCode() : null, t.getUserCreateDateTime(),
+                List.copyOf(criteres));
+    }
+
+    /**
+     * Clé de nom : prénom + nom (ou la raison sociale seule) en minuscules et <b>sans aucun
+     * espace</b> — la normalisation d'OMRAN ({@code REPLACE(FirstName,' ','')}), qui rend
+     * « El Mehdi LAHLOU » et « El MEHDI LAHLOU » égaux et neutralise l'ordre prénom/nom côté
+     * requête (les deux concaténations sont comparées).
+     */
+    private static String cleNom(String prenom, String nom, String raisonSociale) {
+        String cle = sansEspaces(chaine(prenom) + chaine(nom));
+        return cle.isEmpty() ? sansEspaces(raisonSociale) : cle;
+    }
+
+    /** Critère téléphone : 9 derniers chiffres, ou {@code ""} si trop court ou bidon (chiffres tous égaux). */
+    private static String critereTelephone(String telephone) {
+        String neuf = neufDerniers(telephone);
+        if (neuf.length() < CHIFFRES_TELEPHONE || neuf.chars().allMatch(c -> c == neuf.charAt(0))) {
+            return "";
+        }
+        return neuf;
+    }
+
+    /** Critère email : minuscules sans espaces de bord, ou {@code ""} sans {@code @} (« - », « nd », « . »). */
+    private static String critereEmail(String email) {
+        String e = chaine(email).trim().toLowerCase(Locale.ROOT);
+        return e.contains("@") ? e : "";
+    }
+
+    /**
+     * Même chaîne de {@code replace} que {@code CfgTierRepository.trouverDoublons} — les deux
+     * côtés doivent se normaliser à l'identique pour que chaque ligne renvoyée par la requête
+     * retrouve son critère ici.
+     */
+    private static String neufDerniers(String telephone) {
+        String t = chaine(telephone).replace(" ", "").replace("-", "").replace(".", "")
+                .replace("(", "").replace(")", "").replace("+", "");
+        return t.length() <= CHIFFRES_TELEPHONE ? t : t.substring(t.length() - CHIFFRES_TELEPHONE);
+    }
+
+    private static String sansEspaces(String valeur) {
+        return chaine(valeur).replace(" ", "").toLowerCase(Locale.ROOT);
+    }
+
+    private static String chaine(String valeur) {
+        return valeur == null ? "" : valeur;
     }
 
     /**

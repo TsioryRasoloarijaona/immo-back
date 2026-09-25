@@ -1,6 +1,7 @@
 package com.tsix.immocrm.repositories.cfg;
 
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -70,4 +71,35 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
      * {@code instructions/FEATURE-marqueurs-tri-pre-prospection.md} §3.
      */
     List<CfgTier> findByCode(String code);
+
+    /**
+     * Fiches prospect/client correspondant à une identité saisie — {@code GET /api/prospects/doublons}
+     * et le 409 de {@code POST /api/prospects} / {@code POST .../creer-prospect}, voir
+     * {@code instructions/FEATURE-doublons-prospect-projet.md} §2.
+     *
+     * <p>Reprend le contrôle d'OMRAN (trace d'audit : {@code REPLACE(FirstName,' ','')} et
+     * {@code REPLACE(LastName,' ','')} dans les deux ordres, types PRO et CLI) en le rendant
+     * <b>disjonctif</b> : une correspondance sur le nom <em>ou</em> un téléphone <em>ou</em>
+     * l'email suffit — OMRAN exige nom <em>et</em> email, ce qui ne se déclenche jamais sur les
+     * 5 903 fiches sans email. Le nom compare aussi {@code Description} et {@code SocialReason},
+     * seules colonnes de nom de certaines fiches anciennes.
+     *
+     * <p>Les paramètres arrivent normalisés (minuscules, sans espaces ; téléphone = 9 derniers
+     * chiffres après retrait des séparateurs, même chaîne que {@link #findByNormalizedPhone}) et
+     * valent {@code ""} quand le critère est absent — un critère vide ne matche jamais.
+     */
+    @Query("SELECT t FROM CfgTier t JOIN t.cfgTierType ty "
+            + "WHERE lower(ty.code) IN ('pro', 'prornt', 'cli', 'clirnt') AND ("
+            + "(:cle <> '' AND ("
+            + "lower(replace(concat(coalesce(t.firstName, ''), coalesce(t.lastName, '')), ' ', '')) = :cle "
+            + "OR lower(replace(concat(coalesce(t.lastName, ''), coalesce(t.firstName, '')), ' ', '')) = :cle "
+            + "OR lower(replace(coalesce(t.description, ''), ' ', '')) = :cle "
+            + "OR lower(replace(coalesce(t.socialReason, ''), ' ', '')) = :cle)) "
+            + "OR (:tel1 <> '' AND (right(replace(replace(replace(replace(replace(replace(coalesce(t.phone, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel1 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.phone1, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel1 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.phone2, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel1 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.mobile, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel1)) "
+            + "OR (:tel2 <> '' AND (right(replace(replace(replace(replace(replace(replace(coalesce(t.phone, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel2 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.phone1, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel2 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.phone2, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel2 OR right(replace(replace(replace(replace(replace(replace(coalesce(t.mobile, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :tel2)) "
+            + "OR (:email <> '' AND lower(trim(coalesce(t.eMail, ''))) = :email)) "
+            + "ORDER BY t.userCreateDateTime DESC")
+    List<CfgTier> trouverDoublons(@Param("cle") String cle, @Param("tel1") String tel1,
+                                  @Param("tel2") String tel2, @Param("email") String email,
+                                  Pageable pageable);
 }

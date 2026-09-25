@@ -1,9 +1,11 @@
 package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
+import com.tsix.immocrm.exceptions.ProspectionExistanteException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
 import org.springframework.data.core.PropertyReferenceException;
@@ -84,6 +86,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Création de prospect refusée faute de confirmation : la liste des fiches existantes voyage
+     * dans {@code doublons}, pour que l'écran demande « est-ce l'une de ces personnes ? » —
+     * {@code FEATURE-doublons-prospect-projet.md} §2.
+     */
+    @ExceptionHandler(DoublonsProspectException.class)
+    public ProblemDetail handleDoublonsProspect(DoublonsProspectException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("doublons", ex.getDoublons());
+        return problem;
+    }
+
+    /**
+     * Un prospect n'a qu'une prospection ouverte par projet : celle qui existe est nommée dans
+     * {@code prospectionExistante} pour que l'écran propose de l'ouvrir —
+     * {@code FEATURE-doublons-prospect-projet.md} §3.
+     */
+    @ExceptionHandler(ProspectionExistanteException.class)
+    public ProblemDetail handleProspectionExistante(ProspectionExistanteException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("prospectionExistante", ex.getProspectionExistante());
+        return problem;
     }
 
     @ExceptionHandler(InvalidStatutTransitionException.class)
