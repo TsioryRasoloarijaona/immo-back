@@ -1,5 +1,8 @@
 package com.tsix.immocrm.security;
 
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -54,6 +57,12 @@ import org.springframework.web.cors.CorsUtils;
  * endpoint needs one, only) place in the app that checks a specific role rather than just
  * "authenticated at all".
  */
+@SecurityScheme(name = "cleApi", type = SecuritySchemeType.APIKEY, in = SecuritySchemeIn.HEADER,
+        paramName = ApiKeyAuthenticationFilter.EN_TETE,
+        description = "Clé d'API d'un client machine (n8n, agent), créée par POST /api/cles-api. "
+                + "Authentifie le compte de service de la clé et n'autorise que les routes de ses "
+                + "portées (403 `HORS_PORTEE` sinon). Le front, lui, utilise le cookie JWT posé par "
+                + "POST /api/auth/connexion.")
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -61,8 +70,11 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OnboardingGateFilter onboardingGateFilter;
+    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, OnboardingGateFilter onboardingGateFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, OnboardingGateFilter onboardingGateFilter,
+                          ApiKeyAuthenticationFilter apiKeyAuthenticationFilter) {
+        this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.onboardingGateFilter = onboardingGateFilter;
     }
@@ -147,7 +159,11 @@ public class SecurityConfig {
                         // son sens pour tout document généré. Le front envoie déjà
                         // credentials:'include' partout, l'impact UI est nul.
                         .anyRequest().authenticated())
+                // Clé d'API (X-Api-Key) des clients machine, AVANT le JWT : une clé présente fait
+                // foi (401 si invalide, 403 hors portée), le cookie n'est lu qu'en son absence.
+                // Voir FEATURE-cle-api-n8n.md §5.
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyAuthenticationFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(onboardingGateFilter, JwtAuthenticationFilter.class);
         return http.build();
     }

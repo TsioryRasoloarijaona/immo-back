@@ -179,6 +179,11 @@ REFERENCES [dbo].[AdmUser] ([PKey])
 GO
 ALTER TABLE [dbo].[AppUserCredential] CHECK CONSTRAINT [FK_AppUserCredential_AdmUser]
 GO
+ALTER TABLE [dbo].[AppApiClient]  WITH CHECK ADD  CONSTRAINT [FK_AppApiClient_AdmUser] FOREIGN KEY([AdmUserId])
+REFERENCES [dbo].[AdmUser] ([PKey])
+GO
+ALTER TABLE [dbo].[AppApiClient] CHECK CONSTRAINT [FK_AppApiClient_AdmUser]
+GO
 ALTER TABLE [dbo].[BuyDocument]  WITH CHECK ADD  CONSTRAINT [BuyDocument__BuyDocument_FK1] FOREIGN KEY([InvoiceSourceId])
 REFERENCES [dbo].[BuyDocument] ([PKey])
 GO
