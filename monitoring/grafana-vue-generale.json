@@ -27,9 +27,18 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 100, "panels": []
     },
     {
+      "type": "stat", "title": "Version déployée", "id": 105,
+      "description": "Tag de l'image en cours d'exécution (= 7 premiers caractères du commit de merge sur main, cf. GitHub → Deployments). Source : la jauge immo_back_build_info exposée par l'application elle-même, pas cAdvisor. 'inconnu' = image construite hors du pipeline.",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "max by (tag) (immo_back_build_info)", "legendFormat": "{{tag}}", "refId": "A", "instant": true }],
+      "fieldConfig": { "defaults": { "noValue": "API DOWN", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "textMode": "name", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
       "type": "stat", "title": "Uptime", "id": 1,
       "description": "Âge du processus. 'No data' = Prometheus ne scrape plus l'API : c'est l'alerte la plus grave de la page.",
-      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "max(process_uptime_seconds)", "legendFormat": "uptime", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "s", "noValue": "API DOWN", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 300 }, { "color": "green", "value": 3600 } ] } }, "overrides": [] },
@@ -38,7 +47,7 @@
     {
       "type": "stat", "title": "Requêtes / s", "id": 2,
       "description": "Débit HTTP global (moyenne 5 min).",
-      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "req/s", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
@@ -47,7 +56,7 @@
     {
       "type": "stat", "title": "Erreurs 5xx", "id": 3,
       "description": "Part des réponses 5xx sur 5 min. Vert < 1 %, rouge ≥ 5 %.",
-      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "100 * sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "5xx %", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "percent", "decimals": 2, "noValue": "0", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] } }, "overrides": [] },
@@ -56,7 +65,7 @@
     {
       "type": "stat", "title": "Latence p95", "id": 4,
       "description": "95e percentile toutes routes confondues (5 min).",
-      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] } }, "overrides": [] },
@@ -65,7 +74,7 @@
     {
       "type": "stat", "title": "Erreurs loggées (1 h)", "id": 5,
       "description": "logback level=error — attrape ce que le HTTP ne voit pas (synchro, mail, WhatsApp, tâches planifiées).",
-      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "sum(increase(logback_events_total{level=\"error\"}[1h]))", "legendFormat": "erreurs", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "noValue": "0", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] } }, "overrides": [] },
@@ -74,7 +83,7 @@
     {
       "type": "stat", "title": "Synchro : âge du dernier cycle", "id": 6,
       "description": "time() − sync_last_success_timestamp_seconds. Cadence attendue : 2 min. Rouge > 15 min = pipeline muet. 'No data' = backend en mono-base (métriques sync_* absentes).",
-      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 1 },
+      "gridPos": { "h": 4, "w": 2, "x": 18, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "time() - max(sync_last_success_timestamp_seconds)", "legendFormat": "âge", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "noValue": "MONO-BASE ?", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "red", "value": 900 } ] } }, "overrides": [] },
@@ -83,7 +92,7 @@
     {
       "type": "stat", "title": "Synchro : tables en échec", "id": 7,
       "description": "Au dernier cycle. 1-2 pendant un cycle = convergence FK normale ; une valeur qui PERSISTE = table bloquée (voir dashboard sync-pipeline).",
-      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 1 },
+      "gridPos": { "h": 4, "w": 2, "x": 20, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "max(sync_tables_failed)", "legendFormat": "tables", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "noValue": "-", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] } }, "overrides": [] },
@@ -92,7 +101,7 @@
     {
       "type": "stat", "title": "Heap JVM", "id": 8,
       "description": "Mémoire heap utilisée / max.",
-      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 1 },
+      "gridPos": { "h": 4, "w": 2, "x": 22, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [{ "expr": "100 * sum(jvm_memory_used_bytes{area=\"heap\"}) / sum(jvm_memory_max_bytes{area=\"heap\"})", "legendFormat": "heap %", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "percent", "decimals": 0, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 75 }, { "color": "red", "value": 90 } ] } }, "overrides": [] },

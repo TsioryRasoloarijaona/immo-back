@@ -150,7 +150,9 @@ public class SecurityConfig {
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé.
                         // Voir le javadoc de la classe pour la portée réelle de ces deux règles.
-                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
+                        // /actuator/info ne porte que le tag d'image et le commit (InfosBuild),
+                        // déjà publics sur GHCR et GitHub ; le port 9091 n'écoute qu'en loopback.
+                        .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
                         // Les générateurs de documents (PDF/Word) étaient ouverts en permitAll pour
                         // permettre des tests manuels, marqué TEMPORAIRE. Refermé avec le périmètre
                         // commercial : sans authentification il n'y a pas de principal, donc pas de
