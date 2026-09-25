@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.prospect;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -59,6 +61,18 @@ public record CreerProspectRequest(
         String etDe,
         String adresse2,
         String adresse3,
-        PieceIdentiteRequest pieceIdentite
+        PieceIdentiteRequest pieceIdentite,
+        /**
+         * Confirmation « c'est un nouveau contact ». Absent ou {@code false}, la création est
+         * refusée en <b>409</b> dès qu'une fiche prospect/client existante porte le même nom,
+         * téléphone ou email (corps : {@code doublons}, voir
+         * {@code GET /api/prospects/doublons}). {@code true} crée quand même —
+         * {@code FEATURE-doublons-prospect-projet.md} §2.
+         */
+        @Schema(description = "Confirmation « nouveau contact ». Absent ou `false` : **409** avec "
+                + "la liste `doublons` si une fiche prospect/client existante porte le même nom, "
+                + "téléphone ou email (mêmes règles que `GET /api/prospects/doublons`). `true` : "
+                + "crée quand même.", defaultValue = "false")
+        Boolean ignorerDoublons
 ) {
 }

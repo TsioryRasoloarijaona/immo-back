@@ -9,9 +9,11 @@ import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospect.ModifierProspectRequest;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
+import com.tsix.immocrm.dto.prospect.ProspectDoublonDto;
 import com.tsix.immocrm.dto.prospect.ProspectListItemDto;
 import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,6 +70,57 @@ public class ProspectController {
         return prospectService.findById(id);
     }
 
+    @GetMapping("/doublons")
+    @Operation(
+            summary = "Fiches prospect/client existantes correspondant à une identité",
+            description = "Le contrôle d'identité à faire **avant** de créer un prospect — "
+                    + "depuis une pré-prospection ou directement — pour éviter les doublons. "
+                    + "Renvoie les fiches de type prospect ou client (`PRO`, `PRORNT`, `CLI`, "
+                    + "`CLIRNT`) qui correspondent à l'identité saisie sur **au moins un** critère, "
+                    + "chacune avec ses `criteres` :\n\n"
+                    + "- `NOM` : `prenom` + `nom` (ou `raisonSociale` seule) en minuscules et sans "
+                    + "aucun espace, comparé à prénom+nom, nom+prénom, `Description` et "
+                    + "`SocialReason` de la fiche normalisés pareil — la règle d'OMRAN, qui rend "
+                    + "« El Mehdi LAHLOU » et « El MEHDI LAHLOU » égaux ;\n"
+                    + "- `TELEPHONE` : 9 derniers chiffres de `telephone` ou de `mobile`, contre "
+                    + "les quatre numéros de la fiche, quel que soit le format stocké ;\n"
+                    + "- `EMAIL` : sans casse ni espaces de bord.\n\n"
+                    + "Les valeurs bidon ne sont pas des critères : téléphone de moins de 9 chiffres "
+                    + "ou à 9 chiffres identiques (`000000000`), email sans `@` (`-`, `nd`). "
+                    + "**Un homonyme au contact différent est le cas courant** (237 groupes sur 244 "
+                    + "dans les données réelles) : la liste est là pour que l'utilisateur tranche, "
+                    + "pas pour refuser. Tri : le plus de critères d'abord, puis les plus récentes ; "
+                    + "50 au plus. **Vide = aucune fiche ne correspond.** Pas de périmètre "
+                    + "commercial : les prospects n'y sont pas soumis.\n\n"
+                    + "Le même contrôle est appliqué par `POST /api/prospects` et "
+                    + "`POST /api/pre-prospections/{id}/creer-prospect` (409 sauf "
+                    + "`ignorerDoublons: true`). Voir `FEATURE-doublons-prospect-projet.md` §2."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Fiches correspondantes, éventuellement aucune."),
+            @ApiResponse(responseCode = "400", description = "Aucun critère utilisable : tous les "
+                    + "paramètres sont absents, ou ne portent que des valeurs bidon.")
+    })
+    public List<ProspectDoublonDto> doublons(
+            @Parameter(description = "Nom de famille (ou nom complet si `prenom` est vide).", example = "Lahlou")
+            @RequestParam(required = false) String nom,
+            @Parameter(description = "Prénom.", example = "El Mehdi")
+            @RequestParam(required = false) String prenom,
+            @Parameter(description = "Raison sociale, pour une personne morale.")
+            @RequestParam(required = false) String raisonSociale,
+            @Parameter(description = "Téléphone fixe, n'importe quel format.", example = "0674146033")
+            @RequestParam(required = false) String telephone,
+            @Parameter(description = "Mobile, n'importe quel format.", example = "+212 6 74 14 60 33")
+            @RequestParam(required = false) String mobile,
+            @Parameter(description = "Email.", example = "elmehdi.lahlou76@gmail.com")
+            @RequestParam(required = false) String email) {
+        if (!ProspectService.aUnCritereDeDoublon(prenom, nom, raisonSociale, telephone, mobile, email)) {
+            throw new InvalidRequestException(
+                    "Au moins un critère est requis : nom/prenom, raisonSociale, telephone, mobile ou email");
+        }
+        return prospectService.rechercherDoublons(prenom, nom, raisonSociale, telephone, mobile, email);
+    }
+
     @PostMapping
     @Operation(
             summary = "Crée un prospect",
@@ -84,14 +137,25 @@ public class ProspectController {
                     + "base : 9 chiffres deviennent `6 98 29 80 95` (espacé, zéro initial retiré) "
                     + "— la forme de 98,8 % des fiches existantes ; toute autre longueur est "
                     + "stockée en chiffres nus, comme le sont déjà les mobiles nord-américains à "
-                    + "10 chiffres. La valeur relue peut donc différer de celle envoyée."
+                    + "10 chiffres. La valeur relue peut donc différer de celle envoyée.\n\n"
+                    + "**Contrôle de doublon d'identité.** Avant toute écriture, les fiches "
+                    + "prospect/client au même nom, téléphone ou email sont recherchées (règles de "
+                    + "`GET /api/prospects/doublons`) ; s'il y en a et que `ignorerDoublons` n'est "
+                    + "pas `true`, **409** avec la liste `doublons`."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospect créé."),
             @ApiResponse(responseCode = "400", description = "`nom`/`raisonSociale` absents ; "
                     + "numéro fourni sans son indicatif, ou indicatif seul sans numéro ; "
                     + "indicatif absent du référentiel ; numéro hors de 6–14 chiffres ; "
-                    + "référence (type, pays, profession...) inconnue.")
+                    + "référence (type, pays, profession...) inconnue."),
+            @ApiResponse(responseCode = "409", description = "Des fiches prospect/client existantes "
+                    + "portent le même nom, téléphone ou email (mêmes règles que "
+                    + "`GET /api/prospects/doublons`) et `ignorerDoublons` n'est pas `true`. Corps : "
+                    + "`doublons`, liste de `ProspectDoublonDto` avec leurs `criteres` — l'écran "
+                    + "demande « est-ce l'une de ces personnes ? » et renvoie avec "
+                    + "`ignorerDoublons: true` pour un nouveau contact. Voir "
+                    + "`FEATURE-doublons-prospect-projet.md` §2.")
     })
     public ResponseEntity<ProspectDetailDto> create(@RequestBody CreerProspectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectService.create(request));

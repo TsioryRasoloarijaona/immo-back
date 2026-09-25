@@ -8,6 +8,7 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
+import com.tsix.immocrm.dto.prospection.LierProspectRequest;
 import com.tsix.immocrm.dto.prospection.PreProspectionCreeeDto;
 import com.tsix.immocrm.dto.prospection.ProspectionDetailDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
@@ -351,21 +352,72 @@ public class PreProspectionController {
                     + "déjà lié) — 400 sinon. L'étape suivante est "
                     + "`POST /api/prospections/{id}/transformer`, qui assigne le commercial et "
                     + "achève la transformation en prospection.\n\n"
+                    + "**Contrôle de doublon d'identité.** Avant toute écriture, les fiches "
+                    + "prospect/client existantes au même nom, téléphone ou email sont recherchées "
+                    + "(mêmes règles que `GET /api/prospects/doublons`). S'il y en a et que "
+                    + "`ignorerDoublons` n'est pas `true`, la création est refusée en **409** avec "
+                    + "la liste `doublons` : l'écran demande « est-ce l'une de ces personnes ? ». "
+                    + "Oui → `POST /api/pre-prospections/{id}/lier-prospect` avec son id. Non → "
+                    + "renvoyer le même corps avec `ignorerDoublons: true`. Voir "
+                    + "`FEATURE-doublons-prospect-projet.md` §2.\n\n"
                     + "**Périmètre commercial** : une pré-prospection hors du périmètre de "
                     + "l'appelant renvoie 404, comme partout ailleurs."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospect créé et rattaché."),
-            @ApiResponse(responseCode = "400", description = "Cette prospection a déjà un prospect lié."),
+            @ApiResponse(responseCode = "400", description = "Cette prospection a déjà un prospect lié ; "
+                    + "ou `nom`/`raisonSociale` absents, numéro sans indicatif, référence inconnue "
+                    + "(mêmes règles que `POST /api/prospects`)."),
             @ApiResponse(responseCode = "404", description = "Aucune pré-prospection avec cet id, "
                     + "ou pré-prospection hors du périmètre commercial de l'appelant — les deux cas "
                     + "sont volontairement indiscernables. Également renvoyé (plutôt qu'un 400) "
-                    + "lorsque l'identifiant fourni n'est pas un UUID valide.")
+                    + "lorsque l'identifiant fourni n'est pas un UUID valide."),
+            @ApiResponse(responseCode = "409", description = "Des fiches prospect/client existantes "
+                    + "portent le même nom, téléphone ou email et `ignorerDoublons` n'est pas `true`. "
+                    + "Corps : `doublons`, liste de `ProspectDoublonDto` avec leurs `criteres`.")
     })
     public ResponseEntity<ProspectionDetailDto> creerProspect(
             @Parameter(description = "Identifiant de la pré-prospection (ComProspection.PKey).")
             @PathVariable UUID id,
             @RequestBody CreerProspectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerProspect(id, request));
+    }
+
+    @PostMapping("/{id}/lier-prospect")
+    @Operation(
+            summary = "Rattache un prospect existant à une pré-prospection",
+            description = "Le pendant de `creer-prospect` pour la réponse « c'est l'une de ces "
+                    + "personnes » à la liste de doublons : pose un `CfgTier` **existant** comme "
+                    + "prospect de la pré-prospection, sans rien créer. Valide uniquement sur une "
+                    + "pré-prospection sans prospect lié (400 sinon) ; seuls les tiers de type "
+                    + "prospect ou client (`PRO`, `PRORNT`, `CLI`, `CLIRNT`) sont acceptés — le "
+                    + "même sous-ensemble que `GET /api/prospects/doublons`. L'étape suivante reste "
+                    + "`POST /api/prospections/{id}/transformer`.\n\n"
+                    + "**Un prospect, un projet, une prospection.** Si la pré-prospection porte déjà "
+                    + "une tranche et que ce prospect a une prospection **ouverte** sur le projet de "
+                    + "cette tranche, le rattachement est refusé en **409** : la bonne action est "
+                    + "d'ouvrir `prospectionExistante` et d'y ajouter un dossier. Voir "
+                    + "`FEATURE-doublons-prospect-projet.md` §3.\n\n"
+                    + "**Périmètre commercial** : une pré-prospection hors du périmètre de "
+                    + "l'appelant renvoie 404, comme partout ailleurs."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Prospect rattaché ; la pré-prospection "
+                    + "sous la forme de `GET /api/prospections/{id}`. Historique : « Prospect "
+                    + "existant rattaché : … »."),
+            @ApiResponse(responseCode = "400", description = "`prospectId` manquant ou introuvable ; "
+                    + "cette prospection a déjà un prospect lié ; le tiers n'est pas une fiche "
+                    + "prospect ou client."),
+            @ApiResponse(responseCode = "404", description = "Aucune pré-prospection avec cet id, "
+                    + "ou pré-prospection hors du périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409", description = "Le prospect a déjà une prospection "
+                    + "**ouverte** sur le projet de la tranche portée par la pré-prospection. Corps : "
+                    + "`prospectionExistante`.")
+    })
+    public ProspectionDetailDto lierProspect(
+            @Parameter(description = "Identifiant de la pré-prospection (ComProspection.PKey).")
+            @PathVariable UUID id,
+            @RequestBody LierProspectRequest request) {
+        return prospectionService.lierProspect(id, request);
     }
 }

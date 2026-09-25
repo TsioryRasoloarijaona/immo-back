@@ -382,7 +382,13 @@ public class ProspectionController {
                     + "introuvable, ou l'article fourni n'appartient pas à la tranche fournie."),
             @ApiResponse(responseCode = "403", description = "Le projet de la `trancheId` fournie "
                     + "n'est pas dans le périmètre commercial de l'appelant (403 et non 404 : "
-                    + "c'est l'appelant qui a nommé la tranche).")
+                    + "c'est l'appelant qui a nommé la tranche)."),
+            @ApiResponse(responseCode = "409", description = "Le prospect a déjà une prospection "
+                    + "**ouverte** sur le projet de cette tranche — un prospect n'a qu'une "
+                    + "prospection ouverte par projet, c'est sur elle qu'on ajoute des dossiers. "
+                    + "Corps : `prospectionExistante` (id, code, date, nature, commercial, tranche, "
+                    + "projet). Une prospection fermée ne bloque pas. Voir "
+                    + "`FEATURE-doublons-prospect-projet.md` §3.")
     })
     public ResponseEntity<ProspectionDetailDto> creerProspection(@RequestBody CreerProspectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectionService.creerProspection(request));
@@ -444,7 +450,12 @@ public class ProspectionController {
             @ApiResponse(responseCode = "403", description = "Le projet de la tranche cible n'est "
                     + "pas dans le périmètre commercial de l'appelant."),
             @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id, ou "
-                    + "prospection hors du périmètre commercial de l'appelant.")
+                    + "prospection hors du périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409", description = "La tranche cible est sur un **autre "
+                    + "projet** et le prospect lié y a déjà une prospection **ouverte** (un prospect "
+                    + "n'a qu'une prospection ouverte par projet). Changer de tranche au sein du "
+                    + "même projet n'est jamais refusé. Corps : `prospectionExistante`. Voir "
+                    + "`FEATURE-doublons-prospect-projet.md` §3.")
     })
     public ProspectionDetailDto modifierTranchePrincipale(@PathVariable UUID id,
             @RequestBody ModifierTranchePrincipaleRequest request) {
@@ -474,7 +485,12 @@ public class ProspectionController {
                     + "appartient pas à la tranche ; ou aucune tranche fournie ni déjà présente."),
             @ApiResponse(responseCode = "403", description = "Le projet de la tranche fournie n'est "
                     + "pas dans le périmètre commercial de l'appelant."),
-            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id.")
+            @ApiResponse(responseCode = "404", description = "Aucune prospection avec cet id."),
+            @ApiResponse(responseCode = "409", description = "Le prospect lié a déjà une prospection "
+                    + "**ouverte** sur le projet de la tranche effective (`trancheId` fourni, sinon "
+                    + "celle déjà portée) — la transformation en créerait une seconde. Ouvrir "
+                    + "`prospectionExistante` à la place ; une prospection fermée ne bloque pas. "
+                    + "Voir `FEATURE-doublons-prospect-projet.md` §3.")
     })
     public ProspectionDetailDto transformer(@PathVariable UUID id, @RequestBody TransformerProspectionRequest request) {
         return prospectionService.transformer(id, request);

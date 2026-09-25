@@ -200,4 +200,25 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     List<ComProspection> trouverDoublonsContact(@Param("exclu") UUID exclu, @Param("nom") String nom,
                                                 @Param("email") String email,
                                                 @Param("telephone") String telephone, Pageable pageable);
+
+    /**
+     * Prospections <b>ouvertes</b> d'un prospect sur un projet — la règle « une prospection ouverte
+     * par prospect × projet » de {@code instructions/FEATURE-doublons-prospect-projet.md} §3.
+     *
+     * <p>Ouverte = {@code IsClosed} à 0 <b>ou NULL</b> (une ligne NULL n'est pas archivée, voir
+     * {@code FEATURE-desarchiver-prospection.md}). Le projet est celui de la tranche : deux tranches
+     * d'un même projet comptent pareil (38 des 217 couples répétés réels). Les pré-prospections ne
+     * comptent pas ; une ligne sans type compte (même complément que les listes). {@code exclu}
+     * retire la prospection en cours de modification — passer un id qui n'existe pas plutôt que
+     * {@code null}, un {@code <> NULL} ne retenant rien.
+     */
+    @Query("SELECT p FROM ComProspection p JOIN p.stkHierarchy t "
+            + "WHERE p.cfgProspect.id = :prospectId AND t.cfgProject.id = :projetId "
+            + "AND p.id <> :exclu "
+            + "AND (p.isClosed IS NULL OR p.isClosed = false) "
+            + "AND (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
+            + "ORDER BY p.docDate DESC")
+    List<ComProspection> trouverOuvertesMemeProspectMemeProjet(@Param("prospectId") UUID prospectId,
+                                                               @Param("projetId") UUID projetId,
+                                                               @Param("exclu") UUID exclu);
 }
