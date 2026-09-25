@@ -41,6 +41,14 @@ LABEL org.opencontainers.image.source="https://github.com/TsioryRasoloarijaona/i
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
+# Version embarquée : le workflow passe le tag d'image et le SHA du commit en build-args ;
+# l'application les relit (app.build.*) pour la métrique immo_back_build_info et
+# /actuator/info. Un build local sans arguments les laisse à "inconnu".
+ARG IMAGE_TAG=inconnu
+ARG GIT_SHA=inconnu
+ENV APP_BUILD_TAG=${IMAGE_TAG} \
+    APP_BUILD_COMMIT=${GIT_SHA}
+
 # One COPY per layer, ordered least- to most-frequently changed, so a code-only
 # change reuses the dependency layers. spring-boot-loader/ is deliberately absent:
 # it is always empty in non-launcher mode.

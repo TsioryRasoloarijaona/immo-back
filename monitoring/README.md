@@ -8,6 +8,9 @@ logiciel de bureau — est-il bien importé ?**
 
 - `grafana-sync-pipeline.json` — dashboard Grafana importable
   (`Dashboards → Import → Upload JSON`, puis choisir la datasource Prometheus).
+- `grafana-vue-generale.json` — vue générale de l'API (santé, HTTP, JVM, pools) ; son
+  premier panneau, **« Version déployée »**, affiche le tag de l'image qui tourne
+  (`sha-…` = commit de merge sur `main`). Réimporter après chaque modification du JSON.
 
 ## Prérequis
 
@@ -25,6 +28,7 @@ logiciel de bureau — est-il bien importé ?**
 
 | Métrique | Type | Sens |
 |---|---|---|
+| `immo_back_build_info{tag,commit}` | gauge | **version qui tourne** : valeur constante 1, le tag d'image (`sha-…`) et le SHA du commit sont dans les labels. Même chose sur `curl -s http://127.0.0.1:9091/actuator/info`. `inconnu` = image construite hors du pipeline. |
 | `sync_watermark_lag{table}` | gauge | **retard par table** = version CT source − filigrane copie. `0` = à jour. Signal central. |
 | `sync_last_success_timestamp_seconds` | gauge | epoch du dernier cycle ; `time() − valeur` = âge (alerter si muet). |
 | `sync_tables_failed` | gauge | tables en échec au dernier cycle. |

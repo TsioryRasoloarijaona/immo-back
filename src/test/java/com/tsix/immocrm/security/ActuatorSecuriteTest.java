@@ -74,6 +74,26 @@ class ActuatorSecuriteTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("# TYPE")));
     }
 
+    /** La version qui tourne, lisible par Grafana : labels tag/commit, valeur 1 (InfosBuild). */
+    @Test
+    void prometheus_porteLaVersionEmbarquee() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("immo_back_build_info{")))
+                // Hors image (tests), les deux valeurs valent "inconnu" — la jauge existe quand même.
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("tag=\"inconnu\"")));
+    }
+
+    @Test
+    void info_estPublic_etNeRendQueLaVersion() throws Exception {
+        mockMvc.perform(get("/actuator/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.build.tag").value("inconnu"))
+                .andExpect(jsonPath("$.build.commit").value("inconnu"))
+                .andExpect(jsonPath("$.java").doesNotExist())
+                .andExpect(jsonPath("$.os").doesNotExist());
+    }
+
     @Test
     void metrics_resteAuthentifie() throws Exception {
         mockMvc.perform(get("/actuator/metrics"))

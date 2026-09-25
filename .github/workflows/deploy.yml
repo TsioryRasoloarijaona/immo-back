@@ -75,6 +75,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Version embarquée dans l'image (voir Dockerfile) : c'est ce que Grafana affiche
+          # dans « Version déployée » et ce que /actuator/info renvoie.
+          build-args: |
+            IMAGE_TAG=${{ steps.tag.outputs.tag }}
+            GIT_SHA=${{ github.sha }}
           # Sans ce cache, chaque build retélécharge Maven 3.9.16 puis toutes les
           # dépendances. La couche dependency:go-offline est réutilisée tant que
           # pom.xml ne change pas.
