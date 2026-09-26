@@ -131,6 +131,42 @@ This repo is mid-way through building out a REST API (~27 endpoints across Prosp
     - Write descriptions in French, matching the DTO/API layer's existing business language (see the "Naming mismatch" note above).
     This applies going forward to all endpoints, not only new ones — retrofit an existing endpoint's docs if you're touching it substantially anyway, but don't go out of scope to backfill unrelated ones.
 
+## L'aide en ligne d'OMRAN, extraite : `instructions/REFERENCE-aide-omran.md`
+
+Le site d'aide du légataire (https://help.omranestate.com/, 334 pages HelpNDoc) est
+**recopié mot pour mot** dans `instructions/REFERENCE-aide-omran.md` : une section par
+page, dans l'ordre de la table des matières du site, avec pour chaque écran ses tableaux
+`Liste` (colonnes du masque de liste), `Fiche` / `Champs` (champs, **U**nique,
+**O**bligatoire, observations), `Actions` (boutons et leurs effets) et ses `Remarque n :`
+(règles de gestion). Les règles transverses (`GEN0001`…) sont sur la page « Règles de
+gestion générale ». Outils de regénération et mode d'emploi : `instructions/aide-omran/`.
+
+**C'est le premier endroit où chercher quand on reproduit une fonctionnalité d'OMRAN**, avant
+la base et avant la trace d'audit :
+
+1. Trouver la page de l'écran — `grep -n "^### <NOM D'ÉCRAN> <a id" instructions/REFERENCE-aide-omran.md`
+   (les titres de page sont ceux du site : `PROSPECTIONS`, `DOSSIERS DE VENTE`,
+   `TRANSITIONS`…) ou l'ancre `#page-<fichier-html-en-minuscules>`. La table des matières
+   en tête du fichier donne le module de chaque page.
+2. Lire dans cet ordre : `Fiche`/`Champs` (ce que l'écran saisit et ses valeurs par défaut),
+   `Actions` (ce que chaque bouton déclenche), les `Remarque` (les règles), puis les pages
+   de configuration liées (les listes déroulantes renvoient vers leur page `CONFIGURATION`).
+3. **Citer les phrases du site telles quelles dans la spec `FEATURE-*.md`**, avec le nom de
+   la page. Une règle reformulée perd ce qui la rend vérifiable.
+4. Puis **confronter au réel** : la base (`yesRemsProd`, source 115) pour les colonnes et
+   les taux de population, la trace d'audit (`C:\backup\*.sqlaudit`) pour les ordres SQL que
+   l'écran envoie vraiment. Le site décrit le comportement *attendu* ; quand il diverge du
+   comportement *observé*, la trace fait foi et l'écart se note dans la spec. Exemple
+   vérifié le 26/09/2026 : la règle « Pour désactiver une alerte : on ajoute une nouvelle
+   alerte dans le même écran parent » (GEN0005) est exactement ce que la trace montre, et
+   la vue `ComSaleProspectionView` code l'affichage avec `<=` là où le site écrit `=`.
+
+Ce que la référence ne contient pas : les captures d'écran (signalées par
+`[image : Fichier.png]`, non transcrites) et tout ce qui n'est pas documenté par l'éditeur
+(la page « Paramètres système » du site est vide). Ne pas la modifier à la main : la
+regénérer avec les outils, **une requête à la fois** — une rafale parallèle a fait tomber le
+serveur d'aide pendant plus d'une demi-heure.
+
 ## Knowledge graph (graphify)
 
 `graphify-out/` holds a generated knowledge graph of this repo — `graph.json`,
