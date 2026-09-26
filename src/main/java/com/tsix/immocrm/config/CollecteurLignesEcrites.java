@@ -58,7 +58,7 @@ public class CollecteurLignesEcrites
             "CfgProject", "CfgTranche", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
-            "ComActionMessage", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
+            "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject");
 
     /**

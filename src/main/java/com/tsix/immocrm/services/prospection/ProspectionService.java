@@ -201,6 +201,7 @@ public class ProspectionService {
      * {@code FEATURE-suivi-actions.md} §6 pour un compte absent de la base d'écriture.
      */
     private final UtilisateurAffiche utilisateurAffiche;
+    private final AlerteRelanceService alerteRelanceService;
     /**
      * Publie {@link VisitePlanifiee} — voir {@code FEATURE-mail-confirmation-visite.md}. Un
      * événement plutôt qu'un appel direct : le mail ne doit partir que si l'interaction est
@@ -229,7 +230,9 @@ public class ProspectionService {
                                UtilisateurAffiche utilisateurAffiche,
                                ComSaleProspectionViewRepository prospectionViewRepository,
                                StrEntityRepository strEntityRepository,
-                               ApplicationEventPublisher publisher) {
+                               ApplicationEventPublisher publisher,
+                               AlerteRelanceService alerteRelanceService) {
+        this.alerteRelanceService = alerteRelanceService;
         this.prospectionViewRepository = prospectionViewRepository;
         this.strEntityRepository = strEntityRepository;
         this.publisher = publisher;
@@ -1336,8 +1339,9 @@ public class ProspectionService {
      * <p>Reproduit la séquence relevée dans la trace d'audit OMRAN (24/09/2026, prospection
      * 26/05947) : {@code IsClosed = 1}, {@code ClosingDate}, raison, <b>puis désarmement des
      * relances</b> de la prospection — le même {@code UPDATE ComActionMessage SET WithoutRevival = 1}
-     * que la transformation en vente. Sans lui, une prospection archivée continuait d'alimenter
-     * le tableau de bord des relances. Voir {@code FEATURE-desarchiver-prospection.md}.
+     * que la transformation en vente, et l'extinction de leurs lignes {@code AdmAlertData}
+     * ({@link AlerteRelanceService#desarmerToutes}). Sans lui, une prospection archivée continuait
+     * d'alimenter le tableau de bord des relances. Voir {@code FEATURE-desarchiver-prospection.md}.
      */
     @Transactional
     public ProspectionDetailDto archiver(UUID id, ArchiverProspectionRequest request) {
@@ -1362,7 +1366,7 @@ public class ProspectionService {
         marquerModification(prospection, maintenant);
 
         ComProspection sauvee = prospectionRepository.save(prospection);
-        actionMessageRepository.desarmerRelancesDeLaProspection(sauvee.getId());
+        alerteRelanceService.desarmerToutes(sauvee.getId());
         return detailEnrichi(sauvee);
     }
 
@@ -1510,6 +1514,14 @@ public class ProspectionService {
         }
 
         ComActionMessage enregistree = actionMessageRepository.save(message);
+
+        // Une date d'alerte fait de cette interaction la relance courante de la prospection :
+        // les précédentes sont désarmées et l'alerte est posée là où l'écran du logiciel de
+        // bureau la lit (AdmAlertData). Sans date d'alerte, rien n'est touché — c'est la règle
+        // du légataire, vérifiée en direct. Voir AlerteRelanceService.
+        if (enregistree.getAlertValidityDate() != null) {
+            alerteRelanceService.poserAlerte(enregistree);
+        }
 
         // Confirmation au prospect — publiée seulement si un rendez-vous a effectivement été créé,
         // et donc sur exactement l'ensemble de résultats qui alimente déjà le calendrier. Aucune

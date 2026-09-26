@@ -18,6 +18,13 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
 
     List<ComActionMessage> findByComProspectionIdOrderByDocDateDesc(UUID prospectionId);
 
+    /**
+     * Les interactions d'une prospection qui portent une relance et ne sont pas rattachées à une
+     * échéance — la population que le logiciel de bureau désarme quand une nouvelle alerte est
+     * posée. Voir {@code AlerteRelanceService}.
+     */
+    List<ComActionMessage> findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(UUID prospectionId);
+
     Page<ComActionMessage> findByComProspectionIdOrderByDocDateDesc(UUID prospectionId, Pageable pageable);
 
     /**
@@ -129,6 +136,11 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
      * <p>« Dernière » = celle de l'interaction la plus récente ({@code DocDate}), pas celle dont
      * l'échéance est la plus lointaine : c'est la dernière décision du commercial qui fait foi.
      *
+     * <p>Une relance <b>désarmée</b> ({@code WithoutRevival = 1}) n'est plus une alerte : c'est
+     * le drapeau que pose le légataire — et {@code AlerteRelanceService} — quand une interaction
+     * à alerte plus récente arrive, quand la prospection est vendue ou archivée. Sans ce filtre,
+     * la liste continuait d'afficher une alerte que le logiciel de bureau avait éteinte.
+     *
      * <p><b>Ne jamais appeler avec une collection vide</b> : {@code IN ()} est une erreur de
      * syntaxe SQL. Les appelants court-circuitent sur page vide.
      */
@@ -138,7 +150,8 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
             + "ROW_NUMBER() OVER (PARTITION BY m.ComProspectionId "
             + "ORDER BY m.DocDate DESC, m.AlertValidityDate DESC) AS rn "
             + "FROM ComActionMessage m "
-            + "WHERE m.ComProspectionId IN (:prospectionIds) AND m.AlertValidityDate IS NOT NULL"
+            + "WHERE m.ComProspectionId IN (:prospectionIds) AND m.AlertValidityDate IS NOT NULL "
+            + "AND ISNULL(m.WithoutRevival, 0) = 0"
             + ") a WHERE a.rn = 1",
             nativeQuery = true)
     List<DerniereAlerteProjection> dernieresAlertes(@Param("prospectionIds") List<UUID> prospectionIds);
