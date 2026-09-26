@@ -508,10 +508,11 @@ public class ProspectionController {
                     + "maintenant, motif posé depuis `raisonId` (référentiel `ComProspectionClosingReason`) "
                     + "et/ou `raisonTexte` (libre) — **au moins l'un des deux est requis** (400 sinon).\n\n"
                     + "Reproduit la séquence du légataire relevée dans sa trace d'audit : les "
-                    + "**relances en cours de la prospection sont désarmées** (`WithoutRevival`), "
-                    + "comme lors d'une transformation en vente — elles disparaissent du tableau de "
-                    + "bord des relances. Les relances rattachées à une échéance de dossier ne sont "
-                    + "pas touchées.\n\n"
+                    + "**relances en cours de la prospection sont désarmées** (`WithoutRevival`, "
+                    + "alerte éteinte dans `AdmAlertData`), comme lors d'une transformation en "
+                    + "vente — elles disparaissent du tableau de bord des relances et de "
+                    + "`derniereAlerteDate` de la liste. Les relances rattachées à une échéance de "
+                    + "dossier ne sont pas touchées.\n\n"
                     + "Réversible par `PATCH /api/prospections/{id}/desarchiver`."
     )
     @ApiResponses({
@@ -600,7 +601,16 @@ public class ProspectionController {
                     + "c'est ce qui rend les interactions créées ici indiscernables de celles "
                     + "de l'application de bureau.\n\n"
                     + "L'**auteur** est déduit du jeton d'authentification, jamais du corps : "
-                    + "le laisser choisir fausserait les KPI de performance commerciale."
+                    + "le laisser choisir fausserait les KPI de performance commerciale.\n\n"
+                    + "**Relance (`dateAlerte`).** Une interaction datée d'une alerte devient la "
+                    + "relance courante de la prospection, exactement comme dans le logiciel de "
+                    + "bureau : les relances précédentes de la prospection sont désarmées "
+                    + "(`WithoutRevival`, alerte éteinte dans `AdmAlertData`) et la nouvelle est "
+                    + "posée là où l'écran du légataire la lit. Elle disparaît donc de "
+                    + "`derniereAlerteDate` de la liste et du tableau de bord des relances, et "
+                    + "la nouvelle prend sa place. **Une interaction sans `dateAlerte` ne touche à "
+                    + "aucune relance existante** — c'est la règle du légataire, vérifiée sur sa "
+                    + "trace d'audit : ni la date de l'alerte ni une simple note ne l'éteignent."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Interaction créée."),

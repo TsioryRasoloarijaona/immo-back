@@ -58,6 +58,7 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -103,6 +104,7 @@ public class DossierService {
     private final ComActionMessageRepository actionMessageRepository;
     private final StrHistoryRepository strHistoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final AlerteRelanceService alerteRelanceService;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -115,7 +117,9 @@ public class DossierService {
                            GroupementService groupementService,
                            ComActionMessageRepository actionMessageRepository,
                            StrHistoryRepository strHistoryRepository,
-                           UtilisateurAffiche utilisateurAffiche) {
+                           UtilisateurAffiche utilisateurAffiche,
+                           AlerteRelanceService alerteRelanceService) {
+        this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
         this.actionMessageRepository = actionMessageRepository;
@@ -732,13 +736,14 @@ public class DossierService {
      * <p>Le désarmement des relances reprend exactement le prédicat d'Omran : les interactions
      * porteuses d'une alerte et <em>non rattachées à une échéance</em>
      * ({@code ComDocumentId IS NULL}) — celles du dossier qui vient de naître doivent, elles,
-     * rester actives.
+     * rester actives. Il éteint aussi leurs lignes {@code AdmAlertData}, celles que l'écran du
+     * logiciel de bureau lit réellement — voir {@link AlerteRelanceService}.
      */
     private void cloturerLaProspection(ComProspection prospection) {
         prospection.setIsClosed(true);
         prospection.setClosingDate(LocalDateTime.now());
         prospectionRepository.save(prospection);
-        actionMessageRepository.desarmerRelancesDeLaProspection(prospection.getId());
+        alerteRelanceService.desarmerToutes(prospection.getId());
     }
 
     /**
