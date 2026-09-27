@@ -197,6 +197,11 @@ public class ProspectionController {
                     + "format ISO-8601.", example = "2026-12-31T23:59:59")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Filtre d'archivage, **à trois états**. Absent : toutes les "
+                    + "prospections. `true` : seulement les ouvertes (`fermee` à `false` ou "
+                    + "`null`). `false` : seulement les archivées (`fermee` à `true`). Avant le "
+                    + "28/09/2026, `false` était ignoré et renvoyait toute la liste.",
+                    example = "true")
             @RequestParam(required = false) Boolean ouvertes,
             @Parameter(description = "Colonnes à renvoyer. Répétable ou séparé par des virgules. "
                     + "**Absent = comportement historique à l'identique** : les colonnes du groupe "
@@ -295,6 +300,10 @@ public class ProspectionController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Filtre d'archivage à trois états, **identique à celui de la "
+                    + "liste** : absent = tout, `true` = ouvertes, `false` = archivées. Les "
+                    + "effectifs des groupes retombent ainsi sur le `totalElements` de la liste "
+                    + "appelée avec la même valeur.", example = "true")
             @RequestParam(required = false) Boolean ouvertes,
             @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {

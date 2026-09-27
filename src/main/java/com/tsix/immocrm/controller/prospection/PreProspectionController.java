@@ -103,6 +103,11 @@ public class PreProspectionController {
                     + "format ISO-8601.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Filtre d'archivage, **à trois états**. Absent : toutes les "
+                    + "pré-prospections. `true` : seulement les ouvertes (`fermee` à `false` ou "
+                    + "`null`). `false` : seulement les archivées (`fermee` à `true`). Avant le "
+                    + "28/09/2026, `false` était ignoré et renvoyait toute la liste.",
+                    example = "true")
             @RequestParam(required = false) Boolean ouvertes,
             @Parameter(description = "Déplie un groupe : restreint la liste aux pré-prospections "
                     + "d'un groupe renvoyé par `GET /api/pre-prospections/groupes`.",
@@ -176,6 +181,9 @@ public class PreProspectionController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Filtre d'archivage à trois états, **identique à celui de la "
+                    + "liste** : absent = tout, `true` = ouvertes, `false` = archivées.",
+                    example = "true")
             @RequestParam(required = false) Boolean ouvertes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneProspection groupe = ColonneProspection.resoudreGroupement(groupBy);

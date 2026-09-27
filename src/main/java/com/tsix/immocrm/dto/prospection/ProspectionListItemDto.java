@@ -37,7 +37,8 @@ public record ProspectionListItemDto(
 
         @Schema(description = "Prospection archivée (`IsClosed`). **Seul indicateur fiable** : "
                 + "`dateFermeture`/`raisonFermeture` survivent à un désarchivage. `null` équivaut "
-                + "à `false`. `?ouvertes=true` ne renvoie que `false`/`null`.")
+                + "à `false`. `?ouvertes=true` ne renvoie que `false`/`null`, `?ouvertes=false` "
+                + "ne renvoie que `true`, l'absence du paramètre renvoie tout.")
         Boolean fermee,
 
         @Schema(description = "Budget déclaré du prospect. **Mesuré mort : renseigné sur 4 lignes "
