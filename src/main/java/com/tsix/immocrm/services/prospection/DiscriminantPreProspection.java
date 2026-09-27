@@ -4,6 +4,8 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.str.StrEntity;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
@@ -48,9 +50,19 @@ public final class DiscriminantPreProspection {
      * lignes sans type disparaîtraient des deux listes à la fois.
      */
     public static Specification<ComProspection> nEstPasPreProspection() {
-        return (root, query, cb) -> cb.or(
-                cb.isNull(root.get("strEntityId")),
-                cb.not(root.get("strEntityId").in(idsPreProspection(query, cb))));
+        return (root, query, cb) -> nEstPasPreProspection(root, query, cb);
+    }
+
+    /**
+     * Le même prédicat, pour une requête dont la prospection n'est pas la racine mais une
+     * <b>jointure</b> — les relances partent de {@code ComActionMessage}. Une seule définition,
+     * pour que la liste et le tableau de bord ne puissent pas diverger.
+     */
+    public static Predicate nEstPasPreProspection(From<?, ComProspection> prospection,
+                                                  CriteriaQuery<?> query, CriteriaBuilder cb) {
+        return cb.or(
+                cb.isNull(prospection.get("strEntityId")),
+                cb.not(prospection.get("strEntityId").in(idsPreProspection(query, cb))));
     }
 
     /** Même test, sur une ligne déjà chargée. */

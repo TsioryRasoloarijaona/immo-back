@@ -51,8 +51,15 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Il reste 3 765 relances vivantes, sur 3 765 prospections distinctes — une chacune. Aucune
- * déduplication n'est donc nécessaire ici, contrairement à
- * {@code ComActionMessageRepository.dernieresAlertes} qui, lui, ne filtre pas {@code WithoutRevival}.
+ * déduplication n'est donc nécessaire ici.
+ *
+ * <h2>{@code RETARD} : les prospections du mois</h2>
+ *
+ * <p>Depuis le 28/09/2026, {@code echeance=RETARD} sert les relances échues des prospections
+ * <b>qualifiées, ouvertes et créées dans le mois civil en cours</b> — la population de la liste
+ * des prospections, pour que les deux écrans affichent le même nombre. L'ancienne fenêtre
+ * glissante de 30 jours sur la date de l'alerte comptait aussi les prospections du mois
+ * précédent et les pré-prospections. {@code AUJOURDHUI} est inchangé.
  */
 @Service
 public class RelanceDashboardService {
@@ -82,10 +89,42 @@ public class RelanceDashboardService {
         Specification<ComActionMessage> spec = perimetreService.filtreInteractions()
                 .and(relanceVivante())
                 .and(echue(echeance, aujourdhui))
+                .and(echeance.limiteeAuxProspectionsDuMois()
+                        ? prospectionDuMois(aujourdhui)
+                        : (root, query, cb) -> cb.conjunction())
                 .and(filtreDePortee(portee, moi));
 
         return messageRepository.findAll(spec, trierParEcheance(pageable))
                 .map(message -> toDto(message, aujourdhui));
+    }
+
+    /**
+     * La population de la liste des prospections : <b>qualifiée, ouverte, créée dans le mois
+     * civil en cours</b>. C'est ce qui fait tomber le tableau de bord d'accord avec la liste.
+     *
+     * <ul>
+     *   <li><b>Créée ce mois</b> — {@code ComProspection.DocDate} du 1er du mois 00:00 inclus au
+     *       1er du mois suivant exclu. C'est la date que filtre la liste, pas
+     *       {@code UserCreateDateTime}.</li>
+     *   <li><b>Qualifiée</b> — une pré-prospection n'apparaît dans aucune liste de prospections :
+     *       la compter ici fabriquait un chiffre que l'écran ne pouvait pas détailler.</li>
+     *   <li><b>Ouverte</b> — le légataire laisse poser une alerte sur une prospection déjà
+     *       archivée et ne l'éteint jamais (460 cas nettoyés le 27/09/2026). Tant que cette API
+     *       ne le refuse pas elle-même, le filtre protège le compteur.</li>
+     * </ul>
+     */
+    private static Specification<ComActionMessage> prospectionDuMois(LocalDate aujourdhui) {
+        LocalDate premier = EcheanceRelance.debutDuMois(aujourdhui);
+        LocalDateTime debut = premier.atStartOfDay();
+        LocalDateTime finExclue = premier.plusMonths(1).atStartOfDay();
+        return (root, query, cb) -> {
+            Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.INNER);
+            return cb.and(
+                    cb.greaterThanOrEqualTo(prospection.get("docDate"), debut),
+                    cb.lessThan(prospection.get("docDate"), finExclue),
+                    cb.or(cb.isNull(prospection.get("isClosed")), cb.isFalse(prospection.get("isClosed"))),
+                    DiscriminantPreProspection.nEstPasPreProspection(prospection, query, cb));
+        };
     }
 
     /**
@@ -101,7 +140,8 @@ public class RelanceDashboardService {
     }
 
     /**
-     * Fenêtre de dates, bornes incluses des deux côtés.
+     * Fenêtre sur la date de l'alerte, bornes incluses. {@code RETARD} n'a pas de borne basse :
+     * c'est la date de la prospection qui le borne, voir {@link #prospectionDuMois}.
      *
      * <p>La comparaison porte sur un <b>intervalle d'instants</b> et non sur une égalité de date :
      * {@code AlertValidityDate} est un {@code datetime} dont les 3 765 valeurs armées sont à
@@ -109,11 +149,17 @@ public class RelanceDashboardService {
      * exclusive au lendemain 00:00 — {@code 23:59:59.999} compte donc bien pour le jour même.
      */
     private static Specification<ComActionMessage> echue(EcheanceRelance echeance, LocalDate aujourdhui) {
-        LocalDateTime debut = echeance.debut(aujourdhui).atStartOfDay();
+        LocalDate premierJour = echeance.debut(aujourdhui);
         LocalDateTime finExclue = echeance.fin(aujourdhui).plusDays(1).atStartOfDay();
-        return (root, query, cb) -> cb.and(
-                cb.greaterThanOrEqualTo(root.get("alertValidityDate"), debut),
-                cb.lessThan(root.get("alertValidityDate"), finExclue));
+        return (root, query, cb) -> {
+            Predicate avantLaFin = cb.lessThan(root.get("alertValidityDate"), finExclue);
+            if (premierJour == null) {
+                return avantLaFin;
+            }
+            return cb.and(
+                    cb.greaterThanOrEqualTo(root.get("alertValidityDate"), premierJour.atStartOfDay()),
+                    avantLaFin);
+        };
     }
 
     /**
