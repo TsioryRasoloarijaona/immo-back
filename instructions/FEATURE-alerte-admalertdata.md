@@ -148,6 +148,17 @@ montage deux-bases reste sur la source, les copies des VPS sont figées à la co
    8 `WithoutRevival` posés, 4 alertes éteintes, 12 lignes créées dont 7 actives.
 3. **Une synchronisation** suffit ensuite pour les deux copies. Rien à rejouer sur les VPS.
 
+Étapes 1 à 3 **faites le 26/09/2026** (compteurs obtenus : 9 / 8 / 4 / 12, table à 39 611 lignes).
+
+4. **Second rattrapage, `013_AdmAlertData_prospections_fermees.sql`** (27/09) : 583 prospections
+   **fermées** portaient encore une alerte active (582 relances armées), un résidu du légataire —
+   123 alertes antérieures à la fermeture qui ont échappé au désarmement, 460 posées **après**
+   l'archivage par des commerciaux qui ont continué à appeler des prospects archivés
+   « INJOIGNABLE » / « NON INTÉRESSÉ » (358 fois plus de 30 jours après). Le script applique le
+   prédicat d'archivage d'OMRAN à toute prospection `IsClosed = 1` ; `@garderAlertesFutures`
+   permet d'épargner les 9 alertes à date future (toutes « NRP » à décembre 2026-2027). Attendu :
+   582 `WithoutRevival`, 583 alertes éteintes, 4 891 → 4 308 actives.
+
 ## Hors périmètre
 
 - Les alertes de dossier (`Groupping = 'Dossier de vente (…)'`, `ComDocumentId` non nul) —
