@@ -96,6 +96,47 @@ nombre décourageant que personne ne traitera.
 > `echeance=RETARD` ne sert que `today-30 <= AlertValidityDate < today`, soit **75 lignes**
 > aujourd'hui. L'arriéré antérieur reste atteignable par les filtres de `GET /api/prospections`
 > (`avecRelanceActive`), pas par le tableau de bord.
+>
+> **Remplacée le 28/09/2026 — voir §3 bis.**
+
+### 3 bis. Les retards « pour ce mois » : les prospections du mois (28/09/2026)
+
+Branche : `feat/dashboard-relances-du-mois`.
+
+**Le constat.** L'utilisateur compare deux écrans pour la même commerciale : la liste des
+prospections montre environ 46 alertes en retard, le tableau de bord 81. Appel de la production
+(`api.ayaddeveloppement.com`, compte de la commerciale) et rapprochement ligne à ligne :
+
+| Les 81 relances du tableau de bord | Lignes | Dans la liste du mois |
+|---|---:|---|
+| sur des prospections créées en septembre | 43 | oui — les 43 en retard de la liste, exactement |
+| sur des prospections créées en août | 33 | non : la liste est filtrée sur le mois |
+| sur des pré-prospections | 5 | non : une liste de prospections les exclut |
+
+Les deux écrans ne comptaient pas la même chose : la liste filtre sur la **date de la
+prospection**, le tableau de bord filtrait sur la **date de l'alerte**.
+
+> **Décision produit (utilisateur, 28/09/2026) — les relances en retard pour ce mois.**
+> `echeance=RETARD` sert les relances échues (`AlertValidityDate < today`) des prospections
+> **créées dans le mois civil en cours** (`ComProspection.DocDate`), **qualifiées** (hors
+> pré-prospections, discriminant `StrEntity`) et **ouvertes** (`IsClosed` nul ou 0). Le tableau de
+> bord affiche ainsi le même nombre que la liste des prospections filtrée sur le mois.
+
+Chiffres au 28/09/2026 sur la source, pour cette commerciale : 45 avec la nouvelle règle, contre
+76 (78 avec les pré-prospections) avec la fenêtre de 30 jours.
+
+Ce que la règle change, et ce qu'elle laisse :
+
+- **plus de borne sur l'ancienneté de l'alerte** : c'est la date de la prospection qui borne. Une
+  date d'alerte saisie dans le passé (4 cas réels) reste servie, `joursDeRetard` peut dépasser 30 ;
+- **les relances des prospections des mois précédents sortent du tableau de bord** dès le 1er du
+  mois — 33 lignes pour cette commerciale. Elles restent dans la liste des prospections en
+  élargissant la période. C'est le prix de l'accord entre les deux écrans, assumé ;
+- **prospection ouverte** : protection ajoutée au passage. OMRAN laisse poser une alerte sur une
+  prospection archivée sans jamais l'éteindre (460 cas nettoyés le 27/09,
+  `FEATURE-alerte-admalertdata.md`) ;
+- **`AUJOURDHUI` est inchangé** : toute relance armée due aujourd'hui, pré-prospections et
+  prospections anciennes comprises. La demande portait sur les retards.
 
 Le rythme normal justifie la tuile « aujourd'hui » : sur les 21 derniers jours peuplés, il échoit
 **1 à 11 relances par jour** (médiane ≈ 3). La tuile aura de quoi s'afficher un jour ouvré normal ;
@@ -172,7 +213,7 @@ leads depuis le serveur legacy. Deux conséquences pour le contrat :
 
 | Paramètre | Valeurs | Défaut | Rôle |
 |---|---|---|---|
-| `echeance` | `AUJOURDHUI` \| `RETARD` | `AUJOURDHUI` | `AUJOURDHUI` : `AlertValidityDate = today`. `RETARD` : `today-30 <= AlertValidityDate < today` (§3). |
+| `echeance` | `AUJOURDHUI` \| `RETARD` | `AUJOURDHUI` | `AUJOURDHUI` : `AlertValidityDate = today`. `RETARD` : `AlertValidityDate < today` **et** prospection qualifiée, ouverte, créée dans le mois civil en cours (§3 bis). |
 | `portee` | `MOI` \| `EQUIPE` | `MOI` | `MOI` : les relances dont le commercial résolu est l'appelant. `EQUIPE` : tout son périmètre visible. Les non affectées sont servies dans les deux cas (§4). |
 | `page`, `size` | | `0`, `20` | Pagination standard du dépôt. |
 
@@ -214,7 +255,10 @@ Minimum du dépôt (`CLAUDE.md` règle 5) plus, spécifiquement :
 
 - une relance **désarmée** (`WithoutRevival=1`) n'apparaît pas — c'est le filtre qui porte 86 % du volume ;
 - une relance **sur échéance** (`ComDocumentId` non nul) n'apparaît pas ;
-- une relance à **31 jours** de retard est hors fenêtre, à **30 jours** dedans (borne de §3) ;
+- `RETARD` (§3 bis) : une prospection créée le **1er du mois à 00:00** est dedans, la **veille à
+  23:59** dehors ; une alerte vieille de **45 jours** sur une prospection du mois est servie ; une
+  **pré-prospection** et une prospection **fermée** ne le sont pas ; `AUJOURDHUI` continue de
+  servir prospections anciennes et pré-prospections ;
 - une relance **sans commercial des deux côtés** est servie avec `nonAffectee: true`, *y compris*
   sous `portee=MOI` ;
 - une relance dont la prospection et l'interaction **désignent deux commerciaux différents** est
@@ -227,6 +271,18 @@ Minimum du dépôt (`CLAUDE.md` règle 5) plus, spécifiquement :
 
 **Aucune rupture : deux endpoints neufs, aucun existant modifié.** Ce dépôt est backend seul ; la
 consommation côté `crm-prototype` n'entre pas dans ce lot et n'est pas à engager ici.
+
+**Changement de sens du 28/09/2026 (§3 bis), sans changement de forme.**
+`GET /api/dashboard/relances?echeance=RETARD` garde ses paramètres et son DTO, mais ne renvoie
+plus les mêmes lignes :
+
+- le compteur baisse (81 → 45 pour la commerciale mesurée) et égale désormais le nombre d'alertes
+  en retard de la liste des prospections filtrée sur le mois en cours ;
+- `preProspection` est toujours `false` sous `RETARD` — les pré-prospections n'y sont plus
+  servies ; il reste significatif sous `AUJOURDHUI` ;
+- `joursDeRetard` n'est plus borné à 30 ;
+- tout libellé du type « en retard depuis moins de 30 jours » est à remplacer par « en retard ce
+  mois ».
 
 Un point mérite d'être relayé tel quel, parce qu'il est contre-intuitif :
 

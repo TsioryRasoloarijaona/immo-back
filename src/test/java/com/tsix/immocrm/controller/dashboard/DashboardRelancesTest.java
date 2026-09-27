@@ -205,25 +205,101 @@ class DashboardRelancesTest {
                 .andExpect(jsonPath(filtre(relance.getId())).isEmpty());
     }
 
-    /**
-     * La borne des 30 jours est la feature, pas une optimisation : sans elle l'endpoint servirait
-     * 3 710 lignes dont 2 020 de plus d'un an. Les deux bords sont testés parce qu'une borne
-     * inclusive prise pour exclusive ne se voit pas à l'œil.
-     */
+    // ---------------------------------------------------------------- RETARD : les prospections du mois
+    //
+    // Décision du 28/09/2026 : le tableau de bord doit afficher le même nombre que la liste des
+    // prospections, qui travaille sur les prospections créées dans le mois. Mesuré en production
+    // pour une commerciale : 81 relances avec l'ancienne fenêtre de 30 jours, 45 dans sa liste.
+
+    private ComProspection newProspectionCreeeLe(LocalDateTime creation, CfgTier commercial) {
+        ComProspection p = newProspection(newTier("DR-PRO"), commercial);
+        p.setDocDate(creation);
+        return prospectionRepository.saveAndFlush(p);
+    }
+
+    private void attendreEnRetard(ComActionMessage relance, boolean servie) throws Exception {
+        mockMvc.perform(get(RELANCES).param("echeance", "RETARD").param("portee", "EQUIPE")
+                        .param("size", "200"))
+                .andExpect(status().isOk())
+                .andExpect(servie
+                        ? jsonPath(filtre(relance.getId())).isNotEmpty()
+                        : jsonPath(filtre(relance.getId())).isEmpty());
+    }
+
     @Test
-    void retard_borneAtrenteJoursInclus() throws Exception {
+    void retard_sertLaRelanceEchueDUneProspectionDuMois() throws Exception {
         CfgTier commercial = newTier("DR-COM");
         ComProspection p = newProspection(newTier("DR-PRO"), commercial);
-
-        ComActionMessage dedans = newRelance(p, LocalDate.now().minusDays(30).atStartOfDay(), commercial);
-        ComActionMessage dehors = newRelance(p, LocalDate.now().minusDays(31).atStartOfDay(), commercial);
+        ComActionMessage relance = newRelance(p, LocalDate.now().minusDays(1).atStartOfDay(), commercial);
 
         mockMvc.perform(get(RELANCES).param("echeance", "RETARD").param("portee", "EQUIPE")
                         .param("size", "200"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(filtre(dedans.getId())).isNotEmpty())
-                .andExpect(jsonPath(filtre(dedans.getId()) + ".joursDeRetard").value(hasItem(30)))
-                .andExpect(jsonPath(filtre(dehors.getId())).isEmpty());
+                .andExpect(jsonPath(filtre(relance.getId())).isNotEmpty())
+                .andExpect(jsonPath(filtre(relance.getId()) + ".joursDeRetard").value(hasItem(1)));
+    }
+
+    /** Les deux bords du mois : le 1er à 00:00 est dedans, la veille à 23:59 dehors. */
+    @Test
+    void retard_borneAuMoisCivilDeLaProspection() throws Exception {
+        CfgTier commercial = newTier("DR-COM");
+        LocalDate premier = LocalDate.now().withDayOfMonth(1);
+        ComProspection duPremier = newProspectionCreeeLe(premier.atStartOfDay(), commercial);
+        ComProspection deLaVeille = newProspectionCreeeLe(premier.minusDays(1).atTime(23, 59), commercial);
+        LocalDateTime hier = LocalDate.now().minusDays(1).atStartOfDay();
+
+        attendreEnRetard(newRelance(duPremier, hier, commercial), true);
+        attendreEnRetard(newRelance(deLaVeille, hier, commercial), false);
+    }
+
+    /**
+     * La borne porte sur la prospection, plus sur l'alerte : une date d'alerte saisie loin dans le
+     * passé (4 cas réels chez une commerciale) reste un retard de la prospection du mois.
+     */
+    @Test
+    void retard_sansBorneSurLAncienneteDeLAlerte() throws Exception {
+        CfgTier commercial = newTier("DR-COM");
+        ComProspection p = newProspection(newTier("DR-PRO"), commercial);
+        ComActionMessage ancienne = newRelance(p, LocalDate.now().minusDays(45).atStartOfDay(), commercial);
+
+        mockMvc.perform(get(RELANCES).param("echeance", "RETARD").param("portee", "EQUIPE")
+                        .param("size", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre(ancienne.getId()) + ".joursDeRetard").value(hasItem(45)));
+    }
+
+    /** Une pré-prospection n'est dans aucune liste de prospections : elle ne compte pas en retard. */
+    @Test
+    void retard_ecarteLesPreProspections() throws Exception {
+        ComProspection lead = newPreProspection(LocalDateTime.now());
+        attendreEnRetard(newRelance(lead, LocalDate.now().minusDays(1).atStartOfDay(), null), false);
+    }
+
+    /** Le légataire laisse poser une alerte sur une prospection archivée et ne l'éteint jamais. */
+    @Test
+    void retard_ecarteUneProspectionFermee() throws Exception {
+        CfgTier commercial = newTier("DR-COM");
+        ComProspection fermee = newProspection(newTier("DR-PRO"), commercial);
+        fermee.setIsClosed(true);
+        prospectionRepository.saveAndFlush(fermee);
+
+        attendreEnRetard(newRelance(fermee, LocalDate.now().minusDays(1).atStartOfDay(), commercial), false);
+    }
+
+    /** {@code AUJOURDHUI} garde sa population : la règle du mois ne vaut que pour le retard. */
+    @Test
+    void aujourdhui_resteOuvertAuxProspectionsAnciennesEtAuxPreProspections() throws Exception {
+        CfgTier commercial = newTier("DR-COM");
+        ComProspection ancienne = newProspectionCreeeLe(LocalDateTime.now().minusMonths(3), commercial);
+        ComActionMessage surAncienne = newRelance(ancienne, LocalDate.now().atStartOfDay(), commercial);
+        ComActionMessage surLead = newRelance(newPreProspection(LocalDateTime.now().minusMonths(2)),
+                LocalDate.now().atStartOfDay(), null);
+
+        mockMvc.perform(get(RELANCES).param("echeance", "AUJOURDHUI").param("portee", "EQUIPE")
+                        .param("size", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre(surAncienne.getId())).isNotEmpty())
+                .andExpect(jsonPath(filtre(surLead.getId())).isNotEmpty());
     }
 
     /** Une relance du jour n'est pas un retard, et réciproquement : les deux tranches sont disjointes. */

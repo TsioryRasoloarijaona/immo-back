@@ -102,11 +102,22 @@ public class DashboardController {
                     échéance (`ComDocumentId` non nul), qui ne sont pas du travail commercial. Il \
                     reste 3 765 relances vivantes, une par prospection.
 
-                    **`echeance=RETARD` est borné à 30 jours glissants, délibérément.** La base \
-                    porte 3 710 relances en retard, dont **2 020 de plus d'un an** et seulement 75 \
-                    de moins de 30 jours. Sans cette borne l'endpoint servirait un arriéré \
-                    abandonné au lieu d'une liste de travail. Pour atteindre l'arriéré complet, \
-                    passer par les filtres de `GET /api/prospections`.
+                    **`echeance=RETARD` : les relances en retard des prospections du mois.** Sont \
+                    servies les relances échues (date d'alerte antérieure à aujourd'hui) des \
+                    prospections **créées dans le mois civil en cours** (`dateDocument` du 1er du \
+                    mois au dernier jour), **qualifiées** (les pré-prospections sont exclues) et \
+                    **ouvertes**. C'est exactement la population de `GET /api/prospections` filtrée \
+                    sur le mois : le compteur du tableau de bord et le nombre d'alertes en retard \
+                    de la liste sont donc égaux. Aucune borne sur l'ancienneté de l'alerte — \
+                    `joursDeRetard` peut dépasser 30 si une date d'alerte a été saisie dans le \
+                    passé. L'arriéré porté par les prospections des mois précédents (plus de \
+                    3 000 relances) n'est pas servi ici : passer par les filtres de \
+                    `GET /api/prospections`. **Changement du 28/09/2026** : cette tranche servait \
+                    auparavant une fenêtre glissante de 30 jours sur la date de l'alerte, \
+                    pré-prospections et prospections anciennes comprises.
+
+                    `echeance=AUJOURDHUI` est inchangé : toute relance armée dont l'échéance est \
+                    aujourd'hui, pré-prospections comprises.
 
                     **Les relances non affectées sont servies quelle que soit la `portee`**, y \
                     compris `MOI` : 108 relances (2,9 %) ne désignent personne — ni par \
@@ -125,8 +136,9 @@ public class DashboardController {
                     + "valeurs admises.")
     })
     public PageDto<RelanceProspectionDto> relances(
-            @Parameter(description = "`AUJOURDHUI` : échéance au jour même. `RETARD` : en retard "
-                    + "de 1 à 30 jours.", example = "AUJOURDHUI")
+            @Parameter(description = "`AUJOURDHUI` : échéance au jour même. `RETARD` : relances "
+                    + "échues des prospections qualifiées et ouvertes créées dans le mois civil "
+                    + "en cours.", example = "AUJOURDHUI")
             @RequestParam(defaultValue = "AUJOURDHUI") EcheanceRelance echeance,
 
             @Parameter(description = "`MOI` : les relances dont le commercial résolu est "

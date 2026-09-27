@@ -1,5 +1,7 @@
 package com.tsix.immocrm.domain;
 
+import org.jspecify.annotations.Nullable;
+
 import java.time.LocalDate;
 
 /**
@@ -17,25 +19,45 @@ public enum EcheanceRelance {
     AUJOURDHUI,
 
     /**
-     * Retard <b>borné à 30 jours glissants</b>.
+     * En retard, <b>sur les prospections créées dans le mois civil en cours</b>.
      *
-     * <p>Le bornage est la feature, pas une optimisation. En base réelle, 3 710 relances sont en
-     * retard, dont <b>2 020 de plus d'un an</b> et seulement 75 de moins de 30 jours : servi sans
-     * borne, l'endpoint rendrait un arriéré abandonné au lieu d'une liste de travail. L'arriéré
-     * antérieur reste atteignable par les filtres de {@code GET /api/prospections}.
+     * <p>Décision produit du 28/09/2026, qui remplace la fenêtre glissante de 30 jours du
+     * 15/09 : le tableau de bord doit montrer les mêmes relances que la liste des prospections,
+     * et cette liste travaille sur les prospections <b>du mois</b>. Avec l'ancienne fenêtre le
+     * tableau de bord en comptait 81 pour une commerciale quand sa liste en montrait 45 — les 33
+     * autres étaient portées par des prospections du mois précédent, 5 par des pré-prospections.
+     *
+     * <p>La borne porte donc sur la <b>date de création de la prospection</b>
+     * ({@code ComProspection.DocDate}), plus sur la date de l'alerte : toute alerte échue d'une
+     * prospection du mois compte, quelle que soit son ancienneté. Le mur des retards anciens
+     * (3 161 lignes) reste hors du tableau de bord, puisqu'il est porté par des prospections
+     * anciennes ; il reste atteignable par les filtres de {@code GET /api/prospections}.
      */
     RETARD;
 
-    /** Nombre de jours de retard au-delà duquel une relance sort de {@link #RETARD}. */
-    public static final int FENETRE_RETARD_JOURS = 30;
-
-    /** Premier jour servi, inclus, pour cette tranche évaluée à {@code aujourdhui}. */
-    public LocalDate debut(LocalDate aujourdhui) {
-        return this == AUJOURDHUI ? aujourdhui : aujourdhui.minusDays(FENETRE_RETARD_JOURS);
+    /**
+     * Premier jour d'échéance servi, inclus. {@code null} pour {@link #RETARD} : aucune borne
+     * basse sur la date de l'alerte, c'est la date de la prospection qui borne.
+     */
+    public @Nullable LocalDate debut(LocalDate aujourdhui) {
+        return this == AUJOURDHUI ? aujourdhui : null;
     }
 
-    /** Dernier jour servi, <b>inclus</b>, pour cette tranche évaluée à {@code aujourdhui}. */
+    /** Dernier jour d'échéance servi, <b>inclus</b>, pour cette tranche évaluée à {@code aujourdhui}. */
     public LocalDate fin(LocalDate aujourdhui) {
         return this == AUJOURDHUI ? aujourdhui : aujourdhui.minusDays(1);
+    }
+
+    /**
+     * Vrai si la tranche ne retient que les prospections <b>qualifiées, ouvertes et créées dans
+     * le mois civil</b> de {@code aujourdhui} — la population de la liste des prospections.
+     */
+    public boolean limiteeAuxProspectionsDuMois() {
+        return this == RETARD;
+    }
+
+    /** Premier jour du mois civil de {@code aujourdhui}, inclus. */
+    public static LocalDate debutDuMois(LocalDate aujourdhui) {
+        return aujourdhui.withDayOfMonth(1);
     }
 }
