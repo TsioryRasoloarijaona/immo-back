@@ -276,6 +276,44 @@ courant. À retirer dès qu'une des deux corrections ci-dessus est livrée.
 
 ## Traitées
 
+### 15. `?ouvertes=false` ne filtrait pas (livré le 28/09/2026)
+
+**Contexte** : demande rédigée côté front dans
+`crm-prototype/instructions/FIX-filtre-ouvertes-false.md` (branche
+`feat/filtre-archive-periode-mois`). Sur l'écran Prospections, le filtre
+« Archivé : Oui » envoie bien `ouvertes=false` et recevait **toute** la liste.
+
+| Filtre à l'écran | Paramètre | Avant | Après |
+|---|---|---|---|
+| Archivé : Non | `ouvertes=true` | ouvertes | ouvertes (`fermee` à `false` ou `null`) |
+| Archivé : Oui | `ouvertes=false` | **tout** | archivées seulement (`fermee` à `true`) |
+| Archivé : Tous | absent | tout | tout |
+
+**Cause** (confirmée dans le code) : `ProspectionService.buildSpec` testait
+`ouvertes != null && ouvertes` — le paramètre était bien lié en `Boolean`, mais
+seul `true` posait un prédicat. Le défaut précédait le lot front du 28/09.
+
+**Correctif** : le prédicat est ternaire. Il est partagé par les quatre endpoints,
+donc corrigé d'un seul geste et pour tous :
+
+- `GET /api/prospections` et `GET /api/prospections/groupes` ;
+- `GET /api/pre-prospections` et `GET /api/pre-prospections/groupes`.
+
+Liste et groupes appliquent le même prédicat : à filtre égal, la somme des
+effectifs des groupes retombe sur le `totalElements` de la liste. Les trois cas
+sont documentés sur le paramètre (`@Parameter`) des quatre endpoints et sur le
+champ `fermee` du DTO. Test : `ProspectionFiltreOuvertesTest` (6 cas, dont
+`IsClosed` à `NULL` compté comme ouvert — 937 lignes réelles).
+
+**Côté front** : rien à changer, le paramètre envoyé était déjà le bon.
+Rafraîchir le snapshot (`npm run docs:update`) pour récupérer les descriptions.
+
+Livré sur la branche `feat/dashboard-relances-du-mois`, avec le changement de
+`GET /api/dashboard/relances?echeance=RETARD` (relances en retard des prospections
+du mois, voir `FEATURE-dashboard-relances.md` §3 bis).
+
+---
+
 ### 4. Écart colonnes/filtres — écran legacy "Articles" (Patrimoine) vs `ArticleListItemDto`/`GET /api/articles` (livré le 28/08/2026)
 
 **Contexte** : comparaison demandée par le métier entre la grille "Articles

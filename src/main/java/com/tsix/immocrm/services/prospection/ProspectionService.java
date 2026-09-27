@@ -277,7 +277,9 @@ public class ProspectionService {
      *                   {@link ProspectionListItemDto} today).
      * @param dateFin    inclusive upper bound on {@code docDate}.
      * @param search     free-text match on code/prospect name/temp contact fields
-     * @param ouvertes   when true, only non-closed (IsClosed = false) prospections
+     * @param ouvertes   ternaire : {@code null} = pas de filtre, {@code true} = ouvertes
+     *                   ({@code IsClosed} à 0 ou NULL), {@code false} = archivées
+     *                   ({@code IsClosed = 1})
      */
     public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
             List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
@@ -414,8 +416,14 @@ public class ProspectionService {
                         cb.like(cb.lower(root.get("tempEMail")), pattern)
                 ));
             }
-            if (ouvertes != null && ouvertes) {
-                predicates.add(cb.or(cb.isFalse(root.get("isClosed")), cb.isNull(root.get("isClosed"))));
+            // Ternaire, pas un drapeau : absent = tout, true = ouvertes, false = archivées.
+            // `false` était lu comme « pas de filtre », et l'écran « Archivé : Oui » renvoyait
+            // donc toute la liste. NULL compte comme ouverte — OMRAN écrit les deux (2 884
+            // prospections à 0, 937 à NULL) — et n'est donc jamais « archivée ».
+            if (ouvertes != null) {
+                predicates.add(ouvertes
+                        ? cb.or(cb.isFalse(root.get("isClosed")), cb.isNull(root.get("isClosed")))
+                        : cb.isTrue(root.get("isClosed")));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
