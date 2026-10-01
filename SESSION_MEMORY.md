@@ -1,5 +1,5 @@
 # Session Memory
-_Last updated: 2026-09-28T17:30+01:00_
+_Last updated: 2026-10-01T10:30+01:00_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
@@ -44,6 +44,17 @@ pré-prospections par l'API. Reste : le CSV au format d'import demandé par l'ut
 ### Données corrigées sur la source 115
 - CT activé sur `AdmAlertData` (28 tables suivies) ; scripts 012 et 013 appliqués par
   l'utilisateur (4 891 → 4 308 alertes actives) ; 4 relances périmées « touchées ».
+
+### TRIBECA (01/10) — ce qui rend une tranche visible dans l'application
+- TRIBECA = tranche `ART` (AYAD RESIDENCE TRIBECA), projet `ART`, société **MAYLINE** ;
+  `IsForSale = 1`, 80 articles, 26 dossiers, 3 794 prospections (64 en septembre).
+- La visibilité dans l'application = `CfgCompany.IsActive` de la société, lu sur la **copie**
+  (référentiels Projet/Tranche sans filtre de périmètre). `CfgCompany` n'est pas sous CT :
+  chaque copie garde sa valeur. Sur la source, les 9 sociétés sont à 1 (script 005 jamais joué
+  là, et c'est voulu : OMRAN pourrait lire le drapeau).
+- Production : la liste des tranches ne renvoie que ADMOD + GHRIZA → MAYLINE à 0 sur la copie.
+  Activer = `UPDATE dbo.CfgCompany SET IsActive = 1 WHERE Code = 'MAYLINE'` sur chaque copie.
+- 21 utilisateurs sont habilités sur ART (dont Faycal SAOUD, Macire Kamara) ; Khadija ne l'est pas.
 
 ### Méthode qui a payé
 - **Aperçu avant écriture** : tout import passe d'abord par `/import/apercu`.
@@ -101,6 +112,8 @@ pré-prospections par l'API. Reste : le CSV au format d'import demandé par l'ut
 | 67 | L'API ne sait pas modifier nom, téléphone, email d'une pré-prospection (`ModifierProspectionRequest`) | Open | demande front n° 12 |
 | 68 | L'import CSV n'accepte que l'export **Leads Center** ; l'export **Meta Lead Ads** (`created_time`, `full_name`, `phone`, réponses du formulaire) doit être transformé à la main | Open | reconnaître aussi ces en-têtes dans `LecteurCsvLeads` |
 | 69 | 3 téléphones importés avec un zéro en trop après l'indicatif (`+2120…`) | Open (donnée d'origine) | normaliser à l'import, ou corriger quand le bug 67 sera levé |
+| 70 | TRIBECA (société MAYLINE) invisible dans l'application : `IsActive = 0` sur les copies | **Open** (utilisateur) | `UPDATE CfgCompany SET IsActive = 1 WHERE Code = 'MAYLINE'` sur chaque copie, jamais sur la source |
+| 71 | **Modification non commitée de `005_CfgCompany_IsActive.sql`** dans l'arbre de travail (01/10) : la réactivation ne liste plus que `MAYLINE` → joué tel quel, le script **désactive ADMOD et GHRIZA** et fait disparaître APF et ARS. Les commentaires du script parlent encore d'« exactement ADMOD et GHRIZA » | **Open — DANGER** | mettre `('ADMOD', 'GHRIZA', 'MAYLINE')` et corriger les commentaires avant tout usage ; non commité par la session |
 
 ---
 
@@ -164,10 +177,12 @@ pré-prospections par l'API. Reste : le CSV au format d'import demandé par l'ut
 
 ## ⏭️ Next Step
 
-> **Reprendre la demande interrompue** : produire le fichier CSV des 32 leads Meta au format
-> d'import de la plateforme (en-tête Leads Center ci-dessus) et le remettre à l'utilisateur, sans
-> rien écrire en base. Attendre son signal : il a refusé le dernier appel d'outil. Lui demander où
-> déposer le fichier et s'il veut les 32 lignes ou seulement celles qui ne sont pas en base.
+> **Bug 71 d'abord** : le script 005 modifié dans l'arbre de travail (`WHERE Code IN ('MAYLINE')`)
+> ne doit pas être joué ni commité tel quel — il désactiverait ADMOD et GHRIZA. Remettre
+> `('ADMOD', 'GHRIZA', 'MAYLINE')`, aligner les commentaires, puis faire jouer sur chaque copie
+> (jamais sur la source) : `UPDATE dbo.CfgCompany SET IsActive = 1 WHERE Code = 'MAYLINE'` pour
+> activer TRIBECA (bug 70). Ensuite reprendre le CSV des 32 leads Meta au format d'import
+> (demande interrompue ; demander où le déposer et s'il faut les 32 lignes ou les 18 nouvelles).
 
 ### Backlog
 - [ ] Support et action commerciale des 18 pré-prospections : à poser si l'utilisateur tranche
