@@ -154,6 +154,12 @@ api.ayaddeveloppement.com {
   alors les en-têtes que `forward_auth` vient de poser (le service ne recevrait aucune identité),
   et le préflight partirait vers `forward_auth`. Dans un `route`, l'ordre écrit est l'ordre
   exécuté.
+- `forward_auth` **conserve la query string** de la requête d'origine
+  (`/svc/docs/x?a=1` → `/api/passerelle/verifier?a=1`) ; le vérificateur l'ignore, et un test le
+  verrouille. Constaté sur Caddy 2.11.7, avec ce bloc exact, par un banc local (Caddy en
+  conteneur, Spring et service simulés) : identité transmise, en-têtes forgés remplacés ou
+  retirés, 401 sans cookie avec CORS, préflight 204 sans appel à Spring, origine inconnue sans
+  CORS, `/api/*` intact.
 - **Préflight** : `arpent.ayaddeveloppement.com` → `api.ayaddeveloppement.com` est cross-origin
   (même site, mais autre origine). Un `POST` JSON déclenche un `OPTIONS` **sans cookie** ; passé à
   `forward_auth`, il prendrait un 401 et le navigateur bloquerait la vraie requête.

@@ -90,6 +90,19 @@ class PasserelleControllerTest {
         assertThat(reponse.containsHeader(PasserelleController.EN_TETE_EMPLOYEE_ID)).isFalse();
     }
 
+    /**
+     * Caddy {@code forward_auth} garde la query string de la requête d'origine : le service appelé
+     * en {@code /svc/docs/documents?x=1} fait vérifier {@code /api/passerelle/verifier?x=1}.
+     * Constaté sur Caddy 2.11.7.
+     */
+    @Test
+    void queryStringDeLaRequeteDOrigine_ignoree() throws Exception {
+        Compte compte = creerCompte(true, false, "Commercial");
+
+        mockMvc.perform(get(URL + "?x=1&page=2").cookie(connecter(compte.username())))
+                .andExpect(status().isNoContent());
+    }
+
     @Test
     void sansCookie_401() throws Exception {
         mockMvc.perform(get(URL))
