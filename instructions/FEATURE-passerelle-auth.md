@@ -75,7 +75,8 @@ itération (n8n n'appelle pas encore de service annexe).
    restent valables, le frontend garde une seule adresse d'API. Premier service : `/svc/docs/`.
 2. **Aucun port public** : le service écoute sur `127.0.0.1` ou sur le réseau Docker de Caddy.
    Sinon n'importe qui l'atteint en direct avec des en-têtes forgés.
-3. **La passerelle supprime les `X-User-*` envoyés par le client**, avant toute chose.
+3. **La passerelle supprime les `X-User-*` envoyés par le client**, avant toute chose, et gère
+   CORS et le préflight pour tous les services (§4) — un service n'a pas de `CORSMiddleware`.
 4. Le service **refuse (401)** une requête sans `X-User-Id` — défense en profondeur si la route
    Caddy est mal écrite.
 5. Chaque service publie sa propre OpenAPI sous `/svc/<nom>/openapi.json` ; le frontend en garde un
@@ -91,30 +92,77 @@ actuel vers Spring. `<SPRING>` = exactement l'amont déjà utilisé par ce `reve
 (`127.0.0.1:8080`, `immo-back:8080`…) ; `<DOCS>` = l'amont du service FastAPI.
 
 ```caddy
-api.ayaddeveloppement.com {
-    handle_path /svc/docs/* {
-        # Ne jamais croire un en-tête d'identité venu du client.
+# Fragment réutilisable : identité + CORS pour tout service annexe.
+# {args[0]} = amont Spring, {args[1]} = amont du service.
+(service_annexe) {
+    route {
+        # 1. Ne jamais croire un en-tête d'identité venu du client.
         request_header -X-User-Id
         request_header -X-Username
         request_header -X-User-Roles
         request_header -X-Employee-Id
 
-        forward_auth <SPRING> {
+        # 2. CORS centralisé : le front (arpent) est une autre origine que l'API.
+        @origine_autorisee header_regexp Origin ^https://arpent\.ayaddeveloppement\.com$
+        header @origine_autorisee {
+            Access-Control-Allow-Origin "{http.request.header.Origin}"
+            Access-Control-Allow-Credentials "true"
+            Vary "Origin"
+            defer
+        }
+
+        # 3. Préflight : jamais de cookie, donc répondu ici, avant forward_auth.
+        @preflight {
+            method OPTIONS
+            header_regexp Origin ^https://arpent\.ayaddeveloppement\.com$
+        }
+        header @preflight {
+            Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE"
+            Access-Control-Allow-Headers "{http.request.header.Access-Control-Request-Headers}"
+            Access-Control-Max-Age "600"
+        }
+        respond @preflight 204
+
+        # 4. Vérification d'identité par Spring.
+        forward_auth {args[0]} {
             uri /api/passerelle/verifier
             copy_headers X-User-Id X-Username X-User-Roles X-Employee-Id
         }
-        reverse_proxy <DOCS>
+
+        # 5. Relais vers le service.
+        reverse_proxy {args[1]}
+    }
+}
+
+api.ayaddeveloppement.com {
+    handle_path /svc/docs/* {
+        import service_annexe 127.0.0.1:8080 127.0.0.1:8000
     }
 
     handle {
         # le reverse_proxy existant vers Spring, inchangé
-        reverse_proxy <SPRING>
+        reverse_proxy 127.0.0.1:8080
     }
 }
 ```
 
+`127.0.0.1:8080` / `127.0.0.1:8000` sont des hypothèses : reprendre l'amont exact du
+`reverse_proxy` actuel pour Spring, et l'adresse du service.
+
+- **`route` est obligatoire.** Hors `route`, Caddy trie les directives selon un ordre fixe où
+  `forward_auth` passe **avant** `request_header` et `respond` : la suppression du §1 effacerait
+  alors les en-têtes que `forward_auth` vient de poser (le service ne recevrait aucune identité),
+  et le préflight partirait vers `forward_auth`. Dans un `route`, l'ordre écrit est l'ordre
+  exécuté.
+- **Préflight** : `arpent.ayaddeveloppement.com` → `api.ayaddeveloppement.com` est cross-origin
+  (même site, mais autre origine). Un `POST` JSON déclenche un `OPTIONS` **sans cookie** ; passé à
+  `forward_auth`, il prendrait un 401 et le navigateur bloquerait la vraie requête.
+- **CORS dans Caddy, pas dans les services** : écrit une fois pour tous les services ; `defer`
+  l'applique aussi aux 401/403 renvoyés par `forward_auth`, que le front doit pouvoir lire pour
+  déclencher « session expirée ». Ne pas ajouter de `CORSMiddleware` côté FastAPI.
 - `handle_path` retire `/svc/docs` : le service reçoit `/…`. Côté FastAPI,
   `FastAPI(root_path="/svc/docs")` pour que ses liens de doc soient justes.
+- Nouveau service = une ligne : `handle_path /svc/<nom>/* { import service_annexe <spring> <amont> }`.
 - Les `handle` sont mutuellement exclusifs : envelopper le `reverse_proxy` existant dans
   `handle { … }` garantit que `/svc/docs/*` ne part jamais vers Spring sans vérification.
 - Appliquer : `caddy validate --config /etc/caddy/Caddyfile` puis `sudo systemctl reload caddy`
