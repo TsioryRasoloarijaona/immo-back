@@ -11,11 +11,13 @@ import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
+import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -56,7 +58,14 @@ public class ClientService {
         this.settlementLineRepository = settlementLineRepository;
     }
 
-    public Page<ClientListItemDto> findAll(String search, Pageable pageable) {
+    /**
+     * @param trancheId filtre par tranche ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) :
+     *                  ne retient que les clients portant au moins un dossier (visible) de cette
+     *                  tranche, au sens de {@link AppartenanceTranche#dossier} — le même prédicat
+     *                  que {@code GET /api/dossiers?trancheId=…}. Les agrégats de chaque client
+     *                  restent calculés sur tous ses dossiers. {@code null} = pas de filtre.
+     */
+    public Page<ClientListItemDto> findAll(String search, @Nullable UUID trancheId, Pageable pageable) {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -69,10 +78,15 @@ public class ClientService {
             Join<ComFolder, StkItem> article = folderRoot.join("stkItem", JoinType.LEFT);
             Join<StkItem, CfgTranche> tranche = article.join("stkHierarchy", JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
+            List<Predicate> conditionsDossier = new ArrayList<>();
+            conditionsDossier.add(cb.isNotNull(folderRoot.get("cfgCustomer")));
+            conditionsDossier.add(VisibiliteEntites.depuisProjet(projet, cb));
+            if (trancheId != null) {
+                conditionsDossier.add(AppartenanceTranche.dossier(folderRoot, clientsAvecDossier, cb,
+                        List.of(trancheId)));
+            }
             clientsAvecDossier.select(folderRoot.get("cfgCustomer").get("id"))
-                    .where(cb.and(
-                            cb.isNotNull(folderRoot.get("cfgCustomer")),
-                            VisibiliteEntites.depuisProjet(projet, cb)));
+                    .where(cb.and(conditionsDossier.toArray(new Predicate[0])));
             predicates.add(root.get("id").in(clientsAvecDossier));
 
             if (StringUtils.hasText(search)) {

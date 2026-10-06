@@ -7,6 +7,7 @@ import com.tsix.immocrm.dto.prospect.ProspectDetailDto;
 import com.tsix.immocrm.services.client.ClientService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
+import com.tsix.immocrm.services.tranche.FiltreTrancheAdministrateur;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -62,14 +63,33 @@ public class ClientController {
             description = "Les tiers portant au moins un dossier de vente sur une entité juridique "
                     + "en exploitation, avec leurs agrégats calculés côté serveur (nombre de "
                     + "dossiers, total à payer, total réglé). Une page vide signifie qu'aucun "
-                    + "client ne correspond, pas une erreur.")
+                    + "client ne correspond, pas une erreur.\n\n"
+                    + "**Filtre par tranche** (`trancheId`, réservé aux administrateurs) : seuls "
+                    + "les clients ayant au moins un dossier dans cette tranche — même règle "
+                    + "d'appartenance que `GET /api/dossiers?trancheId=` (un article lié ou "
+                    + "l'article principal du dossier dans la tranche). Les agrégats "
+                    + "(`nombreDossiers`, `totalAPayer`, `totalRegle`) restent calculés sur "
+                    + "**tous** les dossiers du client, pas sur ceux de la tranche seule.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page de clients (éventuellement "
+                    + "vide). Une tranche inconnue ou sans dossier donne une page vide, pas un 404."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` n'est pas un UUID."),
+            @ApiResponse(responseCode = "403", description = "`trancheId` envoyé par un appelant "
+                    + "qui n'a pas le rôle Administrateur.")
+    })
     @GetMapping
     public PageDto<ClientListItemDto> findAll(
             @Parameter(description = "Recherche insensible à la casse sur le code, le nom, le "
                     + "prénom, la raison sociale ou l'e-mail.", example = "benali")
             @RequestParam(required = false) String search,
+            @Parameter(description = "Tranche (`CfgTranche.id`, une seule valeur) : ne garde que "
+                    + "les clients ayant au moins un dossier dans cette tranche. **Réservé aux "
+                    + "administrateurs — 403 sinon.** Absent = tous les clients, comportement "
+                    + "inchangé.", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+            @RequestParam(required = false) UUID trancheId,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
-        return PageDto.of(clientService.findAll(search, pageable));
+        FiltreTrancheAdministrateur.verifier(trancheId);
+        return PageDto.of(clientService.findAll(search, trancheId, pageable));
     }
 
     @GetMapping("/{id}")

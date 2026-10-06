@@ -82,6 +82,7 @@ import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
+import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -295,6 +296,19 @@ public class ProspectionService {
     }
 
     /**
+     * Le {@code totalElements} de {@code GET /api/prospections?trancheId=…[&ouvertes=…]} pour
+     * l'appelant courant — <b>la même</b> {@link #specProspections} et le même périmètre que
+     * {@link #findAll}. Sert les compteurs du tableau de bord filtré par tranche
+     * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R3) : égaux à la liste par
+     * construction.
+     */
+    public long compterProspections(UUID trancheId, Boolean ouvertes) {
+        return prospectionRepository.count(specProspections(null, null, null, List.of(trancheId),
+                null, null, null, ouvertes, null)
+                .and(perimetreService.filtreProspections()));
+    }
+
+    /**
      * {@code GET /api/pre-prospections}: {@code StrEntity.Code = 'ComPreProspection'} — voir
      * {@link DiscriminantPreProspection}. Same
      * filter set as {@link #findAll} — see {@code instructions/filtres-avances.md} point 5.
@@ -399,7 +413,7 @@ public class ProspectionService {
                 predicates.add(root.get("cfgCommercial").get("id").in(commerciaux));
             }
             if (trancheIds != null && !trancheIds.isEmpty()) {
-                predicates.add(root.get("stkHierarchy").get("id").in(trancheIds));
+                predicates.add(AppartenanceTranche.prospection(root, trancheIds));
             }
             if (dateDebut != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), dateDebut));

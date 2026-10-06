@@ -140,6 +140,26 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     BigDecimal montantReglePourVentes(LocalDateTime debut, LocalDateTime fin, int seuil,
                                       List<String> sorties);
 
+    /**
+     * Variante de {@link #montantReglePourVentes} restreinte à une liste de dossiers — même tuple. Sert le
+     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
+     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
+     */
+    @Query("SELECT SUM(CASE WHEN cat.isCredit = true THEN l.amount ELSE -l.amount END) "
+            + "FROM StlSettlementLine l JOIN l.comDocument d JOIN d.comSettlementCategory cat "
+            + "JOIN d.comFolder f JOIN f.strStatus s JOIN l.stlSettlement st "
+            + "JOIN st.stlSettlementType sty "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleAdvance = true OR cat.isSaleCredit = true OR cat.isSaleAutoFinancment = true) "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND f.id IN :dossierIds")
+    BigDecimal montantReglePourVentesPourDossiers(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                      List<String> sorties, List<UUID> dossierIds);
+
     /** Variante de {@link #montantReglePourVentes} restreinte au périmètre. */
     @Query("SELECT SUM(CASE WHEN cat.isCredit = true THEN l.amount ELSE -l.amount END) "
             + "FROM StlSettlementLine l JOIN l.comDocument d JOIN d.comSettlementCategory cat "
@@ -182,6 +202,25 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
             + "AND COALESCE(st.settlementDate, st.echeanceDate) < :fin "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     List<Object[]> encaissementsDeLAnnee(LocalDateTime debut, LocalDateTime fin);
+
+    /**
+     * Variante de {@link #encaissementsDeLAnnee} restreinte à une liste de dossiers — même tuple. Sert le
+     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
+     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
+     */
+    @Query("SELECT COUNT(l), SUM(l.amount) "
+            + "FROM StlSettlementLine l JOIN l.stlSettlement st JOIN st.stlSettlementType sty "
+            + "JOIN l.comDocument d JOIN d.comSettlementCategory cat JOIN d.comFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE st.isCredit = true "
+            + "AND (sty.isNotContabilized IS NULL OR sty.isNotContabilized = false) "
+            + "AND (cat.isSaleExpense IS NULL OR cat.isSaleExpense = false) "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) >= :debut "
+            + "AND COALESCE(st.settlementDate, st.echeanceDate) < :fin "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND f.id IN :dossierIds")
+    List<Object[]> encaissementsDeLAnneePourDossiers(LocalDateTime debut, LocalDateTime fin, List<UUID> dossierIds);
 
     /** Variante de {@link #encaissementsDeLAnnee} restreinte au périmètre — même tuple. */
     @Query("SELECT COUNT(l), SUM(l.amount) "

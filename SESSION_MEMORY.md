@@ -1,10 +1,12 @@
 # Session Memory
-_Last updated: 2026-10-01T10:30+01:00_
+_Last updated: 2026-10-06_
 _Project: immo-crm (AyadERP) — C:\Users\tsiory\Documents\ayad-internship\prototype\immo-crm_
 
 ---
 
 ## 🎯 Current Objective
+
+**06/10 — `feat/dashboard-filtre-tranche`** (PR à fusionner) : paramètre `trancheId` réservé à l'administrateur (403 sinon, `services/tranche/FiltreTrancheAdministrateur`) sur `GET /api/dashboard`, `/relances`, `/annuel` et `GET /api/clients`. Appartenance à une tranche centralisée dans `services/tranche/AppartenanceTranche` (dossiers, prospections, clients). Spec : `instructions/FEATURE-dashboard-filtre-tranche.md`.
 
 Parité OMRAN sur la **prospection**. Livré et en production : le cycle de vie des alertes de
 relance, les relances en retard du tableau de bord limitées aux prospections du mois, le filtre

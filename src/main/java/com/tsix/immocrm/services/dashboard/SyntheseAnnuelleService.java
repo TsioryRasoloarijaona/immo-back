@@ -10,6 +10,7 @@ import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.services.dossier.DossierService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -63,32 +64,63 @@ public class SyntheseAnnuelleService {
     private final StlSettlementLineRepository settlementLineRepository;
     private final StrStatusRepository strStatusRepository;
     private final PerimetreCommercialService perimetreService;
+    private final DossierService dossierService;
 
     public SyntheseAnnuelleService(ComDocumentRepository documentRepository,
                                    ComFolderRepository folderRepository,
                                    StlSettlementLineRepository settlementLineRepository,
                                    StrStatusRepository strStatusRepository,
-                                   PerimetreCommercialService perimetreService) {
+                                   PerimetreCommercialService perimetreService,
+                                   DossierService dossierService) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.settlementLineRepository = settlementLineRepository;
         this.strStatusRepository = strStatusRepository;
         this.perimetreService = perimetreService;
+        this.dossierService = dossierService;
     }
 
-    public SyntheseAnnuelleDto get(@Nullable Integer annee) {
+    /**
+     * L'ensemble de dossiers sur lequel portent les trois blocs, résolu une fois.
+     *
+     * <ul>
+     *   <li>{@code dossierIds} non nul — filtre par tranche
+     *       ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : l'assiette de
+     *       {@code GET /api/dossiers?trancheId=…}, périmètre commercial déjà compris. Vide = aucun
+     *       dossier : chaque bloc vaut alors zéro sans interroger la base ;</li>
+     *   <li>sinon {@code perimetre} non nul — commercial restreint ;</li>
+     *   <li>sinon — tout, sous la seule visibilité par entité juridique.</li>
+     * </ul>
+     *
+     * <p>Chaque bloc choisit sa requête selon l'assiette puis agrège par <b>le même code</b> : le
+     * filtre par tranche est un prédicat de plus ({@code f.id IN :dossierIds}), pas un calcul
+     * parallèle (R6).
+     */
+    private record Assiette(@Nullable List<UUID> perimetre, @Nullable List<UUID> dossierIds) {
+        boolean vide() {
+            return dossierIds != null && dossierIds.isEmpty();
+        }
+    }
+
+    /**
+     * @param trancheId tranche ({@code CfgTranche.id}) ; {@code null} = toutes, comportement
+     *                  inchangé
+     */
+    public SyntheseAnnuelleDto get(@Nullable Integer annee, @Nullable UUID trancheId) {
         int cible = annee != null ? annee : LocalDate.now().getYear();
         LocalDateTime debut = LocalDate.of(cible, 1, 1).atStartOfDay();
         LocalDateTime finExclue = LocalDate.of(cible + 1, 1, 1).atStartOfDay();
 
-        List<UUID> perimetre = perimetreService.perimetreCourant().orElse(null);
+        Assiette assiette = trancheId != null
+                ? new Assiette(null, List.copyOf(dossierService.idsDossiersDeTranche(trancheId)))
+                : new Assiette(perimetreService.perimetreCourant().orElse(null), null);
         int seuil = seuilDeConcretisation();
 
         return new SyntheseAnnuelleDto(
                 cible,
-                echeancier(cible, seuil, perimetre),
-                ventes(debut, finExclue, seuil, perimetre),
-                encaissements(debut, finExclue, perimetre));
+                echeancier(cible, seuil, assiette),
+                ventes(debut, finExclue, seuil, assiette),
+                encaissements(debut, finExclue, assiette));
     }
 
     /**
@@ -117,10 +149,19 @@ public class SyntheseAnnuelleService {
      * Les douze mois, <b>toujours</b> — un mois sans échéance vaut zéro et reste un point de la
      * courbe. Reboucher les trous côté client supposerait qu'il sache lesquels manquent.
      */
-    private List<PointMensuelDto> echeancier(int annee, int seuil, @Nullable List<UUID> perimetre) {
-        List<Object[]> lignes = perimetre == null
-                ? documentRepository.echeancierParMois(annee, seuil, CODES_DE_SORTIE)
-                : documentRepository.echeancierParMoisDansPerimetre(annee, seuil, CODES_DE_SORTIE, perimetre);
+    private List<PointMensuelDto> echeancier(int annee, int seuil, Assiette assiette) {
+        List<Object[]> lignes;
+        if (assiette.vide()) {
+            lignes = List.of();
+        } else if (assiette.dossierIds() != null) {
+            lignes = documentRepository.echeancierParMoisPourDossiers(annee, seuil, CODES_DE_SORTIE,
+                    assiette.dossierIds());
+        } else if (assiette.perimetre() != null) {
+            lignes = documentRepository.echeancierParMoisDansPerimetre(annee, seuil, CODES_DE_SORTIE,
+                    assiette.perimetre());
+        } else {
+            lignes = documentRepository.echeancierParMois(annee, seuil, CODES_DE_SORTIE);
+        }
 
         Map<Integer, Object[]> parMois = new HashMap<>();
         for (Object[] ligne : lignes) {
@@ -141,18 +182,29 @@ public class SyntheseAnnuelleService {
     // ---------------------------------------------------------------- bloc B
 
     private VentesConcretiseesDto ventes(LocalDateTime debut, LocalDateTime finExclue, int seuil,
-                                         @Nullable List<UUID> perimetre) {
-        List<Object[]> agregat = perimetre == null
-                ? folderRepository.ventesConcretisees(debut, finExclue, seuil, CODES_DE_SORTIE)
-                : folderRepository.ventesConcretiseesDansPerimetre(debut, finExclue, seuil, CODES_DE_SORTIE, perimetre);
-
-        BigDecimal regle = perimetre == null
-                ? settlementLineRepository.montantReglePourVentes(debut, finExclue, seuil, CODES_DE_SORTIE)
-                : settlementLineRepository.montantReglePourVentesDansPerimetre(debut, finExclue, seuil, CODES_DE_SORTIE, perimetre);
-
-        long sansDateAvance = perimetre == null
-                ? folderRepository.compterDossiersSansDateAvance()
-                : folderRepository.compterDossiersSansDateAvanceDansPerimetre(perimetre);
+                                         Assiette assiette) {
+        List<UUID> dossierIds = assiette.dossierIds();
+        List<UUID> perimetre = assiette.perimetre();
+        List<Object[]> agregat;
+        BigDecimal regle;
+        long sansDateAvance;
+        if (assiette.vide()) {
+            agregat = List.of();
+            regle = null;
+            sansDateAvance = 0L;
+        } else if (dossierIds != null) {
+            agregat = folderRepository.ventesConcretiseesPourDossiers(debut, finExclue, seuil, CODES_DE_SORTIE, dossierIds);
+            regle = settlementLineRepository.montantReglePourVentesPourDossiers(debut, finExclue, seuil, CODES_DE_SORTIE, dossierIds);
+            sansDateAvance = folderRepository.compterDossiersSansDateAvancePourDossiers(dossierIds);
+        } else if (perimetre != null) {
+            agregat = folderRepository.ventesConcretiseesDansPerimetre(debut, finExclue, seuil, CODES_DE_SORTIE, perimetre);
+            regle = settlementLineRepository.montantReglePourVentesDansPerimetre(debut, finExclue, seuil, CODES_DE_SORTIE, perimetre);
+            sansDateAvance = folderRepository.compterDossiersSansDateAvanceDansPerimetre(perimetre);
+        } else {
+            agregat = folderRepository.ventesConcretisees(debut, finExclue, seuil, CODES_DE_SORTIE);
+            regle = settlementLineRepository.montantReglePourVentes(debut, finExclue, seuil, CODES_DE_SORTIE);
+            sansDateAvance = folderRepository.compterDossiersSansDateAvance();
+        }
 
         Object[] ligne = premiere(agregat);
         return new VentesConcretiseesDto(
@@ -165,10 +217,17 @@ public class SyntheseAnnuelleService {
     // ---------------------------------------------------------------- bloc C
 
     private EncaissementsAnnuelsDto encaissements(LocalDateTime debut, LocalDateTime finExclue,
-                                                  @Nullable List<UUID> perimetre) {
-        List<Object[]> agregat = perimetre == null
-                ? settlementLineRepository.encaissementsDeLAnnee(debut, finExclue)
-                : settlementLineRepository.encaissementsDeLAnneeDansPerimetre(debut, finExclue, perimetre);
+                                                  Assiette assiette) {
+        List<Object[]> agregat;
+        if (assiette.vide()) {
+            agregat = List.of();
+        } else if (assiette.dossierIds() != null) {
+            agregat = settlementLineRepository.encaissementsDeLAnneePourDossiers(debut, finExclue, assiette.dossierIds());
+        } else if (assiette.perimetre() != null) {
+            agregat = settlementLineRepository.encaissementsDeLAnneeDansPerimetre(debut, finExclue, assiette.perimetre());
+        } else {
+            agregat = settlementLineRepository.encaissementsDeLAnnee(debut, finExclue);
+        }
 
         Object[] ligne = premiere(agregat);
         return new EncaissementsAnnuelsDto(

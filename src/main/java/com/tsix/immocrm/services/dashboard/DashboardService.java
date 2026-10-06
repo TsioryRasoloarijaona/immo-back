@@ -6,7 +6,10 @@ import com.tsix.immocrm.dto.dashboard.EtapeCountDto;
 import com.tsix.immocrm.dto.dashboard.RelanceDto;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.tsix.immocrm.services.dossier.DossierService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.prospection.ProspectionService;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -20,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -29,12 +33,17 @@ public class DashboardService {
     private final ComFolderRepository folderRepository;
     private final ComProspectionRepository prospectionRepository;
     private final PerimetreCommercialService perimetreService;
+    private final DossierService dossierService;
+    private final ProspectionService prospectionService;
 
     public DashboardService(ComFolderRepository folderRepository, ComProspectionRepository prospectionRepository,
-                             PerimetreCommercialService perimetreService) {
+                             PerimetreCommercialService perimetreService, DossierService dossierService,
+                             ProspectionService prospectionService) {
         this.folderRepository = folderRepository;
         this.prospectionRepository = prospectionRepository;
         this.perimetreService = perimetreService;
+        this.dossierService = dossierService;
+        this.prospectionService = prospectionService;
     }
 
     /**
@@ -46,12 +55,25 @@ public class DashboardService {
      * périmètre prétend masquer. Les quatre agrégats (valeur du pipeline + panier moyen, dossiers
      * par étape, relances en retard, compteurs de prospections) dérivent tous des deux requêtes
      * ci-dessous, filtrées ensemble.
+     *
+     * <p><b>Filtre par tranche</b> ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : un
+     * prédicat de plus, pas un calcul parallèle. Les lignes de dossiers restent celles de la même
+     * projection et passent par la même boucle d'agrégation ; elles sont seulement restreintes aux
+     * ids que renvoie {@code GET /api/dossiers?trancheId=…} (R2/R6). Les compteurs de prospections
+     * sont le {@code totalElements} de {@code GET /api/prospections?trancheId=…} (R3). Sans
+     * tranche, rien ne change.
+     *
+     * @param trancheId tranche ({@code CfgTranche.id}) ; {@code null} = toutes
      */
-    public DashboardDto get() {
+    public DashboardDto get(@Nullable UUID trancheId) {
         Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
         List<Object[]> rows = perimetre
                 .map(folderRepository::findDashboardProjectionDansPerimetre)
                 .orElseGet(folderRepository::findDashboardProjection);
+        if (trancheId != null) {
+            Set<UUID> dossiersDeLaTranche = dossierService.idsDossiersDeTranche(trancheId);
+            rows = rows.stream().filter(row -> dossiersDeLaTranche.contains((UUID) row[0])).toList();
+        }
         LocalDateTime now = LocalDateTime.now();
 
         Map<String, Long> parEtape = new LinkedHashMap<>();
@@ -95,12 +117,19 @@ public class DashboardService {
                 .map(e -> new EtapeCountDto(e.getKey(), e.getValue()))
                 .toList();
 
-        long prospectionsOuvertes = perimetre
-                .map(prospectionRepository::countOpenExcludingPreProspectionsDansPerimetre)
-                .orElseGet(prospectionRepository::countOpenExcludingPreProspections);
-        long prospectionsTotal = perimetre
-                .map(prospectionRepository::countExcludingPreProspectionsDansPerimetre)
-                .orElseGet(prospectionRepository::countExcludingPreProspections);
+        long prospectionsOuvertes;
+        long prospectionsTotal;
+        if (trancheId != null) {
+            prospectionsOuvertes = prospectionService.compterProspections(trancheId, Boolean.TRUE);
+            prospectionsTotal = prospectionService.compterProspections(trancheId, null);
+        } else {
+            prospectionsOuvertes = perimetre
+                    .map(prospectionRepository::countOpenExcludingPreProspectionsDansPerimetre)
+                    .orElseGet(prospectionRepository::countOpenExcludingPreProspections);
+            prospectionsTotal = perimetre
+                    .map(prospectionRepository::countExcludingPreProspectionsDansPerimetre)
+                    .orElseGet(prospectionRepository::countExcludingPreProspections);
+        }
 
         return new DashboardDto(valeurPipeline, panierMoyen, dossiersParEtape, relancesEnRetard,
                 prospectionsOuvertes, prospectionsTotal);

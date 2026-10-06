@@ -60,6 +60,23 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> 
             + "GROUP BY MONTH(d.docDate)")
     List<Object[]> echeancierParMois(int annee, int seuil, List<String> sorties);
 
+    /**
+     * Variante de {@link #echeancierParMois} restreinte à une liste de dossiers — même tuple. Sert le
+     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
+     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
+     */
+    @Query("SELECT MONTH(d.docDate), SUM(d.amount), COUNT(d) "
+            + "FROM ComDocument d JOIN d.comFolder f JOIN f.strStatus s "
+            + "JOIN d.comSettlementCategory cat " + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE YEAR(d.docDate) = :annee AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (cat.isSaleAdvance = true OR cat.isSaleCredit = true OR cat.isSaleAutoFinancment = true) "
+            + "AND (cat.isSaleExpense IS NULL OR cat.isSaleExpense = false) "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND f.id IN :dossierIds "
+            + "GROUP BY MONTH(d.docDate)")
+    List<Object[]> echeancierParMoisPourDossiers(int annee, int seuil, List<String> sorties, List<UUID> dossierIds);
+
     /** Variante de {@link #echeancierParMois} restreinte au périmètre — même tuple. */
     @Query("SELECT MONTH(d.docDate), SUM(d.amount), COUNT(d) "
             + "FROM ComDocument d JOIN d.comFolder f JOIN f.strStatus s "

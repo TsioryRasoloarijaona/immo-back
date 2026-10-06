@@ -167,6 +167,21 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
     List<Object[]> ventesConcretisees(LocalDateTime debut, LocalDateTime fin, int seuil,
                                       List<String> sorties);
 
+    /**
+     * Variante de {@link #ventesConcretisees} restreinte à une liste de dossiers — même tuple. Sert le
+     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
+     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
+     */
+    @Query("SELECT COUNT(f), SUM(f.price) FROM ComFolder f JOIN f.strStatus s "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate >= :debut AND f.advanceDate < :fin "
+            + "AND s.sorting >= :seuil AND s.code NOT IN :sorties "
+            + "AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND f.id IN :dossierIds")
+    List<Object[]> ventesConcretiseesPourDossiers(LocalDateTime debut, LocalDateTime fin, int seuil,
+                                      List<String> sorties, List<UUID> dossierIds);
+
     /** Variante de {@link #ventesConcretisees} restreinte au périmètre — même tuple. */
     @Query("SELECT COUNT(f), SUM(f.price) FROM ComFolder f JOIN f.strStatus s "
             + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
@@ -189,6 +204,18 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE f.advanceDate IS NULL AND (soc.isActive = true OR soc.id IS NULL)")
     long compterDossiersSansDateAvance();
+
+    /**
+     * Variante de {@link #compterDossiersSansDateAvance} restreinte à une liste de dossiers — même tuple. Sert le
+     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
+     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
+     */
+    @Query("SELECT COUNT(f) FROM ComFolder f "
+            + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "
+            + "LEFT JOIN pr.cfgCompany soc "
+            + "WHERE f.advanceDate IS NULL AND (soc.isActive = true OR soc.id IS NULL) "
+            + "AND f.id IN :dossierIds")
+    long compterDossiersSansDateAvancePourDossiers(List<UUID> dossierIds);
 
     /** Variante de {@link #compterDossiersSansDateAvance()} restreinte au périmètre. */
     @Query("SELECT COUNT(f) FROM ComFolder f "
