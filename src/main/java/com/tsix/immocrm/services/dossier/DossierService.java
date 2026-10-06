@@ -58,6 +58,7 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
@@ -226,6 +227,25 @@ public class DossierService {
     }
 
     /**
+     * Les ids des dossiers que renvoie {@code GET /api/dossiers?trancheId=…} à l'appelant courant :
+     * <b>la même</b> {@link #specDossiers} et le même périmètre commercial que {@link #findAll}.
+     * C'est l'assiette du tableau de bord filtré par tranche
+     * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R2/R3) — ce qui garantit que la
+     * somme de {@code dossiersParEtape} retombe sur le {@code totalElements} de la liste filtrée.
+     *
+     * <p>Chargement d'entités plutôt que projection : le volume est borné par le nombre de
+     * dossiers d'une tranche (387 dossiers au total en base réelle).
+     */
+    public Set<UUID> idsDossiersDeTranche(UUID trancheId) {
+        Specification<ComFolder> spec = specDossiers(null, null, null, List.of(trancheId),
+                null, null, null, null)
+                .and(perimetreService.filtreDossiers());
+        return folderRepository.findAll(spec).stream()
+                .map(ComFolder::getId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
      * Les filtres de la liste des dossiers, extraits pour être partagés avec le groupement.
      *
      * <p>N'inclut délibérément <strong>pas</strong> le périmètre commercial : les deux appelants
@@ -253,28 +273,9 @@ public class DossierService {
                         root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), projet));
             }
             if (trancheIds != null && !trancheIds.isEmpty()) {
-                jakarta.persistence.criteria.Subquery<UUID> subquery = query.subquery(UUID.class);
-                jakarta.persistence.criteria.Root<StkItem> article = subquery.from(StkItem.class);
-                subquery.select(article.get("id"))
-                        .where(cb.and(
-                                cb.equal(article.get("comFolderId"), root.get("id")),
-                                article.get("stkHierarchy").get("id").in(trancheIds)));
-                // L'EXISTS seul ne suffit pas : il passe par le lien inverse StkItem.ComFolderId,
-                // qui n'est renseigné que pour 328 des 358 dossiers réels. Les 30 autres ont
-                // pourtant bien une tranche via leur article principal (ComFolder.StkItemId, lui
-                // renseigné à 358/358) — sans cette seconde branche ils étaient invisibles au
-                // filtre, silencieusement.
-                //
-                // Jointures explicitement LEFT : une navigation implicite produirait des INNER
-                // JOIN qui, portant sur toute la requête et non sur la seule branche du OR,
-                // écarteraient un dossier sans article principal même quand l'EXISTS le retient.
-                jakarta.persistence.criteria.Join<ComFolder, StkItem> principal =
-                        root.join("stkItem", jakarta.persistence.criteria.JoinType.LEFT);
-                jakarta.persistence.criteria.Join<StkItem, CfgTranche> trancheDuPrincipal =
-                        principal.join("stkHierarchy", jakarta.persistence.criteria.JoinType.LEFT);
-                predicates.add(cb.or(
-                        cb.exists(subquery),
-                        trancheDuPrincipal.get("id").in(trancheIds)));
+                // Prédicat partagé avec le tableau de bord et GET /api/clients
+                // (FEATURE-dashboard-filtre-tranche.md, R2) — voir AppartenanceTranche.dossier.
+                predicates.add(AppartenanceTranche.dossier(root, query, cb, trancheIds));
             }
             if (dateDebut != null || dateFin != null) {
                 String champ = (champDate != null ? champDate : ChampDateDossier.RESERVATION).getChampEntite();

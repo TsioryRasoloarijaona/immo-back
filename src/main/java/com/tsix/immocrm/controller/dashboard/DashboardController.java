@@ -11,6 +11,7 @@ import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.dashboard.DashboardService;
 import com.tsix.immocrm.services.dashboard.RelanceDashboardService;
 import com.tsix.immocrm.services.dashboard.SyntheseAnnuelleService;
+import com.tsix.immocrm.services.tranche.FiltreTrancheAdministrateur;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
@@ -77,16 +79,41 @@ public class DashboardController {
                     + "ci-dessus ne portent que sur ses projets affectés — un chiffre d'affaires "
                     + "global serait précisément la donnée que le périmètre masque. Les dossiers "
                     + "et prospections dont le projet ne se résout pas restent comptés pour tout "
-                    + "le monde."
+                    + "le monde.\n\n"
+                    + "**Filtre par tranche** (`trancheId`, réservé aux administrateurs) : *tous* "
+                    + "les agrégats ne portent plus que sur la tranche, en plus du périmètre et "
+                    + "des entités actives. Un dossier appartient à la tranche selon la règle de "
+                    + "`GET /api/dossiers?trancheId=` (un article lié ou l'article principal dans "
+                    + "la tranche) — la somme de `dossiersParEtape` vaut donc le `totalElements` "
+                    + "de cette liste, et `valeurPipeline` la somme des `totalToPay` de ses "
+                    + "dossiers hors statut de sortie. Une prospection appartient à la tranche "
+                    + "qu'elle vise : `prospectionsOuvertes` = `totalElements` de "
+                    + "`GET /api/prospections?trancheId=&ouvertes=true`, `prospectionsTotal` = "
+                    + "celui de `GET /api/prospections?trancheId=`. Un dossier dont les articles "
+                    + "couvrent deux tranches compte dans chacune : la somme sur toutes les "
+                    + "tranches peut dépasser le total non filtré."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Agrégats calculés. Des listes vides "
                     + "et des montants à zéro signifient qu'aucun dossier n'entre dans le "
-                    + "périmètre de l'appelant, pas une erreur.")
+                    + "périmètre de l'appelant (ou dans la tranche demandée, même inconnue), pas "
+                    + "une erreur."),
+            @ApiResponse(responseCode = "400", description = "`trancheId` n'est pas un UUID."),
+            @ApiResponse(responseCode = "403", description = "`trancheId` envoyé par un appelant "
+                    + "qui n'a pas le rôle Administrateur.")
     })
-    public DashboardDto get() {
-        return dashboardService.get();
+    public DashboardDto get(
+            @Parameter(description = TRANCHE_ID, example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+            @RequestParam(required = false) UUID trancheId) {
+        FiltreTrancheAdministrateur.verifier(trancheId);
+        return dashboardService.get(trancheId);
     }
+
+    /** Description commune du paramètre {@code trancheId} des endpoints du tableau de bord. */
+    private static final String TRANCHE_ID = "Tranche (`CfgTranche.id`, une seule valeur) : "
+            + "restreint le résultat à cette tranche. **Réservé aux administrateurs — 403 sinon.** "
+            + "Absent = toutes les tranches, comportement inchangé. Une tranche inconnue ou sans "
+            + "donnée renvoie 200 avec des zéros et des listes vides.";
 
     @GetMapping("/relances")
     @Operation(
@@ -133,7 +160,9 @@ public class DashboardController {
                     + "compte non rattaché à un employé ne possède aucune relance — il ne reçoit "
                     + "alors, sous `portee=MOI`, que les relances non affectées."),
             @ApiResponse(responseCode = "400", description = "`echeance` ou `portee` hors des "
-                    + "valeurs admises.")
+                    + "valeurs admises, ou `trancheId` qui n'est pas un UUID."),
+            @ApiResponse(responseCode = "403", description = "`trancheId` envoyé par un appelant "
+                    + "qui n'a pas le rôle Administrateur.")
     })
     public PageDto<RelanceProspectionDto> relances(
             @Parameter(description = "`AUJOURDHUI` : échéance au jour même. `RETARD` : relances "
@@ -146,9 +175,16 @@ public class DashboardController {
                     + "relances non affectées sont incluses.", example = "MOI")
             @RequestParam(defaultValue = "MOI") PorteeRelance portee,
 
+            @Parameter(description = TRANCHE_ID + " Une relance appartient à la tranche que vise "
+                    + "sa prospection (même règle que `GET /api/prospections?trancheId=`) ; "
+                    + "s'applique aux deux `echeance` et aux deux `portee`.",
+                    example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+            @RequestParam(required = false) UUID trancheId,
+
             @AuthenticationPrincipal AuthenticatedUser principal,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
-        return PageDto.of(relanceDashboardService.relances(echeance, portee, principal, pageable));
+        FiltreTrancheAdministrateur.verifier(trancheId);
+        return PageDto.of(relanceDashboardService.relances(echeance, portee, principal, trancheId, pageable));
     }
 
     @GetMapping("/nouveaux-pre-prospects")
@@ -200,11 +236,23 @@ public class DashboardController {
             @ApiResponse(responseCode = "200", description = "Synthese calculee. Des compteurs a "
                     + "zero signifient qu'aucun dossier n'entre dans le perimetre de l'appelant "
                     + "sur cette annee, pas une erreur."),
-            @ApiResponse(responseCode = "400", description = "`annee` non numerique.")
+            @ApiResponse(responseCode = "400", description = "`annee` non numérique, ou "
+                    + "`trancheId` qui n'est pas un UUID."),
+            @ApiResponse(responseCode = "403", description = "`trancheId` envoyé par un appelant "
+                    + "qui n'a pas le rôle Administrateur.")
     })
     public SyntheseAnnuelleDto annuel(
             @Parameter(description = "Annee observee. Defaut : l'annee courante.", example = "2026")
-            @RequestParam(required = false) Integer annee) {
-        return syntheseAnnuelleService.get(annee);
+            @RequestParam(required = false) Integer annee,
+
+            @Parameter(description = TRANCHE_ID + " Les trois blocs (`echeancier`, "
+                    + "`ventesConcretisees`, `encaissements`) et `dossiersSansDateAvance` ne "
+                    + "portent plus que sur les dossiers de la tranche, au sens de "
+                    + "`GET /api/dossiers?trancheId=` (un article lié ou l'article principal dans "
+                    + "la tranche) ; montants calculés par les mêmes requêtes, un prédicat de plus.",
+                    example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+            @RequestParam(required = false) UUID trancheId) {
+        FiltreTrancheAdministrateur.verifier(trancheId);
+        return syntheseAnnuelleService.get(annee, trancheId);
     }
 }

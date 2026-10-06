@@ -13,6 +13,7 @@ import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import com.tsix.immocrm.services.prospection.ProspectionService;
+import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -82,6 +84,7 @@ public class RelanceDashboardService {
     public Page<RelanceProspectionDto> relances(EcheanceRelance echeance,
                                                 PorteeRelance portee,
                                                 @Nullable AuthenticatedUser principal,
+                                                @Nullable UUID trancheId,
                                                 Pageable pageable) {
         LocalDate aujourdhui = LocalDate.now();
         UUID moi = principal != null ? principal.employeeId() : null;
@@ -92,7 +95,8 @@ public class RelanceDashboardService {
                 .and(echeance.limiteeAuxProspectionsDuMois()
                         ? prospectionDuMois(aujourdhui)
                         : (root, query, cb) -> cb.conjunction())
-                .and(filtreDePortee(portee, moi));
+                .and(filtreDePortee(portee, moi))
+                .and(prospectionDeLaTranche(trancheId));
 
         return messageRepository.findAll(spec, trierParEcheance(pageable))
                 .map(message -> toDto(message, aujourdhui));
@@ -125,6 +129,20 @@ public class RelanceDashboardService {
                     cb.or(cb.isNull(prospection.get("isClosed")), cb.isFalse(prospection.get("isClosed"))),
                     DiscriminantPreProspection.nEstPasPreProspection(prospection, query, cb));
         };
+    }
+
+    /**
+     * Filtre par tranche ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : la relance
+     * est retenue si sa prospection vise la tranche — le prédicat de
+     * {@code GET /api/prospections?trancheId=…}, partagé ({@link AppartenanceTranche#prospection}).
+     * Neutre sans tranche.
+     */
+    private static Specification<ComActionMessage> prospectionDeLaTranche(@Nullable UUID trancheId) {
+        if (trancheId == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> AppartenanceTranche.prospection(
+                root.join("comProspection", JoinType.INNER), List.of(trancheId));
     }
 
     /**
