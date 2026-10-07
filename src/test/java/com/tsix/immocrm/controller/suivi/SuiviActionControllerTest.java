@@ -290,6 +290,92 @@ class SuiviActionControllerTest {
         mockMvc.perform(get(URL).param("colonnes", "inexistante")).andExpect(status().isBadRequest());
     }
 
+    // ---------------------------------------------------------------- tiersNom (FEATURE-nom-pre-prospection-relances §2)
+    //
+    // Cascade : tiers de l'action > fiche prospect de la prospection > TempDescription. Les 1 529
+    // actions réelles sans CfgTierId sont toutes sur une prospection et portent un TempDescription.
+
+    private ComActionMessage actionSansTiers(ComProspection p, LocalDateTime date) {
+        ComActionMessage m = action(prospection, appel, p, null, date);
+        m.setCfgTier(null);
+        return messageRepository.saveAndFlush(m);
+    }
+
+    @Test
+    void tiersNom_actionSansTiersSurPreProspection_rendLeTempDescription() throws Exception {
+        ComProspection pre = newProspection(tranche);
+        pre.setTempDescription("  Lead Suivi " + utilisateur + "  ");
+        prospectionRepository.saveAndFlush(pre);
+        actionSansTiers(pre, LocalDateTime.of(2026, 9, 21, 9, 0));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur).param("colonnes", "tiersNom,tiersId"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].tiersNom").value("Lead Suivi " + utilisateur))
+                // tiersId reste l'id du tiers de l'action : aucun ici.
+                .andExpect(jsonPath("$.content[0].tiersId").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void tiersNom_actionSansTiersSurProspectionAvecFiche_rendLeNomDeLaFiche() throws Exception {
+        CfgTier fiche = new CfgTier();
+        fiche.setId(UUID.randomUUID());
+        fiche.setCode("TIER-FICHE-" + UUID.randomUUID());
+        fiche.setDescription("Fiche " + utilisateur);
+        fiche = tierRepository.save(fiche);
+        ComProspection p = newProspection(tranche);
+        p.setCfgProspect(fiche);
+        p.setTempDescription("Nom saisi " + utilisateur);
+        prospectionRepository.saveAndFlush(p);
+        actionSansTiers(p, LocalDateTime.of(2026, 9, 21, 9, 0));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].tiersNom").value("Fiche " + utilisateur));
+    }
+
+    @Test
+    void tiersNom_actionAvecTiers_gardeLeTiersDeLAction() throws Exception {
+        CfgTier fiche = new CfgTier();
+        fiche.setId(UUID.randomUUID());
+        fiche.setCode("TIER-FICHE-" + UUID.randomUUID());
+        fiche.setDescription("Autre fiche " + utilisateur);
+        fiche = tierRepository.save(fiche);
+        ComProspection p = newProspection(tranche);
+        p.setCfgProspect(fiche);
+        p.setTempDescription("Nom saisi " + utilisateur);
+        prospectionRepository.saveAndFlush(p);
+        action(prospection, appel, p, null, LocalDateTime.of(2026, 9, 21, 9, 0));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].tiersNom").value(tiers.getDescription()));
+    }
+
+    /** Une ligne affichée « X » tombe dans le groupe « X », et le dépliage du groupe la retrouve. */
+    @Test
+    void groupes_tiersNom_rangeLActionDePreProspectionSousSonTempDescription() throws Exception {
+        String nom = "Lead Groupe " + utilisateur;
+        ComProspection pre = newProspection(tranche);
+        pre.setTempDescription(nom);
+        prospectionRepository.saveAndFlush(pre);
+        ComActionMessage m = actionSansTiers(pre, LocalDateTime.of(2026, 9, 21, 9, 0));
+        action(prospection, appel, newProspection(tranche), null, LocalDateTime.of(2026, 9, 21, 10, 0));
+
+        mockMvc.perform(get(URL + "/groupes").param("utilisateur", utilisateur).param("groupBy", "tiersNom"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[?(@.cle=='" + nom + "')].nombre")
+                        .value(org.hamcrest.Matchers.hasItem(1)))
+                .andExpect(jsonPath("$.content[?(@.cle=='" + tiers.getDescription() + "')].nombre")
+                        .value(org.hamcrest.Matchers.hasItem(1)));
+
+        mockMvc.perform(get(URL).param("utilisateur", utilisateur)
+                        .param("groupeColonne", "tiersNom").param("groupeValeur", nom))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(m.getId().toString()));
+    }
+
     // ---------------------------------------------------------------- groupes
 
     /**

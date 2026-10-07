@@ -221,6 +221,7 @@ public class SuiviActionService {
                        ce.description AS commercial,
                        au.description AS compte, aue.description AS employeDuCompte,
                        ti.id AS tiersId, ti.description AS tiersNom,
+                       pp.description AS prospectNom, p.tempDescription AS prospectionNomSaisi,
                        p.id AS prospectionId, p.code AS prospectionCode,
                        f.id AS dossierId, f.code AS dossierCode, fs.description AS statutDossier,
                        i.code AS articleCode, i.description AS articleLibelle,
@@ -233,7 +234,7 @@ public class SuiviActionService {
                 LEFT JOIN m.cfgEmployee ce
                 LEFT JOIN m.admUser au LEFT JOIN au.cfgEmployee aue
                 LEFT JOIN m.cfgTier ti
-                LEFT JOIN m.comProspection p
+                LEFT JOIN m.comProspection p LEFT JOIN p.cfgProspect pp
                 LEFT JOIN m.comFolder f LEFT JOIN f.strStatus fs
                 LEFT JOIN m.stkItem i
                 LEFT JOIN m.trancheResolue tr LEFT JOIN tr.cfgProject pr LEFT JOIN pr.cfgCompany so
@@ -322,7 +323,7 @@ public class SuiviActionService {
                 t.get("entrante", Boolean.class),
                 t.get("commercial", String.class),
                 personnel(t),
-                t.get("tiersNom", String.class),
+                tiersNom(t),
                 t.get("prospectionCode", String.class),
                 t.get("dossierCode", String.class),
                 etat(t, etatsParProspection),
@@ -342,6 +343,25 @@ public class SuiviActionService {
                 t.get("creeLe", LocalDateTime.class),
                 t.get("modifiePar", String.class),
                 t.get("modifieLe", LocalDateTime.class));
+    }
+
+    /**
+     * Tiers affiché : le tiers de l'action, sinon la fiche prospect de la prospection, sinon le nom
+     * saisi au premier contact ({@code TempDescription}) — {@code FEATURE-nom-pre-prospection-relances}
+     * §2. Les 1 529 actions réelles sans {@code CfgTierId} sont toutes sur une prospection.
+     *
+     * <p>Rejoue <b>exactement</b> la clé de groupe de {@link ColonneSuiviAction#TIERS_NOM}
+     * ({@code COALESCE(NULLIF(TRIM(a), ''), …)}, cf. {@code Chemin.repli}) : chaque terme est
+     * nettoyé et un terme blanc est sauté. Une ligne affichée « X » tombe ainsi dans le groupe « X ».
+     */
+    private static String tiersNom(Tuple t) {
+        for (String alias : List.of("tiersNom", "prospectNom", "prospectionNomSaisi")) {
+            String v = t.get(alias, String.class);
+            if (StringUtils.hasText(v)) {
+                return v.trim();
+            }
+        }
+        return null;
     }
 
     /** {@code ISNULL(employé du compte, ISNULL(compte, ISNULL(commercial, '')))} — la vue. */
