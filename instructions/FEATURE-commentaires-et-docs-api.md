@@ -224,3 +224,20 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   `FEATURE-reglement-statut-preuve.md` §2).
 - **`FiltresAvancesProspection`** : temps mesurés déplacés dans
   `INVENTAIRE-colonnes-prospection.md` §3.
+
+## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
+
+À traiter dans une feature dédiée (changement de contrat → `docs:update` + front) :
+
+1. Constante supprimée au lot D (exception I2) : `DashboardController.TRANCHE_ID`.
+2. `RelanceProspectionDto.joursDeRetard` dit « de 1 à 30 pour `echeance=RETARD` »,
+   l'opération `relances` dit qu'il peut dépasser 30.
+3. Tag Clients et `findAll` nomment l'agrégat `nombreDossiers` ; le champ de
+   `ClientListItemDto` est `nbDossiers`.
+4. Textes de `/api/dashboard/annuel` sans accents (« Synthese calculee »…).
+5. `HotlineFicheDto`, `HotlineResultDto`, `connu` ne décrivent que la recherche par
+   téléphone ; la recherche par nom existe aussi.
+6. `ActionParTypeDto.type` : « (9 sur 12 mois en base réelle) » mal placé.
+7. `PATCH /api/prospections/{id}/etape` (`changerEtape`) n'a pas de `@Operation`.
+8. Textes d'API contenant des mesures datées (« 643 règlements réels »,
+   « 48 213 actions »…) : à reformuler sans chiffres.

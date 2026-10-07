@@ -4,11 +4,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Summary shape for {@code GET /api/clients} — a "client" is any {@code CfgTier} referenced by
- * at least one {@code ComFolder.CfgCustomerId} (regardless of {@code CfgTierType}/{@code
- * CfgTierKind}), distinct from {@code /api/prospects} which filters by {@code IsProspect}.
- * {@code totalAPayer}/{@code totalRegle}/{@code totalReste} are aggregated server-side across
- * every dossier of the client — not derivable client-side without one call per row.
+ * Client = tout {@code CfgTier} référencé par {@code ComFolder.CfgCustomerId}, quels que soient son
+ * type et sa nature ; {@code /api/prospects} filtre, lui, sur {@code IsProspect}.
  */
 public record ClientListItemDto(
         UUID id,

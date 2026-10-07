@@ -27,22 +27,10 @@ import java.util.UUID;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
 /**
- * A "client" is a {@code CfgTier} referenced by at least one {@code ComFolder.CfgCustomerId} —
- * same underlying table as {@code /api/prospects} (there's no separate Client entity/table in
- * the schema), so the fiche ({@code /{id}}) and its dossiers sub-resource
- * ({@code /{id}/dossiers}) reuse {@link ProspectService}/{@link ProspectSubResourcesService}
- * internally rather than duplicating logic. Only the list ({@code GET /api/clients}) has
- * client-specific shape/filtering — see {@link ClientService}.
+ * Pas de table Client : la fiche et les dossiers d'un client réutilisent les services prospect ;
+ * seule la liste a sa logique propre ({@link ClientService}).
  */
-@Tag(name = "Clients", description = "Tiers ayant acheté — un `CfgTier` référencé par au moins un "
-        + "dossier de vente. Il n'y a pas d'entité Client distincte dans le schéma : la fiche et "
-        + "ses sous-ressources sont celles de /api/prospects.\n\n"
-        + "**Entités juridiques en exploitation.** La qualité de client se juge sur les seuls "
-        + "dossiers rattachés à une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui "
-        + "ADMOD et GHRIZA. Un tier dont tous les dossiers relèvent d'une entité hors exploitation "
-        + "n'est donc plus un client au sens de cet endpoint et disparaît de la liste ; les "
-        + "agrégats `nombreDossiers`, `totalAPayer` et `totalRegle` suivent la même assiette, pour "
-        + "qu'ils concordent avec GET /api/clients/{id}/dossiers.")
+@Tag(name = "Clients")
 @RestController
 @RequestMapping("/api/clients")
 public class ClientController {
@@ -58,18 +46,7 @@ public class ClientController {
         this.subResourcesService = subResourcesService;
     }
 
-    @Operation(
-            summary = "Liste des clients",
-            description = "Les tiers portant au moins un dossier de vente sur une entité juridique "
-                    + "en exploitation, avec leurs agrégats calculés côté serveur (nombre de "
-                    + "dossiers, total à payer, total réglé). Une page vide signifie qu'aucun "
-                    + "client ne correspond, pas une erreur.\n\n"
-                    + "**Filtre par tranche** (`trancheId`, réservé aux administrateurs) : seuls "
-                    + "les clients ayant au moins un dossier dans cette tranche — même règle "
-                    + "d'appartenance que `GET /api/dossiers?trancheId=` (un article lié ou "
-                    + "l'article principal du dossier dans la tranche). Les agrégats "
-                    + "(`nombreDossiers`, `totalAPayer`, `totalRegle`) restent calculés sur "
-                    + "**tous** les dossiers du client, pas sur ceux de la tranche seule.")
+    @Operation(summary = "Liste des clients")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Page de clients (éventuellement "
                     + "vide). Une tranche inconnue ou sans dossier donne une page vide, pas un 404."),
@@ -82,10 +59,7 @@ public class ClientController {
             @Parameter(description = "Recherche insensible à la casse sur le code, le nom, le "
                     + "prénom, la raison sociale ou l'e-mail.", example = "benali")
             @RequestParam(required = false) String search,
-            @Parameter(description = "Tranche (`CfgTranche.id`, une seule valeur) : ne garde que "
-                    + "les clients ayant au moins un dossier dans cette tranche. **Réservé aux "
-                    + "administrateurs — 403 sinon.** Absent = tous les clients, comportement "
-                    + "inchangé.", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+            @Parameter(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
             @RequestParam(required = false) UUID trancheId,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         FiltreTrancheAdministrateur.verifier(trancheId);
@@ -98,16 +72,7 @@ public class ClientController {
     }
 
     @GetMapping("/{id}/dossiers")
-    @Operation(
-            summary = "Dossiers de vente d'un client",
-            description = "Les dossiers dont ce tier est l'acquéreur — mêmes `DossierListItemDto` "
-                    + "que GET /api/dossiers.\n\n"
-                    + "**Périmètre commercial** : si l'appelant est restreint "
-                    + "(`UtilisateurCourantDto.perimetreRestreint = true`), seuls les dossiers de "
-                    + "ses projets affectés sont renvoyés. Le **client**, lui, n'est pas filtré : "
-                    + "sa fiche reste accessible, la liste peut simplement revenir vide ou "
-                    + "partielle. `totalElements` reflète le nombre filtré, pas le total réel."
-    )
+    @Operation(summary = "Dossiers de vente d'un client")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Dossiers du client (éventuellement vide)."),
             @ApiResponse(responseCode = "404", description = "Aucun tier avec cet id.")

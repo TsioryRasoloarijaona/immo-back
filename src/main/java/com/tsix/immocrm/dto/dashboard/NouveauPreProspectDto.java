@@ -5,16 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Un lead arrivé dans la journée, servi par {@code GET /api/dashboard/nouveaux-pre-prospects}.
- *
- * <p>Une pré-prospection se définit par son type légataire ({@code StrEntity.Code =
- * 'ComPreProspection'}) — le même discriminant que {@code GET /api/pre-prospections}, voir
- * {@code DiscriminantPreProspection}.
- */
-@Schema(description = "Un lead non encore qualifié, créé aujourd'hui. Les arrivées se font par "
-        + "rafales (injection automatique depuis le serveur legacy) et **le week-end n'est pas "
-        + "creux** — 34 leads un dimanche en base réelle. Une journée à zéro est le cas courant.")
+/** Pré-prospection = {@code StrEntity.Code = 'ComPreProspection'}, voir {@code DiscriminantPreProspection}. */
 public record NouveauPreProspectDto(
 
         @Schema(description = "Pré-prospection créée. La route de détail est celle des "
@@ -28,9 +19,6 @@ public record NouveauPreProspectDto(
                 + "(`TempDescription`). `null` tant que le lead est anonyme.")
         String nom,
 
-        @Schema(description = "Numéro saisi au premier contact (`TempTel`) — sur une "
-                + "pré-prospection c'est la seule source possible, aucune fiche tiers n'existe "
-                + "encore.")
         String telephone,
 
         @Schema(description = "E-mail saisi au premier contact (`TempEMail`).")

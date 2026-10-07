@@ -4,13 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 
-/**
- * Un mois de la courbe de {@link SyntheseAnnuelleDto#echeancier()}.
- *
- * <p><b>Ce n'est pas un encaissé.</b> Le montant somme {@code ComDocument.Amount}, c'est-à-dire
- * l'échéancier — des sommes <em>dues</em>. Des mois à venir y sont donc renseignés : en septembre
- * 2026, octobre et novembre portaient déjà 380 000 et 50 000 DH.
- */
 @Schema(description = "Un mois de l'échéancier. Montant *dû* sur le mois, pas encaissé — des mois "
         + "futurs peuvent donc être renseignés.")
 public record PointMensuelDto(
