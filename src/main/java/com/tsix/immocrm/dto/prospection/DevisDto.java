@@ -8,11 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * {@code StlQuote} row — the "Offres" tab (GAP-07). Reproduit le formulaire Offre legacy: entête
- * (code, date, prospect, tranche, article, catégorie/type, commercial, mode de paie) + le détail
- * HT/TTC complet ({@link #montants}).
- */
+/** Une ligne {@code StlQuote}. */
 @Schema(description = "Une offre de prix (\"devis\") faite à un prospect sur une prospection, "
         + "avec son détail HT/TTC complet.")
 public record DevisDto(
@@ -21,9 +17,6 @@ public record DevisDto(
         LocalDateTime dateDocument,
 
         UUID prospectionId,
-        @Schema(description = "Code de la prospection d'origine — pour la colonne \"Prospection\" "
-                + "et le lien cliquable vers la prospection dans la liste globale des offres "
-                + "(GET /api/devis).")
         String prospectionCode,
 
         UUID trancheId,
@@ -61,9 +54,6 @@ public record DevisDto(
         @Schema(description = "Détail HT/TTC complet de l'offre — voir MontantsOffreDto.")
         MontantsOffreDto montants,
 
-        @Schema(description = "Plan de financement (AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC) "
-                + "calculé sur le prix de vente TTC après remise de l'offre, même calcul que "
-                + "POST /api/dossiers/simulation-financement. Vide si l'offre n'a pas de prix.")
         List<LigneSchemaFinancementDto> schemaFinancement,
 
         String notes

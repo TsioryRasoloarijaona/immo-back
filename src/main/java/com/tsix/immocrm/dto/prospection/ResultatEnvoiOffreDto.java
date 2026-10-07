@@ -5,17 +5,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-@Schema(description = """
-        Issue de l'envoi d'une offre de prix, sur les deux canaux. Renvoyé avec un code 200 même
-        lorsque rien n'est parti : un prospect sans adresse ni numéro exploitable n'est pas une
-        erreur d'appel, et le commercial a besoin du motif pour y remédier.
-
-        L'offre est créée (ou réutilisée) **avant** l'envoi et le reste quoi qu'il advienne de
-        celui-ci : `offreId` et `offreCode` sont donc toujours renseignés, y compris quand les
-        deux canaux échouent. C'est délibéré — l'offre existe, elle est numérotée, et la perdre
-        parce que le prospect est injoignable obligerait à la régénérer sous un autre numéro.
-
-        Les deux canaux sont tentés indépendamment l'un de l'autre.""")
 public record ResultatEnvoiOffreDto(
 
         @Schema(description = "Vrai dès qu'**au moins un** des deux canaux a abouti.", example = "true")
@@ -28,8 +17,7 @@ public record ResultatEnvoiOffreDto(
                 example = "26/00314")
         String offreCode,
 
-        @Schema(description = "Vrai si une offre existante a été réexpédiée plutôt qu'une nouvelle "
-                + "créée. N'arrive que si l'appel ne demandait ni remise ni prix.", example = "false")
+        @Schema(example = "false")
         boolean offreReutilisee,
 
         @Schema(description = "Prix de vente TTC après remise, tel qu'annoncé au prospect sur les "
@@ -39,8 +27,6 @@ public record ResultatEnvoiOffreDto(
         @Schema(description = "Issue du canal email. Seul canal à porter le PDF de l'offre.")
         CanalEnvoiDto email,
 
-        @Schema(description = "Issue du canal WhatsApp. Porte le montant en texte, jamais de "
-                + "document — et ne mentionne le mail que s'il est réellement parti.")
         CanalEnvoiDto whatsapp
 ) {
 

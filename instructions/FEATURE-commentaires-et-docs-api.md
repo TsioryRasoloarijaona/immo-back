@@ -32,6 +32,10 @@ et les textes du contrat dans des fichiers Markdown.
   listées plus haut, normalise les blancs, et compare avec la version de
   `<ref-git>` traitée pareil. Code de sortie ≠ 0 et liste des fichiers sinon.
   Les fichiers ajoutés par l'étape 1 (mécanisme) sont exclus de la comparaison.
+  **Seule exception admise** (décision manager, lot B) : supprimer une constante
+  `private static final String` qui ne servait **qu'à** composer des textes
+  OpenAPI déplacés en Markdown. `compare-code` la signale ; le rapport doit la
+  nommer, et le manager vérifie que c'est le seul écart.
 - **I3 — Tests verts.** `./mvnw test` complet vert à la fin de chaque étape
   (env : `DB_HOST=localhost DB_NAME=yesRemsTest DB_USER=tsix
   DB_PWD=securePassword123 JWT_SECRET=test-secret-key-not-for-production-use-0123456789abcdef`).
@@ -156,6 +160,12 @@ Description du champ.
 - Un **enum** avec un long `@Schema(description)` le garde dans l'annotation :
   springdoc l'écrit en ligne (pas sous `components/schemas`), il n'a pas
   d'emplacement Markdown. Un commentaire d'une ligne dit pourquoi.
+- Un **record absent de `components/schemas`** (ex. porté seulement par un
+  `ProblemDetail` 409, ou données de PDF) n'a pas d'emplacement Markdown : son
+  texte long reste dans l'annotation, avec un commentaire d'une ligne.
+- Après suppression d'un `.md` source, supprimer aussi sa copie dans
+  `target/classes/api-docs/…` : `spring-boot:run` ne la retire pas et le
+  démarrage échoue en « double source ».
 - Un texte d'API qui contient un chiffre ou un mot « historique » se déplace tel
   quel : I1 fige le contrat, la règle 11 ne s'applique qu'aux commentaires.
 

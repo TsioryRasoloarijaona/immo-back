@@ -6,11 +6,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * All fields needed to render the "Fiche Offre vente" document (PDF), modeled on the legacy
- * template (see {@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf}). Not exposed as
- * JSON — feeds {@code OffreDevisPdfRenderer} only.
- */
+/** Données du PDF « Fiche Offre vente » ({@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf}). Pas exposé en JSON. */
 public record OffreDevisData(
         String code,
         LocalDate date,

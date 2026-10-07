@@ -8,19 +8,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Summary shape for {@code GET /api/prospections} and {@code GET /api/pre-prospections}.
- *
- * <p><strong>Toutes les clés ne sont pas toujours présentes.</strong> Le paramètre
- * {@code ?colonnes=} sélectionne celles qui sont sérialisées ; les autres sont absentes de la
- * réponse — voir {@link com.tsix.immocrm.domain.ColonneProspection}, qui fait aussi office de
- * liste blanche et alimente {@code GET /api/referentiels/colonnes/prospections}.
- *
- * <p>Sans ce paramètre, la réponse est <em>exactement</em> celle d'avant son introduction : les
- * champs du groupe activité valent {@code null} et le serveur n'interroge pas la vue légataire.
- *
- * NOTE: field naming is not yet backed by a shared API spec doc
- * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
- * directly from {@code ComProspection}. Adjust once a spec is available.
+ * Clés sérialisées selon {@code ?colonnes=} (liste blanche :
+ * {@link com.tsix.immocrm.domain.ColonneProspection}) ; sans ce paramètre, le groupe activité vaut
+ * {@code null} et la vue légataire n'est pas interrogée.
  */
 @JsonFilter(ProspectionListItemDto.FILTRE_COLONNES)
 public record ProspectionListItemDto(
@@ -35,17 +25,8 @@ public record ProspectionListItemDto(
         String origine,
         String etape,
 
-        @Schema(description = "Prospection archivée (`IsClosed`). **Seul indicateur fiable** : "
-                + "`dateFermeture`/`raisonFermeture` survivent à un désarchivage. `null` équivaut "
-                + "à `false`. `?ouvertes=true` ne renvoie que `false`/`null`, `?ouvertes=false` "
-                + "ne renvoie que `true`, l'absence du paramètre renvoie tout.")
         Boolean fermee,
 
-        @Schema(description = "Budget déclaré du prospect. **Mesuré mort : renseigné sur 4 lignes "
-                + "sur 14 114**, et valant `0` — jamais `null` — partout ailleurs. Retiré de la "
-                + "sélection par défaut pour cette raison ; reste demandable via `?colonnes=prix`. "
-                + "Ne pas afficher comme un budget : ce serait annoncer « 0,00 DH » sur tout le "
-                + "portefeuille.")
         BigDecimal prix,
 
         @Schema(description = "Surface recherchée. **Mesurée morte : 0 ligne renseignée** sur "
@@ -53,47 +34,26 @@ public record ProspectionListItemDto(
         BigDecimal surface,
 
         UUID trancheId,
-        // -- Libellé de la tranche principale (CfgTranche.Code/Description), pour affichage sans
-        // second appel à GET /api/tranches/{trancheId}.
+        // -- Libellé de la tranche principale (CfgTranche.Code/Description).
         String trancheCode,
         String trancheDescription,
 
-        // -- Contact et relance, pour qu'un commercial puisse appeler depuis la liste sans
-        // ouvrir chaque fiche. Voir instructions/FEATURE-prospection-contact-alerte.md.
-        @Schema(description = "Téléphone du prospect : celui de sa fiche (mobile, à défaut fixe) "
-                + "et, à défaut, le numéro saisi lors du premier contact. Le repli n'est pas "
-                + "décoratif — mesuré sur les 8 613 prospections ouvertes : 5 034 joignables par "
-                + "la fiche, 7 596 par le champ de premier contact, **8 591 par l'une ou "
-                + "l'autre**.",
-                example = "0612345678")
+        // -- Contact et relance : voir instructions/FEATURE-prospection-contact-alerte.md.
+        @Schema(example = "0612345678")
         String telephone,
 
-        @Schema(description = "Email du prospect, même règle de repli que `telephone`. Renseigné "
-                + "sur 4 752 des 8 613 prospections ouvertes (55 %) — `null` est donc un cas "
-                + "courant, pas une anomalie.",
-                example = "client@exemple.ma")
+        @Schema(example = "client@exemple.ma")
         String email,
 
-        @Schema(description = "Date de validité de la dernière alerte de relance posée sur cette "
-                + "prospection, `null` s'il n'y en a aucune (3 236 des 8 613 ouvertes en ont "
-                + "une). L'alerte provient toujours d'une **interaction** : la colonne d'alerte "
-                + "portée par la prospection elle-même est morte en base — 0 ligne sur 8 613.")
         LocalDateTime derniereAlerteDate,
 
-        @Schema(description = "Message de cette dernière alerte — en pratique la note du "
-                + "commercial sur l'interaction qui l'a posée. `null` si aucune alerte.",
-                example = "rappeler la cliente lundi matin")
+        @Schema(example = "rappeler la cliente lundi matin")
         String derniereAlerteMessage,
 
-        // ------------------------------------------------------------------
-        // Groupe « activité » — calculé par la base légataire (ComSaleProspectionView).
-        // Hors sélection par défaut : ces champs valent null tant que ?colonnes= ne les
-        // demande pas, et la requête de vue n'est alors même pas émise.
-        // ------------------------------------------------------------------
+        // -- Groupe « activité » (ComSaleProspectionView) : null tant que ?colonnes= ne le
+        //    demande pas, et la requête de vue n'est alors pas émise.
 
-        @Schema(description = "Jours écoulés depuis la dernière action — le tri de relance du "
-                + "logiciel de bureau. Renseigné sur 100 % des prospections de vente.",
-                example = "1688")
+        @Schema(example = "1688")
         Integer joursInactivite,
 
         @Schema(description = "Nombre d'interactions journalisées. 97 %.", example = "12")
@@ -127,8 +87,6 @@ public record ProspectionListItemDto(
         @Schema(description = "CIN du prospect. 99 %.")
         String cin,
 
-        @Schema(description = "Identifiant du dossier issu de la prospection. `null` sur 98 % des "
-                + "lignes : c'est le taux de conversion réel, pas une donnée manquante.")
         UUID dossierId,
 
         @Schema(description = "Code du dossier issu de la prospection. `null` si non transformée.",
@@ -139,17 +97,11 @@ public record ProspectionListItemDto(
                 + "transformée.", example = "CONCRETISATION")
         String statutDossier,
 
-        // ------------------------------------------------------------------
-        // Lot B — colonnes que le logiciel de bureau affiche et que la liste ne renvoyait pas.
-        // Servies par les entités, hors sélection par défaut.
-        // ------------------------------------------------------------------
+        // -- Colonnes du logiciel de bureau servies par les entités, hors sélection par défaut.
 
         @Schema(description = "Code du prospect (`CfgTier.Code`). 100 %.")
         String prospectCode,
 
-        @Schema(description = "Mobile **brut de la fiche prospect**, sans le repli sur le numéro "
-                + "de premier contact qu'applique `telephone`. 99,8 %. Utile pour éditer ou "
-                + "dédoublonner, là où `telephone` sert à appeler.")
         String mobileProspect,
 
         @Schema(description = "Indicatif pays du mobile. 100 %.", example = "212")
@@ -186,9 +138,6 @@ public record ProspectionListItemDto(
         @Schema(description = "Pays du prospect. 27,3 %.")
         String pays,
 
-        @Schema(description = "Identifiant de la société / entité juridique. 99,8 %. Elle filtre "
-                + "déjà les résultats côté serveur (seules les sociétés actives sont servies) "
-                + "sans avoir jamais été renvoyée.")
         UUID societeId,
 
         @Schema(description = "Code de la société. 99,8 %.", example = "ADMOD")
@@ -210,22 +159,14 @@ public record ProspectionListItemDto(
         @Schema(description = "Date de dernière modification. 100 %.")
         LocalDateTime modifieLe,
 
-        // ------------------------------------------------------------------
-        // Type de document du légataire (StrEntity). Servi depuis les entités, hors sélection
-        // par défaut. Voir instructions/FEATURE-strentity-prospection.md.
-        // ------------------------------------------------------------------
+        // -- Type de document du légataire (StrEntity), hors sélection par défaut.
+        //    Voir instructions/FEATURE-strentity-prospection.md.
 
         @Schema(description = "Identifiant du type de document légataire (`StrEntity`). 100 % — "
                 + "sauf 4 lignes en base réelle.")
         UUID typeProspectionId,
 
-        @Schema(description = "Code du type de document — **c'est ce champ qu'il faut tester**, "
-                + "jamais le libellé. `ComProspection`, `ComPreProspection`, `RntProspection`.\n\n"
-                + "Sur `GET /api/pre-prospections`, toujours `ComPreProspection` ; sur "
-                + "`GET /api/prospections`, jamais — les deux listes se partagent les lignes sur "
-                + "ce seul critère. Cette dernière garde les 4 prospections de location "
-                + "(`RntProspection`) et les 4 lignes sans type (`null`).",
-                example = "ComProspection")
+        @Schema(example = "ComProspection")
         String typeProspectionCode,
 
         @Schema(description = "Libellé d'affichage du type, traduit. Ne pas s'en servir pour "
@@ -234,9 +175,6 @@ public record ProspectionListItemDto(
         String typeProspection
 ) {
 
-    /**
-     * Identifiant du filtre Jackson qui porte la sélection de colonnes. Déclaré ici pour que la
-     * constante suive le DTO qu'elle filtre.
-     */
+    /** Identifiant du filtre Jackson qui porte la sélection de colonnes. */
     public static final String FILTRE_COLONNES = "colonnesProspection";
 }

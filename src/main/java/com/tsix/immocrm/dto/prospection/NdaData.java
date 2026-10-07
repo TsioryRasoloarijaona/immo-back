@@ -3,13 +3,8 @@ package com.tsix.immocrm.dto.prospection;
 import java.time.LocalDate;
 
 /**
- * All fields needed to render the "NDA AYAD PRIVATE" document (PDF) — the "Expression of
- * Interest Form / Non-Disclosure Agreement" a prospect fills at the start of a prospection,
- * modeled on the legacy template ({@code instructions/templates/NDA AYAD PRIVATE.pdf}). The
- * form's boilerplate/letterhead (AYAD Private branding, confidentiality notice, footer) is
- * static — always the same regardless of which project the prospection eventually targets — so
- * it's baked into the renderer rather than sourced from data. Not exposed as JSON — feeds
- * {@code NdaPdfRenderer} only.
+ * Données du PDF « NDA AYAD PRIVATE » ({@code instructions/templates/NDA AYAD PRIVATE.pdf}) ; le
+ * texte fixe du formulaire est dans {@code NdaPdfRenderer}. Pas exposé en JSON.
  */
 public record NdaData(
         String nom,
@@ -18,7 +13,7 @@ public record NdaData(
         String profession,
         LocalDate dateNaissance,
         String lieuNaissance,
-        /** "M"/"F" (AdmSexType.Code) — legacy form checks the corresponding "Male"/"Female" box. */
+        /** "M"/"F" (AdmSexType.Code) : coche la case « Male »/« Female » du formulaire. */
         String sexe,
         String adresse,
         String codePostal,

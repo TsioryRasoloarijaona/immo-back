@@ -5,11 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * La prospection ouverte qui empêche d'en créer une seconde pour le même prospect sur le même
- * projet — propriété {@code prospectionExistante} du 409 de
- * {@code instructions/FEATURE-doublons-prospect-projet.md} §3.
- */
+/** Propriété {@code prospectionExistante} du 409 de {@code instructions/FEATURE-doublons-prospect-projet.md} §3. */
+// Texte laissé dans l'annotation : ce record n'est pas un schéma de components/ (pas de .md possible).
 @Schema(description = "Prospection déjà ouverte pour ce prospect sur ce projet. Un prospect n'a "
         + "qu'une prospection ouverte par projet ; c'est sur elle qu'on ajoute des dossiers.")
 public record ProspectionExistanteDto(
