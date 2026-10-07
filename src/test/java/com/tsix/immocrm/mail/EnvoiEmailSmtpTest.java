@@ -38,13 +38,12 @@ class EnvoiEmailSmtpTest {
 
     private static final MessageEmail MESSAGE = new MessageEmail(
             "jean.rakoto@exemple.ma",
-            "Vos identifiants de connexion",
+            "Vos identifiants Arpent",
             "mail/mot-de-passe-temporaire",
             Map.of("nomComplet", "Jean Rakoto",
                     "identifiant", "j.rakoto",
                     "motDePasse", "Ab3xK9mQp2Rt",
-                    "urlApplication", "https://immo-test.local",
-                    "creation", true),
+                    "urlArpent", "https://arpent.ayaddeveloppement.com"),
             "Identifiant : j.rakoto");
 
     /** {@code JavaMailSenderImpl} qui capture au lieu d'expédier. */
@@ -79,21 +78,32 @@ class EnvoiEmailSmtpTest {
                 .contains("Ab3xK9mQp2Rt")
                 .contains("j.rakoto")
                 .contains("Jean Rakoto")
-                // Formulation propre à la création, pilotée par la variable `creation`.
-                .contains("Un compte vient d'être créé pour vous")
-                .doesNotContain("Le mot de passe de votre compte");
+                .contains("Se connecter à Arpent")
+                .contains("identifiant Omran")
+                // Le mot de passe n'est plus « provisoire » ni à changer (FEATURE-acces-arpent-depuis-omran B2).
+                .doesNotContain("provisoire")
+                .doesNotContain("temporaire");
     }
 
+    /**
+     * FEATURE-acces-arpent-depuis-omran B2 : le lien vers Arpent est présent (bouton et URL en
+     * clair), et aucun {@code href} ne porte le mot de passe ni l'identifiant.
+     */
     @Test
-    void leTemplateBasculeSurLaFormulationDeReinitialisation() {
-        Context contexte = new Context(Locale.FRENCH, Map.of(
-                "nomComplet", "Jean Rakoto", "identifiant", "j.rakoto",
-                "motDePasse", "Ab3xK9mQp2Rt", "urlApplication", "https://immo-test.local",
-                "creation", false));
+    void leTemplatePorteLeLienArpentSansSecretDansLesHref() {
+        String html = moteurTemplate.process(MESSAGE.template(),
+                new Context(Locale.FRENCH, MESSAGE.variables()));
 
-        assertThat(moteurTemplate.process(MESSAGE.template(), contexte))
-                .contains("vient d'être réinitialisé")
-                .doesNotContain("Un compte vient d'être créé pour vous");
+        assertThat(html).contains("href=\"https://arpent.ayaddeveloppement.com\"");
+        assertThat(html.split("https://arpent.ayaddeveloppement.com", -1)).hasSizeGreaterThan(2);
+
+        java.util.regex.Matcher hrefs = java.util.regex.Pattern.compile("href=\"([^\"]*)\"").matcher(html);
+        int nombre = 0;
+        while (hrefs.find()) {
+            nombre++;
+            assertThat(hrefs.group(1)).doesNotContain("Ab3xK9mQp2Rt").doesNotContain("j.rakoto");
+        }
+        assertThat(nombre).isPositive();
     }
 
     @Test
@@ -104,7 +114,7 @@ class EnvoiEmailSmtpTest {
         assertThat(capteur.envoyes).hasSize(1);
         MimeMessage envoye = capteur.envoyes.get(0);
 
-        assertThat(envoye.getSubject()).isEqualTo("Vos identifiants de connexion");
+        assertThat(envoye.getSubject()).isEqualTo("Vos identifiants Arpent");
         assertThat(envoye.getAllRecipients()[0].toString()).isEqualTo("jean.rakoto@exemple.ma");
         assertThat(envoye.getFrom()[0].toString()).contains(properties.getExpediteur());
 

@@ -27,8 +27,9 @@ import java.util.Objects;
 
 /**
  * Backs {@code GET /api/mon-compte}, {@code POST /api/mon-compte/changer-mot-de-passe} and
- * {@code PATCH /api/mon-compte/profil} — the three routes still reachable while
- * {@code OnboardingGateFilter} is blocking everything else.
+ * {@code PATCH /api/mon-compte/profil}. Since FEATURE-acces-arpent-depuis-omran.md there is no
+ * onboarding gate any more: the password change is voluntary, and the profile form is no longer
+ * shown by the frontend (the route stays in place).
  */
 @Service
 @Transactional(readOnly = true)

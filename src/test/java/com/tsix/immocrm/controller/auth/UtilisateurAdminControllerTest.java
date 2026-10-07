@@ -4,12 +4,10 @@ import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
 import com.tsix.immocrm.entities.app.AppUserCredential;
-import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,20 +47,10 @@ class UtilisateurAdminControllerTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private CfgTierKindRepository tierKindRepository;
-
-    @Autowired
     private AdmRoleRepository roleRepository;
 
     @Autowired
     private AdmUserRoleRepository userRoleRepository;
-
-    private CfgTierKind newTierKind(String code) {
-        CfgTierKind kind = new CfgTierKind();
-        kind.setId(UUID.randomUUID());
-        kind.setCode(code);
-        return tierKindRepository.save(kind);
-    }
 
     private AdmRole newRole(String code) {
         AdmRole role = new AdmRole();
@@ -75,12 +63,7 @@ class UtilisateurAdminControllerTest {
         return newUser(username, null);
     }
 
-    /**
-     * Depuis FEATURE-service-envoi-email, la réinitialisation exige une adresse et refuse le
-     * compte en 400 sans elle — les tests qui attendent un succès doivent donc en fournir une.
-     * Les autres (403, 404, listing) continuent d'utiliser {@link #newUser(String)} sans email :
-     * c'est le cas majoritaire en base et il doit rester représenté.
-     */
+    /** Compte AdmUser portant (ou non) une adresse sur AdmUser.Email. */
     private AdmUser newUser(String username, String email) {
         AdmUser user = new AdmUser();
         user.setId(UUID.randomUUID());
@@ -106,21 +89,24 @@ class UtilisateurAdminControllerTest {
         assertThat(tempPassword).hasSize(12);
 
         AppUserCredential credential = credentialRepository.findByAdmUserId(user.getId()).orElseThrow();
-        assertThat(credential.getMustChangePassword()).isTrue();
+        // Compte utilisable tout de suite : plus de portail de première connexion.
+        assertThat(credential.getMustChangePassword()).isFalse();
+        assertThat(credential.getProfileCompleted()).isTrue();
         assertThat(credential.getTokenVersion()).isEqualTo(1);
         assertThat(passwordEncoder.matches(tempPassword, credential.getPasswordHash())).isTrue();
     }
 
     @Test
     @WithMockUser(roles = "Administrateur")
-    void reinitialiser_existingCredential_bumpsTokenVersionAndResetsFlag() throws Exception {
+    void reinitialiser_existingCredential_bumpsTokenVersionAndClearsOnboardingFlags() throws Exception {
         AdmUser user = newUser("test.admin-reset.existing." + UUID.randomUUID(), "reset.existing@example.com");
         AppUserCredential credential = new AppUserCredential();
         credential.setId(UUID.randomUUID());
         credential.setAdmUser(user);
         credential.setPasswordHash(new BCryptPasswordEncoder().encode("AncienMotDePasse123"));
-        credential.setMustChangePassword(false);
-        credential.setProfileCompleted(true);
+        // Drapeaux hérités de l'ancien portail : la réinitialisation doit les neutraliser.
+        credential.setMustChangePassword(true);
+        credential.setProfileCompleted(false);
         credential.setTokenVersion(5);
         credential.setUserCreateDateTime(LocalDateTime.now());
         credentialRepository.save(credential);
@@ -129,9 +115,9 @@ class UtilisateurAdminControllerTest {
                 .andExpect(status().isOk());
 
         AppUserCredential updated = credentialRepository.findByAdmUserId(user.getId()).orElseThrow();
-        assertThat(updated.getMustChangePassword()).isTrue();
+        assertThat(updated.getMustChangePassword()).isFalse();
         assertThat(updated.getTokenVersion()).isEqualTo(6);
-        assertThat(updated.getProfileCompleted()).isTrue(); // untouched by a password reset
+        assertThat(updated.getProfileCompleted()).isTrue();
     }
 
     @Test
@@ -150,81 +136,14 @@ class UtilisateurAdminControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** FEATURE-acces-arpent-depuis-omran B4 : les comptes se créent dans Omran, la route n'existe plus. */
     @Test
     @WithMockUser(roles = "Administrateur")
-    void creerEmploye_happyPath_createsTierUserRoleAndCredential() throws Exception {
-        CfgTierKind kind = newTierKind("COM-CREATE-" + UUID.randomUUID());
-        AdmRole role = newRole("Commercial-" + UUID.randomUUID());
-        String username = "test.employe.create." + UUID.randomUUID();
-
-        String body = """
-                {"prenom":"Luc","nom":"Andria","identifiant":"%s","email":"luc@example.com",
-                "mobile":"0600000000","typeEmployeCode":"%s","roles":["%s"]}""".formatted(
-                username, kind.getCode(), role.getCode());
-
-        MvcResult result = mockMvc.perform(post("/api/utilisateurs")
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.identifiant").value(username))
-                .andExpect(jsonPath("$.cfgTierId").exists())
-                .andExpect(jsonPath("$.admUserId").exists())
-                .andExpect(jsonPath("$.roles[0]").value(role.getCode()))
-                .andExpect(jsonPath("$.motDePasseTemporaire").exists())
-                .andReturn();
-
-        String tempPassword = com.jayway.jsonpath.JsonPath.read(
-                result.getResponse().getContentAsString(), "$.motDePasseTemporaire");
-        assertThat(tempPassword).hasSize(12);
-
-        AdmUser createdUser = userRepository.findByCode(username).orElseThrow();
-        assertThat(createdUser.getCfgEmployee()).isNotNull();
-        assertThat(createdUser.getCfgEmployee().getFirstName()).isEqualTo("Luc");
-
-        AppUserCredential credential = credentialRepository.findByAdmUserId(createdUser.getId()).orElseThrow();
-        assertThat(credential.getMustChangePassword()).isTrue();
-        assertThat(credential.getProfileCompleted()).isFalse();
-        assertThat(passwordEncoder.matches(tempPassword, credential.getPasswordHash())).isTrue();
-    }
-
-    @Test
-    @WithMockUser(roles = "Administrateur")
-    void creerEmploye_duplicateIdentifiant_returns409() throws Exception {
-        CfgTierKind kind = newTierKind("COM-DUP-TEST-" + UUID.randomUUID());
-        AdmRole role = newRole("Commercial-DUP-" + UUID.randomUUID());
-        AdmUser existing = newUser("test.employe.dup." + UUID.randomUUID());
-
-        String body = """
-                {"prenom":"Luc","nom":"Andria","identifiant":"%s","email":"luc@example.com",
-                "typeEmployeCode":"%s","roles":["%s"]}""".formatted(
-                existing.getCode(), kind.getCode(), role.getCode());
-
-        mockMvc.perform(post("/api/utilisateurs").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isConflict());
-    }
-
-    @Test
-    @WithMockUser(roles = "Administrateur")
-    void creerEmploye_unknownTypeEmployeCode_returns400() throws Exception {
-        AdmRole role = newRole("Commercial-UNK-" + UUID.randomUUID());
-        String body = """
-                {"prenom":"Luc","nom":"Andria","identifiant":"test.employe.unk.%s",
-                "email":"luc@example.com","typeEmployeCode":"CODE_INEXISTANT","roles":["%s"]}""".formatted(
-                UUID.randomUUID(), role.getCode());
-
-        mockMvc.perform(post("/api/utilisateurs").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    @WithMockUser // default role USER — not Administrateur
-    void creerEmploye_withoutAdminRole_returns403() throws Exception {
-        String body = """
-                {"prenom":"Luc","nom":"Andria","identifiant":"test.employe.forbidden.%s",
-                "email":"luc@example.com","typeEmployeCode":"COM","roles":["Commercial"]}""".formatted(
-                UUID.randomUUID());
-
-        mockMvc.perform(post("/api/utilisateurs").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
+    void creerEmploye_routeSupprimee_nEstPlusExposee() throws Exception {
+        int statut = mockMvc.perform(post("/api/utilisateurs")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"identifiant\":\"x\"}"))
+                .andReturn().getResponse().getStatus();
+        assertThat(statut).isIn(404, 405);
     }
 
     @Test

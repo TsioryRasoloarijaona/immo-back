@@ -1,27 +1,19 @@
 package com.tsix.immocrm.services.auth;
 
-import com.tsix.immocrm.dto.auth.CreerEmployeRequest;
-import com.tsix.immocrm.dto.auth.CreerEmployeResponse;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
 import com.tsix.immocrm.dto.auth.UtilisateurListItemDto;
-import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.adm.AdmUser;
-import com.tsix.immocrm.entities.adm.AdmUserRole;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
-import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.mail.AdresseMasquee;
 import com.tsix.immocrm.mail.EnvoiEmail;
 import com.tsix.immocrm.mail.MotDePasseTemporaireEmis;
-import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.criteria.Predicate;
@@ -39,13 +31,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Backs the admin-only endpoints of {@code UtilisateurAdminController} (see its
- * {@code @PreAuthorize}): resetting a password and onboarding a brand-new employee.
+ * {@code @PreAuthorize}): listing the accounts and resetting a password. Accounts
+ * themselves are created in Omran, never here (FEATURE-acces-arpent-depuis-omran.md).
  */
 @Service
 @Transactional(readOnly = true)
@@ -59,27 +51,19 @@ public class UtilisateurAdminService {
     private final AdmUserRepository userRepository;
     private final AppUserCredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
-    private final CfgTierRepository tierRepository;
-    private final CfgTierKindRepository tierKindRepository;
-    private final AdmRoleRepository roleRepository;
     private final AdmUserRoleRepository userRoleRepository;
     private final PerimetreCommercialService perimetreService;
     private final ApplicationEventPublisher evenements;
     private final EnvoiEmail envoiEmail;
 
     public UtilisateurAdminService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
-                                    PasswordEncoder passwordEncoder, CfgTierRepository tierRepository,
-                                    CfgTierKindRepository tierKindRepository, AdmRoleRepository roleRepository,
-                                    AdmUserRoleRepository userRoleRepository,
+                                    PasswordEncoder passwordEncoder, AdmUserRoleRepository userRoleRepository,
                                     PerimetreCommercialService perimetreService,
                                     ApplicationEventPublisher evenements, EnvoiEmail envoiEmail) {
         this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tierRepository = tierRepository;
-        this.tierKindRepository = tierKindRepository;
-        this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
         this.evenements = evenements;
         this.envoiEmail = envoiEmail;
@@ -157,28 +141,35 @@ public class UtilisateurAdminService {
     }
 
     /**
-     * Generates a fresh temporary password, hashes it, sets {@code MustChangePassword=true} and
-     * bumps {@code TokenVersion} (invalidates every token already issued to this account, on
-     * every device). Creates the {@code AppUserCredential} row if the account has never logged
-     * into the web app before — an admin can bootstrap any legacy {@code AdmUser} this way.
+     * {@code POST /api/utilisateurs/{admUserId}/reinitialiser-mot-de-passe} — ouvre (ou rouvre)
+     * l'accès Arpent d'un compte Omran. Voir {@code instructions/FEATURE-acces-arpent-depuis-omran.md} B1.
      *
-     * <p>Le mot de passe est expédié par email après commit (voir
-     * {@code instructions/FEATURE-service-envoi-email.md}). <b>Un compte sans adresse est
-     * refusé en 400 avant toute écriture</b> : la vérification précède délibérément la
-     * génération du mot de passe et l'incrément de {@code TokenVersion}, pour qu'un refus
-     * laisse le compte strictement intact plutôt que de déconnecter l'utilisateur de tous ses
-     * appareils au profit d'un mot de passe que personne ne recevra.
+     * <p>Génère toujours un mot de passe, le hache, rend le compte immédiatement utilisable
+     * ({@code MustChangePassword=false}, {@code ProfileCompleted=true} — tout est déjà saisi sur
+     * Omran) et incrémente {@code TokenVersion} (déconnecte toutes les sessions déjà ouvertes).
+     * Crée la ligne {@code AppUserCredential} si le compte ne s'était jamais connecté au web.
+     *
+     * <p>Destinataire : {@code emailCorps} s'il est fourni, sinon {@link #resoudreDestinataire}.
+     * Une adresse fournie mais invalide est refusée en 400 <b>avant toute écriture</b>. Sans
+     * destinataire, la réinitialisation a lieu quand même et aucun événement mail n'est publié :
+     * le mot de passe n'existe alors que dans la réponse. L'adresse du corps n'est jamais
+     * enregistrée — Omran reste la source des comptes.
      */
     @Transactional
-    public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(UUID admUserId) {
+    public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(UUID admUserId, String emailCorps) {
         AdmUser user = userRepository.findById(admUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable: " + admUserId));
 
-        String destinataire = resoudreDestinataire(user);
-        if (destinataire == null) {
-            throw new InvalidRequestException("Ce compte n'a aucune adresse email : le mot de passe "
-                    + "temporaire ne peut pas être envoyé. Renseignez l'email de l'utilisateur avant "
-                    + "de réinitialiser son mot de passe.");
+        String destinataire;
+        if (StringUtils.hasText(emailCorps)) {
+            destinataire = adressePlausible(emailCorps);
+            if (destinataire == null) {
+                throw new InvalidRequestException("L'adresse email fournie n'est pas valide : "
+                        + "corrigez-la, ou laissez le champ vide pour seulement afficher les "
+                        + "identifiants.");
+            }
+        } else {
+            destinataire = resoudreDestinataire(user);
         }
 
         AppUserCredential credential = credentialRepository.findByAdmUserId(admUserId).orElseGet(() -> {
@@ -190,106 +181,21 @@ public class UtilisateurAdminService {
             return c;
         });
 
-        String motDePasseTemporaire = genererMotDePasseTemporaire();
-        credential.setPasswordHash(passwordEncoder.encode(motDePasseTemporaire));
-        credential.setMustChangePassword(true);
+        String motDePasse = genererMotDePasseTemporaire();
+        credential.setPasswordHash(passwordEncoder.encode(motDePasse));
+        credential.setMustChangePassword(false);
+        credential.setProfileCompleted(true);
         credential.setTokenVersion(credential.getTokenVersion() + 1);
         credential.setUserUpdateDateTime(LocalDateTime.now());
         credentialRepository.save(credential);
 
-        evenements.publishEvent(new MotDePasseTemporaireEmis(
-                destinataire, nomAffiche(user), user.getCode(), motDePasseTemporaire, false));
-
-        return new ReinitialiserMotDePasseResponse(user.getId(), user.getCode(), motDePasseTemporaire,
-                envoiEmail.estActif(), AdresseMasquee.de(destinataire));
-    }
-
-    /**
-     * Onboards a brand-new employee in one call: creates the person record ({@code CfgTier}),
-     * the login account ({@code AdmUser}) linked to it, the requested role assignments
-     * ({@code AdmUserRole}), and a fresh {@code AppUserCredential} with a one-time temporary
-     * password (same "must change on first login" flow as {@link #reinitialiserMotDePasse}).
-     */
-    @Transactional
-    public CreerEmployeResponse creerEmploye(CreerEmployeRequest request) {
-        if (!StringUtils.hasText(request.identifiant())) {
-            throw new InvalidRequestException("identifiant est requis");
-        }
-        if (userRepository.findByCode(request.identifiant()).isPresent()) {
-            throw new ConflictException("Identifiant déjà utilisé: " + request.identifiant());
-        }
-        if (request.roles() == null || request.roles().isEmpty()) {
-            throw new InvalidRequestException("Au moins un rôle est requis");
-        }
-        // Doublon assumé des contraintes @NotBlank/@Email du record : celles-ci ne s'appliquent
-        // qu'aux appels passant par le contrôleur, et l'adresse est ici écrite sur DEUX tables
-        // avant d'être utilisée pour l'envoi.
-        String destinataire = adressePlausible(request.email());
-        if (destinataire == null) {
-            throw new InvalidRequestException("email est requis et doit être une adresse valide : "
-                    + "c'est à cette adresse qu'est envoyé le mot de passe temporaire.");
+        if (destinataire != null) {
+            evenements.publishEvent(new MotDePasseTemporaireEmis(
+                    destinataire, nomAffiche(user), user.getCode(), motDePasse));
         }
 
-        CfgTierKind tierKind = tierKindRepository.findByCode(request.typeEmployeCode())
-                .orElseThrow(() -> new InvalidRequestException(
-                        "typeEmployeCode inconnu: " + request.typeEmployeCode()));
-
-        List<AdmRole> roles = roleRepository.findByCodeIn(request.roles());
-        if (roles.size() != Set.copyOf(request.roles()).size()) {
-            Set<String> found = roles.stream().map(AdmRole::getCode).collect(Collectors.toSet());
-            List<String> unknown = request.roles().stream().filter(code -> !found.contains(code)).toList();
-            throw new InvalidRequestException("Rôle(s) inconnu(s): " + unknown);
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-
-        CfgTier tier = new CfgTier();
-        tier.setId(UUID.randomUUID());
-        tier.setFirstName(request.prenom());
-        tier.setLastName(request.nom());
-        tier.setEMail(destinataire);
-        tier.setMobile(request.mobile());
-        tier.setCfgTierKind(tierKind);
-        tier.setUserCreateDateTime(now);
-        tier = tierRepository.save(tier);
-
-        AdmUser user = new AdmUser();
-        user.setId(UUID.randomUUID());
-        user.setCode(request.identifiant());
-        user.setDescription(request.prenom() + " " + request.nom());
-        user.setEmail(destinataire);
-        user.setMobile(request.mobile());
-        user.setDisabled(false);
-        user.setCfgEmployee(tier);
-        user.setUserCreateDateTime(now);
-        user = userRepository.save(user);
-
-        for (AdmRole role : roles) {
-            AdmUserRole userRole = new AdmUserRole();
-            userRole.setId(UUID.randomUUID());
-            userRole.setAdmUser(user);
-            userRole.setAdmRole(role);
-            userRoleRepository.save(userRole);
-        }
-
-        String motDePasseTemporaire = genererMotDePasseTemporaire();
-        AppUserCredential credential = new AppUserCredential();
-        credential.setId(UUID.randomUUID());
-        credential.setAdmUser(user);
-        credential.setPasswordHash(passwordEncoder.encode(motDePasseTemporaire));
-        credential.setMustChangePassword(true);
-        credential.setProfileCompleted(false);
-        credential.setTokenVersion(0);
-        credential.setUserCreateDateTime(now);
-        credentialRepository.save(credential);
-
-        evenements.publishEvent(new MotDePasseTemporaireEmis(
-                destinataire, request.prenom() + " " + request.nom(), user.getCode(),
-                motDePasseTemporaire, true));
-
-        List<String> roleCodes = roles.stream().map(AdmRole::getCode).toList();
-        return new CreerEmployeResponse(tier.getId(), user.getId(), user.getCode(), roleCodes,
-                motDePasseTemporaire, envoiEmail.estActif(), AdresseMasquee.de(destinataire));
+        return new ReinitialiserMotDePasseResponse(user.getId(), user.getCode(), motDePasse,
+                destinataire != null && envoiEmail.estActif(), AdresseMasquee.de(destinataire));
     }
 
     private static String genererMotDePasseTemporaire() {

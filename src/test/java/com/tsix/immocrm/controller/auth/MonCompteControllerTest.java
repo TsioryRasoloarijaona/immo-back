@@ -33,11 +33,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * End-to-end onboarding flow: login with a temporary password → blocked on every route except
- * /api/auth/** and /api/mon-compte/** → change password → still blocked (profile incomplete) →
- * complete profile → finally unblocked. Deliberately does NOT use @WithMockUser (that principal
- * type bypasses OnboardingGateFilter entirely) — every request here carries a real JWT cookie
- * obtained by actually logging in, exactly like a real client would.
+ * Plus de portail de première connexion (FEATURE-acces-arpent-depuis-omran.md B3) : un compte
+ * dont les drapeaux hérités disent encore mustChangePassword=true / profileCompleted=false
+ * accède à toute l'API. Deliberately does NOT use @WithMockUser — every request here carries a
+ * real JWT cookie obtained by actually logging in, exactly like a real client would, since the
+ * removed gate read the flags from that cookie's principal.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -110,21 +110,30 @@ class MonCompteControllerTest {
     }
 
     @Test
-    void fullOnboardingFlow_blocksThenUnblocksProtectedRoutes() throws Exception {
+    void drapeauxHerites_neBloquentPlusAucuneRoute() throws Exception {
         AdmUser user = newOnboardingUser("test.onboarding." + UUID.randomUUID(), "TempPass123");
         Cookie cookie = login(user.getCode(), "TempPass123");
 
-        // Blocked: temporary password still active.
+        // Routes métier accessibles malgré mustChangePassword=true / profileCompleted=false.
+        mockMvc.perform(get("/api/prospections").cookie(cookie))
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/referentiels/etapes-prospection").cookie(cookie))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("MOT_DE_PASSE_TEMPORAIRE"));
+                .andExpect(status().isOk());
 
-        // /api/mon-compte itself stays reachable.
+        // Les drapeaux restent renvoyés (contrat), le front les ignore.
         mockMvc.perform(get("/api/mon-compte").cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.mustChangePassword").value(true));
+                .andExpect(jsonPath("$.mustChangePassword").value(true))
+                .andExpect(jsonPath("$.profileCompleted").value(false));
+    }
 
-        // Change password → new cookie, still blocked (profile incomplete).
+    /** Changement de mot de passe volontaire et PATCH profil : laissés en place (B3). */
+    @Test
+    void changementVolontaireEtProfil_fonctionnentToujours() throws Exception {
+        AdmUser user = newOnboardingUser("test.onboarding." + UUID.randomUUID(), "TempPass123");
+        Cookie cookie = login(user.getCode(), "TempPass123");
+
+        // Change password → new cookie.
         String changePasswordBody = """
                 {"ancienMotDePasse":"TempPass123","nouveauMotDePasse":"NouveauMotDePasse456"}""";
         MvcResult changeResult = mockMvc.perform(post("/api/mon-compte/changer-mot-de-passe").cookie(cookie)
@@ -137,14 +146,13 @@ class MonCompteControllerTest {
         assertThat(cookieAfterPasswordChange).isNotNull();
 
         mockMvc.perform(get("/api/referentiels/etapes-prospection").cookie(cookieAfterPasswordChange))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PROFIL_INCOMPLET"));
+                .andExpect(status().isOk());
 
         // The old cookie (pre-password-change) is now invalid (TokenVersion bumped).
         mockMvc.perform(get("/api/mon-compte").cookie(cookie))
                 .andExpect(status().isUnauthorized());
 
-        // Complete profile → fully unblocked.
+        // PATCH profil still accepted (no longer called by the frontend).
         String completeProfilBody = """
                 {"prenom":"Jean","nom":"Dupont","telephone":"0612345678","email":"jean.dupont@example.com","dateNaissance":"1990-01-01T00:00:00"}""";
         MvcResult completeResult = mockMvc.perform(patch("/api/mon-compte/profil").cookie(cookieAfterPasswordChange)

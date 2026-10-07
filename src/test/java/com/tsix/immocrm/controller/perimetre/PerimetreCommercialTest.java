@@ -191,7 +191,7 @@ class PerimetreCommercialTest {
      * Authentifie la requête avec un vrai {@link AuthenticatedUser} — indispensable ici : le
      * périmètre est résolu depuis {@code AuthenticatedUser.admUserId()}, et {@code @WithMockUser}
      * pose un principal d'un autre type, donc non restreint. {@code mustChangePassword=false} et
-     * {@code profileCompleted=true} évitent le blocage par {@code OnboardingGateFilter}.
+     * {@code profileCompleted=true} : valeurs neutres (plus aucun portail ne les lit).
      */
     private RequestPostProcessor connecte(AdmUser user, String... roles) {
         AuthenticatedUser principal = new AuthenticatedUser(

@@ -80,11 +80,11 @@ public class ReferentielController {
     @GetMapping("/roles")
     @Operation(
             summary = "Liste des rôles applicatifs (AdmRole)",
-            description = "Rôles pouvant être assignés à un compte utilisateur — alimente le "
-                    + "choix (cases à cocher) \"roles\" de POST /api/utilisateurs lors de la "
-                    + "création d'un employé. Chaque code (ex. \"Commercial\", \"Administrateur\") "
-                    + "pilote aussi les autorisations d'accès (hasRole(...)) sur les endpoints "
-                    + "réservés."
+            description = "Rôles applicatifs existants (AdmRole), tels qu'ils sont assignés aux "
+                    + "comptes dans Omran — Arpent ne crée ni n'assigne de rôle. Chaque code "
+                    + "(ex. \"Commercial\", \"Administrateur\") pilote les autorisations d'accès "
+                    + "(hasRole(...)) sur les endpoints réservés et apparaît dans "
+                    + "`roles` de GET /api/utilisateurs et GET /api/mon-compte."
     )
     public List<ReferentielItemDto> getRoles() {
         return referentielService.roles();
@@ -171,12 +171,13 @@ public class ReferentielController {
 
     @GetMapping("/types-employe")
     @Operation(
-            summary = "Types d'employé (CfgTierKind) assignables à un compte",
-            description = "Codes CfgTierKind valides pour `typeEmployeCode` de "
-                    + "`POST /api/utilisateurs` lors de la création d'un employé (ex. \"COM\" "
-                    + "pour commercial) — équivalent de `GET /api/referentiels/tier-types/{typeId}/"
-                    + "kinds` déjà filtré sur le CfgTierType \"EMP\", pour ne pas obliger le front "
-                    + "à connaître son id."
+            summary = "Types d'employé (CfgTierKind)",
+            description = "Types d'employé existants (ex. \"COM\" pour commercial), tels qu'ils "
+                    + "qualifient les fiches employé saisies dans Omran — c'est le "
+                    + "`typeEmployeCode` / `typeEmployeLibelle` de GET /api/utilisateurs. "
+                    + "Équivalent de `GET /api/referentiels/tier-types/{typeId}/kinds` déjà "
+                    + "filtré sur le CfgTierType \"EMP\", pour ne pas obliger le front à connaître "
+                    + "son id."
     )
     public List<ReferentielItemDto> getTypesEmploye() {
         return referentielService.typesEmploye();

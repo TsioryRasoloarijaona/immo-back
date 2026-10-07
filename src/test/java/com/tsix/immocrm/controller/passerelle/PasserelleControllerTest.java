@@ -32,7 +32,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -129,13 +128,13 @@ class PasserelleControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /** Plus de portail de première connexion (FEATURE-acces-arpent-depuis-omran.md B3). */
     @Test
-    void motDePasseTemporaire_403_avecLeCodeDOnboarding() throws Exception {
+    void motDePasseTemporaireHerite_neBloquePlus_204() throws Exception {
         Compte compte = creerCompte(true, true, "Commercial");
 
         mockMvc.perform(get(URL).cookie(connecter(compte.username())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("MOT_DE_PASSE_TEMPORAIRE"));
+                .andExpect(status().isNoContent());
     }
 
     // ------------------------------------------------------------------ fixtures

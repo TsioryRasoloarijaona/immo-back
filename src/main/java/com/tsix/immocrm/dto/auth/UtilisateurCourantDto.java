@@ -25,13 +25,16 @@ public record UtilisateurCourantDto(
         @Schema(description = "Codes des rôles assignés (AdmRole.Code), ex: [\"Commercial\", \"Administrateur\"].")
         List<String> roles,
 
-        @Schema(description = "true si un mot de passe temporaire est actif — le front doit "
-                + "rediriger vers l'écran de changement de mot de passe ; toutes les autres "
-                + "routes de l'API renvoient 403 tant que c'est le cas.")
+        @Schema(description = "Drapeau hérité (AppUserCredential.MustChangePassword), conservé "
+                + "pour le contrat. **Ne bloque plus rien** et le front l'ignore : il n'y a plus "
+                + "de changement de mot de passe imposé à la connexion. Une réinitialisation par "
+                + "un administrateur le remet à false.")
         boolean mustChangePassword,
 
-        @Schema(description = "false tant que le formulaire de première connexion (infos "
-                + "personnelles) n'a pas été soumis — mêmes conséquences que mustChangePassword.")
+        @Schema(description = "Drapeau hérité (AppUserCredential.ProfileCompleted), conservé "
+                + "pour le contrat. **Ne bloque plus rien** et le front l'ignore : les informations "
+                + "du compte viennent d'Omran. Une réinitialisation par un administrateur le met "
+                + "à true.")
         boolean profileCompleted,
 
         @Schema(description = "true si le périmètre commercial s'applique réellement à ce compte, "

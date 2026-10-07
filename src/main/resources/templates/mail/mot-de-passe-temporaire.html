@@ -1,19 +1,21 @@
 <!DOCTYPE html>
 <!--
-  Corps du message portant un mot de passe temporaire (création de compte ou
-  réinitialisation). Voir instructions/FEATURE-service-envoi-email.md §8.
+  Corps du message portant les identifiants Arpent d'un compte Omran (réinitialisation
+  par un administrateur). Voir instructions/FEATURE-service-envoi-email.md §8 et
+  FEATURE-acces-arpent-depuis-omran.md B2.
 
   Deux contraintes de forme, propres à l'email et non négociables :
     - mise en page par <table> et styles EN LIGNE. Outlook et les webmails ignorent
       largement les feuilles de style et les dispositions modernes ;
-    - AUCUN lien portant le mot de passe. Un lien de connexion pré-rempli finirait dans un
-      historique de navigation et dans les journaux de tout proxy traversé.
+    - AUCUN lien portant le mot de passe ni l'identifiant. Le lien « Se connecter à Arpent »
+      pointe sur app.arpent.url nu : un lien pré-rempli finirait dans un historique de
+      navigation et dans les journaux de tout proxy traversé.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:text="${creation} ? 'Vos identifiants de connexion' : 'Réinitialisation de votre mot de passe'">Vos identifiants</title>
+    <title>Vos identifiants Arpent</title>
 </head>
 <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
 
@@ -26,9 +28,8 @@
 
                 <tr>
                     <td style="padding:28px 32px 8px 32px;">
-                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;"
-                            th:text="${creation} ? 'Bienvenue sur Ayad Estate' : 'Votre mot de passe a été réinitialisé'">
-                            Bienvenue
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;">
+                            Votre accès à Arpent
                         </h1>
                     </td>
                 </tr>
@@ -38,13 +39,9 @@
                         <p style="margin:0 0 14px 0;">
                             Bonjour <span th:text="${nomComplet}" style="font-weight:600;">Prénom Nom</span>,
                         </p>
-                        <p style="margin:0 0 20px 0;" th:if="${creation}">
-                            Un compte vient d'être créé pour vous sur l'application Ayad Estate.
-                            Voici vos identifiants de connexion.
-                        </p>
-                        <p style="margin:0 0 20px 0;" th:unless="${creation}">
-                            Le mot de passe de votre compte Ayad Estate vient d'être réinitialisé
-                            par un administrateur. Voici votre nouveau mot de passe provisoire.
+                        <p style="margin:0 0 20px 0;">
+                            Votre accès à Arpent est prêt. Connectez-vous avec votre
+                            identifiant Omran et le mot de passe ci-dessous.
                         </p>
                     </td>
                 </tr>
@@ -55,7 +52,7 @@
                                style="background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px;">
                             <tr>
                                 <td style="padding:16px 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
-                                    Identifiant
+                                    Identifiant (Omran)
                                 </td>
                             </tr>
                             <tr>
@@ -65,7 +62,7 @@
                             </tr>
                             <tr>
                                 <td style="padding:0 20px 6px 20px; font-size:12px; color:#7b8794; text-transform:uppercase; letter-spacing:0.4px;">
-                                    Mot de passe temporaire
+                                    Mot de passe
                                 </td>
                             </tr>
                             <tr>
@@ -82,14 +79,20 @@
 
                 <tr>
                     <td style="padding:20px 32px 0 32px; font-size:15px; line-height:1.6;">
-                        <p style="margin:0 0 16px 0;">
-                            Ce mot de passe est <strong>provisoire</strong> : il vous sera demandé
-                            d'en choisir un nouveau dès votre première connexion.
-                        </p>
-                        <p style="margin:0 0 24px 0; font-size:14px; color:#52606d;"
-                           th:if="${urlApplication}">
-                            Application :
-                            <span th:text="${urlApplication}" style="color:#1f2933;">https://exemple</span>
+                        <!-- Lien nu vers l'application : ni identifiant ni mot de passe dans l'URL. -->
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px 0;">
+                            <tr>
+                                <td style="border-radius:6px; background-color:#1f2933;">
+                                    <a th:href="${urlArpent}" href="https://arpent.ayaddeveloppement.com"
+                                       style="display:inline-block; padding:11px 22px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:6px;">
+                                        Se connecter à Arpent
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:0 0 24px 0; font-size:14px; color:#52606d;">
+                            Ou copiez cette adresse dans votre navigateur :
+                            <span th:text="${urlArpent}" style="color:#1f2933;">https://arpent.ayaddeveloppement.com</span>
                         </p>
                     </td>
                 </tr>
