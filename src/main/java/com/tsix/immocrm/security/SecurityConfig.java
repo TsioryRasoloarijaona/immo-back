@@ -20,8 +20,9 @@ import org.springframework.web.cors.CorsUtils;
 /**
  * Phase 2 of the auth rollout: the whole API now requires an authenticated caller (a valid
  * {@code access_token} cookie, parsed by {@link JwtAuthenticationFilter}) except
- * {@code /api/auth/**} (login itself) and the Swagger/OpenAPI doc endpoints. See
- * {@link OnboardingGateFilter} for the extra "première connexion" gate layered on top.
+ * {@code /api/auth/**} (login itself) and the Swagger/OpenAPI doc endpoints. There is no
+ * "première connexion" gate any more: accounts come from Omran fully filled in, and an admin
+ * reset makes them usable immediately (FEATURE-acces-arpent-depuis-omran.md B3).
  * <p>
  * Il n'y a plus <b>aucune</b> exception applicative à {@code authenticated()} : le trou
  * {@code permitAll} qui laissait passer les générateurs de documents a été refermé avec le
@@ -69,14 +70,12 @@ import org.springframework.web.cors.CorsUtils;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final OnboardingGateFilter onboardingGateFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, OnboardingGateFilter onboardingGateFilter,
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           ApiKeyAuthenticationFilter apiKeyAuthenticationFilter) {
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.onboardingGateFilter = onboardingGateFilter;
     }
 
     @Bean
@@ -165,8 +164,7 @@ public class SecurityConfig {
                 // foi (401 si invalide, 403 hors portée), le cookie n'est lu qu'en son absence.
                 // Voir FEATURE-cle-api-n8n.md §5.
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(apiKeyAuthenticationFilter, JwtAuthenticationFilter.class)
-                .addFilterAfter(onboardingGateFilter, JwtAuthenticationFilter.class);
+                .addFilterBefore(apiKeyAuthenticationFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 }

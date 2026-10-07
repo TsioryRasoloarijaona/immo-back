@@ -54,13 +54,14 @@ public record UtilisateurListItemDto(
                 + "(voir POST /api/utilisateurs/{admUserId}/reinitialiser-mot-de-passe).")
         boolean compteWebInitialise,
 
-        @Schema(description = "true si un mot de passe temporaire est actif pour ce compte "
-                + "(en attente de changement à la prochaine connexion). false, y compris si "
+        @Schema(description = "Drapeau hérité AppUserCredential.MustChangePassword — ne bloque "
+                + "plus rien (aucun changement imposé à la connexion). false, y compris si "
                 + "compteWebInitialise est false.")
         boolean mustChangePassword,
 
-        @Schema(description = "true si le profil (informations personnelles de première connexion) "
-                + "a déjà été complété. false, y compris si compteWebInitialise est false.")
+        @Schema(description = "Drapeau hérité AppUserCredential.ProfileCompleted — ne bloque "
+                + "plus rien (aucun formulaire de première connexion). false si "
+                + "compteWebInitialise est false.")
         boolean profileCompleted,
 
         @Schema(description = "Date de création du compte (AdmUser.UserCreateDateTime).")

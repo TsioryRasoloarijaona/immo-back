@@ -241,10 +241,8 @@ public class ReferentielService {
     }
 
     /**
-     * {@code GET /api/referentiels/roles} — {@code AdmRole} disponibles, à cocher lors de la
-     * création d'un employé ({@code POST /api/utilisateurs}, champ {@code roles}, une liste de
-     * codes). Sans cet endpoint, le front n'avait aucun moyen de peupler ce choix autrement qu'en
-     * codant les valeurs en dur.
+     * {@code GET /api/referentiels/roles} — {@code AdmRole} existants, tels qu'assignés aux
+     * comptes dans Omran (Arpent n'en assigne aucun).
      */
     public List<ReferentielItemDto> roles() {
         return roleRepository.findAll().stream()
@@ -340,8 +338,8 @@ public class ReferentielService {
     }
 
     /**
-     * {@code GET /api/referentiels/types-employe} — {@code CfgTierKind} codes valid for
-     * {@code POST /api/utilisateurs}'s {@code typeEmployeCode} (kinds under the "EMP" CfgTierType).
+     * {@code GET /api/referentiels/types-employe} — {@code CfgTierKind} codes of employee records
+     * (kinds under the "EMP" CfgTierType), as filled in Omran.
      */
     public List<ReferentielItemDto> typesEmploye() {
         return tierKindRepository.findByCfgTierTypeCodeOrderBySortingAsc("EMP").stream().map(k -> new ReferentielItemDto(

@@ -1,7 +1,6 @@
 package com.tsix.immocrm.controller.auth;
 
-import com.tsix.immocrm.dto.auth.CreerEmployeRequest;
-import com.tsix.immocrm.dto.auth.CreerEmployeResponse;
+import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseRequest;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
 import com.tsix.immocrm.dto.auth.UtilisateurListItemDto;
 import com.tsix.immocrm.dto.common.PageDto;
@@ -14,12 +13,9 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,9 +32,9 @@ import java.util.UUID;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
 @Tag(name = "Utilisateurs (admin)", description = "Actions administratives sur les comptes "
-        + "AdmUser — réservées au rôle Administrateur : liste des comptes, création d'employé, "
-        + "réinitialisation de mot de passe, et affectation des projets qui composent le périmètre "
-        + "commercial d'un utilisateur.")
+        + "AdmUser — réservées au rôle Administrateur : liste des comptes, réinitialisation du mot "
+        + "de passe Arpent, et affectation des projets qui composent le périmètre commercial d'un "
+        + "utilisateur. Les comptes eux-mêmes se créent dans Omran, jamais ici.")
 @RestController
 @RequestMapping("/api/utilisateurs")
 public class UtilisateurAdminController {
@@ -80,72 +76,45 @@ public class UtilisateurAdminController {
     @PostMapping("/{admUserId}/reinitialiser-mot-de-passe")
     @PreAuthorize("hasRole('Administrateur')")
     @Operation(
-            summary = "Réinitialise le mot de passe d'un utilisateur",
-            description = "Génère un mot de passe temporaire, **l'envoie par email à "
-                    + "l'utilisateur**, le renvoie une seule fois dans la réponse, et force son "
-                    + "changement à la prochaine connexion (mustChangePassword=true). Invalide "
-                    + "immédiatement tous les tokens déjà émis pour ce compte, sur tous les "
-                    + "appareils. Crée l'enregistrement d'identifiants web si ce compte legacy "
-                    + "(AdmUser) ne s'était encore jamais connecté à l'application web.\n\n"
-                    + "**Le compte doit avoir une adresse email, sinon 400.** L'adresse est "
-                    + "cherchée sur `AdmUser.Email` puis, à défaut, sur la fiche employé liée "
-                    + "(`CfgTier`). Le refus intervient **avant toute écriture** : aucun mot de "
-                    + "passe n'est généré et les sessions en cours ne sont pas invalidées, le "
-                    + "compte reste donc strictement intact. Cas fréquent sur les comptes "
-                    + "hérités — au 08/09/2026, 5 des 15 comptes actifs sont dans ce cas.\n\n"
-                    + "L'envoi est **asynchrone** et postérieur au commit : `emailEnvoye=true` "
-                    + "signifie qu'il a été déclenché sans obstacle, pas qu'il a été remis. "
-                    + "C'est pourquoi `motDePasseTemporaire` reste dans la réponse et doit "
-                    + "continuer d'être affiché à l'administrateur. Réservé au rôle "
-                    + "Administrateur."
+            summary = "Réinitialise le mot de passe Arpent d'un compte Omran",
+            description = "Les comptes se créent dans Omran (AdmUser, fiche employé, rôles) ; ce "
+                    + "geste est le seul qui ouvre ou rouvre l'accès web. Génère **toujours** un "
+                    + "nouveau mot de passe Arpent pour le login Omran (`AdmUser.Code`), le "
+                    + "renvoie une seule fois dans la réponse, et rend le compte **utilisable "
+                    + "immédiatement** : aucun changement de mot de passe ni formulaire de profil "
+                    + "n'est demandé à la connexion (mustChangePassword=false, "
+                    + "profileCompleted=true). Invalide tous les tokens déjà émis pour ce compte, "
+                    + "sur tous les appareils (TokenVersion incrémenté). Crée l'enregistrement "
+                    + "d'identifiants web si le compte ne s'était jamais connecté.\n\n"
+                    + "**Destinataire** : `email` du corps s'il est fourni (pour cet envoi "
+                    + "seulement, jamais enregistré), sinon `AdmUser.Email`, à défaut l'email de "
+                    + "la fiche employé (`CfgTier`). **Un compte sans aucune adresse n'est plus "
+                    + "refusé** : la réinitialisation a lieu, aucun email n'est envoyé "
+                    + "(`emailEnvoye=false`, `destinataire=null`) et l'administrateur transmet "
+                    + "lui-même les identifiants affichés. Le corps est facultatif (absent = `{}`).\n\n"
+                    + "L'email contient l'identifiant, le mot de passe et le lien vers Arpent "
+                    + "(sans identifiant ni mot de passe dans le lien). L'envoi est "
+                    + "**asynchrone** et postérieur au commit : `emailEnvoye=true` signifie qu'il "
+                    + "a été déclenché, pas qu'il a été remis — `motDePasseTemporaire` doit donc "
+                    + "toujours être affiché. Réservé au rôle Administrateur."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Mot de passe temporaire généré et envoi déclenché."),
-            @ApiResponse(responseCode = "400", description = "Le compte n'a aucune adresse email "
-                    + "(ni sur AdmUser, ni sur sa fiche employé) : le mot de passe ne peut être "
-                    + "envoyé. Le message serveur nomme le remède — renseigner l'email de "
-                    + "l'utilisateur — et peut être affiché tel quel."),
+            @ApiResponse(responseCode = "200", description = "Mot de passe généré ; email déclenché "
+                    + "si un destinataire existe et que le service d'envoi est actif."),
+            @ApiResponse(responseCode = "400", description = "`email` fourni dans le corps mais "
+                    + "invalide (pas de forme local@domaine.tld). Rien n'est modifié : pas de "
+                    + "nouveau mot de passe, sessions conservées. Le message serveur peut être "
+                    + "affiché tel quel sous le champ."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
             @ApiResponse(responseCode = "404", description = "Aucun AdmUser avec cet id.")
     })
     public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(
-            @Parameter(description = "Id de l'AdmUser à réinitialiser.") @PathVariable UUID admUserId) {
-        return utilisateurAdminService.reinitialiserMotDePasse(admUserId);
-    }
-
-    @PostMapping
-    @PreAuthorize("hasRole('Administrateur')")
-    @Operation(
-            summary = "Crée un nouvel employé",
-            description = "Crée en une seule opération la fiche personne (CfgTier), le compte de "
-                    + "connexion (AdmUser) qui lui est lié, les rôles demandés (AdmUserRole), et "
-                    + "génère un mot de passe temporaire **envoyé par email à l'employé** et "
-                    + "renvoyé une seule fois dans la réponse. Le compte devra changer ce mot de "
-                    + "passe et compléter son profil à sa première connexion "
-                    + "(mustChangePassword=true, profileCompleted=false — voir "
-                    + "GET /api/mon-compte).\n\n"
-                    + "**`email` est désormais réellement obligatoire et doit être une adresse "
-                    + "valide**, alors qu'il était jusqu'ici accepté vide malgré sa mention "
-                    + "REQUIRED : c'est à cette adresse qu'est expédié le mot de passe, et elle "
-                    + "est écrite à la fois sur la fiche personne et sur le compte. Le "
-                    + "formulaire doit donc la valider avant envoi.\n\n"
-                    + "L'envoi est **asynchrone** et postérieur au commit : `emailEnvoye=true` "
-                    + "signifie qu'il a été déclenché sans obstacle, pas qu'il a été remis. "
-                    + "C'est pourquoi `motDePasseTemporaire` reste dans la réponse et doit "
-                    + "continuer d'être affiché à l'administrateur. Réservé au rôle "
-                    + "Administrateur."
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Employé créé et envoi déclenché."),
-            @ApiResponse(responseCode = "400", description = "Champ requis manquant, `email` "
-                    + "absent ou malformé, ou typeEmployeCode/rôle référençant un code inconnu "
-                    + "en base."),
-            @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
-            @ApiResponse(responseCode = "409", description = "L'identifiant demandé est déjà utilisé "
-                    + "par un autre compte.")
-    })
-    public ResponseEntity<CreerEmployeResponse> creerEmploye(@Valid @RequestBody CreerEmployeRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(utilisateurAdminService.creerEmploye(request));
+            @Parameter(description = "Id de l'AdmUser à réinitialiser.") @PathVariable UUID admUserId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = false,
+                    description = "Facultatif. `email` : adresse d'envoi pour cette fois seulement.")
+            @RequestBody(required = false) ReinitialiserMotDePasseRequest request) {
+        return utilisateurAdminService.reinitialiserMotDePasse(admUserId,
+                request == null ? null : request.email());
     }
 
     // -- Périmètre commercial : affectation de projets (voir instructions/FEATURE-perimetre-commercial.md) --

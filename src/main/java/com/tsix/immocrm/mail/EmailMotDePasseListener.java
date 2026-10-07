@@ -1,5 +1,6 @@
 package com.tsix.immocrm.mail;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -9,12 +10,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Envoie le mot de passe temporaire, une fois la transaction d'origine réellement validée.
+ * Envoie les identifiants Arpent (identifiant Omran + mot de passe + lien vers l'application),
+ * une fois la transaction d'origine réellement validée.
  *
  * <p>La combinaison des deux annotations porte tout le comportement voulu :
  * <ul>
- *   <li>{@code AFTER_COMMIT} — rien ne part si la création du compte a été annulée. Sans
- *       cette phase, un employé jamais créé recevrait quand même ses identifiants.</li>
+ *   <li>{@code AFTER_COMMIT} — rien ne part si la réinitialisation a été annulée. Sans
+ *       cette phase, un mot de passe jamais enregistré serait quand même envoyé.</li>
  *   <li>{@code @Async("mailExecutor")} — la latence SMTP (1 à 3 s chez Hostinger) sort du
  *       temps de réponse HTTP.</li>
  * </ul>
@@ -30,12 +32,19 @@ public class EmailMotDePasseListener {
 
     private static final String TEMPLATE = "mail/mot-de-passe-temporaire";
 
-    private final EnvoiEmail envoiEmail;
-    private final EmailProperties properties;
+    static final String SUJET = "Vos identifiants Arpent";
 
-    public EmailMotDePasseListener(EnvoiEmail envoiEmail, EmailProperties properties) {
+    private final EnvoiEmail envoiEmail;
+    private final String urlArpent;
+
+    /**
+     * @param urlArpent lien « Se connecter à Arpent » ({@code app.arpent.url}) — ne porte jamais
+     *                  ni identifiant ni mot de passe
+     */
+    public EmailMotDePasseListener(EnvoiEmail envoiEmail,
+                                   @Value("${app.arpent.url:https://arpent.ayaddeveloppement.com}") String urlArpent) {
         this.envoiEmail = envoiEmail;
-        this.properties = properties;
+        this.urlArpent = urlArpent;
     }
 
     @Async("mailExecutor")
@@ -53,14 +62,11 @@ public class EmailMotDePasseListener {
         variables.put("nomComplet", evenement.nomComplet());
         variables.put("identifiant", evenement.identifiant());
         variables.put("motDePasse", evenement.motDePasse());
-        variables.put("urlApplication", properties.getUrlApplication());
-        variables.put("creation", evenement.creation());
+        variables.put("urlArpent", urlArpent);
 
         return new MessageEmail(
                 evenement.destinataire(),
-                evenement.creation()
-                        ? "Vos identifiants de connexion"
-                        : "Réinitialisation de votre mot de passe",
+                SUJET,
                 TEMPLATE,
                 variables,
                 corpsTexte(evenement));
@@ -72,29 +78,22 @@ public class EmailMotDePasseListener {
      * sert le HTML — beaucoup de plomberie pour huit lignes de texte.
      */
     private String corpsTexte(MotDePasseTemporaireEmis evenement) {
-        String entree = evenement.creation()
-                ? "Un compte vient d'être créé pour vous sur l'application Ayad Estate."
-                : "Le mot de passe de votre compte Ayad Estate vient d'être réinitialisé.";
-
         return """
                 Bonjour %s,
 
-                %s
+                Votre accès à Arpent est prêt. Connectez-vous avec votre identifiant Omran
+                et le mot de passe ci-dessous.
 
-                Identifiant : %s
-                Mot de passe temporaire : %s
+                Identifiant (Omran) : %s
+                Mot de passe : %s
 
-                Ce mot de passe est provisoire : il vous sera demandé d'en choisir un nouveau
-                dès votre première connexion.
-
-                Application : %s
+                Se connecter à Arpent : %s
 
                 Ce message est automatique, merci de ne pas y répondre.
                 """.formatted(
                 evenement.nomComplet(),
-                entree,
                 evenement.identifiant(),
                 evenement.motDePasse(),
-                properties.getUrlApplication());
+                urlArpent);
     }
 }

@@ -44,9 +44,9 @@ public class AuthController {
                     + "`tsiory.tech` — depuis un autre domaine, le navigateur ne l'attacherait pas "
                     + "et tout appel suivant la connexion repartirait anonyme. "
                     + "Le corps de réponse contient le profil et les "
-                    + "rôles, jamais le token lui-même. Si `mustChangePassword`/`profileCompleted` "
-                    + "sont défavorables, seules les routes /api/auth/** et /api/mon-compte/** "
-                    + "restent accessibles tant que l'utilisateur n'a pas régularisé sa situation."
+                    + "rôles, jamais le token lui-même. `mustChangePassword`/`profileCompleted` "
+                    + "restent renvoyés pour le contrat mais ne bloquent plus rien : "
+                    + "l'utilisateur accède directement à toute l'application."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Connexion réussie, cookie posé."),

@@ -1,7 +1,10 @@
 package com.tsix.immocrm.mail;
 
 /**
- * Événement applicatif : un mot de passe temporaire vient d'être généré pour un compte.
+ * Événement applicatif : un mot de passe Arpent vient d'être généré pour un compte Omran
+ * (réinitialisation par un administrateur — la création de compte n'existe plus côté Arpent,
+ * voir {@code instructions/FEATURE-acces-arpent-depuis-omran.md}). Le nom « temporaire » est
+ * historique : le mot de passe n'est plus à changer à la connexion.
  * Publié par {@code UtilisateurAdminService}, consommé après commit par
  * {@link EmailMotDePasseListener}.
  *
@@ -17,23 +20,19 @@ package com.tsix.immocrm.mail;
  * @param destinataire adresse résolue par l'appelant (voir la règle R1 de la spec)
  * @param nomComplet   nom affiché dans le corps du message
  * @param identifiant  {@code AdmUser.Code}, rappelé car il n'est pas toujours évident
- * @param motDePasse   mot de passe temporaire en clair
- * @param creation     {@code true} pour une création de compte, {@code false} pour une
- *                     réinitialisation — un seul template, deux formulations
+ * @param motDePasse   mot de passe en clair
  */
 public record MotDePasseTemporaireEmis(
         String destinataire,
         String nomComplet,
         String identifiant,
-        String motDePasse,
-        boolean creation
+        String motDePasse
 ) {
 
     @Override
     public String toString() {
         return "MotDePasseTemporaireEmis[destinataire=" + AdresseMasquee.de(destinataire)
                 + ", identifiant=" + identifiant
-                + ", motDePasse=***"
-                + ", creation=" + creation + "]";
+                + ", motDePasse=***]";
     }
 }

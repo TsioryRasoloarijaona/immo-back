@@ -47,17 +47,15 @@ public class AppUserCredential {
     private String passwordHash;
 
     /**
-     * True right after an admin sets/resets a temporary password — the account can authenticate
-     * but every endpoint other than {@code /api/auth/**}/{@code /api/mon-compte/**} is blocked
-     * (403) until {@code POST /api/mon-compte/changer-mot-de-passe} clears it.
+     * Legacy onboarding flag, kept because the column exists. Blocks nothing since
+     * FEATURE-acces-arpent-depuis-omran.md (an admin reset sets it to false).
      */
     @Column(name = "MustChangePassword", nullable = false)
     private Boolean mustChangePassword = true;
 
     /**
-     * True once {@code PATCH /api/mon-compte/profil} has been submitted at least once. Same
-     * blocking behavior as {@link #mustChangePassword} while false — the "première connexion"
-     * onboarding gate.
+     * Legacy "première connexion" flag, kept because the column exists. Blocks nothing since
+     * FEATURE-acces-arpent-depuis-omran.md (an admin reset sets it to true).
      */
     @Column(name = "ProfileCompleted", nullable = false)
     private Boolean profileCompleted = false;

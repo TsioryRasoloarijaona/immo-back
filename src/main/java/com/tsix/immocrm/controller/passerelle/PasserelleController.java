@@ -25,10 +25,9 @@ import java.util.stream.Collectors;
  * services annexes {@code /svc/<nom>/*}. Voir {@code instructions/FEATURE-passerelle-auth.md}.
  *
  * <p><b>Pourquoi hors de {@code /api/auth/**}.</b> Ce préfixe est {@code permitAll} dans
- * {@code SecurityConfig} et exempté par {@code OnboardingGateFilter}. Ici, au contraire, la route
+ * {@code SecurityConfig}. Ici, au contraire, la route
  * hérite de toute la chaîne : 401 sans cookie valide (signature, expiration, {@code tokenVersion}
- * révoqué), 403 {@code MOT_DE_PASSE_TEMPORAIRE}/{@code PROFIL_INCOMPLET} pendant l'onboarding, et
- * {@code X-Api-Key} accepté si la portée de la clé couvre cette route. Le contrôleur n'a donc
+ * révoqué), et {@code X-Api-Key} accepté si la portée de la clé couvre cette route. Le contrôleur n'a donc
  * qu'une chose à faire : traduire le principal en en-têtes.
  *
  * <p>Ces en-têtes sont <b>le contrat</b> entre la passerelle et les services. Un passage futur à
@@ -62,7 +61,8 @@ public class PasserelleController {
                     + "espaces, qu'un en-tête HTTP ne peut pas transporter tels quels. X-Employee-Id "
                     + "est absent si le compte n'est lié à aucune fiche employé. Les mêmes contrôles "
                     + "que sur le reste de l'API s'appliquent : révocation par changement de mot de "
-                    + "passe, onboarding, portée des clés d'API."
+                    + "passe, portée des clés d'API. Plus aucun blocage de première connexion : "
+                    + "mustChangePassword/profileCompleted ne sont pas consultés."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Appelant authentifié ; identité dans les en-têtes.",
@@ -73,7 +73,7 @@ public class PasserelleController {
                             @Header(name = EN_TETE_EMPLOYEE_ID, description = "Fiche employé (CfgTier, UUID) ; absent si aucune.")
                     }),
             @ApiResponse(responseCode = "401", description = "Cookie absent, expiré, mal signé ou révoqué (TokenVersion), ou clé d'API invalide. La passerelle renvoie ce 401 tel quel au client."),
-            @ApiResponse(responseCode = "403", description = "Onboarding non terminé (code MOT_DE_PASSE_TEMPORAIRE ou PROFIL_INCOMPLET), ou clé d'API dont la portée ne couvre pas cette route (HORS_PORTEE).")
+            @ApiResponse(responseCode = "403", description = "Clé d'API dont la portée ne couvre pas cette route (HORS_PORTEE).")
     })
     public ResponseEntity<Void> verifier(@AuthenticationPrincipal AuthenticatedUser principal,
                                          Authentication authentication) {

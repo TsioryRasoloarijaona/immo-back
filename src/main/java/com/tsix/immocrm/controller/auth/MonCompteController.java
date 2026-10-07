@@ -21,8 +21,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Mon compte", description = "Profil de l'utilisateur authentifié — les seules routes "
-        + "accessibles (avec /api/auth/**) tant que mustChangePassword/profileCompleted bloquent le reste de l'API.")
+@Tag(name = "Mon compte", description = "Profil de l'utilisateur authentifié et changement "
+        + "volontaire de son mot de passe. Aucun portail de première connexion : "
+        + "mustChangePassword/profileCompleted ne bloquent plus aucune route.")
 @RestController
 @RequestMapping("/api/mon-compte")
 public class MonCompteController {
@@ -37,7 +38,10 @@ public class MonCompteController {
 
     @GetMapping
     @Operation(summary = "Profil courant", description = "Le compte authentifié : identité, "
-            + "rôles, et l'état mustChangePassword/profileCompleted qui pilote l'onboarding.")
+            + "rôles, et l'état mustChangePassword/profileCompleted. Ces deux drapeaux restent "
+            + "renvoyés pour le contrat mais ne bloquent plus rien : il n'y a plus de portail de "
+            + "première connexion (les comptes viennent d'Omran, déjà renseignés), le front les "
+            + "ignore.")
     public UtilisateurCourantDto moi(@AuthenticationPrincipal AuthenticatedUser principal) {
         return monCompteService.moi(principal);
     }

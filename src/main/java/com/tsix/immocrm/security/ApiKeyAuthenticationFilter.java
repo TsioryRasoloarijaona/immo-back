@@ -30,7 +30,7 @@ import java.util.Optional;
  *       foi, un cookie éventuel n'est pas consulté (sinon une clé révoquée « marcherait » encore
  *       depuis un navigateur connecté, et l'administrateur ne le verrait jamais) ;</li>
  *   <li>clé valide mais route hors portée : <b>403</b> {@code HORS_PORTEE}, écrit ici comme le
- *       fait {@link OnboardingGateFilter} ; sinon le principal est posé et la chaîne continue.</li>
+ *       sous forme de {@code ProblemDetail} avec un {@code code} ; sinon le principal est posé et la chaîne continue.</li>
  * </ul>
  *
  * <p>Le principal est le même {@link AuthenticatedUser} que celui du JWT : périmètre, auteur
