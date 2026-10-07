@@ -23,10 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Clés d'API (admin)", description = "Clés d'API des clients machine (n8n, agents), "
-        + "réservées au rôle Administrateur. Une clé s'envoie dans l'en-tête `X-Api-Key` ; elle "
-        + "authentifie un compte de service et n'autorise que les routes de ses portées. Le secret "
-        + "n'est montré qu'à la création et à la régénération. Voir `FEATURE-cle-api-n8n.md`.")
+@Tag(name = "Clés d'API (admin)")
 @RestController
 @RequestMapping("/api/cles-api")
 public class CleApiController {
@@ -39,13 +36,7 @@ public class CleApiController {
 
     @GetMapping
     @PreAuthorize("hasRole('Administrateur')")
-    @Operation(
-            summary = "Liste les clés d'API",
-            description = "Toutes les clés, actives et révoquées, les plus récentes d'abord. Le "
-                    + "secret n'est **jamais** renvoyé : `clePrefixe` (`ak_` + 8 caractères) suffit "
-                    + "à reconnaître la clé configurée côté client. `dernierUsage` est tracé à la "
-                    + "minute près."
-    )
+    @Operation(summary = "Liste les clés d'API")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Liste, éventuellement vide."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur "
@@ -57,18 +48,7 @@ public class CleApiController {
 
     @PostMapping
     @PreAuthorize("hasRole('Administrateur')")
-    @Operation(
-            summary = "Crée une clé d'API et son compte de service",
-            description = "Génère un secret aléatoire (`ak_` + 43 caractères), n'en stocke que le "
-                    + "hash SHA-256, et le renvoie **une seule fois** dans `cle`. Sauf `compteCode`, "
-                    + "un compte `AdmUser` est créé au nom de la clé, sans employé ni rôle : c'est "
-                    + "lui qui apparaît en auteur (`UserCreate`) de tout ce que la clé écrit. Un tel "
-                    + "compte n'a **aucune restriction de périmètre** (règle existante : pas "
-                    + "d'habilitation = tout voir) — la portée est sa seule limite, d'où l'exigence "
-                    + "d'au moins une portée.\n\n"
-                    + "**Pour n8n** : `{\"nom\":\"n8n\",\"portees\":[\"PRE_PROSPECTIONS_ECRIRE\","
-                    + "\"REFERENTIELS_LIRE\"]}`, puis credential Header Auth `X-Api-Key` dans n8n."
-    )
+    @Operation(summary = "Crée une clé d'API et son compte de service")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Clé créée ; `cle` est le secret, à copier maintenant."),
             @ApiResponse(responseCode = "400", description = "`nom` vide ou trop long ; `portees` vide "
@@ -83,12 +63,7 @@ public class CleApiController {
 
     @PostMapping("/{id}/regenerer")
     @PreAuthorize("hasRole('Administrateur')")
-    @Operation(
-            summary = "Régénère le secret d'une clé",
-            description = "Nouveau secret, même compte de service, mêmes portées. L'ancien secret "
-                    + "cesse d'être accepté immédiatement. À utiliser après une fuite ou pour une "
-                    + "rotation ; une clé révoquée ne se régénère pas, on en crée une nouvelle."
-    )
+    @Operation(summary = "Régénère le secret d'une clé")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Nouveau secret dans `cle`, montré une seule fois."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),
@@ -102,12 +77,7 @@ public class CleApiController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('Administrateur')")
-    @Operation(
-            summary = "Révoque une clé",
-            description = "La clé est refusée en 401 dès le commit ; la ligne reste listée avec "
-                    + "`actif = false`, `revoqueLe` et `revoquePar`. Idempotent : révoquer une clé "
-                    + "déjà révoquée ne change rien. Le compte de service n'est pas touché."
-    )
+    @Operation(summary = "Révoque une clé")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Révoquée (ou déjà révoquée)."),
             @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur."),

@@ -4,12 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.UUID;
 
-/**
- * Une tranche à laquelle le prospect s'est intéressé — voir
- * {@code instructions/FEATURE-audit-tranches-prospect.md} §2.2.
- */
-@Schema(description = "Tranche à laquelle le prospect s'est intéressé, via l'une de ses "
-        + "prospections — en tranche principale ou en intérêt secondaire.")
+/** Voir instructions/FEATURE-audit-tranches-prospect.md §2.2. */
 public record TrancheInteretDto(
 
         @Schema(description = "Identifiant de la tranche (`CfgTranche.PKey`), exploitable "

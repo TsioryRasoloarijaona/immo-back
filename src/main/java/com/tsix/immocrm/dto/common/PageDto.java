@@ -4,12 +4,7 @@ import org.springframework.data.domain.Page;
 
 import java.util.List;
 
-/**
- * Uniform pagination envelope for every GET list endpoint (default page size 10, see
- * {@link com.tsix.immocrm.web.PaginationDefaults}). Detail endpoints (by id) and computed
- * aggregates ({@code GET /api/dossiers/{id}/montants}, {@code GET /api/dashboard}) are single
- * objects, not collections, and are not wrapped by this DTO.
- */
+/** Enveloppe de toutes les listes GET ; les détails et agrégats ne sont pas enveloppés. */
 public record PageDto<T>(
         List<T> content,
         int page,

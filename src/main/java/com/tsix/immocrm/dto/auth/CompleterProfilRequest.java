@@ -4,8 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
-@Schema(description = "Corps du formulaire \"première connexion\" — complète la fiche employé "
-        + "(CfgTier) liée au compte. Tous les champs sont obligatoires sauf `adresse`.")
 public record CompleterProfilRequest(
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED)

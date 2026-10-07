@@ -7,12 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Une clé d'API telle que la liste l'affiche — <b>jamais le secret</b>, seulement son préfixe.
- * {@code instructions/FEATURE-cle-api-n8n.md} §5.
- */
-@Schema(description = "Clé d'API d'un client machine. Le secret n'est jamais renvoyé ici : "
-        + "seulement `clePrefixe`, pour reconnaître la clé configurée côté client.")
+/** Voir instructions/FEATURE-cle-api-n8n.md §5. */
 public record CleApiDto(
         @Schema(description = "Identifiant (AppApiClient.PKey).") UUID id,
         @Schema(description = "Nom du client.", example = "n8n") String nom,

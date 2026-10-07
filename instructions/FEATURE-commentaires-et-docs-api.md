@@ -153,6 +153,9 @@ Description du champ.
 - Les descriptions de corps de requête
   (`@io.swagger.v3.oas.annotations.parameters.RequestBody(description=…)`)
   restent dans l'annotation (pas d'emplacement Markdown).
+- Un **enum** avec un long `@Schema(description)` le garde dans l'annotation :
+  springdoc l'écrit en ligne (pas sous `components/schemas`), il n'a pas
+  d'emplacement Markdown. Un commentaire d'une ligne dit pourquoi.
 - Un texte d'API qui contient un chiffre ou un mot « historique » se déplace tel
   quel : I1 fige le contrat, la règle 11 ne s'applique qu'aux commentaires.
 

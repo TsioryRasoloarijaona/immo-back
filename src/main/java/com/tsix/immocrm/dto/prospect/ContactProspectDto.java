@@ -5,9 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
 /**
- * Ligne {@code CfgTierContact}, jointe au {@code CfgTier} lié pour l'affichage. Les coordonnées
- * (mobile, téléphone, e-mail) et le nom viennent du {@code CfgTier} de la personne-contact
- * ({@code CfgContactId}), comme dans la requête d'affichage du légataire.
+ * Ligne {@code CfgTierContact} ; nom et coordonnées viennent du {@code CfgTier} de la
+ * personne-contact ({@code CfgContactId}), comme dans la requête d'affichage du légataire.
  */
 public record ContactProspectDto(
         @Schema(description = "Id du lien CfgTierContact (sert au DELETE).")
