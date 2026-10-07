@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,7 +70,7 @@ public class CalendrierService {
                 Champs.de(prospection, ComProspection::getId),
                 Champs.de(prospection, ComProspection::getCode),
                 Champs.de(prospect, CfgTier::getId),
-                TierNomFormatter.nom(prospect),
+                ProspectionService.nomProspect(prospect, prospection),
                 Champs.de(commercial, CfgTier::getId),
                 TierNomFormatter.nom(commercial)
         );

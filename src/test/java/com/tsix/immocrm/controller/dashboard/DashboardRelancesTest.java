@@ -385,6 +385,40 @@ class DashboardRelancesTest {
                 .andExpect(jsonPath(filtre(orpheline.getId()) + ".preProspection").value(hasItem(true)));
     }
 
+    // ---------------------------------------------------------------- le nom du prospect
+    //
+    // FEATURE-nom-pre-prospection-relances : une pré-prospection n'a pas de fiche tiers, son nom
+    // est dans TempDescription. Sans repli, le bloc « À rappeler » affichait « Lead sans nom ».
+
+    @Test
+    void preProspectionSansFiche_prospectNomEstLeTempDescription() throws Exception {
+        ComProspection lead = newPreProspection(LocalDateTime.now());
+        lead.setTempDescription("  Karim Lead-Nom  ");
+        prospectionRepository.saveAndFlush(lead);
+        ComActionMessage relance = newRelance(lead, LocalDate.now().atStartOfDay(), null);
+
+        mockMvc.perform(get(RELANCES).param("echeance", "AUJOURDHUI").param("portee", "EQUIPE")
+                        .param("size", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre(relance.getId()) + ".prospectNom")
+                        .value(hasItem("Karim Lead-Nom")));
+    }
+
+    @Test
+    void prospectionAvecFiche_gardeLeNomDeLaFicheMalgreTempDescription() throws Exception {
+        CfgTier commercial = newTier("DR-COM");
+        ComProspection p = newProspection(newTier("DR-PRO"), commercial);
+        p.setTempDescription("Nom saisi au premier contact");
+        prospectionRepository.saveAndFlush(p);
+        ComActionMessage relance = newRelance(p, LocalDate.now().atStartOfDay(), commercial);
+
+        mockMvc.perform(get(RELANCES).param("echeance", "AUJOURDHUI").param("portee", "EQUIPE")
+                        .param("size", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre(relance.getId()) + ".prospectNom")
+                        .value(hasItem("Relance TEST")));
+    }
+
     // ---------------------------------------------------------------- nouveaux pré-prospects
 
     @Test

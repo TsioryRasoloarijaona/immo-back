@@ -1730,6 +1730,29 @@ public class ProspectionService {
     }
 
     /**
+     * Nom affichable du prospect : le nom de la fiche tiers ({@link TierNomFormatter#nom}) s'il
+     * en a un, sinon le nom saisi au premier contact ({@code ComProspection.TempDescription},
+     * nettoyé), sinon {@code null}. Une pré-prospection n'a pas encore de fiche tiers
+     * ({@code CfgProspectId} NULL) : en base réelle 3 394 des 17 703 prospections, dont 3 390
+     * portent un {@code TempDescription}.
+     *
+     * <p>Même repli que {@link #telephoneProspect}, et publique pour la même raison : le tableau
+     * de bord des relances et le calendrier servent ce nom ; une variante recopiée ferait
+     * réapparaître « Lead sans nom » sur l'un des deux. {@code p} peut être {@code null}
+     * (événement de calendrier sans prospection) : seule la fiche compte alors.
+     */
+    public static String nomProspect(CfgTier prospect, ComProspection p) {
+        String nomFiche = TierNomFormatter.nom(prospect);
+        if (StringUtils.hasText(nomFiche)) {
+            return nomFiche;
+        }
+        if (p != null && StringUtils.hasText(p.getTempDescription())) {
+            return p.getTempDescription().trim();
+        }
+        return null;
+    }
+
+    /**
      * Téléphone joignable : la fiche d'abord (mobile, à défaut fixe), puis le numéro saisi au
      * premier contact. Mesuré sur les 8 613 prospections ouvertes — 5 034 par la fiche, 7 596
      * par le champ temporaire, <b>8 591 par l'une ou l'autre</b> : aucune des deux sources ne

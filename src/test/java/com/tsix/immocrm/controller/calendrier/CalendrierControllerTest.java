@@ -94,6 +94,38 @@ class CalendrierControllerTest {
                         .value("Le prospect veut faire une visite du projet"));
     }
 
+    /** FEATURE-nom-pre-prospection-relances : pas de fiche tiers → le nom saisi sur la prospection. */
+    @Test
+    void evenements_preProspectionSansFiche_prospectNomEstLeTempDescription() throws Exception {
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-CAL-NOM");
+        prospection.setTempDescription("Lead Calendrier");
+        prospectionRepository.save(prospection);
+
+        AdmEvent event = new AdmEvent();
+        event.setId(UUID.randomUUID());
+        event.setSubject("Visite lead");
+        event.setStartHour(LocalDateTime.of(2026, 9, 16, 10, 0));
+        admEventRepository.save(event);
+
+        ComActionMessage message = new ComActionMessage();
+        message.setId(UUID.randomUUID());
+        message.setComProspection(prospection);
+        message.setDocDate(LocalDateTime.now());
+        message.setDescription("Visite lead");
+        message.setIsIn(true);
+        message.setAdmEvent(event);
+        actionMessageRepository.save(message);
+
+        mockMvc.perform(get("/api/calendrier/evenements")
+                        .param("debut", "2026-09-01T00:00:00")
+                        .param("fin", "2026-09-30T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.interactionId=='" + message.getId() + "')].prospectNom")
+                        .value("Lead Calendrier"));
+    }
+
     @Test
     void evenements_outsideRange_excludesEvent() throws Exception {
         mockMvc.perform(get("/api/calendrier/evenements")

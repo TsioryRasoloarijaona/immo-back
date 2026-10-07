@@ -53,7 +53,9 @@ public record EvenementCalendrierDto(
         @Schema(description = "Id du prospect/client concerné, si connu.")
         UUID prospectId,
 
-        @Schema(description = "Nom affichable du prospect/client (raison sociale ou prénom nom).")
+        @Schema(description = "Nom affichable du prospect/client (raison sociale ou prénom nom) ; "
+                + "à défaut de fiche tiers, le nom saisi au premier contact sur la prospection "
+                + "(`TempDescription`). `null` si aucun des deux n'est renseigné.")
         String prospectNom,
 
         @Schema(description = "Id du commercial ayant loggé l'interaction, si connu.")

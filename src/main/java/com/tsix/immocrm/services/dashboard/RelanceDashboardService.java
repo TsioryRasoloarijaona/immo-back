@@ -246,7 +246,7 @@ public class RelanceDashboardService {
                 message.getId(),
                 prospection.getId(),
                 DiscriminantPreProspection.estPreProspection(prospection),
-                TierNomFormatter.nom(prospect),
+                ProspectionService.nomProspect(prospect, prospection),
                 ProspectionService.telephoneProspect(prospect, prospection),
                 dateRelance,
                 ChronoUnit.DAYS.between(dateRelance, aujourdhui),
