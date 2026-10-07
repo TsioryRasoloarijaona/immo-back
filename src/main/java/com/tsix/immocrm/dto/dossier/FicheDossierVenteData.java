@@ -5,22 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * All fields needed to render the "Fiche Dossier de Vente" document (PDF), reproducing the legacy
- * "FICHE COMPLETE" Stimulsoft template ({@code ComSaleFiche.yes}, bound to {@code ComSaleFolderView})
- * — a comprehensive internal dossier summary/audit sheet (entête, montants fixes, tous les jalons
- * de dates, annulation/résiliation, autres informations, schéma de financement détaillé,
- * sous-articles, historique). See {@code FicheDossierVenteService} for how each field is sourced,
- * and {@code FicheDossierVentePdfRenderer} for the actual layout.
- *
- * <p>Two legacy fields have no equivalent in this app's data model and are deliberately left
- * unmapped rather than guessed: "Présentation" ({@code StkPresentationType}, no lookup table
- * mapped anywhere in this app) and "Décision MEILLEURTAUX" ({@code ComLoanCompanyDecision}, same
- * situation — only its two dates are mapped). The HISTORIQUE table also reuses the app-wide
- * {@code GET /api/dossiers/{id}/historique} shape (Date/Type/Utilisateur/Description) rather than
- * the legacy's Utilisateur/Date/Etat/Client/Article/Détail columns, since there is no per-event
- * Client/Article tracking in this app's unified historique (a deliberate design choice, see
- * {@code DossierHistoriqueService}) and duplicating that public endpoint's contract just for this
- * PDF was judged out of scope.
+ * Données de la « Fiche Dossier de Vente » (modèle « FICHE COMPLETE », {@code ComSaleFiche.yes}), hors JSON.
+ * « Présentation » et « Décision MEILLEURTAUX » ne sont pas reprises ; l'historique a la forme de
+ * {@code GET /api/dossiers/{id}/historique}, pas les colonnes Client/Article du légataire.
  */
 public record FicheDossierVenteData(
         String dossierCode,
@@ -97,18 +84,9 @@ public record FicheDossierVenteData(
         String notes
 ) {
     /**
-     * MONTANTS box — 9 lignes fixes de l'original (contrairement au reste de l'app, qui calcule
-     * les montants dynamiquement par catégorie de règlement libre texte). Frais/Modification/
-     * Avance/Crédit/Auto-financement/Pénalité/Résiliation sont recalculés à partir de
-     * l'échéancier via les booléens dédiés confirmés en base sur {@code ComSettlementCategory}
-     * (IsSaleExpense/IsSaleModification/IsSaleAdvance/IsSaleCredit/IsSaleAutoFinancment/
-     * IsSalePenality/IsSaleResiliation) — montant/réglé/reste tous réels, jamais stockés. Seul
-     * "Prix de vente" vient du snapshot {@code ComFolder} (PriceAfterDiscount), faute de
-     * catégorie d'échéancier dédiée — ce n'est pas un règlement en soi mais le prix affiché.
-     * Net à payer = Frais + Modification + Prix de vente + Pénalité + Résiliation
-     * (Avance/Crédit/Auto-financement ne sont qu'une ventilation informative du Prix de vente,
-     * jamais additionnés dedans — vérifié sur l'exemple réel du template : 900 000 de Prix de
-     * vente = 900 000 d'Auto-financement, pas 1 800 000).
+     * Lignes recalculées depuis l'échéancier par les booléens {@code IsSale*} de {@code ComSettlementCategory},
+     * sauf « Prix de vente » ({@code ComFolder.PriceAfterDiscount}). Net à payer = Frais + Modification + Prix
+     * de vente + Pénalité + Résiliation : Avance/Crédit/Auto-financement ventilent le prix, jamais additionnés.
      */
     public record MontantsFiche(
             BigDecimal montantFrais, BigDecimal regleFrais,

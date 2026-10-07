@@ -204,3 +204,23 @@ la suite complète.
 `api-docsV4.json`, `pom.xml` (si le mécanisme semble demander une dépendance :
 s'arrêter et le dire), toute correction de bug rencontrée en route (la noter
 dans le rapport, ne pas la faire).
+
+## Annexe — Mesures retirées du code et gardées ici
+
+Faits chiffrés qui justifiaient un choix, retirés des commentaires par le
+nettoyage et absents de toute autre spec. La conclusion reste dans le code.
+
+- **`AutorisationVersementData` — rattachée au règlement, pas à l'échéance.**
+  `StlSettlement.StlAccountId` renseigné à 76 %, `StlSettlementTypeId` 99,9 %,
+  `TierId` 99,7 %, contre 2/958 et 1/958 pour les équivalents de `ComDocument` :
+  un document rattaché à l'échéance serait vide sur presque toutes les lignes.
+- **`FicheDossierVenteData.MontantsFiche` — Avance / Crédit / Auto-financement
+  ne s'additionnent pas.** Vérifié sur l'exemple réel du template : 900 000 de
+  Prix de vente = 900 000 d'Auto-financement, pas 1 800 000.
+- **`ArticleSummaryDto` — un dossier peut lier plusieurs articles.** Exemple
+  réel : le dossier « MBR 2022/00205 » lie « MB 18 1 04 » et « MB 18 1 04 TER ».
+- **`CreerReglementRequest` — `EcheanceDate`** est renseignée sur plus de 99 %
+  des règlements réels (les chiffres 3 244 / 14 / 3 218 sont dans
+  `FEATURE-reglement-statut-preuve.md` §2).
+- **`FiltresAvancesProspection`** : temps mesurés déplacés dans
+  `INVENTAIRE-colonnes-prospection.md` §3.

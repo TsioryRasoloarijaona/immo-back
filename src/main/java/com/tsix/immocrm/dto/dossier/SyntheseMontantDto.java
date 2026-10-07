@@ -5,13 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 /**
- * Une ligne de synthèse de l'onglet « Montants » du logiciel de bureau : un montant, ce qui en a
- * été réglé, et ce qui reste.
- *
- * <p>Distinct de {@link CategorieMontantDto}, qui porte la même triade mais pour une
- * <em>catégorie d'échéancier</em>. Les lignes de synthèse ne sont pas des catégories : elles
- * agrègent l'échéancier selon des règles métier vérifiées sur les 358 dossiers réels — voir
- * {@code instructions/FEATURE-fiche-dossier-alignement-ecran.md} §5.
+ * Même triade que {@link CategorieMontantDto}, mais une ligne de synthèse n'est pas une catégorie : elle
+ * agrège l'échéancier selon FEATURE-fiche-dossier-alignement-ecran.md §5.
  */
 @Schema(description = "Triade Montant / Réglé / Reste d'une ligne de synthèse financière.")
 public record SyntheseMontantDto(

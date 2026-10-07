@@ -4,11 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * All fields needed to render the "Acte de réservation" contract (PDF or Word), modeled on the
- * legacy template (see {@code instructions/templates/ACTE RESERVATION.pdf}). Not exposed as
- * JSON — feeds {@code ActeReservationPdfRenderer} / {@code ActeReservationDocxRenderer} only.
- */
+/** Données de l'« Acte de réservation » (modèle {@code instructions/templates/ACTE RESERVATION.pdf}), hors JSON. */
 public record ActeReservationData(
         String dossierCode,
         String clientTitre,
@@ -18,12 +14,10 @@ public record ActeReservationData(
         String clientTelephone,
         String projetNom,
         String projetAdresse,
-        /** Legal entity the project is sold under (CfgProject.cfgCompany.description) — never
-         * hardcode a company name in a renderer, it's per-project (e.g. "ADMOD", "MAYLINE"). */
+        /** Entité juridique du projet ({@code CfgProject.cfgCompany}) : jamais de nom de société en dur. */
         String entrepriseNom,
-        /** true when the article is a terrain/land lot (StkItem.stkKind.code == "TER") — the
-         * legacy template then omits floor/building and the "achèvement des travaux" mention,
-         * and skips the SAV/Assurance/Syndic section (renumbering the following ones). */
+        /** Lot terrain ({@code StkKind} TER) : le modèle omet étage, immeuble, « achèvement des travaux »
+         * et la section SAV/Assurance/Syndic (les suivantes sont renumérotées). */
         boolean estTerrain,
         String articleCategorie,
         String articleCode,

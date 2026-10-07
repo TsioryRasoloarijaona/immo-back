@@ -4,16 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * All fields needed to render the "Fiche Bancaire" document (PDF), modeled on the legacy
- * "FICHE BANCAIRE" Stimulsoft template — a mortgage-application support sheet listing every
- * acquéreur's civil status/identity, the property's full designation, and the price/frais
- * réglé-reste breakdown. Not exposed as JSON — feeds {@code FicheBancairePdfRenderer} only.
- */
+/** Données de la « Fiche Bancaire » (modèle Stimulsoft légataire, support de demande de crédit), hors JSON. */
 public record FicheBancaireData(
         String dossierCode,
-        /** {@code ComFolder.BankRecordDate} — null means the legacy form itself is blocked
-         * ("Vous devez saisir la date de la fiche bancaire...") until it's set. */
+        /** {@code ComFolder.BankRecordDate} : nulle, le légataire bloque l'édition (« Vous devez saisir la date… »). */
         LocalDate dateFiche,
         String entrepriseNom,
         String projetNom,

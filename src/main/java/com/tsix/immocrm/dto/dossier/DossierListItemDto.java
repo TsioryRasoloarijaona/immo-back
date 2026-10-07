@@ -9,19 +9,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Summary shape for {@code GET /api/dossiers}.
- *
- * <p><strong>Toutes les clés ne sont pas toujours présentes.</strong> Le paramètre
- * {@code ?colonnes=} sélectionne celles qui sont sérialisées ; les autres sont absentes de la
- * réponse — voir {@link ColonneDossier}, qui fait aussi office de liste blanche et alimente
- * {@code GET /api/referentiels/colonnes/dossiers}.
- *
- * <p>Sans ce paramètre, la réponse est <em>exactement</em> celle d'avant son introduction : les
- * treize colonnes historiques, et rien d'autre.
- *
- * NOTE: field naming is not yet backed by a shared API spec doc
- * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
- * directly from {@code ComFolder}. Adjust once a spec is available.
+ * Seules les clés demandées par {@code ?colonnes=} sont sérialisées ({@link ColonneDossier}, liste
+ * blanche) ; sans le paramètre, les colonnes par défaut.
  */
 @JsonFilter(ColonneDossier.FILTRE)
 public record DossierListItemDto(
@@ -35,22 +24,14 @@ public record DossierListItemDto(
         String commercialNom,
         BigDecimal prix,
         BigDecimal totalAPayer,
-        /**
-         * Jalon "Concrétisation" ({@code ComFolder.advanceDate}) — exposé en plus de
-         * {@code dateDocument} (qui sert de proxy pour "Date de réservation", voir
-         * {@code ChampDateDossier}) pour le filtre par période, point 3 de
-         * {@code instructions/filtres-avances.md}. Null tant que le dossier n'a pas atteint ce
-         * statut.
-         */
+        /** Jalon « Concrétisation » ({@code ComFolder.advanceDate}) ; {@code dateDocument} tient lieu de date de
+         * réservation (voir {@code ChampDateDossier} et instructions/filtres-avances.md, point 3). */
         LocalDateTime dateConcretisation,
         @Schema(description = "Identifiant de la prospection à l'origine du dossier (ComFolder.ComProspectionId).")
         UUID prospectionId,
-        @Schema(description = "Code de la prospection à l'origine du dossier — pour le lien cliquable vers la prospection depuis le dossier (`GET /api/prospections/{prospectionId}`).")
         String prospectionCode,
 
-        // ------------------------------------------------------------------
-        // Colonnes ajoutées avec le sélecteur. Hors sélection par défaut, sans exception.
-        // ------------------------------------------------------------------
+        // Hors sélection par défaut, toutes les colonnes qui suivent.
 
         @Schema(description = "Prix avant remise.")
         BigDecimal prixAvantRemise,
@@ -70,8 +51,6 @@ public record DossierListItemDto(
         @Schema(description = "Probabilité de finalisation. 100 %.")
         BigDecimal probabiliteFinalisation,
 
-        @Schema(description = "Identifiant du projet. 100 %. **Provient de la tranche de "
-                + "l'article** — `StkItem.CfgProjectId` est nul sur les 358 articles réels.")
         UUID projetId,
 
         @Schema(description = "Code du projet. 100 %.", example = "CITEB")
@@ -135,15 +114,11 @@ public record DossierListItemDto(
         @Schema(description = "Date de dernière modification. 100 %.")
         LocalDateTime modifieLe,
 
-        // -- Article principal. Hors sélection par défaut : demander une de ces colonnes coûte
-        //    jusqu'à cinq jointures paresseuses par ligne.
+        // Article principal : demander une de ces colonnes coûte jusqu'à cinq jointures paresseuses par ligne.
         @Schema(description = "Id de l'article principal (StkItem.PKey). 100 % des 358 dossiers.")
         UUID articleId,
 
-        @Schema(description = "Code de l'article principal. **C'est la clé de tri par défaut de la "
-                + "liste du logiciel de bureau** (`ORDER BY ArticleCode, H1Code, H2Code, H3Code`, "
-                + "où H1/H2/H3 sont la tranche, le projet et la société — déjà servis ici sous "
-                + "`trancheCode`, `projetCode` et `societeCode`).", example = "A-203")
+        @Schema(example = "A-203")
         String articleCode,
 
         @Schema(description = "Libellé de l'article principal.", example = "Appartement 203")
@@ -168,38 +143,26 @@ public record DossierListItemDto(
         @Schema(description = "Code du type de présentation de l'article.")
         String typePresentation,
 
-        // -- Acteur supplémentaire.
         @Schema(description = "Id du responsable de vente (ComFolder.CfgSaleManagerId).")
         UUID responsableVenteId,
 
-        @Schema(description = "Responsable de vente — acteur **distinct du commercial**, renseigné "
-                + "sur 221 des 358 dossiers réels (61 %). Le second responsable du légataire "
-                + "(`CfgSaleManager2Id`) n'est pas exposé : mesuré à 0 ligne.",
-                example = "Hamza ATCHANY")
+        @Schema(example = "Hamza ATCHANY")
         String responsableVenteNom,
 
-        // -- Jalons et délais du cycle de vente.
         @Schema(description = "Date du compromis (ComFolder.AgreementDate). 73 / 358.")
         LocalDateTime dateCompromis,
 
         @Schema(description = "Date de livraison réelle (ComFolder.DeliveryDateReal). 63 / 358.")
         LocalDateTime dateLivraisonReelle,
 
-        @Schema(description = "Jours entre l'origine du dossier et sa concrétisation. Calculé "
-                + "côté serveur, jamais stocké. L'origine est la date de la **prospection** quand "
-                + "il y en a une, sinon celle du dossier — même règle que le logiciel de bureau. "
-                + "`null` tant que la concrétisation n'a pas eu lieu : calculable sur 152 / 358.",
-                example = "47")
+        @Schema(example = "47")
         Integer delaiConcretisation,
 
         @Schema(description = "Jours entre la concrétisation et le compromis. Calculé côté "
                 + "serveur. Calculable sur 73 / 358.", example = "112")
         Integer delaiNotaire,
 
-        @Schema(description = "Jours entre le compromis et la livraison réelle. Calculé côté "
-                + "serveur. Calculable sur 63 / 358.\n\nLe délai de crédit du logiciel de bureau "
-                + "n'est pas exposé : il dépend de `CreditPossessionDate`, mesurée à **0 ligne sur "
-                + "358**, donc il vaudrait `null` partout.", example = "365")
+        @Schema(example = "365")
         Integer delaiLivraison
 ) {
 }
