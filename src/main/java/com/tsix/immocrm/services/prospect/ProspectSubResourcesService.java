@@ -40,10 +40,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * GAP-06 — sub-resources of the prospect fiche: linked prospections, dossiers, règlements
- * (all dossiers combined), historique, and contacts (conjoint/notaire/apporteur...).
- */
+/** Sous-ressources de la fiche prospect : prospections, dossiers, règlements, historique, contacts. */
 @Service
 @Transactional(readOnly = true)
 public class ProspectSubResourcesService {
@@ -88,19 +85,9 @@ public class ProspectSubResourcesService {
     }
 
     /**
-     * {@code GET /api/prospects/{id}/prospections}, et — via {@code HotlineService} — le bloc
-     * "prospections" de {@code GET /api/hotline/recherche}.
-     *
-     * <p><b>Périmètre commercial (§9bis.2)</b> : ces trois sous-ressources renvoient exactement les
-     * mêmes DTO que {@code GET /api/prospections}, {@code GET /api/dossiers} et
-     * {@code GET /api/encaissements}, mais sous un préfixe d'URL que {@code PerimetreInterceptor}
-     * ne couvre pas — le tier, lui, reste hors périmètre. Sans filtre ici, il suffisait d'énumérer
-     * {@code GET /api/prospects} (non filtré, et qui doit le rester) pour reconstituer le pipeline
-     * de tous les projets, sans même deviner un id : la frontière posée sur les listes principales
-     * était contournable de bout en bout.
-     *
-     * <p>Le filtre masque les <b>lignes</b> hors périmètre ; il ne masque ni le prospect, ni le
-     * client, ni la fiche hotline eux-mêmes.
+     * Sert aussi le bloc « prospections » de la hotline. Périmètre filtré ici : PerimetreInterceptor
+     * ne couvre pas ce préfixe, et la liste des prospects (non filtrée) permettrait sinon de
+     * reconstituer tout le pipeline. Voir FEATURE-perimetre-commercial.md §9bis.2.
      */
     public Page<ProspectionListItemDto> prospections(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
@@ -111,11 +98,7 @@ public class ProspectSubResourcesService {
                 .map(ProspectSubResourcesService::toProspectionListItem);
     }
 
-    /**
-     * {@code GET /api/prospects/{id}/dossiers} <b>et</b> {@code GET /api/clients/{id}/dossiers}
-     * (même service, voir {@code ClientController}), plus le bloc "dossiers" de la hotline.
-     * Filtré par le périmètre commercial — voir {@link #prospections}.
-     */
+    /** Sert aussi {@code GET /api/clients/{id}/dossiers} et la hotline ; périmètre : voir {@link #prospections}. */
     public Page<DossierListItemDto> dossiers(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
         Specification<ComFolder> spec = Specification
@@ -126,14 +109,8 @@ public class ProspectSubResourcesService {
     }
 
     /**
-     * {@code GET /api/prospects/{id}/reglements} — tous dossiers confondus. Filtré par le périmètre
-     * commercial (voir {@link #prospections}) : un règlement n'est visible que s'il porte au moins
-     * une ligne rattachée à un dossier d'un projet du périmètre, ou si aucune de ses lignes ne
-     * résout de projet.
-     *
-     * <p>Le tri {@code docDate} décroissant, auparavant porté par le nom de la méthode de
-     * repository, est désormais appliqué explicitement lorsque l'appelant n'en fournit pas —
-     * passer à un {@code Specification} fait perdre le {@code OrderBy} dérivé.
+     * Tous dossiers confondus ; périmètre : voir {@link #prospections}. Un {@code Specification}
+     * n'a pas d'{@code OrderBy} dérivé, d'où le tri par défaut explicite.
      */
     public Page<ReglementProspectDto> reglements(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
@@ -144,7 +121,6 @@ public class ProspectSubResourcesService {
                 .map(this::toReglementDto);
     }
 
-    /** Conserve le tri historique (docDate DESC) quand l'appelant ne demande pas de tri explicite. */
     private static Pageable parDefautPlusRecentDabord(Pageable pageable) {
         if (pageable.getSort().isSorted()) {
             return pageable;
@@ -166,10 +142,8 @@ public class ProspectSubResourcesService {
     }
 
     /**
-     * Ajoute un contact au tiers. La personne-contact est soit un {@code CfgTier} existant
-     * ({@code contactProspectId}), soit créée à la volée ({@code nouveauContact}) — comme le fait
-     * OMRAN, qui insère un nouveau {@code CfgTier} puis le lien {@code CfgTierContact}. Fournir
-     * exactement l'un des deux ; {@code relationTypeId} est requis.
+     * Contact existant ({@code contactProspectId}) ou créé à la volée ({@code nouveauContact}),
+     * exactement l'un des deux — comme OMRAN, qui insère le {@code CfgTier} puis le lien.
      */
     @Transactional
     public ContactProspectDto ajouterContact(UUID prospectId, CreerContactProspectRequest request) {
@@ -202,11 +176,7 @@ public class ProspectSubResourcesService {
         return toContactDto(tierContactRepository.save(link));
     }
 
-    /**
-     * {@code GET /api/prospections/{id}/contacts} — les contacts du prospect de cette prospection.
-     * Une pré-prospection (sans prospect lié) n'a par construction aucun contact : liste vide,
-     * jamais 400. 404 si la prospection est inconnue.
-     */
+    /** Une pré-prospection (sans prospect) rend une liste vide, jamais 400. */
     public List<ContactProspectDto> contactsDeProspection(UUID prospectionId) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
@@ -216,12 +186,6 @@ public class ProspectSubResourcesService {
         return contacts(prospection.getCfgProspect().getId());
     }
 
-    /**
-     * {@code POST /api/prospections/{id}/contacts} — ajoute un contact au prospect de la
-     * prospection. 404 si la prospection est inconnue, 400 si elle n'a pas encore de prospect
-     * (pré-prospection : créer d'abord le prospect via
-     * {@code POST /api/pre-prospections/{id}/creer-prospect}).
-     */
     @Transactional
     public ContactProspectDto ajouterContactAProspection(UUID prospectionId, CreerContactProspectRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
@@ -285,24 +249,12 @@ public class ProspectSubResourcesService {
         );
     }
 
-    /**
-     * Délègue au mappeur commun de {@code ProspectionService} : ce bloc existait ici en copie
-     * identique, et c'est cette duplication qui l'a fait diverger quand la liste a gagné le
-     * contact et l'alerte. Les champs d'alerte restent nuls ici — ils ne sont résolus que par
-     * les listes de prospections, qui les chargent en une requête groupée.
-     */
+    // Champs d'alerte nuls ici : seules les listes de prospections les chargent (requête groupée).
     private static ProspectionListItemDto toProspectionListItem(ComProspection p) {
         return ProspectionService.toListItem(p);
     }
 
-    /**
-     * Délègue au mappeur commun de {@code DossierService}, pour la même raison que
-     * {@link #toProspectionListItem} : ce bloc en était une copie caractère pour caractère, et
-     * la liste des dossiers vient de gagner vingt-six colonnes qu'il aurait fallu recopier ici.
-     *
-     * <p>{@code Set.of()} — aucune colonne optionnelle demandée : cette sous-ressource sert le
-     * contrat historique, et ne doit pas payer les jointures du contexte patrimonial.
-     */
+    // Set.of() : aucune colonne optionnelle, pour ne pas payer les jointures du contexte patrimonial.
     private static DossierListItemDto toDossierListItem(ComFolder f) {
         return DossierService.toListItem(f, Set.of());
     }

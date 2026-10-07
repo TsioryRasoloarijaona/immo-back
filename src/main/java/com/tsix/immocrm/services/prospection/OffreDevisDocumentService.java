@@ -23,9 +23,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Fiche Offre vente" document (see {@code OffreDevisPdfRenderer} for
- * the actual PDF rendering), modeled on the legacy template
- * ({@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf}).
+ * Gathers the data behind the "Fiche Offre vente" document (rendered by {@code OffreDevisPdfRenderer}),
+ * modeled on {@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf}.
  */
 @Service
 @Transactional(readOnly = true)

@@ -36,18 +36,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Construit et expédie la confirmation de visite envoyée au prospect quand un rendez-vous est
- * planifié. Voir {@code instructions/FEATURE-mail-confirmation-visite.md}.
- *
- * <p><b>Une résolution, deux canaux, deux déclencheurs.</b> Le contenu est résolu une fois
- * ({@link ContenuVisite}) puis mis en forme séparément pour l'email et pour WhatsApp ; l'envoi
- * automatique (après commit) et le renvoi manuel (endpoint) empruntent tous deux ce chemin. Les
- * règles R1 à R7 ne peuvent donc diverger ni entre les canaux, ni entre les déclencheurs.
- *
- * <p><b>Les deux canaux sont tentés indépendamment</b>, et cela répond à un écart mesuré :
- * 99 % des prospections avec rendez-vous portent un numéro exploitable contre 57 % une adresse
- * email. Lier les deux — n'envoyer le WhatsApp qu'en l'absence d'email, par exemple — priverait
- * du canal le plus lu la moitié des prospects qui en disposent.
+ * Confirmation de visite (email et WhatsApp, tentés indépendamment), résolue une fois pour les
+ * deux canaux et les deux déclencheurs. Voir {@code instructions/FEATURE-mail-confirmation-visite.md}.
  */
 @Service
 @Transactional(readOnly = true)
@@ -61,11 +51,7 @@ public class ConfirmationVisiteService {
     private static final DateTimeFormatter FORMAT_HEURE =
             DateTimeFormatter.ofPattern("HH'h'mm", Locale.FRENCH);
 
-    /**
-     * Longueur en deçà de laquelle une adresse est tenue pour un remplissage de formulaire plutôt
-     * que pour une adresse (R4). Calibrée sur le cas réel : le projet {@code YESTEST} porte
-     * littéralement {@code "adresse"}, sept caractères.
-     */
+    // R4 : calibrée pour rejeter le projet YESTEST, dont l'adresse est littéralement « adresse ».
     private static final int LONGUEUR_MINIMALE_ADRESSE = 8;
 
     private final ComActionMessageRepository actionMessageRepository;
@@ -80,10 +66,7 @@ public class ConfirmationVisiteService {
         this.envoiWhatsApp = envoiWhatsApp;
     }
 
-    /**
-     * Chemin de l'écouteur : l'interaction vient d'être écrite, son identifiant est le seul
-     * élément transporté par l'événement.
-     */
+    /** Chemin de l'écouteur, après commit. */
     public ResultatEnvoiVisiteDto envoyer(UUID interactionId) {
         ComActionMessage interaction = actionMessageRepository.findById(interactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interaction introuvable: " + interactionId));
@@ -91,12 +74,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * Chemin de l'endpoint {@code POST /api/prospections/{id}/interactions/{interactionId}/email-visite}.
-     *
-     * <p>Le contrôle de périmètre commercial n'est <b>pas</b> refait ici : {@code PerimetreInterceptor}
-     * couvre déjà {@code /api/prospections/{id}/**} et rend 404 pour une prospection hors périmètre.
-     * L'appartenance de l'interaction à cette prospection-là, en revanche, se vérifie — sans quoi
-     * l'endpoint permettrait de faire envoyer le rendez-vous d'autrui en énumérant les identifiants.
+     * Périmètre déjà couvert par {@code PerimetreInterceptor} ; l'appartenance de l'interaction à
+     * la prospection se vérifie ici, sinon on ferait envoyer le rendez-vous d'autrui.
      */
     public ResultatEnvoiVisiteDto renvoyer(UUID prospectionId, UUID interactionId) {
         ComActionMessage interaction = actionMessageRepository.findById(interactionId)
@@ -108,24 +87,19 @@ public class ConfirmationVisiteService {
                     "Interaction introuvable pour cette prospection: " + interactionId);
         }
         if (interaction.getAdmEvent() == null) {
-            // 409 et non 400 : la requête est bien formée, c'est l'état de l'interaction qui s'y
-            // oppose — même lecture que le refus d'une transition de statut de dossier.
+            // 409 et non 400 : la requête est bien formée, c'est l'état de l'interaction qui s'y oppose.
             throw new ConflictException(
                     "Cette interaction ne planifie aucun rendez-vous : rien à confirmer.");
         }
         return envoyerPour(interaction);
     }
 
-    /**
-     * Résout le contenu puis expédie sur les deux canaux. Ne lève jamais pour un motif métier :
-     * un prospect sans adresse est une issue, pas une erreur.
-     */
+    /** Ne lève jamais pour un motif métier : un prospect sans adresse est une issue, pas une erreur. */
     private ResultatEnvoiVisiteDto envoyerPour(ComActionMessage interaction) {
         AdmEvent rendezVous = interaction.getAdmEvent();
         if (rendezVous == null || rendezVous.getStartHour() == null) {
-            // Atteignable seulement par l'écouteur, dont l'événement n'est publié que sur création
-            // d'un AdmEvent — donc jamais en pratique. Vérifié quand même : l'alternative serait un
-            // NullPointerException dans un fil asynchrone, c'est-à-dire une trace illisible.
+            // Jamais en pratique (l'événement suppose un AdmEvent), mais évite un NPE illisible
+            // dans un fil asynchrone.
             log.warn("Confirmation de visite ignorée : l'interaction {} ne porte pas de rendez-vous.",
                     interaction.getId());
             return ResultatEnvoiVisiteDto.de(
@@ -166,14 +140,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * R4 bis — la « localisation exacte », sous la seule forme que les données permettent :
-     * un lien de recherche Google Maps construit sur l'adresse retenue. Aucune coordonnée GPS
-     * n'existe en base ({@code MapLatitude}/{@code MapLongitude} : 0 ligne sur 1 068
-     * {@code StkItem}, et les colonnes n'existent ni sur le projet ni sur la tranche) — le
-     * jour où elles seront saisies, ce lien pourra devenir un {@code query=lat,long}.
-     *
-     * <p>Le lien suit l'adresse : validée par {@link #adresseValide} ou absente. Construire un
-     * lien sur une adresse rejetée enverrait le prospect chercher « adresse » sur une carte.
+     * R4 bis — lien de recherche sur l'adresse retenue, aucune coordonnée GPS n'existant en base ;
+     * il suit l'adresse validée, ou n'existe pas. Voir {@code FEATURE-mail-visite-localisation.md}.
      */
     private static String lienCarte(Adresse adresse) {
         if (adresse == null) {
@@ -187,14 +155,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * R1 — la fiche du prospect, à défaut le champ saisi au premier contact, puis un contrôle de
-     * forme minimal.
-     *
-     * <p>Le contrôle se réduit à la présence d'un {@code @} : ni plus — une expression régulière
-     * d'adresse email complète rejette des adresses valides et coûte plus qu'elle ne rapporte —
-     * ni moins, puisque 33 lignes réelles portent une valeur non vide qui n'est pas une adresse
-     * (un numéro de téléphone, le plus souvent). Le serveur SMTP refuserait le message, et
-     * l'échec serait invisible depuis l'application.
+     * R1 — fiche, puis champ du premier contact. Un {@code @} suffit : une regex complète rejette
+     * des adresses valides, mais des valeurs réelles sont des numéros de téléphone.
      */
     private static String email(CfgTier prospect, ComProspection prospection) {
         if (prospection == null) {
@@ -209,14 +171,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * R1 bis — le numéro WhatsApp, composé du mobile de la fiche et de son indicatif.
-     *
-     * <p><b>Aucun repli sur {@code ComProspection.TempTel}</b>, contrairement à l'email. Deux
-     * raisons, l'une mesurée et l'autre de principe : le mobile de la fiche couvre déjà
-     * 5 070 des 5 079 prospections avec rendez-vous, si bien que le repli en apporterait <i>huit</i> ;
-     * et {@code TempTel} ne porte pas d'indicatif, ce qui obligerait à supposer le Maroc — une
-     * supposition qui, sur les 225 tiers d'indicatif « 33 », enverrait le message à un inconnu.
-     * Huit prospections ne valent pas ce risque.
+     * Pas de repli sur {@code ComProspection.TempTel}, contrairement à l'email : sans indicatif, il
+     * faudrait supposer le Maroc. Voir {@code FEATURE-mail-confirmation-visite.md} §4 bis W2.
      */
     private static String numeroWhatsApp(CfgTier prospect) {
         if (prospect == null) {
@@ -240,10 +196,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * R4 — la tranche d'abord parce qu'elle est plus précise, le projet ensuite parce qu'il est
-     * toujours renseigné (5 071/5 071 contre 1 639). Le code postal et la ville accompagnent
-     * <b>le porteur retenu</b> : panacher l'adresse de la tranche avec la ville du projet
-     * fabriquerait une adresse qui n'existe nulle part.
+     * R4 — tranche (plus précise), puis projet (toujours renseigné). Code postal et ville suivent
+     * le porteur retenu : les panacher fabriquerait une adresse qui n'existe nulle part.
      */
     private static Adresse adresse(CfgTranche tranche, CfgProject projet) {
         Adresse depuisTranche = adresseValide(
@@ -262,18 +216,8 @@ public class ConfirmationVisiteService {
     }
 
     /**
-     * Rejette les deux formes de fausse adresse observées en données réelles, et rien d'autre :
-     *
-     * <ul>
-     *   <li>trop courte pour être une adresse — {@code "adresse"} sur le projet {@code YESTEST} ;</li>
-     *   <li>égale au libellé de son propre porteur — {@code "Mansouria Beach Resort"} sur
-     *       {@code MBR}, qui recopie le nom du projet.</li>
-     * </ul>
-     *
-     * <p>Le filtre est volontairement étroit. Le but n'est pas de valider des adresses marocaines
-     * — personne ne sait le faire de façon fiable — mais d'empêcher deux cas connus d'atteindre un
-     * client. Un doute se tranche en faveur de l'omission : un message sans bloc adresse reste
-     * utile, un message avec une fausse adresse envoie quelqu'un au mauvais endroit.
+     * Volontairement étroit : rejette les deux fausses adresses réelles connues (trop courte,
+     * ou égale au libellé du porteur comme sur {@code MBR}). Dans le doute, omettre le bloc.
      */
     private static Adresse adresseValide(String adresse, String codePostal, String ville,
                                          String libellePorteur) {
@@ -316,8 +260,7 @@ public class ConfirmationVisiteService {
         variables.put("nomCommercial", contenu.nomCommercial());
         variables.put("mobileCommercial", contenu.mobileCommercial());
 
-        // Aucune pièce jointe, et c'est un choix : le message n'emporte plus de plan — il
-        // porte l'adresse et sa localisation. Voir FEATURE-mail-visite-localisation.md.
+        // Aucune pièce jointe, par choix : voir FEATURE-mail-visite-localisation.md.
         envoiEmail.envoyer(new MessageEmail(contenu.email(), sujet(contenu), TEMPLATE,
                 variables, corpsTexte(contenu), List.of()));
 
@@ -334,8 +277,7 @@ public class ConfirmationVisiteService {
 
     private CanalEnvoiDto parWhatsApp(ContenuVisite contenu, UUID interactionId) {
         if (contenu.numeroWhatsApp() == null) {
-            // Distinguer les deux permet au commercial de savoir s'il doit obtenir un numéro ou
-            // en réparer un : 43 fiches réelles portent un numéro que rien ne peut envoyer.
+            // Distingue « obtenir un numéro » de « réparer un numéro » pour le commercial.
             MotifEnvoiVisite motif = contenu.aUnMobileBrut()
                     ? MotifEnvoiVisite.NUMERO_INEXPLOITABLE
                     : MotifEnvoiVisite.DESTINATAIRE_ABSENT;
@@ -355,12 +297,7 @@ public class ConfirmationVisiteService {
                 : CanalEnvoiDto.nonEnvoye(MotifEnvoiVisite.ECHEC_ENVOI, contenu.numeroWhatsApp());
     }
 
-    /**
-     * Le message WhatsApp reprend les mêmes informations que le mail, dans une forme adaptée au
-     * canal : court, sans salutation cérémonieuse, et avec la mise en gras {@code *…*} que
-     * WhatsApp interprète. Le lien de localisation y est particulièrement à sa place — le
-     * message se lit sur le téléphone qui servira à s'y rendre.
-     */
+    /** Mêmes informations que le mail, plus court ; {@code *…*} est le gras de WhatsApp. */
     private static String texteWhatsApp(ContenuVisite contenu) {
         StringBuilder texte = new StringBuilder();
         texte.append("Bonjour");
@@ -397,10 +334,7 @@ public class ConfirmationVisiteService {
 
     // ------------------------------------------------------------------ divers
 
-    /**
-     * Alternative texte brut du mail, construite en Java comme celle du mot de passe temporaire —
-     * un second résolveur Thymeleaf en mode TEXT serait beaucoup de plomberie pour quinze lignes.
-     */
+    /** Texte brut construit en Java : un second résolveur Thymeleaf (mode TEXT) n'en vaut pas la peine. */
     private static String corpsTexte(ContenuVisite contenu) {
         StringBuilder texte = new StringBuilder();
         texte.append("Bonjour");
@@ -436,27 +370,15 @@ public class ConfirmationVisiteService {
         return texte.toString();
     }
 
-    /**
-     * Une valeur utilisable, ou {@code null}. Les colonnes legacy contiennent aussi bien
-     * {@code NULL} que des chaînes d'espaces — les deux doivent produire la même absence, sans
-     * quoi une chaîne vide traverserait le template et laisserait un libellé sans valeur en face.
-     */
+    /** Les colonnes legacy portent {@code NULL} ou des espaces : les deux deviennent {@code null}. */
     private static String nettoyer(String valeur) {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 
-    /** Adresse retenue, déjà validée et déjà mise en forme sur deux lignes. */
     private record Adresse(String ligne, String ville) {
     }
 
-    /**
-     * Le contenu de la confirmation, résolu une fois pour tous les canaux.
-     *
-     * @param aUnMobileBrut la fiche porte un mobile, exploitable ou non — permet de distinguer
-     *                      « pas de numéro » de « numéro impossible à composer »
-     * @param lienCarte     lien Google Maps sur l'adresse retenue — la « localisation exacte »,
-     *                      dans la seule forme que les données permettent (aucun GPS en base)
-     */
+    /** @param aUnMobileBrut la fiche porte un mobile, exploitable ou non */
     private record ContenuVisite(
             String nomProspect,
             String email,

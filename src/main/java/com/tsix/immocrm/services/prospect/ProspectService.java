@@ -63,36 +63,19 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ProspectService {
 
-    /**
-     * Codes {@code CfgTierType} qui définissent un "prospect" dans Omran — confirmé sur données
-     * réelles: {@code CfgTierType.Code = "PRO"} porte 13 567 tiers (contre seulement 13 avec
-     * {@code CfgTier.IsProspect = true}, un flag app-only quasi jamais renseigné côté legacy) et
-     * {@code "PRORNT"} ("PROSPECT LOCATION") 4 de plus — cohérent avec les ~13 730 tiers
-     * distincts réellement liés à une {@code ComProspection}. {@link #findAll} filtre dessus par
-     * défaut; {@link #createEntity} y défaut le type d'un nouveau prospect si non précisé.
-     */
+    // Un prospect OMRAN se reconnaît à son CfgTierType (PRO, PRORNT), pas à CfgTier.IsProspect,
+    // drapeau que le légataire ne renseigne presque jamais.
     private static final List<String> CODES_TYPE_PROSPECT = List.of("pro", "prornt");
     private static final String CODE_TYPE_PROSPECT_PAR_DEFAUT = "PRO";
-    /**
-     * Les fiches candidates au contrôle de doublon — prospects <em>et</em> clients, comme le
-     * contrôle d'OMRAN (types PRO et CLI dans la trace d'audit) : un client qui revient est le
-     * doublon le plus coûteux à créer. Voir {@code FEATURE-doublons-prospect-projet.md} §2.
-     */
+    /** Prospects <em>et</em> clients, comme le contrôle d'OMRAN — voir {@code FEATURE-doublons-prospect-projet.md} §2. */
     private static final Set<String> CODES_TYPE_PROSPECT_OU_CLIENT = Set.of("pro", "prornt", "cli", "clirnt");
-    /** Plafond de la liste de doublons ({@code GET /api/prospects/doublons} et le 409). */
     private static final int PLAFOND_DOUBLONS = 50;
     /** Un téléphone se compare sur ses 9 derniers chiffres — la normalisation de la hotline. */
     private static final int CHIFFRES_TELEPHONE = 9;
 
     private final CfgTierRepository tierRepository;
-    /**
-     * Sert les <strong>tranches d'intérêt</strong> de la fiche — voir
-     * {@code instructions/FEATURE-audit-tranches-prospect.md}. Une requête de plus sur la fiche
-     * seulement : en liste, elle serait payée <em>par ligne</em>, soit vingt requêtes par page.
-     * C'est pour cette raison que {@code tranchesInteret} ne figure pas au catalogue
-     * {@link com.tsix.immocrm.domain.ColonneProspect} — l'exposer en liste demanderait un
-     * chargement par lot, comme l'enrichissement de la prospection.
-     */
+    // Tranches d'intérêt : fiche seulement (une requête par ligne en liste), d'où leur absence de
+    // ColonneProspect. Voir FEATURE-audit-tranches-prospect.md §3.
     private final CfgTrancheRepository trancheRepository;
     private final CfgTierTypeRepository tierTypeRepository;
     private final CfgTierKindRepository tierKindRepository;
@@ -106,7 +89,6 @@ public class ProspectService {
     private final AdmProfessionRepository professionRepository;
     private final AdmSalaryRepository salaryRepository;
     private final AdmIdentityDocumentTypeRepository identityDocumentTypeRepository;
-    /** Contrôle indicatif + numéro — voir {@code FEATURE-indicatif-telephone.md}. */
     private final NumeroTelephoneSupport numeroSupport;
     private final GenerateurCodeSequence generateurCode;
 
@@ -145,14 +127,8 @@ public class ProspectService {
     }
 
     /**
-     * @param search free-text match on code/nom/prenom/raisonSociale/email
-     * @param types  {@code CfgTierType.code} filter — OR-match, repeated query param
-     *               ({@code ?type=a&type=b}). When provided, replaces the default "is a
-     *               prospect" restriction entirely (the caller is deliberately narrowing to
-     *               specific type codes). When absent, defaults to {@link #CODES_TYPE_PROSPECT}
-     *               — same classification Omran itself uses ({@code CfgTierType.Code = "PRO"},
-     *               confirmed on real data: 13 567 tiers, vs. only 13 with the app-only
-     *               {@code CfgTier.IsProspect} flag this endpoint filtered on before).
+     * @param types codes {@code CfgTierType} en OU ; fournis, ils <b>remplacent</b> le filtre par
+     *              défaut {@link #CODES_TYPE_PROSPECT} au lieu de s'y ajouter
      */
     public Page<ProspectListItemDto> findAll(String search, List<String> types, Pageable pageable,
                                             Set<ColonneProspect> colonnes) {
@@ -190,19 +166,13 @@ public class ProspectService {
         return toDetail(createEntity(request));
     }
 
-    /**
-     * Same creation logic as {@link #create}, but returns the persisted entity — used by
-     * {@link com.tsix.immocrm.services.prospection.ProspectionService} to link a newly
-     * created prospect back onto a pré-prospection (POST /api/pre-prospections/{id}/creer-prospect).
-     */
+    /** Comme {@link #create}, mais rend l'entité — sert aussi {@code POST /api/pre-prospections/{id}/creer-prospect}. */
     @Transactional
     public CfgTier createEntity(CreerProspectRequest request) {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
-        // Contrôle d'identité avant toute écriture : une fiche existante au même nom, téléphone
-        // ou email arrête la création en 409 tant que l'appelant n'a pas confirmé « nouveau
-        // contact ». Voir FEATURE-doublons-prospect-projet.md §2.
+        // 409 tant que l'appelant n'a pas confirmé « nouveau contact » (FEATURE-doublons-prospect-projet.md §2).
         if (!Boolean.TRUE.equals(request.ignorerDoublons())) {
             List<ProspectDoublonDto> doublons = rechercherDoublons(request.prenom(), request.nom(),
                     request.raisonSociale(), request.telephone(), request.mobile(), request.email());
@@ -214,21 +184,14 @@ public class ProspectService {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);
-        // Drapeaux hérités posés à `false` plutôt que laissés à NULL, et ce n'est pas de la
-        // cosmétique : les écrans du logiciel de bureau filtrent en « = 0 », et en SQL
-        // `NULL = 0` n'est JAMAIS vrai. Une ligne laissée à NULL est donc silencieusement
-        // absente de leurs listes — mesuré sur CfgTier comme sur ComProspection.
-        // C'est ainsi qu'OMRAN remplit ses propres lignes ; on s'aligne.
+        // false et non NULL : les écrans OMRAN filtrent en « = 0 », et NULL = 0 n'est jamais vrai —
+        // une ligne à NULL disparaîtrait de leurs listes.
         tier.setIsOldCustomer(false);
         tier.setIsExtern(false);
         tier.setIsRntCustomer(false);
         tier.setIsVisibleInList(false);
         tier.setIsFundReader(false);
-        // Numérotation sur le compteur du logiciel de bureau. Sans elle, chaque prospect créé
-        // par l'API rejoignait une anomalie marginale : sur 13 913 prospects et clients
-        // réels, 12 seulement n'ont pas de code. Couvre les deux chemins de création, celui-ci
-        // étant partagé par POST /api/prospects et
-        // POST /api/pre-prospections/{id}/creer-prospect.
+        // Même compteur qu'OMRAN, sinon codes en collision. Voir FIX-creation-prospect-prospection.md §3.
         tier.setCode(generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
         applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
                 request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
@@ -239,9 +202,7 @@ public class ProspectService {
                 request.typeResidenceId(), request.regimeMatrimonialId(), request.professionId(), request.salaireId(),
                 request.employeur(), request.anciennete(), request.filsDe(), request.etDe(), request.adresse2(),
                 request.adresse3(), request.pieceIdentite());
-        // Sans typeId explicite, défaut sur CfgTierType "PRO" — le type sur lequel GET
-        // /api/prospects filtre désormais par défaut (voir CODES_TYPE_PROSPECT). Sans ça, un
-        // prospect créé sans typeId n'apparaîtrait plus dans sa propre liste.
+        // Sans type PRO, un prospect créé sans typeId n'apparaîtrait pas dans sa propre liste.
         if (request.typeId() == null) {
             tier.setCfgTierType(resolveTypeProspectParDefaut());
         }
@@ -250,19 +211,9 @@ public class ProspectService {
     }
 
     /**
-     * {@code GET /api/prospects/doublons} et le 409 de {@link #createEntity} : les fiches
-     * prospect/client correspondant à l'identité saisie sur au moins un critère, avec ces
-     * critères — voir {@code FEATURE-doublons-prospect-projet.md} §2 pour les règles et les
-     * mesures (244 groupes d'homonymes sur 14 040 fiches, mais 6 seulement à nom <em>et</em>
-     * téléphone identiques : l'homonyme au contact différent est le cas courant, d'où une liste à
-     * arbitrer plutôt qu'un refus).
-     *
-     * <p>Les valeurs bidon ne sont pas des critères : téléphone de moins de 9 chiffres ou à 9
-     * chiffres identiques ({@code 000000000} et {@code 111111111} portent 17 fiches chacun), email
-     * sans {@code @} ({@code -}, {@code nd}, {@code .}). Aucun critère utilisable ⟶ liste vide.
-     *
-     * <p>Tri : les fiches qui correspondent sur le plus de critères d'abord, puis les plus
-     * récentes ; 50 au plus.
+     * Fiches prospect/client partageant au moins un critère d'identité : une liste à arbitrer,
+     * pas un refus — voir {@code FEATURE-doublons-prospect-projet.md} §2. Les valeurs bidon
+     * (téléphone court ou à chiffres tous égaux, email sans {@code @}) ne sont pas des critères.
      */
     public List<ProspectDoublonDto> rechercherDoublons(String prenom, String nom, String raisonSociale,
                                                        String telephone, String mobile, String email) {
@@ -317,12 +268,8 @@ public class ProspectService {
                 List.copyOf(criteres));
     }
 
-    /**
-     * Clé de nom : prénom + nom (ou la raison sociale seule) en minuscules et <b>sans aucun
-     * espace</b> — la normalisation d'OMRAN ({@code REPLACE(FirstName,' ','')}), qui rend
-     * « El Mehdi LAHLOU » et « El MEHDI LAHLOU » égaux et neutralise l'ordre prénom/nom côté
-     * requête (les deux concaténations sont comparées).
-     */
+    // Sans aucun espace, comme OMRAN (REPLACE(FirstName,' ','')) ; les deux ordres prénom/nom
+    // sont comparés côté requête.
     private static String cleNom(String prenom, String nom, String raisonSociale) {
         String cle = sansEspaces(chaine(prenom) + chaine(nom));
         return cle.isEmpty() ? sansEspaces(raisonSociale) : cle;
@@ -343,11 +290,8 @@ public class ProspectService {
         return e.contains("@") ? e : "";
     }
 
-    /**
-     * Même chaîne de {@code replace} que {@code CfgTierRepository.trouverDoublons} — les deux
-     * côtés doivent se normaliser à l'identique pour que chaque ligne renvoyée par la requête
-     * retrouve son critère ici.
-     */
+    // Même chaîne de replace que CfgTierRepository.trouverDoublons, sinon une ligne renvoyée par
+    // la requête ne retrouverait pas son critère ici.
     private static String neufDerniers(String telephone) {
         String t = chaine(telephone).replace(" ", "").replace("-", "").replace(".", "")
                 .replace("(", "").replace(")", "").replace("+", "");
@@ -362,12 +306,7 @@ public class ProspectService {
         return valeur == null ? "" : valeur;
     }
 
-    /**
-     * Type "PRO" par défaut des nouveaux prospects créés sans {@code typeId} explicite.
-     * Auto-répare si la ligne de référence venait à manquer (ex. base de test fraîche) plutôt que
-     * de bloquer toute création de prospect — même convention que
-     * {@code DossierService.genererCodeDossier}.
-     */
+    // Crée la ligne PRO si elle manque (base de test fraîche) plutôt que de bloquer toute création.
     private CfgTierType resolveTypeProspectParDefaut() {
         return tierTypeRepository.findByCode(CODE_TYPE_PROSPECT_PAR_DEFAUT).orElseGet(() -> {
             CfgTierType type = new CfgTierType();
@@ -405,13 +344,8 @@ public class ProspectService {
                               UUID typeResidenceId, UUID regimeMatrimonialId, UUID professionId, UUID salaireId,
                               String employeur, Integer anciennete, String filsDe, String etDe, String adresse2,
                               String adresse3, PieceIdentiteRequest pieceIdentite) {
-        // Un numéro ne s'écrit jamais seul : indicatif exigé, valeur normalisée au format que
-        // porte déjà la base. Voir FEATURE-indicatif-telephone.md §5.
-        //
-        // Les DEUX contrôles ont lieu avant la moindre écriture, et l'ordre porte le sens : une
-        // requête fournissant un mobile valide et un fixe fautif ne doit pas laisser la fiche
-        // avec le mobile écrit et le reste non. La transaction annulerait de toute façon, mais
-        // s'appuyer là-dessus ferait dépendre la cohérence d'un mécanisme extérieur à la méthode.
+        // Les deux contrôles avant toute écriture : un mobile valide et un fixe fautif n'écrivent
+        // rien, sans dépendre du rollback. Voir FEATURE-indicatif-telephone.md §5.
         NumeroTelephoneSupport.NumeroNormalise fixe =
                 numeroSupport.valider(telephone, indicatifTelephone, "telephone");
         NumeroTelephoneSupport.NumeroNormalise portable =
@@ -518,28 +452,15 @@ public class ProspectService {
             if (pieceIdentite.valideJusquau() != null) tier.setIDValidateDate(pieceIdentite.valideJusquau());
             if (pieceIdentite.lieuValidite() != null) tier.setIDValidatePlace(pieceIdentite.lieuValidite());
         }
-        // CfgTier.Description est le champ d'affichage canonique côté legacy (lu directement par
-        // les rapports/vues SQL et les templates Stimulsoft, ex. ComSaleFicheTropPercu.yes) —
-        // confirmé en base que ce n'était jamais renseigné à la création/mise à jour via cette
-        // API (contrairement aux données legacy), ce qui le laissait vide même quand
-        // prenom/nom/raisonSociale étaient fournis. Recalculé à chaque fois plutôt que seulement
-        // à la création, pour rester en phase si le nom change ensuite via PATCH.
+        // CfgTier.Description est le nom qu'affichent les vues SQL et templates Stimulsoft du
+        // légataire ; recalculé à chaque changement de nom, pas seulement à la création.
         if (prenom != null || nom != null || raisonSociale != null) {
             tier.setDescription(TierNomFormatter.nom(tier));
         }
     }
 
-    /**
-     * Mappeur de la liste des prospects.
-     *
-     * <p>Les <strong>référentiels ne sont déréférencés que si la colonne est demandée</strong> :
-     * chacun est un chargement paresseux de plus par ligne, soit vingt requêtes inutiles par page
-     * quand personne ne les réclame. Les scalaires de {@code CfgTier}, eux, sont déjà chargés —
-     * les conditionner n'apporterait rien et alourdirait la lecture.
-     *
-     * @param colonnes sélection résolue ; {@code Set.of()} pour les appels hors liste, qui ne
-     *                 déréférenceront alors aucun référentiel optionnel.
-     */
+    // Un référentiel n'est déréférencé que si sa colonne est demandée : chacun coûte un chargement
+    // paresseux par ligne. Les scalaires, déjà chargés, ne sont pas conditionnés.
     private static ProspectListItemDto toListItem(CfgTier tier, Set<ColonneProspect> colonnes) {
         return new ProspectListItemDto(
                 tier.getId(),
@@ -590,7 +511,7 @@ public class ProspectService {
                         ? tier.getAdmCountryResidence().getDescription() : null,
                 colonnes.contains(ColonneProspect.TYPE_RESIDENCE) && tier.getAdmResidenceType() != null
                         ? tier.getAdmResidenceType().getDescription() : null,
-                // Alimentée par CfgTier.Quality, mesurée à 0 ligne sur 13 664 : toujours nulle.
+                // CfgTier.Quality n'est jamais renseignée en base : toujours nulle.
                 tier.getQuality(),
                 colonnes.contains(ColonneProspect.SALAIRE) && tier.getAdmSalary() != null
                         ? tier.getAdmSalary().getDescription() : null,
@@ -687,16 +608,7 @@ public class ProspectService {
         );
     }
 
-    /**
-     * Tranches d'intérêt du prospect, dans la forme structurée que l'API sert à la place de la
-     * chaîne agrégée de la vue légataire.
-     *
-     * <p>Un tiers qui n'a pas encore d'identifiant — cas d'un {@code toDetail} appelé sur une
-     * entité tout juste construite — n'a par définition aucune prospection : rendre la liste vide
-     * sans interroger la base est ici correct, pas une optimisation prématurée.
-     *
-     * @return liste toujours non nulle, vide quand le prospect n'a aucune prospection.
-     */
+    /** Forme structurée de la chaîne agrégée de la vue légataire ; jamais {@code null}. */
     private List<TrancheInteretDto> tranchesInteret(CfgTier tier) {
         if (tier.getId() == null) {
             return List.of();

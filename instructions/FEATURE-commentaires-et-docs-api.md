@@ -224,6 +224,33 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   `FEATURE-reglement-statut-preuve.md` §2).
 - **`FiltresAvancesProspection`** : temps mesurés déplacés dans
   `INVENTAIRE-colonnes-prospection.md` §3.
+- **`ProspectService.CODES_TYPE_PROSPECT` — prospect = type, pas `IsProspect`.**
+  `CfgTierType.Code = "PRO"` porte 13 567 tiers contre 13 avec
+  `CfgTier.IsProspect = true` (flag app-only) ; `PRORNT` en ajoute 4 ; ~13 730 tiers
+  distincts liés à une `ComProspection`.
+- **`ProspectionService.modifierTranchePrincipale`** : 100 % des prospections avec
+  article principal ont la tranche de l'article (0 exception sur 807).
+- **`NumeroTelephoneSupport.indicatifsConnus` — pas de cache** : table de 47 lignes,
+  moins chère à relire qu'un cache à invalider si un pays est ajouté à chaud.
+- **`IsNotRead` (`addInteraction`)** : 43 493 lignes sur 43 540 à 0 ; le 1 signale
+  une note à lire, pas une interaction.
+- **`DevisService.genererCodeOffre`** : `AdmSequence` ligne `Offre`, `SeqValue` = 313
+  = plus grand `StlQuote.Code` (« 26/00313 ») ; compteur global jamais remis à 0
+  par année (« 22/00001 » → « 26/00313 »).
+- **`DevisService.calculerMontants`** : vérifié sur données réelles
+  `ComSaleUnitCostHT × Area = ComSalePriceHT` et
+  `ComSalePriceHT × (1 + Vat) = ComSalePrice`.
+- **`telephoneProspect`** : sur 8 613 prospections ouvertes, 5 034 renseignées par
+  la fiche, 7 596 par le champ temporaire, 8 591 par l'une ou l'autre.
+- **`nomProspect` / `emailProspect`** : 3 394 prospections sur 17 703 sans fiche,
+  dont 3 390 avec `TempDescription` ; email : 4 752 des 8 613 ouvertes (55 %).
+- **`toActivite`** : colonnes non-`NULL` à 100 % mais non vides à 90 % (résultat,
+  message) et 25 % (`LastActiveAlertReason`).
+- **Téléphones** : 43 fiches portent un numéro que rien ne peut envoyer ;
+  `000000000` et `111111111` portent 17 fiches chacun (doublons).
+- **Contradiction entre specs** : `CfgEmployeeId` vide « 4 fois sur 5 »
+  (`FIX-interaction-note.md` §2) contre renseigné à 77 % (37 286 / 48 278,
+  `FIX-auteur-interactions.md`). À trancher.
 
 ## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
 

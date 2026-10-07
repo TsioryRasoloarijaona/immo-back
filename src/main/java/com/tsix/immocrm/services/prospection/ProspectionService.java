@@ -117,46 +117,23 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ProspectionService {
 
-    /**
-     * {@code ComActionMessageSubCategory.Code} values (under the "Prospection" category) that
-     * require a "Date du rendez-vous" and create a calendar entry ({@link AdmEvent}) — confirmed
-     * empirically against real data. Covers both actual rendez-vous ("Rendez vous pris"/"RDV
-     * reporté") and planned site visits ("Le prospect veut faire une visite du projet", 5708 real
-     * uses) — same underlying mechanism, distinguished on the calendar by
-     * {@code AdmEvent.comActionMessageSubCategory}. See {@code GET /api/calendrier/evenements}.
-     */
+    // Résultats qui exigent une date de rendez-vous et créent un AdmEvent ; la visite de projet
+    // suit le même mécanisme, distinguée au calendrier par AdmEvent.comActionMessageSubCategory.
     private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
-    /**
-     * {@code ComProspectionKind.Code} de l'étape qui déclenche le remerciement d'après-visite —
-     * voir {@code instructions/FEATURE-offre-apres-visite.md}.
-     *
-     * <p>C'est bien l'étape et non un résultat d'interaction : sur les 44 152 interactions réelles,
-     * les résultats {@code Réalisée} et {@code Non réalisée} comptent <b>zéro</b> ligne. 1 266
-     * prospections portent cette étape, dont 99,7 % joignables sur WhatsApp.
-     */
+    // Le remerciement suit l'étape, pas un résultat d'interaction : « Réalisée » / « Non réalisée »
+    // ne sont jamais saisis. Voir FEATURE-offre-apres-visite.md §1.
     static final String ETAPE_APRES_VISITE = "4 APRES VISITES";
 
-    /**
-     * Format du libellé {@code ComActionMessage.Description}, repris à l'identique de
-     * l'application de bureau : {@code 07/09/2026 17:13 Khadija ELKORRI}. Vérifié sur les
-     * 46 546 interactions de {@code yesRemsProd}, sans une seule exception.
-     */
+    /** {@code ComActionMessage.Description} comme OMRAN, sans exception : {@code 07/09/2026 17:13 Khadija ELKORRI}. */
     private static final DateTimeFormatter FORMAT_LIBELLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final ComProspectionRepository prospectionRepository;
-    /**
-     * Vue légataire fournissant le bloc « activité » de la fiche — voir
-     * {@code instructions/FEATURE-vues-legacy-prospection.md}. Lecture seule, une ligne à la fois
-     * (26 ms) : ne jamais l'utiliser pour une liste.
-     */
+    // Vue légataire du bloc « activité » : une ligne à la fois, jamais pour une liste
+    // (FEATURE-vues-legacy-prospection.md §5).
     private final ComSaleProspectionViewRepository prospectionViewRepository;
-    /**
-     * Référentiel des types de document du légataire (162 lignes) — voir
-     * {@code instructions/FEATURE-strentity-prospection.md}. Résout {@code StrEntityId} en code et
-     * libellé, et sert le filtre {@code ?typeProspection=}.
-     */
+    /** Types de document du légataire — voir {@code instructions/FEATURE-strentity-prospection.md}. */
     private final StrEntityRepository strEntityRepository;
     private final ProspectService prospectService;
     private final CfgTierRepository tierRepository;
@@ -170,23 +147,14 @@ public class ProspectionService {
     private final ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository;
     private final ComActionMessageCategoryRepository actionMessageCategoryRepository;
 
-    /**
-     * {@code ComActionMessageCategory.Code} porté par les interactions de création — 2 250 des
-     * 2 634 mesurées. Les 384 autres sont catégorisées « Dossier de vente (Réservation) » et
-     * relèvent de la transformation en vente, pas de la création.
-     */
+    // Catégorie des interactions de création ; celles en « Dossier de vente (Réservation) »
+    // relèvent de la transformation (FIX-creation-prospect-prospection.md §4).
     private static final String CATEGORIE_PROSPECTION = "Prospection";
 
-    /**
-     * Type de document du legataire pour une prospection de vente — {@code StrEntity.Code}.
-     * Voir {@code instructions/FEATURE-strentity-prospection.md}.
-     */
     private static final String CODE_STR_ENTITY_PROSPECTION_VENTE = "ComProspection";
 
-    /**
-     * Repli si le referentiel ne repond pas. Identique dans yesRems, yesRemsProd et yesRemsTest —
-     * c'est du referentiel legataire restaure de la meme source, pas une valeur inventee ici.
-     */
+    // Repli si le référentiel ne répond pas : même PKey dans toutes les bases (référentiel
+    // légataire restauré d'une même source).
     private static final UUID ID_STR_ENTITY_PROSPECTION_VENTE =
             UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601");
     private final AdmEventRepository admEventRepository;
@@ -197,17 +165,11 @@ public class ProspectionService {
     private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
-    /**
-     * Résout l'auteur d'une interaction depuis le jeton — voir {@code FIX-interaction-note.md}, et
-     * {@code FEATURE-suivi-actions.md} §6 pour un compte absent de la base d'écriture.
-     */
+    /** Auteur d'une interaction — voir {@code FIX-interaction-note.md} et {@code FEATURE-suivi-actions.md} §6. */
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
-    /**
-     * Publie {@link VisitePlanifiee} — voir {@code FEATURE-mail-confirmation-visite.md}. Un
-     * événement plutôt qu'un appel direct : le mail ne doit partir que si l'interaction est
-     * réellement écrite, et l'envoi ne doit rien pouvoir annuler.
-     */
+    // Événement plutôt qu'appel direct : le mail ne part que si l'interaction est écrite, et
+    // l'envoi ne peut rien annuler (FEATURE-mail-confirmation-visite.md §3).
     private final ApplicationEventPublisher publisher;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
@@ -261,26 +223,9 @@ public class ProspectionService {
     }
 
     /**
-     * {@code GET /api/prospections}. Excludes pré-prospections ({@link DiscriminantPreProspection})
-     * — those are exposed separately by
-     * {@link #findPreProspections(List, List, List, List, LocalDateTime, LocalDateTime, String, Boolean, Pageable)}
-     * to avoid the two endpoints returning overlapping rows.
+     * Pré-prospections exclues : {@link #findPreProspections} les sert, sans recouvrement.
      *
-     * @param etapes     {@code ComProspectionKind.code} filter ("Nature") — OR-match, repeated
-     *                   query param, 0/1/2+ values behave like {@code DossierService.findAll}'s
-     *                   {@code statuts}. See {@code instructions/filtres-avances.md}.
-     * @param origines   {@code ComProspectionOrigin.code} filter — same OR-match convention.
-     * @param commerciaux {@code CfgTier.id} (commercial) filter — same OR-match convention.
-     * @param trancheIds {@code CfgTranche.id} filter ({@code ComProspection.stkHierarchy} — the
-     *                   tranche visée), OR-match. Unlike Dossier, this is a direct FK on
-     *                   {@code ComProspection}, no EXISTS subquery needed.
-     * @param dateDebut  inclusive lower bound on {@code docDate} (only date field exposed by
-     *                   {@link ProspectionListItemDto} today).
-     * @param dateFin    inclusive upper bound on {@code docDate}.
-     * @param search     free-text match on code/prospect name/temp contact fields
-     * @param ouvertes   ternaire : {@code null} = pas de filtre, {@code true} = ouvertes
-     *                   ({@code IsClosed} à 0 ou NULL), {@code false} = archivées
-     *                   ({@code IsClosed = 1})
+     * @param ouvertes {@code null} = pas de filtre ; ouvertes = {@code IsClosed} à 0 <b>ou NULL</b>
      */
     public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
             List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
@@ -289,18 +234,14 @@ public class ProspectionService {
             Pageable pageable) {
         Specification<ComProspection> spec = specProspections(etapes, origines, commerciaux, trancheIds,
                 dateDebut, dateFin, search, ouvertes, filtres)
-                // Périmètre commercial — prédicat neutre si l'appelant n'est pas restreint.
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
     }
 
     /**
-     * Le {@code totalElements} de {@code GET /api/prospections?trancheId=…[&ouvertes=…]} pour
-     * l'appelant courant — <b>la même</b> {@link #specProspections} et le même périmètre que
-     * {@link #findAll}. Sert les compteurs du tableau de bord filtré par tranche
-     * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R3) : égaux à la liste par
-     * construction.
+     * Même spec et même périmètre que {@link #findAll} : les compteurs du tableau de bord égalent
+     * la liste par construction ({@code FEATURE-dashboard-filtre-tranche.md} R3).
      */
     public long compterProspections(UUID trancheId, Boolean ouvertes) {
         return prospectionRepository.count(specProspections(null, null, null, List.of(trancheId),
@@ -308,30 +249,20 @@ public class ProspectionService {
                 .and(perimetreService.filtreProspections()));
     }
 
-    /**
-     * {@code GET /api/pre-prospections}: {@code StrEntity.Code = 'ComPreProspection'} — voir
-     * {@link DiscriminantPreProspection}. Same
-     * filter set as {@link #findAll} — see {@code instructions/filtres-avances.md} point 5.
-     */
     public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeColonne, String groupeValeur,
             Granularite granularite, Pageable pageable) {
         Specification<ComProspection> spec = specPreProspections(etapes, origines, commerciaux, trancheIds,
                 dateDebut, dateFin, search, ouvertes)
-                // Périmètre commercial : scopé par le projet de la tranche, comme les prospections.
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
-        // Sélection par défaut, sans discussion : ComSaleProspectionView exclut par construction
-        // les pré-prospections, donc aucune colonne d'activité ne peut être servie ici. Demander
-        // la vue reviendrait à payer une requête pour n'obtenir que des null.
+        // Sélection par défaut forcée : ComSaleProspectionView exclut les pré-prospections, la
+        // lire ne rendrait que des null.
         return versListe(prospectionRepository.findAll(spec, pageable), ColonneProspection.parDefautSet());
     }
 
-    /**
-     * Replie {@code GET /api/prospections} en groupes — voir
-     * {@code instructions/FEATURE-groupement-listes.md}.
-     */
+    /** Voir {@code instructions/FEATURE-groupement-listes.md}. */
     public ResultatGroupement grouperProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, FiltresAvancesProspection filtres,
@@ -341,7 +272,6 @@ public class ProspectionService {
                 search, ouvertes, filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
-    /** Replie {@code GET /api/pre-prospections} en groupes, même discriminant que la liste. */
     public ResultatGroupement grouperPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
@@ -358,12 +288,6 @@ public class ProspectionService {
                 groupeBy.chemin(), granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
-    /**
-     * Prédicat de dépliage, ou prédicat neutre si aucun groupe n'est demandé.
-     *
-     * <p>Neutre plutôt que {@code null} : {@code Specification.and(null)} est licite mais rendrait
-     * la chaîne d'appel illisible dès qu'on en enchaîne plusieurs.
-     */
     private static Specification<ComProspection> filtreDeGroupe(ColonneProspection groupeColonne,
             String groupeValeur, Granularite granularite) {
         if (groupeColonne == null) {
@@ -374,10 +298,8 @@ public class ProspectionService {
     }
 
     /**
-     * Filtres de {@code GET /api/prospections}, périmètre commercial <strong>exclu</strong> — les
-     * appelants l'ajoutent explicitement, ce qui rend son absence visible à la lecture plutôt que
-     * cachée dans une composition. Partagé avec le groupement pour que la liste et ses groupes
-     * portent exactement les mêmes lignes.
+     * Partagé par la liste et ses groupes, pour qu'ils portent les mêmes lignes. Périmètre
+     * <b>exclu</b> : chaque appelant l'ajoute explicitement.
      */
     private static Specification<ComProspection> specProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
@@ -387,7 +309,6 @@ public class ProspectionService {
                 .and(DiscriminantPreProspection.nEstPasPreProspection());
     }
 
-    /** Idem pour les pré-prospections : le discriminant est l'inverse exact du précédent. */
     private static Specification<ComProspection> specPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes) {
@@ -395,7 +316,6 @@ public class ProspectionService {
                 .and(DiscriminantPreProspection.estPreProspection());
     }
 
-    /** Shared filter predicates for {@link #findAll} and {@link #findPreProspections}. */
     private static Specification<ComProspection> buildSpec(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes) {
@@ -430,10 +350,8 @@ public class ProspectionService {
                         cb.like(cb.lower(root.get("tempEMail")), pattern)
                 ));
             }
-            // Ternaire, pas un drapeau : absent = tout, true = ouvertes, false = archivées.
-            // `false` était lu comme « pas de filtre », et l'écran « Archivé : Oui » renvoyait
-            // donc toute la liste. NULL compte comme ouverte — OMRAN écrit les deux (2 884
-            // prospections à 0, 937 à NULL) — et n'est donc jamais « archivée ».
+            // Ternaire : absent = tout, true = ouvertes, false = archivées. NULL compte comme
+            // ouverte — OMRAN écrit 0 et NULL (FEATURE-creation-pre-prospection.md §2).
             if (ouvertes != null) {
                 predicates.add(ouvertes
                         ? cb.or(cb.isFalse(root.get("isClosed")), cb.isNull(root.get("isClosed")))
@@ -443,21 +361,15 @@ public class ProspectionService {
         };
     }
 
-    /**
-     * Filtres du lot C — voir {@link FiltresAvancesProspection}.
-     *
-     * <p>Prédicat neutre quand aucun n'est renseigné : {@code findPreProspections} et les appels
-     * historiques ne changent pas de comportement.
-     */
+    /** Voir {@link FiltresAvancesProspection} ; prédicat neutre quand aucun n'est renseigné. */
     private static Specification<ComProspection> filtresAvances(FiltresAvancesProspection f) {
         return (root, query, cb) -> {
             if (f == null) {
                 return cb.conjunction();
             }
             List<Predicate> predicates = new ArrayList<>();
-            // -- Portés par l'entité. Chacun traverse une association : quand le filtre est actif,
-            //    la jointure devient interne et écarte les lignes sans valeur, ce qui est le
-            //    comportement attendu d'un filtre (une prospection sans tranche n'a pas de projet).
+            // -- Portés par l'entité. Filtre actif = jointure interne, qui écarte les lignes sans
+            //    valeur : voulu (une prospection sans tranche n'a pas de projet).
             if (estRenseignee(f.projetId())) {
                 predicates.add(root.get("stkHierarchy").get("cfgProject").get("id").in(f.projetId()));
             }
@@ -488,12 +400,8 @@ public class ProspectionService {
                         ? cb.isTrue(root.get("isOldCustomer"))
                         : cb.or(cb.isFalse(root.get("isOldCustomer")), cb.isNull(root.get("isOldCustomer"))));
             }
-            // -- Type de document légataire. Sous-requête sur StrEntity plutôt que résolution
-            //    préalable des codes en identifiants : ça garde la méthode statique, et surtout ça
-            //    évite qu'un code inconnu doive être distingué d'un code sans correspondance — les
-            //    deux rendent un résultat vide, ce qui est le comportement voulu.
-            //    Une prospection sans StrEntityId est écartée d'office (NULL IN (…) est inconnu),
-            //    ce qui est correct : elle n'a pas de type.
+            // -- Type de document : sous-requête par code, un code inconnu rend un résultat vide.
+            //    Une ligne sans StrEntityId est écartée (NULL IN (…) est inconnu) : voulu.
             if (estRenseignee(f.typeProspection())) {
                 Subquery<UUID> types = query.subquery(UUID.class);
                 Root<StrEntity> typeRoot = types.from(StrEntity.class);
@@ -509,17 +417,9 @@ public class ProspectionService {
     }
 
     /**
-     * Sous-requête sur {@code ComSaleProspectionView} portant les critères calculés.
-     *
-     * <p>C'est le compromis retenu après mesure : la liste reste servie par {@code ComProspection}
-     * — table indexée, pagination profonde, périmètre commercial inchangés — et seul le prédicat
-     * traverse la vue. Coût mesuré : <strong>231 ms page 1, 302 ms à l'{@code OFFSET 5000}</strong>,
-     * contre 100/134 ms sans filtre de cette famille, et 515 ms dès la page 1 si la liste elle-même
-     * était servie depuis la vue.
-     *
-     * <p>Effet de bord assumé : la vue exclut les pré-prospections et les lignes sans
-     * {@code StrEntityId}. Activer un de ces filtres les écarte donc toutes — ce qui est cohérent,
-     * ces lignes n'ayant par construction aucun indicateur d'activité.
+     * Seul le prédicat traverse la vue, la liste reste servie par la table (voir
+     * {@code INVENTAIRE-colonnes-prospection.md} §3). La vue exclut pré-prospections et lignes sans
+     * {@code StrEntityId} : un de ces filtres les écarte donc, ce qui est voulu.
      */
     private static Subquery<UUID> sousRequeteVue(FiltresAvancesProspection f,
                                                  CriteriaQuery<?> query, CriteriaBuilder cb) {
@@ -552,11 +452,6 @@ public class ProspectionService {
         return sousRequete;
     }
 
-    /**
-     * Générique plutôt que typée {@code List<UUID>} : le filtre de type de document porte des
-     * codes ({@code List<String>}), et dupliquer la méthode pour une différence de paramètre de
-     * type aurait été le genre de copie qui finit par diverger.
-     */
     private static boolean estRenseignee(List<?> valeurs) {
         return valeurs != null && !valeurs.isEmpty();
     }
@@ -568,22 +463,14 @@ public class ProspectionService {
     }
 
     /**
-     * Construit le détail depuis {@link ComProspection}, puis le complète du bloc « activité »
-     * calculé par {@code ComSaleProspectionView}.
-     *
-     * <p>Une requête de plus, mesurée à 26 ms sur la base réelle. Quand la vue ne rend rien — cas
-     * systématique des <strong>pré-prospections</strong>, qu'elle exclut par construction — le
-     * détail est renvoyé tel quel avec {@code activite = null}. Ce n'est pas une erreur : les
-     * pré-prospections ont leur propre vue, et un 404 ici serait faux.
+     * Complète le détail du bloc « activité » de {@code ComSaleProspectionView}. La vue exclut les
+     * pré-prospections : {@code activite = null} pour elles, pas un 404.
      */
     private ProspectionDetailDto detailEnrichi(ComProspection p) {
         ActiviteProspectionDto activite = prospectionViewRepository.findById(p.getId())
                 .map(ProspectionService::toActivite)
                 .orElse(null);
-        // Contrairement à la liste, la fiche sert toujours le type : il n'y a pas de sélection de
-        // colonnes ici, et la requête porte sur une clé unique d'une table de 162 lignes. Reste
-        // null sur les 4 prospections dépourvues de StrEntityId — celles-là mêmes qui sont
-        // invisibles du logiciel de bureau.
+        // La fiche sert toujours le type (pas de sélection de colonnes ici) ; null sans StrEntityId.
         StrEntity type = p.getStrEntityId() == null
                 ? null
                 : strEntityRepository.findById(p.getStrEntityId()).orElse(null);
@@ -591,18 +478,9 @@ public class ProspectionService {
     }
 
     /**
-     * Suit le pointeur de doublon {@code ComProspection.TempField10}, qui porte un
-     * {@code CfgTier.Code} — 849 valeurs réelles, 849 résolues.
-     *
-     * <p><b>Une requête de plus, mais seulement sur moins de 5 % des fiches</b> : le champ est vide
-     * partout ailleurs, et on sort avant d'interroger quoi que ce soit.
-     *
-     * <p><b>{@code null} sur une correspondance multiple, délibérément.</b> {@code CfgTier.Code}
-     * n'est pas unique (14 516 tiers pour 14 504 codes distincts). Aucun des 849 pointeurs réels
-     * n'est ambigu aujourd'hui, mais prendre le premier de plusieurs reviendrait à désigner un
-     * tiers au hasard, et le front l'afficherait comme un fait. Le code brut reste servi par
-     * {@code doublonDeCode}, donc l'information n'est pas perdue — elle est seulement présentée
-     * comme non résolue, ce qu'elle est.
+     * {@code TempField10} porte un {@code CfgTier.Code} (FEATURE-marqueurs-tri-pre-prospection.md §2).
+     * Ce code n'est pas unique : plusieurs correspondances rendent {@code null} plutôt qu'un tiers
+     * au hasard ; le code brut reste servi par {@code doublonDeCode}.
      */
     private CfgTier resoudreDoublon(String code) {
         if (!StringUtils.hasText(code)) {
@@ -612,16 +490,8 @@ public class ProspectionService {
         return trouves.size() == 1 ? trouves.getFirst() : null;
     }
 
-    /**
-     * Traduit la ligne de vue en bloc d'activité.
-     *
-     * <p>Trois colonnes de la vue rendent une <strong>chaîne vide</strong> plutôt que
-     * {@code NULL} quand il n'y a rien à dire : elles sont non-{@code NULL} sur 100 % des lignes
-     * mais non-vides sur 90 % (résultat et message de communication) et 25 %
-     * ({@code LastActiveAlertReason}) seulement. Sans la normalisation ci-dessous, l'API
-     * répondrait {@code ""} là où elle doit répondre {@code null}, et le front afficherait un
-     * libellé vide au lieu de masquer le champ.
-     */
+    // Des colonnes de la vue rendent "" au lieu de NULL quand il n'y a rien : videEnNull, sinon le
+    // front afficherait un libellé vide au lieu de masquer le champ.
     private static ActiviteProspectionDto toActivite(ComSaleProspectionView v) {
         return new ActiviteProspectionDto(
                 v.getInactivityTimeout(),
@@ -646,39 +516,19 @@ public class ProspectionService {
         );
     }
 
-    /** {@code null} pour une chaîne nulle ou blanche — voir {@link #toActivite}. */
     private static String videEnNull(String s) {
         return s == null || s.isBlank() ? null : s;
     }
 
-    /**
-     * Champ de saisie libre : {@code null} si vide, espaces de bordure retirés sinon.
-     *
-     * <p>Le contenu est servi tel quel — on ne corrige ni la casse ni l'orthographe, puisque c'est
-     * justement ce qu'on ne sait pas interpréter. Mais les espaces de bordure ne portent aucune
-     * information et se voient à l'affichage : {@code TempField1} contient réellement des valeurs
-     * comme {@code "  TRAITÉ  "}. Les laisser passer obligerait chaque client à les retirer.
-     *
-     * <p>Distinct de {@link #videEnNull} qui, lui, ne touche pas au contenu : celui-là sert aux
-     * colonnes de vue, où la chaîne vide est un artefact de la base et non une saisie.
-     */
+    /** Saisie libre servie telle quelle, espaces de bord retirés ({@code TempField1} porte {@code "  TRAITÉ  "}). */
     private static String texteLibre(String s) {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
     /**
-     * {@code GET /api/prospections/{id}/historique}: piste d'audit complète du parcours d'un lead
-     * — {@code StrHistory} filtré par {@code ObjectId = prospectionId}, même mécanisme que
-     * {@code GET /api/prospects/{id}/historique} et {@code GET /api/dossiers/{id}/historique}.
-     * Comble une lacune constatée: avant cet endpoint, rien ne traçait les dates de "devenu
-     * prospect" ({@link #creerProspect}) ni "devenu prospection" ({@link #transformer}) — la même
-     * ligne {@code ComProspection} était mutée en place sans horodatage, y compris côté Omran
-     * (confirmé: {@code ComProspection.UserUpdateDateTime} reste toujours {@code NULL} en base
-     * réelle, même sur des lignes déjà transformées). La date de création du pré-prospect reste
-     * disponible via {@code ProspectionDetailDto.dateDocument} (pas de doublon ici, aucun
-     * endpoint ne permettant de créer une {@code ComProspection} pour intercepter cet évènement).
-     * Le stade "Dossier de vente" a son propre historique — voir
-     * {@code GET /api/dossiers/{id}/historique}.
+     * {@code StrHistory} par {@code ObjectId} : seule trace datée de « devenu prospect » et
+     * « devenu prospection », la ligne étant mutée en place et OMRAN laissant
+     * {@code ComProspection.UserUpdateDateTime} à {@code NULL}.
      */
     public Page<HistoriqueDto> historique(UUID prospectionId, Pageable pageable) {
         if (!prospectionRepository.existsById(prospectionId)) {
@@ -699,11 +549,6 @@ public class ProspectionService {
         );
     }
 
-    /**
-     * Écrit une ligne {@code StrHistory} pour une transition du parcours pré-prospect → prospect
-     * → prospection, consultable via {@link #historique}. Voir {@link #creerProspect} et
-     * {@link #transformer}.
-     */
     private void enregistrerHistorique(UUID prospectionId, String description) {
         StrHistory historique = new StrHistory();
         historique.setId(UUID.randomUUID());
@@ -714,22 +559,9 @@ public class ProspectionService {
     }
 
     /**
-     * {@code POST /api/prospections}: creates a fully-qualified prospection in one call, for a
-     * prospect that already exists — see {@link CreerProspectionRequest}'s javadoc for how this
-     * differs from the pré-prospection flow.
-     *
-     * <p><b>Champs obligatoires alignés sur l'écran légataire.</b> OMRAN refuse d'enregistrer une
-     * prospection sans ces cinq valeurs (message de validation constaté sur l'écran, prospection
-     * {@code 26/05946}) : <b>Notes</b> ({@code notes}), <b>Source de contact</b> ({@code origineId}
-     * → {@code ComProspectionOriginId}), <b>Type</b> ({@code typeContactId} →
-     * {@code ComActionMessageTypeId}), <b>Nature</b> ({@code etapeId} → {@code ComProspectionKindId})
-     * et <b>Tranche</b> ({@code trancheId} → {@code StkHierarchyId}). On les exige donc ici aussi.
-     * Le mapping libellé→colonne a été vérifié sur les traces d'audit réelles : au brouillon, ces
-     * cinq colonnes étaient {@code NULL} et sont exactement celles qu'OMRAN a réclamées puis
-     * remplies. {@code prospectId} reste requis ; {@code commercialId} reste optionnel (posé
-     * immédiatement, ou plus tard par {@code POST .../transformer}) — OMRAN ne le compte pas parmi
-     * les champs bloquants de l'écran de création. Les autres champs sont optionnels et validés
-     * pour existence uniquement quand fournis, comme {@link #modifierProspection}.
+     * Prospection complète pour un prospect existant. Les cinq champs que l'écran OMRAN exige sont
+     * exigés ici aussi, {@code commercialId} reste optionnel comme dans OMRAN — voir
+     * {@code FEATURE-transformation-tranche-obligatoire.md}, « Champs obligatoires à la création ».
      */
     @Transactional
     public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
@@ -737,10 +569,7 @@ public class ProspectionService {
         CfgTier prospect = tierRepository.findById(request.prospectId())
                 .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
 
-        // Champs obligatoires de l'écran légataire (Notes, Source de contact, Type, Nature,
-        // Tranche). Validés en amont pour un 400 clair et par champ ; l'existence des référentiels
-        // reste contrôlée par les blocs ci-dessous. `notes` passe par texteLibre() pour refuser
-        // aussi une chaîne vide/blanche, pas seulement null.
+        // texteLibre() : une note blanche est refusée comme une note absente.
         String notes = Requis.champ(texteLibre(request.notes()), "notes est requis (champ Notes)");
         Requis.champ(request.origineId(), "origineId est requis (champ Source de contact)");
         Requis.champ(request.typeContactId(), "typeContactId est requis (champ Type)");
@@ -752,18 +581,12 @@ public class ProspectionService {
         prospection.setCode(genererCodeProspection());
         prospection.setDocDate(LocalDateTime.now());
         prospection.setCfgProspect(prospect);
-        // `IsClosed` à false, et c'est le défaut qui rendait invisible dans le logiciel de
-        // bureau toute prospection créée par le CRM : sa vue de travail filtre en
-        // `IsClosed = 0`, et `NULL = 0` n'est jamais vrai en SQL. La ligne était pourtant bien
-        // écrite — elle n'apparaissait simplement dans aucune liste. Vérifié en comparant une
-        // prospection du CRM à une prospection saisie dans le logiciel.
+        // false et non NULL : la vue de travail OMRAN filtre en IsClosed = 0, que NULL ne
+        // satisfait jamais — la prospection n'apparaîtrait dans aucune liste.
         prospection.setIsClosed(false);
         prospection.setIsOldCustomer(false);
-        // Le discriminant de type de document du legataire. Sans lui, la ligne n'existe pour
-        // aucun ecran du logiciel de bureau : sa vue de travail l'ecarte par
-        // `StrEntityId <> <pre-prospection>` et son ecran refiltre par `StrEntityId = <vente>`,
-        // deux comparaisons qu'un NULL ne satisfait jamais. Le manque etait connu et
-        // documente sur ComProspection.strEntityId ; il se referme ici.
+        // Sans StrEntityId, aucun écran OMRAN ne voit la ligne : ses filtres StrEntityId <> … et
+        // = … ne sont jamais vrais pour NULL (FEATURE-vues-legacy-prospection.md §8).
         prospection.setStrEntityId(idProspectionDeVente());
 
         if (request.commercialId() != null) {
@@ -802,15 +625,12 @@ public class ProspectionService {
             prospection.setComProspectionKind(kind);
         }
 
-        // trancheId/articleId: même validation croisée que modifierTranchePrincipale (l'article
-        // doit appartenir à la tranche fournie) — voir sa doc pour le raisonnement.
+        // Même validation croisée que modifierTranchePrincipale : l'article appartient à la tranche.
         if (request.trancheId() != null) {
             CfgTranche tranche = trancheRepository.findById(request.trancheId())
                     .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
-            // Périmètre commercial : créer une prospection sur un projet non affecté est refusé (403).
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de prospection sur la tranche " + tranche.getCode());
-            // Règle « une prospection ouverte par prospect × projet » — 409 avec l'existante.
             verifierUniciteProspectProjet(prospect, tranche, null);
             if (request.articleId() != null) {
                 StkItem article = stkItemRepository.findById(request.articleId())
@@ -843,23 +663,8 @@ public class ProspectionService {
         return detailEnrichi(prospection);
     }
 
-    /**
-     * Numbers a new Prospection the same way the legacy app does — confirmed against real data:
-     * {@code AdmSequence} (row {@code Code = "Prospection"}) holds the live counter
-     * ({@code SeqValue = 5932} at time of writing), format
-     * {@code "{année sur 2 chiffres}/{numéro sur 5 chiffres}"} (e.g. "26/05932" — real examples
-     * confirmed on {@code ComProspection.Code}). Same mechanism as
-     * {@code DossierService#genererCodeDossier}, but with no per-project prefix (a single global
-     * counter, no "APF"/"ART"-style prefix on Prospection codes).
-     */
-    /**
-     * Identifiant du type « Prospection vente » dans {@code StrEntity}.
-     *
-     * <p>Resolu par code plutot que code en dur, pour que le jour ou une base porterait un autre
-     * identifiant la resolution suive. Le repli sur la constante couvre le cas inverse — un
-     * referentiel incomplet — parce que rendre une prospection invisible en silence serait pire
-     * que de la rattacher a l'identifiant connu : c'est le meme dans les trois bases du projet.
-     */
+    // Résolu par code ; le repli sur la constante évite, sur un référentiel incomplet, une
+    // prospection invisible d'OMRAN.
     private UUID idProspectionDeVente() {
         return strEntityRepository.findByCodeIn(List.of(CODE_STR_ENTITY_PROSPECTION_VENTE)).stream()
                 .findFirst()
@@ -867,28 +672,19 @@ public class ProspectionService {
                 .orElse(ID_STR_ENTITY_PROSPECTION_VENTE);
     }
 
+    // Compteur AdmSequence « Prospection » d'OMRAN, global, sans préfixe de projet : YY/NNNNN.
     private String genererCodeProspection() {
         return generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_PROSPECTION, 2, 5);
     }
 
-    /** Code de la vocation posée par défaut sur une pré-prospection — 3 801 sur 3 801 en base réelle. */
+    /** Vocation par défaut d'une pré-prospection : toutes les pré-prospections réelles la portent. */
     private static final String CODE_VOCATION_VENTE = "VENTE";
 
-    /** Plafond de la liste de doublons renvoyée à la création. */
     private static final int DOUBLONS_MAX = 50;
 
     /**
-     * {@code POST /api/pre-prospections} : crée un lead brut, comme l'écran « Pré-prospection »
-     * d'OMRAN — voir {@code instructions/FEATURE-creation-pre-prospection.md}.
-     *
-     * <p>Rejoue la séquence relevée dans la trace d'audit (création de {@code 26/05948}) : code
-     * tiré du compteur {@code AdmSequence} « Prospection » (le même que les prospections), puis
-     * {@code INSERT ComProspection} typé {@code ComPreProspection}, le contact dans les champs
-     * {@code Temp*}. Jamais de prospect ni de commercial : ce sont les étapes suivantes
-     * ({@link #creerProspect}, {@link #transformer}).
-     *
-     * <p>Le contrôle de doublon d'OMRAN est repris mais <b>ne bloque pas</b> (décision
-     * utilisateur) : les doublons sont renvoyés avec la ligne créée.
+     * Rejoue la création d'OMRAN relevée dans sa trace d'audit ; le contrôle de doublon
+     * <b>ne bloque pas</b> (décision utilisateur). Voir {@code FEATURE-creation-pre-prospection.md} §1, §3.
      */
     @Transactional
     public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
@@ -899,10 +695,7 @@ public class ProspectionService {
         return new PreProspectionCreeeDto(detailEnrichi(p), doublons);
     }
 
-    /**
-     * Les prospections existantes au même contact que {@code p} (elle exclue) — la règle de
-     * doublon de {@link #creerPreProspection}, partagée avec l'import CSV.
-     */
+    /** Règle de doublon de {@link #creerPreProspection}, partagée avec l'import CSV ; {@code p} exclue. */
     public List<ComProspection> doublonsContact(ComProspection p) {
         return doublonsContact(p.getId(), p.getTempDescription(), p.getTempEMail(), p.getTempTel());
     }
@@ -918,10 +711,8 @@ public class ProspectionService {
     }
 
     /**
-     * Ne garde que les prospections que l'appelant a le droit de voir — même prédicat que les
-     * listes (périmètre commercial et entités juridiques actives). Un doublon hors périmètre
-     * n'est jamais nommé : le signaler révélerait l'existence d'un contact sur un projet non
-     * affecté, ce que le reste de l'API masque en 404.
+     * Même prédicat que les listes. Un doublon hors périmètre n'est jamais nommé : ce serait
+     * révéler un contact que le reste de l'API masque en 404.
      */
     public List<ComProspection> visibles(List<ComProspection> prospections) {
         if (prospections.isEmpty()) {
@@ -940,13 +731,7 @@ public class ProspectionService {
         return valeur == null ? "" : valeur.trim().toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * Écrit une pré-prospection et renvoie la ligne — le cœur de {@link #creerPreProspection},
-     * partagé avec {@code ImportPreProspectionService}.
-     *
-     * @param dateDocument {@code DocDate} : maintenant pour une saisie, la date de soumission du
-     *                     lead pour un import (colonne « Créé » de l'export).
-     */
+    /** @param dateDocument maintenant pour une saisie, la colonne « Créé » de l'export pour un import */
     @Transactional
     public ComProspection ecrirePreProspection(CreerPreProspectionRequest request, LocalDateTime dateDocument) {
         String nom = Requis.champ(texteLibre(request.nom()), "nom est requis (champ Nom)");
@@ -968,9 +753,8 @@ public class ProspectionService {
         p.setTempTel(telephone);
         p.setTempEMail(email);
         p.setNotes(notes);
-        // false plutôt que le NULL d'OMRAN : les deux coexistent en base (2 884 / 937) et
-        // notre filtre `ouvertes` accepte les deux, mais false survit à la bascule vers la vue
-        // de travail OMRAN (IsClosed = 0) sans dépendre de transformer.
+        // false plutôt que le NULL d'OMRAN : la ligne reste visible de sa vue de travail
+        // (IsClosed = 0) sans dépendre de transformer.
         p.setIsClosed(false);
         p.setIsOldCustomer(false);
         p.setUserCreate(utilisateurAffiche.courant().nom());
@@ -1034,11 +818,6 @@ public class ProspectionService {
         }
     }
 
-    /**
-     * {@code POST /api/pre-prospections/{id}/creer-prospect}: creates a {@code CfgTier} and
-     * links it as the prospection's {@code CfgProspectId}. Only valid on a pré-prospection
-     * (CfgProspectId IS NULL) — 400 if the prospection already has a prospect.
-     */
     @Transactional
     public ProspectionDetailDto creerProspect(UUID prospectionId, CreerProspectRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
@@ -1056,16 +835,9 @@ public class ProspectionService {
     }
 
     /**
-     * {@code POST /api/pre-prospections/{id}/lier-prospect} : pose un {@code CfgTier}
-     * <b>existant</b> comme prospect de la pré-prospection — la réponse « c'est l'une de ces
-     * personnes » à la liste de doublons de {@link #creerProspect}, voir
-     * {@code instructions/FEATURE-doublons-prospect-projet.md} §2. Mêmes conditions que
-     * {@code creerProspect} (400 si un prospect est déjà lié) ; seuls les tiers de type
-     * prospect/client sont acceptés (400 sinon) — le même sous-ensemble que
-     * {@code GET /api/prospects/doublons}.
-     *
-     * <p>Si la pré-prospection porte déjà une tranche, le couple (prospect, projet) se forme ici :
-     * la règle d'unicité s'applique (409 avec la prospection ouverte existante).
+     * Réponse « c'est l'une de ces personnes » à la liste de doublons — voir
+     * {@code FEATURE-doublons-prospect-projet.md} §2. Avec une tranche déjà posée, le couple
+     * (prospect, projet) se forme ici : la règle d'unicité s'applique.
      */
     @Transactional
     public ProspectionDetailDto lierProspect(UUID prospectionId, LierProspectRequest request) {
@@ -1093,14 +865,8 @@ public class ProspectionService {
     }
 
     /**
-     * Règle « une prospection ouverte par prospect × projet » —
-     * {@code instructions/FEATURE-doublons-prospect-projet.md} §3. Sur 14 113 prospections réelles
-     * avec prospect et projet, un seul couple porte deux prospections ouvertes à la fois, saisies
-     * dans OMRAN par deux commerciaux à un mois d'écart ; les 216 autres répétitions sont des
-     * re-prospections après clôture, que la règle laisse passer.
-     *
-     * <p>Sans prospect, sans tranche ou sans projet sur la tranche, rien à contrôler. {@code exclu}
-     * est la prospection en cours de modification ({@code null} à la création).
+     * Une prospection <b>ouverte</b> par prospect × projet ; les re-prospections après clôture
+     * passent. Voir {@code FEATURE-doublons-prospect-projet.md} §3. {@code exclu} : la ligne modifiée.
      */
     private void verifierUniciteProspectProjet(CfgTier prospect, CfgTranche tranche, UUID exclu) {
         UUID projetId = projetDe(tranche);
@@ -1130,20 +896,8 @@ public class ProspectionService {
     }
 
     /**
-     * {@code POST /api/prospections/{id}/transformer}: pré-prospection → prospection, en affectant
-     * le commercial <b>et</b> en garantissant qu'une tranche (projet) est rattachée. Requiert
-     * qu'un prospect soit déjà lié (via {@link #creerProspect}) — 400 sinon.
-     *
-     * <p><b>La tranche est obligatoire à la sortie.</b> Règle métier plus stricte que le légataire
-     * (qui n'impose rien au niveau base) mais fondée sur les données réelles : 99,83 % des
-     * prospections qualifiées (14 700/14 725) portent déjà une tranche. Deux cas :
-     * <ul>
-     *   <li>{@code trancheId} fourni → la tranche est posée/remplacée ici, avec contrôle de
-     *       périmètre commercial (403 sur un projet non affecté) et validation croisée de
-     *       {@code articleId} (il doit appartenir à la tranche), exactement comme
-     *       {@link #modifierTranchePrincipale} ;</li>
-     *   <li>{@code trancheId} omis → la prospection doit <b>déjà</b> porter une tranche, sinon 400.</li>
-     * </ul>
+     * Tranche obligatoire à la sortie, plus strict que le légataire : fournie ici, ou déjà portée.
+     * Voir {@code FEATURE-transformation-tranche-obligatoire.md}.
      */
     @Transactional
     public ProspectionDetailDto transformer(UUID id, TransformerProspectionRequest request) {
@@ -1159,8 +913,6 @@ public class ProspectionService {
         CfgTier commercial = tierRepository.findById(request.commercialId())
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
 
-        // Tranche obligatoire : fournie ici (on la pose, avec périmètre + cohérence article), ou
-        // déjà présente sur la prospection. Sinon la transformation est refusée.
         if (request.trancheId() != null) {
             CfgTranche tranche = trancheRepository.findById(request.trancheId())
                     .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
@@ -1177,8 +929,7 @@ public class ProspectionService {
             } else if (prospection.getStkItem() != null
                     && (prospection.getStkItem().getStkHierarchy() == null
                         || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
-                // L'article déjà assigné appartenait à l'ancienne tranche : on le désassigne
-                // plutôt que de laisser trancheId/articleId incohérents (voir modifierTranchePrincipale).
+                // Article de l'ancienne tranche : désassigné plutôt que laissé incohérent.
                 prospection.setStkItem(null);
             }
             prospection.setStkHierarchy(tranche);
@@ -1190,22 +941,16 @@ public class ProspectionService {
                     + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
         }
 
-        // La tranche effective est maintenant connue : un prospect n'a qu'une prospection ouverte
-        // par projet, et c'est ici que le couple (prospect, projet) devient une prospection. La
-        // ligne elle-même est exclue du contrôle.
+        // Le couple (prospect, projet) devient une prospection ici.
         verifierUniciteProspectProjet(prospection.getCfgProspect(), prospection.getStkHierarchy(), id);
 
         prospection.setCfgCommercial(commercial);
-        // Bascule de type, en place, comme OMRAN : trace d'audit de 26/05947, où l'ORM
-        // prospection réécrit la même ligne avec strEntityId = ComProspection. Sans elle, la
-        // ligne transformée resterait dans GET /api/pre-prospections. Une ligne sans type est
-        // typée au passage — elle était invisible du logiciel de bureau. Un type d'une autre
-        // nature (location…) n'est pas touché.
+        // Bascule de type en place, comme OMRAN (FEATURE-creation-pre-prospection.md §1). Une ligne
+        // sans type est typée au passage ; un type d'une autre nature (location…) n'est pas touché.
         if (prospection.getStrEntityId() == null || DiscriminantPreProspection.estPreProspection(prospection)) {
             prospection.setStrEntityId(idProspectionDeVente());
         }
-        // La vue de travail OMRAN filtre en IsClosed = 0 ; une pré-prospection saisie dans OMRAN
-        // porte souvent NULL (937 sur 3 823), qu'OMRAN corrige lui aussi à la bascule.
+        // La vue de travail OMRAN filtre en IsClosed = 0 ; OMRAN corrige lui aussi le NULL à la bascule.
         if (prospection.getIsClosed() == null) {
             prospection.setIsClosed(false);
         }
@@ -1214,14 +959,7 @@ public class ProspectionService {
         return detailEnrichi(prospection);
     }
 
-    /**
-     * {@code PATCH /api/prospections/{id}/etape}: changes {@code ComProspectionKindId}
-     * ("Nature"). Only membership is validated — no transition table.
-     *
-     * <p>Le passage à {@link #ETAPE_APRES_VISITE} publie {@link VisiteEffectuee}, qui déclenche le
-     * remerciement au prospect après commit. Aucune règle métier n'est ajoutée ici : le
-     * changement d'étape reste libre, seule sa valeur d'arrivée est observée.
-     */
+    /** Pas de table de transitions : seule la valeur d'arrivée compte ({@link #ETAPE_APRES_VISITE} → remerciement). */
     @Transactional
     public ProspectionDetailDto changerEtape(UUID id, ChangerEtapeRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
@@ -1244,21 +982,14 @@ public class ProspectionService {
         return detailEnrichi(enregistree);
     }
 
-    /**
-     * Le libellé d'étape, comparé sans casse ni espaces de bord. Ce n'est pas de la prudence
-     * gratuite : le référentiel voisin des résultats porte des valeurs réellement suffixées d'un
-     * espace ({@code "Numéro erroné "}), et une égalité stricte y serait silencieusement fausse.
-     */
+    // Sans casse ni espaces de bord : le référentiel voisin porte des codes suffixés d'un espace
+    // ("Numéro erroné ").
     private static boolean estEtapeApresVisite(ComProspectionKind kind) {
         return kind != null && kind.getCode() != null
                 && ETAPE_APRES_VISITE.equalsIgnoreCase(kind.getCode().trim());
     }
 
-    /**
-     * {@code PATCH /api/prospections/{id}}: edits qualification fields (origine, vocation,
-     * budget, tranche/article, notes...). Partial update — {@code null} fields are left
-     * unchanged, same convention as {@link com.tsix.immocrm.services.prospect.ProspectService#update}.
-     */
+    /** Mise à jour partielle : un champ {@code null} reste inchangé. */
     @Transactional
     public ProspectionDetailDto modifierProspection(UUID id, ModifierProspectionRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
@@ -1303,18 +1034,9 @@ public class ProspectionService {
     }
 
     /**
-     * {@code PATCH /api/prospections/{id}/tranche-principale}: remplace la tranche/l'article
-     * principaux en une opération atomique et cohérente — distinct du PATCH générique
-     * ({@link #modifierProspection}) et des "autres tranches" ({@code ComProspectionProject},
-     * intérêts secondaires indépendants gérés par {@code ProspectionQualificationService}).
-     * <p>
-     * Contrairement à l'ancien comportement (tranche/article modifiables séparément et sans
-     * validation croisée via le PATCH générique), {@code articleId} doit obligatoirement
-     * appartenir à {@code trancheId} — confirmé empiriquement: 100% des prospections en base avec
-     * un article principal ont une tranche principale qui correspond à celle de l'article
-     * (aucune exception sur 807 lignes). Si {@code articleId} est omis et que l'article
-     * actuellement assigné n'appartient plus à la nouvelle tranche, il est désassigné
-     * automatiquement plutôt que laissé incohérent.
+     * Tranche et article principaux ensemble : l'article doit appartenir à la tranche, ce que
+     * respectent toutes les prospections réelles. Article omis et hors nouvelle tranche :
+     * désassigné. Les « autres tranches » sont dans {@code ProspectionQualificationService}.
      */
     @Transactional
     public ProspectionDetailDto modifierTranchePrincipale(UUID id, ModifierTranchePrincipaleRequest request) {
@@ -1324,13 +1046,10 @@ public class ProspectionService {
         Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
-        // Périmètre commercial : déplacer une prospection vers un projet non affecté est refusé
-        // (403) — sinon le périmètre se contournerait en sortant la ressource de son projet.
+        // Sinon le périmètre se contournerait en déplaçant la prospection vers un autre projet.
         perimetreService.verifierEcritureSurTranche(tranche,
                 "Rattachement de prospection à la tranche " + tranche.getCode());
-        // Changer de tranche au sein du même projet ne forme aucun nouveau couple (prospect,
-        // projet) ; changer de projet, si — et le prospect ne doit pas y avoir déjà une
-        // prospection ouverte. La ligne elle-même est exclue du contrôle.
+        // Seul un changement de projet forme un nouveau couple (prospect, projet).
         if (projetDe(tranche) != null && !projetDe(tranche).equals(projetDe(prospection.getStkHierarchy()))) {
             verifierUniciteProspectProjet(prospection.getCfgProspect(), tranche, id);
         }
@@ -1346,8 +1065,7 @@ public class ProspectionService {
         } else if (prospection.getStkItem() != null
                 && (prospection.getStkItem().getStkHierarchy() == null
                     || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
-            // L'article actuellement assigné appartient à l'ancienne tranche : on le désassigne
-            // plutôt que de laisser trancheId/articleId incohérents (voir doc de la méthode).
+            // Article de l'ancienne tranche : désassigné plutôt que laissé incohérent.
             prospection.setStkItem(null);
         }
 
@@ -1356,14 +1074,8 @@ public class ProspectionService {
     }
 
     /**
-     * {@code PATCH /api/prospections/{id}/archiver}: closes the prospection with a reason.
-     *
-     * <p>Reproduit la séquence relevée dans la trace d'audit OMRAN (24/09/2026, prospection
-     * 26/05947) : {@code IsClosed = 1}, {@code ClosingDate}, raison, <b>puis désarmement des
-     * relances</b> de la prospection — le même {@code UPDATE ComActionMessage SET WithoutRevival = 1}
-     * que la transformation en vente, et l'extinction de leurs lignes {@code AdmAlertData}
-     * ({@link AlerteRelanceService#desarmerToutes}). Sans lui, une prospection archivée continuait
-     * d'alimenter le tableau de bord des relances. Voir {@code FEATURE-desarchiver-prospection.md}.
+     * Séquence d'OMRAN : clôture, puis désarmement des relances, sans quoi l'archivée alimenterait
+     * encore le tableau de bord des relances. Voir {@code FEATURE-desarchiver-prospection.md}.
      */
     @Transactional
     public ProspectionDetailDto archiver(UUID id, ArchiverProspectionRequest request) {
@@ -1393,17 +1105,9 @@ public class ProspectionService {
     }
 
     /**
-     * {@code PATCH /api/prospections/{id}/desarchiver}: rouvre une prospection archivée.
-     *
-     * <p>Strictement ce qu'OMRAN écrit (historique {@code AdmWebHistorics} du 24/09/2026 :
-     * {@code [["IsClosed","True","False"]]}, rien d'autre) : {@code IsClosed} repasse à false,
-     * <b>la date et la raison de clôture sont conservées</b>, les relances désarmées à
-     * l'archivage ne sont pas réarmées. Mesuré sur {@code yesRemsProd} : 88 prospections vente
-     * ouvertes portent encore date et raison de clôture — ce sont des désarchivées. L'état
-     * « archivée » se lit donc sur {@code IsClosed} seul, jamais sur {@code ClosingDate}.
-     *
-     * @throws ConflictException si la prospection n'est pas archivée (409) — OMRAN ne refuse
-     *         rien, mais un désarchivage sans archivage est un appel incohérent côté API
+     * Comme OMRAN, seul {@code IsClosed} change : date et raison de clôture restent, relances non
+     * réarmées. « Archivée » se lit donc sur {@code IsClosed}, jamais sur {@code ClosingDate}.
+     * Le 409 est propre à l'API : OMRAN ne refuse rien.
      */
     @Transactional
     public ProspectionDetailDto desarchiver(UUID id) {
@@ -1420,16 +1124,12 @@ public class ProspectionService {
         return detailEnrichi(prospectionRepository.save(prospection));
     }
 
-    /**
-     * {@code UserUpdate} / {@code UserUpdateDateTime}, qu'OMRAN réécrit à chaque modification
-     * d'une prospection (visible sur les deux {@code UPDATE} de la trace du 24/09/2026).
-     */
+    /** OMRAN réécrit ces deux colonnes à chaque modification (trace d'audit). */
     private void marquerModification(ComProspection prospection, LocalDateTime quand) {
         prospection.setUserUpdate(utilisateurAffiche.courant().nom());
         prospection.setUserUpdateDateTime(quand);
     }
 
-    /** {@code GET /api/prospections/{id}/interactions}: journal, most recent first. */
     public Page<InteractionDto> findInteractions(UUID prospectionId, Pageable pageable) {
         if (!prospectionRepository.existsById(prospectionId)) {
             throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
@@ -1438,7 +1138,6 @@ public class ProspectionService {
                 .map(ProspectionService::toInteractionDto);
     }
 
-    /** {@code POST /api/prospections/{id}/interactions}. */
     @Transactional
     public InteractionDto addInteraction(UUID prospectionId, CreerInteractionRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
@@ -1458,16 +1157,13 @@ public class ProspectionService {
         message.setComProspection(prospection);
         message.setDocDate(maintenant);
 
-        // Le texte de l'appelant va dans AlertMessage, PAS dans Description : c'est là que
-        // l'application de bureau écrit et lit la note. Description est un libellé « date +
-        // auteur » qu'elle régénère, et que nous générons donc à l'identique — mesuré sur
-        // 46 546 lignes réelles, sans une seule exception. Voir FIX-interaction-note.md §2.
+        // La note va dans AlertMessage, là où OMRAN l'écrit et la lit ; Description est un libellé
+        // « date + auteur » régénéré à l'identique. Voir FIX-interaction-note.md §2.
         message.setAlertMessage(request.description());
         message.setDescription(libelleInteraction(maintenant, nomAuteur));
 
-        // L'auteur vient du jeton, jamais du corps : le laisser choisir fausserait les KPI de
-        // performance commerciale. AdmUser est le porteur fiable de l'auteur — CfgEmployeeId
-        // est vide 4 fois sur 5 en base réelle.
+        // Auteur pris du jeton, jamais du corps (sinon KPI faussés) ; AdmUser le porte de façon
+        // fiable, pas CfgEmployeeId (FIX-interaction-note.md §2).
         message.setAdmUser(auteur);
         message.setCfgEmployee(auteur != null ? auteur.getCfgEmployee() : null);
         message.setUserName(nomAuteur);
@@ -1477,32 +1173,14 @@ public class ProspectionService {
         message.setIsIn(request.entrante() != null ? request.entrante() : true);
         message.setAlertValidityDate(request.dateAlerte());
 
-        // ------------------------------------------------------------------
-        // Les quatre drapeaux du légataire, et le tiers. Nous ne les posions pas, et ce n'était
-        // pas anodin : ComSaleProspectionView calcule LastCommunicationDate et
-        // LastCommunicationResult avec `AND IsSystem = 0`. Un NULL ne satisfait pas `= 0`, donc
-        // nos interactions étaient EXCLUES du « dernier échange » — dans l'écran du logiciel de
-        // bureau comme dans notre propre liste, qui lit cette colonne depuis la vue.
-        //
-        // Mesuré sur yesRems avant correctif : 14 lignes à IsSystem NULL, toutes écrites par
-        // cette API (UserCreate nul, note dans Description), touchant 8 prospections dont le
-        // dernier échange restait faux. Script de rattrapage :
-        // src/main/resources/db/migration/007_ComActionMessage_drapeaux_api.sql
-        //
-        // Les valeurs suivent la convention mesurée sur les 43 540 interactions manuelles.
-        // ------------------------------------------------------------------
-
-        // 0 = saisie humaine. 1 est réservé aux alertes que le légataire génère lui-même
-        // (4 431 lignes), et c'est exactement ce que la vue écarte du dernier échange.
+        // Drapeaux posés comme les saisies manuelles du légataire : la vue calcule le dernier
+        // échange avec AND IsSystem = 0, qu'un NULL ne satisfait pas (FEATURE-conformite-legataire.md §1).
         message.setIsSystem(false);
-        // 43 493 lignes sur 43 540 sont à 0 ; le 1 signale une note à lire, pas une interaction.
+        // 1 signale une note à lire, pas une interaction.
         message.setIsNotRead(false);
         message.setIsUnpaid(false);
-        // 0 à la création. Le passage à 1 est un acte distinct — c'est la transformation en vente
-        // qui désarme les relances de la prospection (voir DossierService.create).
+        // Passe à 1 quand une relance suivante ou la vente la désarme, jamais à la création.
         message.setWithoutRevival(false);
-        // Renseigné sur 42 028 des 43 540 interactions manuelles (96,5 %). Le prospect de la
-        // prospection : la même valeur que le légataire y met.
         message.setCfgTier(prospection.getCfgProspect());
 
         if (request.actionTypeId() != null) {
@@ -1515,7 +1193,7 @@ public class ProspectionService {
             ComActionMessageSubCategory resultat = actionMessageSubCategoryRepository.findById(request.resultatId())
                     .orElseThrow(() -> new InvalidRequestException("ComActionMessageSubCategory introuvable: " + request.resultatId()));
             message.setComActionMessageSubCategory(resultat);
-            // The category is never client-supplied — always derived from the chosen résultat.
+            // Catégorie jamais fournie par le client : toujours déduite du résultat.
             message.setComActionMessageCategory(resultat.getComActionMessageCategory());
 
             if (RESULTATS_AVEC_DATE_PLANIFIEE.contains(resultat.getCode())) {
@@ -1537,17 +1215,12 @@ public class ProspectionService {
 
         ComActionMessage enregistree = actionMessageRepository.save(message);
 
-        // Une date d'alerte fait de cette interaction la relance courante de la prospection :
-        // les précédentes sont désarmées et l'alerte est posée là où l'écran du logiciel de
-        // bureau la lit (AdmAlertData). Sans date d'alerte, rien n'est touché — c'est la règle
-        // du légataire, vérifiée en direct. Voir AlerteRelanceService.
+        // Sans date d'alerte, rien n'est touché : règle du légataire (voir AlerteRelanceService).
         if (enregistree.getAlertValidityDate() != null) {
             alerteRelanceService.poserAlerte(enregistree);
         }
 
-        // Confirmation au prospect — publiée seulement si un rendez-vous a effectivement été créé,
-        // et donc sur exactement l'ensemble de résultats qui alimente déjà le calendrier. Aucune
-        // règle métier nouvelle. La livraison, elle, n'a lieu qu'après commit : voir VisitePlanifiee.
+        // Seulement si un rendez-vous a été créé ; livraison après commit (voir VisitePlanifiee).
         if (enregistree.getAdmEvent() != null) {
             publisher.publishEvent(new VisitePlanifiee(enregistree.getId()));
         }
@@ -1556,38 +1229,8 @@ public class ProspectionService {
     }
 
     /**
-     * Format exact du libellé de l'application de bureau : {@code dd/MM/yyyy HH:mm } suivi du
-     * nom de l'auteur. Vérifié ligne à ligne sur {@code yesRemsProd} — la date correspond
-     * toujours à {@code DocDate}, et le nom à {@code AdmUser.Description}.
-     *
-     * <p>Sans auteur connu (R3 de la spec), le libellé se réduit à la date plutôt que de
-     * traîner un « null » : certains contextes n'ont pas de principal authentifié, et une
-     * interaction sans auteur vaut mieux qu'une exception.
-     */
-    /**
-     * L'interaction que le logiciel de bureau écrit <b>systématiquement</b> juste après avoir créé
-     * une prospection — relevée dans sa trace d'audit : {@code INSERT INTO ComProspection} suivi,
-     * dans la même seconde, d'un {@code INSERT INTO ComActionMessage}.
-     *
-     * <p>Nous ne l'écrivions pas, et une prospection naissait donc sans aucun échange. Tout ce qui
-     * se fonde sur les interactions s'en trouvait faussé dès la création : dernier échange, délai
-     * de prise en charge, compteurs d'activité de {@code /api/kpi/commerciaux}.
-     *
-     * <h2>Les drapeaux, et pourquoi ils s'écartent de {@code creerInteraction}</h2>
-     *
-     * <p>{@code IsSystem = 1} et {@code WithoutRevival = 1}, à l'inverse d'une interaction saisie.
-     * Ce n'est pas une incohérence : {@code ComSaleProspectionView} calcule le dernier échange avec
-     * {@code AND IsSystem = 0}, et cette ligne-ci <b>doit</b> en être exclue — créer une
-     * prospection n'est pas un échange avec le client. Le légataire fait exactement ce choix,
-     * mesuré sur les 2 634 interactions de création réelles.
-     *
-     * <p>{@code AlertMessage} reprend les notes de la prospection (identique au caractère près sur
-     * 1 507 des 2 634, les écarts restants n'étant que des espaces), et {@code AlertValidityDate}
-     * reste nulle : ce n'est pas une relance.
-     *
-     * <p>Le type reprend celui de la prospection (83 % des cas réels) et la catégorie est
-     * {@code Prospection}. Une catégorie introuvable ne fait pas échouer la création : la ligne
-     * part sans, ce qui vaut mieux que de refuser une prospection pour un référentiel incomplet.
+     * L'interaction qu'OMRAN écrit toujours juste après une création de prospection. Voir
+     * {@code FIX-creation-prospect-prospection.md} §4 ; une catégorie introuvable n'empêche rien.
      */
     private void ecrireInteractionDeCreation(ComProspection prospection) {
         LocalDateTime maintenant = LocalDateTime.now();
@@ -1609,6 +1252,8 @@ public class ProspectionService {
         actionMessageCategoryRepository.findByCode(CATEGORIE_PROSPECTION)
                 .ifPresent(message::setComActionMessageCategory);
 
+        // IsSystem = 1, à l'inverse d'une saisie : créer une prospection n'est pas un échange, la
+        // vue doit l'exclure du dernier échange — comme le fait OMRAN.
         message.setIsSystem(true);
         message.setWithoutRevival(true);
         message.setIsNotRead(false);
@@ -1619,22 +1264,16 @@ public class ProspectionService {
         actionMessageRepository.save(message);
     }
 
+    // Sans auteur connu, la date seule plutôt qu'un « null » traîné dans le libellé.
     private static String libelleInteraction(LocalDateTime date, String nomAuteur) {
         String horodatage = date.format(FORMAT_LIBELLE);
         return StringUtils.hasText(nomAuteur) ? horodatage + " " + nomAuteur : horodatage;
     }
 
     /**
-     * Nom d'affichage de l'auteur d'une interaction : l'employé lié quand il existe, sinon
-     * {@code UserName} puis {@code UserCreate}. Mesuré sur les 48 278 interactions réelles :
-     * {@code CfgEmployeeId} n'est renseigné que sur 77 % d'entre elles — et jamais par les
-     * comptes créés par cette plateforme, qui n'ont pas d'employé — quand {@code UserName} et
-     * {@code UserCreate} le sont à 99,996 %. Ne lire que l'employé, comme avant, affichait
-     * « Système » sur un quart du journal, nos propres saisies comprises, alors que le
-     * logiciel de bureau retrace l'auteur en lisant {@code UserName}.
-     *
-     * <p>Partagé avec {@code HotlineService} : les deux mappeurs d'interactions ont déjà
-     * divergé une fois, la règle ne doit vivre qu'ici.
+     * Employé lié, sinon {@code UserName} puis {@code UserCreate} : l'employé manque souvent
+     * (voir {@code FIX-auteur-interactions.md}). Partagé avec {@code HotlineService}, la règle
+     * ne doit vivre qu'ici.
      */
     public static String nomAuteur(ComActionMessage m) {
         String employe = TierNomFormatter.nom(m.getCfgEmployee());
@@ -1645,15 +1284,12 @@ public class ProspectionService {
     }
 
     private static InteractionDto toInteractionDto(ComActionMessage m) {
-        // Contexte projet/tranche : déduit, jamais stocké sur ComActionMessage — voir
-        // ContexteInteraction, qui reproduit la règle de la vue légataire.
         CfgTranche tranche = ContexteInteraction.tranche(m);
         CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
         return new InteractionDto(
                 m.getId(),
                 m.getDocDate(),
-                // AlertMessage porte le texte du commercial ; Description n'est qu'un libellé
-                // « date + auteur » régénéré à chaque écriture. Voir FIX-interaction-note.md.
+                // AlertMessage porte la note ; Description n'est qu'un libellé (FIX-interaction-note.md).
                 m.getAlertMessage(),
                 m.getDescription(),
                 m.getIsIn(),
@@ -1676,11 +1312,7 @@ public class ProspectionService {
         );
     }
 
-    /**
-     * Résout la page en DTO en chargeant les alertes de toute la page <b>en une requête</b>.
-     * Les résoudre ligne par ligne ferait 20 requêtes pour une page de 20 — le genre de N+1 qui
-     * ne se voit pas en test sur trois lignes et qui coûte cher sur un écran réel.
-     */
+    /** Alertes, activité et types chargés pour toute la page en une requête chacun, pas ligne par ligne. */
     private Page<ProspectionListItemDto> versListe(Page<ComProspection> page,
                                                    Set<ColonneProspection> colonnes) {
         List<UUID> ids = page.getContent().stream().map(ComProspection::getId).toList();
@@ -1689,25 +1321,17 @@ public class ProspectionService {
                 ? Map.of()
                 : actionMessageRepository.dernieresAlertes(ids).stream()
                         .collect(Collectors.toMap(DerniereAlerteProjection::getProspectionId, a -> a));
-        // La vue n'est interrogée que si la sélection contient au moins une colonne d'activité :
-        // sans `?colonnes=`, cette requête n'est pas émise et le coût du lot est nul.
+        // Vue interrogée seulement si une colonne d'activité est demandée.
         Map<UUID, ComSaleProspectionView> activite = ids.isEmpty() || !ColonneProspection.exigeLaVue(colonnes)
                 ? Map.of()
                 : prospectionViewRepository.findByIdIn(ids).stream()
                         .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
-        // Même discipline pour le référentiel StrEntity : résolu seulement si l'une des trois
-        // colonnes de type est demandée. Les identifiants sont dédoublonnés — en pratique un ou
-        // deux types distincts sur une page de 20, la quasi-totalité des lignes portant
-        // ComProspection — donc la requête porte sur une poignée de clés d'une table de 162 lignes.
+        // Idem pour StrEntity : seulement si une colonne de type est demandée.
         Map<UUID, StrEntity> types = chargerTypes(page.getContent(), colonnes);
         return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()),
                 typeDe(types, p), colonnes));
     }
 
-    /**
-     * Types de document de la page, indexés par identifiant — vide si aucune colonne de type n'est
-     * demandée, auquel cas aucune requête n'est émise.
-     */
     private Map<UUID, StrEntity> chargerTypes(List<ComProspection> prospections,
                                               Set<ColonneProspection> colonnes) {
         if (!ColonneProspection.exigeLeTypeProspection(colonnes)) {
@@ -1724,22 +1348,13 @@ public class ProspectionService {
                 .collect(Collectors.toMap(StrEntity::getId, e -> e));
     }
 
-    /** Type d'une prospection, ou {@code null} si elle n'en porte pas — 4 lignes en base réelle. */
     private static StrEntity typeDe(Map<UUID, StrEntity> types, ComProspection p) {
         return p.getStrEntityId() == null ? null : types.get(p.getStrEntityId());
     }
 
     /**
-     * Nom affichable du prospect : le nom de la fiche tiers ({@link TierNomFormatter#nom}) s'il
-     * en a un, sinon le nom saisi au premier contact ({@code ComProspection.TempDescription},
-     * nettoyé), sinon {@code null}. Une pré-prospection n'a pas encore de fiche tiers
-     * ({@code CfgProspectId} NULL) : en base réelle 3 394 des 17 703 prospections, dont 3 390
-     * portent un {@code TempDescription}.
-     *
-     * <p>Même repli que {@link #telephoneProspect}, et publique pour la même raison : le tableau
-     * de bord des relances et le calendrier servent ce nom ; une variante recopiée ferait
-     * réapparaître « Lead sans nom » sur l'un des deux. {@code p} peut être {@code null}
-     * (événement de calendrier sans prospection) : seule la fiche compte alors.
+     * Fiche tiers, sinon nom du premier contact (une pré-prospection n'a pas de fiche). Seule
+     * règle, partagée avec les relances et le calendrier ; {@code p} peut être {@code null}.
      */
     public static String nomProspect(CfgTier prospect, ComProspection p) {
         String nomFiche = TierNomFormatter.nom(prospect);
@@ -1753,14 +1368,8 @@ public class ProspectionService {
     }
 
     /**
-     * Téléphone joignable : la fiche d'abord (mobile, à défaut fixe), puis le numéro saisi au
-     * premier contact. Mesuré sur les 8 613 prospections ouvertes — 5 034 par la fiche, 7 596
-     * par le champ temporaire, <b>8 591 par l'une ou l'autre</b> : aucune des deux sources ne
-     * suffit seule, le repli n'est pas une commodité.
-     *
-     * <p><b>Publique parce qu'elle est la seule</b>, comme {@link #emailProspect}. Le tableau de
-     * bord des relances sert le même numéro dans sa tuile ; en recopier une variante ferait
-     * diverger deux règles mesurées sur la même donnée.
+     * Fiche (mobile, puis fixe), puis numéro du premier contact : aucune des deux sources ne
+     * suffit seule. Seule règle, partagée avec les relances.
      */
     public static String telephoneProspect(CfgTier prospect, ComProspection p) {
         if (prospect != null) {
@@ -1775,16 +1384,9 @@ public class ProspectionService {
     }
 
     /**
-     * Même règle de repli que {@link #telephoneProspect} — 4 752 des 8 613 ouvertes (55 %).
-     *
-     * <p><b>Publique parce qu'elle est la seule.</b> {@code ConfirmationVisiteService} résout le
-     * destinataire du mail de visite avec exactement cette règle ; en recopier une variante est
-     * précisément ce qui avait fait diverger les trois mappeurs de {@code ProspectionListItemDto}.
-     *
-     * <p>Aucune validation de forme ici, délibérément : cette méthode sert d'abord à
-     * <i>afficher</i> le contact, et 33 lignes réelles portent une valeur non vide qui n'est pas
-     * une adresse. Les montrer telles quelles est utile — un commercial voit qu'il y a une saisie
-     * à corriger. C'est l'appelant qui <i>envoie</i> qui doit exiger davantage.
+     * Même repli que {@link #telephoneProspect} ; seule règle, partagée avec les envois. Pas de
+     * contrôle de forme : afficher une saisie fautive aide à la corriger, c'est à l'appelant qui
+     * <i>envoie</i> d'exiger davantage.
      */
     public static String emailProspect(CfgTier prospect, ComProspection p) {
         if (prospect != null && StringUtils.hasText(prospect.getEMail())) {
@@ -1794,35 +1396,20 @@ public class ProspectionService {
     }
 
     /**
-     * Mappeur commun de {@link ProspectionListItemDto}. Public parce qu'il est le seul :
-     * {@code HotlineService} et {@code ProspectSubResourcesService} en portaient chacun une copie
-     * identique au caractère près, et c'est cette duplication qui les a fait diverger dès que la
-     * liste a gagné le contact et l'alerte.
-     *
-     * <p>Cette variante laisse les champs d'alerte nuls. Ils ne sont résolus que par les listes
-     * de prospections, qui les chargent pour toute la page en une requête — voir
-     * {@link #versListe}.
+     * Seul mappeur de {@link ProspectionListItemDto}, partagé par la hotline et la fiche prospect.
+     * Champs d'alerte nuls : seul {@link #versListe} les charge, pour toute la page.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
         return toListItem(p, null, null, null, Set.of());
     }
 
-    /**
-     * @param vue  ligne de {@code ComSaleProspectionView}, ou {@code null} quand aucune colonne
-     *             d'activité n'est demandée — ou que la prospection n'y figure pas
-     *             (pré-prospection, ou {@code StrEntityId} absent).
-     * @param type type de document légataire, ou {@code null} quand aucune colonne de type n'est
-     *             demandée — ou que la prospection ne porte pas de {@code StrEntityId}. Les deux
-     *             cas produisent la même sortie ; c'est la sélection de colonnes, et non le DTO,
-     *             qui distingue « non demandé » de « absent ».
-     */
+    /** {@code vue} et {@code type} : {@code null} si non demandés <b>ou</b> absents — même sortie. */
     private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
                                                      ComSaleProspectionView vue,
                                                      StrEntity type,
                                                      Set<ColonneProspection> colonnes) {
-        // Les associations du lot B ne sont déréférencées QUE si la colonne est demandée : chacune
-        // est un chargement paresseux de plus par ligne (deux pour la société, qui traverse
-        // tranche → projet). Non demandée, elle ne coûte rien.
+        // Associations déréférencées seulement si leur colonne est demandée : chacune coûte un
+        // chargement paresseux par ligne (deux pour la société).
         CfgTranche tranche = p.getStkHierarchy();
         CfgProject projet = colonnes.contains(ColonneProspection.SOCIETE_ID)
                 || colonnes.contains(ColonneProspection.SOCIETE_CODE)
@@ -1892,25 +1479,17 @@ public class ProspectionService {
                 p.getUserCreateDateTime(),
                 p.getUserUpdate(),
                 p.getUserUpdateDateTime(),
-                // typeProspectionId vient de la prospection elle-même, pas du référentiel : il est
-                // connu sans jointure. Mais il reste conditionné à la sélection, sinon il
-                // apparaîtrait alors que les deux autres champs du groupe seraient nuls.
+                // Connu sans jointure, mais conditionné comme ses deux voisins pour rester cohérent.
                 colonnes.contains(ColonneProspection.TYPE_PROSPECTION_ID) ? p.getStrEntityId() : null,
                 type != null ? type.getCode() : null,
                 type != null ? type.getDescription() : null
         );
     }
 
-    /**
-     * Détail « nu », sans le bloc activité. Passer par {@link #detailEnrichi(ComProspection)} pour
-     * une réponse d'API : c'est lui qui interroge la vue et remplit {@code activite}.
-     */
+    /** Passer par {@link #detailEnrichi(ComProspection)} pour une réponse d'API. */
     private static ProspectionDetailDto toDetail(ComProspection p, ActiviteProspectionDto activite,
                                                  StrEntity type, CfgTier doublonDe) {
-        // Chaque association est nommée une fois plutôt que déréférencée à chaque champ : depuis
-        // que la fiche sert aussi le code des référentiels, un `p.getX() != null ? p.getX()...`
-        // traverserait le proxy LAZY trois fois par association. Même raison d'être que
-        // com.tsix.immocrm.utils.Champs.
+        // Chaque association lue une fois, pour ne pas traverser le proxy LAZY à chaque champ.
         CfgTier prospect = p.getCfgProspect();
         CfgTierType typeTiers = Champs.de(prospect, CfgTier::getCfgTierType);
         CfgTier commercial = p.getCfgCommercial();
@@ -1925,10 +1504,7 @@ public class ProspectionService {
         CfgTranche tranche = p.getStkHierarchy();
         StkItem article = p.getStkItem();
         AdmCountry pays = p.getAdmCountry();
-        // Société : dérivée de la tranche (CfgTranche → CfgProject → CfgCompany), exactement comme
-        // le fait ComSaleProspectionView. Elle n'est jamais saisie sur la prospection. Contrairement
-        // à la liste, rien n'est ici conditionné à une sélection de colonnes : la fiche sert un
-        // enregistrement unique, les deux chargements paresseux sont payés une fois, pas par ligne.
+        // Société jamais saisie sur la prospection : dérivée de la tranche, comme la vue légataire.
         CfgCompany societe = Champs.de(tranche, CfgTranche::getCfgProject, CfgProject::getCfgCompany);
         return new ProspectionDetailDto(
                 p.getId(),
@@ -2003,8 +1579,7 @@ public class ProspectionService {
                 p.getUserCreateDateTime(),
                 p.getUserUpdate(),
                 p.getUserUpdateDateTime(),
-                // Le texte brut est servi tel quel ; le marqueur normalisé vaut null dès que ce
-                // texte n'en est pas un — ce qui est le cas le plus fréquent (1 239 lignes).
+                // Texte brut tel quel ; le marqueur normalisé est null quand le texte n'en est pas un.
                 texteLibre(p.getTempField1()),
                 Champs.de(MarqueurTriProspection.depuis(p.getTempField1()), MarqueurTriProspection::name),
                 texteLibre(p.getTempField10()),

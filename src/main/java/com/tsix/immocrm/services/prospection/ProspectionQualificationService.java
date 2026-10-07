@@ -46,7 +46,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * GAP-04 — Prospection multi-valued qualification sub-resources: villes, categories, types de
+ * Prospection multi-valued qualification sub-resources: villes, categories, types de
  * bien, profils, autres tranches. Each is a thin join table onto {@code ComProspection}.
  */
 @Service

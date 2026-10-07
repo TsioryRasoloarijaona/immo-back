@@ -32,11 +32,7 @@ import static com.tsix.immocrm.services.prospection.document.MontantFormatter.po
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.surface;
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.vide;
 
-/**
- * Renders the "Fiche Offre vente" as a PDF, modeled on the legacy template (see
- * {@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf} and its
- * {@code logo (1).png}). Uses OpenPDF ({@code org.openpdf.text}) — pure Java, no external process.
- */
+/** Renders the "Fiche Offre vente" PDF, modeled on {@code instructions/templates/priceOffer/OFFRE DE PRIX.pdf}. */
 @Component
 public class OffreDevisPdfRenderer {
 
@@ -201,8 +197,7 @@ public class OffreDevisPdfRenderer {
         montantRowBold(table, "Prix de vente", m.prixVenteHT(), m.prixVenteTTC(), pourcentage(m.remisePercent()));
         if (m.commissionPercent() != null) {
             table.addCell(labelCell("Commission"));
-            // CommissionRate is stored as a ratio (e.g. 0.03 = 3%), same as VATRatio — never
-            // written by this app's own API yet, only ever read back (possibly legacy data).
+            // CommissionRate is stored as a ratio (0.03 = 3 %), like VATRatio.
             table.addCell(amountCell(pourcentageRatio(m.commissionPercent()), NORMAL));
             table.addCell(amountCell("", NORMAL));
             table.addCell(amountCell("", NORMAL));
