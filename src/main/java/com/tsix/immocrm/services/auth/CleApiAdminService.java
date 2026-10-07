@@ -24,10 +24,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Administration des clés d'API ({@code /api/cles-api}, rôle Administrateur) —
- * {@code instructions/FEATURE-cle-api-n8n.md} §5.
- */
+/** Administration des clés d'API — {@code FEATURE-cle-api-n8n.md} §5. */
 @Service
 public class CleApiAdminService {
 
@@ -54,9 +51,8 @@ public class CleApiAdminService {
     }
 
     /**
-     * Crée la clé et, sauf {@code compteCode}, son compte de service : un {@code AdmUser} au nom
-     * de la clé, sans employé ni rôle. Sans habilitation, ce compte n'a aucune restriction de
-     * périmètre (règle existante) — la portée est sa seule limite, d'où « au moins une ».
+     * Sans {@code compteCode} : compte de service sans employé, rôle ni habilitation — donc sans
+     * restriction de périmètre ; la portée est sa seule limite, d'où « au moins une ».
      */
     @Transactional
     public CleApiCreeeDto creer(CreerCleApiRequest request) {

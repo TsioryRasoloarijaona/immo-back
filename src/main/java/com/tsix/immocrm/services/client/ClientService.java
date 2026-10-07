@@ -33,12 +33,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * {@code GET /api/clients}: distinct {@code CfgTier} referenced by at least one
- * {@code ComFolder.CfgCustomerId} — "client" here means "has bought", not a {@code CfgTierType}/
- * {@code CfgTierKind} filter (there's no dedicated "client" flag on {@code CfgTier}, unlike
- * {@code IsProspect}). {@code /api/clients/{id}} and {@code /api/clients/{id}/dossiers} reuse
- * {@code ProspectService}/{@code ProspectSubResourcesService} internally (same {@code CfgTier}
- * table — see {@code ClientController}), so this service only owns the list + its aggregates.
+ * Client = {@code CfgTier} référencé par au moins un {@code ComFolder.CfgCustomerId} : aucun drapeau ni
+ * type « client » n'existe. Le détail réutilise {@code ProspectService} ; ici, la liste seulement.
  */
 @Service
 @Transactional(readOnly = true)
@@ -59,20 +55,15 @@ public class ClientService {
     }
 
     /**
-     * @param trancheId filtre par tranche ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) :
-     *                  ne retient que les clients portant au moins un dossier (visible) de cette
-     *                  tranche, au sens de {@link AppartenanceTranche#dossier} — le même prédicat
-     *                  que {@code GET /api/dossiers?trancheId=…}. Les agrégats de chaque client
-     *                  restent calculés sur tous ses dossiers. {@code null} = pas de filtre.
+     * @param trancheId clients ayant au moins un dossier visible de la tranche ; leurs agrégats restent
+     *                  calculés sur tous leurs dossiers visibles ({@code FEATURE-dashboard-filtre-tranche.md}).
      */
     public Page<ClientListItemDto> findAll(String search, @Nullable UUID trancheId, Pageable pageable) {
         Specification<CfgTier> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // "Client" = tier porté par au moins un ComFolder. La visibilité par entité juridique
-            // s'applique donc ici, dans la sous-requête : un client dont tous les dossiers sont sur
-            // une entité hors exploitation disparaît de la liste par construction, sans règle
-            // supplémentaire (FEATURE-visibilite-transversale-entites.md, R5).
+            // Visibilité par entité dans la sous-requête : un client dont tous les dossiers sont sur
+            // une entité inactive disparaît (FEATURE-visibilite-transversale-entites.md R5).
             Subquery<UUID> clientsAvecDossier = query.subquery(UUID.class);
             Root<ComFolder> folderRoot = clientsAvecDossier.from(ComFolder.class);
             Join<ComFolder, StkItem> article = folderRoot.join("stkItem", JoinType.LEFT);
@@ -99,8 +90,6 @@ public class ClientService {
                         cb.like(cb.lower(root.get("eMail")), pattern)
                 ));
             }
-            // Distinct: a client can have several dossiers, the IN-subquery above must not
-            // duplicate rows if the JPA provider doesn't already distinct the subquery result.
             if (query.getResultType() != Long.class && query.getResultType() != long.class) {
                 query.distinct(true);
             }
@@ -108,7 +97,7 @@ public class ClientService {
         };
 
         Page<CfgTier> page = tierRepository.findAll(spec, pageable);
-        // Avoid an "IN ()" query when the page is empty (invalid/unnecessary on some drivers).
+        // Page vide : pas de requête d'agrégat sur un « IN () ».
         return page.isEmpty() ? page.map(t -> toDto(t, 0, BigDecimal.ZERO, BigDecimal.ZERO)) : enrichirAvecAgregats(page);
     }
 

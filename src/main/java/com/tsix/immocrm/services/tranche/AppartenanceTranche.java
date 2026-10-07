@@ -19,13 +19,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * <b>La</b> définition de « appartient à la tranche », pour un dossier et pour une prospection.
- *
- * <p>Source unique partagée par les filtres {@code trancheId} de {@code GET /api/dossiers},
- * {@code GET /api/prospections} / {@code GET /api/pre-prospections}, et par le filtre par tranche
- * du tableau de bord et de {@code GET /api/clients}
- * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R2). Un second prédicat écrit à part
- * ferait diverger les compteurs du tableau de bord des totaux des listes filtrées.
+ * <b>La</b> définition de « appartient à la tranche », partagée par les listes, le tableau de bord et
+ * les clients : un second prédicat ferait diverger compteurs et totaux ({@code FEATURE-dashboard-filtre-tranche.md} R2).
  */
 public final class AppartenanceTranche {
 
@@ -33,16 +28,10 @@ public final class AppartenanceTranche {
     }
 
     /**
-     * Un dossier appartient à l'une des tranches si l'un de ses articles liés
-     * ({@code StkItem.comFolderId}) <b>ou</b> son article principal ({@code ComFolder.stkItem}) y
-     * appartient. Les deux branches sont nécessaires : le lien inverse ne couvre que 328 des 358
-     * dossiers réels, l'article principal les 358. Un dossier peut porter plusieurs articles
-     * (lot principal + annexes) éventuellement répartis sur plusieurs tranches, d'où
-     * l'{@code EXISTS} plutôt qu'une simple jointure — et un tel dossier compte dans chacune.
-     * Voir {@code instructions/filtres-avances.md} point 2.
+     * Un article lié ({@code StkItem.comFolderId}) <b>ou</b> l'article principal dans la tranche. Un
+     * dossier aux articles répartis sur plusieurs tranches compte dans chacune, d'où l'{@code EXISTS}.
      *
-     * @param dossier le dossier, racine d'une requête ou d'une sous-requête
-     * @param query   la requête (ou sous-requête) qui porte {@code dossier}, pour y ouvrir l'EXISTS
+     * @param query la requête (ou sous-requête) qui porte {@code dossier}, pour y ouvrir l'EXISTS
      */
     public static Predicate dossier(From<?, ComFolder> dossier, CommonAbstractCriteria query,
                                     CriteriaBuilder cb, Collection<UUID> trancheIds) {
@@ -52,14 +41,9 @@ public final class AppartenanceTranche {
                 .where(cb.and(
                         cb.equal(article.get("comFolderId"), dossier.get("id")),
                         article.get("stkHierarchy").get("id").in(trancheIds)));
-        // L'EXISTS seul ne suffit pas : il passe par le lien inverse StkItem.ComFolderId, qui
-        // n'est renseigné que pour 328 des 358 dossiers réels. Les 30 autres ont pourtant bien une
-        // tranche via leur article principal (ComFolder.StkItemId, lui renseigné à 358/358) — sans
-        // cette seconde branche ils étaient invisibles au filtre, silencieusement.
-        //
-        // Jointures explicitement LEFT : une navigation implicite produirait des INNER JOIN qui,
-        // portant sur toute la requête et non sur la seule branche du OR, écarteraient un dossier
-        // sans article principal même quand l'EXISTS le retient.
+        // L'EXISTS seul ne suffit pas : le lien inverse StkItem.ComFolderId manque sur des dossiers
+        // dont l'article principal a bien une tranche. LEFT explicite : une navigation implicite
+        // ferait un INNER JOIN sur toute la requête et écarterait un dossier sans article principal.
         Join<ComFolder, StkItem> principal = dossier.join("stkItem", JoinType.LEFT);
         Join<StkItem, CfgTranche> trancheDuPrincipal = principal.join("stkHierarchy", JoinType.LEFT);
         return cb.or(cb.exists(subquery), trancheDuPrincipal.get("id").in(trancheIds));
@@ -70,10 +54,7 @@ public final class AppartenanceTranche {
         return (root, query, cb) -> dossier(root, query, cb, List.of(trancheId));
     }
 
-    /**
-     * Une prospection (ou pré-prospection) appartient à la tranche qu'elle vise :
-     * {@code ComProspection.StkHierarchyId}, clé étrangère directe — pas d'EXISTS nécessaire.
-     */
+    /** FK directe {@code ComProspection.StkHierarchyId}, pré-prospections comprises. */
     public static Predicate prospection(From<?, ComProspection> prospection, Collection<UUID> trancheIds) {
         return prospection.get("stkHierarchy").get("id").in(trancheIds);
     }

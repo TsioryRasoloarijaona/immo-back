@@ -33,36 +33,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Backs {@code GET /api/hotline/recherche} — the "who is calling?" lookup a hotline agent runs
- * the instant a caller gives their phone number: are they already known, and if so, what is
- * their entire history (general info, prospections, dossiers, règlements, interactions,
- * statut history)? See {@link HotlineResultDto} for the full response shape.
- */
+/** « Qui appelle ? » : fiches et historique d'un tiers retrouvé par téléphone ou par nom. */
 @Service
 @Transactional(readOnly = true)
 public class HotlineService {
 
-    /**
-     * Cap applied to every history list embedded in a {@link HotlineFicheDto} (prospections,
-     * dossiers, règlements, interactions, historique) — this endpoint is meant for an instant,
-     * single-round-trip overview while someone is on the phone, not exhaustive pagination. Once
-     * a tier is identified via {@code tier.id}, the dedicated {@code /api/prospects/{id}/...}
-     * endpoints give full, paginated access to any of these lists.
-     */
+    /** Vue d'ensemble en un aller-retour ; la pagination complète est sous {@code /api/prospects/{id}/…}. */
     static final int HISTORIQUE_LIMIT = 50;
 
     /**
-     * Nombre maximal de fiches construites pour une recherche par NOM.
-     *
-     * <p>Un numéro identifie une personne ; un nom en identifie des centaines — « MOHAMED »
-     * remonte 555 lignes en base réelle. Comme chaque fiche déclenche cinq requêtes, servir
-     * l'ensemble coûterait ~2 775 requêtes pour une frappe. Ce plafond borne le pire cas à 100,
-     * et {@code tronque} avertit l'agent qu'il doit préciser sa recherche.
-     *
-     * <p>La recherche par téléphone n'est délibérément <b>pas</b> plafonnée : elle remonte 0 à 2
-     * fiches (un couple peut partager un fixe), et lui imposer une limite changerait un
-     * comportement qui n'a jamais posé problème.
+     * Un nom remonte des centaines de tiers et chaque fiche coûte cinq requêtes : plafond, et
+     * {@code tronque} invite à préciser. Le téléphone (0 à 2 fiches) n'est pas plafonné.
      */
     public static final int FICHES_MAX_PAR_NOM = 20;
 
@@ -90,7 +71,6 @@ public class HotlineService {
         this.subResourcesService = subResourcesService;
     }
 
-    /** {@code GET /api/hotline/recherche?telephone=...} — see {@link HotlineResultDto}. */
     public HotlineResultDto rechercherParTelephone(String telephoneBrut) {
         if (!StringUtils.hasText(telephoneBrut)) {
             throw new InvalidRequestException("Le paramètre 'telephone' est requis");
@@ -103,9 +83,8 @@ public class HotlineService {
         List<CfgTier> tiers = tierRepository.findByNormalizedPhone(normalise);
 
         Pageable preProspectionsPage = PageRequest.of(0, HISTORIQUE_LIMIT);
-        // Périmètre commercial : le filtre est appliqué DANS la requête, avant le plafond de 50 —
-        // filtrer la page déjà chargée reviendrait à évincer les lignes du périmètre au profit de
-        // celles qui l'ont saturée (voir §9ter.2 et la doc du repository).
+        // Périmètre DANS la requête, avant le plafond : filtrer la page chargée évincerait les lignes
+        // du périmètre (FEATURE-perimetre-commercial.md §9ter.2).
         List<ComProspection> preProspections = perimetreService.perimetreCourant()
                 .map(projetIds -> prospectionRepository.findByNormalizedTempTelDansPerimetre(
                         normalise, projetIds, preProspectionsPage))
@@ -115,15 +94,7 @@ public class HotlineService {
         return assembler("TELEPHONE", telephoneBrut, normalise, null, tiers, preProspections, false);
     }
 
-    /**
-     * {@code GET /api/hotline/recherche?nom=...} — même résultat, autre porte d'entrée : l'agent
-     * a le nom mais pas le numéro (appel masqué, ou l'interlocuteur se présente).
-     *
-     * <p><b>Plafonnée, contrairement à la recherche par téléphone</b>, pour la raison expliquée
-     * sur {@link #FICHES_MAX_PAR_NOM}. On demande volontairement une ligne de plus que le
-     * plafond : c'est ce qui permet de dire à l'agent que sa recherche a été coupée, sans avoir
-     * à compter la totalité des correspondances.
-     */
+    /** Une ligne de plus que le plafond : de quoi savoir que c'est tronqué sans tout compter. */
     public HotlineResultDto rechercherParNom(String nomBrut) {
         if (!StringUtils.hasText(nomBrut)) {
             throw new InvalidRequestException("Le paramètre 'nom' est requis");
@@ -139,8 +110,7 @@ public class HotlineService {
         boolean tronque = trouves.size() > FICHES_MAX_PAR_NOM;
         List<CfgTier> tiers = tronque ? trouves.subList(0, FICHES_MAX_PAR_NOM) : trouves;
 
-        // Même exigence de périmètre que par téléphone : sans cette variante, la recherche par
-        // nom deviendrait un contournement — on verrait par le nom ce que le numéro cache.
+        // Même périmètre que par téléphone, sinon le nom montrerait ce que le numéro cache.
         List<ComProspection> preProspections = perimetreService.perimetreCourant()
                 .map(projetIds -> prospectionRepository.rechercherPreProspectionsParNomDansPerimetre(
                         motif, projetIds, HISTORIQUE_LIMIT))
@@ -149,14 +119,7 @@ public class HotlineService {
         return assembler("NOM", null, null, nomBrut, tiers, preProspections, tronque);
     }
 
-    /**
-     * Tout ce que les deux recherches ont en commun : construire les fiches, écarter les
-     * pré-prospections déjà rattachées à l'une d'elles, assembler la réponse.
-     *
-     * <p>Cette partie était mêlée à la recherche par téléphone. L'en extraire est ce qui fait
-     * hériter la recherche par nom des règles déjà éprouvées — en particulier l'exclusion des
-     * doublons ci-dessous, qu'on aurait fatalement oubliée en dupliquant la méthode.
-     */
+    /** Commun aux deux recherches, dont l'exclusion des doublons ci-dessous. */
     private HotlineResultDto assembler(String critere, String telephoneBrut, String telephoneNormalise,
                                        String nomRecherche, List<CfgTier> tiers,
                                        List<ComProspection> preProspections, boolean tronque) {
@@ -164,8 +127,7 @@ public class HotlineService {
         Set<UUID> tierIds = tiers.stream().map(CfgTier::getId).collect(Collectors.toSet());
 
         List<ProspectionListItemDto> appelsSansFiche = preProspections.stream()
-                // A match can, on messy legacy data, already belong to a prospection that's since
-                // been linked to one of the tiers above — don't show it twice.
+                // Une pré-prospection peut avoir été rattachée depuis à l'un des tiers trouvés.
                 .filter(p -> p.getCfgProspect() == null || !tierIds.contains(p.getCfgProspect().getId()))
                 .map(HotlineService::toProspectionListItem)
                 .toList();
@@ -175,15 +137,8 @@ public class HotlineService {
     }
 
     /**
-     * Chaque bloc de la fiche est plafonné à {@link #HISTORIQUE_LIMIT} lignes. Le périmètre
-     * commercial doit donc être appliqué <b>dans chaque requête</b>, jamais sur le résultat :
-     * filtrer après coup une page déjà plafonnée évince les lignes du périmètre (celles hors
-     * périmètre ayant consommé la page) au lieu d'évincer celles hors périmètre — un tiers avec 50
-     * interactions récentes sur un autre projet et une seule sur le mien renvoyait une liste vide.
-     * Les prospections / dossiers / règlements passent par {@code ProspectSubResourcesService}, déjà
-     * filtré par {@code Specification} ; les interactions sont filtrées ici par
-     * {@code filtreInteractions()}, qui résout le projet par la prospection <i>puis</i> par le
-     * dossier.
+     * Blocs plafonnés : périmètre dans chaque requête, jamais sur le résultat (§9ter.2). Prospections,
+     * dossiers, règlements filtrés par {@code ProspectSubResourcesService} ; interactions ici.
      */
     private HotlineFicheDto toFiche(UUID tierId) {
         Pageable recentSorted = PageRequest.of(0, HISTORIQUE_LIMIT, Sort.by(Sort.Direction.DESC, "docDate"));
@@ -204,19 +159,12 @@ public class HotlineService {
         );
     }
 
-    /**
-     * Délègue au mappeur commun de {@code ProspectionService} : ce bloc existait ici en copie
-     * identique, et c'est cette duplication qui l'a fait diverger quand la liste a gagné le
-     * contact et l'alerte. Les champs d'alerte restent nuls ici — ils ne sont résolus que par
-     * les listes de prospections, qui les chargent en une requête groupée.
-     */
+    /** Champs d'alerte nuls ici : seules les listes de prospections les chargent (requête groupée). */
     private static ProspectionListItemDto toProspectionListItem(ComProspection p) {
         return ProspectionService.toListItem(p);
     }
 
     private static InteractionDto toInteractionDto(ComActionMessage m) {
-        // Même contexte projet/tranche que GET /api/prospections/{id}/interactions : la règle
-        // est partagée pour que les deux endpoints ne divergent pas.
         CfgTranche tranche = ContexteInteraction.tranche(m);
         CfgProject projet = tranche != null ? tranche.getCfgProject() : null;
         return new InteractionDto(
@@ -228,8 +176,7 @@ public class HotlineService {
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
-                // Même règle d'auteur que le journal de prospection — employé, puis UserName :
-                // sans le repli, un quart des interactions s'affichait « Système ».
+                // Employé, puis UserName (FIX-auteur-interactions.md).
                 ProspectionService.nomAuteur(m),
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,

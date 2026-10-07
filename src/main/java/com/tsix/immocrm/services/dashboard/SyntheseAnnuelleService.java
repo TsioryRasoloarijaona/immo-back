@@ -27,36 +27,19 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * {@code GET /api/dashboard/annuel} — l'écran d'accueil du logiciel de bureau
- * ({@code instructions/FEATURE-dashboard-omran.md}).
- *
- * <p>Les trois blocs reprennent les requêtes qu'OMRAN exécute réellement, relevées dans sa trace
- * d'audit SQL. Deux écarts assumés avec le légataire, tous deux documentés sur la requête
- * concernée : la contradiction {@code IsSaleExpense} du bloc A n'est pas recopiée (seule son
- * intention l'est), et la jointure {@code StkItem} du bloc C est écartée parce qu'elle porte une
- * double-comptabilisation latente sans rien changer aujourd'hui.
- *
- * <p>Comme {@link DashboardService}, ce service n'utilise pas de {@code Specification} : le
- * périmètre commercial est appliqué <b>explicitement à chaque agrégat</b>, par la variante
- * {@code …DansPerimetre} de chaque requête. C'est le point de fuite le plus probable de la
- * feature — un agrégat resté global montrerait à un commercial restreint un chiffre d'affaires
- * qu'il n'a pas le droit de détailler.
+ * Écran d'accueil d'OMRAN ({@code FEATURE-dashboard-omran.md}). Pas de {@code Specification} : le
+ * périmètre s'applique à chaque agrégat par la variante {@code …DansPerimetre} de chaque requête.
  */
 @Service
 @Transactional(readOnly = true)
 public class SyntheseAnnuelleService {
 
-    /** Les statuts hors course : {@code StatutDossier.isSortie()}, résolu une fois. */
     private static final List<String> CODES_DE_SORTIE = Arrays.stream(StatutDossier.values())
             .filter(StatutDossier::isSortie)
             .map(StatutDossier::getCode)
             .toList();
 
-    /**
-     * Repli si le statut de concrétisation n'est pas en base — cas d'une base de test qui ne sème
-     * pas les statuts. {@code 0} laisse alors passer tous les statuts plutôt que d'en écarter
-     * arbitrairement : un seuil introuvable ne doit pas se transformer en filtre silencieux.
-     */
+    /** Statut introuvable (base de test) : 0 laisse tout passer plutôt que de filtrer en silence. */
     private static final int SEUIL_PAR_DEFAUT = 0;
 
     private final ComDocumentRepository documentRepository;
@@ -81,20 +64,8 @@ public class SyntheseAnnuelleService {
     }
 
     /**
-     * L'ensemble de dossiers sur lequel portent les trois blocs, résolu une fois.
-     *
-     * <ul>
-     *   <li>{@code dossierIds} non nul — filtre par tranche
-     *       ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : l'assiette de
-     *       {@code GET /api/dossiers?trancheId=…}, périmètre commercial déjà compris. Vide = aucun
-     *       dossier : chaque bloc vaut alors zéro sans interroger la base ;</li>
-     *   <li>sinon {@code perimetre} non nul — commercial restreint ;</li>
-     *   <li>sinon — tout, sous la seule visibilité par entité juridique.</li>
-     * </ul>
-     *
-     * <p>Chaque bloc choisit sa requête selon l'assiette puis agrège par <b>le même code</b> : le
-     * filtre par tranche est un prédicat de plus ({@code f.id IN :dossierIds}), pas un calcul
-     * parallèle (R6).
+     * {@code dossierIds} (tranche) porte déjà le périmètre — vide ⇒ zéros sans requête ; sinon
+     * {@code perimetre} si restreint ; sinon tout, sous la visibilité par entité.
      */
     private record Assiette(@Nullable List<UUID> perimetre, @Nullable List<UUID> dossierIds) {
         boolean vide() {
@@ -102,10 +73,6 @@ public class SyntheseAnnuelleService {
         }
     }
 
-    /**
-     * @param trancheId tranche ({@code CfgTranche.id}) ; {@code null} = toutes, comportement
-     *                  inchangé
-     */
     public SyntheseAnnuelleDto get(@Nullable Integer annee, @Nullable UUID trancheId) {
         int cible = annee != null ? annee : LocalDate.now().getYear();
         LocalDateTime debut = LocalDate.of(cible, 1, 1).atStartOfDay();
@@ -124,15 +91,8 @@ public class SyntheseAnnuelleService {
     }
 
     /**
-     * Le seuil au-delà duquel un dossier est « concrétisé », lu en base plutôt que figé.
-     *
-     * <p>Le légataire le lit dans {@code AdmParamsGuid.DefaultComFolderStatusConcretisation}, qui
-     * pointe sur le statut {@code CONCRETISATION} ({@code Sorting = 2}). Cette table n'existe pas
-     * dans la base de test ; le seuil est donc résolu par le <b>code</b> du statut, ce qui donne
-     * le même résultat aujourd'hui — mesuré — sans imposer une table de plus.
-     *
-     * <p>Ce qu'on perd, explicitement : si l'exploitation déplaçait le paramètre vers un autre
-     * statut, ce chiffre cesserait de suivre le leur sans rien signaler.
+     * Le légataire lit {@code AdmParamsGuid}, non mappée : résolu par le code du statut, ce qui cesserait
+     * de suivre un paramètre déplacé ({@code FEATURE-dashboard-omran.md} §5).
      */
     private int seuilDeConcretisation() {
         StrStatus concretisation = strStatusRepository.findByStrConfigEntityIdAndCode(
@@ -145,10 +105,7 @@ public class SyntheseAnnuelleService {
 
     // ---------------------------------------------------------------- bloc A
 
-    /**
-     * Les douze mois, <b>toujours</b> — un mois sans échéance vaut zéro et reste un point de la
-     * courbe. Reboucher les trous côté client supposerait qu'il sache lesquels manquent.
-     */
+    /** Toujours douze points : un mois sans échéance vaut zéro, le client n'a pas à boucher les trous. */
     private List<PointMensuelDto> echeancier(int annee, int seuil, Assiette assiette) {
         List<Object[]> lignes;
         if (assiette.vide()) {
@@ -238,11 +195,8 @@ public class SyntheseAnnuelleService {
     // ---------------------------------------------------------------- utilitaires
 
     /**
-     * Substitue {@code BigDecimal.ZERO} à un agrégat vide, <b>en Java et jamais en SQL</b>.
-     *
-     * <p>Un {@code COALESCE(SUM(x), 0)} côté base dégrade l'échelle de la somme sur le littéral
-     * entier : 190,75 DH y devient 191. Le piège s'est déjà refermé une fois sur ce dépôt, sur
-     * une somme d'argent qui paraissait juste.
+     * Zéro substitué en Java, jamais en SQL : {@code COALESCE(SUM(x), 0)} ramène la somme à l'échelle
+     * du littéral entier (190,75 devient 191).
      */
     private static BigDecimal montant(@Nullable Object valeur) {
         return valeur instanceof BigDecimal somme ? somme : BigDecimal.ZERO;

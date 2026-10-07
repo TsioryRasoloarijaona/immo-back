@@ -34,34 +34,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * {@code GET /api/dashboard/relances} et {@code GET /api/dashboard/nouveaux-pre-prospects}
- * ({@code instructions/FEATURE-dashboard-relances.md}).
- *
- * <h2>Ce qu'est une relance, et ce qui la disqualifie</h2>
- *
- * <p>Une relance est portée par une <b>interaction</b> ({@code ComActionMessage.AlertValidityDate}),
- * jamais par la prospection : la colonne homonyme de {@code ComProspection} est morte en base
- * réelle (0 ligne). Trois conditions la disqualifient, et elles portent l'essentiel du volume :
- *
- * <ul>
- *   <li>{@code WithoutRevival = 1} — désarmée. <b>86 % des 39 335 alertes le sont</b> : c'est le
- *       drapeau que pose {@code desarmerRelancesDeLaProspection} quand la prospection est vendue.
- *       L'oublier multiplierait le volume par dix et ressortirait des prospections conclues.</li>
- *   <li>{@code ComDocumentId} non nul — ce n'est pas une relance commerciale mais un rappel de
- *       paiement rattaché à une échéance.</li>
- *   <li>{@code ComProspectionId} nul — l'interaction ne vise aucune prospection.</li>
- * </ul>
- *
- * <p>Il reste 3 765 relances vivantes, sur 3 765 prospections distinctes — une chacune. Aucune
- * déduplication n'est donc nécessaire ici.
- *
- * <h2>{@code RETARD} : les prospections du mois</h2>
- *
- * <p>Depuis le 28/09/2026, {@code echeance=RETARD} sert les relances échues des prospections
- * <b>qualifiées, ouvertes et créées dans le mois civil en cours</b> — la population de la liste
- * des prospections, pour que les deux écrans affichent le même nombre. L'ancienne fenêtre
- * glissante de 30 jours sur la date de l'alerte comptait aussi les prospections du mois
- * précédent et les pré-prospections. {@code AUJOURDHUI} est inchangé.
+ * Relances et nouveaux pré-prospects du tableau de bord ({@code FEATURE-dashboard-relances.md}). La
+ * relance vit sur l'interaction ({@code ComActionMessage.AlertValidityDate}) : la colonne homonyme de
+ * {@code ComProspection} est vide (§1). Une relance par prospection, pas de dédoublonnage.
  */
 @Service
 public class RelanceDashboardService {
@@ -103,19 +78,9 @@ public class RelanceDashboardService {
     }
 
     /**
-     * La population de la liste des prospections : <b>qualifiée, ouverte, créée dans le mois
-     * civil en cours</b>. C'est ce qui fait tomber le tableau de bord d'accord avec la liste.
-     *
-     * <ul>
-     *   <li><b>Créée ce mois</b> — {@code ComProspection.DocDate} du 1er du mois 00:00 inclus au
-     *       1er du mois suivant exclu. C'est la date que filtre la liste, pas
-     *       {@code UserCreateDateTime}.</li>
-     *   <li><b>Qualifiée</b> — une pré-prospection n'apparaît dans aucune liste de prospections :
-     *       la compter ici fabriquait un chiffre que l'écran ne pouvait pas détailler.</li>
-     *   <li><b>Ouverte</b> — le légataire laisse poser une alerte sur une prospection déjà
-     *       archivée et ne l'éteint jamais (460 cas nettoyés le 27/09/2026). Tant que cette API
-     *       ne le refuse pas elle-même, le filtre protège le compteur.</li>
-     * </ul>
+     * {@code RETARD} : la population de la liste des prospections (qualifiée, ouverte, {@code DocDate}
+     * du mois), pour que les deux écrans tombent d'accord. « Ouverte » parce que le légataire laisse une
+     * alerte vivante sur une prospection archivée (§3 bis).
      */
     private static Specification<ComActionMessage> prospectionDuMois(LocalDate aujourdhui) {
         LocalDate premier = EcheanceRelance.debutDuMois(aujourdhui);
@@ -131,12 +96,6 @@ public class RelanceDashboardService {
         };
     }
 
-    /**
-     * Filtre par tranche ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : la relance
-     * est retenue si sa prospection vise la tranche — le prédicat de
-     * {@code GET /api/prospections?trancheId=…}, partagé ({@link AppartenanceTranche#prospection}).
-     * Neutre sans tranche.
-     */
     private static Specification<ComActionMessage> prospectionDeLaTranche(@Nullable UUID trancheId) {
         if (trancheId == null) {
             return (root, query, cb) -> cb.conjunction();
@@ -146,8 +105,8 @@ public class RelanceDashboardService {
     }
 
     /**
-     * Le prédicat du logiciel de bureau, mot pour mot — voir la javadoc de classe pour ce que
-     * chaque terme retire.
+     * Le prédicat du légataire mot pour mot : {@code WithoutRevival} = désarmée à la vente (le gros du
+     * volume), {@code ComDocument} = rappel de paiement, pas relance commerciale (§1).
      */
     private static Specification<ComActionMessage> relanceVivante() {
         return (root, query, cb) -> cb.and(
@@ -158,13 +117,8 @@ public class RelanceDashboardService {
     }
 
     /**
-     * Fenêtre sur la date de l'alerte, bornes incluses. {@code RETARD} n'a pas de borne basse :
-     * c'est la date de la prospection qui le borne, voir {@link #prospectionDuMois}.
-     *
-     * <p>La comparaison porte sur un <b>intervalle d'instants</b> et non sur une égalité de date :
-     * {@code AlertValidityDate} est un {@code datetime} dont les 3 765 valeurs armées sont à
-     * minuit, mais une relance posée par cette API à 14 h doit compter pour son jour. Borne haute
-     * exclusive au lendemain 00:00 — {@code 23:59:59.999} compte donc bien pour le jour même.
+     * Intervalle d'instants, pas égalité de date : le légataire écrit minuit, cette API une heure (§2).
+     * {@code RETARD} n'a pas de borne basse ici, {@link #prospectionDuMois} le borne.
      */
     private static Specification<ComActionMessage> echue(EcheanceRelance echeance, LocalDate aujourdhui) {
         LocalDate premierJour = echeance.debut(aujourdhui);
@@ -181,23 +135,11 @@ public class RelanceDashboardService {
     }
 
     /**
-     * {@code portee=MOI} : les relances dont le commercial résolu est l'appelant, <b>plus les non
-     * affectées</b>.
-     *
-     * <p>Le second terme n'est pas une tolérance. 108 relances sur 3 765 ne désignent personne, ni
-     * par la prospection ni par l'interaction, et les 21 posées sur des pré-prospections en font
-     * toutes partie — une pré-prospection est <em>définie</em> par l'absence de commercial. Les
-     * filtrer sous {@code MOI} les rendrait invisibles à tout le monde, or c'est le canal des leads
-     * injectés automatiquement.
-     *
-     * <p>Un compte non rattaché à un employé ({@code moi} nul) ne peut posséder aucune relance : il
-     * ne reçoit alors que les non affectées, sans erreur. Servir un 404 comme le fait
-     * {@code /api/kpi/commerciaux/moi} viderait une tuile de tableau de bord au lieu de l'informer.
+     * {@code MOI} inclut les non affectées : les pré-prospections n'ont jamais de commercial, sinon
+     * personne ne les verrait (§4). Sans employé ({@code moi} nul), les non affectées seules, pas de 404.
      */
     private static Specification<ComActionMessage> filtreDePortee(PorteeRelance portee, @Nullable UUID moi) {
         if (portee == PorteeRelance.EQUIPE) {
-            // Neutre plutôt que null : Specification.and(null) est licite mais rend la chaîne
-            // d'appel illisible dès qu'on en enchaîne plusieurs (même motif que ProspectionService).
             return (root, query, cb) -> cb.conjunction();
         }
         return miennesOuNonAffectees(moi);
@@ -213,18 +155,13 @@ public class RelanceDashboardService {
             if (moi == null) {
                 return nonAffectee;
             }
-            // coalesce = « l'affectation de la prospection d'abord, l'auteur de l'interaction
-            // ensuite » — les deux concordent à 98,8 % quand elles coexistent.
+            // Commercial de la prospection d'abord, auteur de l'interaction ensuite (§4).
             Predicate mienne = cb.equal(cb.coalesce(commercial.get("id"), employe.get("id")), moi);
             return cb.or(mienne, nonAffectee);
         };
     }
 
-    /**
-     * Tri imposé ici et non laissé à l'appelant : la pagination doit être déterministe, et
-     * l'échéance la plus ancienne est le premier travail à faire. L'{@code id} départage les
-     * ex æquo, nombreux puisque toutes les dates légataires sont à minuit.
-     */
+    /** Tri imposé ; l'{@code id} départage les ex æquo, nombreux puisque les dates légataires sont à minuit. */
     private static Pageable trierParEcheance(Pageable pageable) {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Order.asc("alertValidityDate"), Sort.Order.asc("id")));
@@ -236,8 +173,8 @@ public class RelanceDashboardService {
         CfgTier commercialProspection = prospection.getCfgCommercial();
         CfgTier employeInteraction = message.getCfgEmployee();
 
-        // Même ordre de résolution que le prédicat de portée — les deux doivent rester d'accord,
-        // sans quoi une ligne servie sous MOI pourrait s'afficher au nom de quelqu'un d'autre.
+        // Même ordre que miennesOuNonAffectees, sinon une ligne servie sous MOI s'afficherait au nom
+        // de quelqu'un d'autre.
         CfgTier commercial = commercialProspection != null ? commercialProspection : employeInteraction;
 
         LocalDate dateRelance = message.getAlertValidityDate().toLocalDate();
@@ -259,14 +196,7 @@ public class RelanceDashboardService {
 
     // ---------------------------------------------------------------- nouveaux pré-prospects
 
-    /**
-     * Les leads créés dans la journée.
-     *
-     * <p>Pas de {@code portee} ici : un lead du jour n'a pas encore de commercial, {@code MOI}
-     * n'aurait aucun sens. Seul le périmètre par projet s'applique, comme partout.
-     *
-     * <p>Une page vide est le cas courant — les leads arrivent par rafales, week-end compris.
-     */
+    /** Pas de {@code portee} : un lead du jour n'a pas de commercial. Seul le périmètre s'applique. */
     @Transactional(readOnly = true)
     public Page<NouveauPreProspectDto> nouveauxPreProspects(@Nullable LocalDate jour, Pageable pageable) {
         LocalDate cible = jour != null ? jour : LocalDate.now();

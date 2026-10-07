@@ -54,15 +54,9 @@ public class ArticleService {
     }
 
     /**
-     * {@code GET /api/tranches/{id}/articles}: articles ET sous-articles de la tranche (un
-     * sous-article porte sa propre {@code StkHierarchyId}, voir {@code ArticleListItemDto.sousArticle}
-     * pour les distinguer côté front), filtrables sur la disponibilité, la catégorie
-     * (StkItemCategory, ex. "APPARTEMENT"), le type (StkItemType, ex. "1 CHAMBRES + SALON") —
-     * même cascade de cases à cocher que le formulaire legacy "Tranche → Catégorie → Type → Article"
-     * — et, depuis instructions/from_front.md #4, les filtres de parité avec la grille legacy
-     * (entité/nature/vocation/étage, prix/surface de-à).
+     * Articles <b>et</b> sous-articles : un sous-article porte sa propre {@code StkHierarchyId}.
      *
-     * @param statut filter; defaults to {@link StatutArticle#DISPONIBLE} when {@code null}
+     * @param statut {@link StatutArticle#DISPONIBLE} par défaut
      */
     public Page<ArticleListItemDto> findByTranche(UUID trancheId, StatutArticle statut,
                                                    List<UUID> categorieIds, List<UUID> typeIds,
@@ -81,15 +75,7 @@ public class ArticleService {
         return page.map(item -> toListItem(item, dossiers, superficies));
     }
 
-    /**
-     * {@code GET /api/articles}: catalogue transverse, toutes tranches confondues — contrairement à
-     * {@link #findByTranche}, {@code statut} n'a PAS de valeur par défaut ici : absent = tous les
-     * statuts (DISPONIBLE + OCCUPE), pour permettre une vraie vue "tout le patrimoine" plutôt
-     * qu'un pré-filtrage implicite. Restreint aux entités juridiques en exploitation
-     * ({@code CfgCompany.isActive}) comme les autres endpoints de listing
-     * Projet/Tranche/Article. Mêmes filtres de parité legacy que {@link #findByTranche}
-     * (instructions/from_front.md #4).
-     */
+    /** Catalogue transverse, entités actives : {@code statut} absent = tous, contrairement à {@link #findByTranche}. */
     public Page<ArticleListItemDto> findAll(String search, List<UUID> trancheIds, StatutArticle statut,
                                              List<UUID> categorieIds, List<UUID> typeIds,
                                              UUID entiteId, UUID natureId, UUID vocationId, UUID etageId,
@@ -174,11 +160,7 @@ public class ArticleService {
         );
     }
 
-    /**
-     * {@code GET /api/articles/{id}/sous-articles}: paginated sous-lots of one article (e.g.
-     * cave/parking annexés à un lot principal), filterable by {@link StatutArticle}, catégorie et
-     * type exactly like {@link #findByTranche} — same DISPONIBLE default.
-     */
+    /** Même défaut DISPONIBLE que {@link #findByTranche}. */
     public Page<ArticleListItemDto> findSousArticles(UUID articleId, StatutArticle statut,
                                                        List<UUID> categorieIds, List<UUID> typeIds, Pageable pageable) {
         if (!stkItemRepository.existsById(articleId)) {
@@ -192,13 +174,7 @@ public class ArticleService {
         return page.map(item -> toListItem(item, dossiers, superficies));
     }
 
-    /**
-     * Batch-loads the {@code ComFolder} (+ its {@code strStatus}/{@code cfgCustomer}) referenced
-     * by a page/list of {@code StkItem}s, keyed by {@code ComFolder.id} — avoids one query per
-     * article for the Article → Dossier reverse link (demande #5 de
-     * {@code instructions/from_front.md}). Items with no {@code comFolderId} (article libre) are
-     * simply absent from the map.
-     */
+    /** Une requête pour toute la page, pas une par article. */
     private Map<UUID, ComFolder> loadDossiers(List<StkItem> items) {
         List<UUID> folderIds = items.stream()
                 .map(StkItem::getComFolderId)
@@ -212,13 +188,7 @@ public class ArticleService {
                 .collect(Collectors.toMap(ComFolder::getId, Function.identity()));
     }
 
-    /**
-     * Batch-loads "Superficie Sous Articles" (instructions/from_front.md #4) for a page/list of
-     * articles in one round trip — same batching precedent as {@link #loadDossiers}. Keyed by the
-     * parent article's id; absent = no sous-article (front should treat as 0, not shown here as
-     * the map simply omits the entry rather than mapping to {@link BigDecimal#ZERO}, since callers
-     * always render via {@code toListItem}'s own zero-default).
-     */
+    /** Par id d'article parent ; absent = aucun sous-article, {@code toListItem} rend alors zéro. */
     private Map<UUID, BigDecimal> loadSuperficiesSousArticles(List<StkItem> items) {
         List<UUID> ids = items.stream().map(StkItem::getId).distinct().toList();
         if (ids.isEmpty()) {
@@ -231,11 +201,7 @@ public class ArticleService {
         return result;
     }
 
-    /**
-     * Also reused by {@code ReferentielService}'s articles/sous-articles dropdown mapping — those
-     * callers pass empty maps since their listings default to DISPONIBLE (no reserved/sold article
-     * to link, in practice, and the picklist rows don't need "Superficie Sous Articles" either).
-     */
+    /** {@code ReferentielService} passe des maps vides : ses listes sont DISPONIBLE par défaut, sans dossier à lier. */
     public static ArticleListItemDto toListItem(StkItem item, Map<UUID, ComFolder> dossiersParFolderId,
                                                  Map<UUID, BigDecimal> superficiesSousArticlesParArticleId) {
         var categorie = item.getStkItemCategory();

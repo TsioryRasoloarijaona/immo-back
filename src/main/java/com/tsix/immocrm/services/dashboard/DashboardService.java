@@ -47,23 +47,9 @@ public class DashboardService {
     }
 
     /**
-     * {@code GET /api/dashboard}. Contrairement à {@code DossierService}/{@code ProspectionService}/
-     * {@code EncaissementService}, ce service n'utilise pas de {@code Specification} : le périmètre
-     * commercial doit donc être appliqué <b>explicitement à chaque agrégat</b>, ce qui en fait le
-     * point de fuite le plus probable de la feature. Un KPI resté global afficherait à un commercial
-     * restreint un chiffre d'affaires qu'il ne peut pas détailler — exactement la donnée que le
-     * périmètre prétend masquer. Les quatre agrégats (valeur du pipeline + panier moyen, dossiers
-     * par étape, relances en retard, compteurs de prospections) dérivent tous des deux requêtes
-     * ci-dessous, filtrées ensemble.
-     *
-     * <p><b>Filtre par tranche</b> ({@code instructions/FEATURE-dashboard-filtre-tranche.md}) : un
-     * prédicat de plus, pas un calcul parallèle. Les lignes de dossiers restent celles de la même
-     * projection et passent par la même boucle d'agrégation ; elles sont seulement restreintes aux
-     * ids que renvoie {@code GET /api/dossiers?trancheId=…} (R2/R6). Les compteurs de prospections
-     * sont le {@code totalElements} de {@code GET /api/prospections?trancheId=…} (R3). Sans
-     * tranche, rien ne change.
-     *
-     * @param trancheId tranche ({@code CfgTranche.id}) ; {@code null} = toutes
+     * Pas de {@code Specification} ici : le périmètre s'applique <b>à chaque agrégat</b>, à la main
+     * ({@code FEATURE-perimetre-commercial.md} §6.6). La tranche restreint les mêmes lignes aux ids de
+     * {@code /api/dossiers?trancheId=}, sans calcul parallèle ({@code FEATURE-dashboard-filtre-tranche.md} R2/R3).
      */
     public DashboardDto get(@Nullable UUID trancheId) {
         Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
@@ -135,11 +121,7 @@ public class DashboardService {
                 prospectionsOuvertes, prospectionsTotal);
     }
 
-    /**
-     * Revival1 and Revival2 are each checked independently against their own ValidityDate;
-     * when both are overdue the earliest ValidityDate (the longest-overdue one) is returned.
-     * A revival with no ValidityDate set is never considered overdue.
-     */
+    /** Une relance sans {@code ValidityDate} n'est jamais en retard ; si les deux le sont, la plus ancienne. */
     private static LocalDateTime earliestOverdue(LocalDateTime revival1, LocalDateTime revival1ValidityDate,
                                                   LocalDateTime revival2, LocalDateTime revival2ValidityDate,
                                                   LocalDateTime now) {

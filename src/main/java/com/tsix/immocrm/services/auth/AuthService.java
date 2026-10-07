@@ -18,7 +18,6 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Objects;
 
-/** Backs {@code POST /api/auth/connexion} / {@code /api/auth/deconnexion}. */
 @Service
 @Transactional(readOnly = true)
 public class AuthService {
@@ -44,11 +43,8 @@ public class AuthService {
     }
 
     /**
-     * Validates username/password and issues a signed JWT (for the caller to put in the
-     * {@code access_token} httpOnly cookie). Deliberately throws the exact same
-     * {@link UnauthorizedException} message whether the username is unknown, the account is
-     * disabled, no web credential has been set up for it yet, or the password is wrong — never
-     * reveals which case it was.
+     * Même {@link UnauthorizedException} pour un compte inconnu, désactivé, sans identifiant web ou un
+     * mot de passe faux : ne jamais révéler lequel.
      */
     public LoginResult connexion(String username, String password) {
         if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
@@ -80,11 +76,7 @@ public class AuthService {
         return new LoginResult(token, toUtilisateurCourantDto(user, roles, mustChangePassword, profileCompleted));
     }
 
-    /**
-     * Le périmètre est résolu <b>par requête</b> à chaque connexion, jamais embarqué dans le JWT :
-     * un token survit à une modification d'affectation par l'administrateur, l'y stocker servirait
-     * un périmètre périmé. Voir {@link PerimetreCommercialService}.
-     */
+    /** Périmètre jamais embarqué dans le JWT, qui survit à une réaffectation ({@code FEATURE-perimetre-commercial.md} §6.1). */
     private UtilisateurCourantDto toUtilisateurCourantDto(AdmUser user, List<String> roles,
                                                            boolean mustChangePassword, boolean profileCompleted) {
         List<ProjetPerimetreDto> projets = perimetreService.projetsDuPerimetre(user.getId());
@@ -102,7 +94,6 @@ public class AuthService {
         );
     }
 
-    /** Result of a successful login: the signed JWT plus the profile to hand back in the response body. */
     public record LoginResult(String token, UtilisateurCourantDto utilisateur) {
     }
 }

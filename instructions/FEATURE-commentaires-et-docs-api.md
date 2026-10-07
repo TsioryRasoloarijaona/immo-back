@@ -270,6 +270,17 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   221 dossiers réels.
 - **`GenerateurCodeSequence`** : la ligne réelle porte encore `SeqYear` 2021 alors
   que les codes 2026 commencent par « 26 » (d'où `BasedOnSystemYear = 1`).
+- **`AppartenanceTranche.dossier` — deux branches nécessaires** : le lien inverse ne
+  couvre que 328 des 358 dossiers réels ; l'article principal (`ComFolder.StkItemId`,
+  358/358) couvre les 30 autres.
+- **`PerformanceCommercialService`** : auteur de l'activité et commercial affecté
+  coïncident dans 86 % des cas réels.
+- **`HotlineService.FICHES_MAX_PAR_NOM`** : « MOHAMED » remonte 555 lignes, soit
+  ~2 775 requêtes pour une frappe ; la borne à 100 limite le pire cas.
+- **`ReferentielService`** : 21 tiers banques ; 3 dépôts seulement
+  (FOURNISSEUR / CLIENT / BANQUE).
+- **`VisibiliteEntites.actifOuNonResolu`** : `cb.isTrue(…)` au lieu de
+  `cb.equal(…, TRUE)` avait cassé neuf tests sous SQL Server.
 
 ## Annexe — Défauts possibles relevés pendant le nettoyage (non corrigés)
 
@@ -288,6 +299,24 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
    suppression d'une PJ ») contredit `FEATURE-suppression-pieces-jointes.md` §6 ;
    `FEATURE-conformite-legataire.md` §3 dit à tort que l'onglet Historique des
    dossiers lit `StrHistory`.
+6. **Visibilité (hotline)** : les requêtes pré-prospection derrière `appelsSansFiche`
+   (`findByNormalizedTempTel[DansPerimetre]`, `rechercherPreProspectionsParNom…`)
+   n'appliquent pas le filtre entité ; `subResourcesService.historique(tierId)` sans
+   périmètre.
+7. **Visibilité (patrimoine par id)** : `ProjetService.findById/findTranches`,
+   `TrancheService.findById`, `ArticleService.findById/findByTranche/findSousArticles`,
+   `ArticlePieceJointeService` sans filtre entité ; la réponse article contient le nom
+   du client du dossier lié (R4 dit que l'accès par id doit être filtré aussi).
+8. **Autorisation (suivi)** : « mes actions » = `UserName` = nom affiché ; deux
+   comptes de même nom affiché se voient mutuellement (« admin » sur deux comptes).
+9. **Argent (clients)** : `COALESCE(SUM(...), 0)` dans
+   `ComDocumentRepository/StlSettlementLineRepository.sumAmountGroupedByClientId`
+   peut arrondir à l'entier (190,75 → 191) : `totalAPayer`, `totalRegle`, `solde` de
+   `GET /api/clients`.
+10. **Clés API** : `CleApiAdminService.creer(compteCode)` peut lier une clé à un compte
+    Administrateur, qui hérite alors de l'exemption de périmètre.
+11. **Spec périmée** : `FEATURE-kpi-performance-commerciaux.md` §3 (interactions sans
+    employé exclues) contredit le code et `FEATURE-suivi-actions.md` §7.
 
 ## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
 

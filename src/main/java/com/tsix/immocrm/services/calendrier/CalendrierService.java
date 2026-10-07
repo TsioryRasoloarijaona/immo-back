@@ -17,7 +17,6 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Backs {@code GET /api/calendrier/evenements} — the visite/rendez-vous calendar. */
 @Service
 @Transactional(readOnly = true)
 public class CalendrierService {
@@ -28,16 +27,7 @@ public class CalendrierService {
         this.actionMessageRepository = actionMessageRepository;
     }
 
-    /**
-     * {@code GET /api/calendrier/evenements?debut=...&fin=...}: every rendez-vous/visite
-     * ({@code AdmEvent}) created via {@code POST /api/prospections/{id}/interactions} whose
-     * start falls within [debut, fin], earliest first.
-     *
-     * <p>Seuls les événements rattachés à une entité juridique en exploitation sont renvoyés
-     * ({@code CfgCompany.IsActive}) ; ceux qu'aucune prospection ni aucun dossier ne rattache à une
-     * entité restent affichés. Le prédicat est porté par la requête, pas par ce service — voir
-     * {@code ComActionMessageRepository.findEvenementsVisibles}.
-     */
+    /** Visibilité par entité portée par la requête {@code findEvenementsVisibles}, pas par ce service. */
     public List<EvenementCalendrierDto> evenements(LocalDateTime debut, LocalDateTime fin) {
         if (debut == null || fin == null) {
             throw new InvalidRequestException("debut et fin sont requis");

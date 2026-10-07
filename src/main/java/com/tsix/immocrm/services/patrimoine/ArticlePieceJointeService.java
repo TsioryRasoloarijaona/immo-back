@@ -11,17 +11,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * {@code /api/articles/{id}/pieces-jointes[/...]} — accès en lecture aux pièces jointes d'un
- * Article ({@code AdmAttachedFile}, {@code CategoryId = StkItem.PKey}). Read-only for now — no
- * upload endpoint, unlike {@code PieceJointeService} (Dossier) which also handles deposits: the
- * real data behind this is legacy plans (PLAN/PLAN_ARCHITECTE/PLAN_ETAGE), not something this
- * app currently produces, so a write path wasn't asked for. Add one by calling
- * {@link PieceJointeSupport#deposer} if/when needed.
- *
- * <p>Toute la mécanique commune vit dans {@link PieceJointeSupport} ; il ne reste ici que ce qui
- * est propre à l'Article (vérification d'existence + libellé d'erreur).
- */
+/** Pièces jointes d'un article ({@code AdmAttachedFile.CategoryId = StkItem.PKey}), en lecture seule. */
 @Service
 @Transactional(readOnly = true)
 public class ArticlePieceJointeService {
@@ -34,7 +24,6 @@ public class ArticlePieceJointeService {
         this.support = support;
     }
 
-    /** Same "IsCheckedButNotAttached" exclusion as {@code PieceJointeService#findByDossier}. */
     public List<PieceJointeDto> findByArticle(UUID articleId) {
         if (!itemRepository.existsById(articleId)) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
@@ -42,7 +31,7 @@ public class ArticlePieceJointeService {
         return support.lister(articleId);
     }
 
-    /** URL présignée de téléchargement — 404 si la pièce n'appartient pas à cet article. */
+    /** 404 si la pièce n'appartient pas à cet article. */
     public URI urlFichier(UUID articleId, UUID pieceId) {
         if (!itemRepository.existsById(articleId)) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
