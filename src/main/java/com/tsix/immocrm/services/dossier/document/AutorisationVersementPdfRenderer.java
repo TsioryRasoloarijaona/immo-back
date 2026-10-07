@@ -25,21 +25,8 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
 /**
- * Renders the "Autorisation d'Encaissement" as a PDF, reproducing the layout of the legacy
- * Stimulsoft template
- * {@code instructions/templates/autorisation_virement/ComSaleDocumentAutorisationVersement.yes} /
- * {@code Report.pdf}, checked page-for-page against the sample: **one page**, and a single
- * unbroken outer rectangle around the whole "Cadre réservé à la banque" block — no border
- * anywhere else, and no internal grid lines inside that block (its rows are one bordered
- * {@link PdfPCell} holding several stacked elements, not a multi-row bordered table). Reading
- * order: centered title, two-column header (opération/bien/prix/mode de versement ↔ clients),
- * montant à verser + date d'émission, two-column coordonnées bancaires ↔ responsable commercial,
- * "CONDITIONS GENERALES" paragraph, footnotes (3)/(4), then the bordered "Cadre réservé à la
- * banque" box. Individual text boxes that sat at fixed pixel positions in the original (e.g.
- * "Nom :"/"Prénom :"/"CIN N° :" side by side) are flowed into single lines here rather than
- * reproduced position-for-position. Uses OpenPDF, same conventions (fonts) as every other
- * renderer in this package; margins/spacing are kept tight specifically to fit the one-page
- * constraint confirmed on the sample.
+ * « Autorisation d'Encaissement », d'après {@code autorisation_virement/Report.pdf} : <b>une seule
+ * page</b> (marges serrées pour cela), et une seule bordure, autour du « Cadre réservé à la banque ».
  */
 @Component
 public class AutorisationVersementPdfRenderer {
@@ -198,9 +185,8 @@ public class AutorisationVersementPdfRenderer {
         return p;
     }
 
-    // -- Cadre réservé à la banque : UN SEUL rectangle extérieur, aucune ligne interne (voir
-    // Report.pdf) — tout le contenu est empilé dans une unique PdfPCell bordée plutôt que dans
-    // plusieurs lignes de table (qui dessineraient chacune leur propre bordure).
+    // -- Cadre réservé à la banque : une seule PdfPCell bordée ; des lignes de table dessineraient
+    // chacune leur bordure, or Report.pdf n'a aucune ligne interne.
 
     private static PdfPTable cadreBanque(AutorisationVersementData data) {
         PdfPTable outer = new PdfPTable(1);
@@ -283,7 +269,7 @@ public class AutorisationVersementPdfRenderer {
         return p;
     }
 
-    /** Table interne SANS bordure (les seules bordures du document sont sur la cellule englobante de {@link #cadreBanque}). */
+    /** Sans bordure : la seule du document est la cellule englobante de {@link #cadreBanque}. */
     private static PdfPTable signaturesTable() {
         PdfPTable table = new PdfPTable(3);
         table.setWidthPercentage(100);

@@ -33,12 +33,8 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.pource
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
 /**
- * Renders the "Fiche Dossier de Vente" as a PDF, reproducing the layout of the legacy "FICHE
- * COMPLETE" Stimulsoft template ({@code ComSaleFiche.yes}) as closely as OpenPDF's table model
- * allows: bordered ENTETE/MONTANTS/DATE/ANNULATION boxes on page 1, AUTRES on page 2, SCHEMA DE
- * FINANCEMENT/SOUS ARTICLES/HISTORIQUE on page 3 — same section order, same 2-pair-per-row grid
- * for label/value boxes, same page breaks. See {@code FicheDossierVenteData}'s javadoc for the
- * couple of legacy fields deliberately left unmapped (Présentation, Décision MEILLEURTAUX).
+ * « Fiche Dossier de Vente » d'après {@code ComSaleFiche.yes} : mêmes sections, grilles et sauts de
+ * page. Champs legacy volontairement non repris : voir {@code FicheDossierVenteData}.
  */
 @Component
 public class FicheDossierVentePdfRenderer {

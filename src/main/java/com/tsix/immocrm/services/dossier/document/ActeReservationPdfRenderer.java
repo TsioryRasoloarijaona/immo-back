@@ -22,10 +22,7 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.pourcentage;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Acte de réservation" as a PDF, modeled on the legacy template (see
- * {@code instructions/templates/ACTE RESERVATION.pdf}). Uses OpenPDF ({@code org.openpdf.text}).
- */
+/** « Acte de réservation » en PDF, d'après {@code instructions/templates/ACTE RESERVATION.pdf}. */
 @Component
 public class ActeReservationPdfRenderer {
 
@@ -115,8 +112,8 @@ public class ActeReservationPdfRenderer {
                             + "descendant, du conjoint ou d'un membre de la famille jusqu'au 3ème degré."));
             document.add(spacer());
 
-            // Land (TER) lots have no keys/syndic to manage — the legacy template drops this
-            // whole section for them and renumbers everything after it down by one.
+            // Un terrain (TER) n'a ni clés ni syndic : le template legacy supprime la section et
+            // renumérote les suivantes.
             if (!data.estTerrain()) {
                 document.add(section("8- SERVICE APRES VENTE - ASSURANCE - SYNDIC"));
                 document.add(bodyParagraph(savParagraph(data)));

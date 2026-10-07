@@ -30,13 +30,8 @@ import java.util.UUID;
 import static java.util.Objects.requireNonNullElse;
 
 /**
- * {@code GET /api/dossiers/{id}/historique}: a single, chronological, traceable timeline merging
- * every kind of event that happens on a Dossier — status changes (with note), échéances,
- * règlements, pièces jointes. Each source is a distinct table (there's no single unified audit
- * table for this in the schema, aside from the generic-but-technical {@code AdmWebHistorics}
- * field-diff log, which this deliberately avoids in favor of business-readable events); merged
- * and sorted in memory since a dossier's total event count stays small, then paginated like every
- * other list endpoint.
+ * Chronologie d'un dossier fusionnant statuts, échéances, règlements et pièces jointes (pas
+ * {@code AdmWebHistorics}, trop technique) ; triée et paginée en mémoire, le volume par dossier est faible.
  */
 @Service
 @Transactional(readOnly = true)
@@ -73,9 +68,8 @@ public class DossierHistoriqueService {
                 .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
                 .forEach(a -> evenements.add(toPieceJointeEvent(a)));
 
-        // Most recent first, events with no date (e.g. a pièce jointe with no UserCreateDateTime)
-        // sorted last. NOT `comparing(..., nullsLast(naturalOrder())).reversed()` — .reversed()
-        // flips the whole comparator, including null placement, so nulls would sort FIRST instead.
+        // Plus récent d'abord, non datés en dernier. Pas `nullsLast(naturalOrder()).reversed()` :
+        // reversed() inverse aussi la place des null, qui passeraient en tête.
         evenements.sort(Comparator.comparing(HistoriqueEvenementDto::date,
                 Comparator.nullsLast(Comparator.reverseOrder())));
 
@@ -110,9 +104,8 @@ public class DossierHistoriqueService {
         if (s != null && s.getDescription() != null && !s.getDescription().isBlank()) {
             description += " — " + s.getDescription();
         }
-        // Date de saisie de préférence ; à défaut la date d'encaissement (les règlements legacy
-        // n'ont pas de UserCreateDateTime — c'est ce que l'API ne posait pas avant la feature
-        // reglement-statut-preuve). Les deux peuvent manquer : l'événement est alors non daté.
+        // Date de saisie, à défaut d'encaissement (les règlements legacy n'ont pas de
+        // UserCreateDateTime) ; les deux peuvent manquer : événement non daté.
         LocalDateTime date = Champs.de(s, StlSettlement::getUserCreateDateTime);
         if (date == null) {
             date = Champs.de(s, StlSettlement::getSettlementDate);

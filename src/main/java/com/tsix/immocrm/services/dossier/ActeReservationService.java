@@ -30,12 +30,7 @@ import java.util.UUID;
 
 import static java.util.Objects.requireNonNullElse;
 
-/**
- * Gathers the data behind the "Acte de réservation" contract (see
- * {@code ActeReservationPdfRenderer} / {@code ActeReservationDocxRenderer} for the actual PDF
- * and Word rendering). Reuses the "AVANCE"/"AUTO-FINANCEMENT" échéancier lines auto-generated on
- * Dossier creation (see {@code DossierService#genererSchemaFinancement}).
- */
+/** « Acte de réservation » ; lit les échéances AVANCE / AUTO-FINANCEMENT générées à la création du dossier. */
 @Service
 @Transactional(readOnly = true)
 public class ActeReservationService {
@@ -60,8 +55,7 @@ public class ActeReservationService {
         CfgTier client = folder.getCfgCustomer();
         StkItem article = folder.getStkItem();
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
-        // StkItem.CfgProjectId is never populated in real data — confirmed path is via the
-        // tranche (StkHierarchyId -> CfgTranche.CfgProjectId). Same fix in FicheReservationService.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
         BigDecimal prixVente = folder.getPrice();
 

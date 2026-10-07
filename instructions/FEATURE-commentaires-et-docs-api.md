@@ -251,6 +251,43 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
 - **Contradiction entre specs** : `CfgEmployeeId` vide « 4 fois sur 5 »
   (`FIX-interaction-note.md` §2) contre renseigné à 77 % (37 286 / 48 278,
   `FIX-auteur-interactions.md`). À trancher.
+- **`DossierService.genererCodeDossier`** : une seule séquence globale pour tous les
+  préfixes (codes 379→378→377 sur APF/ART/ARS, sans trou ni remise à zéro).
+- **Statut initial** : 100 % des dossiers réels avec historique (359/359)
+  commencent à RESERVATION.
+- **Montant d'avance de la fiche** = `AgreementAmount` (99,7 % des 358 dossiers),
+  pas une colonne `AdvanceAmount`.
+- **`estSorti`** ≡ `IsCancellation` de la vue légataire, vérifié 30/30
+  (22 ANNULATION + 8 DESISTEMENT).
+- **`idsDossiersDeTranche`** : volume borné (387 dossiers au total en base réelle).
+- **Chaîne article → tranche → projet → société** vérifiée 358/358 ;
+  `StkItem.StkHierarchyId` renseigné sur les 358 articles de dossier ;
+  `StkItem.CfgProjectId` null sur les 358.
+- **`EcheancierService`** : `IsReferenceMandatory` vrai pour CHÈQUE / CHEQUE
+  NOTAIRE / SYNDIC / BANQUE / CERTIFIÉ / EFFET, référence renseignée sur > 99 %
+  de ces lignes ; `TierId` renseigné sur 3 232 / 3 240 (99,75 %).
+- **`FicheReservationPdfRenderer`** : les marques MBR et ART représentent
+  221 dossiers réels.
+- **`GenerateurCodeSequence`** : la ligne réelle porte encore `SeqYear` 2021 alors
+  que les codes 2026 commencent par « 26 » (d'où `BasedOnSystemYear = 1`).
+
+## Annexe — Défauts possibles relevés pendant le nettoyage (non corrigés)
+
+1. ~~**Visibilité** : `GET /api/encaissements/{id}` sans périmètre~~ — **faux
+   positif** : couvert par `PerimetreInterceptor` (`verifierAccesEncaissement`),
+   vérifié par le manager.
+2. **Argent** : le reçu (`RecuReglementService`) imprime « remboursement » quand
+   `IsCredit = true`, alors que `EcheancierService.addReglement` écrit
+   `IsCredit = true` pour un encaissement client.
+3. **Argent** : deux calculs du « Net à payer » — `FicheDossierVenteService.montants`
+   (PriceAfterDiscount + frais + modification + pénalité + résiliation) et
+   `DossierService.netAPayer` (Price + frais exclus du prix).
+4. **Statuts** : un dossier dont `StrStatus.Code` est inconnu de `StatutDossier`
+   échappe à `TransitionsValidees`.
+5. **Specs** : `FEATURE-reglement-statut-preuve.md` §5.5 (« aucun blocage sur la
+   suppression d'une PJ ») contredit `FEATURE-suppression-pieces-jointes.md` §6 ;
+   `FEATURE-conformite-legataire.md` §3 dit à tort que l'onglet Historique des
+   dossiers lit `StrHistory`.
 
 ## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
 

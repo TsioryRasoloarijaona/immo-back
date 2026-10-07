@@ -24,20 +24,11 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montant;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Reçu de règlement" as a PDF, modeled band-for-band on "Page1" of the legacy
- * Stimulsoft report source
- * {@code instructions/templates/RECEIP/Yes_Stl_Front_Credit_Settlement_20240301102347.yes} — same
- * reading order (attestation → désignation du bien → situation des chèques → disclaimer →
- * signature), table columns (Date / Montant / Mode / N° Vers) and column proportions (2.2 / 2.6 /
- * 10.4 / 1.4 cm in the original, kept as relative widths here). Uses OpenPDF
- * ({@code org.openpdf.text}). Font family (Century Gothic / Times New Roman in the original) is
- * substituted with Helvetica, same precedent as every other renderer in this package.
- */
+/** « Reçu de règlement », bande par bande d'après la page 1 du template {@code RECEIP/…Credit_Settlement….yes}. */
 @Component
 public class RecuReglementPdfRenderer {
 
-    /** {@code AdmParamsString} rows confirmed on real data ({@code CurrencyLabel}/{@code CurrencyFraction}), same as la Fiche Trop Perçu. */
+    /** Valeurs réelles de {@code AdmParamsString} {@code CurrencyLabel} / {@code CurrencyFraction}. */
     private static final String DEVISE = "dirham";
     private static final String DEVISE_FRACTION = "centime";
 
@@ -49,7 +40,7 @@ public class RecuReglementPdfRenderer {
     private static final Font TABLE_CELL_BOLD = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
     private static final Font FOOTNOTE = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.BLACK);
 
-    /** Relative widths of the "Date" / "Montant" / "Mode" / "N° Vers" columns — 2.2 / 2.6 / 10.4 / 1.4 cm in the original. */
+    /** Largeurs relatives Date / Montant / Mode / N° Vers, en cm dans le template. */
     private static final float[] COLONNES_VERSEMENTS = {2.2f, 2.6f, 10.4f, 1.4f};
 
     public byte[] render(RecuReglementData data) {
@@ -114,10 +105,8 @@ public class RecuReglementPdfRenderer {
     }
 
     /**
-     * Versement (non-IsCredit) : "Nous soussignés société {entreprise} reconnaissons avoir reçu
-     * de {bénéficiaire}...". Remboursement (IsCredit) : ordre inversé, "Nous soussignés
-     * {bénéficiaire} reconnaissons avoir reçu de la société {entreprise}..." — voir
-     * {@code GroupHeaderBand2.Text3/Text4} du template legacy.
+     * Versement : la société reconnaît avoir reçu du client ; remboursement : l'inverse
+     * ({@code GroupHeaderBand2.Text3/Text4} du template legacy).
      */
     private static Paragraph attestationParagraph(RecuReglementData data) {
         Paragraph p = new Paragraph();

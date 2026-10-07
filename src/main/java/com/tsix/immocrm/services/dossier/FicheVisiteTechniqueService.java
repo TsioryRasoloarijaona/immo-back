@@ -17,19 +17,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Gathers the data behind the "Fiche Visite Technique" document (see
- * {@code FicheVisiteTechniquePdfRenderer} for the actual PDF rendering) — the pre-delivery
- * inspection checklist plus the "Service Après-Vente" contact clause.
- */
+/** « Fiche Visite Technique » : check-list avant livraison et clause de contact SAV. */
 @Service
 @Transactional(readOnly = true)
 public class FicheVisiteTechniqueService {
 
     /**
-     * Confirmed against the real template: tranche code "FAN" gets a project-manager-by-email-only
-     * contact line, every other tranche gets the full tranche technical manager (title/name/mobile/
-     * email) — same per-tranche branching pattern as {@code ActeReservationService}'s TER handling.
+     * D'après le template réel : la tranche « FAN » n'a qu'un contact chef de projet par email, les
+     * autres le responsable technique complet (titre, nom, mobile, email).
      */
     private static final String CODE_TRANCHE_CONTACT_EMAIL_SEUL = "FAN";
 

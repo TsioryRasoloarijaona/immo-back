@@ -25,18 +25,13 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
 /**
- * Renders the "Fiche Trop Perçu" as a PDF, modeled band-for-band on the legacy Stimulsoft report
- * source {@code instructions/templates/ComSaleFicheTropPercu.yes} — same reading order, section
- * texts, table columns (N° Vers / Date / Montant / Mode) and column proportions (1.4 / 2.2 / 2.6 /
- * 10.4 cm in the original, kept as relative widths here). Uses OpenPDF ({@code org.openpdf.text}).
- * Font family (Century Gothic / Times New Roman in the original) is substituted with Helvetica,
- * same precedent as every other renderer in this package — sizes and weights (bold/regular) are
- * kept exact.
+ * « Fiche Trop Perçu » bande par bande d'après {@code ComSaleFicheTropPercu.yes} ; Helvetica remplace
+ * Century Gothic / Times New Roman, tailles et graisses conservées.
  */
 @Component
 public class FicheTropPercuPdfRenderer {
 
-    /** {@code AdmParamsString} rows confirmed on real data ({@code CurrencyLabel}/{@code CurrencyFraction}). */
+    /** Valeurs réelles de {@code AdmParamsString} {@code CurrencyLabel} / {@code CurrencyFraction}. */
     private static final String DEVISE = "dirham";
     private static final String DEVISE_FRACTION = "centime";
 
@@ -48,7 +43,7 @@ public class FicheTropPercuPdfRenderer {
     private static final Font TABLE_CELL_BOLD = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
     private static final Font FOOTNOTE = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.BLACK);
 
-    /** Relative widths of the "N° Vers" / "Date" / "Montant" / "Mode" columns — 1.4 / 2.2 / 2.6 / 10.4 cm in the original. */
+    /** Largeurs relatives N° Vers / Date / Montant / Mode, en cm dans le template. */
     private static final float[] COLONNES_VERSEMENTS = {1.4f, 2.2f, 2.6f, 10.4f};
 
     public byte[] render(FicheTropPercuData data) {

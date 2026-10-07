@@ -22,11 +22,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Gathers the data behind the "Fiche de réservation" document (see
- * {@code FicheReservationPdfRenderer} / {@code FicheReservationDocxRenderer} for the actual PDF
- * and Word rendering).
- */
 @Service
 @Transactional(readOnly = true)
 public class FicheReservationService {
@@ -46,9 +41,7 @@ public class FicheReservationService {
 
         CfgTier client = folder.getCfgCustomer();
         StkItem article = folder.getStkItem();
-        // StkItem.CfgProjectId is never populated in real data — the confirmed path is via the
-        // article's tranche (StkHierarchyId -> CfgTranche.CfgProjectId). Same fix applied in
-        // ActeReservationService and DossierService#genererCodeDossier.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(article, StkItem::getStkHierarchy, CfgTranche::getCfgProject);
 
         StlSettlementLine reservationLine = findReservationLine(dossierId);
@@ -75,7 +68,7 @@ public class FicheReservationService {
         );
     }
 
-    /** Prefers the "AVANCE" échéance's règlement; falls back to the earliest règlement overall. */
+    /** Le règlement de l'échéance AVANCE, à défaut le plus ancien du dossier. */
     private StlSettlementLine findReservationLine(UUID dossierId) {
         List<StlSettlementLine> avance = settlementLineRepository.findAvanceLinesByDossierIdOrderByDateAsc(dossierId);
         if (!avance.isEmpty()) {

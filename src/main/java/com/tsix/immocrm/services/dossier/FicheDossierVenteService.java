@@ -43,13 +43,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Fiche Dossier de Vente" document (see
- * {@code FicheDossierVentePdfRenderer} for the actual PDF rendering) — modeled on the legacy
- * "FICHE COMPLETE" template, a comprehensive internal dossier summary. Reuses
- * {@link DossierHistoriqueService#findHistorique} for the HISTORIQUE table, but computes its own
- * MONTANTS breakdown (see {@link FicheDossierVenteData.MontantsFiche}) rather than
- * {@link DossierService#montants}, since the legacy template's 9 fixed rows don't match this
- * app's free-text-category dynamic grouping.
+ * « Fiche Dossier de Vente » (template legacy « FICHE COMPLETE »). MONTANTS recalculé ici, pas via
+ * {@link DossierService#montants} : les 9 lignes fixes du template ne suivent pas les catégories.
  */
 @Service
 @Transactional(readOnly = true)
@@ -152,7 +147,7 @@ public class FicheDossierVenteService {
                 folder.getReservationDate(),
                 folder.getAgreementDate(),
                 folder.getAgreementRegistryDate(),
-                null, // Visite technique: no dedicated ComFolder column confirmed distinct from ReceptionDate
+                null, // Visite technique : aucune colonne ComFolder distincte de ReceptionDate
                 folder.getReceptionDate(),
                 folder.getBankRecordDate(),
                 folder.getCreditApprovalDate(),
@@ -184,10 +179,7 @@ public class FicheDossierVenteService {
         );
     }
 
-    /**
-     * Recomputes the MONTANTS box's 9 fixed rows. See {@link MontantsFiche}'s javadoc for the
-     * reasoning behind each row's source.
-     */
+    /** Les 9 lignes fixes de MONTANTS ; la source de chaque ligne est expliquée sur {@link MontantsFiche}. */
     private static MontantsFiche montants(ComFolder folder, List<ComDocument> echeances,
                                            Map<UUID, List<StlSettlementLine>> reglementsParEcheance) {
         BigDecimal[] frais = sommeParFlag(echeances, reglementsParEcheance, ComSettlementCategory::getIsSaleExpense);
@@ -220,7 +212,7 @@ public class FicheDossierVenteService {
         );
     }
 
-    /** [montant total, réglé total] des échéances dont la catégorie a le flag booléen donné à vrai. */
+    /** [montant, réglé] des échéances dont la catégorie porte ce flag à vrai. */
     private static BigDecimal[] sommeParFlag(List<ComDocument> echeances, Map<UUID, List<StlSettlementLine>> reglementsParEcheance,
                                               java.util.function.Function<ComSettlementCategory, Boolean> flag) {
         BigDecimal montant = BigDecimal.ZERO;
@@ -258,7 +250,7 @@ public class FicheDossierVenteService {
         );
     }
 
-    /** "{description du règlement} N° {code} du {date}" — reproduit le libellé du template legacy. */
+    /** « {description} N° {code} du {date} », libellé du template legacy. */
     private static DetailReglement toDetailReglement(StlSettlementLine ligne) {
         StlSettlement s = ligne.getStlSettlement();
         StringBuilder libelle = new StringBuilder();

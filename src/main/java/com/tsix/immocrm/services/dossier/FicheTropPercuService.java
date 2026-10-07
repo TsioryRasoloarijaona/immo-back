@@ -33,13 +33,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Fiche Trop Perçu" document (see {@code FicheTropPercuPdfRenderer}
- * for the actual PDF rendering) — modeled on the legacy Stimulsoft template
- * {@code instructions/templates/ComSaleFicheTropPercu.yes}, a receipt acknowledging that the
- * client's settlements exceed the dossier's price. Reuses {@link DossierService#montants} for the
- * "frais" total (never re-derives raw {@code ComDocument.excludeFromPrice} sums here), and the
- * same acquéreur/co-acquéreur ({@code ComFolderCustomer}) and "société" ({@code CfgProject.cfgCompany})
- * lookups as {@link FicheBancaireService}.
+ * « Fiche Trop Perçu » (template {@code ComSaleFicheTropPercu.yes}) : les règlements dépassent le prix.
+ * Total des frais repris de {@link DossierService#montants}, jamais recalculé ici.
  */
 @Service
 @Transactional(readOnly = true)
@@ -67,8 +62,7 @@ public class FicheTropPercuService {
 
         StkItem article = folder.getStkItem();
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
-        // Chemin confirmé (même que ActeReservationService/FicheReservationService/FicheBancaireService) :
-        // StkItem.CfgProjectId n'est jamais peuplé en données réelles.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         List<Acquereur> acquereurs = new ArrayList<>();

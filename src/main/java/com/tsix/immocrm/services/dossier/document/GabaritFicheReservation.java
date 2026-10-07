@@ -3,22 +3,8 @@ package com.tsix.immocrm.services.dossier.document;
 import java.util.Map;
 
 /**
- * Emplacement des valeurs sur une « Fiche de réservation », par marque.
- *
- * <p>Le document légataire n'est pas dessiné : c'est un <b>fond de page pré-imprimé</b> (cadre,
- * logo, libellés, cases, paragraphes fixes, bandeau) sur lequel le rapport incruste une poignée
- * de valeurs. Le reproduire en redessinant des primitives ne pouvait pas être fidèle — la police
- * du fond n'est pas Helvetica et les filets ne sont pas des traits. On estampille donc le même
- * fond, et on ne place que ce qui varie.
- *
- * <p><b>Les coordonnées ne viennent pas du template.</b> Le {@code .yes} fourni est une révision
- * antérieure au PDF de référence : il n'a aucun champ « Prix article » que la référence affiche,
- * et il place le CIN au-dessus de l'adresse alors que le fond fait l'inverse. Les sept cases
- * sont donc <b>mesurées dans l'image de fond</b> (détection des filets, à 300 dpi), ce qui les
- * rend exactes par construction et immunise contre l'obsolescence du template.
- *
- * <p>Origine en haut à gauche, unités en centimètres — comme le rapport d'origine. La conversion
- * vers le repère PDF (origine en bas à gauche) est faite au rendu.
+ * Emplacement des valeurs sur le fond de chaque marque, <b>mesuré dans l'image de fond</b> : le
+ * {@code .yes} fourni est une révision antérieure. Origine en haut à gauche, en cm, comme le rapport.
  */
 final class GabaritFicheReservation {
 
@@ -31,13 +17,7 @@ final class GabaritFicheReservation {
 
     enum Alignement { GAUCHE, CENTRE, DROITE }
 
-    /**
-     * Une valeur à incruster.
-     *
-     * @param hauteurCm hauteur de la boîte : le texte y est centré verticalement, ce qui évite de
-     *                  raisonner en ligne de base et rend le placement stable quelle que soit la
-     *                  taille de police.
-     */
+    /** {@code hauteurCm} : le texte est centré verticalement dans la boîte, quelle que soit la police. */
     record Zone(float xCm, float yCm, float largeurCm, float hauteurCm, int taille, Alignement alignement) {
 
         Zone(float xCm, float yCm, float largeurCm, float hauteurCm, int taille) {
@@ -69,12 +49,7 @@ final class GabaritFicheReservation {
     private static final float APF_X = 6.35f;
     private static final float APF_L = 12.75f;
 
-    /**
-     * Gabarit ARS (GHRIZA — AYAD Residence Bel Air / Sidi Maarouf), fond violet.
-     *
-     * <p>Les {@code y} des sept cases sont les filets relevés dans {@code fond-ARS.jpg} :
-     * 7,66 / 8,39 / 9,64 / 10,37 / 11,11 / 11,85 / 12,62 cm.
-     */
+    /** ARS (GHRIZA), fond violet : les {@code y} des sept cases sont les filets relevés dans {@code fond-ARS.jpg}. */
     static final Map<String, Zone> ARS = Map.ofEntries(
             // Boîte « N°V » : filets à 3,35 et 4,25 cm, blanc utile de 2,98 à 6,69 cm.
             Map.entry(DOSSIER, new Zone(3.15f, 3.35f, 3.35f, 0.90f, 9)),
@@ -85,9 +60,8 @@ final class GabaritFicheReservation {
             Map.entry(MONTANT, new Zone(BOITE_X, 11.11f, BOITE_L - 0.15f, 0.57f, 10, Alignement.DROITE)),
             Map.entry(REGLE_PAR, new Zone(BOITE_X, 11.85f, BOITE_L, 0.59f, 10)),
             Map.entry(PRIX, new Zone(BOITE_X, 12.62f, BOITE_L - 0.15f, 0.58f, 10, Alignement.DROITE)),
-            // Valeurs incrustées dans le paragraphe « A titre de réservation… ». Les x sont les
-            // blancs réellement laissés par le fond entre deux mots, détectés par absence d'encre
-            // sur la bande de la ligne — le template les plaçait ailleurs.
+            // Valeurs du paragraphe « A titre de réservation… » : x = blancs laissés par le fond entre
+            // deux mots (absence d'encre), pas les positions du template.
             Map.entry(ARTICLE, new Zone(17.09f, 13.70f, 2.28f, 0.4f, 9, Alignement.CENTRE)),
             Map.entry(IMMEUBLE, new Zone(2.70f, 14.28f, 2.08f, 0.4f, 9, Alignement.CENTRE)),
             Map.entry(PORTE, new Zone(6.01f, 14.28f, 1.45f, 0.4f, 9, Alignement.CENTRE)),
@@ -98,12 +72,8 @@ final class GabaritFicheReservation {
     );
 
     /**
-     * Gabarit APF (ADMOD — AYAD Private Ferme Bretone), fond orange.
-     *
-     * <p>Mêmes sept cases que sur ARS, simplement plus basses : le fond APF porte au-dessus un
-     * paragraphe de société de quatre lignes contre trois. Le template annonçait six cases et un
-     * prix flottant à droite de « Montant de » ; les filets relevés dans le fond disent
-     * autre chose, et c'est le fond qui fait foi.
+     * APF (ADMOD), fond orange : mêmes sept cases qu'ARS, plus basses (paragraphe de société plus long).
+     * Le template annonçait six cases ; le fond fait foi.
      */
     static final Map<String, Zone> APF = Map.ofEntries(
             Map.entry(DOSSIER, new Zone(3.05f, 3.75f, 3.35f, 0.90f, 10)),
@@ -125,12 +95,8 @@ final class GabaritFicheReservation {
     );
 
     /**
-     * Mention propre à ARS, en gras 18 pt sous le paragraphe.
-     *
-     * <p>Elle est <b>statique dans le template</b>, pas issue d'une donnée : le rapport légataire
-     * l'imprime sur toutes les fiches ARS, sans condition. Reproduit tel quel — mais c'est une
-     * affirmation commerciale appliquée à tous les dossiers de cette marque, ce qui mérite d'être
-     * su avant de l'étendre à d'autres.
+     * <b>Statique dans le template</b> : le légataire l'imprime sur toute fiche ARS, sans condition —
+     * une affirmation commerciale à ne pas étendre à d'autres marques sans le savoir.
      */
     static final String MENTION_ARS = "Cette réservation inclut la place parking sous-sol";
 

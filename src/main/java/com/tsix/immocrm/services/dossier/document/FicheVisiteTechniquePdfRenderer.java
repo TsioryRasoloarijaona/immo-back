@@ -20,12 +20,7 @@ import java.util.List;
 
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Fiche Visite Technique" as a PDF — the pre-delivery inspection checklist
- * ("FICHE D'INTERVENTION AVANT LIVRAISON") plus the co-ownership rules synthesis and the
- * "Service Après-Vente" contact clause. Modeled on the legacy "FICHE VISITE TECHNIQUE" template
- * (French content only — the legacy template is bilingual French/Arabic). Uses OpenPDF.
- */
+/** « Fiche Visite Technique » en PDF ; partie française seulement du template legacy bilingue français/arabe. */
 @Component
 public class FicheVisiteTechniquePdfRenderer {
 

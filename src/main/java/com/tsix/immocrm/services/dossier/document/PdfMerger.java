@@ -8,15 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 
-/**
- * Concatenates several single-document PDFs (each possibly already multi-page, e.g. "Fiche
- * Dossier de Vente") into one PDF, page order preserved — backs every
- * {@code POST /api/dossiers/documents/{type}} "génération en lot" endpoint (select several
- * dossiers, get one PDF with one page group per dossier). Pure page concatenation via
- * {@link PdfCopy}, no re-rendering: each input PDF is produced by the same renderer used for the
- * single-dossier endpoint, so a batch of 1 dossier is byte-for-byte content-identical to calling
- * the single-dossier endpoint directly (just re-encoded through PdfCopy).
- */
+/** Concatène des PDF par {@link PdfCopy}, sans re-rendu, dans l'ordre : la génération en lot. */
 @Component
 public class PdfMerger {
 

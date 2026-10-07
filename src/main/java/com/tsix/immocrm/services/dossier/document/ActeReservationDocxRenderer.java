@@ -18,10 +18,7 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.pourcentage;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Acte de réservation" as a Word (.docx) document — same content as
- * {@link ActeReservationPdfRenderer}, built with Apache POI (XWPF).
- */
+/** « Acte de réservation » en .docx (Apache POI), même contenu que {@link ActeReservationPdfRenderer}. */
 @Component
 public class ActeReservationDocxRenderer {
 

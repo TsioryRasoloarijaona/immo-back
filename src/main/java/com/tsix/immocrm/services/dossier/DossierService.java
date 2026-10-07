@@ -140,14 +140,8 @@ public class DossierService {
     }
 
     /**
-     * Numbers a new Dossier the same way the legacy app does — confirmed against real data:
-     * {@code AdmSequence} (row {@code Code = "Dossier de vente"}) holds the actual live counter
-     * ({@code SeqValue}), a single global sequence shared by every project/prefix (codes count
-     * down 379→378→377 across different prefixes APF/ART/ARS with no gaps or per-project reset).
-     * Format: {@code "{ProjectCode} {année}/{numéro sur 5 chiffres}"} (e.g. "APF 2026/00380").
-     * The project code comes from the article's tranche ({@code StkItem.StkHierarchyId} →
-     * {@code CfgTranche.CfgProjectId}) — {@code StkItem.CfgProjectId} itself is never populated
-     * in real data, so it can't be used directly.
+     * {@code "APF 2026/00380"} : compteur {@code AdmSequence} unique pour tous les projets (pas de
+     * remise à zéro par préfixe) ; projet lu via la tranche, {@code StkItem.CfgProjectId} étant vide.
      */
     private String genererCodeDossier(StkItem premierArticle) {
         String prefixe = "DOS";
@@ -155,42 +149,10 @@ public class DossierService {
                 && premierArticle.getStkHierarchy().getCfgProject().getCode() != null) {
             prefixe = premierArticle.getStkHierarchy().getCfgProject().getCode();
         }
-        // Année sur 4 chiffres ici, contrairement au tiers et à la prospection : « APF 2026/00380 ».
+        // Année sur 4 chiffres ici, contrairement au tiers et à la prospection.
         return prefixe + " " + generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_DOSSIER, 4, 5);
     }
 
-    /**
-     * @param statuts    {@code StrStatus.code} filter — 0 values means no filter, 1 value
-     *                   behaves exactly like the pre-multi-select single-value filter, 2+
-     *                   values match any of them (OR). Repeated query param
-     *                   ({@code ?statut=a&statut=b}), see {@code instructions/filtres-avances.md}.
-     * @param commercial {@code CfgTier.id} (cfgCommercial) filter
-     * @param projet     {@code CfgProject.id} filter, résolu par la <b>tranche</b> de l'article
-     *                   principal ({@code ComFolder.stkItem.stkHierarchy.cfgProject}) et non par
-     *                   {@code StkItem.cfgProject}, colonne morte en base réelle (0 ligne sur
-     *                   1068) sur laquelle ce filtre ne renvoyait jamais aucun dossier. Le chemin
-     *                   retenu couvre 358 dossiers sur 358.
-     * @param trancheIds {@code CfgTranche.id} filter — retient un dossier si l'un de ses articles
-     *                   liés ({@code StkItem.comFolderId}) <b>ou</b> son article principal
-     *                   ({@code ComFolder.stkItem}) appartient à l'une de ces tranches. Les deux
-     *                   branches sont nécessaires : le lien inverse ne couvre que 328 des 358
-     *                   dossiers réels, l'article principal les 358. Un dossier peut porter
-     *                   plusieurs articles (lot principal + annexes) éventuellement répartis sur
-     *                   plusieurs tranches, d'où l'{@code EXISTS} plutôt qu'une simple jointure.
-     *                   Voir {@code instructions/filtres-avances.md} point 2.
-     * @param champDate  which {@code ComFolder} milestone column {@code dateDebut}/{@code dateFin}
-     *                   apply to (defaults to {@link ChampDateDossier#RESERVATION} — i.e.
-     *                   {@code docDate} — if a range is given without an explicit field). Ignored
-     *                   if neither {@code dateDebut} nor {@code dateFin} is given. See
-     *                   {@code instructions/filtres-avances.md} point 3.
-     * @param dateDebut  inclusive lower bound on {@code champDate}'s column
-     * @param dateFin    inclusive upper bound on {@code champDate}'s column
-     * @param search     free-text match on {@code code} OR the linked client's
-     *                   nom/prénom/raison sociale ({@code CfgTier} via {@code ComFolder.cfgCustomer}
-     *                   — LEFT JOIN, so folders without a linked client still match on
-     *                   {@code code} alone). Same OR-across-fields convention as
-     *                   {@code ProspectService.findAll}. See {@code instructions/from_front.md} #6.
-     */
     public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, ColonneDossier groupeColonne, String groupeValeur,
@@ -207,14 +169,7 @@ public class DossierService {
                 .map(f -> toListItem(f, colonnes));
     }
 
-    /**
-     * Replie {@code GET /api/dossiers} en groupes — voir
-     * {@code instructions/FEATURE-groupement-listes.md}.
-     *
-     * <p>Réutilise {@link #specDossiers} <strong>à l'identique</strong>, périmètre commercial
-     * compris : c'est ce qui garantit que la somme des effectifs des groupes retombe sur le
-     * {@code totalElements} de la liste non groupée.
-     */
+    /** Même {@link #specDossiers} et même périmètre que la liste : la somme des groupes retombe sur son total. */
     public ResultatGroupement grouper(List<String> statuts, UUID commercial, UUID projet,
             List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, ColonneDossier groupeBy, Granularite granularite,
@@ -227,14 +182,8 @@ public class DossierService {
     }
 
     /**
-     * Les ids des dossiers que renvoie {@code GET /api/dossiers?trancheId=…} à l'appelant courant :
-     * <b>la même</b> {@link #specDossiers} et le même périmètre commercial que {@link #findAll}.
-     * C'est l'assiette du tableau de bord filtré par tranche
-     * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R2/R3) — ce qui garantit que la
-     * somme de {@code dossiersParEtape} retombe sur le {@code totalElements} de la liste filtrée.
-     *
-     * <p>Chargement d'entités plutôt que projection : le volume est borné par le nombre de
-     * dossiers d'une tranche (387 dossiers au total en base réelle).
+     * Assiette du tableau de bord par tranche : même spec et même périmètre que {@link #findAll},
+     * pour retomber sur son total ({@code FEATURE-dashboard-filtre-tranche.md} R2/R3).
      */
     public Set<UUID> idsDossiersDeTranche(UUID trancheId) {
         Specification<ComFolder> spec = specDossiers(null, null, null, List.of(trancheId),
@@ -245,13 +194,7 @@ public class DossierService {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    /**
-     * Les filtres de la liste des dossiers, extraits pour être partagés avec le groupement.
-     *
-     * <p>N'inclut délibérément <strong>pas</strong> le périmètre commercial : les deux appelants
-     * l'ajoutent explicitement, ce qui rend son absence visible à la lecture plutôt que cachée
-     * dans une composition.
-     */
+    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement. */
     private static Specification<ComFolder> specDossiers(List<String> statuts, UUID commercial,
             UUID projet, List<UUID> trancheIds, ChampDateDossier champDate,
             LocalDateTime dateDebut, LocalDateTime dateFin, String search) {
@@ -265,16 +208,13 @@ public class DossierService {
                 predicates.add(cb.equal(root.get("cfgCommercial").get("id"), commercial));
             }
             if (projet != null) {
-                // Le projet se résout par la TRANCHE de l'article principal, jamais par
-                // StkItem.CfgProjectId : ce raccourci est mort en base réelle (0 ligne sur 1068),
-                // donc le filtre ne renvoyait jamais aucun dossier. Même chemin que
-                // ComFolderRepository.findDashboardProjectionDansPerimetre, qui le documentait déjà.
+                // Par la tranche de l'article principal, jamais StkItem.CfgProjectId, colonne morte
+                // (FEATURE-perimetre-commercial.md, piège 1).
                 predicates.add(cb.equal(
                         root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), projet));
             }
             if (trancheIds != null && !trancheIds.isEmpty()) {
-                // Prédicat partagé avec le tableau de bord et GET /api/clients
-                // (FEATURE-dashboard-filtre-tranche.md, R2) — voir AppartenanceTranche.dossier.
+                // Partagé avec le tableau de bord et GET /api/clients (FEATURE-dashboard-filtre-tranche.md R2).
                 predicates.add(AppartenanceTranche.dossier(root, query, cb, trancheIds));
             }
             if (dateDebut != null || dateFin != null) {
@@ -312,22 +252,9 @@ public class DossierService {
     }
 
     /**
-     * {@code POST /api/dossiers}: creates a Dossier from a Prospection. The prospection must
-     * have a linked prospect (client). Every article in {@code articleIds} must exist and be
-     * DISPONIBLE ({@code StkItem.ComFolderId IS NULL}) — confirmed availability rule from
-     * {@link com.tsix.immocrm.domain.StatutArticle}. {@code StkVocation} (required, NOT NULL
-     * on ComFolder) is taken from the first article, since a folder has none of its own.
-     *
-     * {@code modePaieId} and {@code cin} are required by business decision (the underlying DB
-     * columns are nullable, but a sales dossier must not be created without them). {@code cin}
-     * is written onto the buyer's {@code CfgTier.IDNumber} — it doesn't overwrite an existing
-     * value with a blank one, but does overwrite a differing value (the CIN captured at sale
-     * time is treated as authoritative).
-     *
-     * When {@code prix} is provided, also auto-generates the "Schéma de financement" échéancier
-     * lines (AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC — confirmed against real
-     * {@code ComSettlementCategory}/{@code ComDocument} data, see {@link #genererSchemaFinancement}).
-     * Skipped entirely if {@code prix} is null, since the amounts derive from it.
+     * Articles DISPONIBLE ({@code ComFolderId IS NULL}) ; {@code StkVocation}, NOT NULL, vient du
+     * premier article. {@code modePaieId} et {@code cin} sont exigés par décision métier (colonnes
+     * nullables) ; le CIN saisi à la vente écrase celui du client. Sans {@code prix}, ni montants ni schéma.
      */
     @Transactional
     public DossierDetailDto create(CreerDossierRequest request) {
@@ -344,8 +271,7 @@ public class DossierService {
         if (!StringUtils.hasText(request.cin())) {
             throw new InvalidRequestException("cin est requis");
         }
-        // Validée avant toute écriture (y compris sans `prix`, où la remise serait sans effet):
-        // une remise aberrante doit être refusée, pas silencieusement ignorée.
+        // Validée même sans `prix`, où elle serait sans effet : refusée, pas ignorée.
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
@@ -360,15 +286,8 @@ public class DossierService {
             articles.add(item);
         }
 
-        // Périmètre commercial : créer un dossier sur un projet non affecté est refusé (403).
-        // Ici l'appelant a lui-même désigné les articles, donc les projets — il n'y a rien à
-        // cacher, contrairement à une lecture hors périmètre (404). Sans ce contrôle, la frontière
-        // posée sur les listes et les détails serait purement décorative.
-        //
-        // TOUS les articles sont contrôlés, pas seulement le principal : la boucle plus bas pose
-        // StkItem.ComFolderId sur chacun d'eux. Ne valider que articles.get(0) laissait passer
-        // [lotDuProjetA, annexeDuProjetB] en 201 et marquait vendu un lot d'un projet que
-        // l'appelant ne peut même pas lire — une écriture transverse au périmètre.
+        // 403 et non 404 : l'appelant a désigné les articles lui-même, rien à cacher. TOUS sont
+        // contrôlés, pas seulement le principal : chacun reçoit ComFolderId plus bas, donc devient vendu.
         for (StkItem article : articles) {
             perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
                     "Création de dossier sur l'article " + article.getCode());
@@ -382,10 +301,8 @@ public class DossierService {
         folder.setId(UUID.randomUUID());
         folder.setDocDate(LocalDateTime.now());
         folder.setCode(genererCodeDossier(articles.get(0)));
-        // Main article back-link (ComFolder.StkItemId) — confirmed against real data: it points
-        // to the main lot when several articles are linked (annexes like TER/PARKING only carry
-        // the reverse StkItem.ComFolderId, set below). Was missing entirely before this fix,
-        // leaving folder.getStkItem() always null for API-created dossiers.
+        // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) ne portent que le
+        // lien inverse StkItem.ComFolderId, posé plus bas.
         folder.setStkItem(articles.get(0));
         folder.setStkVocation(articles.get(0).getStkVocation());
         folder.setCfgCustomer(client);
@@ -393,9 +310,7 @@ public class DossierService {
         folder.setComProspection(prospection);
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
-        // Initial status: confirmed 100% of real dossiers (359/359 with history) start at
-        // RESERVATION — no exception. Doesn't block creation if the StrStatus row is somehow
-        // missing (defensive, same spirit as genererCodeDossier's self-healing).
+        // Tout dossier réel commence en RESERVATION. Ligne StrStatus absente : on crée quand même.
         StrStatus statutInitial = strStatusRepository.findByStrConfigEntityIdAndCode(
                 StatutDossier.CONFIG_ENTITY_ID, StatutDossier.RESERVATION.getCode());
         folder.setStrStatus(statutInitial);
@@ -421,10 +336,8 @@ public class DossierService {
         }
 
         if (request.prix() != null) {
-            // Base du schéma = prix APRÈS remise (posé par appliquerMontants juste au-dessus), pas
-            // le `prix` brut de la requête : sans remise explicite les deux sont égaux (comportement
-            // historique inchangé), avec une remise saisie par le commercial l'AVANCE et
-            // l'AUTO-FINANCEMENT doivent porter sur le prix réellement dû.
+            // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
+            // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû.
             genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
         }
 
@@ -435,38 +348,11 @@ public class DossierService {
     }
 
     /**
-     * Calcule et pose la ventilation HT/TTC/remise du dossier à la création — même logique que
-     * {@code DevisService#calculerMontants} (l'onglet "Montants" de l'Offre : prix commercial de
-     * l'article, {@code ComSalePrice(HT)}/{@code Vat}, HT dérivé du taux de TVA), mais avec deux
-     * différences volontaires par rapport à l'Offre :
-     * <ul>
-     *   <li>Deux modes de remise, selon que {@code remisePercent} est fourni ou non :
-     *     <ul>
-     *       <li><b>Remise explicite</b> ({@code remisePercent != null}) — le commercial saisit la
-     *           remise sur l'écran de création. {@code prixNegocie} devient alors le prix
-     *           <b>avant</b> remise et remplace le prix commercial de l'article comme base (même
-     *           rôle que {@code prixOverride} dans {@code DevisService#calculerMontants}), la
-     *           remise est appliquée dessus : {@code priceAfterDiscount = priceBeforeDiscount ×
-     *           (1 − remise/100)}. C'est ce prix après remise qui alimente {@code TotalToPay}
-     *           <i>et</i> le schéma de financement (AVANCE / AUTO-FINANCEMENT).</li>
-     *       <li><b>Remise dérivée</b> ({@code remisePercent == null}, comportement historique
-     *           conservé pour ne rien casser côté front) — {@code prixNegocie} est le prix
-     *           <b>après</b> remise, le prix avant remise vient du prix commercial de l'article,
-     *           et le pourcentage de remise est déduit de l'écart entre les deux.</li>
-     *     </ul>
-     *   </li>
-     *   <li>{@code TotalToPay} (exposé sur {@code DossierListItemDto}/{@code DossierDetailDto} et
-     *       agrégé par {@code DashboardService} pour la "valeur du pipeline" — colonne réelle,
-     *       jamais posée avant ce correctif) = {@code priceAfterDiscount} (TTC) + Frais Syndic
-     *       ({@link SchemaFinancementCalculator}, jamais inclus dans le total d'une Offre).</li>
-     * </ul>
-     * {@code annexes} (articles secondaires liés au même dossier, ex. parking/cave) jouent le
-     * rôle des sous-articles côté Offre — leur {@code ComSalePrice(HT)} alimente
-     * {@code underItemsPrice(HT)}, et la remise explicite porte sur le total (principal + annexes),
-     * répartie au prorata comme côté Offre.
+     * Ventilation HT/TTC/remise, comme {@code DevisService#calculerMontants} (annexes = sous-articles).
+     * Remise explicite : {@code prixNegocie} est le prix <b>avant</b> remise ; sinon c'est le prix
+     * <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
      */
-    // Package-private (not private) so DossierMontantsBackfill (one-off migration, src/test) can
-    // reuse this exact logic to fill TotalToPay on legacy dossiers that predate this computation.
+    // Package-private : DossierMontantsBackfill (src/test) réutilise ce calcul exact.
     static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
                                            BigDecimal prixNegocie, BigDecimal remisePercent,
                                            BigDecimal fraisSyndic) {
@@ -476,8 +362,7 @@ public class DossierService {
         BigDecimal itemPrice;
         BigDecimal itemPriceHT;
         if (remiseExplicite && prixNegocie != null) {
-            // Prix saisi = prix avant remise de l'article principal (peut être le prix commercial
-            // pré-rempli par le front, ou une valeur ajustée) — le HT est redérivé du taux de TVA.
+            // Prix saisi = prix avant remise du principal ; HT redérivé du taux de TVA.
             itemPrice = prixNegocie;
             itemPriceHT = diviserParTaux(itemPrice, vatRatio);
         } else {
@@ -523,8 +408,7 @@ public class DossierService {
                     : BigDecimal.ZERO;
         }
 
-        // Répartit la remise au prorata entre article principal et annexes pour la ventilation
-        // "après remise" — même principe que DevisService#calculerMontants.
+        // Remise répartie au prorata HT entre principal et annexes, comme DevisService#calculerMontants.
         BigDecimal partPrincipal = priceBeforeDiscountHT.signum() != 0
                 ? itemPriceHT.divide(priceBeforeDiscountHT, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
         BigDecimal itemPriceAfterHT = itemPriceHT.subtract(discountAmountHT.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
@@ -556,11 +440,7 @@ public class DossierService {
         folder.setTotalToPay(priceAfterDiscount.add(syndic));
     }
 
-    /**
-     * Une remise saisie hors de [0 ; 100] est refusée en 400 : négative elle gonflerait le prix,
-     * au-delà de 100 elle donnerait un prix après remise négatif (et un schéma de financement
-     * négatif derrière). Absente ⇒ mode historique, aucune validation.
-     */
+    /** Hors de [0 ; 100] ⇒ 400 : sinon prix gonflé, ou prix après remise et schéma négatifs. */
     private static void validerRemisePercent(BigDecimal remisePercent) {
         if (remisePercent == null) {
             return;
@@ -570,7 +450,7 @@ public class DossierService {
         }
     }
 
-    /** HT = TTC / (1 + taux). Renvoie TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
+    /** HT = TTC / (1 + taux), TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
     private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
         if (vatRatio == null || vatRatio.signum() == 0) {
             return montantTTC;
@@ -579,11 +459,8 @@ public class DossierService {
     }
 
     /**
-     * Auto-generates the "Schéma de financement" on Dossier creation, persisting each line as a
-     * {@code ComDocument} échéance. Each category is looked up by exact {@code Code} scoped to
-     * the folder's {@code StkVocation} (confirmed: AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC all share
-     * the same "VENTE" vocation in real data) — a line whose category doesn't exist for that
-     * vocation is silently skipped (matches the pre-existing behaviour, never blocks creation).
+     * Une échéance {@code ComDocument} par ligne ; catégorie cherchée par {@code Code} dans la
+     * vocation du dossier, ligne ignorée si elle n'y existe pas (la création n'est jamais bloquée).
      */
     private void genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
         UUID vocationId = folder.getStkVocation().getId();
@@ -604,17 +481,8 @@ public class DossierService {
     }
 
     /**
-     * {@code POST /api/dossiers/simulation-financement}: étape de prévisualisation AVANT création
-     * du dossier — calcule le même "Schéma de financement" que {@link #create} générerait
-     * ({@link SchemaFinancementCalculator#calculer}, la même méthode partagée), mais ne persiste rien (aucun
-     * {@code ComFolder}/{@code ComDocument} créé). Le premier article de {@code articleIds} fait
-     * foi pour la tranche (barème AVANCE/SYNDIC) et la vocation (catégorie d'échéance) — même
-     * convention que {@link #create}. Contrairement à la création réelle, les articles n'ont pas
-     * besoin d'être DISPONIBLE ici : c'est une simulation, rien n'est réservé.
-     *
-     * {@code remisePercent} suit exactement la même sémantique qu'à la création (voir
-     * {@link #appliquerMontants}) : fourni, le schéma porte sur le prix APRÈS remise, et les
-     * articles suivants comptent alors comme annexes dans le prix avant remise.
+     * Le schéma que {@link #create} générerait, sans rien persister. Les articles n'ont pas à être
+     * DISPONIBLE : rien n'est réservé.
      */
     public SchemaFinancementDto simulerSchemaFinancement(SimulerSchemaFinancementRequest request) {
         if (request.articleIds() == null || request.articleIds().isEmpty()) {
@@ -625,8 +493,7 @@ public class DossierService {
 
         StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
                 .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleIds().get(0)));
-        // Charge aussi les articles suivants (mêmes erreurs qu'à la création réelle) : ils servent
-        // d'annexes dans le calcul de la remise explicite, exactement comme à la création.
+        // Les articles suivants sont les annexes du calcul de remise, comme à la création.
         List<StkItem> annexes = new ArrayList<>();
         for (UUID articleId : request.articleIds().subList(1, request.articleIds().size())) {
             annexes.add(stkItemRepository.findById(articleId)
@@ -636,9 +503,8 @@ public class DossierService {
         UUID vocationId = premierArticle.getStkVocation().getId();
         CfgTranche tranche = premierArticle.getStkHierarchy();
 
-        // Le schéma se calcule sur le prix APRÈS remise. Plutôt que de dupliquer la formule, on
-        // réutilise appliquerMontants sur un ComFolder jetable, jamais persisté : la simulation ne peut
-        // donc pas diverger de ce que POST /api/dossiers produira pour les mêmes paramètres.
+        // appliquerMontants sur un ComFolder jetable, jamais persisté, plutôt qu'une copie de la
+        // formule : la simulation ne peut pas diverger de POST /api/dossiers.
         ComFolder apercu = new ComFolder();
         appliquerMontants(apercu, premierArticle, annexes, request.prix(), request.remisePercent(), BigDecimal.ZERO);
         BigDecimal prixApresRemise = apercu.getPriceAfterDiscount();
@@ -658,9 +524,8 @@ public class DossierService {
     }
 
     /**
-     * {@code PATCH /api/dossiers/{id}/statut}. Enforces {@link TransitionsValidees} — 409 via
-     * {@link InvalidStatutTransitionException} on an invalid transition. A dossier with no
-     * current status (new/never set) accepts any valid {@link StatutDossier} as its first one.
+     * 409 hors {@link TransitionsValidees}. Un dossier sans statut courant (ou à code inconnu)
+     * accepte n'importe quel {@link StatutDossier} comme premier statut.
      */
     @Transactional
     public DossierDetailDto changerStatut(UUID id, ChangerStatutRequest request) {
@@ -700,45 +565,9 @@ public class DossierService {
     }
 
     /**
-     * Writes {@code request.date()} onto the target status's confirmed "milestone" column (see
-     * {@link com.tsix.immocrm.domain.EtapeMilestone}) and applies {@code request.note()} —
-     * {@code ANNULATION} routes it to {@code CancelDescription} (the cancellation cause, per
-     * real data), every other status to the generic {@code Notes}. No-op (beyond the note) for
-     * statuses with no confirmed milestone column (e.g. RESERVATION, CREDIT_EN_COURS).
-     */
-    /**
-     * Records the transition on {@code StrFolderStatusHistory} — the same table
-     * {@link TransitionsValidees} was mined from — so status changes made through this API are
-     * traceable the same way legacy desktop-app changes are (see
-     * {@code GET /api/dossiers/{id}/historique}). {@code note} is stored as {@code Description},
-     * matching real data usage (e.g. "ANNULATION AFFECTATION").
-     */
-    /**
-     * Ferme la prospection transformée et désarme ses relances — ce que fait le logiciel de bureau
-     * à chaque vente, et que nous ne faisions pas.
-     *
-     * <h2>Pourquoi c'est nécessaire</h2>
-     *
-     * <p>Sans cette clôture, la prospection reste <strong>active dans le pipeline</strong> après la
-     * vente : elle continue d'apparaître dans {@code GET /api/prospections}, de compter dans les
-     * tableaux de bord, et ses relances restent armées — un commercial est relancé sur une affaire
-     * déjà signée.
-     *
-     * <h2>Ce qui est posé, et ce qui ne l'est pas</h2>
-     *
-     * <p>Mesuré sur les dossiers réels : <strong>354 des 355</strong> dossiers liés à une
-     * prospection l'ont fermée (99,7 % — la seule exception est un dossier de 2022 saisi à la
-     * main), et {@code ClosingDate} est renseignée sur <strong>354/354</strong>.
-     *
-     * <p>En revanche <strong>aucun motif de clôture n'est posé</strong> : seules 20 des 354
-     * prospections fermées en portent un (5,6 %). L'exiger serait plus strict que le légataire, et
-     * inventer une valeur par défaut fabriquerait une statistique fausse.
-     *
-     * <p>Le désarmement des relances reprend exactement le prédicat d'Omran : les interactions
-     * porteuses d'une alerte et <em>non rattachées à une échéance</em>
-     * ({@code ComDocumentId IS NULL}) — celles du dossier qui vient de naître doivent, elles,
-     * rester actives. Il éteint aussi leurs lignes {@code AdmAlertData}, celles que l'écran du
-     * logiciel de bureau lit réellement — voir {@link AlerteRelanceService}.
+     * Comme OMRAN à chaque vente : ferme la prospection, sans motif de clôture (le légataire n'en
+     * pose presque jamais), et désarme ses relances hors échéance. Voir
+     * {@code FEATURE-conformite-legataire.md} §2.
      */
     private void cloturerLaProspection(ComProspection prospection) {
         prospection.setIsClosed(true);
@@ -748,22 +577,8 @@ public class DossierService {
     }
 
     /**
-     * Historise un changement de statut, dans les <strong>deux</strong> tables que le logiciel de
-     * bureau alimente.
-     *
-     * <p>{@code StrFolderStatusHistory} était déjà écrite, mais amputée : ni l'auteur ni le client
-     * n'y figuraient. Un historique qui ne dit pas <em>qui</em> a changé le statut ne sert qu'à
-     * moitié — et le légataire, lui, renseigne {@code AdmUserId} et {@code CfgTierId} sur
-     * <strong>1 282 de ses 1 308 lignes (98 %)</strong>.
-     *
-     * <p>{@code StrHistory} est la seconde, générique, que nous <em>lisions</em> déjà pour l'onglet
-     * « Historique » sans jamais l'écrire : nos dossiers n'y apparaissaient donc pas. Elle porte
-     * 1 065 lignes rattachées à un dossier en base réelle, et son {@code AdmUserId} est renseigné
-     * à 99,6 %.
-     *
-     * <p>{@code StrWorkflowId} reste nul : nous ne modélisons pas les workflows du légataire, et
-     * inventer un identifiant produirait une ligne que son écran ne saurait pas interpréter. Les
-     * 21 % de ses lignes qui n'en portent pas montrent que c'est un cas admis.
+     * Dans les <strong>deux</strong> tables qu'alimente OMRAN, auteur compris ; {@code StrWorkflowId}
+     * reste nul, cas admis par le légataire. Voir {@code FEATURE-conformite-legataire.md} §3.
      */
     private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
         UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
@@ -793,6 +608,8 @@ public class DossierService {
         strHistoryRepository.save(generique);
     }
 
+    // La date va sur la colonne jalon de l'étape (EtapeMilestone) ; la note va sur CancelDescription
+    // pour ANNULATION (la cause d'annulation), sur Notes sinon.
     private static void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
         if (cible == StatutDossier.ANNULATION) {
             folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now());
@@ -817,17 +634,15 @@ public class DossierService {
             case REMISE_DES_CLEFS -> folder.setDeliveryDateReal(request.date());
             case FORMALISE -> folder.setAgreementRegistryDate(request.date());
             default -> {
-                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE, DESISTEMENT: no confirmed
-                // milestone column — see EtapeMilestone.
+                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE, DESISTEMENT : pas de colonne
+                // jalon confirmée — voir EtapeMilestone.
             }
         }
     }
 
     /**
-     * {@code GET /api/dossiers/{id}/montants}: recap grouped by category, computed
-     * server-side from the échéancier — never stored. {@code ComDocument.excludeFromPrice}
-     * lines (e.g. FRAIS) are counted in {@code parCategorie}/{@code totalGeneral} but excluded
-     * from {@code totalSoumisReglePrixTTC}.
+     * Calculé depuis l'échéancier, jamais stocké. Les lignes {@code excludeFromPrice} (FRAIS) comptent
+     * dans {@code parCategorie}/{@code totalGeneral} mais pas dans {@code totalSoumisReglePrixTTC}.
      */
     public MontantsDossierDto montants(UUID dossierId) {
         ComFolder folder = folderRepository.findById(dossierId)
@@ -882,11 +697,8 @@ public class DossierService {
     }
 
     /**
-     * Ligne « Prix de vente » de l'onglet Montants du logiciel de bureau.
-     *
-     * <p>Le montant vient de {@code ComFolder.Price} et n'est <strong>pas</strong> re-dérivé de
-     * l'échéancier : les deux coïncident sur 327 des 328 dossiers actifs réels, et c'est le prix
-     * stocké qui fait foi — c'est aussi ce que lit la vue légataire.
+     * « Prix de vente » de l'onglet Montants : {@code ComFolder.Price}, <strong>pas</strong> re-dérivé
+     * de l'échéancier — le prix stocké fait foi, c'est ce que lit la vue légataire.
      */
     private static SyntheseMontantDto prixVente(ComFolder f, BigDecimal regleSoumisAuPrix) {
         BigDecimal montant = requireNonNullElse(f.getPrice(), BigDecimal.ZERO);
@@ -894,13 +706,8 @@ public class DossierService {
     }
 
     /**
-     * Ligne « Net à payer » : le prix de vente augmenté des frais exclus du prix.
-     *
-     * <p><strong>Sauf sur un dossier sorti</strong> ({@code ANNULATION} / {@code DESISTEMENT}), où
-     * le net à payer se réduit à ce qui a déjà été encaissé et le reste tombe à zéro — un dossier
-     * annulé ne reste rien devoir. Les deux règles sont vérifiées sans exception sur les 358
-     * dossiers réels : 328/328 pour les actifs, 30/30 pour les sortis. Voir
-     * {@code instructions/FEATURE-fiche-dossier-alignement-ecran.md} §5.
+     * « Net à payer » = prix de vente + frais exclus du prix ; sur un dossier sorti, = déjà encaissé,
+     * reste 0. Voir {@code FEATURE-fiche-dossier-alignement-ecran.md} §5.
      */
     private static SyntheseMontantDto netAPayer(ComFolder f, BigDecimal fraisExclusDuPrix,
                                                 BigDecimal regleTotal) {
@@ -911,17 +718,12 @@ public class DossierService {
         return new SyntheseMontantDto(montant, regleTotal, montant.subtract(regleTotal));
     }
 
-    /**
-     * Dossier sorti du parcours. Équivaut exactement au {@code IsCancellation} de la vue légataire
-     * — vérifié 30/30 (22 {@code ANNULATION} + 8 {@code DESISTEMENT}), aucune exception —, donc
-     * aucune colonne supplémentaire n'est mappée pour l'obtenir.
-     */
+    /** Équivaut au {@code IsCancellation} de la vue légataire, d'où aucune colonne mappée pour l'obtenir. */
     private static boolean estSorti(ComFolder f) {
         if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
             return false;
         }
-        // fromCode lève sur un code hors référentiel : un statut inconnu ne doit pas faire tomber
-        // le calcul des montants en 500. Même repli défensif que etapesAtteignables.
+        // fromCode lève sur un code hors référentiel : pas de 500 sur les montants pour autant.
         try {
             return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
         } catch (IllegalArgumentException e) {
@@ -929,22 +731,14 @@ public class DossierService {
         }
     }
 
-    /**
-     * Le statut courant du dossier, ou {@link Optional#empty()} si le dossier n'en porte pas — ou
-     * s'il porte un code que {@link StatutDossier} ne connaît pas. Les deux cas se traitent
-     * identiquement chez tous les appelants, d'où un seul type de retour pour les deux.
-     */
+    /** Vide si le dossier n'a pas de statut <b>ou</b> un code inconnu : les appelants les traitent pareil. */
     private static Optional<StatutDossier> statutActuel(ComFolder folder) {
         return folder.getStrStatus() == null
                 ? Optional.empty()
                 : tryFromCode(folder.getStrStatus().getCode());
     }
 
-    /**
-     * Lecture tolérante d'un code de statut legacy : {@link Optional#empty()} pour une valeur
-     * absente <b>ou inconnue</b>. {@code StrStatus.Code} reste alimenté par l'application de
-     * bureau, une valeur inattendue ne doit pas faire échouer la lecture d'un dossier.
-     */
+    /** {@code StrStatus.Code} est alimenté par OMRAN : une valeur inconnue ne fait pas échouer la lecture. */
     private static Optional<StatutDossier> tryFromCode(String code) {
         try {
             return Optional.ofNullable(code).map(StatutDossier::fromCode);
@@ -953,12 +747,7 @@ public class DossierService {
         }
     }
 
-    /**
-     * {@code GET /api/dossiers/{id}/statut/etapes-suivantes}: for each status reachable from the
-     * Dossier's current one, which {@code ComFolder} milestone column (if any) {@code PATCH
-     * .../statut}'s {@code date} would be written to — lets the front-end know which date to ask
-     * for, per {@link com.tsix.immocrm.domain.EtapeMilestone}.
-     */
+    /** Pour chaque statut atteignable, la colonne jalon où {@code PATCH .../statut} écrirait sa date. */
     public List<EtapeSuivanteDto> etapesSuivantes(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + id));
@@ -990,14 +779,8 @@ public class DossierService {
     }
 
     /**
-     * Mappeur de la liste des dossiers.
-     *
-     * <p>Le <strong>contexte patrimonial n'est traversé que s'il est demandé</strong> : la chaîne
-     * article → tranche → projet → société est de trois jointures paresseuses par ligne, soit
-     * soixante requêtes inutiles sur une page de vingt quand personne ne les réclame. Même règle
-     * pour la prospection d'origine.
-     *
-     * @param colonnes sélection résolue ; {@code Set.of()} pour les appels hors liste.
+     * Patrimoine (trois jointures paresseuses par ligne), prospection et article ne sont traversés
+     * que si leurs colonnes sont demandées. {@code colonnes} : {@code Set.of()} hors liste.
      */
     public static DossierListItemDto toListItem(ComFolder f, Set<ColonneDossier> colonnes) {
         boolean patrimoine = ColonneDossier.exigeLePatrimoine(colonnes);
@@ -1025,8 +808,7 @@ public class DossierService {
                 f.getDiscount(),
                 f.getDiscountAmount(),
                 f.getPriceAfterDiscount(),
-                // Le "montant d'avance" de la fiche vient d'AgreementAmount (99,7 % des 358
-                // dossiers), pas d'une colonne AdvanceAmount : ComFolder n'en porte pas.
+                // Le « montant d'avance » vient d'AgreementAmount : ComFolder n'a pas d'AdvanceAmount.
                 f.getAgreementAmount(),
                 f.getProbabilityOfFinalisation(),
                 projet != null ? projet.getId() : null,
@@ -1055,9 +837,6 @@ public class DossierService {
                 f.getUserCreateDateTime(),
                 f.getUserUpdate(),
                 f.getUserUpdateDateTime(),
-                // Article principal : déréférencé seulement s'il est demandé — jusqu'à cinq
-                // jointures paresseuses par ligne sinon (bâtiment, étage, catégorie, type,
-                // présentation), soit cent requêtes sur une page de vingt.
                 article != null ? article.getId() : null,
                 article != null ? article.getCode() : null,
                 article != null ? article.getDescription() : null,
@@ -1117,10 +896,8 @@ public class DossierService {
                 f.getPartPercent(),
                 f.getComProspection() != null ? f.getComProspection().getId() : null,
                 f.getComProspection() != null ? f.getComProspection().getCode() : null,
-                // -- Contexte patrimonial. La chaîne article → tranche → projet → société est
-                //    vérifiée à 358/358, mais chaque maillon est déréférencé défensivement : la
-                //    vue légataire la traverse en LEFT JOIN, donc rien ne garantit en base qu'un
-                //    maillon manquant soit impossible.
+                // Chaque maillon article → tranche → projet → société est testé : la vue légataire
+                // les traverse en LEFT JOIN, rien en base n'interdit qu'il manque.
                 projet(f) != null ? projet(f).getId() : null,
                 projet(f) != null ? projet(f).getCode() : null,
                 projet(f) != null ? projet(f).getDescription() : null,
@@ -1152,29 +929,17 @@ public class DossierService {
         );
     }
 
-    /**
-     * Tranche du dossier, portée par son article principal.
-     *
-     * <p>{@code ComFolder} n'a pas de tranche à lui : elle vient de {@code StkItem.StkHierarchyId},
-     * renseigné sur les 358 articles de dossier réels.
-     */
+    /** {@code ComFolder} n'a pas de tranche à lui : celle de l'article principal ({@code StkHierarchyId}). */
     private static CfgTranche tranche(ComFolder f) {
         return f.getStkItem() != null ? f.getStkItem().getStkHierarchy() : null;
     }
 
-    /**
-     * Projet du dossier — <strong>via la tranche, jamais via l'article</strong>.
-     *
-     * <p>{@code StkItem.CfgProjectId} est {@code null} sur les <strong>358</strong> articles de
-     * dossier de la base réelle. Le lire directement rendrait {@code null} partout, sans erreur
-     * visible : c'est le genre de mapping qui passe les tests et ne remplit jamais l'écran.
-     */
+    /** Via la tranche, jamais {@code StkItem.CfgProjectId}, toujours {@code null} en base réelle. */
     private static CfgProject projet(ComFolder f) {
         CfgTranche t = tranche(f);
         return t != null ? t.getCfgProject() : null;
     }
 
-    /** Entité juridique sous laquelle le projet est vendu. */
     private static CfgCompany societe(ComFolder f) {
         CfgProject p = projet(f);
         return p != null ? p.getCfgCompany() : null;
