@@ -47,3 +47,49 @@ pré-prospections (`ColonneProspection.PROSPECT_NOM`).
 - Test unitaire de `nomProspect` (tiers, repli, tout vide, `p` null).
 - `./mvnw compile` vert ; tests ciblés verts. La suite complète est lancée par
   le manager.
+
+---
+
+## §2 — Suivi des actions : colonne « Tiers » (`tiersNom`)
+
+Demande utilisateur (2026-10-07) : dans **Suivi des actions**, une action rattachée
+à une pré-prospection n'affiche aucun nom ; une action de prospection, si.
+
+**Cause.** `SuiviActionService.projeter` lit `ti.description` avec
+`LEFT JOIN m.cfgTier ti` (le tiers posé **sur l'action**, `ComActionMessage.CfgTierId`).
+Les actions de pré-prospection n'ont pas de `CfgTierId`. La colonne catalogue
+`ColonneSuiviAction.TIERS_NOM` est `Chemin.groupable("cfgTier.description")`.
+
+**Chiffres `yesRems` (copie locale, peut être en retard sur la prod) :** 48 013
+actions ; 1 529 sans `CfgTierId`, **toutes** rattachées à une prospection, et les
+1 529 ont un `TempDescription` non blanc. Parmi elles, 1 492 ont une prospection
+**avec** fiche prospect (`CfgProspectId`) — elles affichent aussi un nom vide
+aujourd'hui — et 37 sont sur des pré-prospections.
+
+### Règles
+
+5. `tiersNom` = premier texte non blanc parmi, dans cet ordre :
+   1. `m.cfgTier.description` (inchangé quand présent) ;
+   2. `m.comProspection.cfgProspect.description` ;
+   3. `m.comProspection.tempDescription` (trim).
+   Sinon `null`. Même règle « non blanc » que `StringUtils.hasText`.
+6. Tri, filtre et groupement sur `tiersNom` suivent la **même cascade** : passer
+   `TIERS_NOM` à `Chemin.repli("cfgTier.description",
+   "comProspection.cfgProspect.description", "comProspection.tempDescription")`
+   (le mécanisme existe déjà pour `telephone`/`email` de la prospection ; vérifier
+   qu'il marche aussi pour le tri/filtre de la liste suivi, pas seulement le
+   groupement). Une ligne affichée « X » doit tomber dans le groupe « X ».
+7. `tiersId` **ne change pas** (reste l'id du tiers de l'action, `null` ici) ; le
+   calcul de rang (actions plus récentes du même tiers) ne change pas.
+
+### Vérification §2
+
+- Test : action sans `CfgTierId` sur une pré-prospection avec `TempDescription`
+  → `GET /api/suivi-actions` (endpoint existant de la liste) renvoie ce nom dans
+  `tiersNom`.
+- Test : action sans `CfgTierId` sur une prospection avec fiche prospect → nom de
+  la fiche.
+- Test : action avec `CfgTierId` → nom du tiers de l'action, même si la
+  prospection a un autre nom.
+- Test : groupement `groupBy=tiersNom` met l'action de pré-prospection dans le
+  groupe portant son `TempDescription`.

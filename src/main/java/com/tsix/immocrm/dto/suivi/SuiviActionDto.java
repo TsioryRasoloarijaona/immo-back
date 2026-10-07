@@ -57,7 +57,12 @@ public record SuiviActionDto(
         @Schema(description = "Personnel : employé du compte auteur, sinon le compte, sinon le "
                 + "commercial — règle de la vue OMRAN. Calculé pour la page servie.")
         String personnel,
-        @Schema(description = "Tiers (prospect/client) de l'action (`CfgTier.Description`).")
+        @Schema(description = "Tiers (prospect/client) de l'action : `CfgTier.Description` du tiers "
+                + "posé sur l'action, à défaut la fiche prospect de la prospection rattachée, à "
+                + "défaut le nom saisi au premier contact (`TempDescription`, cas des "
+                + "pré-prospections). Premier texte non blanc, nettoyé ; `null` si aucun. Le "
+                + "groupement (`groupBy=tiersNom`) et son dépliage suivent la même cascade. `tiersId` reste l'id du "
+                + "seul tiers de l'action.")
         String tiersNom,
         @Schema(description = "Code de la prospection rattachée.", example = "26/05947")
         String prospectionCode,

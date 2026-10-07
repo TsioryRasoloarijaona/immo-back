@@ -76,8 +76,14 @@ public enum ColonneSuiviAction implements Colonne {
             Chemin.groupable("cfgEmployee.description")),
     /** Employé du compte, sinon le compte, sinon le commercial — règle de la vue. Page servie seulement. */
     PERSONNEL("personnel", "Personnel", Groupe.ACTEURS, TypeColonne.TEXTE, true),
+    /**
+     * Tiers de l'action, sinon fiche prospect de la prospection, sinon {@code TempDescription} —
+     * même cascade que l'affichage ({@code SuiviActionService#tiersNom}). Sans elle, les actions
+     * de pré-prospection (sans {@code CfgTierId}) n'avaient ni nom ni groupe.
+     */
     TIERS_NOM("tiersNom", "Tiers", Groupe.ACTEURS, TypeColonne.TEXTE, true,
-            Chemin.groupable("cfgTier.description")),
+            Chemin.repli("cfgTier.description", "comProspection.cfgProspect.description",
+                    "comProspection.tempDescription")),
 
     // -- Ce à quoi l'action est rattachée.
     PROSPECTION_CODE("prospectionCode", "Prospection", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true,
