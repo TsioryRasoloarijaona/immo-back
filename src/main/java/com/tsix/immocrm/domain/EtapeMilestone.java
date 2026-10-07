@@ -6,41 +6,17 @@ import java.util.Map;
 import static com.tsix.immocrm.domain.StatutDossier.*;
 
 /**
- * Which {@code ComFolder} date column (if any) is the "milestone date" for reaching a given
- * {@link StatutDossier}, and how confident that mapping is. Derived empirically against the real
- * database (never documented anywhere) — two kinds of evidence were used:
- * <ol>
- *   <li><b>The legacy "Fiche dossier de vente" printed report</b> (see
- *       {@code instructions/templates/FICHE DOSSIER DE VENTE.pdf}) directly pairs a French label
- *       with a {@code ComFolder} column value — e.g. it prints "Envoie notaire / Avocat" next to
- *       {@code ComFolder.AgreementDate}'s value. This is the strongest evidence (it's the legacy
- *       app itself telling us what the column means) — used for {@link #CONFIRME} entries.</li>
- *   <li><b>Cross-referencing {@code StrFolderStatusHistory}</b> (the status-change audit log)
- *       against the candidate column, on several real (non-test-looking) dossiers, checking the
- *       column's date lands on or shortly before the matching status transition timestamp.</li>
- * </ol>
- * Some statuses have no reliable column at all:
- * <ul>
- *   <li>{@link StatutDossier#RESERVATION}, {@link StatutDossier#CREDIT_EN_COURS} are transient
- *       states with no dedicated business date — {@code ComFolder.DocDate} already covers
- *       "when the dossier was created".</li>
- *   <li>{@link StatutDossier#LIVRAISON_PROVISOIRE} has <b>zero</b> occurrences in
- *       {@code StrFolderStatusHistory} across the whole database — never used in practice, no
- *       field can be confirmed.</li>
- *   <li>{@link StatutDossier#DESISTEMENT} is backed by a whole separate entity
- *       ({@code ComSaleWithdrawalCancellation} — reimbursement amount, withdrawal reason,
- *       legalization date...), not a single date column; out of scope here, tracked separately.</li>
- * </ul>
+ * Colonne date de {@code ComFolder} qui marque l'atteinte de chaque statut, avec sa confiance.
+ * Déduit de la fiche PDF légataire ({@code instructions/templates/FICHE DOSSIER DE VENTE.pdf}, qui
+ * associe libellé et colonne) et recoupé avec {@code StrFolderStatusHistory} sur dossiers réels.
  */
 public final class EtapeMilestone {
 
     public enum Confiance {
-        /** Directly confirmed by the legacy printed report's label ↔ column pairing. */
+        /** Confirmé par l'association libellé ↔ colonne de la fiche PDF légataire. */
         CONFIRME,
-        /** Field exists and is thematically right, but real data shows it's often left empty
-         * even once the status is reached (e.g. optional administrative paperwork date). */
+        /** Bonne colonne, mais souvent vide même une fois le statut atteint. */
         PLAUSIBLE,
-        /** No column could be confirmed at all. */
         AUCUN
     }
 

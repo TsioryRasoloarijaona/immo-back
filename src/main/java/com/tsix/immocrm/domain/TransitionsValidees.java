@@ -8,20 +8,9 @@ import java.util.Set;
 import static com.tsix.immocrm.domain.StatutDossier.*;
 
 /**
- * Allowed {@link StatutDossier} transitions, enforced in the service layer on
- * {@code PATCH /api/dossiers/{id}/statut} (409 Conflict on violation).
- *
- * Derived by mining {@code StrFolderStatusHistory} on the real database — for each
- * {@code ComFolder}, ordering its status history by date and counting observed
- * (previous status → new status) pairs. Self-transitions (save without an actual status
- * change) were excluded as audit-log noise. This is empirical, not a documented rule: some
- * back-edges (e.g. {@code FORMALISE → RESERVATION}) look like manual corrections rather than
- * intended workflow, but were kept as-is per explicit confirmation.
- *
- * {@link StatutDossier#LIVRAISON_PROVISOIRE} has zero occurrences in the history — its only
- * transition here ({@code FORMALISE → LIVRAISON_PROVISOIRE}) is unconfirmed, placed on the
- * assumption it follows FORMALISE (adjacent sort order: 9 → 71).
- * // TODO: LIVRAISON_PROVISOIRE transition non confirmée
+ * Transitions de {@link StatutDossier} imposées par le service (409). Empiriques : paires observées
+ * dans {@code StrFolderStatusHistory}, auto-transitions exclues, retours arrière gardés sur confirmation.
+ * // TODO: LIVRAISON_PROVISOIRE transition non confirmée (jamais observée, placée après FORMALISE)
  */
 public final class TransitionsValidees {
 

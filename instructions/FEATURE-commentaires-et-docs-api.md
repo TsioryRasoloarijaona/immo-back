@@ -281,6 +281,14 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   (FOURNISSEUR / CLIENT / BANQUE).
 - **`VisibiliteEntites.actifOuNonResolu`** : `cb.isTrue(…)` au lieu de
   `cb.equal(…, TRUE)` avait cassé neuf tests sous SQL Server.
+- **`ChampDateDossier.RESERVATION` → `DocDate`** : la colonne `ReservationDate` n'est
+  renseignée que sur 2 des 374 dossiers réels.
+- **`StatutArticle` — pas de jointure `ComFolder`** : 0 ligne réelle où
+  `StkItem.ComFolderId` pointe vers un dossier annulé ou désisté.
+- **`TransitionsValidees`** : table extraite des paires de `StrFolderStatusHistory`
+  (auto-transitions exclues ; retours arrière comme FORMALISE → RESERVATION gardés
+  sur confirmation explicite de l'utilisateur). `LIVRAISON_PROVISOIRE` : 0 occurrence,
+  placée après FORMALISE par l'ordre de tri adjacent (9 → 71).
 
 ## Annexe — Défauts possibles relevés pendant le nettoyage (non corrigés)
 

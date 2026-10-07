@@ -4,13 +4,8 @@ import java.io.Serial;
 import java.util.List;
 
 /**
- * Nom hors catalogue passé à {@code ?colonnes=} — traduit en 400 par le
- * {@code GlobalExceptionHandler}.
- *
- * <p><strong>Porte la liste des noms valides de son propre catalogue.</strong> C'est ce qui permet
- * à plusieurs listes filtrables de coexister : sans cela, une faute de frappe sur une colonne de
- * prospect se verrait répondre la liste des colonnes de prospection, ce qui est pire qu'aucune
- * aide — le message désignerait le mauvais écran.
+ * Nom hors catalogue — 400. Porte les noms valides de <strong>son</strong> catalogue, sinon une
+ * faute sur une colonne de prospect répondrait la liste des colonnes de prospection.
  */
 public class ColonneInconnueException extends RuntimeException {
 
@@ -30,7 +25,6 @@ public class ColonneInconnueException extends RuntimeException {
         return colonne;
     }
 
-    /** Noms acceptés par le catalogue qui a rejeté l'appel. */
     public List<String> nomsValides() {
         return nomsValides;
     }
