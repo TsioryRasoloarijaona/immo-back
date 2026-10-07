@@ -34,8 +34,10 @@ public record RelanceProspectionDto(
                 + "porter un commercial : `nonAffectee` n'est donc pas systématique.")
         boolean preProspection,
 
-        @Schema(description = "Nom du prospect. `null` sur une pré-prospection dont le prospect "
-                + "n'a pas encore été créé — le `telephone` reste alors le seul moyen de rappel.")
+        @Schema(description = "Nom du prospect : celui de la fiche tiers, à défaut le nom saisi "
+                + "au premier contact (`TempDescription`) — c'est le cas des pré-prospections dont "
+                + "le prospect n'a pas encore été créé. `null` seulement si aucun des deux n'est "
+                + "renseigné.")
         String prospectNom,
 
         @Schema(description = "Numéro joignable : le mobile de la fiche, à défaut son fixe, à "
