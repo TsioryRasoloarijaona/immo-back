@@ -229,8 +229,8 @@ public class EcheancierService {
         ComDocument document = new ComDocument();
         document.setId(UUID.randomUUID());
         document.setComFolder(folder);
-        // Exposée en EcheanceDto.creeLe. UserCreate reste non posé : aucun champ ne l'expose.
-        // Voir FEATURE-fiche-dossier-alignement-ecran.md §3.
+        // UserCreate signe l'événement ECHEANCE de l'historique (FIX-tracabilite-historique-hotline.md §1).
+        document.setUserCreate(utilisateurAffiche.courant().nom());
         document.setUserCreateDateTime(LocalDateTime.now(clock));
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());

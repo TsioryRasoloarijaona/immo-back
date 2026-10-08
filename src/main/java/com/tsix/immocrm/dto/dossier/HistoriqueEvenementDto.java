@@ -1,10 +1,13 @@
 package com.tsix.immocrm.dto.dossier;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 
 public record HistoriqueEvenementDto(
         LocalDateTime date,
         String type,
+        @Schema(description = "Auteur de l'événement (libellé du compte). Null sur les lignes legacy sans auteur.")
         String utilisateur,
         String description
 ) {

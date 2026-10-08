@@ -34,8 +34,8 @@ personne ne correspond, `connu` vaut `false` et les listes sont vides — c'est 
 la création d'une nouvelle fiche dans ce cas.
 
 **Périmètre commercial** : si l'appelant est restreint (`UtilisateurCourantDto.perimetreRestreint =
-true`), les listes imbriquées de chaque fiche (prospections, dossiers, règlements, interactions)
-ainsi que `appelsSansFiche` ne contiennent que les lignes de ses projets affectés. La **fiche
+true`), les listes imbriquées de chaque fiche (prospections, dossiers, règlements, interactions,
+historique) ainsi que `appelsSansFiche` ne contiennent que les lignes de ses projets affectés. La **fiche
 elle-même n'est pas masquée** : le tier reste identifiable — c'est le but de cet écran, un agent
 doit pouvoir dire qui appelle — mais son activité sur les autres projets ne lui est pas montrée. Un
 appelant peut donc apparaître `connu` avec des listes vides.

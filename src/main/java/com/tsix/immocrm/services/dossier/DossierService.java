@@ -335,6 +335,8 @@ public class DossierService {
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
         folder.setDocDate(LocalDateTime.now(clock));
+        folder.setUserCreate(utilisateurAffiche.courant().nom());
+        folder.setUserCreateDateTime(LocalDateTime.now(clock));
         folder.setCode(genererCodeDossier(articles.get(0)));
         // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) ne portent que le
         // lien inverse StkItem.ComFolderId, posé plus bas.
@@ -512,6 +514,7 @@ public class DossierService {
      */
     private void genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
         UUID vocationId = folder.getStkVocation().getId();
+        String auteur = utilisateurAffiche.courant().nom();
         for (SchemaFinancementCalculator.Ligne ligne : SchemaFinancementCalculator.calculer(tranche, prix)) {
             settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
                     .ifPresent(categorie -> {
@@ -519,6 +522,8 @@ public class DossierService {
                         document.setId(UUID.randomUUID());
                         document.setComFolder(folder);
                         document.setDocDate(LocalDateTime.now(clock));
+                        document.setUserCreate(auteur);
+                        document.setUserCreateDateTime(LocalDateTime.now(clock));
                         document.setAmount(ligne.montant());
                         document.setComSettlementCategory(categorie);
                         document.setExcludeFromPrice(categorie.getExcludeFromPrice());
@@ -603,12 +608,19 @@ public class DossierService {
         }
         folder.setStrStatus(strStatus);
         appliquerChampEtape(folder, cible, request);
+        marquerModification(folder);
         enregistrerHistoriqueStatut(folder, strStatus, request.note());
 
         List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
                 .map(DossierService::toArticleSummary)
                 .toList();
         return toDetail(folderRepository.save(folder), articles);
+    }
+
+    /** GEN0016 : toute écriture sur le dossier signe {@code UserUpdate}/{@code UserUpdateDateTime}. */
+    private void marquerModification(ComFolder folder) {
+        folder.setUserUpdate(utilisateurAffiche.courant().nom());
+        folder.setUserUpdateDateTime(LocalDateTime.now(clock));
     }
 
     /**

@@ -41,6 +41,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -51,6 +52,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -94,6 +96,8 @@ public class ProspectService {
     private final AdmIdentityDocumentTypeRepository identityDocumentTypeRepository;
     private final NumeroTelephoneSupport numeroSupport;
     private final GenerateurCodeSequence generateurCode;
+    private final UtilisateurAffiche utilisateurAffiche;
+    private final Clock clock;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -110,7 +114,11 @@ public class ProspectService {
                             AdmIdentityDocumentTypeRepository identityDocumentTypeRepository,
                             CfgTrancheRepository trancheRepository,
                             NumeroTelephoneSupport numeroSupport,
-                            GenerateurCodeSequence generateurCode) {
+                            GenerateurCodeSequence generateurCode,
+                            UtilisateurAffiche utilisateurAffiche,
+                            Clock clock) {
+        this.utilisateurAffiche = utilisateurAffiche;
+        this.clock = clock;
         this.trancheRepository = trancheRepository;
         this.numeroSupport = numeroSupport;
         this.generateurCode = generateurCode;
@@ -200,6 +208,8 @@ public class ProspectService {
         tier.setIsFundReader(false);
         // Même compteur qu'OMRAN, sinon codes en collision. Voir FIX-creation-prospect-prospection.md §3.
         tier.setCode(generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
+        tier.setUserCreate(utilisateurAffiche.courant().nom());
+        tier.setUserCreateDateTime(LocalDateTime.now(clock));
         applyFields(tier, ChampsProspect.de(request));
         // Sans type PRO, un prospect créé sans typeId n'apparaîtrait pas dans sa propre liste.
         if (request.typeId() == null) {

@@ -158,8 +158,15 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}/historique")
-    public PageDto<HistoriqueDto> getHistorique(@PathVariable UUID id,
-                                                 @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
+    @Operation(summary = "Historique des dossiers de vente du tiers (changements de statut)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lignes d'historique (éventuellement vide)."),
+            @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
+    })
+    public PageDto<HistoriqueDto> getHistorique(
+            @Parameter(description = "Identifiant du prospect (CfgTier.PKey).")
+            @PathVariable UUID id,
+            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(subResourcesService.historique(id, pageable));
     }
 

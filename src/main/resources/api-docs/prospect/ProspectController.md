@@ -103,6 +103,17 @@ Triés par date de pièce décroissante par défaut.
 de ses projets affectés sont renvoyés (plus ceux dont aucune ligne ne résout de projet) ; le
 prospect lui-même n'est pas filtré. `totalElements` reflète le nombre filtré.
 
+## getHistorique
+
+Onglet « Historique » du tiers (OMRAN : « l'historique de dossier de vente d'un client en
+affichant : L'utilisateur, La date, L'état, Le N° Dossier, L'article, Les détails »). Une ligne par
+changement de statut d'un dossier dont le tiers est le client (`StrFolderStatusHistory`), la plus
+récente en premier ; le tri demandé par le client est ignoré. `utilisateur` est null sur les lignes
+legacy sans auteur. Un tiers sans dossier rend une page vide.
+
+**Périmètre commercial** : les lignes d'un dossier hors des projets affectés de l'appelant (ou d'une
+entité hors exploitation) ne sont pas renvoyées ; le tiers lui-même n'est pas filtré.
+
 ## getContacts
 
 Contacts (conjoint, notaire, apporteur…) liés au prospect — lignes `CfgTierContact` jointes au
