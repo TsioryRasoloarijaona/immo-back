@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -160,6 +161,7 @@ public class ActionsRecentesService {
         cq.select(m).where(predicats.toArray(Predicate[]::new)).orderBy(ordre(cb, date, m.get("id")));
         return em.createQuery(cq).setMaxResults(filtre.limite()).getResultList().stream()
                 .map(ActionsRecentesService::depuisInteraction)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -246,10 +248,14 @@ public class ActionsRecentesService {
      * Rattachée aux deux : la prospection l'emporte, dans l'ordre de {@code filtreInteractions()} —
      * sinon un dossier hors périmètre serait exposé (FEATURE-actions-recentes.md §10.1).
      */
-    private static ActionRecenteDto depuisInteraction(ComActionMessage m) {
+    static ActionRecenteDto depuisInteraction(ComActionMessage m) {
         AdmUser auteur = m.getAdmUser();
         ComProspection p = m.getComProspection();
         ComFolder dossier = p == null ? m.getComFolder() : null;
+        // Le filtre teste la colonne de lien, pas la ligne : une fiche supprimée laisse les deux à null (R8).
+        if (p == null && dossier == null) {
+            return null;
+        }
         LocalDateTime date = m.getUserCreateDateTime() != null ? m.getUserCreateDateTime() : m.getDocDate();
         return new ActionRecenteDto(
                 m.getId(),
