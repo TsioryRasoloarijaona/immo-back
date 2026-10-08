@@ -710,6 +710,12 @@ public class ProspectionService {
                 PageRequest.of(0, DOUBLONS_MAX));
     }
 
+    /** Même contact soumis à la même minute que {@code minute} (tronquée à la minute), sans plafond. */
+    public List<ComProspection> memeSoumission(String nom, String email, String telephone, LocalDateTime minute) {
+        return prospectionRepository.trouverMemeSoumission(cleContact(nom), cleContact(email),
+                PhoneNumberUtils.normalize(telephone), minute, minute.plusMinutes(1));
+    }
+
     /**
      * Même prédicat que les listes. Un doublon hors périmètre n'est jamais nommé : ce serait
      * révéler un contact que le reste de l'API masque en 404.

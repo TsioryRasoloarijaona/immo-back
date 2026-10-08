@@ -315,6 +315,158 @@ class PreProspectionImportTest {
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString(cachee.getId().toString()))));
     }
 
+    // -- Import sélectif par statut : FEATURE-import-selectif.md
+
+    /**
+     * Ligne 2 NOUVELLE, 3 DOUBLON interne (contact de la ligne 2, autre minute), 4 DEJA_IMPORTEE
+     * (même lead que la 2), 5 ERREUR (nom vide), 6 NOUVELLE.
+     */
+    private String fichierMixte() {
+        String houda = ",Houda " + suffixe + ",houda." + suffixe + "@test.local,Payé," + formulaire
+                + ",E-mail,,,,+212662178116,,\n";
+        return ENTETE + "\n"
+                + "09/21/2026 2:09pm" + houda
+                + "09/22/2026 9:00am" + houda
+                + "09/21/2026 2:09pm" + houda
+                + "09/23/2026 3:00am,,vide@test.local,Payé," + formulaire + ",E-mail,,,,+212600000000,,\n"
+                + "09/23/2026 1:45am,Imane " + suffixe + ",imane." + suffixe + "@test.local,Payé," + formulaire
+                + ",E-mail,,,,+212663434434,,\n";
+    }
+
+    private ResultActions importerStatuts(String contenu, String... statuts) throws Exception {
+        return mockMvc.perform(multipart("/api/pre-prospections/import").file(csv(contenu))
+                .param("trancheId", tranche.getId().toString())
+                .param("statuts", statuts));
+    }
+
+    private long creeesSurLaTranche() {
+        return prospectionRepository.count(
+                (root, query, cb) -> cb.equal(root.get("stkHierarchy").get("id"), tranche.getId()));
+    }
+
+    private static final List<String> STATUTS_MIXTE =
+            List.of("NOUVELLE", "DOUBLON", "DEJA_IMPORTEE", "ERREUR", "NOUVELLE");
+
+    @Test
+    void statutsNouvelle_neCreeQueLesNouvelles() throws Exception {
+        String reponse = importerStatuts(fichierMixte(), "NOUVELLE")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutsImportes", hasSize(1)))
+                .andExpect(jsonPath("$.statutsImportes[0]").value("NOUVELLE"))
+                .andExpect(jsonPath("$.nouvelles").value(2))
+                .andExpect(jsonPath("$.doublons").value(1))
+                .andExpect(jsonPath("$.creees").value(2))
+                .andExpect(jsonPath("$.lignes[0].preProspectionId").isNotEmpty())
+                .andExpect(jsonPath("$.lignes[1].statut").value("DOUBLON"))
+                .andExpect(jsonPath("$.lignes[1].preProspectionId").value(nullValue()))
+                .andExpect(jsonPath("$.lignes[1].code").value(nullValue()))
+                .andExpect(jsonPath("$.lignes[1].message")
+                        .value(org.hamcrest.Matchers.endsWith(" — non importée (statut non sélectionné)")))
+                .andExpect(jsonPath("$.lignes[4].preProspectionId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> statuts = JsonPath.read(reponse, "$.lignes[*].statut");
+        assertThat(statuts).isEqualTo(STATUTS_MIXTE);
+        assertThat(creeesSurLaTranche()).isEqualTo(2);
+    }
+
+    /** R2 : la DOUBLON interne reste DOUBLON bien que sa NOUVELLE de référence ne soit pas importée. */
+    @Test
+    void statutsDoublon_neCreeQueLesDoublons_etLaClassificationNeBougePas() throws Exception {
+        String reponse = importerStatuts(fichierMixte(), "DOUBLON")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutsImportes[0]").value("DOUBLON"))
+                .andExpect(jsonPath("$.statutsImportes", hasSize(1)))
+                .andExpect(jsonPath("$.creees").value(1))
+                .andExpect(jsonPath("$.nouvelles").value(2))
+                .andExpect(jsonPath("$.lignes[0].preProspectionId").value(nullValue()))
+                .andExpect(jsonPath("$.lignes[0].message").value("Non importée (statut non sélectionné)"))
+                .andExpect(jsonPath("$.lignes[1].statut").value("DOUBLON"))
+                .andExpect(jsonPath("$.lignes[1].preProspectionId").isNotEmpty())
+                .andExpect(jsonPath("$.lignes[1].message")
+                        .value("Même contact que la ligne 2 du fichier (autre soumission)"))
+                .andExpect(jsonPath("$.lignes[4].preProspectionId").value(nullValue()))
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> statuts = JsonPath.read(reponse, "$.lignes[*].statut");
+        assertThat(statuts).isEqualTo(STATUTS_MIXTE);
+        assertThat(creeesSurLaTranche()).isEqualTo(1);
+    }
+
+    @Test
+    void sansStatuts_creeNouvellesEtDoublons_commeAvant() throws Exception {
+        importer(fichierMixte())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutsImportes[0]").value("NOUVELLE"))
+                .andExpect(jsonPath("$.statutsImportes[1]").value("DOUBLON"))
+                .andExpect(jsonPath("$.creees").value(3))
+                .andExpect(jsonPath("$.lignes[1].doublonIds", hasSize(1)));
+        assertThat(creeesSurLaTranche()).isEqualTo(3);
+    }
+
+    @Test
+    void statutsSeparesParVirgules_acceptes_etRenduDansLOrdre() throws Exception {
+        importerStatuts(fichierMixte(), "DOUBLON,NOUVELLE")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutsImportes[0]").value("NOUVELLE"))
+                .andExpect(jsonPath("$.statutsImportes[1]").value("DOUBLON"))
+                .andExpect(jsonPath("$.creees").value(3));
+    }
+
+    /** R2 : mêmes statuts ligne à ligne que l'aperçu, quelle que soit la sélection. */
+    @Test
+    void statutsDeLImport_egalentCeuxDeLApercu() throws Exception {
+        String apercu = apercu(fichierMixte())
+                .andExpect(jsonPath("$.statutsImportes").value(nullValue()))
+                .andExpect(jsonPath("$.creees").value(0))
+                .andReturn().getResponse().getContentAsString();
+        String importe = importerStatuts(fichierMixte(), "NOUVELLE")
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> attendus = JsonPath.read(apercu, "$.lignes[*].statut");
+        List<String> obtenus = JsonPath.read(importe, "$.lignes[*].statut");
+        assertThat(attendus).isEqualTo(STATUTS_MIXTE);
+        assertThat(obtenus).isEqualTo(attendus);
+    }
+
+    @Test
+    void statutsInvalides_400_sansRienEcrire() throws Exception {
+        for (String statuts : List.of("ERREUR", "DEJA_IMPORTEE", "FOO", "", "NOUVELLE,FOO", "NOUVELLE,ERREUR")) {
+            importerStatuts(fichierMixte(), statuts)
+                    .andExpect(status().isBadRequest());
+        }
+        assertThat(creeesSurLaTranche()).isZero();
+    }
+
+    /**
+     * Revue — R2 / R5 : doublonsContact est limité à 50 lignes triées par création décroissante.
+     * Plus de 50 soumissions d'un même contact créées par cet import évincent la ligne déjà en base
+     * de la page : la dernière ligne (même lead que celle en base) passe de DEJA_IMPORTEE (aperçu)
+     * à DOUBLON, et est recréée.
+     */
+    @Test
+    void revue_plusDe50SoumissionsDUnContact_statutIdentiqueALApercu_etRienRecree() throws Exception {
+        String contact = ",Houda " + suffixe + ",houda." + suffixe + "@test.local,Payé," + formulaire
+                + ",E-mail,,,,+212662178116,,\n";
+        importer(ENTETE + "\n" + "09/21/2026 2:09pm" + contact).andExpect(status().isOk());
+
+        StringBuilder fichier = new StringBuilder(ENTETE + "\n");
+        for (int m = 0; m < 50; m++) {
+            fichier.append(String.format("09/24/2026 1:%02dam", m)).append(contact);
+        }
+        fichier.append("09/21/2026 2:09pm").append(contact);
+
+        String apercu = apercu(fichier.toString()).andReturn().getResponse().getContentAsString();
+        String importe = importer(fichier.toString()).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> attendus = JsonPath.read(apercu, "$.lignes[*].statut");
+        List<String> obtenus = JsonPath.read(importe, "$.lignes[*].statut");
+        assertThat(attendus.get(50)).isEqualTo("DEJA_IMPORTEE");
+        assertThat(obtenus).isEqualTo(attendus);
+        assertThat(creeesSurLaTranche()).isEqualTo(51);
+    }
+
     private CfgProject newProjet(String code) {
         CfgProject projet = new CfgProject();
         projet.setId(UUID.randomUUID());

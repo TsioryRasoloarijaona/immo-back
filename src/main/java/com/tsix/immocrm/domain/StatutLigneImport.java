@@ -6,10 +6,10 @@ package com.tsix.immocrm.domain;
  */
 public enum StatutLigneImport {
 
-    /** Aucun contact identique connu : créée (ou le sera, en aperçu). */
+    /** Aucun contact identique connu : créée si sélectionnée (ou le sera, en aperçu). */
     NOUVELLE,
 
-    /** Même contact, autre date de soumission : créée et signalée — OMRAN garde une ligne par soumission. */
+    /** Même contact, autre date de soumission : créée si sélectionnée et signalée — OMRAN garde une ligne par soumission. */
     DOUBLON,
 
     /** Même contact et même date, en base ou plus haut dans le fichier : ignorée (réimport idempotent). */

@@ -15,6 +15,7 @@ import com.tsix.immocrm.domain.FonctionAgregatInconnueException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** Exceptions métier → {@link ProblemDetail} RFC 7807. */
 @RestControllerAdvice
@@ -87,6 +88,13 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setProperty("transitionsAutorisees", ex.getTransitionsAutorisees());
         return problem;
+    }
+
+    /** Paramètre non convertible (valeur d'enum inconnue, nombre illisible…) : 400, pas 500. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Valeur invalide pour le paramètre '" + ex.getName() + "' : '" + ex.getValue() + "'");
     }
 
     /** {@code ?sort=} sur un nom de champ DTO au lieu de l'attribut d'entité : 400 au lieu d'un 500. */
