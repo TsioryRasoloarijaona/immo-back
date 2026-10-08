@@ -16,15 +16,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo.AdmEvent — a calendar entry (appointment). Used here to back the "Date du rendez-vous"
- * captured on an interaction whose {@code Résultat} (see {@link ComActionMessageSubCategory}) is
- * "Rendez vous pris", "RDV reporté" or "Le prospect veut faire une visite du projet" —
- * {@code ComActionMessage.AdmEventId} links to it, and {@code GET /api/calendrier/evenements}
- * lists them for the frontend calendar. Only the columns relevant to that use case are mapped;
- * {@code CfgEmloyeeId} (sic, matches the real DB typo), {@code StrEntityId}, {@code AdmEventTypeId}
- * and {@code CfgTrancheId} are left as raw UUID columns since no dedicated feature reads them yet.
- */
+/** Rendez-vous du calendrier, lié par {@code ComActionMessage.AdmEventId}. */
 @Getter
 @Setter
 @Entity
@@ -77,6 +69,7 @@ public class AdmEvent {
     @JoinColumn(name = "ComActionMessageSubCategoryId")
     private ComActionMessageSubCategory comActionMessageSubCategory;
 
+    // Faute de frappe du schéma réel (« Emloyee »).
     @Column(name = "CfgEmloyeeId")
     private UUID cfgEmployeeId;
 

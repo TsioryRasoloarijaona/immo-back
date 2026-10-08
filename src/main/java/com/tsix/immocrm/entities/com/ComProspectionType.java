@@ -13,7 +13,7 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/** dbo_ComProspectionType — a "recherché" article type on a Prospection (GAP-04, "Types de bien"). */
+/** Type de bien recherché par une prospection. */
 @Getter
 @Setter
 @Entity

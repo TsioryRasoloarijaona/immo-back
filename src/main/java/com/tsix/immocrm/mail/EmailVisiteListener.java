@@ -9,20 +9,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Envoie la confirmation de visite au prospect, une fois l'interaction réellement écrite.
- *
- * <p>Mêmes deux annotations que {@link EmailMotDePasseListener}, pour les mêmes raisons :
- * {@code AFTER_COMMIT} pour qu'un enregistrement annulé ne convoque personne, {@code @Async}
- * pour que la latence SMTP sorte du temps de réponse de {@code POST /interactions}.
- *
- * <p>Cet écouteur ne contient <b>aucune règle</b> : il ne fait que déclencher
- * {@link ConfirmationVisiteService}, que l'endpoint de renvoi appelle également. C'est
- * délibéré — la moindre logique ici serait une logique que le renvoi manuel n'appliquerait pas.
- *
- * <p><b>À savoir pour les tests</b> : un écouteur {@code AFTER_COMMIT} ne se déclenche
- * <b>jamais</b> sous la suite de ce dépôt, qui est {@code @Transactional} donc annulée. La
- * publication de l'événement se vérifie avec {@code @RecordApplicationEvents} ; l'envoi
- * lui-même s'éprouve en appelant le service directement.
+ * Confirmation de visite après commit, en {@code @Async}. Aucune règle ici : tout est dans
+ * {@link ConfirmationVisiteService}, que le renvoi manuel appelle aussi. Jamais déclenché sous la suite de tests.
  */
 @Component
 public class EmailVisiteListener {
@@ -41,8 +29,7 @@ public class EmailVisiteListener {
         try {
             confirmationVisiteService.envoyer(evenement.interactionId());
         } catch (RuntimeException e) {
-            // Rien à propager : nous sommes hors du fil de la requête et hors de sa transaction.
-            // Une exception laissée filer se perdrait dans l'exécuteur, sans trace exploitable.
+            // Hors du fil de la requête : une exception laissée filer se perdrait dans l'exécuteur.
             log.error("Confirmation de visite non envoyée pour l'interaction {}.",
                     evenement.interactionId(), e);
         }

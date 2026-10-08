@@ -3,8 +3,8 @@ package com.tsix.immocrm.dto.referentiel;
 import java.util.UUID;
 
 /**
- * {@code AdmCountry} row. {@code indicatifTelephone} is parsed from the DB's text
- * {@code PhoneCode} column (e.g. "261") — null if the stored value isn't purely numeric.
+ * {@code AdmCountry}. {@code indicatifTelephone} vient de la colonne texte {@code PhoneCode} :
+ * null si la valeur stockée n'est pas purement numérique.
  */
 public record PaysDto(
         UUID id,

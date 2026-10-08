@@ -8,19 +8,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Summary shape for {@code GET /api/prospects}.
- *
- * <p><strong>Toutes les clés ne sont pas toujours présentes.</strong> Le paramètre
- * {@code ?colonnes=} sélectionne celles qui sont sérialisées ; les autres sont absentes de la
- * réponse — voir {@link ColonneProspect}, qui fait aussi office de liste blanche et alimente
- * {@code GET /api/referentiels/colonnes/prospects}.
- *
- * <p>Sans ce paramètre, la réponse est <em>exactement</em> celle d'avant son introduction : les
- * dix colonnes historiques, et rien d'autre.
- *
- * NOTE: field naming is not yet backed by a shared API spec doc
- * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
- * directly from {@code CfgTier}. Adjust once a spec is available.
+ * Seules les clés choisies par {@code ?colonnes=} sont sérialisées (filtre Jackson) ;
+ * {@link ColonneProspect} est la liste blanche.
  */
 @JsonFilter(ColonneProspect.FILTRE)
 public record ProspectListItemDto(
@@ -35,17 +24,11 @@ public record ProspectListItemDto(
         String ville,
         String type,
 
-        // ------------------------------------------------------------------
-        // Colonnes ajoutées avec le sélecteur. Toutes servies par la fiche depuis longtemps ;
-        // la liste n'avait simplement aucun moyen de les demander.
-        // Hors sélection par défaut, sans exception.
-        // ------------------------------------------------------------------
+        // Hors sélection par défaut.
 
         @Schema(description = "CIN du prospect (`CfgTier.IDNumber`).")
         String cin,
 
-        @Schema(description = "Identifiant Commun de l'Entreprise (`CfgTier.ICE`). Ne pas "
-                + "confondre avec `FiscalCode`, qui est une autre colonne et n'est pas servie.")
         String ice,
 
         @Schema(description = "Date de naissance.")
@@ -131,9 +114,6 @@ public record ProspectListItemDto(
         @Schema(description = "Type de résidence.")
         String typeResidence,
 
-        @Schema(description = "Profession, alimentée par `CfgTier.Quality` — **mesurée à 0 ligne "
-                + "sur 13 664**, donc toujours nulle. Servie pour rester cohérente avec la fiche, "
-                + "à ne pas proposer comme critère.")
         String profession,
 
         @Schema(description = "Tranche de salaire (`AdmSalary`). Rare : 0,2 % des prospects.")

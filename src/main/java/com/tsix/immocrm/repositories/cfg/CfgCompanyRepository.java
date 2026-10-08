@@ -9,12 +9,7 @@ import java.util.UUID;
 
 public interface CfgCompanyRepository extends JpaRepository<CfgCompany, UUID> {
 
-    /**
-     * {@code GET /api/referentiels/entites} — entités en exploitation, triées par libellé.
-     *
-     * <p>Le filtre est {@code isActive = true} et non {@code != false} : une entité dont le
-     * drapeau n'a jamais été renseigné reste invisible. Voir {@code CfgCompany.isActive}.
-     */
+    /** {@code = true} et non {@code != false} : un drapeau jamais renseigné reste invisible. */
     @Query("SELECT c FROM CfgCompany c WHERE c.isActive = true ORDER BY c.description ASC")
     List<CfgCompany> findActivesOrderByDescriptionAsc();
 }

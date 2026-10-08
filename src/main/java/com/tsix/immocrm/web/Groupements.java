@@ -6,30 +6,15 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 
 import java.util.function.Function;
 
-/**
- * Résolution des paramètres de groupement communs aux contrôleurs de listes.
- *
- * <p>Écrite une fois pour {@code DossierController}, {@code ProspectionController} et
- * {@code PreProspectionController} : les trois reçoivent les mêmes paramètres et doivent les
- * refuser de la même façon. Voir {@code instructions/FEATURE-groupement-listes.md} §4.
- */
+/** Paramètres de groupement communs aux listes, refusés pareil partout (FEATURE-groupement-listes.md §4). */
 public final class Groupements {
 
     private Groupements() {
     }
 
     /**
-     * Résout {@code ?groupeColonne=} pour le dépliage d'un groupe.
-     *
-     * <p><strong>{@code groupeValeur} sans {@code groupeColonne} est un 400, pas un paramètre
-     * ignoré.</strong> Ignorer silencieusement renverrait la liste entière alors que le client
-     * croit avoir ouvert un groupe — une page de résultats plausible mais fausse, exactement le
-     * genre d'erreur qui ne se voit pas.
-     *
-     * <p>L'inverse est licite : {@code groupeColonne} seul désigne le groupe des lignes sans
-     * valeur, qui doit pouvoir s'ouvrir comme les autres.
-     *
-     * @return la colonne groupée, ou {@code null} si aucun dépliage n'est demandé
+     * {@code groupeValeur} sans {@code groupeColonne} = 400 : l'ignorer renverrait la liste entière, plausible mais
+     * fausse. {@code groupeColonne} seul est licite (groupe des lignes sans valeur). Nul si pas de dépliage.
      */
     public static <C extends Colonne> C colonneDeDepliage(String groupeColonne, String groupeValeur,
                                                           Function<String, C> resolveur) {
@@ -44,13 +29,7 @@ public final class Groupements {
         return resolveur.apply(groupeColonne);
     }
 
-    /**
-     * Granularité effective d'un groupement.
-     *
-     * <p>{@code null} dès que la colonne n'est pas temporelle — y compris si le client a passé une
-     * granularité, qui est alors sans objet. La renvoyer quand même ferait appliquer
-     * {@code YEAR()} à un code de statut.
-     */
+    /** Nulle si la colonne n'est pas temporelle, même si le client en a passé une (sinon {@code YEAR()} sur un code). */
     public static Granularite granularite(Colonne colonne, Granularite demandee) {
         if (colonne == null || colonne.chemin() == null || !colonne.chemin().temporel()) {
             return null;

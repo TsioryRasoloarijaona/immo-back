@@ -9,6 +9,5 @@ import java.util.UUID;
 
 public interface AdmUserRepository extends JpaRepository<AdmUser, UUID>, JpaSpecificationExecutor<AdmUser> {
 
-    /** {@code POST /api/auth/connexion} — login lookup by username. */
     Optional<AdmUser> findByCode(String code);
 }

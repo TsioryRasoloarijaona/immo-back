@@ -17,17 +17,13 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     // Pré-prospection : StrEntity.Code = 'ComPreProspection' — voir DiscriminantPreProspection.
     // Les requêtes ci-dessous en portent le complément exact, NULL compris.
 
-    /**
-     * Real prospections (excludes pré-prospections), for {@code GET /api/dashboard} — restreint aux
-     * entités juridiques en exploitation, les prospections sans tranche restant comptées (R2).
-     */
+    /** Hors pré-prospections ; une prospection sans tranche reste comptée (R2). */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspections();
 
-    /** Real, non-closed prospections, for {@code GET /api/dashboard} — même restriction d'entité. */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
@@ -36,12 +32,8 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
     long countOpenExcludingPreProspections();
 
     /**
-     * Variante de {@link #countExcludingPreProspections()} restreinte au périmètre commercial.
-     * Le projet d'une prospection se résout <b>directement</b> par sa tranche
-     * ({@code ComProspection.StkHierarchyId} → {@code CfgTranche.CfgProjectId}), sans passer par
-     * {@code StkItem} : cette colonne n'est renseignée que sur 4,61 % des lignes et n'apporte
-     * aucune ligne supplémentaire (mesuré). {@code pr.id IS NULL} reste inclus — une prospection
-     * sans projet résoluble n'est masquée à personne (§6.4).
+     * Projet par la tranche de la prospection, pas par {@code StkItem} (rare, n'ajoute rien :
+     * FEATURE-perimetre-commercial.md). {@code pr.id IS NULL} inclus : sans projet, visible de tous (§6.4).
      */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
@@ -50,7 +42,6 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
 
-    /** Variante de {@link #countOpenExcludingPreProspections()} restreinte au périmètre commercial. */
     @Query("SELECT COUNT(p) FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE (p.strEntityId IS NULL OR p.strEntityId NOT IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection')) "
@@ -59,42 +50,23 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     long countOpenExcludingPreProspectionsDansPerimetre(@Param("projetIds") List<UUID> projetIds);
 
-    /**
-     * Point de contrôle unique du périmètre sur le chargement d'une prospection (ou
-     * pré-prospection) par id — voir {@code PerimetreInterceptor}. Hors périmètre ⇒ traitée comme
-     * inexistante (404), jamais 403.
-     */
+    /** Contrôle unique du périmètre par id ({@code PerimetreInterceptor}) : hors périmètre = 404, jamais 403. */
     @Query("SELECT COUNT(p) > 0 FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE p.id = :id AND (pr.id IN :projetIds OR pr.id IS NULL) "
             + "AND (soc.isActive = true OR soc.id IS NULL)")
     boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
 
-    /**
-     * Variante de {@link #existsDansPerimetre} pour un appelant non restreint par un périmètre :
-     * seule la visibilité par entité juridique s'applique (R4). Une prospection sans tranche reste
-     * accessible (R2).
-     */
+    /** Appelant sans périmètre : seule la visibilité par entité (R4) ; sans tranche = accessible (R2). */
     @Query("SELECT COUNT(p) > 0 FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr "
             + "LEFT JOIN pr.cfgCompany soc "
             + "WHERE p.id = :id AND (soc.isActive = true OR soc.id IS NULL)")
     boolean existsVisible(@Param("id") UUID id);
 
     /**
-     * Projection par prospection pour les KPI commerciaux — colonnes : {@code commercialId},
-     * {@code docDate}, {@code isClosed}, date de la <b>première</b> interaction reçue (toutes
-     * origines confondues), {@code null} si jamais contactée.
-     *
-     * <p>Une ligne par prospection plutôt qu'un agrégat SQL : la médiane du délai de première
-     * réponse ne s'exprime pas en JPQL, et le taux de prise en charge se déduit du même passage.
-     * Même parti-pris que {@code DashboardService}, qui agrège en Java une projection de dossiers.
-     *
-     * <p>{@code p.cfgCommercial.id IS NOT NULL} exclut mécaniquement les pré-prospections, qui
-     * n'ont par construction aucun commercial (0 sur 2 800 mesurées).
-     *
-     * <p>La sous-requête {@code MIN} porte sur <b>toutes</b> les interactions de la prospection,
-     * pas seulement celles de son commercial : ce qu'on mesure est le délai avant que le prospect
-     * reçoive une réponse, pas la performance individuelle du titulaire.
+     * [commercialId, docDate, isClosed, première interaction] par ligne : la médiane ne s'exprime pas en JPQL.
+     * {@code cfgCommercial IS NOT NULL} exclut les pré-prospections (jamais de commercial). Le {@code MIN}
+     * porte sur toutes les interactions : on mesure l'attente du prospect, pas le titulaire.
      */
     @Query("SELECT p.cfgCommercial.id, p.docDate, p.isClosed, "
             + "(SELECT MIN(m.docDate) FROM ComActionMessage m WHERE m.comProspection = p) "
@@ -116,26 +88,16 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                 @Param("fin") LocalDateTime fin,
                                                 @Param("projetIds") List<UUID> projetIds);
 
-    /** {@code GET /api/prospects/{id}/prospections} (GAP-06). */
     Page<ComProspection> findByCfgProspectId(UUID prospectId, Pageable pageable);
 
-    /**
-     * {@code GET /api/hotline/recherche} — every {@code ComProspection} whose {@code TempTel}
-     * (the free-text phone captured before a caller has a {@code CfgTier} record, e.g.
-     * pré-prospections) matches the given number. Same format-agnostic normalization as
-     * {@link com.tsix.immocrm.repositories.cfg.CfgTierRepository#findByNormalizedPhone}.
-     */
+    /** {@code TempTel} (saisi avant toute fiche), normalisé comme {@code CfgTierRepository#findByNormalizedPhone}. */
     @Query("SELECT p FROM ComProspection p WHERE "
             + "right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone")
     Page<ComProspection> findByNormalizedTempTel(@Param("normalizedPhone") String normalizedPhone, Pageable pageable);
 
     /**
-     * Variante de {@link #findByNormalizedTempTel} restreinte au périmètre commercial.
-     * <p>
-     * Le filtrage doit impérativement être <b>dans la requête</b> et non appliqué après coup sur la
-     * page renvoyée : {@code HotlineService} plafonne cette liste à 50 lignes, et filtrer ces 50
-     * lignes en Java évincerait les lignes <em>du</em> périmètre — celles hors périmètre ayant déjà
-     * consommé la page — au lieu d'évincer celles hors périmètre. Voir §9ter.2.
+     * Filtre dans la requête, jamais sur la page : la liste est plafonnée, filtrer après coup évincerait
+     * les lignes du périmètre (FEATURE-perimetre-commercial.md §9ter.2).
      */
     @Query("SELECT p FROM ComProspection p LEFT JOIN p.stkHierarchy t LEFT JOIN t.cfgProject pr WHERE "
             + "right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone "
@@ -145,14 +107,8 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                                Pageable pageable);
 
     /**
-     * Pendant par NOM de {@link #findByNormalizedTempTel} : pré-prospections dont le nom saisi à
-     * l'époque ({@code TempDescription}) contient le terme. Cette colonne est renseignée sur
-     * 3 569 des 3 574 pré-prospections sans fiche (99,9 %) — mieux que {@code TempTel} lui-même.
-     *
-     * <p>Native pour la même raison que
-     * {@link com.tsix.immocrm.repositories.cfg.CfgTierRepository#rechercherParNom} : la base est
-     * en {@code French_CI_AS}, sensible aux accents, et JPQL ne sait pas exprimer
-     * {@code COLLATE}.
+     * Par nom saisi ({@code TempDescription}, presque toujours renseigné). Native : la base est en
+     * {@code French_CI_AS} (sensible aux accents) et JPQL ne sait pas exprimer {@code COLLATE}.
      */
     @Query(value = "SELECT TOP (:limite) p.* FROM ComProspection p "
             + "WHERE p.TempDescription COLLATE French_CI_AI LIKE :motif "
@@ -162,13 +118,8 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                           @Param("limite") int limite);
 
     /**
-     * Variante de {@link #rechercherPreProspectionsParNom} restreinte au périmètre commercial.
-     *
-     * <p>Elle existe pour la même raison que sa jumelle par téléphone, et l'omettre serait un
-     * trou de sécurité plutôt qu'un oubli de confort : sans elle, la recherche par nom
-     * deviendrait un contournement du périmètre — un commercial restreint verrait par le nom ce
-     * que le numéro lui cache. Le filtre est <b>dans</b> la requête, jamais appliqué au résultat,
-     * pour la raison expliquée sur {@link #findByNormalizedTempTelDansPerimetre}.
+     * Sans elle, le nom contournerait le périmètre que le numéro applique. Filtre dans la requête,
+     * comme {@link #findByNormalizedTempTelDansPerimetre}.
      */
     @Query(value = "SELECT TOP (:limite) p.* FROM ComProspection p "
             + "LEFT JOIN CfgTranche t ON t.PKey = p.StkHierarchyId "
@@ -181,16 +132,9 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                                        @Param("limite") int limite);
 
     /**
-     * Doublons d'une pré-prospection qu'on vient de créer — {@code POST /api/pre-prospections},
-     * voir {@code FEATURE-creation-pre-prospection.md} §3.
-     *
-     * <p>Même contrôle qu'OMRAN (nom + email + téléphone, trace d'audit du 21/09), rendu
-     * tolérant : casse et espaces de bord ignorés, téléphone normalisé comme la hotline (9
-     * derniers chiffres), et un champ absent des deux côtés compte comme égal — l'égalité SQL
-     * stricte d'OMRAN ne se déclenche jamais dès qu'un des trois est {@code NULL}.
-     *
-     * <p>Les paramètres arrivent déjà normalisés : nom et email en minuscules sans espaces de
-     * bord ({@code ""} si absents), téléphone par {@code PhoneNumberUtils.normalize}.
+     * Contrôle nom + email + téléphone d'OMRAN rendu tolérant : absent des deux côtés = égal (l'égalité
+     * stricte d'OMRAN ne se déclenche jamais sur un NULL). Paramètres déjà normalisés, {@code ""} si absents
+     * — voir FEATURE-creation-pre-prospection.md §3.
      */
     @Query("SELECT p FROM ComProspection p WHERE p.id <> :exclu "
             + "AND lower(trim(coalesce(p.tempDescription, ''))) = :nom "
@@ -202,15 +146,9 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                 @Param("telephone") String telephone, Pageable pageable);
 
     /**
-     * Prospections <b>ouvertes</b> d'un prospect sur un projet — la règle « une prospection ouverte
-     * par prospect × projet » de {@code instructions/FEATURE-doublons-prospect-projet.md} §3.
-     *
-     * <p>Ouverte = {@code IsClosed} à 0 <b>ou NULL</b> (une ligne NULL n'est pas archivée, voir
-     * {@code FEATURE-desarchiver-prospection.md}). Le projet est celui de la tranche : deux tranches
-     * d'un même projet comptent pareil (38 des 217 couples répétés réels). Les pré-prospections ne
-     * comptent pas ; une ligne sans type compte (même complément que les listes). {@code exclu}
-     * retire la prospection en cours de modification — passer un id qui n'existe pas plutôt que
-     * {@code null}, un {@code <> NULL} ne retenant rien.
+     * Règle « une prospection ouverte par prospect × projet » (FEATURE-doublons-prospect-projet.md §3) ;
+     * ouverte = {@code IsClosed} 0 ou NULL. {@code exclu} : passer un id inexistant plutôt que {@code null},
+     * un {@code <> NULL} ne retient rien.
      */
     @Query("SELECT p FROM ComProspection p JOIN p.stkHierarchy t "
             + "WHERE p.cfgProspect.id = :prospectId AND t.cfgProject.id = :projetId "

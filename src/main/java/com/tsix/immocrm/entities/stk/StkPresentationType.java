@@ -16,14 +16,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo.StkPresentationType — "Type Présentation" on the legacy "Articles" grid (single-letter
- * codes on real data: F/J/B/C/H/G/A/E/D/I...), scoped per tranche ({@code StkHierarchyId}) rather
- * than a single global lookup. Resolves {@code instructions/from_front.md} #4's open question
- * ("pas de champ correspondant identifié... à confirmer si c'est un champ StkItem distinct") —
- * confirmed a real, distinct table via {@code INFORMATION_SCHEMA} (StkItem.StkPresentationTypeId
- * FK), not a transformation of Catégorie/Type.
- */
+/** « Type Présentation » de la grille Articles : table propre, propre à chaque tranche ({@code StkHierarchyId}). */
 @Getter
 @Setter
 @Entity

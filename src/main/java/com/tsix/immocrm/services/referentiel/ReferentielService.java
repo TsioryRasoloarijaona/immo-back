@@ -101,20 +101,14 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Backs the {@code /api/referentiels/*} lookup endpoints (GAP-02). */
 @Service
 @Transactional(readOnly = true)
 public class ReferentielService {
 
-    /**
-     * {@code ComActionMessageSubCategory.Code} values that require a "Date du rendez-vous" (RDV
-     * ou visite planifiée) on the interaction they're attached to — mirrors
-     * {@code ProspectionService.RESULTATS_AVEC_DATE_PLANIFIEE}, confirmed empirically.
-     */
+    /** Résultats qui exigent une date de rendez-vous ; doit rester égal à celui de {@code ProspectionService}. */
     private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
-    /** {@code ComActionMessageCategory.Code} the "Résultat" dropdown is scoped to. */
     private static final String CATEGORIE_RESULTAT_INTERACTION = "Prospection";
 
     private final ComProspectionKindRepository prospectionKindRepository;
@@ -240,10 +234,6 @@ public class ReferentielService {
         this.floorRepository = floorRepository;
     }
 
-    /**
-     * {@code GET /api/referentiels/roles} — {@code AdmRole} existants, tels qu'assignés aux
-     * comptes dans Omran (Arpent n'en assigne aucun).
-     */
     public List<ReferentielItemDto> roles() {
         return roleRepository.findAll().stream()
                 .map(r -> new ReferentielItemDto(r.getId(), r.getCode(), r.getDescription(), null))
@@ -276,10 +266,6 @@ public class ReferentielService {
                 t.getId(), t.getCode(), t.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/resultats-interaction} — the "Résultat" dropdown for
-     * {@code POST /api/prospections/{id}/interactions}. See {@link ResultatInteractionDto}.
-     */
     public List<ResultatInteractionDto> resultatsInteraction() {
         return actionMessageSubCategoryRepository
                 .findByComActionMessageCategoryCodeOrderByDescriptionAsc(CATEGORIE_RESULTAT_INTERACTION)
@@ -308,20 +294,12 @@ public class ReferentielService {
                 v.getId(), v.getCode(), v.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/natures} — dropdown "Nature" ({@code StkKind}) pour le filtre
-     * {@code natureId} de {@code GET /api/articles}/{@code GET /api/tranches/{id}/articles}
-     * (instructions/from_front.md #4). Distinct de Catégorie/Type — voir {@code StkKind} javadoc.
-     */
+    /** {@code StkKind}, distinct de la catégorie et du type. */
     public List<ReferentielItemDto> natures() {
         return kindRepository.findAll().stream().map(k -> new ReferentielItemDto(
                 k.getId(), k.getCode(), k.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/etages} — dropdown "Étage" ({@code StkFloor}) pour le filtre
-     * {@code etageId} des mêmes endpoints Article (instructions/from_front.md #4).
-     */
     public List<ReferentielItemDto> etages() {
         return floorRepository.findAll().stream().map(f -> new ReferentielItemDto(
                 f.getId(), f.getCode(), f.getDescription(), null)).toList();
@@ -337,10 +315,7 @@ public class ReferentielService {
                 k.getId(), k.getCode(), k.getDescription(), k.getSorting())).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/types-employe} — {@code CfgTierKind} codes of employee records
-     * (kinds under the "EMP" CfgTierType), as filled in Omran.
-     */
+    /** Les {@code CfgTierKind} du type de tiers « EMP ». */
     public List<ReferentielItemDto> typesEmploye() {
         return tierKindRepository.findByCfgTierTypeCodeOrderBySortingAsc("EMP").stream().map(k -> new ReferentielItemDto(
                 k.getId(), k.getCode(), k.getDescription(), k.getSorting())).toList();
@@ -386,12 +361,6 @@ public class ReferentielService {
                 t.getId(), t.getCode(), t.getDescription(), t.getSorting())).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/types-piece-jointe} — {@code AdmAttachedFileType} disponibles
-     * (ex. "PIECE D'IDENTITE", "CONTRAT"...), pour peupler le sélecteur de type au dépôt d'une
-     * pièce jointe de dossier ({@code POST /api/dossiers/{id}/pieces-jointes}, paramètre
-     * {@code typeId}).
-     */
     public List<ReferentielItemDto> typesPieceJointe() {
         return attachedFileTypeRepository.findAll().stream()
                 .sorted(Comparator.comparing(t -> Objects.toString(t.getDescription(), "")))
@@ -448,11 +417,8 @@ public class ReferentielService {
     }
 
     /**
-     * {@code GET /api/referentiels/types-reglement} — {@code StlSettlementType}, une table
-     * distincte de {@code ComPaymentMethod} (voir {@link #modesPaiement}) : confirmé en suivant
-     * {@code EcheancierService.ajouterReglement}, qui résout {@code CreerReglementRequest.typeId}
-     * contre {@code StlSettlementType}, jamais {@code ComPaymentMethod}. Alimente le "Type" du
-     * formulaire "+ Règlement" sur la fiche Dossier.
+     * {@code StlSettlementType}, pas {@code ComPaymentMethod} ({@link #modesPaiement}) : c'est contre
+     * lui qu'{@code EcheancierService} résout {@code CreerReglementRequest.typeId}.
      */
     public List<TypeReglementDto> typesReglement() {
         return settlementTypeRepository.findAllByOrderByDescriptionAsc().stream()
@@ -464,46 +430,27 @@ public class ReferentielService {
                 t.getIsBankMandatory(), t.getIsReferenceMandatory());
     }
 
-    /**
-     * {@code GET /api/referentiels/banques} — {@code CfgTier} de type "BAN" (confirmé sur données
-     * réelles : 21 tiers), pour {@code CreerReglementRequest.banqueId}. N'a de sens que pour les
-     * types de règlement où {@code TypeReglementDto.banqueObligatoire} est vrai (ex. CHÈQUE,
-     * VIREMENT) — pas pour ESPÈCES par exemple.
-     */
+    /** Les banques sont des {@code CfgTier} de type « BAN ». */
     public List<ReferentielItemDto> banques() {
         return tierRepository.findByCfgTierType_CodeOrderByDescriptionAsc("BAN").stream()
                 .map(t -> new ReferentielItemDto(t.getId(), t.getCode(), t.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/entites} — dropdown "Entité" pour {@code GET /api/encaissements}
-     * (colonne/filtre "Entité" de l'écran legacy "Encaissements Vente"). Restreint aux entités
-     * en exploitation ({@code CfgCompany.isActive}), comme les autres listings.
-     */
     public List<ReferentielItemDto> entites() {
         return companyRepository.findActivesOrderByDescriptionAsc().stream()
                 .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/comptes} — dropdown "Compte" pour {@code GET /api/encaissements}
-     * ({@code StlAccount}, un compte bancaire par entité juridique en données réelles).
-     */
     public List<ReferentielItemDto> comptes() {
         return accountRepository.findAllByOrderByDescriptionAsc().stream()
                 .map(a -> new ReferentielItemDto(a.getId(), a.getCode(), a.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/depots} — dropdown "Dépôt" pour {@code GET /api/encaissements}
-     * ({@code StlDeposit} — seulement 3 lignes en données réelles : FOURNISSEUR/CLIENT/BANQUE).
-     */
     public List<ReferentielItemDto> depots() {
         return depositRepository.findAllByOrderByDescriptionAsc().stream()
                 .map(d -> new ReferentielItemDto(d.getId(), d.getCode(), d.getDescription(), null)).toList();
     }
 
-    /** {@code ComSettlementCategory} — the "Catégorie" lookup for échéancier lines (AVANCE, AUTO-FINANCEMENT, FRAIS SYNDIC...). */
     public List<ReferentielItemDto> categoriesEcheance() {
         return settlementCategoryRepository.findAll().stream().map(c -> new ReferentielItemDto(
                 c.getId(), c.getCode(), c.getDescription(), null)).toList();
@@ -518,23 +465,11 @@ public class ReferentielService {
         )).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/projets} — dropdown "Projet" (CfgProject.Code/Description).
-     * Restreint aux entités juridiques en exploitation
-     * ({@code CfgCompany.isActive}).
-     */
     public List<ReferentielItemDto> projets() {
         return projectRepository.findDesEntitesActives().stream()
                 .map(p -> new ReferentielItemDto(p.getId(), p.getCode(), p.getDescription(), null)).toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/tranches} — dropdown "Tranche", optionnellement scopé à un
-     * projet via {@code projetId} (mêmes cascades de sélection Projet → Tranche → Article que
-     * {@code GET /api/tranches?projetId=} mais sans pagination, pour peupler un `<select>`).
-     * Restreint aux entités juridiques en exploitation
-     * ({@code CfgCompany.isActive}).
-     */
     public List<ReferentielItemDto> tranches(UUID projetId) {
         List<CfgTranche> tranches = projetId != null
                 ? trancheRepository.findDesEntitesActivesParProjet(projetId)
@@ -544,19 +479,8 @@ public class ReferentielService {
     }
 
     /**
-     * {@code GET /api/referentiels/articles} — dropdown "Article" scopé à une tranche
-     * (`trancheId` obligatoire, pour éviter de charger tout le parc), filtré sur la disponibilité
-     * (défaut: DISPONIBLE) et optionnellement sur la catégorie/le type — même cascade de cases à
-     * cocher (Tranche → Catégorie → Type → Article) que {@code GET /api/tranches/{id}/articles}.
-     * N'inclut que les articles racine (pas les sous-articles — ceux-ci ont leur propre dropdown,
-     * voir {@link #sousArticles}), et écarte les <b>annexes</b> ({@code IsUnderItem = 1} — la
-     * règle exacte de l'écran Articles du légataire, relevée dans sa trace d'audit ; voir
-     * {@link StkItemSpecifications#horsAnnexes}) : jamais un lot principal sur les 358 dossiers
-     * réels, mais 241 parkings racine noyaient la sélection. L'exclusion tombe dès qu'une
-     * {@code categorieId} est demandée explicitement — cocher PARKING dans la cascade doit
-     * rendre les parkings, pas une liste vide. Renvoie {@link ArticleListItemDto} (pas le
-     * générique {@link ReferentielItemDto}) pour exposer le nom (`description`) et la
-     * catégorie/le type de chaque article, pas seulement son code.
+     * Racines hors annexes ({@link StkItemSpecifications#horsAnnexes}) ; l'exclusion tombe dès qu'une
+     * {@code categorieId} est demandée : cocher PARKING doit rendre les parkings.
      */
     public List<ArticleListItemDto> articles(UUID trancheId, StatutArticle statut,
                                               List<UUID> categorieIds, List<UUID> typeIds) {
@@ -573,12 +497,6 @@ public class ReferentielService {
                 .toList();
     }
 
-    /**
-     * {@code GET /api/referentiels/sous-articles} — dropdown "Sous-article" scopé à un article
-     * parent (`articleId` obligatoire), même filtres (disponibilité, catégorie, type) que
-     * {@link #articles} / {@code GET /api/articles/{id}/sous-articles}. Chaque entrée porte son
-     * `description` (le nom du sous-article), pas seulement son `code`.
-     */
     public List<ArticleListItemDto> sousArticles(UUID articleId, StatutArticle statut,
                                                   List<UUID> categorieIds, List<UUID> typeIds) {
         if (!stkItemRepository.existsById(articleId)) {

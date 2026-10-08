@@ -4,13 +4,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Converts a monetary amount into French words — mirrors the legacy Stimulsoft template's
- * {@code DecimalToLiteral(montant, CurrencyLabel.CodeValue, CurrencyFraction.CodeValue)} function
- * (e.g. "cent mille dirhams et cinquante centimes"), used by "Fiche Trop Perçu"
- * ({@code ComSaleFicheTropPercu.yes}). {@code CurrencyLabel}/{@code CurrencyFraction} are
- * {@code AdmParamsString} rows confirmed on real data as "dirham"/"centime" — hardcoded here
- * rather than mapping a new entity for two static params, same precedent as
- * {@link MontantFormatter}'s hardcoded " DH" suffix.
+ * Montant en toutes lettres, comme {@code DecimalToLiteral} des templates Stimulsoft (« cent mille
+ * dirhams et cinquante centimes ») ; devise en dur plutôt que mapper deux {@code AdmParamsString}.
  */
 final class NombreEnLettresFr {
 
@@ -59,9 +54,8 @@ final class NombreEnLettresFr {
         long milliers = (nombre / 1000L) % 1000;
         long reste = nombre % 1000;
 
-        // "cent"/"quatre-vingts" ne prennent le pluriel que dans le tout dernier groupe de 3
-        // chiffres (rien après) — convention usuelle des documents administratifs/financiers :
-        // "quatre-vingt mille dirhams" (invariable) mais "cent quatre-vingts dirhams" (pluriel).
+        // « cent »/« quatre-vingts » ne prennent le pluriel que dans le dernier groupe de 3 chiffres :
+        // « quatre-vingt mille dirhams » mais « cent quatre-vingts dirhams ».
         StringBuilder sb = new StringBuilder();
         if (milliards > 0) {
             sb.append(centaines(milliards, false)).append(milliards > 1 ? " milliards " : " milliard ");

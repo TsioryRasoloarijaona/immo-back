@@ -1,11 +1,6 @@
 package com.tsix.immocrm.domain;
 
-/**
- * Which {@code StlSettlement} date column a "période" filter on {@code GET /api/encaissements}
- * applies to — mirrors the legacy "Encaissements Vente" screen's period dropdown ("Date pièce"
- * by default, with "Date échéance"/"Date règlement" as alternatives). Same pattern as
- * {@link ChampDateDossier} for Dossier listings.
- */
+/** Colonne date de {@code StlSettlement} visée par la période de {@code GET /api/encaissements}. */
 public enum ChampDateEncaissement {
     DATE_PIECE("docDate", "Date pièce (date de saisie du règlement)"),
     DATE_ECHEANCE("echeanceDate", "Date d'échéance"),
@@ -19,7 +14,7 @@ public enum ChampDateEncaissement {
         this.libelle = libelle;
     }
 
-    /** JPA entity attribute name on {@code StlSettlement} — usable directly in a Criteria {@code root.get(...)}. */
+    /** Attribut JPA de {@code StlSettlement}, pour {@code root.get(...)}. */
     public String getChampEntite() {
         return champEntite;
     }

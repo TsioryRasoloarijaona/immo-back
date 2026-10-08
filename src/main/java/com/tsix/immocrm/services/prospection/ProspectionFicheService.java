@@ -14,10 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Fiche Prospection" document (see {@code ProspectionFichePdfRenderer}
- * for the actual PDF rendering) — modeled on the legacy "FICHE" prospection template. Reuses
- * {@link ProspectionService#findById} and {@link ProspectionService#findInteractions} rather than
- * re-deriving the same fields from scratch.
+ * Gathers the data behind the "Fiche Prospection" document (rendered by {@code ProspectionFichePdfRenderer}),
+ * modeled on the legacy "FICHE" prospection template.
  */
 @Service
 @Transactional(readOnly = true)

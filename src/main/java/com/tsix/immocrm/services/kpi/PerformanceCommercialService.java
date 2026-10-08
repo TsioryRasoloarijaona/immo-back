@@ -38,35 +38,14 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * {@code GET /api/kpi/commerciaux[/moi]} — performance commerciale sur une période
- * ({@code instructions/FEATURE-kpi-performance-commerciaux.md}).
- *
- * <p><b>Ce service porte lui-même les deux restrictions de visibilité, et c'est le point de
- * vigilance de la feature.</b> {@code /api/kpi} n'appartient pas aux collections scopées de
- * {@code PerimetreInterceptor} — qui ne connaît que {@code dossiers}, {@code prospections},
- * {@code pre-prospections} et {@code encaissements} — donc rien n'est filtré en amont. Chaque
- * agrégat existe en deux variantes, avec et sans périmètre, et toutes portent le filtre d'entité
- * juridique. Un compteur resté global exposerait ici les chiffres d'entités que le reste de
- * l'application masque. Même avertissement que {@code DashboardService}, pour la même raison.
- *
- * <p><b>Deux attributions distinctes, assumées.</b> L'activité (toutes les actions) est comptée
- * pour <i>l'auteur</i> de la saisie ; le portefeuille (prospections, dossiers) pour le
- * <i>commercial assigné</i>. Elles coïncident dans 86 % des cas réels, et l'écart est précisément
- * ce qu'un responsable veut voir. La clé commune est le commercial ({@code CfgTier}), jamais le
- * compte : un employé porte parfois deux comptes, dont les chiffres doivent s'additionner.
- *
- * <p><b>L'auteur d'une action suit la règle du « Suivi des actions »</b>
- * ({@code FEATURE-suivi-actions.md} §3bis) : son compte ({@code AdmUserId}) quand il est
- * renseigné, <b>sinon le nom écrit sur l'action</b> ({@code UserName}), résolu vers le compte qui
- * le porte — seulement s'il est seul à le porter (« admin » est porté par deux comptes : jamais
- * deviné). Les actions « Système » ne sont à personne. Un compte sans employé (16 sur 75) forme sa
- * propre ligne, identifiée par {@code utilisateurId} : ses actions n'étaient comptées nulle part.
+ * {@code /api/kpi} échappe à {@code PerimetreInterceptor} : périmètre et entité appliqués ici, à chaque
+ * agrégat ({@code FEATURE-kpi-performance-commerciaux.md} §5). Activité à l'auteur, portefeuille au
+ * commercial assigné, regroupés par employé et non par compte (§3 ; auteur : {@code FEATURE-suivi-actions.md}).
  */
 @Service
 @Transactional(readOnly = true)
 public class PerformanceCommercialService {
 
-    /** Fenêtre par défaut quand l'appelant ne précise pas de période. */
     private static final int JOURS_PAR_DEFAUT = 30;
 
     private final ComActionMessageRepository messageRepository;
@@ -79,7 +58,6 @@ public class PerformanceCommercialService {
     /** {@code UserName} des actions générées — exclues, cf. {@code SuiviActionService}. */
     static final String UTILISATEUR_SYSTEME = "Système";
 
-    /** Libellé du groupe des actions sans type dans {@code actionsParType}. */
     static final String SANS_TYPE = "(sans type)";
 
     public PerformanceCommercialService(ComActionMessageRepository messageRepository,
@@ -96,10 +74,7 @@ public class PerformanceCommercialService {
         this.perimetreService = perimetreService;
     }
 
-    /**
-     * Clé d'une ligne du KPI : le commercial quand le compte en a un, sinon le compte lui-même.
-     * Exactement un des deux est renseigné.
-     */
+    /** Le commercial quand le compte en a un, sinon le compte : exactement un des deux renseigné. */
     private record Cle(UUID commercialId, UUID utilisateurId) {
 
         static Cle commercial(UUID id) {
@@ -111,12 +86,7 @@ public class PerformanceCommercialService {
         }
     }
 
-    /**
-     * Tous les commerciaux ayant au moins une ligne sur la période, les plus performants d'abord
-     * (dossiers créés, puis appels passés). Ceux sans aucune activité sont omis : sur les 75
-     * comptes de la base réelle, 60 sont désactivés, et les lister à zéro noierait les 23 qui
-     * travaillent.
-     */
+    /** Sans activité sur la période ⇒ omis : la plupart des comptes sont désactivés (§6). */
     public List<PerformanceCommercialDto> findAll(LocalDate du, LocalDate au) {
         Periode periode = Periode.resoudre(du, au);
         Comparator<PerformanceCommercialDto> parPerformance =
@@ -126,14 +96,7 @@ public class PerformanceCommercialService {
         return assembler(periode).values().stream().sorted(parPerformance).toList();
     }
 
-    /**
-     * Les chiffres du compte connecté : ceux de son commercial s'il est rattaché à un employé,
-     * sinon ceux du compte lui-même — un compte sans employé a désormais une activité propre.
-     *
-     * <p>Renvoie <b>200 avec des compteurs à zéro</b> quand il n'a rien fait sur la période : un
-     * écran vide est une information, une erreur n'en est pas une. Le 404 est réservé à un appel
-     * sans compte applicatif identifiable.
-     */
+    /** Rien sur la période ⇒ 200 à zéro ; 404 seulement sans compte identifiable (§6). */
     public PerformanceCommercialDto findMoi(AuthenticatedUser principal, LocalDate du, LocalDate au) {
         if (principal == null || (principal.employeeId() == null && principal.admUserId() == null)) {
             throw new ResourceNotFoundException("Aucun compte identifiable : aucune performance à afficher.");
@@ -148,13 +111,8 @@ public class PerformanceCommercialService {
 
     // ---------------------------------------------------------------- assemblage
 
-    /**
-     * Les trois projections, fusionnées par commercial. L'ordre d'insertion suit les interactions
-     * puis les prospections puis les dossiers ; le tri définitif est appliqué par l'appelant.
-     */
     private Map<Cle, PerformanceCommercialDto> assembler(Periode periode) {
-        // L'Optional du service de périmètre est résolu ici, une fois : « pas de restriction »
-        // se transporte ensuite comme un null explicite, jamais comme un Optional en paramètre.
+        // null = pas de restriction.
         List<UUID> perimetre = perimetreService.perimetreCourant().orElse(null);
         Map<Cle, Accumulateur> parCommercial = new LinkedHashMap<>();
         Comptes comptes = comptes();
@@ -190,8 +148,7 @@ public class PerformanceCommercialService {
             LocalDateTime premiereInteraction = (LocalDateTime) ligne[3];
             if (premiereInteraction != null) {
                 acc.prospectionsPrisesEnCharge++;
-                // Une interaction antérieure à la prospection existe en base (saisie rétroactive) ;
-                // un délai négatif n'a pas de sens et fausserait la médiane, on le ramène à zéro.
+                // Saisie rétroactive : une interaction peut précéder la prospection ; délai ramené à 0.
                 if (creation != null) {
                     long heures = Duration.between(creation, premiereInteraction).toHours();
                     acc.delaisHeures.add(Math.max(0L, heures));
@@ -217,10 +174,8 @@ public class PerformanceCommercialService {
     }
 
     /**
-     * L'auteur d'une ligne d'activité (colonnes de
-     * {@code ComActionMessageRepository#projeterActionsPourKpi}) : le compte s'il est renseigné,
-     * sinon le compte seul à porter le nom écrit sur l'action ; puis son employé s'il en a un.
-     * {@code null} si personne ne se résout — l'action n'est comptée pour personne.
+     * Le compte, sinon le compte <b>seul</b> à porter le nom écrit sur l'action (un nom partagé n'est
+     * jamais deviné), puis son employé. {@code null} ⇒ l'action n'est comptée pour personne.
      */
     private static Cle auteur(Object[] ligne, Comptes comptes) {
         UUID compte = (UUID) ligne[0];
@@ -245,10 +200,7 @@ public class PerformanceCommercialService {
                 periode.debut(), periode.fin(), UTILISATEUR_SYSTEME, perimetre);
     }
 
-    /**
-     * Les comptes, pour résoudre un auteur par son nom et nommer une ligne sans employé. 75 lignes
-     * en base réelle : lues une fois par calcul.
-     */
+    /** Table de quelques dizaines de lignes : lue en entier, une fois par calcul. */
     private Comptes comptes() {
         Map<UUID, Comptes.Compte> parId = new LinkedHashMap<>();
         Map<String, List<Comptes.Compte>> parNom = new HashMap<>();
@@ -269,7 +221,6 @@ public class PerformanceCommercialService {
         record Compte(UUID id, UUID employeId, String nom) {
         }
 
-        /** Le compte seul à porter ce nom, ou {@code null} — un nom partagé n'est jamais deviné. */
         Compte parNomUnique(String nom) {
             if (!StringUtils.hasText(nom)) {
                 return null;
@@ -313,7 +264,6 @@ public class PerformanceCommercialService {
         return noms;
     }
 
-    /** {@code Description}, à défaut « prénom nom », à défaut le code — jamais une chaîne vide. */
     private static String nomAffiche(CfgTier tier) {
         if (StringUtils.hasText(tier.getDescription())) {
             return tier.getDescription().trim();
@@ -335,13 +285,7 @@ public class PerformanceCommercialService {
 
     // ---------------------------------------------------------------- période
 
-    /**
-     * Bornes effectives de la période.
-     *
-     * <p>{@code au} est inclusive <b>jusqu'à la fin de la journée</b> : la borner à minuit
-     * exclurait toute l'activité du jour demandé, ce qui rendrait faux le cas le plus courant —
-     * « du 1er au aujourd'hui ».
-     */
+    /** {@code au} inclus jusqu'à la fin de la journée : à minuit, « jusqu'à aujourd'hui » perdrait le jour. */
     private record Periode(LocalDate du, LocalDate au, LocalDateTime debut, LocalDateTime fin) {
 
         static Periode resoudre(LocalDate du, LocalDate au) {
@@ -357,7 +301,6 @@ public class PerformanceCommercialService {
 
     // ---------------------------------------------------------------- accumulateur
 
-    /** État mutable d'un commercial pendant la fusion des trois projections. */
     private static final class Accumulateur {
         private long appelsPasses;
         private long appelsRecus;
@@ -375,7 +318,6 @@ public class PerformanceCommercialService {
         private BigDecimal montantTotal = BigDecimal.ZERO;
 
         PerformanceCommercialDto versDto(Cle cle, String nom, Periode periode) {
-            // Du plus au moins fréquent ; à égalité, par libellé — un ordre stable d'un appel à l'autre.
             List<ActionParTypeDto> actionsParType = parType.entrySet().stream()
                     .sorted(Map.Entry.<String, Long>comparingByValue().reversed()
                             .thenComparing(Map.Entry.comparingByKey()))
@@ -398,11 +340,7 @@ public class PerformanceCommercialService {
                     ratio(dossiersCrees, prospectionsAssignees));
         }
 
-        /**
-         * {@code null} — jamais zéro — quand le dénominateur est nul : « aucun appel passé » et
-         * « des appels passés, aucun rendez-vous » sont deux situations opposées, et un 0 les
-         * confondrait au détriment du premier.
-         */
+        /** Dénominateur nul ⇒ {@code null}, pas 0 : « aucun appel » n'est pas « aucun rendez-vous ». */
         private static BigDecimal ratio(long numerateur, long denominateur) {
             if (denominateur <= 0) {
                 return null;
@@ -412,10 +350,8 @@ public class PerformanceCommercialService {
         }
 
         /**
-         * Médiane et non moyenne : quelques leads repris des mois plus tard suffisent à tirer une
-         * moyenne loin du comportement habituel (109 h de moyenne sur la base réelle). Sur un
-         * effectif pair, la borne basse des deux valeurs centrales — pas leur demi-somme : un
-         * délai est un fait observé, en inventer un qui n'a jamais eu lieu n'apporte rien.
+         * Médiane : quelques leads repris des mois plus tard tirent la moyenne (§4). Effectif pair ⇒
+         * la valeur centrale basse, pas la demi-somme : un délai qui n'a jamais eu lieu n'apporte rien.
          */
         private static Long mediane(List<Long> valeurs) {
             if (valeurs.isEmpty()) {

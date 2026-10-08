@@ -17,7 +17,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** dbo_ComProspectionProject — an "other tranche" of interest on a Prospection (GAP-04). */
+/** Autre tranche d'intérêt d'une prospection (malgré le nom de la table). */
 @Getter
 @Setter
 @Entity

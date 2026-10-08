@@ -11,13 +11,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Ce qu'une clé d'API a le droit d'appeler — {@code instructions/FEATURE-cle-api-n8n.md} §4.
- *
- * <p>Un compte de service sans habilitation ni rôle exempté n'a <b>aucune</b> restriction de
- * périmètre (règle existante : pas d'habilitation = tout voir). La portée est donc la seule
- * limite d'une clé, et elle est fermée : une route absente de toute portée est refusée (403),
- * ce qui vaut en particulier pour {@code /api/cles-api} et {@code /api/utilisateurs} — une clé
- * ne peut jamais en créer une autre.
+ * Ce qu'une clé d'API a le droit d'appeler — {@code instructions/FEATURE-cle-api-n8n.md} §4. Seule
+ * limite d'un compte de service (sans habilitation = tout voir), donc fermée : route absente = 403.
  */
 public enum PorteeCleApi {
 

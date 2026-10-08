@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface AdmAttachedFileRepository extends JpaRepository<AdmAttachedFile, UUID> {
 
-    /** Scoped by dossier ({@code CategoryId}) so one dossier can't fetch another's file by id. */
+    /** Restreint au porteur : la pièce d'un autre porteur donne vide (404), jamais son fichier. */
     Optional<AdmAttachedFile> findByIdAndCategoryId(UUID id, UUID dossierId);
 }

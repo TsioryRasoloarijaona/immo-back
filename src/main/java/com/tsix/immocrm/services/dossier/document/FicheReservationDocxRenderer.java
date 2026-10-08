@@ -20,15 +20,11 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montant;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Fiche de réservation" as a Word (.docx) document — same content/layout as
- * {@link FicheReservationPdfRenderer}, built with Apache POI (XWPF) so it stays a pure-Java,
- * no-external-process dependency.
- */
+/** « Fiche de réservation » en .docx (Apache POI), même contenu que {@link FicheReservationPdfRenderer}. */
 @Component
 public class FicheReservationDocxRenderer {
 
-    /** Couleurs relevees sur les fonds de page legataires, pas approximees. */
+    /** Couleurs relevées sur les fonds de page légataires. */
     private static final String APF_ORANGE = "F37123";
     private static final String ARS_VIOLET = "726789";
     private static final String GRAY_LABEL = "E4E4E4";
@@ -78,10 +74,8 @@ public class FicheReservationDocxRenderer {
     }
 
     /**
-     * Marque deduite du prefixe du code dossier, comme dans le rapport legataire dont les pages
-     * s'appellent APF / ARS / ART / MBR. Elle decide de la couleur, de la societe citee et des
-     * clauses imprimees. Un prefixe inconnu est refuse plutot que rendu sous une autre marque :
-     * une fiche de reservation est remise au client.
+     * Marque = préfixe du code dossier, comme le rapport légataire ; elle décide couleur, société et
+     * clauses. Préfixe inconnu refusé plutôt que rendu sous une autre marque : la fiche est remise au client.
      */
     static String marque(String dossierCode) {
         String prefixe = dossierCode == null || dossierCode.length() < 3
@@ -113,11 +107,7 @@ public class FicheReservationDocxRenderer {
         value.setBold(true);
     }
 
-    /**
-     * Le paragraphe de societe differe par marque : ce n'est pas une mise en forme mais le texte
-     * legal de l'entite qui vend. L'ancienne version composait « SOCIETE {nom} (groupe AYAD
-     * DEVELOPPEMENT) » quelle que soit l'entite, ce qui produisait une mention fausse pour GHRIZA.
-     */
+    /** Paragraphe de société propre à chaque marque : c'est le texte légal de l'entité qui vend. */
     private static void addIntro(XWPFDocument document, FicheReservationData data, String marque) {
         XWPFParagraph p = document.createParagraph();
         p.setAlignment(ParagraphAlignment.BOTH);
@@ -197,10 +187,8 @@ public class FicheReservationDocxRenderer {
     }
 
     /**
-     * La clause d'immobilisation de 10 % n'existe que sur APF, et la mention parking que sur ARS :
-     * les deux sont imprimees dans le fond de page de leur marque respective. Les appliquer aux
-     * deux, comme le faisait l'ancienne version, revenait a engager GHRIZA sur une penalite que
-     * son document ne prevoit pas.
+     * Clause d'immobilisation de 10 % : APF seulement ; mention parking : ARS seulement, comme sur leurs
+     * fonds de page. L'appliquer à ARS engagerait GHRIZA sur une pénalité que son document ne prévoit pas.
      */
     private static void addFixedWarning(XWPFDocument document, String marque) {
         XWPFParagraph p = document.createParagraph();

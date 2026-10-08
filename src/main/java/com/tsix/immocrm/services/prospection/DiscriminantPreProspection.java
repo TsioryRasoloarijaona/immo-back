@@ -13,28 +13,16 @@ import org.springframework.data.jpa.domain.Specification;
 import java.util.UUID;
 
 /**
- * Ce qui fait d'une {@link ComProspection} une <b>pré-prospection</b> : son type de document
- * légataire, {@code StrEntity.Code = 'ComPreProspection'} — le discriminant d'OMRAN lui-même
- * (sa vue {@code ComSalePreProspectionView} filtre sur ce seul critère).
- *
- * <p>Remplace l'heuristique {@code CfgProspectId IS NULL AND CfgCommercialId IS NULL}, qui
- * classait en prospection ~830 pré-prospections OMRAN ayant déjà un prospect ou un commercial —
- * décision #44, voir {@code instructions/FEATURE-creation-pre-prospection.md} §4.
- *
- * <p>Point unique : les listes, les groupes, le dashboard et les relances doivent tous tomber
- * d'accord, sinon une même ligne serait comptée des deux côtés. Les requêtes JPQL de
- * {@code ComProspectionRepository} répètent le même prédicat en toutes lettres.
+ * Une pré-prospection = {@code StrEntity.Code = 'ComPreProspection'}, le discriminant d'OMRAN
+ * (voir {@code instructions/FEATURE-creation-pre-prospection.md} §4). Point unique, sinon une
+ * ligne serait comptée des deux côtés ; les JPQL de {@code ComProspectionRepository} le répètent.
  */
 public final class DiscriminantPreProspection {
 
-    /** {@code StrEntity.Code} du type « Pré-Prospection ». */
     public static final String CODE_PRE_PROSPECTION = "ComPreProspection";
 
-    /**
-     * Identifiant du type, identique dans yesRems, yesRemsProd et yesRemsTest (référentiel
-     * légataire restauré de la même source). Sert au test en mémoire d'une ligne déjà chargée ;
-     * les requêtes, elles, résolvent par code.
-     */
+    // Même PKey dans toutes les bases (référentiel restauré d'une même source). Sert au test en
+    // mémoire ; les requêtes, elles, résolvent par code.
     public static final UUID ID_PRE_PROSPECTION = UUID.fromString("B92DF3D8-158C-4E1E-827A-70FEB172A264");
 
     private DiscriminantPreProspection() {
@@ -53,11 +41,7 @@ public final class DiscriminantPreProspection {
         return (root, query, cb) -> nEstPasPreProspection(root, query, cb);
     }
 
-    /**
-     * Le même prédicat, pour une requête dont la prospection n'est pas la racine mais une
-     * <b>jointure</b> — les relances partent de {@code ComActionMessage}. Une seule définition,
-     * pour que la liste et le tableau de bord ne puissent pas diverger.
-     */
+    /** Même prédicat quand la prospection est une <b>jointure</b> (relances, depuis {@code ComActionMessage}). */
     public static Predicate nEstPasPreProspection(From<?, ComProspection> prospection,
                                                   CriteriaQuery<?> query, CriteriaBuilder cb) {
         return cb.or(

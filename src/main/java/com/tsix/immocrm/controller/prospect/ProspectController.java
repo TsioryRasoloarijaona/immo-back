@@ -55,11 +55,7 @@ public class ProspectController {
     @GetMapping
     public PageDto<ProspectListItemDto> findAll(@RequestParam(required = false) String search,
             @RequestParam(required = false) List<String> type,
-            @Parameter(description = "Colonnes a serialiser, repetable ou separees par des "
-                    + "virgules. Absent : les 10 colonnes historiques. Catalogue et liste blanche : "
-                    + "`GET /api/referentiels/colonnes/prospects`. Un nom hors catalogue rend 400 "
-                    + "avec la liste des noms valides. `id` est toujours servi.",
-                    example = "code,nom,prenom,cin,creePar")
+            @Parameter(example = "code,nom,prenom,cin,creePar")
             @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(prospectService.findAll(search, type, pageable, ColonneProspect.resoudre(colonnes)));
@@ -71,31 +67,7 @@ public class ProspectController {
     }
 
     @GetMapping("/doublons")
-    @Operation(
-            summary = "Fiches prospect/client existantes correspondant à une identité",
-            description = "Le contrôle d'identité à faire **avant** de créer un prospect — "
-                    + "depuis une pré-prospection ou directement — pour éviter les doublons. "
-                    + "Renvoie les fiches de type prospect ou client (`PRO`, `PRORNT`, `CLI`, "
-                    + "`CLIRNT`) qui correspondent à l'identité saisie sur **au moins un** critère, "
-                    + "chacune avec ses `criteres` :\n\n"
-                    + "- `NOM` : `prenom` + `nom` (ou `raisonSociale` seule) en minuscules et sans "
-                    + "aucun espace, comparé à prénom+nom, nom+prénom, `Description` et "
-                    + "`SocialReason` de la fiche normalisés pareil — la règle d'OMRAN, qui rend "
-                    + "« El Mehdi LAHLOU » et « El MEHDI LAHLOU » égaux ;\n"
-                    + "- `TELEPHONE` : 9 derniers chiffres de `telephone` ou de `mobile`, contre "
-                    + "les quatre numéros de la fiche, quel que soit le format stocké ;\n"
-                    + "- `EMAIL` : sans casse ni espaces de bord.\n\n"
-                    + "Les valeurs bidon ne sont pas des critères : téléphone de moins de 9 chiffres "
-                    + "ou à 9 chiffres identiques (`000000000`), email sans `@` (`-`, `nd`). "
-                    + "**Un homonyme au contact différent est le cas courant** (237 groupes sur 244 "
-                    + "dans les données réelles) : la liste est là pour que l'utilisateur tranche, "
-                    + "pas pour refuser. Tri : le plus de critères d'abord, puis les plus récentes ; "
-                    + "50 au plus. **Vide = aucune fiche ne correspond.** Pas de périmètre "
-                    + "commercial : les prospects n'y sont pas soumis.\n\n"
-                    + "Le même contrôle est appliqué par `POST /api/prospects` et "
-                    + "`POST /api/pre-prospections/{id}/creer-prospect` (409 sauf "
-                    + "`ignorerDoublons: true`). Voir `FEATURE-doublons-prospect-projet.md` §2."
-    )
+    @Operation(summary = "Fiches prospect/client existantes correspondant à une identité")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Fiches correspondantes, éventuellement aucune."),
             @ApiResponse(responseCode = "400", description = "Aucun critère utilisable : tous les "
@@ -122,60 +94,18 @@ public class ProspectController {
     }
 
     @PostMapping
-    @Operation(
-            summary = "Crée un prospect",
-            description = "`nom` ou `raisonSociale` est requis ; tout le reste est optionnel.\n\n"
-                    + "**Un numéro de téléphone ne s'enregistre jamais seul.** Fournir `mobile` "
-                    + "impose `indicatifMobile`, fournir `telephone` impose "
-                    + "`indicatifTelephone` — sinon **400**. L'indicatif est l'indicatif pays "
-                    + "sans le `+` (`\"212\"`, le `+` étant toléré et retiré), et il doit exister "
-                    + "dans le référentiel : voir GET /api/referentiels/pays, champ "
-                    + "`indicatifTelephone`. C'est ce contrôle qui rend l'envoi WhatsApp fiable "
-                    + "en aval — un numéro sans indicatif est inenvoyable, un indicatif fautif "
-                    + "expédie le message à un inconnu.\n\n"
-                    + "**Le numéro est normalisé avant écriture**, au format que porte déjà la "
-                    + "base : 9 chiffres deviennent `6 98 29 80 95` (espacé, zéro initial retiré) "
-                    + "— la forme de 98,8 % des fiches existantes ; toute autre longueur est "
-                    + "stockée en chiffres nus, comme le sont déjà les mobiles nord-américains à "
-                    + "10 chiffres. La valeur relue peut donc différer de celle envoyée.\n\n"
-                    + "**Contrôle de doublon d'identité.** Avant toute écriture, les fiches "
-                    + "prospect/client au même nom, téléphone ou email sont recherchées (règles de "
-                    + "`GET /api/prospects/doublons`) ; s'il y en a et que `ignorerDoublons` n'est "
-                    + "pas `true`, **409** avec la liste `doublons`."
-    )
+    @Operation(summary = "Crée un prospect")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospect créé."),
-            @ApiResponse(responseCode = "400", description = "`nom`/`raisonSociale` absents ; "
-                    + "numéro fourni sans son indicatif, ou indicatif seul sans numéro ; "
-                    + "indicatif absent du référentiel ; numéro hors de 6–14 chiffres ; "
-                    + "référence (type, pays, profession...) inconnue."),
-            @ApiResponse(responseCode = "409", description = "Des fiches prospect/client existantes "
-                    + "portent le même nom, téléphone ou email (mêmes règles que "
-                    + "`GET /api/prospects/doublons`) et `ignorerDoublons` n'est pas `true`. Corps : "
-                    + "`doublons`, liste de `ProspectDoublonDto` avec leurs `criteres` — l'écran "
-                    + "demande « est-ce l'une de ces personnes ? » et renvoie avec "
-                    + "`ignorerDoublons: true` pour un nouveau contact. Voir "
-                    + "`FEATURE-doublons-prospect-projet.md` §2.")
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "409")
     })
     public ResponseEntity<ProspectDetailDto> create(@RequestBody CreerProspectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(prospectService.create(request));
     }
 
     @PatchMapping("/{id}")
-    @Operation(
-            summary = "Modifie un prospect",
-            description = "Mise à jour partielle : un champ absent ou `null` est laissé "
-                    + "inchangé.\n\n"
-                    + "**Les mêmes règles de téléphone qu'à la création s'appliquent** (voir "
-                    + "POST /api/prospects), avec une conséquence propre à la modification : "
-                    + "l'indicatif **n'est jamais repris implicitement** de la fiche existante. "
-                    + "Modifier `mobile` sans envoyer `indicatifMobile` renvoie 400 même si la "
-                    + "fiche en portait déjà un — un numéro qui change peut changer de pays, et "
-                    + "hériter de l'ancien indicatif fabriquerait un numéro qui n'existe pas.\n\n"
-                    + "En revanche, une modification qui **ne touche pas** au téléphone ne "
-                    + "demande aucun indicatif : les fiches historiques dont l'indicatif manque "
-                    + "restent modifiables sur leurs autres champs."
-    )
+    @Operation(summary = "Modifie un prospect")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Prospect mis à jour."),
             @ApiResponse(responseCode = "400", description = "Mêmes causes qu'à la création."),
@@ -185,22 +115,11 @@ public class ProspectController {
         return prospectService.update(id, request);
     }
 
-    // -- GAP-06: prospect fiche sub-resources --
-    //
-    // Les trois listes ci-dessous renvoient exactement les mêmes DTO que GET /api/prospections,
-    // GET /api/dossiers et GET /api/encaissements : elles sont donc filtrées par le périmètre
-    // commercial au même titre, bien qu'elles vivent sous /api/prospects. Le prospect lui-même
-    // n'est pas filtré (voir §9bis.2 de instructions/FEATURE-perimetre-commercial.md).
+    // Mêmes DTO que /api/prospections, /api/dossiers, /api/encaissements, donc filtrés par le
+    // périmètre commercial comme eux ; le prospect lui-même ne l'est pas (FEATURE-perimetre-commercial.md §9bis.2).
 
     @GetMapping("/{id}/prospections")
-    @Operation(
-            summary = "Prospections d'un prospect",
-            description = "Mêmes `ProspectionListItemDto` que GET /api/prospections.\n\n"
-                    + "**Périmètre commercial** : si l'appelant est restreint, seules les "
-                    + "prospections de ses projets affectés sont renvoyées. Le prospect, lui, "
-                    + "n'est pas filtré — sa fiche reste accessible et la liste peut simplement "
-                    + "revenir vide ou partielle. `totalElements` reflète le nombre filtré."
-    )
+    @Operation(summary = "Prospections d'un prospect")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Prospections du prospect (éventuellement vide)."),
             @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
@@ -213,13 +132,7 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}/dossiers")
-    @Operation(
-            summary = "Dossiers de vente d'un prospect",
-            description = "Mêmes `DossierListItemDto` que GET /api/dossiers.\n\n"
-                    + "**Périmètre commercial** : si l'appelant est restreint, seuls les dossiers "
-                    + "de ses projets affectés sont renvoyés ; le prospect lui-même n'est pas "
-                    + "filtré. `totalElements` reflète le nombre filtré."
-    )
+    @Operation(summary = "Dossiers de vente d'un prospect")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Dossiers du prospect (éventuellement vide)."),
             @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
@@ -232,14 +145,7 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}/reglements")
-    @Operation(
-            summary = "Règlements d'un prospect, tous dossiers confondus",
-            description = "Triés par date de pièce décroissante par défaut.\n\n"
-                    + "**Périmètre commercial** : si l'appelant est restreint, seuls les "
-                    + "règlements rattachés à un dossier de ses projets affectés sont renvoyés "
-                    + "(plus ceux dont aucune ligne ne résout de projet) ; le prospect lui-même "
-                    + "n'est pas filtré. `totalElements` reflète le nombre filtré."
-    )
+    @Operation(summary = "Règlements d'un prospect, tous dossiers confondus")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Règlements du prospect (éventuellement vide)."),
             @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id.")
@@ -258,24 +164,13 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}/contacts")
-    @Operation(
-            summary = "Contacts du prospect",
-            description = "Contacts (conjoint, notaire, apporteur…) liés au prospect — lignes "
-                    + "`CfgTierContact` jointes au `CfgTier` de chaque personne (nom, mobile, "
-                    + "téléphone, e-mail) et à son type de relation."
-    )
+    @Operation(summary = "Contacts du prospect")
     public List<ContactProspectDto> getContacts(@PathVariable UUID id) {
         return subResourcesService.contacts(id);
     }
 
     @PostMapping("/{id}/contacts")
-    @Operation(
-            summary = "Ajoute un contact au prospect",
-            description = "La personne-contact est soit un `CfgTier` existant (`contactProspectId`), "
-                    + "soit **créée à la volée** (`nouveauContact`) puis liée — comme l'écran "
-                    + "légataire, qui insère un nouveau `CfgTier` puis le lien `CfgTierContact`. "
-                    + "Fournir l'un **ou** l'autre ; `relationTypeId` est obligatoire."
-    )
+    @Operation(summary = "Ajoute un contact au prospect")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Contact créé/lié et rattaché."),
             @ApiResponse(responseCode = "400", description = "`relationTypeId` manquant ; ni "

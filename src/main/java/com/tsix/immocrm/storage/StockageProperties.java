@@ -3,40 +3,23 @@ package com.tsix.immocrm.storage;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration du stockage objet (MinIO / S3), préfixe {@code app.stockage}.
- *
- * <p><b>Aucun secret ici.</b> {@code accessKey}/{@code secretKey} sont alimentées depuis
- * l'environnement du processus, comme {@code DB_PWD} et {@code JWT_SECRET} —
- * {@code application.properties} est suivi par git.
- *
- * <p>{@code prefix} isole les environnements dans un même bucket ({@code dev}, {@code prod}).
- * Il est déterminant : les bases de dev et de prod étant des restaurations du même jeu de
- * données, les {@code PKey} y sont identiques et des clés sans préfixe distinct
- * s'écraseraient entre elles.
+ * {@code app.stockage} ; clés d'accès par l'environnement. Dev et prod ont les mêmes {@code PKey} (restaurations) : sur
+ * un bucket partagé, un {@code prefix} distinct est obligatoire, sinon les clés s'écrasent.
  */
 @ConfigurationProperties(prefix = "app.stockage")
 public class StockageProperties {
 
-    /** Nom du bucket, ex. {@code immo-back-dev}. */
     private String bucket;
 
-    /**
-     * URL du serveur S3. Renseignée pour MinIO ({@code https://s3.exemple.com}), laissée vide
-     * pour AWS S3 (le SDK déduit alors l'endpoint de la région).
-     */
+    /** Vide pour AWS S3 (déduit de la région). */
     private String endpoint;
 
-    /** Sans objet sur MinIO, mais exigée par le SDK — {@code us-east-1} par convention. */
+    /** Sans objet sur MinIO, mais exigée par le SDK. */
     private String region = "us-east-1";
 
-    /** Premier segment de clé : {@code dev} ou {@code prod}. */
     private String prefix;
 
-    /**
-     * Durée de validité des URL présignées. Assez longue pour un téléchargement de 35 Mo sur
-     * une connexion lente, assez courte pour qu'une URL qui fuite (historique, journal proxy,
-     * capture d'écran) n'ouvre pas un accès durable.
-     */
+    /** Assez long pour un gros fichier sur une connexion lente, assez court pour qu'une URL qui fuit ne dure pas. */
     private int presignMinutes = 15;
 
     private String accessKey;

@@ -146,6 +146,13 @@ servir la liste depuis la vue coûte 513 ms à l'`OFFSET 5000` contre 2–5 ms a
 
 ---
 
+**Coût mesuré des filtres sur colonnes calculées** (déplacé du Javadoc de
+`FiltresAvancesProspection` le 2026-10-07) : les cinq filtres portés par
+`ComSaleProspectionView` passent par une sous-requête — 231 ms page 1 et 302 ms à
+`OFFSET 5000`, contre 100/134 ms sans. Le surcoût n'est payé que si l'un d'eux est
+actif et reste plat en profondeur ; servir la liste depuis la vue coûtait 515 ms
+dès la première page.
+
 ## 4. Correction d'un chiffre publié au lot 1
 
 `FEATURE-vues-legacy-prospection.md` et `ActiviteProspectionDto` annoncent **`cin` peuplé à

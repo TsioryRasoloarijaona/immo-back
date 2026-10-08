@@ -19,26 +19,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Lit l'export CSV des leads (Meta / Leads Center) : {@code Créé, Nom, Adresse e-mail, Source,
- * Formulaire, Canal, Étape, Propriétaire, Étiquettes, Téléphone, Numéro de téléphone secondaire,
- * Numéro WhatsApp}. Voir {@code instructions/FEATURE-creation-pre-prospection.md} §5.
- *
- * <p>Aucune dépendance : le {@code pom.xml} n'a pas de bibliothèque CSV et n'en prend pas sans
- * accord. Le format est RFC 4180 (guillemets doublés, retours à la ligne dans un champ cité).
- *
- * <p>Tolérances, parce que le fichier passe souvent par Excel avant d'arriver ici :
- * <ul>
- *   <li>séparateur {@code ,} ou {@code ;} (Excel en français enregistre en {@code ;}), déduit de
- *       l'en-tête ;</li>
- *   <li>UTF-8 avec ou sans BOM, sinon Windows-1252 ;</li>
- *   <li>colonnes reconnues par leur <b>nom</b> (sans casse ni accents), dans n'importe quel
- *       ordre ; les colonnes inconnues sont ignorées. Seule {@code Nom} est indispensable.</li>
- * </ul>
- * Une ligne mal formée n'arrête pas la lecture : elle revient avec son {@code erreur}.
+ * Lit l'export CSV des leads (Meta / Leads Center), RFC 4180, à la main : pas de bibliothèque CSV
+ * dans le {@code pom.xml}. Tolère ce qu'en fait Excel : {@code ;}, Windows-1252, colonnes dans tout
+ * ordre. Voir {@code instructions/FEATURE-creation-pre-prospection.md} §5.
  */
 public final class LecteurCsvLeads {
 
-    /** Au-delà, le fichier est refusé entier — un export de leads en compte quelques centaines. */
+    /** Au-delà, le fichier est refusé entier. */
     public static final int LIGNES_MAX = 5000;
 
     /** Date « Créé » de l'export : {@code 09/23/2026 1:45am} — mois en premier, heure sur 12. */
@@ -77,10 +64,8 @@ public final class LecteurCsvLeads {
             Map.entry("numero whatsapp", Colonne.WHATSAPP));
 
     /**
-     * Une ligne de l'export, champs vides ramenés à {@code null}.
-     *
-     * @param numeroLigne numéro de ligne dans le fichier, en-tête = 1 — celui qu'un tableur affiche
-     * @param erreur      {@code null} si la ligne est exploitable, sinon la raison en clair
+     * @param numeroLigne en-tête = 1, comme dans un tableur
+     * @param erreur      {@code null} si la ligne est exploitable ; une ligne fautive n'arrête pas la lecture
      */
     public record LigneLead(int numeroLigne, LocalDateTime dateCreation, String nom, String email,
                             String source, String formulaire, String canal, String etape,

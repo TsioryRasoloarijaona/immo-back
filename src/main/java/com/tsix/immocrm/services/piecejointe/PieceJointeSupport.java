@@ -35,19 +35,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Mécanique commune aux pièces jointes, quel que soit l'objet porteur (Dossier, Article,
- * Règlement…).
- *
- * <p>{@code AdmAttachedFile} est polymorphe : le rattachement se fait par
- * {@code CategoryId = <porteur>.PKey}, sans FK déclarée. Tout ce qui suit ce rattachement est
- * strictement identique d'un porteur à l'autre ; seules diffèrent (a) la vérification
- * d'existence du porteur et (b) la chaîne {@code Category} écrite au dépôt, laissées à
- * l'appelant.
- *
- * <p><b>Les binaires ne sont plus en base.</b> Ils vivent sur S3/MinIO ; {@code AppFileObject}
- * porte le pointeur, et {@code AdmAttachedFile} ne garde que les métadonnées. La lecture ne
- * renvoie donc plus d'octets mais une URL présignée : le fichier transite directement entre le
- * navigateur et le stockage, sans passer par le backend.
+ * Pièces jointes de tout porteur : {@code AdmAttachedFile} est polymorphe ({@code CategoryId =
+ * <porteur>.PKey}, sans FK). Binaire sur S3 pointé par {@code AppFileObject}, lu par URL présignée.
  */
 @Service
 @Transactional(readOnly = true)
@@ -81,10 +70,8 @@ public class PieceJointeSupport {
     }
 
     /**
-     * Pièces jointes du porteur, plus récentes d'abord. Exclut les lignes {@code hasFile = false}
-     * — en données réelles ce sont des cases de checklist "cochée mais jamais déposée"
-     * ({@code IsCheckedButNotAttached}) : {@code CategoryId} correspond bien, mais aucun fichier
-     * n'a jamais été téléversé.
+     * Plus récentes d'abord. Exclut {@code hasFile = false} : cases de checklist « cochée mais
+     * jamais déposée » ({@code IsCheckedButNotAttached}), dont le {@code CategoryId} correspond.
      */
     public List<PieceJointeDto> lister(UUID porteurId) {
         return summaryRepository.findByCategoryId(porteurId).stream()
@@ -93,17 +80,12 @@ public class PieceJointeSupport {
                 .toList();
     }
 
-    /** {@code true} dès qu'au moins une pièce jointe réelle porte cet id. */
     public boolean auMoinsUnFichier(UUID porteurId) {
         return summaryRepository.findByCategoryId(porteurId).stream()
                 .anyMatch(a -> Boolean.TRUE.equals(a.getHasFile()));
     }
 
-    /**
-     * Nombre de pièces jointes réelles du porteur — mêmes exclusions que {@link #lister}. Sert à
-     * un appelant qui doit savoir, <b>avant</b> de supprimer, si la pièce visée est la dernière
-     * (voir {@code ReglementPieceJointeService#supprimer}).
-     */
+    /** Mêmes exclusions que {@link #lister}. */
     public long nombreDeFichiers(UUID porteurId) {
         return summaryRepository.findByCategoryId(porteurId).stream()
                 .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
@@ -111,14 +93,8 @@ public class PieceJointeSupport {
     }
 
     /**
-     * URL présignée de téléchargement, bornée au porteur : un id de pièce appartenant à un autre
-     * porteur donne 404, jamais le fichier d'autrui. {@code libellePorteur} n'entre que dans le
-     * message d'erreur ("ce dossier", "ce règlement"…).
-     *
-     * <p>L'URL <b>vaut autorisation d'accès</b> pour sa durée de validité : quiconque l'obtient
-     * peut télécharger le fichier sans être authentifié. C'est pourquoi elle n'est délivrée
-     * qu'après le contrôle d'appartenance ci-dessous, et pourquoi sa durée de vie est courte
-     * ({@code app.stockage.presign-minutes}).
+     * Bornée au porteur : la pièce d'un autre porteur donne 404. L'URL <b>vaut autorisation</b>
+     * pendant sa validité, d'où le contrôle d'appartenance avant et sa durée courte.
      */
     public URI urlTelechargement(UUID porteurId, UUID pieceId, String libellePorteur) {
         AdmAttachedFile piece = fileRepository.findByIdAndCategoryId(pieceId, porteurId)
@@ -136,17 +112,9 @@ public class PieceJointeSupport {
     }
 
     /**
-     * Dépose un fichier sur le porteur. L'appelant a déjà vérifié que le porteur existe et lui
-     * appartient ; il fournit le {@link PorteurPieceJointe} (segment de clé) et la chaîne
-     * {@code category} à écrire (convention legacy propre à chaque type de porteur, purement
-     * cosmétique : la relecture ne filtre que sur {@code CategoryId}).
-     *
-     * <p><b>Ordre imposé : le stockage d'abord, la base ensuite.</b> S3 n'est pas dans la
-     * transaction. Dans cet ordre, la seule fuite possible en cas d'échec est un objet orphelin
-     * dans le bucket — un coût, sans conséquence fonctionnelle, et balayable. L'ordre inverse
-     * laisserait des lignes pointant vers le vide, c'est-à-dire des 500 au téléchargement. Le
-     * {@link TransactionSynchronization} enregistré ci-dessous supprime l'objet si la
-     * transaction est finalement annulée, ce qui rattrape le cas courant.
+     * L'appelant a vérifié le porteur ; {@code category} est cosmétique (la relecture ne filtre que
+     * sur {@code CategoryId}). <b>S3 d'abord, la base ensuite</b> : au pire un objet orphelin, jamais
+     * une ligne pointant vers le vide — voir {@code FEATURE-s3-storage.md} §3.4.
      */
     @Transactional
     public PieceJointeDto deposer(UUID porteurId, PorteurPieceJointe porteur, String category,
@@ -197,8 +165,7 @@ public class PieceJointeSupport {
         entity.setUserCreate(utilisateurAffiche.nom(principal));
         entity = fileRepository.save(entity);
 
-        // En deux-bases, le logiciel de bureau ne lit que la colonne binaire de la source ;
-        // en mono-base c'est un no-op. Voir DepotBinaireSource.
+        // OMRAN ne lit que la colonne binaire de la source ; no-op en mono-base.
         depotBinaireSource.deposer(pieceId, contenu);
 
         AppFileObject objet = new AppFileObject();
@@ -217,14 +184,8 @@ public class PieceJointeSupport {
     }
 
     /**
-     * Le fichier stocké de cette pièce, borné au porteur — ou 404. Deux échecs distincts, tous
-     * deux invisibles pour l'appelant : la pièce n'appartient pas à ce porteur (ou n'existe pas),
-     * ou elle n'a aucun objet stocké <b>vivant</b> (case de checklist jamais téléversée, ou pièce
-     * déjà supprimée logiquement).
-     *
-     * <p>Exposée séparément de {@link #supprimer} pour l'appelant qui doit intercaler une règle
-     * métier entre le contrôle d'existence et la suppression : sans elle, une pièce inconnue sur
-     * un règlement pointé donnerait 409 au lieu de 404.
+     * 404 si la pièce n'est pas à ce porteur ou n'a aucun objet <b>vivant</b>. Séparée de
+     * {@link #supprimer} : sinon une pièce inconnue sur un règlement pointé donnerait 409, pas 404.
      */
     public AppFileObject exigerFichier(UUID porteurId, UUID pieceId, String libellePorteur) {
         fileRepository.findByIdAndCategoryId(pieceId, porteurId)
@@ -237,57 +198,24 @@ public class PieceJointeSupport {
     }
 
     /**
-     * Suppression logique : {@code DeletedAt} + {@code DeletedBy} sur {@code AppFileObject}.
-     *
-     * <p><b>Deux choses ne sont volontairement pas faites ici.</b>
-     *
-     * <p>La ligne {@code AdmAttachedFile} <b>n'est pas supprimée</b> : elle porte les métadonnées
-     * et l'auteur du dépôt, et la faire disparaître rendrait la suppression intraçable. Elle
-     * bascule simplement à {@code hasFile = false} — la {@code @Formula} de
-     * {@link AdmAttachedFileSummary} teste {@code DeletedAt IS NULL} — donc invisible de
-     * {@link #lister} et de {@link #urlTelechargement} sans qu'aucun de ces deux chemins n'ait à
-     * connaître la suppression.
-     *
-     * <p>L'objet S3 <b>n'est pas supprimé</b>, ni maintenant ni après : un balayage hors ligne
-     * s'en charge ({@code FEATURE-s3-storage.md} §3.4). Le dépôt écrit le stockage avant la base
-     * précisément pour que la seule fuite possible soit un objet orphelin ; supprimer le binaire
-     * dans la transaction rouvrirait le cas inverse — une transaction annulée après un
-     * {@code DELETE} S3 laisserait une ligne pointant vers le vide, c'est-à-dire un 500 au
-     * téléchargement.
-     *
-     * <p><b>{@code saveAndFlush}, pas {@code save}</b> — et ce n'est pas une précaution
-     * décorative. {@code hasFile} est une {@link org.hibernate.annotations.Formula} : sa
-     * sous-requête sur {@code AppFileObject} est évaluée <b>par SQL Server</b> au chargement de
-     * {@link AdmAttachedFileSummary}. Hibernate ne voit dans cette formule qu'un fragment de SQL
-     * opaque, ignore donc que la liste dépend d'{@code AppFileObject}, et n'inclut pas cette table
-     * dans les espaces de requête qui déclenchent l'auto-flush. Sans le flush explicite, une
-     * lecture faite dans la même transaction que la suppression relit la ligne <i>d'avant</i> et
-     * la pièce supprimée réapparaît dans la liste. En production le cas ne se voit pas — une
-     * requête, une transaction — mais il est réel et permanent sous {@code @Transactional} côté
-     * test, et il le serait pour tout appelant qui enchaînerait suppression et relecture.
+     * Suppression logique ; ni la ligne {@code AdmAttachedFile} ni l'objet S3 ne sont supprimés
+     * ({@code FEATURE-suppression-pieces-jointes.md} §5 R1–R2).
      */
     @Transactional
     public void marquerSupprime(AppFileObject objet, AuthenticatedUser principal) {
         objet.setDeletedAt(LocalDateTime.now());
         objet.setDeletedBy(utilisateurAffiche.nom(principal));
+        // saveAndFlush : hasFile est une @Formula sur AppFileObject, hors des espaces d'auto-flush
+        // d'Hibernate ; sans flush, une relecture dans la même transaction voit encore la pièce.
         fileObjectRepository.saveAndFlush(objet);
     }
 
-    /**
-     * Cas courant : résout la pièce puis la marque supprimée. Équivaut à
-     * {@link #exigerFichier} suivi de {@link #marquerSupprime}.
-     */
     @Transactional
     public void supprimer(UUID porteurId, UUID pieceId, String libellePorteur,
                           AuthenticatedUser principal) {
         marquerSupprime(exigerFichier(porteurId, pieceId, libellePorteur), principal);
     }
 
-    /**
-     * Supprime l'objet déposé si la transaction est annulée après coup — sans quoi un rollback
-     * (contrainte violée, erreur applicative plus loin) laisserait un fichier payant et jamais
-     * référencé dans le bucket.
-     */
     private void supprimerSiTransactionAnnulee(String cle) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
@@ -302,11 +230,7 @@ public class PieceJointeSupport {
         });
     }
 
-    /**
-     * Nom proposé au navigateur : la description, suffixée de l'extension si elle manque.
-     * Publique parce que la pièce jointe d'un email a besoin du même nom de fichier que le
-     * téléchargement — un plan doit s'appeler pareil qu'on le télécharge ou qu'on le reçoive.
-     */
+    /** Publique : la pièce jointe d'un email doit porter le même nom que le téléchargement. */
     public static String nomTelechargement(String description, String extension) {
         String base = StringUtils.hasText(description) ? description.trim() : "piece-jointe";
         if (StringUtils.hasText(extension) && !base.toLowerCase().endsWith(extension)) {

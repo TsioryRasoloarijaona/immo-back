@@ -20,13 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo_StlQuoteItem — une ligne "sous-article" d'une offre ({@link StlQuote}), reproduisant le
- * tableau "SOUS ARTICLES" du formulaire Offre legacy (Code, Catégorie, Tjs affecté, Sup., Prix
- * TTC avant remise, Remise, Montant remise, Prix TTC après remise). La table réelle porte aussi
- * ~15 colonnes de location/parenté/étage qui ne s'appliquent pas à une offre de vente et ne sont
- * pas mappées ici (mêmes principes que {@link StlQuote}).
- */
+/** Ligne du tableau « SOUS ARTICLES » d'une offre {@link StlQuote}. */
 @Getter
 @Setter
 @Entity
@@ -99,7 +93,7 @@ public class StlQuoteItem {
     @Column(name = "UnitCostAfterDiscount", precision = 26, scale = 6)
     private BigDecimal unitCostAfterDiscount;
 
-    /** "Prix TTC après remise" HT/TTC — dernière colonne du tableau "SOUS ARTICLES". */
+    /** "Prix TTC après remise" HT/TTC. */
     @Column(name = "PriceAfterDiscountHT", precision = 26, scale = 6)
     private BigDecimal priceAfterDiscountHT;
 

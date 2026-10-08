@@ -27,10 +27,7 @@ public class ProjetService {
         this.trancheRepository = trancheRepository;
     }
 
-    /**
-     * {@code GET /api/projets}: restreint aux entités juridiques en exploitation.
-     * La sélection vient de {@code CfgCompany.isActive}, pas d'une liste figée dans le code.
-     */
+    /** Entités actives par {@code CfgCompany.IsActive}, jamais une liste de codes figée. */
     public Page<ProjetListItemDto> findAll(Pageable pageable) {
         return projectRepository.findDesEntitesActives(pageable)
                 .map(ProjetService::toListItem);

@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/** Shared "1 200 000.00 DH" / "dd/MM/yyyy" formatting used by the Fiche de réservation renderers. */
+/** Formats « 1 200 000.00 DH » et « dd/MM/yyyy » des documents de dossier. */
 final class MontantFormatter {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");

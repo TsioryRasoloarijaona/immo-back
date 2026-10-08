@@ -11,14 +11,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
-/**
- * dbo_AdmAttachedFileType — reference table for the "type" of a pièce jointe (ex. "PIECE
- * D'IDENTITE", "CONTRAT", "FICHE PERMISSION REMISE DES CLES"...). Referenced by
- * {@code AdmAttachedFile.AdmAttachedFileTypeId} (see {@link AdmAttachedFileSummary}).
- * {@code Code} and {@code Description} are identical for every row in real data (confirmed via
- * {@code SELECT COUNT(*) WHERE Code <> Description} = 0), so only {@code Description} is
- * exposed at the API boundary.
- */
+/** Type de pièce jointe ; {@code Code} = {@code Description} sur toutes les lignes, seule la seconde est exposée. */
 @Getter
 @Setter
 @Entity

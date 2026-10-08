@@ -23,10 +23,7 @@ import java.util.List;
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.montant;
 import static com.tsix.immocrm.services.prospection.document.MontantFormatter.vide;
 
-/**
- * Renders the "Fiche Prospection" as a PDF, modeled on the legacy "FICHE"
- * (Yes.Com.Front.Prospection.Prospection) template. Uses OpenPDF ({@code org.openpdf.text}).
- */
+/** Renders the "Fiche Prospection" PDF, modeled on the legacy "FICHE" (Yes.Com.Front.Prospection.Prospection) template. */
 @Component
 public class ProspectionFichePdfRenderer {
 

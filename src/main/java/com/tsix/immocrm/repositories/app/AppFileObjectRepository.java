@@ -8,9 +8,6 @@ import java.util.UUID;
 
 public interface AppFileObjectRepository extends JpaRepository<AppFileObject, UUID> {
 
-    /**
-     * Exclut les pièces logiquement supprimées — l'objet peut encore exister dans le bucket en
-     * attendant le balayage, il ne doit pour autant plus être servi.
-     */
+    /** Une pièce supprimée peut encore être dans le bucket (balayage différé) : ne plus la servir. */
     Optional<AppFileObject> findByAdmAttachedFileIdAndDeletedAtIsNull(UUID admAttachedFileId);
 }

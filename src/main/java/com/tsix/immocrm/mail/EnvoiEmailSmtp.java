@@ -15,12 +15,7 @@ import org.thymeleaf.context.Context;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-/**
- * Implémentation SMTP du port {@link EnvoiEmail} : rend le template Thymeleaf puis remet le
- * message à {@code JavaMailSender} (configuré par les {@code spring.mail.*}).
- *
- * <p><b>Cette classe n'échoue jamais vers l'appelant.</b> Voir {@link EnvoiEmail#envoyer}.
- */
+/** Port {@link EnvoiEmail} en SMTP + Thymeleaf ; n'échoue jamais vers l'appelant (voir {@link EnvoiEmail#envoyer}). */
 @Component
 public class EnvoiEmailSmtp implements EnvoiEmail {
 
@@ -30,22 +25,12 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
     private final ITemplateEngine moteurTemplate;
     private final EmailProperties properties;
 
-    /**
-     * Calculé une fois au démarrage plutôt qu'à chaque envoi : une configuration incomplète
-     * doit se voir dans le journal de démarrage, pas seulement le jour où un administrateur
-     * crée un employé et croit que le mail est parti.
-     */
+    /** Calculé au démarrage : une configuration incomplète doit se voir dans le journal de démarrage. */
     private final boolean actif;
 
     /**
-     * Adresse d'expédition réellement utilisée : {@code app.mail.expediteur}, à défaut le compte
-     * SMTP lui-même.
-     *
-     * <p>Ce repli n'est pas une commodité. Titan (comme la plupart des hébergeurs mutualisés)
-     * <b>impose</b> que l'expéditeur soit la boîte authentifiée : toute autre valeur est rejetée.
-     * Les deux ne peuvent donc pratiquement pas différer, et exiger {@code MAIL_FROM} en plus de
-     * {@code MAIL_USERNAME} ne faisait qu'ajouter une variable à oublier — ce qui est arrivé, et
-     * rendait le service silencieusement inactif alors que les identifiants étaient bons.
+     * {@code app.mail.expediteur}, à défaut le compte SMTP : Titan impose que l'expéditeur soit la boîte authentifiée,
+     * exiger {@code MAIL_FROM} en plus rendait le service inactif pour rien (FEATURE-service-envoi-email.md §4).
      */
     private final String expediteurEffectif;
 
@@ -65,11 +50,7 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
         return (expedieur instanceof JavaMailSenderImpl impl) ? impl.getUsername() : null;
     }
 
-    /**
-     * Le service n'est réellement actif que si l'interrupteur est levé <b>et</b> que les trois
-     * éléments sans lesquels aucun message ne peut partir sont renseignés : le serveur, le
-     * compte SMTP, et l'adresse d'expédition.
-     */
+    /** Actif si l'interrupteur est levé et que serveur, compte SMTP et adresse d'expédition sont renseignés. */
     private static boolean determinerActivite(JavaMailSender expedieur, EmailProperties properties,
                                               String expediteurEffectif) {
         if (!properties.isActif()) {
@@ -116,17 +97,14 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
             String html = moteurTemplate.process(message.template(), contexte);
 
             if (StringUtils.hasText(message.corpsTexte())) {
-                // L'ordre des arguments porte le sens : texte d'abord, HTML ensuite. Le client
-                // affiche la DERNIÈRE alternative qu'il sait rendre.
+                // Texte d'abord, HTML ensuite : le client affiche la DERNIÈRE alternative qu'il sait rendre.
                 aide.setText(message.corpsTexte(), html);
             } else {
                 aide.setText(html, true);
             }
 
-            // Les pièces sont ajoutées APRÈS le corps : MimeMessageHelper construit la structure
-            // multipart à la première écriture de texte, et une pièce ajoutée avant se
-            // retrouverait dans la partie « alternative » au lieu de la partie « mixed » —
-            // certains clients ne l'afficheraient alors pas du tout.
+            // Pièces APRÈS le corps : MimeMessageHelper bâtit le multipart au premier setText, une pièce ajoutée
+            // avant tomberait dans « alternative » au lieu de « mixed », invisible pour certains clients.
             for (PieceJointeEmail piece : message.piecesJointes()) {
                 aide.addAttachment(piece.nom(),
                         new ByteArrayResource(piece.contenu()), piece.contentType());
@@ -137,9 +115,8 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
                     message.sujet(), AdresseMasquee.de(message.destinataire()),
                     message.piecesJointes().size());
         } catch (Exception e) {
-            // Volontairement large et volontairement avalée : cette méthode est appelée depuis
-            // un écouteur @Async exécuté après commit. Propager n'annulerait rien et ferait
-            // seulement disparaître la trace dans l'exécuteur.
+            // Large et avalée exprès : appelée depuis un écouteur @Async après commit, propager n'annulerait rien
+            // et perdrait la trace dans l'exécuteur.
             log.error("Échec de l'envoi d'email : sujet « {} », destinataire {}. L'appel d'origine "
                             + "n'est pas affecté : un mot de passe temporaire reste dans sa réponse "
                             + "HTTP, une confirmation de visite est renvoyable depuis la prospection.",

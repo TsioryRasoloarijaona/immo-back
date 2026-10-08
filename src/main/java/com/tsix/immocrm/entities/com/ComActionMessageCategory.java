@@ -12,11 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo.ComActionMessageCategory — coarse grouping of an interaction's business context
- * ("Prospection", "Dossier de vente (Réservation)", "Réclamation"...). Each
- * {@link ComActionMessageSubCategory} ("Résultat") belongs to exactly one category.
- */
+/** Contexte métier d'une interaction (« Prospection », « Réclamation »…). */
 @Getter
 @Setter
 @Entity

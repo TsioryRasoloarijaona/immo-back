@@ -30,13 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Gathers the data behind the "Fiche Bancaire" document (see {@code FicheBancairePdfRenderer} for
- * the actual PDF rendering) — modeled on the legacy "FICHE BANCAIRE" template, a mortgage-support
- * sheet. Reuses {@link DossierService#montants} (the same category recap
- * {@code GET /api/dossiers/{id}/montants} exposes) for the "FRAIS DOSSIER"/"FRAIS SYNDIC"
- * réglé/reste split — never re-derives raw settlement sums here.
- */
+/** « Fiche Bancaire » ; réglé/reste des frais repris de {@link DossierService#montants}, jamais recalculés ici. */
 @Service
 @Transactional(readOnly = true)
 public class FicheBancaireService {
@@ -64,8 +58,7 @@ public class FicheBancaireService {
 
         StkItem article = folder.getStkItem();
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
-        // Confirmed path (same as ActeReservationService/FicheReservationService):
-        // StkItem.CfgProjectId is never populated in real data.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         List<Acquereur> acquereurs = new ArrayList<>();

@@ -117,56 +117,23 @@ public class ComProspection {
     private CfgTranche stkHierarchy;
 
     /**
-     * Entité structurelle du légataire, qui distingue une <strong>prospection de vente</strong>
-     * ({@code Code = 'ComProspection'}) d'une <strong>pré-prospection</strong>
-     * ({@code 'ComPreProspection'}), d'une prospection de location, etc.
-     *
-     * <p>C'est le discriminant réel du logiciel de bureau, et ses vues font un
-     * {@code INNER JOIN} dessus : une ligne dont {@code StrEntityId} est {@code NULL}
-     * <strong>n'apparaît dans aucune vue</strong>, donc dans aucun écran du logiciel de bureau.
-     * En base réelle, 4 lignes sont dans ce cas — deux injectées par {@code n8n_api}, une créée
-     * par notre API, une par un script de test.
-     *
-     * <p>Mappé en UUID brut plutôt qu'en {@code @ManyToOne} : {@code StrEntity} n'a pas d'entité
-     * JPA dans ce dépôt, et {@code StrStatus.StrConfigEntityId} suit déjà exactement cette
-     * convention.
-     *
-     * <p>Posé à la création ({@code ComProspection} ou {@code ComPreProspection}) et basculé
-     * par la transformation, comme OMRAN. C'est aussi notre discriminant pré-prospection —
-     * voir {@code DiscriminantPreProspection}.
+     * Discriminant prospection / pré-prospection ({@link com.tsix.immocrm.entities.str.StrEntity}), posé à
+     * la création et basculé par la transformation, comme OMRAN. {@code NULL} = invisible de tous les
+     * écrans du bureau (INNER JOIN de ses vues). Voir {@code DiscriminantPreProspection}.
      */
     @Column(name = "StrEntityId")
     private UUID strEntityId;
 
     /**
-     * Activité de visite pré-agrégée, pour le groupement — voir {@link ComProspectionVisites}.
-     *
-     * <p><strong>{@code @ManyToOne} et non {@code @OneToOne}, délibérément.</strong> La relation
-     * est bien un-à-un (même clé), mais un {@code @OneToOne} <em>optionnel</em> ne se proxifie pas :
-     * Hibernate doit interroger la cible pour savoir si elle existe, donc il émet un select par
-     * prospection chargée — un N+1 sur <em>toutes</em> les requêtes du domaine, pas seulement sur
-     * le groupement. Un {@code @ManyToOne} paresseux se contente d'un proxy et ne coûte rien tant
-     * que personne ne le déréférence.
-     *
-     * <p>Personne ne le déréférence : le mappeur de liste sert {@code derniereVisiteDate} depuis
-     * la vue légataire, comme avant. Cette association n'existe que pour que le moteur de
-     * groupement puisse écrire {@code LEFT JOIN} dessus.
-     *
-     * <p>Non insérable et non modifiable : la colonne est déjà portée par {@code @Id}.
+     * N'existe que pour le {@code LEFT JOIN} du groupement ; jamais déréférencée. {@code @ManyToOne} bien
+     * qu'un-à-un : un {@code @OneToOne} optionnel ne se proxifie pas, d'où un N+1 sur tout le domaine.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PKey", referencedColumnName = "ComProspectionId",
             insertable = false, updatable = false)
     private ComProspectionVisites visites;
 
-    /**
-     * Pays du prospect, tel que la vue légataire l'expose sous {@code AdmCountryId} — renseigné
-     * sur <strong>27,3 %</strong> des 14 118 prospections réelles.
-     *
-     * <p>La colonne existait en base sans être mappée : c'était le seul manque de
-     * {@code INVENTAIRE-colonnes-prospection.md} §2 qui exigeait autre chose qu'une entrée au
-     * catalogue.
-     */
+    /** Pays du prospect, peu renseigné (INVENTAIRE-colonnes-prospection.md §2). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmCountryId")
     private AdmCountry admCountry;

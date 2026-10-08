@@ -4,17 +4,8 @@ import java.io.Serial;
 import java.util.List;
 
 /**
- * Fonction d'agrégat refusée dans {@code ?agregats=} — traduite en 400 par le
- * {@code GlobalExceptionHandler}.
- *
- * <p>Distincte de {@link ColonneInconnueException} parce que les deux erreurs se corrigent
- * différemment : là, c'est le nom de colonne qu'il faut changer ; ici, la colonne est bonne mais la
- * fonction ne s'y applique pas. Répondre « colonne inconnue » à un {@code dateDocument:SUM} enverrait
- * chercher une faute de frappe dans un nom qui est correct.
- *
- * <p>Deux cas la déclenchent : un nom de fonction qui n'existe pas, et une fonction qui existe mais
- * que la colonne n'autorise pas (sommer une date, prendre le minimum d'une différence). Le message
- * porte les fonctions réellement acceptées <strong>par cette colonne-là</strong>.
+ * Fonction d'agrégat refusée (inconnue, ou non permise par la colonne) — 400. Distincte de
+ * {@link ColonneInconnueException} : ici le nom de colonne est bon, c'est la fonction qu'il faut changer.
  */
 public class FonctionAgregatInconnueException extends RuntimeException {
 

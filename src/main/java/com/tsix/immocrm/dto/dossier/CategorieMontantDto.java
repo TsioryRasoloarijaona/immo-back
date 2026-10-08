@@ -2,11 +2,7 @@ package com.tsix.immocrm.dto.dossier;
 
 import java.math.BigDecimal;
 
-/**
- * One category row in {@link MontantsDossierDto#parCategorie()}. {@code regle}/{@code reste} are
- * computed from the linked {@code StlSettlementLine}s of every échéance in the category, never
- * stored.
- */
+/** {@code regle}/{@code reste} : calculés depuis les {@code StlSettlementLine} des échéances de la catégorie, jamais stockés. */
 public record CategorieMontantDto(
         String categorie,
         BigDecimal montant,

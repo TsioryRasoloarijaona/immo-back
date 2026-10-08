@@ -26,10 +26,6 @@ public class StkItemType {
     @Column(name = "PKey", nullable = false)
     private UUID id;
 
-    /**
-     * Nature physique à laquelle la typologie se rattache — voir {@link StkKind}.
-     * La colonne est NOT NULL en base : une typologie existe toujours au sein d'une nature.
-     */
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "StkKindId", nullable = false)

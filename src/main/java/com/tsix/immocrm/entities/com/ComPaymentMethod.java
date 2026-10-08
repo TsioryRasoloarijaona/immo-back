@@ -12,11 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Payment mode reference table ("mode de paiement") — linked from {@code ComFolder.ComPaymentMethodId}.
- * Not to be confused with {@link ComDocumentPaymentMethod}, which is a per-échéance breakdown line,
- * not a lookup table.
- */
+/** Mode de paiement d'un dossier ; à ne pas confondre avec {@link ComDocumentPaymentMethod}, ligne par échéance. */
 @Getter
 @Setter
 @Entity

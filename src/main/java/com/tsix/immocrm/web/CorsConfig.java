@@ -6,14 +6,8 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Allows the deployed frontend origin plus any localhost origin (regardless of port) to call the
- * API — the latter covers local frontend dev servers (e.g. Vite on 5173, CRA on 3000) without
- * hardcoding a specific port. Also the single place where {@link PerimetreInterceptor} (périmètre
- * commercial) is wired into the MVC stack.
- * <p>
- * {@code allowCredentials(true)} is required by the JWT-in-httpOnly-cookie scheme, and it rules
- * out the {@code *} wildcard: every production origin has to be listed here explicitly. A new
- * deployment domain therefore means editing this file — there is no configuration escape hatch.
+ * CORS et branchement de {@link PerimetreInterceptor}. {@code allowCredentials(true)} (cookie JWT) interdit {@code *} :
+ * toute origine de production doit être listée ici, il n'y a pas de réglage externe.
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
@@ -25,9 +19,8 @@ public class CorsConfig implements WebMvcConfigurer {
     }
 
     /**
-     * Le périmètre commercial ne s'applique qu'à ces quatre collections — patrimoine, calendrier,
-     * hotline, clients et prospects en sont explicitement exclus (décision produit, §6.5 de
-     * {@code instructions/FEATURE-perimetre-commercial.md}).
+     * Contrôle par id sur ces quatre collections seulement (FEATURE-perimetre-commercial.md §6.5) ; les sous-ressources
+     * clients, prospects, devis et hotline sont filtrées dans leurs services (§9bis.2).
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {

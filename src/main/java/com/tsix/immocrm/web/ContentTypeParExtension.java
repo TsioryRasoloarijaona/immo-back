@@ -5,11 +5,7 @@ import org.springframework.http.MediaType;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Resolves a stored {@code AdmAttachedFile.Extention} (e.g. {@code ".pdf"}) to the
- * {@link MediaType} to serve it as — shared by every controller that streams a raw pièce
- * jointe (Dossier, Article...), previously duplicated per-controller.
- */
+/** Type MIME servi pour une pièce jointe, d'après {@code AdmAttachedFile.Extention} (ex. {@code ".pdf"}). */
 public final class ContentTypeParExtension {
 
     private static final Map<String, MediaType> PAR_EXTENSION = Map.ofEntries(
@@ -28,7 +24,7 @@ public final class ContentTypeParExtension {
     private ContentTypeParExtension() {
     }
 
-    /** {@code extension} may be {@code null}/empty/any case — falls back to {@code application/octet-stream}. */
+    /** Insensible à la casse ; nul, vide ou inconnu → {@code application/octet-stream}. */
     public static MediaType resolve(String extension) {
         String cle = extension != null ? extension.toLowerCase(Locale.ROOT) : "";
         return PAR_EXTENSION.getOrDefault(cle, MediaType.APPLICATION_OCTET_STREAM);

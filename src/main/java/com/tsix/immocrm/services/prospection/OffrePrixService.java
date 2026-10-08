@@ -41,19 +41,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Crée l'offre de prix d'une prospection puis l'expédie au prospect. Voir
- * {@code instructions/FEATURE-offre-apres-visite.md} §4 et §5.
- *
- * <p><b>Pourquoi cet envoi est explicite et non automatique.</b> Le prix vient du lot
- * ({@code StkItem.ComSalePrice}), et le lot est inconnu sur <b>93 %</b> des prospections à l'étape
- * « 4 APRES VISITES » (94 sur 1 266). Sans lot il n'y a aucun prix à annoncer : un déclenchement
- * automatique ne produirait rien pour neuf prospections sur dix, sans que personne le sache. Le
- * remerciement, lui, ne dépend d'aucune donnée et reste automatique — voir
- * {@link RemerciementVisiteService}.
- *
- * <p><b>Le calcul des montants n'est pas réécrit ici.</b> Il appartient entièrement à
- * {@link DevisService}, y compris la numérotation legacy par {@code AdmSequence}. Ce service
- * décide seulement <i>quand</i> créer une offre et <i>comment</i> l'acheminer.
+ * Crée l'offre de prix (calcul délégué à {@link DevisService}) puis l'expédie ; envoi explicite,
+ * le lot manquant le plus souvent. Voir {@code instructions/FEATURE-offre-apres-visite.md} §2, §4, §5.
  */
 @Service
 public class OffrePrixService {
@@ -91,14 +80,8 @@ public class OffrePrixService {
     }
 
     /**
-     * {@code POST /api/prospections/{id}/offre-prix}.
-     *
-     * <p><b>La transaction est bornée à la création de l'offre</b>, volontairement, et n'englobe
-     * pas les envois. Un {@code @Transactional} sur cette méthode tiendrait une transaction en
-     * écriture ouverte pendant un appel SMTP et un appel HTTP à UltraMsg — deux services distants
-     * dont la latence n'a rien à faire dans une transaction de base. Le contrôle de périmètre
-     * commercial n'est pas refait : {@code PerimetreInterceptor} couvre déjà
-     * {@code /api/prospections/{id}/**} et rend 404 hors périmètre.
+     * Pas de {@code @Transactional} ici : la transaction est bornée à la création, pour ne pas
+     * rester ouverte pendant les appels SMTP et UltraMsg. Périmètre : {@code PerimetreInterceptor}.
      */
     public ResultatEnvoiOffreDto envoyer(UUID prospectionId, EnvoyerOffrePrixRequest request) {
         Preparation preparation = transactions.execute(statut -> preparer(prospectionId, request));
@@ -114,10 +97,7 @@ public class OffrePrixService {
 
     // ------------------------------------------------------------------ préparation (transaction)
 
-    /**
-     * Résout l'état, crée ou réutilise l'offre, et fige tout ce dont les envois auront besoin.
-     * Rien de paresseux ne franchit cette frontière : les envois travaillent sur des valeurs.
-     */
+    /** Fige tout ce dont les envois ont besoin : rien de paresseux ne sort de la transaction. */
     private Preparation preparer(UUID prospectionId, EnvoyerOffrePrixRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
@@ -128,8 +108,8 @@ public class OffrePrixService {
         boolean conditionsFournies = request != null
                 && (estRenseigne(request.remisePercent()) || estRenseigne(request.prix()));
 
-        // R : une offre déjà émise n'est réutilisée que si l'appel n'impose aucune condition
-        // nouvelle. Réécrire ses montants modifierait un document que le prospect détient déjà.
+        // Réutilisée seulement sans condition nouvelle : réécrire ses montants modifierait un
+        // document que le prospect détient déjà.
         Optional<StlQuote> existante = conditionsFournies
                 ? Optional.empty()
                 : quoteRepository.findFirstByComProspectionIdOrderByDocDateDesc(prospectionId);
@@ -185,11 +165,7 @@ public class OffrePrixService {
                         ? commercial.getMobile().trim() : null);
     }
 
-    /**
-     * R6 — l'offre de prix suit la visite, elle ne la précède pas. 409 et non 400 : la requête est
-     * bien formée, c'est l'état de la prospection qui s'y oppose — même lecture que le refus d'une
-     * transition de dossier.
-     */
+    /** R6 — 409 et non 400 : la requête est bien formée, c'est l'état de la prospection qui s'y oppose. */
     private static void exigerEtapeApresVisite(ComProspection prospection) {
         ComProspectionKind kind = prospection.getComProspectionKind();
         String code = kind != null && kind.getCode() != null ? kind.getCode().trim() : null;
@@ -200,11 +176,7 @@ public class OffrePrixService {
         }
     }
 
-    /**
-     * R5 — pas de lot, pas d'offre. Le message nomme la sortie, parce que c'est le cas majoritaire
-     * attendu (93 % des prospections de l'étape) et qu'un 409 sans mode d'emploi y serait vécu
-     * comme une panne.
-     */
+    /** R5 — le message donne la sortie : c'est le cas majoritaire, un 409 muet passerait pour une panne. */
     private static StkItem exigerArticle(ComProspection prospection) {
         StkItem article = prospection.getStkItem();
         if (article == null) {
@@ -217,10 +189,7 @@ public class OffrePrixService {
 
     // ------------------------------------------------------------------ document
 
-    /**
-     * R8 — un PDF illisible ne doit pas priver le prospect de son prix. Le WhatsApp porte le
-     * montant en texte et reste tenté ; le mail partira sans pièce jointe.
-     */
+    /** R8 — un PDF illisible n'annule rien : le mail part sans pièce jointe, le WhatsApp porte le prix. */
     private byte[] rendre(UUID offreId, UUID prospectionId) {
         try {
             return pdfRenderer.render(documentService.collect(prospectionId, offreId));
@@ -230,10 +199,7 @@ public class OffrePrixService {
         }
     }
 
-    /**
-     * Le numéro d'offre porte une barre oblique ({@code 26/00314}) : la reprendre telle quelle
-     * fabriquerait un nom de fichier invalide, voire un chemin.
-     */
+    /** Le code d'offre contient un {@code /} : tel quel, il ferait un chemin, pas un nom de fichier. */
     private static String nomFichier(String offreCode) {
         String propre = offreCode != null ? offreCode.replace('/', '-').replace('\\', '-') : "offre";
         return "Offre-" + propre + ".pdf";
@@ -282,11 +248,7 @@ public class OffrePrixService {
     // ------------------------------------------------------------------ canal WhatsApp
 
     /**
-     * <b>Le WhatsApp porte le montant en clair</b>, et c'est la décision centrale de ce chantier.
-     * À l'étape « 4 APRES VISITES » le rapport s'inverse par rapport à la prise de rendez-vous :
-     * <b>19,7 % d'email contre 99,7 % de WhatsApp</b> (249 et 1 262 sur 1 266). Se contenter
-     * d'annoncer un mail priverait quatre prospects sur cinq de toute information — et pire, leur
-     * ferait chercher un message qui n'existe pas.
+     * Montant en clair : à cette étape, peu de prospects ont un email (FEATURE-offre-apres-visite.md §5).
      *
      * @param mailParti le mail n'est mentionné que s'il est <b>réellement</b> parti
      */
@@ -404,10 +366,7 @@ public class OffrePrixService {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 
-    /**
-     * Tout ce dont les envois ont besoin, figé pendant la transaction. Aucune entité JPA ne
-     * franchit cette frontière : les canaux travaillent sur des valeurs, hors session Hibernate.
-     */
+    /** Valeurs figées pendant la transaction : aucune entité JPA n'en sort. */
     private record Preparation(
             UUID offreId,
             String offreCode,

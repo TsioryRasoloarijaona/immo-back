@@ -5,45 +5,40 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * All fields needed to render the "Reçu de règlement" (sale settlement receipt) — modeled on the
- * "Page1" of the legacy Stimulsoft report source
- * {@code instructions/templates/RECEIP/Yes_Stl_Front_Credit_Settlement_20240301102347.yes}
- * (the other page of that file, RntDocumentView-based rental receipts, is out of scope). An
- * "ATTESTATION DE RÉCEPTION CHEQUE" acknowledging one specific règlement ({@code StlSettlement}),
- * followed by the item designation and the dossier's full "situation des chèques reçus". Not
- * exposed as JSON — feeds {@code RecuReglementPdfRenderer} only.
+ * Données du « Reçu de règlement » d'un {@code StlSettlement}, hors JSON : page 1 du modèle
+ * {@code instructions/templates/RECEIP/Yes_Stl_Front_Credit_Settlement_20240301102347.yes} (la page location est hors périmètre).
  */
 public record RecuReglementData(
         String dossierCode,
         String receiptCode,
-        /** {@code StlSettlement.isCredit} — true = remboursement (société→client), false = versement (client→société). */
+        /** {@code StlSettlement.isCredit} : true = remboursement (société→client), false = versement. */
         boolean remboursement,
-        /** {@code StlSettlementLine.amount} spécifique à ce dossier pour ce règlement — jamais {@code StlSettlement.amount} (peut couvrir d'autres dossiers). */
+        /** {@code StlSettlementLine.amount} de ce dossier, jamais {@code StlSettlement.amount} (qui peut couvrir d'autres dossiers). */
         BigDecimal montantRegleDossier,
-        /** {@code StlSettlement.description} — libellé du mode de paiement (ex. "Chèque", "Virement bancaire"). */
+        /** {@code StlSettlement.description} : c'est là que le légataire met le libellé du mode de paiement. */
         String modePaiement,
-        /** {@code StlSettlement.tier}, avec repli sur {@code ComFolder.cfgCustomer} — la personne "Nous soussignés ... reçu de/reconnaissons avoir reçu". */
+        /** {@code StlSettlement.tier}, à défaut {@code ComFolder.cfgCustomer}. */
         Beneficiaire beneficiaire,
-        /** Co-acquéreurs du dossier ({@code ComFolderCustomer}), ajoutés après {@code beneficiaire} dans la phrase ("et de ..."). */
+        /** {@code ComFolderCustomer}, cités après {@code beneficiaire} (« et de … »). */
         List<Beneficiaire> coAcquereurs,
-        /** {@code StlSettlement.cfgCompany.description} — jamais codé en dur, propre à l'entité juridique sur laquelle le règlement a été saisi. */
+        /** Entité sur laquelle le règlement a été saisi ({@code StlSettlement.cfgCompany}) ; jamais en dur. */
         String entrepriseNom,
         String entrepriseFormeJuridique,
         String entrepriseAdresse,
         String villeSignature,
-        /** {@code ComFolder.docDate} — date de signature en pied de document. */
+        /** {@code ComFolder.docDate}. */
         LocalDate dateSignature,
         String articleCategorieLibelle,
         String articleCode,
         String projetDescription,
         String typeLibelle,
         BigDecimal superficie,
-        /** true quand {@code StkItem.titleNumber} est vide — déclenche la mention "approximative" et l'astérisque, comme la Fiche Trop Perçu. */
+        /** {@code StkItem.titleNumber} vide : mention « approximative » et astérisque, comme la Fiche Trop Perçu. */
         boolean superficieApproximative,
         BigDecimal prixApresRemise,
-        /** "Situation des chèques reçus" — tous les règlements du dossier, pas seulement celui de ce reçu. */
+        /** Tous les règlements du dossier, pas seulement celui de ce reçu. */
         List<LigneReglement> lignesReglement,
-        /** Reste dû du dossier (hors FRAIS), réutilise {@code DossierService#montants} — jamais re-dérivé. */
+        /** Reste dû hors FRAIS, repris de {@code DossierService#montants}, jamais recalculé ici. */
         BigDecimal resteAPayer
 ) {
     public record Beneficiaire(String titre, String nom, String pieceIdentite) {

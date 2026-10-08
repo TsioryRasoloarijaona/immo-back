@@ -5,13 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Article summary embedded in {@link DossierDetailDto#articles()}.
- *
- * NOTE (confirmed): a Dossier can have several articles — e.g. real dossier
- * "MBR 2022/00205" links both "MB 18 1 04" (main lot) and "MB 18 1 04 TER" (its annex) —
- * so this is a list, never a single article.
- */
+/** Un article de {@link DossierDetailDto#articles()} : un dossier peut en porter plusieurs (lot et annexe). */
 public record ArticleSummaryDto(
         UUID id,
         String code,
@@ -19,11 +13,7 @@ public record ArticleSummaryDto(
         BigDecimal area,
         BigDecimal price,
 
-        // ------------------------------------------------------------------
-        // Contexte patrimonial de l'article — voir
-        // instructions/FEATURE-contexte-dossier.md §2.2. Les quatre référentiels sont
-        // renseignés sur 100 % des 358 articles de dossier réels.
-        // ------------------------------------------------------------------
+        // Contexte patrimonial — voir FEATURE-contexte-dossier.md §2.2.
 
         @Schema(description = "Identifiant de la catégorie de l'article. 100 %.")
         UUID categorieId,
@@ -61,14 +51,9 @@ public record ArticleSummaryDto(
         @Schema(description = "Libellé de l'immeuble.")
         String immeubleLibelle,
 
-        // ------------------------------------------------------------------
-        // Champs « Tit. foncier » et « Présentation » de l'écran légataire.
-        // Voir instructions/FEATURE-fiche-dossier-alignement-ecran.md §4.
-        // ------------------------------------------------------------------
+        // « Tit. foncier » et « Présentation » de l'écran légataire — voir FEATURE-fiche-dossier-alignement-ecran.md §4.
 
-        @Schema(description = "Numéro de titre foncier du lot (`StkItem.TitleNumber`). Renseigné "
-                + "sur **69,6 %** des 358 dossiers réels — à afficher conditionnellement.",
-                example = "R/12345")
+        @Schema(example = "R/12345")
         String titreFoncier,
 
         @Schema(description = "Code du type de présentation du lot (`StkPresentationType`) — la "

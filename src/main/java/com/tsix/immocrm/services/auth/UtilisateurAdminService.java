@@ -34,16 +34,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Backs the admin-only endpoints of {@code UtilisateurAdminController} (see its
- * {@code @PreAuthorize}): listing the accounts and resetting a password. Accounts
- * themselves are created in Omran, never here (FEATURE-acces-arpent-depuis-omran.md).
- */
+/** Les comptes se créent dans Omran, jamais ici ({@code FEATURE-acces-arpent-depuis-omran.md}). */
 @Service
 @Transactional(readOnly = true)
 public class UtilisateurAdminService {
 
-    /** Unambiguous charset (no 0/O/1/I/l) — the temporary password is read aloud/typed by hand. */
+    /** Sans 0/O/1/I/l : le mot de passe est lu et retapé à la main. */
     private static final String TEMP_PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
     private static final int TEMP_PASSWORD_LENGTH = 12;
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -69,18 +65,12 @@ public class UtilisateurAdminService {
         this.envoiEmail = envoiEmail;
     }
 
-    /**
-     * {@code GET /api/utilisateurs} — every account (AdmUser) with its details, linked employee
-     * (CfgTier) info and assigned roles (AdmRole), for the admin user-management screen.
-     * {@code search} matches (case-insensitive, substring) username/description/email; disabled
-     * accounts are included unless {@code disabled=false} is passed explicitly.
-     */
     public Page<UtilisateurListItemDto> findAll(String search, Boolean disabled, Pageable pageable) {
         Specification<AdmUser> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (StringUtils.hasText(search)) {
-                // code/email are mapped @Lob (CLOB) — Hibernate's lower() rejects CLOB arguments,
-                // so these two rely on SQL Server's default case-insensitive collation instead.
+                // code/email sont des @Lob : lower() refuse les CLOB, la collation insensible à la
+                // casse de SQL Server fait le travail.
                 String pattern = "%" + search + "%";
                 predicates.add(cb.or(
                         cb.like(root.get("code"), pattern),
@@ -105,7 +95,6 @@ public class UtilisateurAdminService {
         Map<UUID, AppUserCredential> credentialByUserId = credentialRepository.findByAdmUserIdIn(userIds).stream()
                 .collect(Collectors.toMap(c -> c.getAdmUser().getId(), c -> c));
 
-        // Périmètre commercial : un seul agrégat pour toute la page, pas une requête par ligne.
         Map<UUID, Integer> projetsByUserId = perimetreService.nombreProjetsParUtilisateur(userIds);
 
         return page.map(user -> toListItem(user,
@@ -141,19 +130,9 @@ public class UtilisateurAdminService {
     }
 
     /**
-     * {@code POST /api/utilisateurs/{admUserId}/reinitialiser-mot-de-passe} — ouvre (ou rouvre)
-     * l'accès Arpent d'un compte Omran. Voir {@code instructions/FEATURE-acces-arpent-depuis-omran.md} B1.
-     *
-     * <p>Génère toujours un mot de passe, le hache, rend le compte immédiatement utilisable
-     * ({@code MustChangePassword=false}, {@code ProfileCompleted=true} — tout est déjà saisi sur
-     * Omran) et incrémente {@code TokenVersion} (déconnecte toutes les sessions déjà ouvertes).
-     * Crée la ligne {@code AppUserCredential} si le compte ne s'était jamais connecté au web.
-     *
-     * <p>Destinataire : {@code emailCorps} s'il est fourni, sinon {@link #resoudreDestinataire}.
-     * Une adresse fournie mais invalide est refusée en 400 <b>avant toute écriture</b>. Sans
-     * destinataire, la réinitialisation a lieu quand même et aucun événement mail n'est publié :
-     * le mot de passe n'existe alors que dans la réponse. L'adresse du corps n'est jamais
-     * enregistrée — Omran reste la source des comptes.
+     * Voir {@code FEATURE-acces-arpent-depuis-omran.md} B1. Adresse invalide ⇒ 400 avant toute écriture ;
+     * sans destinataire, pas de mail et le mot de passe n'existe que dans la réponse. Adresse du
+     * corps jamais enregistrée : Omran reste la source des comptes.
      */
     @Transactional
     public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(UUID admUserId, String emailCorps) {
@@ -206,15 +185,7 @@ public class UtilisateurAdminService {
         return sb.toString();
     }
 
-    /**
-     * Adresse à laquelle expédier le mot de passe : {@code AdmUser.Email}, à défaut l'email de
-     * la fiche employé liée ({@code CfgTier.EMail}). {@code null} si le compte n'en a aucune.
-     *
-     * <p>Le repli n'est pas décoratif — mesuré sur {@code yesRemsProd} : 24 comptes portent une
-     * adresse sur {@code AdmUser}, 17 sur {@code CfgTier}, et 25 sur l'une ou l'autre. Il gagne
-     * donc un destinataire réel, ce qui suffit à le justifier sur une population de 15 comptes
-     * actifs.
-     */
+    /** Repli sur la fiche employé : il gagne des destinataires réels ({@code FEATURE-service-envoi-email.md} §2). */
     private static String resoudreDestinataire(AdmUser user) {
         String direct = adressePlausible(user.getEmail());
         if (direct != null) {
@@ -224,12 +195,8 @@ public class UtilisateurAdminService {
     }
 
     /**
-     * Normalise et filtre grossièrement une adresse : {@code null} si elle est vide, blanche,
-     * ou dépourvue de structure {@code local@domaine.tld}.
-     *
-     * <p>Volontairement permissif — le but n'est pas de valider une adresse (seul un envoi
-     * réussi le fait) mais d'écarter ce qui ne peut manifestement pas en être une, en
-     * particulier les chaînes vides que la base contient à la place de {@code NULL}.
+     * Volontairement permissif : écarte ce qui ne peut pas être une adresse, notamment les chaînes
+     * vides que la base contient à la place de {@code NULL}.
      */
     private static String adressePlausible(String valeur) {
         if (!StringUtils.hasText(valeur)) {
@@ -245,7 +212,6 @@ public class UtilisateurAdminService {
         return (point > 0 && point < domaine.length() - 1) ? nettoyee : null;
     }
 
-    /** Nom lisible pour l'en-tête du message, avec repli sur l'identifiant du compte. */
     private static String nomAffiche(AdmUser user) {
         if (StringUtils.hasText(user.getDescription())) {
             return user.getDescription().trim();

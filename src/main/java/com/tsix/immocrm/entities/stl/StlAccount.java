@@ -16,12 +16,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
-/**
- * "Compte" — a bank account the company holds règlements in (see {@code StlSettlement.stlAccount}).
- * Real data (yesRems) has one row per legal entity (ADMOD, GHRIZA, BENACEUR, MAYLINE...), plus a
- * couple of "SYNDIC"/test ones — {@code Code} doubles as the display label in the legacy
- * "Encaissements Vente" screen's "Compte" column/filter.
- */
+/** Compte bancaire des règlements ; {@code Code} sert de libellé à la colonne « Compte » du légataire. */
 @Getter
 @Setter
 @Entity
@@ -74,10 +69,8 @@ public class StlAccount {
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
 
-    // Clé RIB (2 derniers chiffres) — avec BankCode/AgencyCode/AccountNumber ci-dessus, compose le
-    // RIB affiché sur l'Autorisation d'Encaissement. `StlAccountView.RIB` (legacy) est une colonne
-    // *calculée* de la vue, pas une colonne de base — confirmé via INFORMATION_SCHEMA.COLUMNS —
-    // donc reconstruite ici plutôt que mappée telle quelle (voir AutorisationVersementService.rib()).
+    // Clé RIB. StlAccountView.RIB est une colonne calculée de la vue, pas de la table : le RIB est
+    // recomposé depuis BankCode/AgencyCode/AccountNumber/AccountKey (AutorisationVersementService.rib()).
     @Size(max = 5)
     @Nationalized
     @Column(name = "AccountKey", length = 5)

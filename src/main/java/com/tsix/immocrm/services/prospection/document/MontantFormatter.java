@@ -9,12 +9,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
- * Shared "1 200 000.00 DH" / "20.00 %" / "dd/MM/yyyy" formatting for {@link OffreDevisPdfRenderer}.
- *
- * <p>Public depuis que l'offre de prix part aussi par mail et par WhatsApp
- * ({@code instructions/FEATURE-offre-apres-visite.md} §5) : le même montant doit s'écrire de la
- * même façon dans le PDF, dans le corps du mail et dans le texte WhatsApp. Un second formateur
- * ferait diverger le prix affiché de celui du document, sur le même envoi.
+ * Formats "1 200 000.00 DH" / "20.00 %" / "dd/MM/yyyy" — seul formateur du PDF, du mail et du
+ * WhatsApp de l'offre, pour qu'un même envoi n'affiche pas deux prix différents.
  */
 public final class MontantFormatter {
 

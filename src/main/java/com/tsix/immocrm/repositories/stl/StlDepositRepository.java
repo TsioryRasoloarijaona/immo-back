@@ -8,6 +8,5 @@ import java.util.UUID;
 
 public interface StlDepositRepository extends JpaRepository<StlDeposit, UUID> {
 
-    /** {@code GET /api/referentiels/depots} — 3 lignes en données réelles (FOURNISSEUR/CLIENT/BANQUE). */
     List<StlDeposit> findAllByOrderByDescriptionAsc();
 }

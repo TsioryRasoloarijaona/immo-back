@@ -17,15 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 
-/**
- * {@code POST /api/dossiers/documents/{type}}: "génération en lot" for every dossier-scoped
- * document generator except "Reçu de règlement" (scoped to one règlement, not one dossier — see
- * {@link com.tsix.immocrm.dto.dossier.GenererDocumentsLotRequest}'s javadoc). Each method here
- * mirrors one single-dossier endpoint already on {@code DossierController}: same
- * {@code xxxService.collect(id)} + {@code xxxPdfRenderer.render(data)} pipeline, called once per
- * dossier, then concatenated into a single PDF via {@link PdfMerger} — never re-implements the
- * per-dossier rendering logic itself.
- */
+/** Génération en lot : le pipeline {@code collect} + {@code render} de chaque document unitaire, fusionné. */
 @Service
 @Transactional(readOnly = true)
 public class DocumentLotService {
@@ -100,14 +92,8 @@ public class DocumentLotService {
     }
 
     /**
-     * Fails on the first unknown/invalid dossier id (via the underlying {@code xxxService.collect}'s
-     * own {@code ResourceNotFoundException}) rather than silently skipping it — a batch print run
-     * with a missing dossier should be reported, not quietly short one page group.
-     *
-     * <p>Périmètre commercial : ces endpoints reçoivent leurs ids dans le <b>corps</b> de la requête,
-     * hors de portée de {@code PerimetreInterceptor} (qui ne lit que l'URL) — c'est le seul endroit
-     * de l'application où la vérification d'accès par id doit être appelée à la main. Un dossier hors
-     * périmètre y est traité comme inexistant (404), exactement comme sur le endpoint unitaire.
+     * Échoue au premier id inconnu plutôt que de l'ignorer. Ids dans le <b>corps</b>, hors de portée
+     * de {@code PerimetreInterceptor} (URL seulement) : le périmètre est vérifié à la main, 404 hors périmètre.
      */
     private byte[] genererLot(List<UUID> dossierIds, Function<UUID, byte[]> genererUnDocument) {
         if (dossierIds == null || dossierIds.isEmpty()) {

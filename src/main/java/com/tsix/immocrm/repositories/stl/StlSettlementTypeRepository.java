@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface StlSettlementTypeRepository extends JpaRepository<StlSettlementType, UUID> {
 
-    /** {@code GET /api/referentiels/types-reglement} — pas de colonne Sorting sur cette table, tri alphabétique. */
+    /** Pas de colonne Sorting : tri alphabétique. */
     List<StlSettlementType> findAllByOrderByDescriptionAsc();
 }

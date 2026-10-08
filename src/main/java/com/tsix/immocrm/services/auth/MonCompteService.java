@@ -25,12 +25,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Backs {@code GET /api/mon-compte}, {@code POST /api/mon-compte/changer-mot-de-passe} and
- * {@code PATCH /api/mon-compte/profil}. Since FEATURE-acces-arpent-depuis-omran.md there is no
- * onboarding gate any more: the password change is voluntary, and the profile form is no longer
- * shown by the frontend (the route stays in place).
- */
 @Service
 @Transactional(readOnly = true)
 public class MonCompteService {
@@ -63,10 +57,8 @@ public class MonCompteService {
     }
 
     /**
-     * Verifies {@code ancienMotDePasse}, hashes and stores the new one, clears
-     * {@code mustChangePassword}, bumps {@code TokenVersion} (invalidates every token issued
-     * before this call — including the one used to make this very request, so a fresh cookie is
-     * returned) and returns a freshly signed token to replace it.
+     * Incrémenter {@code TokenVersion} invalide tous les jetons émis, y compris celui de cette requête :
+     * d'où le nouveau jeton renvoyé.
      */
     @Transactional
     public AuthService.LoginResult changerMotDePasse(AuthenticatedUser principal, ChangerMotDePasseRequest request) {
@@ -95,11 +87,7 @@ public class MonCompteService {
         return new AuthService.LoginResult(token, toDto(user, roles, credential));
     }
 
-    /**
-     * Fills the linked {@code CfgTier}'s personal fields and marks {@code ProfileCompleted}.
-     * 400 if the account has no linked employee (nowhere to store the info) — a known limitation
-     * for legacy accounts like "notaire" that were never tied to a CfgTier.
-     */
+    /** 400 sans fiche employé liée : le profil s'écrit dans le {@code CfgTier}, que certains comptes n'ont pas. */
     @Transactional
     public AuthService.LoginResult completerProfil(AuthenticatedUser principal, CompleterProfilRequest request) {
         if (!StringUtils.hasText(request.prenom()) || !StringUtils.hasText(request.nom())
@@ -152,11 +140,7 @@ public class MonCompteService {
                 .toList();
     }
 
-    /**
-     * Le périmètre commercial est relu en base à chaque appel — jamais depuis le JWT : c'est
-     * précisément ce qui permet à {@code GET /api/mon-compte} de refléter immédiatement une
-     * affectation modifiée par un administrateur, sans reconnexion.
-     */
+    /** Périmètre relu en base, jamais depuis le JWT : une réaffectation se voit sans reconnexion. */
     private UtilisateurCourantDto toDto(AdmUser user, List<String> roles, AppUserCredential credential) {
         List<ProjetPerimetreDto> projets = perimetreService.projetsDuPerimetre(user.getId());
         return new UtilisateurCourantDto(

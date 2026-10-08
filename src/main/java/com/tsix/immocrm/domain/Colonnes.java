@@ -10,13 +10,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Résolution commune des catalogues de colonnes — voir {@link Colonne}.
- *
- * <p>Écrite une fois pour les trois catalogues plutôt que recopiée dans chacun : la logique
- * (défauts, liste blanche, ajout systématique de l'identifiant, 400 sur nom inconnu) est
- * identique, et c'est le genre de duplication qui diverge dès qu'un seul catalogue évolue.
- */
+/** Résolution commune des catalogues de colonnes — voir {@link Colonne}. */
 public final class Colonnes {
 
     private Colonnes() {
@@ -28,11 +22,7 @@ public final class Colonnes {
                 .collect(Collectors.toMap(c -> c.nom().toLowerCase(Locale.ROOT), Function.identity()));
     }
 
-    /**
-     * Sélection appliquée quand {@code ?colonnes=} est absent : exactement les colonnes servies
-     * avant l'introduction du paramètre. C'est ce qui rend chaque lot additif — une intégration
-     * qui ignore {@code colonnes} ne voit aucun changement.
-     */
+    /** Sélection sans {@code ?colonnes=} : les colonnes servies avant le paramètre, d'où des lots additifs. */
     public static <C extends Enum<C> & Colonne> Set<C> parDefaut(Class<C> type) {
         return Arrays.stream(type.getEnumConstants())
                 .filter(Colonne::parDefaut)
@@ -52,13 +42,9 @@ public final class Colonnes {
     }
 
     /**
-     * Résout une sélection reçue du client.
+     * {@code colonneId} est toujours ajoutée : sans elle la ligne n'ouvre plus la fiche.
      *
-     * <p>{@code colonneId} est toujours ajoutée, même si elle n'est pas demandée : sans elle la
-     * ligne n'est pas cliquable et le front ne peut plus appeler la fiche.
-     *
-     * @throws ColonneInconnueException si un nom ne figure pas au catalogue — plutôt que de
-     *         l'ignorer en silence, ce qui laisserait le front croire à une colonne vide.
+     * @throws ColonneInconnueException si un nom ne figure pas au catalogue (pas d'oubli silencieux)
      */
     public static <C extends Enum<C> & Colonne> Set<C> resoudre(Class<C> type, List<String> demandees,
                                                                 C colonneId) {
@@ -83,21 +69,15 @@ public final class Colonnes {
 
     // ------------------------------------------------------------------
     // Groupement et agrégats — voir instructions/FEATURE-groupement-listes.md
-    //
-    // Même raison d'être que les méthodes ci-dessus : écrites une fois pour les trois catalogues.
-    // La liste blanche n'est plus `parDefaut` mais le Chemin déclaré, donc une colonne sans chemin
-    // est rejetée exactement comme un nom inconnu — du point de vue du client, demander une
-    // colonne qui n'existe pas et en demander une qui ne se groupe pas sont la même erreur.
+    // Une colonne sans chemin est rejetée exactement comme un nom inconnu.
     // ------------------------------------------------------------------
 
-    /** Colonnes groupables du catalogue, dans l'ordre de déclaration. */
     public static <C extends Enum<C> & Colonne> List<C> groupables(Class<C> type) {
         return Arrays.stream(type.getEnumConstants())
                 .filter(c -> c.chemin() != null && c.chemin().groupable())
                 .toList();
     }
 
-    /** Colonnes agrégeables du catalogue, dans l'ordre de déclaration. */
     public static <C extends Enum<C> & Colonne> List<C> agregeables(Class<C> type) {
         return Arrays.stream(type.getEnumConstants())
                 .filter(c -> c.chemin() != null && c.chemin().agregeable())
@@ -109,11 +89,8 @@ public final class Colonnes {
     }
 
     /**
-     * Résout la colonne de {@code ?groupBy=}.
-     *
-     * @throws ColonneInconnueException si le nom est absent du catalogue <em>ou</em> présent mais
-     *         non groupable. Le message porte la liste des colonnes groupables — pas celle de
-     *         toutes les colonnes, qui enverrait le client réessayer avec une autre valeur refusée.
+     * @throws ColonneInconnueException si le nom est absent ou non groupable ; le message liste
+     *         les seules colonnes groupables
      */
     public static <C extends Enum<C> & Colonne> C resoudreGroupement(Class<C> type, String demandee) {
         if (demandee == null || demandee.isBlank()) {
@@ -127,25 +104,11 @@ public final class Colonnes {
     }
 
     /**
-     * Résout la sélection de {@code ?agregats=}. Absente ou vide → aucun agrégat, seul l'effectif
-     * du groupe est renvoyé.
+     * {@code prix} (nom nu) = {@link FonctionAgregat#DEFAUT}, sous la clé {@code prix} ; {@code prix:AVG}
+     * revient sous la clé {@code prix:AVG}. Les deux coexistent, d'où le dédoublonnage par jeton et
+     * non par colonne. Absente ou vide → seul l'effectif du groupe.
      *
-     * <h2>Deux formes, et pourquoi la première ne bouge pas</h2>
-     *
-     * <p>{@code prix} — nom nu — vaut {@link FonctionAgregat#DEFAUT}, c'est-à-dire la somme, et le
-     * résultat revient sous la clé {@code prix}. C'est <strong>exactement</strong> le comportement
-     * d'avant l'ouverture du menu Σ : les intégrations existantes n'ont rien à changer, et c'est
-     * ce qui rend ce lot non cassant pour les quatre listes.
-     *
-     * <p>{@code prix:AVG} — nom qualifié — applique la fonction nommée et revient sous la clé
-     * {@code prix:AVG}. Les deux formes peuvent coexister dans le même appel : demander
-     * {@code prix} et {@code prix:AVG} rend deux entrées distinctes, ce qu'un dédoublonnage par
-     * colonne aurait écrasé. D'où le dédoublonnage <em>par jeton</em>.
-     *
-     * @throws ColonneInconnueException          si un nom est absent du catalogue
-     * @throws FonctionAgregatInconnueException  si la fonction n'existe pas, ou si la colonne ne
-     *                                           l'autorise pas (sommer une date, agréger une
-     *                                           colonne sans chemin)
+     * @throws FonctionAgregatInconnueException si la fonction n'existe pas ou que la colonne ne l'autorise pas
      */
     public static <C extends Enum<C> & Colonne> List<AgregatDemande> resoudreAgregats(
             Class<C> type, List<String> demandees) {
@@ -180,8 +143,7 @@ public final class Colonnes {
                     throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
                 }
             }
-            // Couvre les deux refus d'un coup : la colonne sans chemin (liste vide, donc rien n'y
-            // passe) et la fonction qui ne s'applique pas à ce genre de colonne.
+            // Couvre aussi la colonne sans chemin : sa liste d'autorisées est vide.
             if (!autorisees.contains(fonction)) {
                 throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
             }

@@ -5,24 +5,12 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Construction des clés d'objet.
- *
- * <pre>{@code {prefix}/pieces-jointes/{porteur}/{porteurId}/{fileId}{ext}}</pre>
- *
- * <p>La clé se termine par l'identifiant <b>immuable</b> de la pièce jointe : modifier sa
- * description ne déplace jamais l'objet. Le nom de fichier d'origine n'y entre <b>jamais</b>
- * (accents, espaces, données personnelles) — il vit dans {@code AdmAttachedFile.Description}
- * et n'est servi qu'en {@code Content-Disposition}.
- *
- * <p>Format identique à celui produit par le script de reprise
- * ({@code migration/migrate_blobs_to_s3.py}), mais ce n'est qu'une commodité de lecture du
- * bucket : {@code AppFileObject.StorageKey} stocke la clé <b>en entier</b> et l'application ne
- * la recalcule jamais pour un fichier existant. Une divergence de forme entre les clés issues
- * de la migration et celles des nouveaux dépôts serait donc sans conséquence.
+ * {@code {prefix}/pieces-jointes/{porteur}/{porteurId}/{fileId}{ext}} : finit par l'id immuable, jamais le nom
+ * d'origine (accents, données personnelles). La clé est stockée entière et jamais recalculée pour un fichier existant.
  */
 public final class CleStockage {
 
-    /** Toute extension hors de ce format est écartée plutôt que reprise telle quelle. */
+    /** Hors de ce format, l'extension est écartée plutôt que reprise telle quelle. */
     private static final Pattern EXTENSION_VALIDE = Pattern.compile("^\\.[a-z0-9]{1,10}$");
 
     private CleStockage() {
@@ -37,17 +25,8 @@ public final class CleStockage {
     }
 
     /**
-     * {@code "prod"} / {@code "prod/"} / {@code "/prod/"} → {@code "prod/"} ; vide ou
-     * {@code null} → {@code ""}.
-     *
-     * <p>Le préfixe devient facultatif dès lors que chaque environnement a <b>son propre
-     * bucket</b> : le risque qu'il écartait — deux environnements écrivant la même clé, les
-     * bases étant des restaurations du même jeu de données donc porteuses des mêmes
-     * {@code PKey} — n'existe plus entre buckets distincts.
-     *
-     * <p>Un préfixe vide ne doit pour autant pas produire une clé commençant par {@code /} :
-     * S3 l'accepterait, mais elle s'afficherait comme un dossier sans nom dans la console MinIO
-     * et compliquerait toute inspection manuelle.
+     * {@code "/prod/"} → {@code "prod/"} ; vide → {@code ""}. Facultatif avec un bucket par environnement ; vide, il ne
+     * doit pas laisser de {@code /} en tête (dossier sans nom dans la console MinIO).
      */
     private static String normaliserPrefixe(String prefix) {
         if (prefix == null || prefix.isBlank()) {

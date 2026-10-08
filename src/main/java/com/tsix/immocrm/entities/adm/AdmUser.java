@@ -18,17 +18,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * dbo.AdmUser — a login account for the legacy desktop app, reused as-is for the new API's
- * authentication (see {@code AppUserCredential}). {@code Code} is the username; {@code Pass} is
- * the legacy account's password, encrypted with an algorithm/key only the old desktop app knows
- * — it is mapped read-only for reference but never used to authenticate (see
- * {@code AppUserCredential.passwordHash}, a fresh bcrypt hash set on first web login). Only the
- * columns relevant to web auth are mapped; {@code WebRoleId}, {@code WebCultureId},
- * {@code WebAlertDefinitionId}, {@code EmailPassword}/{@code EmailPortNumber}/
- * {@code EmailSMTPServer}/{@code EmailSSLActive}, {@code OpenBeeCode}/{@code OpenBeePass},
- * {@code WebPass}, {@code LinesPerPage}, {@code ConfirmDelete}, {@code LockDelay},
- * {@code IsVisibleForChat}, {@code CanDisapearNotification} and {@code IsMobileUser} are left
- * unmapped since no dedicated feature reads them yet.
+ * Compte de connexion du logiciel de bureau, réutilisé pour l'authentification web
+ * ({@code AppUserCredential} porte le hash bcrypt). {@code Code} = identifiant.
  */
 @Getter
 @Setter
@@ -39,12 +30,11 @@ public class AdmUser {
     @Column(name = "PKey", nullable = false)
     private UUID id;
 
-    /** Username. */
     @Lob
     @Column(name = "Code", nullable = false)
     private String code;
 
-    /** Legacy encrypted password — informational only, never used to authenticate. See class doc. */
+    /** Chiffré par un algorithme que seul le logiciel de bureau connaît : jamais utilisé pour authentifier. */
     @Nationalized
     @Lob
     @Column(name = "Pass")
@@ -73,7 +63,6 @@ public class AdmUser {
     @Column(name = "Disabled")
     private Boolean disabled;
 
-    /** The employee/commercial (CfgTier) this account belongs to. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgEmployeeId")
     private CfgTier cfgEmployee;

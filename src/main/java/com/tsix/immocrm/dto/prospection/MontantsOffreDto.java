@@ -4,11 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 
-/**
- * Détail HT/TTC d'une offre ({@code StlQuote}) — reproduit exactement l'onglet "Montants" du
- * formulaire Offre legacy: prix du m², prix article, prix sous-articles, total, remise puis prix
- * de vente, chaque ligne déclinée en HT et en TTC (TTC = HT × (1 + tvaRatio)).
- */
+/** Onglet « Montants » du formulaire Offre légataire ; TTC = HT × (1 + tvaRatio). */
 @Schema(description = "Détail HT/TTC des montants d'une offre, reproduisant l'onglet \"Montants\" "
         + "du formulaire Offre legacy.")
 public record MontantsOffreDto(

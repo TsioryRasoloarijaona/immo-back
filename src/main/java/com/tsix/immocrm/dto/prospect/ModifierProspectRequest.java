@@ -3,26 +3,13 @@ package com.tsix.immocrm.dto.prospect;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Body for {@code PATCH /api/prospects/{id}}. Every field is optional — only non-null
- * fields are applied (partial update).
- *
- * NOTE: field naming is not yet backed by a shared API spec doc
- * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
- * directly from {@code CfgTier}. Adjust once a spec is available.
- *
- * GAP-05: same new fields as {@link CreerProspectRequest} — see its doc-comment.
- */
+/** Mise à jour partielle : seuls les champs non null sont appliqués. */
 public record ModifierProspectRequest(
         String prenom,
         String nom,
         String raisonSociale,
         String telephone,
-        /**
-         * Indicatif pays du fixe, sans le {@code +}. <b>Requis dès que {@code telephone} est
-         * fourni</b>, sans reprise implicite de celui déjà en base : un numéro qui change peut
-         * changer de pays. Une modification qui ne touche pas au téléphone n'a rien à fournir.
-         */
+        /** Requis dès que {@code telephone} est fourni, jamais repris de la base : le pays peut changer. */
         String indicatifTelephone,
         String mobile,
         /** Indicatif pays du mobile, mêmes règles que {@link #indicatifTelephone}. */

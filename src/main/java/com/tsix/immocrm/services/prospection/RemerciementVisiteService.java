@@ -27,17 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Remercie le prospect après sa visite, sur les deux canaux. Voir
- * {@code instructions/FEATURE-offre-apres-visite.md} §3.
- *
- * <p><b>Volontairement pauvre.</b> Le remerciement ne porte ni plan, ni offre, ni adresse — la
- * visite a eu lieu, ces informations n'ont plus d'objet. C'est ce dénuement qui lui permet d'être
- * automatique : il ne dépend d'aucune donnée susceptible de manquer, là où l'offre de prix dépend
- * d'un lot inconnu sur 93 % des prospections de cette étape.
- *
- * <p>La résolution du destinataire est celle de {@link ConfirmationVisiteService} — mêmes règles,
- * même absence de repli sur {@code TempTel}. Elle n'est pas réécrite mais réempruntée, de sorte
- * qu'un prospect joignable pour sa convocation le reste pour son remerciement.
+ * Remerciement après visite, volontairement pauvre pour pouvoir être automatique ; destinataire
+ * résolu comme {@link ConfirmationVisiteService}. Voir {@code instructions/FEATURE-offre-apres-visite.md} §3.
  */
 @Service
 @Transactional(readOnly = true)
@@ -195,11 +186,7 @@ public class RemerciementVisiteService {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 
-    /**
-     * @param aUnMobileBrut la fiche porte un mobile, exploitable ou non — distingue « pas de
-     *                      numéro » de « numéro impossible à composer », qui n'appellent pas la
-     *                      même correction.
-     */
+    /** @param aUnMobileBrut la fiche porte un mobile, exploitable ou non */
     private record Contenu(
             String nomProspect,
             String email,

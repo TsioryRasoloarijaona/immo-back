@@ -12,7 +12,6 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/** dbo.AdmUserRole — join row assigning one {@link AdmRole} to one {@link AdmUser}. */
 @Getter
 @Setter
 @Entity

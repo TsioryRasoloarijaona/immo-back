@@ -7,36 +7,21 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Une ligne de {@code GET /api/suivi-actions} — une action commerciale ({@code ComActionMessage}),
- * avec les colonnes de l'écran OMRAN « Suivi des actions ».
- *
- * <p>Filtré par {@code ?colonnes=} : seuls les champs demandés sont sérialisés — voir
- * {@link ColonneSuiviAction}, dont les noms sont exactement ceux des composants ci-dessous.
- */
+/** Filtré par {@link ColonneSuiviAction#FILTRE} : les noms de colonnes y sont exactement ceux des composants. */
 @JsonFilter(ColonneSuiviAction.FILTRE)
-@Schema(description = "Une action commerciale (appel, visite, message, note…) telle que l'affiche "
-        + "l'écran OMRAN « Suivi des actions ». Seules les colonnes demandées par `?colonnes=` sont "
-        + "présentes — catalogue : `GET /api/referentiels/colonnes/suivi-actions`.")
 public record SuiviActionDto(
         @Schema(description = "Identifiant de l'action (ComActionMessage.PKey). Toujours servi.")
         UUID id,
-        @Schema(description = "Auteur de l'action tel qu'écrit sur la ligne (`UserName`) — la colonne "
-                + "sur laquelle filtre l'écran OMRAN. « Système » ou vide pour une action générée.",
-                example = "Khadija ELKORRI")
+        @Schema(example = "Khadija ELKORRI")
         String utilisateur,
         @Schema(description = "Type d'action (ComActionMessageType).", example = "Téléphone Sortant")
         String typeAction,
-        @Schema(description = "Rang de l'action parmi celles du même type pour le même tiers, **1 = la "
-                + "plus récente** (hors actions système et impayées) — la règle de la vue OMRAN. "
-                + "Calculé pour la page servie : ni triable ni groupable.", example = "1")
+        @Schema(example = "1")
         Integer rang,
         @Schema(description = "Date de l'action (`DocDate`).")
         LocalDateTime dateAction,
         @Schema(description = "Date de l'alerte / de la relance (`AlertValidityDate`). Null si aucune.")
         LocalDateTime dateAlerte,
-        @Schema(description = "L'alerte de cette action est-elle encore active (`AdmAlertData.Active`) ? "
-                + "`false` si aucune alerte. Calculé pour la page servie.")
         Boolean alerteActive,
         @Schema(description = "Catégorie (Prospection, Dossier de vente…).", example = "Prospection")
         String categorie,
@@ -46,30 +31,16 @@ public record SuiviActionDto(
         String message,
         @Schema(description = "Action marquée impayé (`IsUnpaid`).")
         Boolean impaye,
-        @Schema(description = "Action générée par le système (`IsSystem`) — relance, événement… "
-                + "Listée comme dans OMRAN ; filtrable par `?systeme=false`.")
         Boolean systeme,
         @Schema(description = "Action entrante (`IsIn`). Rarement renseigné : le type porte le sens.")
         Boolean entrante,
-        @Schema(description = "Commercial concerné (`CfgEmployeeId` → `CfgTier.Description`) — pas "
-                + "l'auteur, qui est `utilisateur`. Vide sur 23 % des actions réelles.")
         String commercial,
-        @Schema(description = "Personnel : employé du compte auteur, sinon le compte, sinon le "
-                + "commercial — règle de la vue OMRAN. Calculé pour la page servie.")
         String personnel,
-        @Schema(description = "Tiers (prospect/client) de l'action : `CfgTier.Description` du tiers "
-                + "posé sur l'action, à défaut la fiche prospect de la prospection rattachée, à "
-                + "défaut le nom saisi au premier contact (`TempDescription`, cas des "
-                + "pré-prospections). Premier texte non blanc, nettoyé ; `null` si aucun. Le "
-                + "groupement (`groupBy=tiersNom`) et son dépliage suivent la même cascade. `tiersId` reste l'id du "
-                + "seul tiers de l'action.")
         String tiersNom,
         @Schema(description = "Code de la prospection rattachée.", example = "26/05947")
         String prospectionCode,
         @Schema(description = "Code du dossier de vente rattaché.")
         String dossierCode,
-        @Schema(description = "État : statut du dossier de l'action, sinon du dossier né de sa "
-                + "prospection, sinon sa catégorie — règle de la vue OMRAN. Calculé pour la page servie.")
         String etat,
         @Schema(description = "Code de l'article rattaché.")
         String articleCode,

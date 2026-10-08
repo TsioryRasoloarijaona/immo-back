@@ -4,38 +4,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Catalogue des colonnes sélectionnables de {@code GET /api/suivi-actions} — l'écran OMRAN
- * « Suivi des actions ».
- *
- * <p>Liste blanche de {@code ?colonnes=}, publiée par
- * {@code GET /api/referentiels/colonnes/suivi-actions} pour le sélecteur côté front, et porteuse
- * des {@link Chemin} qui rendent {@code GET /api/suivi-actions/groupes} possible.
- *
- * <h2>Comment il a été établi</h2>
- *
- * <p>Les colonnes sont celles de la vue {@code ComActionMessageView} que lit l'écran (trace
- * d'audit du 23/09) et que liste sa documentation officielle, <b>filtrées par la mesure</b> sur les
- * 48 213 actions réelles : désistement, transfert client, transfert produit (0 ligne), SAV (2),
- * location, offre et syndic (0) ne sont pas au catalogue. Voir
- * {@code instructions/FEATURE-suivi-actions.md} §2.
- *
- * <p><b>Le défaut</b> reproduit la grille OMRAN ; identifiants et piste d'audit sont hors défaut.
- *
- * <h2>Les colonnes sans chemin</h2>
- *
- * <ul>
- *   <li>{@link #RANG}, {@link #ALERTE_ACTIVE}, {@link #ETAT}, {@link #PERSONNEL} : calculées pour
- *       la <em>page servie</em> seulement. La vue les calcule sur toutes les lignes, et c'est ce
- *       qui la rend inutilisable (6,6 s la page) ;</li>
- *   <li>{@link #MESSAGE} : {@code AlertMessage} est un {@code nvarchar(max)}, que le
- *       {@code COUNT(DISTINCT)} du moteur de groupement refuse.</li>
- * </ul>
- *
- * <p>Les libellés de tiers et de commercial sont groupés sur {@code Description}, la colonne que
- * la vue affiche — pas sur la priorité de {@code TierNomFormatter} : la ligne et son groupe doivent
- * porter le même libellé.
- *
- * <p>Sans JPA, comme le reste de {@code domain/}.
+ * Catalogue des colonnes de {@code GET /api/suivi-actions} (écran OMRAN « Suivi des actions »),
+ * filtrées par la mesure : voir FEATURE-suivi-actions.md §2. Colonnes sans chemin : calculées pour
+ * la page servie seulement (la vue les calcule sur toutes les lignes), ou {@code nvarchar(max)}.
  */
 public enum ColonneSuiviAction implements Colonne {
 
@@ -48,38 +19,39 @@ public enum ColonneSuiviAction implements Colonne {
     RANG("rang", "Rang", Groupe.ACTION, TypeColonne.NOMBRE, true),
     DATE_ACTION("dateAction", "Date action", Groupe.ACTION, TypeColonne.DATE, true,
             Chemin.date("docDate")),
-    /** 39 363 / 48 213. */
     DATE_ALERTE("dateAlerte", "Date alerte", Groupe.ACTION, TypeColonne.DATE, true,
             Chemin.date("alertValidityDate")),
     /** {@code AdmAlertData.Active}. Page servie seulement. */
     ALERTE_ACTIVE("alerteActive", "Alerte active", Groupe.ACTION, TypeColonne.BOOLEEN, true),
     CATEGORIE("categorie", "Catégorie", Groupe.ACTION, TypeColonne.TEXTE, true,
             Chemin.groupable("comActionMessageCategory.description")),
-    /** Sous-catégorie : « Rendez vous pris », « Hors budget »… — 44 650 / 48 213. */
+    /** Sous-catégorie : « Rendez vous pris », « Hors budget »… */
     RESULTAT("resultat", "Résultat", Groupe.ACTION, TypeColonne.TEXTE, true,
             Chemin.groupable("comActionMessageSubCategory.description")),
     /** {@code AlertMessage} — la note saisie. {@code nvarchar(max)} : ni groupable ni agrégeable. */
     MESSAGE("message", "Message", Groupe.ACTION, TypeColonne.TEXTE, true),
-    /** 930 à vrai. */
     IMPAYE("impaye", "Impayé", Groupe.ACTION, TypeColonne.BOOLEEN, true,
             Chemin.groupable("isUnpaid")),
-    /** 4 482 à vrai : relances et événements générés, que l'écran OMRAN liste aussi. */
+    /** Relances et événements générés, que l'écran OMRAN liste aussi. */
     SYSTEME("systeme", "Système", Groupe.ACTION, TypeColonne.BOOLEEN, false,
             Chemin.groupable("isSystem")),
-    /** 13 à vrai sur 48 213 : le type (« Téléphone entrant ») porte le sens bien plus souvent. */
+    /** Rarement vrai : le type (« Téléphone entrant ») porte le sens bien plus souvent. */
     ENTRANTE("entrante", "Entrante", Groupe.ACTION, TypeColonne.BOOLEEN, false,
             Chemin.groupable("isIn")),
 
     // -- Les personnes.
-    /** {@code CfgEmployeeId} — l'employé concerné, pas l'auteur. 37 219 / 48 213 (77 %). */
+    /**
+     * {@code CfgEmployeeId} — l'employé concerné, pas l'auteur. Groupé sur {@code Description}, comme
+     * la vue l'affiche, pas sur la priorité de {@code TierNomFormatter} : ligne et groupe même libellé.
+     */
     COMMERCIAL("commercial", "Commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true,
             Chemin.groupable("cfgEmployee.description")),
     /** Employé du compte, sinon le compte, sinon le commercial — règle de la vue. Page servie seulement. */
     PERSONNEL("personnel", "Personnel", Groupe.ACTEURS, TypeColonne.TEXTE, true),
     /**
-     * Tiers de l'action, sinon fiche prospect de la prospection, sinon {@code TempDescription} —
-     * même cascade que l'affichage ({@code SuiviActionService#tiersNom}). Sans elle, les actions
-     * de pré-prospection (sans {@code CfgTierId}) n'avaient ni nom ni groupe.
+     * Tiers de l'action, sinon fiche prospect de la prospection, sinon {@code TempDescription} — même
+     * cascade que {@code SuiviActionService#tiersNom}, sur {@code Description} comme {@link #COMMERCIAL} :
+     * sans elle, les actions de pré-prospection (sans {@code CfgTierId}) n'ont ni nom ni groupe.
      */
     TIERS_NOM("tiersNom", "Tiers", Groupe.ACTEURS, TypeColonne.TEXTE, true,
             Chemin.repli("cfgTier.description", "comProspection.cfgProspect.description",
@@ -88,17 +60,15 @@ public enum ColonneSuiviAction implements Colonne {
     // -- Ce à quoi l'action est rattachée.
     PROSPECTION_CODE("prospectionCode", "Prospection", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true,
             Chemin.groupable("comProspection.code")),
-    /** 1 507 / 48 213. */
     DOSSIER_CODE("dossierCode", "N° dossier", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true,
             Chemin.groupable("comFolder.code")),
     /** Statut du dossier (ou du dossier né de la prospection), sinon la catégorie. Page servie seulement. */
     ETAT("etat", "État", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true),
-    /** 4 170 / 48 213. */
     ARTICLE_CODE("articleCode", "Article", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true,
             Chemin.groupable("stkItem.code")),
     ARTICLE_LIBELLE("articleLibelle", "Libellé article", Groupe.RATTACHEMENT, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.description")),
-    /** Tranche résolue comme la vue OMRAN — 46 559 / 48 213, 14 tranches. */
+    /** Tranche résolue comme la vue OMRAN. */
     TRANCHE_CODE("trancheCode", "Tranche", Groupe.RATTACHEMENT, TypeColonne.TEXTE, true,
             Chemin.groupable("trancheResolue.code")),
     TRANCHE_LIBELLE("trancheLibelle", "Libellé tranche", Groupe.RATTACHEMENT, TypeColonne.TEXTE, false,
@@ -197,10 +167,7 @@ public enum ColonneSuiviAction implements Colonne {
         return Colonnes.resoudreGroupement(ColonneSuiviAction.class, demandee);
     }
 
-    /**
-     * Résout {@code ?agregats=}. Aucune colonne de ce catalogue n'est agrégeable : l'effectif de
-     * chaque groupe est la mesure — le nombre d'actions. Une demande d'agrégat rend donc 400.
-     */
+    /** Aucune colonne agrégeable : l'effectif du groupe est la mesure, une demande d'agrégat rend 400. */
     public static List<AgregatDemande> resoudreAgregats(List<String> demandees) {
         return Colonnes.resoudreAgregats(ColonneSuiviAction.class, demandees);
     }

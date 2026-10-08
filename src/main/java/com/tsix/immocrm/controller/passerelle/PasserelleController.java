@@ -21,22 +21,11 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 
 /**
- * Vérification d'identité pour la passerelle (Caddy {@code forward_auth}) placée devant les
- * services annexes {@code /svc/<nom>/*}. Voir {@code instructions/FEATURE-passerelle-auth.md}.
- *
- * <p><b>Pourquoi hors de {@code /api/auth/**}.</b> Ce préfixe est {@code permitAll} dans
- * {@code SecurityConfig}. Ici, au contraire, la route
- * hérite de toute la chaîne : 401 sans cookie valide (signature, expiration, {@code tokenVersion}
- * révoqué), et {@code X-Api-Key} accepté si la portée de la clé couvre cette route. Le contrôleur n'a donc
- * qu'une chose à faire : traduire le principal en en-têtes.
- *
- * <p>Ces en-têtes sont <b>le contrat</b> entre la passerelle et les services. Un passage futur à
- * une validation locale du JWT par la passerelle (RS256 + JWKS) devra produire exactement les
- * mêmes ; ne pas les renommer.
+ * Caddy {@code forward_auth} devant {@code /svc/<nom>/*} (FEATURE-passerelle-auth.md). Hors de
+ * {@code /api/auth/**} (permitAll) pour hériter de toute la chaîne de sécurité. Les en-têtes sont
+ * le contrat entre passerelle et services : ne pas les renommer.
  */
-@Tag(name = "Passerelle", description = "Vérification d'identité appelée par la passerelle (Caddy "
-        + "forward_auth) avant de relayer une requête vers un service annexe /svc/<nom>/*. "
-        + "Pas destinée au frontend.")
+@Tag(name = "Passerelle")
 @RestController
 @RequestMapping("/api/passerelle")
 public class PasserelleController {
@@ -49,21 +38,7 @@ public class PasserelleController {
     private static final String PREFIXE_ROLE = "ROLE_";
 
     @GetMapping("/verifier")
-    @Operation(
-            summary = "Vérifie l'appelant pour la passerelle",
-            description = "Appelée par Caddy (forward_auth) avec les en-têtes de la requête d'origine, "
-                    + "dont le cookie access_token. Ne renvoie aucun corps : en cas de succès, "
-                    + "l'identité est portée par les en-têtes X-User-Id, X-Username, X-User-Roles et "
-                    + "X-Employee-Id, que la passerelle recopie sur la requête relayée au service. "
-                    + "X-User-Roles liste les codes de rôle (AdmRole.Code) séparés par des virgules, "
-                    + "chacun encodé en pourcentage UTF-8 (« Direction Générale » → "
-                    + "« Direction%20G%C3%A9n%C3%A9rale ») : les codes réels portent accents et "
-                    + "espaces, qu'un en-tête HTTP ne peut pas transporter tels quels. X-Employee-Id "
-                    + "est absent si le compte n'est lié à aucune fiche employé. Les mêmes contrôles "
-                    + "que sur le reste de l'API s'appliquent : révocation par changement de mot de "
-                    + "passe, portée des clés d'API. Plus aucun blocage de première connexion : "
-                    + "mustChangePassword/profileCompleted ne sont pas consultés."
-    )
+    @Operation(summary = "Vérifie l'appelant pour la passerelle")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Appelant authentifié ; identité dans les en-têtes.",
                     headers = {
@@ -72,7 +47,7 @@ public class PasserelleController {
                             @Header(name = EN_TETE_ROLES, description = "Codes de rôle séparés par des virgules, chacun encodé en pourcentage UTF-8."),
                             @Header(name = EN_TETE_EMPLOYEE_ID, description = "Fiche employé (CfgTier, UUID) ; absent si aucune.")
                     }),
-            @ApiResponse(responseCode = "401", description = "Cookie absent, expiré, mal signé ou révoqué (TokenVersion), ou clé d'API invalide. La passerelle renvoie ce 401 tel quel au client."),
+            @ApiResponse(responseCode = "401"),
             @ApiResponse(responseCode = "403", description = "Clé d'API dont la portée ne couvre pas cette route (HORS_PORTEE).")
     })
     public ResponseEntity<Void> verifier(@AuthenticationPrincipal AuthenticatedUser principal,

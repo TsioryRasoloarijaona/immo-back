@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface ComFolderCustomerRepository extends JpaRepository<ComFolderCustomer, UUID> {
 
-    /** Co-acquéreurs additionnels d'un dossier (au-delà de {@code ComFolder.cfgCustomer}) — voir "FICHE BANCAIRE". */
+    /** Co-acquéreurs en plus de {@code ComFolder.cfgCustomer}. */
     List<ComFolderCustomer> findByComFolderId(UUID comFolderId);
 }

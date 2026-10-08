@@ -4,40 +4,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Catalogue des colonnes sélectionnables de {@code GET /api/dossiers}.
- *
- * <p>C'est la <strong>liste blanche</strong> du paramètre {@code ?colonnes=} et, exposée par
- * {@code GET /api/referentiels/colonnes/dossiers}, la source du sélecteur de colonnes côté front.
- *
- * <h2>Pourquoi ce catalogue existe</h2>
- *
- * <p>La liste des dossiers servait <strong>13 colonnes</strong> quand la fiche en sert une
- * quarantaine, et le logiciel de bureau davantage encore : {@code ComSaleFolderView} porte 217
- * colonnes. Voir {@code instructions/FEATURE-selecteur-colonnes-prospect-dossier.md}.
- *
- * <h2>Ce qui n'y figure pas, et pourquoi</h2>
- *
- * <p><strong>Les articles.</strong> Ils exigent une requête <em>par dossier</em>
- * ({@code StkItemRepository.findByComFolderId}) : les servir en liste ferait un N+1 de 20
- * requêtes par page. Ils restent sur la fiche.
- *
- * <p><strong>La ventilation financière du légataire.</strong> Mesurée sur les 358 dossiers réels,
- * 5 postes seulement sur 12 sont vivants, et le bloc {@code Agreement*} diverge du bloc principal
- * sur 20 % des lignes sans qu'on sache lequel fait foi — décision métier ouverte. Un catalogue
- * n'est pas le bon endroit pour trancher ça.
- *
- * <p><strong>{@code notes}.</strong> {@code ComFolder.Notes} est mesurée à <strong>0 ligne sur
- * 358</strong> : la servir en liste ajouterait une colonne toujours vide au sélecteur.
- *
- * <p>Sans JPA, comme le reste de {@code domain/}.
+ * Catalogue des colonnes de {@code GET /api/dossiers} : liste blanche de {@code ?colonnes=}.
+ * Exclusions (articles, ventilation financière, notes) : FEATURE-selecteur-colonnes-prospect-dossier.md §3.2.
  */
 public enum ColonneDossier implements Colonne {
 
     // -- Colonnes historiques : la sélection par défaut, à ne pas modifier.
-    //
-    // Les `*_ID` sont groupables au meme titre que le reste : leur jumelle `*_NOM` donne la
-    // meme partition avec un libelle lisible, mais c'est au client de choisir laquelle il
-    // affiche. Les refuser revenait a decider a sa place.
     ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true,
             Chemin.groupable("id")),
     CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true,
@@ -66,11 +38,8 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("comProspection.code")),
 
     // -- Financier, déjà servi par la fiche. Scalaires de ComFolder : coût nul.
-    //
-    // Tous agrégeables, aucun groupable : `Price` porte 190 valeurs distinctes sur 358 dossiers.
-    // `REMISE` et `PROBABILITE_FINALISATION` sont des RATIOS stockés en fraction (1.00 = 100 %) —
-    // leur somme n'a pas de sens métier, mais c'est au client de choisir ce qu'il additionne, et
-    // les exclure ferait une exception à expliquer pour un gain nul.
+    // `REMISE` et `PROBABILITE_FINALISATION` sont des ratios en fraction (1.00 = 100 %) : sommables
+    // quand même, c'est au client de choisir ce qu'il additionne.
     PRIX_AVANT_REMISE("prixAvantRemise", "Prix avant remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
             Chemin.groupableEtAgregeable("priceBeforeDiscount")),
     REMISE("remise", "Remise (%)", Groupe.FINANCIER, TypeColonne.NOMBRE, false,
@@ -84,13 +53,8 @@ public enum ColonneDossier implements Colonne {
     PROBABILITE_FINALISATION("probabiliteFinalisation", "Probabilité", Groupe.FINANCIER, TypeColonne.NOMBRE, false,
             Chemin.groupableEtAgregeable("probabilityOfFinalisation")),
 
-    // -- Contexte patrimonial. Chaîne article → tranche → projet → société : jointures paresseuses,
-    //    payées seulement si demandées.
-    //
-    // Les chemins traversent `stkItem` (l'article principal), qui est NULLABLE. Le moteur de
-    // groupement doit donc les joindre en LEFT explicite : une navigation implicite produirait
-    // des INNER JOIN et ferait disparaître des groupes entiers — le piège déjà rencontré sur le
-    // filtre `trancheId` de DossierService (voir les commentaires de buildSpec).
+    // -- Contexte patrimonial, via `stkItem` (article principal) qui est NULLABLE : le groupement
+    //    doit le joindre en LEFT explicite, sinon INNER JOIN implicite et groupes perdus.
     PROJET_ID("projetId", "Id projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.cfgProject.id")),
     PROJET_CODE("projetCode", "Projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
@@ -122,8 +86,7 @@ public enum ColonneDossier implements Colonne {
     MODE_PAIE("modePaie", "Mode de paiement", Groupe.FINANCIER, TypeColonne.TEXTE, false,
             Chemin.groupable("comPaymentMethod.code")),
 
-    // -- Origine, depuis la prospection. 99,2 % des dossiers en ont une.
-    // `etapeProspection` lit bien ComProspectionKind : c'est ce que fait déjà le mappeur de liste.
+    // -- Origine, depuis la prospection. `etapeProspection` lit ComProspectionKind, comme le mappeur de liste.
     ETAPE_PROSPECTION("etapeProspection", "Étape prospection", Groupe.ORIGINE, TypeColonne.TEXTE, false,
             Chemin.groupable("comProspection.comProspectionKind.description")),
     ORIGINE_PROSPECTION("origineProspection", "Origine", Groupe.ORIGINE, TypeColonne.TEXTE, false,
@@ -131,7 +94,7 @@ public enum ColonneDossier implements Colonne {
     DATE_PROSPECTION("dateProspection", "Date prospection", Groupe.ORIGINE, TypeColonne.DATE, false,
             Chemin.date("comProspection.docDate")),
 
-    // -- Piste d'audit. Scalaires, 100 % en base réelle.
+    // -- Piste d'audit.
     CREE_PAR("creePar", "Créé par", Groupe.AUDIT, TypeColonne.TEXTE, false,
             Chemin.groupable("userCreate")),
     CREE_LE("creeLe", "Créé le", Groupe.AUDIT, TypeColonne.DATE, false,
@@ -141,16 +104,8 @@ public enum ColonneDossier implements Colonne {
     MODIFIE_LE("modifieLe", "Modifié le", Groupe.AUDIT, TypeColonne.DATE, false,
             Chemin.date("userUpdateDateTime")),
 
-    // ------------------------------------------------------------------
-    // L'ARTICLE PRINCIPAL. Trouvé par la trace d'audit du logiciel de bureau (sys.fn_get_audit_file
-    // sur C:\backup\*.sqlaudit) : sa liste des dossiers trie par
-    // `ORDER BY ArticleCode, H1Code, H2Code, H3Code`, et nous ne servions AUCUNE de ces colonnes
-    // d'article. H1/H2/H3 sont en revanche déjà servis — ce sont la tranche, le projet et la
-    // société, sous d'autres noms.
-    //
-    // Chaîne `stkItem` → bâtiment / étage / catégorie / type / présentation : une jointure
-    // paresseuse par ligne, payée seulement si demandée (voir exigeLArticle).
-    // ------------------------------------------------------------------
+    // -- Article principal : l'écran légataire trie par `ArticleCode, H1Code, H2Code, H3Code`
+    //    (H1/H2/H3 = tranche, projet, société). Voir FEATURE-colonnes-dossier-ecran-legataire.md §1.
     ARTICLE_ID("articleId", "Id article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.id")),
     /** La clé de tri par défaut de l'écran légataire. */
@@ -171,36 +126,21 @@ public enum ColonneDossier implements Colonne {
     TYPE_PRESENTATION("typePresentation", "Présentation", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkPresentationType.code")),
 
-    // ------------------------------------------------------------------
-    // LE RESPONSABLE DE VENTE — acteur distinct du commercial, renseigné sur 221 des 358 dossiers
-    // (61 %), et que nous n'exposions nulle part. `CfgSaleManager2Id` n'est PAS repris : mesuré à
-    // 0 ligne sur 358.
-    // ------------------------------------------------------------------
+    // -- Responsable de vente, distinct du commercial. `CfgSaleManager2Id` non repris (vide).
     RESPONSABLE_VENTE_ID("responsableVenteId", "Id responsable de vente", Groupe.ACTEURS, TypeColonne.TEXTE, false,
             Chemin.groupable("cfgSaleManager.id")),
     RESPONSABLE_VENTE_NOM("responsableVenteNom", "Responsable de vente", Groupe.ACTEURS, TypeColonne.TEXTE, false,
             Chemin.tier("cfgSaleManager")),
 
-    // ------------------------------------------------------------------
-    // JALONS ET DÉLAIS DU CYCLE DE VENTE. Les deux dates sont les entrées des délais : les servir
-    // sans elles rendrait un nombre de jours invérifiable à l'écran.
-    //
-    // Les délais sont des @Formula sur l'entité, donc des propriétés ordinaires : groupables et
-    // sommables comme n'importe quelle colonne. `DelayCredit` de la vue est écarté — il dépend de
-    // CreditPossessionDate, mesurée à 0 ligne sur 358.
-    // ------------------------------------------------------------------
+    // -- Jalons et délais. Les délais sont des @Formula (FEATURE-colonnes-dossier-ecran-legataire.md §3) ;
+    //    les deux dates en sont les entrées, sans elles un nombre de jours est invérifiable à l'écran.
     DATE_COMPROMIS("dateCompromis", "Compromis", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("agreementDate")),
     DATE_LIVRAISON_REELLE("dateLivraisonReelle", "Livraison réelle", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("deliveryDateReal")),
     /**
-     * Sommable mais <strong>non groupable</strong>, et ce n'est pas un choix : sa formule contient
-     * une sous-requête corrélée (la date de la prospection d'origine), et SQL Server refuse
-     * « un agrégat ou une sous-requête dans une expression utilisée dans la liste GROUP BY ».
-     * Le mettre groupable produisait une SQLGrammarException en 500.
-     *
-     * <p>Les deux autres délais n'ont pas ce problème : ils n'arithmétisent que des colonnes de
-     * {@code ComFolder}, donc ils sont groupables normalement.
+     * Non groupable : sa formule contient une sous-requête corrélée, que SQL Server refuse dans un
+     * GROUP BY (SQLGrammarException en 500). Les deux autres délais n'en ont pas.
      */
     DELAI_CONCRETISATION("delaiConcretisation", "Délai de concrétisation (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
             Chemin.agregeable("delaiConcretisation")),
@@ -209,15 +149,7 @@ public enum ColonneDossier implements Colonne {
     DELAI_LIVRAISON("delaiLivraison", "Délai de livraison (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
             Chemin.groupableEtAgregeable("delaiLivraison"));
 
-    /**
-     * Regroupement d'affichage du sélecteur.
-     *
-     * <p>{@code ARTICLE} et {@code DELAIS} sont ajoutés au lot « colonnes de l'écran légataire ».
-     * {@code ARTICLE} est distinct de {@code PATRIMOINE} pour une raison concrète et non
-     * cosmétique : {@link #exigeLePatrimoine} déclenche la résolution de la chaîne tranche →
-     * projet → société, dont les colonnes d'article n'ont pas besoin. Les confondre ferait payer
-     * trois jointures à qui ne demande qu'un code d'article.
-     */
+    /** {@code ARTICLE} ≠ {@code PATRIMOINE} : {@link #exigeLePatrimoine} ferait payer trois jointures pour un code d'article. */
     public enum Groupe { IDENTITE, ACTEURS, FINANCIER, PATRIMOINE, ARTICLE, DELAIS, ORIGINE, AUDIT }
 
     /** Type d'affichage, pour que le front aligne et formate sans table de correspondance. */
@@ -275,12 +207,10 @@ public enum ColonneDossier implements Colonne {
         return chemin;
     }
 
-    /** Colonnes acceptées par {@code ?groupBy=}, dans l'ordre de déclaration. */
     public static List<ColonneDossier> groupables() {
         return Colonnes.groupables(ColonneDossier.class);
     }
 
-    /** Colonnes acceptées par {@code ?agregats=}, dans l'ordre de déclaration. */
     public static List<ColonneDossier> agregeables() {
         return Colonnes.agregeables(ColonneDossier.class);
     }
@@ -290,12 +220,7 @@ public enum ColonneDossier implements Colonne {
         return Colonnes.resoudreGroupement(ColonneDossier.class, demandee);
     }
 
-    /**
-     * Résout {@code ?agregats=}, forme {@code colonne} (somme) ou {@code colonne:FONCTION}.
-     *
-     * @throws ColonneInconnueException         si un nom n'est pas une colonne de ce catalogue
-     * @throws FonctionAgregatInconnueException si la colonne n'autorise pas cette fonction
-     */
+    /** Forme {@code colonne} (somme) ou {@code colonne:FONCTION}. */
     public static List<AgregatDemande> resoudreAgregats(List<String> demandees) {
         return Colonnes.resoudreAgregats(ColonneDossier.class, demandees);
     }
@@ -317,12 +242,7 @@ public enum ColonneDossier implements Colonne {
         return Colonnes.resoudre(ColonneDossier.class, demandees, ID);
     }
 
-    /**
-     * Vrai si la sélection oblige à traverser la chaîne article → tranche → projet → société.
-     *
-     * <p>Sans ce test, une liste par défaut paierait trois jointures paresseuses par ligne pour des
-     * colonnes que personne n'a demandées.
-     */
+    /** Sans ce test, la liste par défaut paierait trois jointures paresseuses par ligne. */
     public static boolean exigeLePatrimoine(Set<ColonneDossier> selection) {
         return selection.stream().anyMatch(c -> c.groupe == Groupe.PATRIMOINE);
     }
@@ -334,13 +254,7 @@ public enum ColonneDossier implements Colonne {
                 || selection.contains(DATE_PROSPECTION);
     }
 
-    /**
-     * Vrai si la sélection oblige à déréférencer l'article principal.
-     *
-     * <p>Même discipline que les deux gardes ci-dessus : l'article et ses référentiels (bâtiment,
-     * étage, catégorie, type, présentation) sont jusqu'à cinq jointures paresseuses par ligne,
-     * soit cent requêtes inutiles sur une page de vingt quand personne ne les réclame.
-     */
+    /** L'article et ses référentiels : jusqu'à cinq jointures paresseuses par ligne. */
     public static boolean exigeLArticle(Set<ColonneDossier> selection) {
         return selection.stream().anyMatch(c -> c.groupe == Groupe.ARTICLE);
     }

@@ -22,33 +22,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * {@code PATCH /api/dossiers/{id}/reglements/{reglementId}/statut} — cycle de vie d'un règlement
- * ({@code StlSettlement.Status}).
- *
- * <p><b>La règle « pointé ⇒ preuve de paiement » est une règle métier nouvelle</b>, pas un
- * comportement legacy restauré, et il faut le savoir avant de la modifier. Les données réelles ne
- * peuvent ni la confirmer ni l'infirmer : le pointage s'est arrêté en 2022-2023 (14 lignes
- * {@code POINTED} en tout, la dernière modifiée le 31/03/2023) alors que le dépôt de preuves n'a
- * démarré que le 18/01/2022 et n'a fait que croître depuis. Sur la fenêtre où les deux pratiques
- * coexistent : <b>3 règlements pointés, dont 2 avec pièce jointe et 1 sans</b>. n=3.
- * À l'inverse, 451 règlements récents portent une preuve <i>sans</i> être pointés — les
- * utilisateurs joignent déjà le justificatif, ils ne pointent simplement plus.
- *
- * <p>Conséquence directe sur l'implémentation : la règle est vérifiée <b>au moment de la
- * transition uniquement</b>. Jamais en lecture, jamais rétroactivement — 12 des 14 règlements
- * {@code POINTED} existants n'ont aucune pièce jointe et doivent rester lisibles, et l'application
- * desktop continue d'écrire dans {@code yesRems} sans rien contrôler. Ne pas « renforcer » cette
- * règle en la déplaçant vers la lecture : ce serait casser des dossiers réels au nom d'un
- * invariant que la base n'a jamais respecté.
- *
- * <p><b>Une exception, décidée et mesurée</b> : {@code ReglementPieceJointeService#supprimer}
- * refuse (409) de supprimer la <i>dernière</i> pièce jointe d'un règlement déjà {@code POINTED}.
- * Cette phrase déconseillait auparavant aussi ce cas ; l'argument qui la fondait est le risque
- * <i>rétroactif</i>, et il ne s'y applique pas — rien n'est vérifié en lecture, aucune ligne
- * existante ne devient illisible, et la garde ne s'évalue qu'au moment d'une suppression demandée
- * par l'utilisateur. Sur {@code yesRemsProd} : 17 règlements {@code POINTED}, dont 3 portent
- * exactement une pièce jointe — les 3 seules lignes de la base où ce 409 peut se déclencher. Voir
- * {@code FEATURE-suppression-pieces-jointes.md} §6.
+ * « Pointé ⇒ preuve de paiement » est une règle <b>nouvelle</b>, vérifiée à la transition seulement,
+ * jamais en lecture : des règlements pointés legacy n'ont aucune pièce. Voir
+ * {@code FEATURE-reglement-statut-preuve.md} §2 (et l'exception de {@code FEATURE-suppression-pieces-jointes.md} §6).
  */
 @Service
 @Transactional(readOnly = true)
@@ -91,8 +67,7 @@ public class ReglementStatutService {
             throw new InvalidRequestException(e.getMessage());
         }
 
-        // Une valeur legacy absente ou inconnue est traitée comme IN_WORK : c'est le statut des
-        // 3 218 lignes réelles saisies, et les 9 lignes à Status NULL n'ont jamais été pointées.
+        // Absente ou inconnue ⇒ IN_WORK : les lignes legacy à Status NULL n'ont jamais été pointées.
         StatutReglement actuel = StatutReglement.lireCode(settlement.getStatus())
                 .orElse(StatutReglement.IN_WORK);
 
@@ -120,9 +95,8 @@ public class ReglementStatutService {
         settlement.setStatus(cible.name());
         settlement = settlementRepository.save(settlement);
 
-        // Le DTO porte la part affectée à *une* échéance : on renvoie la ligne de ce dossier. Un
-        // règlement peut en couvrir plusieurs (cas réel, règlements éclatés) — on prend la
-        // première par ordre d'id pour rester déterministe.
+        // Le DTO porte la part d'une seule échéance ; un règlement éclaté en couvre plusieurs :
+        // la première par id, pour rester déterministe.
         StlSettlementLine ligne = lignes.stream()
                 .min(Comparator.comparing(StlSettlementLine::getId))
                 .orElseThrow();

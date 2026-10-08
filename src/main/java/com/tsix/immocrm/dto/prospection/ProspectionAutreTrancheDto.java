@@ -2,12 +2,7 @@ package com.tsix.immocrm.dto.prospection;
 
 import java.util.UUID;
 
-/**
- * {@code ComProspectionProject} row — the "Autres tranches" tab: a secondary tranche/article
- * interest, independent from the prospection's tranche/article principal (see
- * {@code ProspectionDetailDto.trancheId}/{@code articleId} and
- * {@code PATCH /api/prospections/{id}/tranche-principale}).
- */
+/** Ligne {@code ComProspectionProject} : intérêt secondaire, indépendant de la tranche/l'article principal. */
 public record ProspectionAutreTrancheDto(
         UUID id,
         UUID trancheId,

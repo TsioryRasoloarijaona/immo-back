@@ -1,14 +1,8 @@
 package com.tsix.immocrm.domain;
 
 /**
- * Which {@code ComFolder} date column a "plage de dates" filter on {@code GET /api/dossiers}
- * applies to — lets the front pick a milestone the way the legacy Omran panel does ("Date
- * réservation", "Date concrétisation", ...) instead of always filtering on the creation date.
- * Reuses the same confirmed columns as {@link EtapeMilestone} (only the ones with a real, mapped
- * column — see that class for how each was confirmed); {@link #RESERVATION} is the one exception,
- * mapped to {@code DocDate} rather than the real {@code ReservationDate} column, which is almost
- * never populated in practice (2/374 real dossiers) — same choice {@link EtapeMilestone} already
- * made for the RESERVATION status. See {@code instructions/filtres-avances.md} point 3.
+ * Colonne date de {@code ComFolder} visée par la plage de dates de {@code GET /api/dossiers}.
+ * {@link #RESERVATION} lit {@code DocDate} : {@code ReservationDate} n'est presque jamais renseignée.
  */
 public enum ChampDateDossier {
     RESERVATION("docDate", "Date de réservation (date de création du dossier)"),
@@ -29,7 +23,7 @@ public enum ChampDateDossier {
         this.libelle = libelle;
     }
 
-    /** JPA entity attribute name on {@code ComFolder} — usable directly in a Criteria {@code root.get(...)}. */
+    /** Attribut JPA de {@code ComFolder}, pour {@code root.get(...)}. */
     public String getChampEntite() {
         return champEntite;
     }

@@ -5,9 +5,8 @@ import com.tsix.immocrm.dto.prospect.ProspectDoublonDto;
 import java.util.List;
 
 /**
- * Création de prospect refusée parce que des fiches existantes portent le même nom, téléphone ou
- * email et que l'appelant n'a pas confirmé ({@code ignorerDoublons}). 409 avec la liste en
- * propriété {@code doublons} — voir {@code instructions/FEATURE-doublons-prospect-projet.md} §2.
+ * Fiches de même nom, téléphone ou email sans confirmation {@code ignorerDoublons} → 409 avec {@code doublons}
+ * (FEATURE-doublons-prospect-projet.md §2).
  */
 public class DoublonsProspectException extends ConflictException {
 

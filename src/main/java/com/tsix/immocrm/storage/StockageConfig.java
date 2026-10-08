@@ -15,13 +15,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import java.net.URI;
 
 /**
- * Clients S3 : un pour les écritures, un pour la signature des URL de lecture.
- *
- * <p><b>{@code pathStyleAccessEnabled(true)} est obligatoire pour MinIO</b>, qui ne sait pas
- * adresser un bucket par sous-domaine ({@code bucket.s3.exemple.com}) mais seulement par
- * chemin ({@code s3.exemple.com/bucket}). Sans cette option, tous les appels échouent en
- * résolution DNS. Elle doit être posée sur le client <b>et</b> sur le signataire, faute de quoi
- * les URL présignées pointent vers un hôte inexistant alors que les dépôts fonctionnent.
+ * {@code pathStyleAccessEnabled(true)} obligatoire pour MinIO (pas d'adressage par sous-domaine), sur le client
+ * <b>et</b> le signataire : sinon les URL présignées visent un hôte inexistant alors que les dépôts marchent.
  */
 @Configuration
 @EnableConfigurationProperties(StockageProperties.class)

@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface StlAccountRepository extends JpaRepository<StlAccount, UUID> {
 
-    /** {@code GET /api/referentiels/comptes} — pas de colonne Sorting, tri alphabétique. */
+    /** Pas de colonne Sorting : tri alphabétique. */
     List<StlAccount> findAllByOrderByDescriptionAsc();
 }

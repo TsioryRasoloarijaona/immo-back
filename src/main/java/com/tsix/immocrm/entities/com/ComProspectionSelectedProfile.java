@@ -13,7 +13,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** dbo_ComProspectionSelectedProfile — a selected {@link ComProspectionProfile} on a Prospection (GAP-04). */
+/** {@link ComProspectionProfile} sélectionné sur une prospection. */
 @Getter
 @Setter
 @Entity

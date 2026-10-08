@@ -2,9 +2,6 @@ package com.tsix.immocrm.dto.auth;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Corps de changement de mot de passe — utilisé aussi bien pour la "
-        + "régularisation d'un mot de passe temporaire (première connexion) qu'un changement "
-        + "volontaire ultérieur.")
 public record ChangerMotDePasseRequest(
 
         @Schema(description = "Mot de passe actuel (temporaire ou non) — vérifié avant tout changement.",

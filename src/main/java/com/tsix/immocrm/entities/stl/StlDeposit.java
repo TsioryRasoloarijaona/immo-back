@@ -11,12 +11,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
-/**
- * "Dépôt" — the broad category a règlement is deposited under (see
- * {@code StlSettlement.stlDeposit}). Only 3 rows in real data: FOURNISSEUR/CLIENT/BANQUE
- * ({@code IsSupplier}/{@code IsCustomer}/{@code IsBank}) — the "Encaissements Vente" screen only
- * ever shows CLIENT rows in practice, but the filter itself is generic.
- */
+/** Catégorie de dépôt d'un règlement : FOURNISSEUR / CLIENT / BANQUE ({@code IsSupplier}/{@code IsCustomer}/{@code IsBank}). */
 @Getter
 @Setter
 @Entity

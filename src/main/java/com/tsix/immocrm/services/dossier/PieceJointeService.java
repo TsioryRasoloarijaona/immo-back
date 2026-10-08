@@ -19,14 +19,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * {@code /api/dossiers/{id}/pieces-jointes[/...]} — accès (lecture, dépôt, suppression) aux pièces jointes
- * d'un Dossier ({@code AdmAttachedFile}). Voir la doc de {@link AdmAttachedFileSummary} pour le
- * rattachement à {@code ComFolder} (confirmé malgré l'absence de FK déclarée en DB).
- *
- * <p>Ne porte plus que ce qui est <b>propre au Dossier</b> — la vérification d'existence du
- * dossier et la convention legacy du {@code Category}. Toute la mécanique commune (liste, binaire,
- * dépôt, DTO) vit dans {@link PieceJointeSupport}, partagée avec les pièces jointes d'Article et
- * de Règlement.
+ * Pièces jointes d'un dossier, rattachées sans FK (voir {@link AdmAttachedFileSummary}) : seul ce qui
+ * lui est propre, la mécanique est dans {@link PieceJointeSupport}.
  */
 @Service
 @Transactional(readOnly = true)
@@ -42,11 +36,6 @@ public class PieceJointeService {
         this.support = support;
     }
 
-    /**
-     * Exclut les lignes {@code hasFile = false} (données réelles : cases de checklist
-     * "IsCheckedButNotAttached" — {@code Category} commence bien par "Dossier de vente" et
-     * {@code CategoryId} correspond, mais aucun fichier n'a jamais été déposé).
-     */
     public List<PieceJointeDto> findByDossier(UUID dossierId) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
@@ -54,10 +43,6 @@ public class PieceJointeService {
         return support.lister(dossierId);
     }
 
-    /**
-     * URL présignée de téléchargement — 404 si la pièce n'appartient pas à ce dossier, ou s'il
-     * s'agit d'une case de checklist sans fichier réel (voir {@link #findByDossier}).
-     */
     public URI urlFichier(UUID dossierId, UUID pieceId) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
@@ -65,14 +50,7 @@ public class PieceJointeService {
         return support.urlTelechargement(dossierId, pieceId, "ce dossier");
     }
 
-    /**
-     * {@code POST /api/dossiers/{id}/pieces-jointes} — dépose un nouveau fichier sur le Dossier.
-     * Reproduit la convention legacy du {@code Category} ("Dossier de vente N° {code} du {date}")
-     * pour rester cohérent avec les données existantes, mais ce n'est plus une condition de
-     * visibilité : {@link com.tsix.immocrm.repositories.adm.AdmAttachedFileSummaryRepository#findByCategoryId}
-     * filtre uniquement sur {@code CategoryId} désormais (voir sa doc), donc le fichier réapparaît
-     * dans {@link #findByDossier} juste après le dépôt quel que soit le {@code Category}.
-     */
+    /** {@code Category} au format legacy, par cohérence seulement : la relecture filtre sur {@code CategoryId}. */
     @Transactional
     public PieceJointeDto create(UUID dossierId, MultipartFile fichier, String description, UUID typeId,
                                   AuthenticatedUser principal) {
@@ -83,15 +61,7 @@ public class PieceJointeService {
                 typeId, principal);
     }
 
-    /**
-     * {@code DELETE /api/dossiers/{id}/pieces-jointes/{pieceId}} — retire une pièce du dossier.
-     *
-     * <p>Suppression <b>logique</b> (voir {@link PieceJointeSupport#marquerSupprime}) : la pièce
-     * quitte {@link #findByDossier} et son fichier n'est plus téléchargeable, mais la ligne de
-     * métadonnées et l'objet stocké restent. Aucune règle métier ne s'y oppose côté Dossier —
-     * contrairement au règlement, où la dernière preuve d'un règlement pointé est protégée (voir
-     * {@code ReglementPieceJointeService#supprimer}).
-     */
+    /** Suppression logique, sans règle métier côté dossier (contrairement au règlement pointé). */
     @Transactional
     public void supprimer(UUID dossierId, UUID pieceId, AuthenticatedUser principal) {
         if (!folderRepository.existsById(dossierId)) {

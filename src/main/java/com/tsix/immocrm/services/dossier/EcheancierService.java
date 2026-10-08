@@ -41,7 +41,7 @@ import java.util.UUID;
 
 import static java.util.Objects.requireNonNullElse;
 
-/** Échéancier (payment schedule) sub-resource of a Dossier, backed by {@code ComDocument}. */
+/** Échéancier d'un dossier ({@code ComDocument}) et ses règlements. */
 @Service
 @Transactional(readOnly = true)
 public class EcheancierService {
@@ -79,20 +79,9 @@ public class EcheancierService {
     }
 
     /**
-     * {@code POST /api/dossiers/{id}/echeancier/{echeanceId}/reglements}.
-     *
-     * <p><b>Saisie complète obligatoire.</b> Un règlement incomplet produisait une « Autorisation
-     * d'encaissement » trouée (Mode de versement et Versement effectué par vides) ; montant, date
-     * d'échéance, type et payeur sont donc requis, la banque et la référence dès que le type les
-     * impose.
-     *
-     * <p>Écrit aussi trois colonnes que l'API laissait vides jusqu'ici :
-     * {@code Status = IN_WORK} (les 3 218 lignes legacy saisies portent cette valeur, les nôtres
-     * portaient {@code NULL}), {@code IsCredit = true} (encaissement client — détermine aussi la
-     * {@code Category} des pièces jointes du règlement), et {@code UserCreate}/
-     * {@code UserCreateDateTime}, dont l'absence reléguait les règlements créés par l'API en bas
-     * de l'historique du dossier ({@code DossierHistoriqueService} trie là-dessus, nulls en
-     * dernier).
+     * <b>Saisie complète</b>, sinon l'autorisation d'encaissement sort trouée. {@code IsCredit = true}
+     * détermine aussi la {@code Category} des pièces jointes ; {@code UserCreateDateTime} sert le tri
+     * de l'historique. Voir {@code FEATURE-reglement-statut-preuve.md} §4.
      */
     @Transactional
     public ReglementDto addReglement(UUID dossierId, UUID echeanceId, CreerReglementRequest request,
@@ -102,16 +91,14 @@ public class EcheancierService {
         }
         ComDocument echeance = findEcheanceOf(dossierId, echeanceId);
 
-        // dateReglement (SettlementDate) n'appartient qu'au passage à POINTED : sur 3 244 règlements
-        // réels elle n'est renseignée que sur les 14 lignes pointées, sur aucune des 3 218 en cours.
-        // L'accepter ici créerait la première ligne IN_WORK datée de l'historique de cette base.
+        // dateReglement (SettlementDate) n'appartient qu'au passage à POINTED : aucune ligne IN_WORK
+        // réelle n'est datée (FEATURE-reglement-statut-preuve.md §2).
         if (request.dateReglement() != null) {
             throw new InvalidRequestException("dateReglement ne peut pas être fournie à la création : "
                     + "elle se renseigne au passage à POINTED, via PATCH /api/dossiers/" + dossierId
                     + "/reglements/{reglementId}/statut");
         }
-        // Aucune pièce jointe ne peut exister avant que le règlement existe, donc aucun règlement
-        // ne peut naître POINTED (la preuve de paiement serait impossible à fournir).
+        // Jamais créé POINTED : la preuve de paiement ne peut pas exister avant le règlement.
         if (StringUtils.hasText(request.statut())
                 && !StatutReglement.INITIAL.name().equalsIgnoreCase(request.statut().trim())) {
             throw new InvalidRequestException("Un règlement est toujours créé en "
@@ -130,22 +117,16 @@ public class EcheancierService {
         StlSettlementType type = settlementTypeRepository.findById(typeId)
                 .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + typeId));
 
-        // IsReferenceMandatory varie par type (confirmé sur données réelles : vrai pour
-        // CHÈQUE/CHEQUE NOTAIRE/SYNDIC/BANQUE/CERTIFIÉ/EFFET, référence renseignée sur >99% des
-        // lignes réelles de ces types).
+        // IsReferenceMandatory varie par type (chèques, banque, certifié, effet).
         if (Boolean.TRUE.equals(type.getIsReferenceMandatory()) && !StringUtils.hasText(request.reference())) {
             throw new InvalidRequestException("reference est requise pour le type de règlement " + type.getCode());
         }
-        // IsBankMandatory était jusqu'ici purement indicatif : annoncé au front via
-        // TypeReglementDto.banqueObligatoire mais jamais appliqué côté serveur, si bien qu'un
-        // chèque sans banque passait en 201. Le flag est désormais enforcé.
         if (Boolean.TRUE.equals(type.getIsBankMandatory()) && request.banqueId() == null) {
             throw new InvalidRequestException("banqueId est requise pour le type de règlement " + type.getCode());
         }
 
-        // Reste à payer de l'échéance — même calcul que buildDto (montant de l'échéance moins la
-        // somme déjà réglée). Sans ce contrôle un sur-paiement passait silencieusement et donnait
-        // un reste négatif affiché avec le statut calculé "PAYE".
+        // Reste = montant de l'échéance − déjà réglé, même calcul que buildDto ; un sur-paiement
+        // donnerait un reste négatif affiché « PAYE ».
         BigDecimal montantEcheance = requireNonNullElse(echeance.getAmount(), BigDecimal.ZERO);
         BigDecimal dejaRegle = requireNonNullElse(
                 settlementLineRepository.sumAmountByComDocumentId(echeanceId), BigDecimal.ZERO);
@@ -173,8 +154,7 @@ public class EcheancierService {
                     .orElseThrow(() -> new InvalidRequestException("Banque (CfgTier) introuvable: " + request.banqueId()));
             settlement.setCfgBank(banque);
         }
-        // TierId ("réglé par") — alimente le bloc « Versement effectué par » de l'autorisation
-        // d'encaissement ; confirmé renseigné sur 3232/3240 lignes réelles (99,75%).
+        // TierId (« réglé par ») alimente « Versement effectué par » de l'autorisation d'encaissement.
         CfgTier payeur = tierRepository.findById(payeurId)
                 .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + payeurId));
         settlement.setTier(payeur);
@@ -190,13 +170,6 @@ public class EcheancierService {
         return toReglementDto(line, echeanceId);
     }
 
-    /**
-     * {@code GET /api/dossiers/{id}/echeancier/{echeanceId}/reglements}: historique complet des
-     * règlements d'une échéance — contrepartie en lecture du {@code POST} ci-dessus, plus récent
-     * d'abord. Chaque entrée porte le détail complet (type, banque, réglé par, référence) plutôt
-     * que juste le montant, pour afficher un historique exploitable côté front sans appel
-     * supplémentaire par règlement.
-     */
     public List<ReglementDto> findReglements(UUID dossierId, UUID echeanceId) {
         if (!folderRepository.existsById(dossierId)) {
             throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
@@ -208,14 +181,9 @@ public class EcheancierService {
     }
 
     /**
-     * {@code line} carries both the {@code StlSettlement} (règlement) and the specific
-     * {@code StlSettlementLine} tying it to this échéance. {@code ReglementDto.id} must be the
-     * {@code StlSettlement.PKey} — it's what {@code GET .../documents/recu} expects as
-     * {@code reglementId} — never the line's own id, which is a different table/PK entirely
-     * (was the cause of "Règlement introuvable" 404s on an id copied straight from this DTO).
-     * Likewise {@code montant} must be this line's share ({@code line.getAmount()}), not the
-     * settlement's total ({@code s.getAmount()}) — a règlement split across several échéances
-     * (e.g. frais dossier + frais syndic) would otherwise show the full total on every line.
+     * {@code id} = {@code StlSettlement.PKey} (attendu par {@code .../documents/recu}), jamais l'id de
+     * la ligne. {@code montant} = la part de cette ligne, pas le total d'un règlement réparti sur
+     * plusieurs échéances.
      */
     static ReglementDto toReglementDto(StlSettlementLine line, UUID echeanceId) {
         StlSettlement s = line.getStlSettlement();
@@ -257,11 +225,8 @@ public class EcheancierService {
         ComDocument document = new ComDocument();
         document.setId(UUID.randomUUID());
         document.setComFolder(folder);
-        // Renseigné ici parce que l'API expose désormais cette date sous EcheanceDto.creeLe : les
-        // 921 échéances créées par le logiciel de bureau la portent toutes, nos créations la
-        // laissaient nulle. Exposer un champ que notre propre chemin d'écriture ne remplit pas
-        // serait livrer un champ cassé. L'AUTEUR (UserCreate), lui, reste non posé : il exigerait
-        // de faire descendre le principal jusqu'ici, et aucun champ ne l'expose.
+        // Exposée en EcheanceDto.creeLe. UserCreate reste non posé : aucun champ ne l'expose.
+        // Voir FEATURE-fiche-dossier-alignement-ecran.md §3.
         document.setUserCreateDateTime(LocalDateTime.now());
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
@@ -300,15 +265,11 @@ public class EcheancierService {
         }
     }
 
-    /** {@code null} pour une chaîne nulle ou blanche. */
     private static String videEnNull(String s) {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
-    /**
-     * Builds the DTO given an already-known règlement total, so callers computing totals in
-     * bulk (e.g. {@link DossierService#montants}) don't issue one query per échéance.
-     */
+    /** Total réglé fourni par l'appelant, pour ne pas payer une requête par échéance. */
     static EcheanceDto buildDto(ComDocument d, BigDecimal montantRegle) {
         BigDecimal montant = requireNonNullElse(d.getAmount(), BigDecimal.ZERO);
         BigDecimal regle = requireNonNullElse(montantRegle, BigDecimal.ZERO);
@@ -332,9 +293,7 @@ public class EcheancierService {
                 regle,
                 reste,
                 statutCalcule.name(),
-                // QuittanceCode n'est JAMAIS null en base — 0 ligne sur 921 — mais vide sur 83,5 %
-                // d'entre elles. Sans cette normalisation l'API répondrait "" là où elle doit
-                // répondre null, et le client afficherait un décompte vide au lieu de masquer.
+                // QuittanceCode n'est jamais NULL mais souvent "" : null pour que le client masque.
                 videEnNull(d.getQuittanceCode()),
                 d.getUserCreateDateTime()
         );

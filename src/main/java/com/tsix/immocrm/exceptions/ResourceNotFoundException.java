@@ -1,10 +1,6 @@
 package com.tsix.immocrm.exceptions;
 
-/**
- * Thrown when a resource requested by id (or another unique lookup) does not exist.
- * Translated to a 404 {@link org.springframework.http.ProblemDetail} response
- * by {@link com.tsix.immocrm.web.GlobalExceptionHandler}.
- */
+/** Ressource introuvable (ou masquée par le périmètre) → 404. */
 public class ResourceNotFoundException extends RuntimeException {
 
     public ResourceNotFoundException(String message) {

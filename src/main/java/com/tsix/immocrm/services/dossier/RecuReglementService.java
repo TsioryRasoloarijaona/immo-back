@@ -33,14 +33,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Reçu de règlement" document (see {@code RecuReglementPdfRenderer}
- * for the actual PDF rendering) — modeled on "Page1" of the legacy Stimulsoft template
- * {@code instructions/templates/RECEIP/Yes_Stl_Front_Credit_Settlement_20240301102347.yes}, an
- * "ATTESTATION DE RÉCEPTION CHEQUE" acknowledging one specific règlement. Reuses
- * {@link DossierService#montants} for the "Reste à payer" (never re-derives raw
- * {@code ComSaleFolderView.PriceRest}-style sums here), and the same acquéreur/co-acquéreur
- * ({@code ComFolderCustomer}) lookup and "situation des chèques reçus" listing as
- * {@code FicheTropPercuService}.
+ * « Reçu de règlement » (page 1 du template {@code RECEIP/Yes_Stl_Front_Credit_Settlement_*.yes}).
+ * « Reste à payer » repris de {@link DossierService#montants}, jamais recalculé ici.
  */
 @Service
 @Transactional(readOnly = true)
@@ -82,8 +76,7 @@ public class RecuReglementService {
 
         StkItem article = folder.getStkItem();
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
-        // Chemin confirmé (même que FicheTropPercuService/FicheBancaireService) : StkItem.CfgProjectId
-        // n'est jamais peuplé en données réelles.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
         CfgTier beneficiaireTier = settlement.getTier() != null ? settlement.getTier() : folder.getCfgCustomer();

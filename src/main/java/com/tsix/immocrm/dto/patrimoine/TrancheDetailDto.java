@@ -4,14 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Detail shape for {@code GET /api/tranches/{id}}, including the penalty/delay
- * business-rule fields called out by the endpoint spec.
- *
- * NOTE: field naming is not yet backed by a shared API spec doc
- * (API-endpoints-vente-prospection-patrimoine.md is not present in this repo) — derived
- * directly from {@code CfgTranche}. Adjust once a spec is available.
- */
 public record TrancheDetailDto(
         UUID id,
         UUID projetId,
@@ -60,8 +52,7 @@ public record TrancheDetailDto(
         Integer delaiMinimumIntervention,
         Integer delaiMaxEcheance,
 
-        // -- Règles commerciales (CfgTranche.AdvancePercent/ConcretisationPercent/
-        // MaxVisitNumber/IsWithVerifCredit/CreditPercent) --
+        // -- Règles commerciales --
         BigDecimal advancePercent,
         BigDecimal concretisationPercent,
         Integer maxVisitNumber,

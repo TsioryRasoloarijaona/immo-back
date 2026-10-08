@@ -13,19 +13,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Pointeur vers le fichier stocké sur S3/MinIO — table applicative, hors schéma legacy
- * (créée par {@code src/main/resources/db/migration/002_AppFileObject.sql}, même convention
- * que {@link AppUserCredential}).
- *
- * <p>{@code AdmAttachedFile} reste la ligne de métadonnées et de rattachement
- * ({@code Category}, {@code CategoryId}, {@code Description}, type, auteur) ; seule la
- * localisation du binaire vit ici. La relation est 1:1 et partage la clé :
- * {@code AdmAttachedFileId = AdmAttachedFile.PKey}.
- *
- * <p>{@code storageKey} est stockée <b>en entier</b> et n'est jamais recalculée à la relecture.
- * C'est délibéré : les clés produites par le script de reprise
- * ({@code migration/migrate_blobs_to_s3.py}) et celles des nouveaux dépôts peuvent différer de
- * forme sans qu'aucun fichier ne devienne introuvable.
+ * Table applicative (002_AppFileObject.sql) : pointeur S3 d'une pièce, 1:1 avec {@code AdmAttachedFile}
+ * par la clé. {@code storageKey} est stockée en entier, jamais recalculée : les clés de la reprise et
+ * des nouveaux dépôts peuvent différer de forme.
  */
 @Getter
 @Setter
@@ -64,20 +54,11 @@ public class AppFileObject {
     @Column(name = "UploadedBy")
     private String uploadedBy;
 
-    /**
-     * Suppression logique. L'objet S3 n'est jamais supprimé dans la transaction de la requête :
-     * on marque ici, un balayage hors ligne nettoie ensuite le bucket.
-     */
+    /** Suppression logique : l'objet S3 n'est jamais supprimé dans la requête, un balayage hors ligne s'en charge. */
     @Column(name = "DeletedAt")
     private LocalDateTime deletedAt;
 
-    /**
-     * Nom affiché de l'auteur de la suppression, symétrique de {@link #uploadedBy}. Ajoutée par
-     * {@code 006_AppFileObject_DeletedBy.sql} en même temps que les endpoints {@code DELETE} :
-     * jusque-là {@code DeletedAt} n'était écrite par personne, donc la question ne se posait pas.
-     * {@code null} tant que la pièce n'est pas supprimée, et pour toute suppression faite hors
-     * API.
-     */
+    /** Nom affiché ; {@code null} aussi pour une suppression faite hors API. */
     @Size(max = 255)
     @Nationalized
     @Column(name = "DeletedBy")

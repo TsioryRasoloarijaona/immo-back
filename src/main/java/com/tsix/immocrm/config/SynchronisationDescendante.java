@@ -17,64 +17,9 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Synchronisation <b>descendante</b> périodique : rapatrie dans la copie de lecture ce que
- * d'autres que ce backend — le logiciel de bureau, en pratique — écrivent sur la source de
- * vérité. Le pendant de {@link RemonteeLecture}, qui ne couvre que l'immédiat de nos propres
- * écritures ; sans ce cycle, un dossier créé dans le logiciel de bureau n'apparaîtrait jamais
- * dans le CRM.
- *
- * <p>Portée par le <b>Change Tracking</b> de SQL Server, activé sur la source
- * ({@code prototype/ct-activer-yesRems.sql}, rétention 7 jours) : disponible sur Express,
- * aucune colonne ni déclencheur ajouté — le légataire ne voit rien. Les décisions reprennent
- * {@code prototype/sync-ct-descendant.sql}, la version T-SQL de ce même cycle (qui exige un
- * nommage à trois parties, donc un seul serveur — ici les deux connexions du backend suffisent).
- *
- * <h2>Deux régimes, choisis table par table</h2>
- *
- * <ul>
- *   <li><b>BASELINE</b> — aucun filigrane, ou filigrane plus vieux que
- *       {@code CHANGE_TRACKING_MIN_VALID_VERSION} (le job est resté arrêté au-delà de la
- *       rétention). Toutes les lignes de la source sont fusionnées, par lots.
- *       <b>Aucune suppression</b> : la copie porte des lignes que la source n'a jamais eues
- *       (héritées d'avant la bascule), les effacer détruirait des données. Seule une
- *       suppression explicitement rapportée par le Change Tracking est propagée.</li>
- *   <li><b>DELTA</b> — le cas courant : {@code CHANGETABLE(CHANGES …)} donne les clés touchées
- *       et l'opération. Insertions et mises à jour passent par le même {@code MERGE} que le
- *       rapatriement immédiat ; une clé dont la ligne a disparu de la source entre-temps est
- *       traitée comme une suppression — la relecture fait foi, pas le code opération.</li>
- * </ul>
- *
- * <h2>Ce qui rend le cycle sûr</h2>
- *
- * <ul>
- *   <li><b>Le filigrane est lu une fois, en début de cycle.</b> Ce qui change pendant
- *       l'exécution porte une version supérieure et sera repris au tour suivant — au pire
- *       traité deux fois, et tout est idempotent ({@code MERGE}, {@code DELETE}).</li>
- *   <li><b>Le filigrane d'une table n'avance que si sa passe a entièrement réussi.</b> Un
- *       échec (FK, indisponibilité) est journalisé et la table sera rejouée depuis le même
- *       point au cycle suivant.</li>
- *   <li><b>Fusions dans l'ordre des clés étrangères, suppressions après et en ordre
- *       inverse</b> — la copie porte le schéma complet et ses 1 219 FK. Un ordre inter-tables
- *       encore insatisfait (parent supprimé avant son enfant d'une autre table) échoue
- *       proprement et converge au cycle suivant.</li>
- *   <li><b>Nos propres écritures reviennent par ce canal</b> (elles touchent la source, donc
- *       le Change Tracking les voit) : les refusionner est un no-op idempotent, pas une
- *       boucle.</li>
- * </ul>
- *
- * <p>L'état vit côté <b>copie</b>, table {@code AppSyncEtat}
- * ({@code db/migration/009_AppSyncEtat.sql}) : un filigrane par table suivie — jamais sur la
- * source, l'état appartient au consommateur. Démarrage sur une copie fraîchement restaurée
- * depuis la source : pré-remplir {@code AppSyncEtat} à la version courante (voir le script)
- * évite une baseline intégrale qui ne changerait rien.
- *
- * <p>La liste des tables est lue sur la source ({@code sys.change_tracking_tables}) à chaque
- * cycle — activer le suivi d'une table de plus ne demande aucun redéploiement. {@code
- * AdmSequence} resterait exclue même si on l'y ajoutait ({@code JAMAIS_RAPATRIEES}).
- *
- * <p>Même condition d'activation que {@link DataSourceConfig} ; en mono-base, ni bean ni
- * planification. {@code fixedDelay} (pas {@code fixedRate}) : un cycle lent ne se fait pas
- * doubler par le suivant.
+ * Rapatrie dans la copie ce qu'OMRAN écrit sur la source, par le Change Tracking (FEATURE-source-de-verite-115.md,
+ * « Synchronisation descendante »). Filigrane par table dans {@code AppSyncEtat} côté copie, lu une fois par cycle,
+ * avancé seulement si la passe a réussi ; tout est idempotent. Baseline = fusion sans aucune suppression.
  */
 @Service
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -82,7 +27,6 @@ public class SynchronisationDescendante {
 
     private static final Logger log = LoggerFactory.getLogger(SynchronisationDescendante.class);
 
-    /** Les deux régimes du cycle — voir le javadoc de classe. */
     enum Regime { BASELINE, DELTA }
 
     private final JdbcTemplate surSource;
@@ -90,13 +34,7 @@ public class SynchronisationDescendante {
     private final RemonteeLecture remontee;
     private final MoniteurSynchronisation moniteur;
 
-    /**
-     * Un seul cycle à la fois. Le cycle planifié et un déclenchement manuel
-     * ({@code POST /api/synchronisation}) partagent ce verrou : le second arrivant est
-     * écarté plutôt que de doubler le travail — inutile (les opérations sont idempotentes) et
-     * coûteux sur une source lente. {@code tryLock} sans attente : on refuse, on ne fait pas
-     * patienter.
-     */
+    /** Partagé avec {@code POST /api/synchronisation} : le second arrivant est refusé, pas mis en attente. */
     private final java.util.concurrent.locks.ReentrantLock verrou =
             new java.util.concurrent.locks.ReentrantLock();
 
@@ -111,10 +49,8 @@ public class SynchronisationDescendante {
     }
 
     /**
-     * Résumé d'un cycle — de quoi répondre au déclenchement manuel et tracer l'automatique.
-     *
-     * @param declenchee {@code false} si un autre cycle tournait déjà : rien n'a été fait.
-     * @param version    version Change Tracking atteinte ({@code null} si le CT est inactif).
+     * @param declenchee faux si un autre cycle tournait déjà : rien n'a été fait
+     * @param version    nul si le Change Tracking est inactif
      */
     public record ResultatSync(boolean declenchee, Long version, int fusions, int suppressions,
                                int tablesTraitees, int tablesEnEchec, long dureeMs) {
@@ -124,23 +60,14 @@ public class SynchronisationDescendante {
         }
     }
 
-    /**
-     * Le cycle planifié : 2 minutes par défaut ({@code SOURCE_DB_SYNC_MINUTES}), le retard
-     * maximal qu'un utilisateur du CRM voit sur ce que le bureau vient de saisir. Le Change
-     * Tracking rend un cycle vide quasi gratuit. Un chevauchement (cycle précédent encore en
-     * cours, ou déclenchement manuel simultané) est simplement sauté.
-     */
+    /** {@code fixedDelay} et non {@code fixedRate} : un cycle lent ne se fait pas doubler. */
     @Scheduled(fixedDelayString = "${app.source-de-verite.sync-minutes}",
             initialDelayString = "1", timeUnit = TimeUnit.MINUTES)
     public void cycle() {
         executer();
     }
 
-    /**
-     * Exécute un cycle et rend son résumé. Point d'entrée du déclenchement manuel comme du
-     * planifié. Ne lève rien pour un cycle vide ou déjà en cours ; les échecs par table sont
-     * absorbés et comptés, jamais propagés — une table en erreur rejoue au cycle suivant.
-     */
+    /** Les échecs par table sont comptés, jamais propagés : la table rejoue au cycle suivant. */
     public ResultatSync executer() {
         if (!verrou.tryLock()) {
             log.debug("Cycle de synchronisation deja en cours : declenchement ignore.");
@@ -186,9 +113,7 @@ public class SynchronisationDescendante {
                 remontee.supprimer(ligne);
                 supprimees++;
             } catch (RuntimeException e) {
-                // Le filigrane de sa table avance quand même : la clé reste dans CHANGETABLE
-                // tant que la rétention court, mais pas au-delà. Se voir dans les journaux
-                // suffit — l'ordre inter-tables converge normalement au cycle suivant.
+                // Table retirée des réussies : son filigrane n'avance pas, la suppression rejouera au cycle suivant.
                 log.error("Suppression non repercutee dans la copie : {} {}.",
                         ligne.table(), ligne.pkey(), e);
                 if (tablesReussies.remove(ligne.table())) {
@@ -208,7 +133,7 @@ public class SynchronisationDescendante {
         }
         ResultatSync resultat = new ResultatSync(true, versionCourante, fusionnees, supprimees,
                 tablesReussies.size(), enEchec, dureeMs);
-        // Le moniteur ne doit jamais faire échouer un cycle : ses métriques sont un observateur.
+        // Le moniteur ne doit jamais faire échouer un cycle.
         try {
             moniteur.enregistrerCycle(resultat, retardsParTable(versionCourante));
         } catch (RuntimeException e) {
@@ -217,11 +142,7 @@ public class SynchronisationDescendante {
         return resultat;
     }
 
-    /**
-     * Retard par table pour le tableau de suivi : {@code versionCourante} moins le filigrane de
-     * chaque table dans {@code AppSyncEtat} ({@code 0} = à jour). Une table jamais synchronisée
-     * (sans filigrane) n'apparaît pas encore ici — elle le fera dès sa première baseline.
-     */
+    /** Une table sans filigrane n'apparaît qu'après sa première baseline. */
     private Map<String, Long> retardsParTable(long versionCourante) {
         Map<String, Long> retards = new java.util.LinkedHashMap<>();
         surCopie.query("SELECT TableNom, DerniereVersion FROM dbo.AppSyncEtat", rs -> {
@@ -231,7 +152,7 @@ public class SynchronisationDescendante {
         return retards;
     }
 
-    /** Fusionne ce que la table doit à la copie ; collecte les suppressions pour la fin de cycle. */
+    /** Les suppressions sont collectées pour la fin de cycle (en ordre inverse des clés étrangères). */
     private int passeDeFusion(String table, long versionCourante, List<LigneEcrite> suppressions) {
         Long filigrane = surCopie.query(
                 "SELECT DerniereVersion FROM dbo.AppSyncEtat WHERE TableNom = ?",
@@ -256,9 +177,7 @@ public class SynchronisationDescendante {
             Object brut = changement.get("cle");
             LigneEcrite ligne = new LigneEcrite(table,
                     brut instanceof UUID u ? u : UUID.fromString(brut.toString()));
-            // L'opération I/U/D rapportée n'est pas consultée : la relecture décide. Une ligne
-            // présente sur la source se fusionne, une ligne absente se supprime — y compris une
-            // insertion déjà resupprimée depuis.
+            // L'opération I/U/D n'est pas consultée : la relecture décide (une insertion resupprimée depuis se supprime).
             if (remontee.fusionner(ligne)) {
                 fusionnees++;
             } else {
@@ -268,7 +187,7 @@ public class SynchronisationDescendante {
         return fusionnees;
     }
 
-    /** La règle de choix du régime, extraite pour être éprouvée sans base. */
+    /** Baseline si aucun filigrane ou s'il a dépassé la rétention du Change Tracking. */
     static Regime regime(Long filigrane, Long minValide) {
         if (filigrane == null || minValide == null || filigrane < minValide) {
             return Regime.BASELINE;
@@ -276,10 +195,7 @@ public class SynchronisationDescendante {
         return Regime.DELTA;
     }
 
-    /**
-     * Les tables suivies par le Change Tracking de la source, dans l'ordre des clés étrangères
-     * — les inconnues de la liste passent en dernier, comme au rapatriement immédiat.
-     */
+    /** Relue à chaque cycle : suivre une table de plus ne demande pas de redéploiement. */
     private List<String> tablesSuivies() {
         List<String> tables = surSource.queryForList(
                 "SELECT t.name FROM sys.change_tracking_tables ctt "

@@ -28,19 +28,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Gathers the data behind the "Autorisation d'Encaissement" document (see
- * {@code AutorisationVersementPdfRenderer} for the PDF rendering) — modeled on the legacy
- * Stimulsoft template {@code instructions/templates/autorisation_virement/ComSaleDocumentAutorisationVersement.yes}.
- * Scoped to one règlement ({@code StlSettlement}) of a dossier, not one échéance — same per-item
- * scope as {@link RecuReglementService}. See {@link AutorisationVersementData}'s javadoc for why
- * this was corrected from an initial échéance-scoped version: the fields that actually make the
- * document useful (compte, mode de versement, tiers payeur) live almost exclusively on
- * {@code StlSettlement} in real data, not on the underlying {@code ComDocument}.
- * <p>
- * "Responsable Commercial" comes from {@code ComFolder.CfgCommercialId}, not the legacy
- * {@code AdmWebSessions} (logged-in desktop user) — same REST-API substitution already applied to
- * every other document in this package (see {@code ActeReservationService}/
- * {@code FicheDossierVenteService}).
+ * « Autorisation d'Encaissement » d'un <b>règlement</b>, pas d'une échéance : voir
+ * {@link AutorisationVersementData}. Responsable commercial = {@code ComFolder.CfgCommercialId},
+ * pas l'utilisateur de bureau connecté ({@code AdmWebSessions}) du template legacy.
  */
 @Service
 @Transactional(readOnly = true)
@@ -70,8 +60,7 @@ public class AutorisationVersementService {
         }
 
         StkItem article = folder.getStkItem();
-        // Même chemin confirmé (StkItem.CfgProjectId n'est jamais peuplé) que RecuReglementService/
-        // FicheTropPercuService/FicheBancaireService : StkItem -> StkHierarchy (tranche) -> CfgProject.
+        // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
         CfgCompany entreprise = Champs.de(projet, CfgProject::getCfgCompany);
@@ -102,10 +91,8 @@ public class AutorisationVersementService {
                 settlement.getStlSettlementType() != null ? settlement.getStlSettlementType().getDescription() : null,
                 clients,
                 settlement.getAmount(),
-                // Pas d'équivalent direct de ComDocument.PaymentAuthorizationDate sur StlSettlement
-                // (confirmé, aucune colonne "PaymentAuthorizationDate"/analogue) — DocDate (date de
-                // saisie du règlement) est le meilleur repli, même sémantique "date d'émission" que
-                // ChampDateEncaissement.DATE_PIECE.
+                // StlSettlement n'a pas d'équivalent de ComDocument.PaymentAuthorizationDate : DocDate,
+                // la date de saisie, en tient lieu.
                 settlement.getDocDate(),
                 rib,
                 banqueNom,
@@ -129,9 +116,7 @@ public class AutorisationVersementService {
         return new Payeur(tier.getLastName(), tier.getFirstName(), pieceIdentite(tier));
     }
 
-    // Même format que RecuReglementService.pieceIdentite ("{type} N° {numéro}") — dupliqué plutôt
-    // que partagé, même précédent que le reste du package (chaque document a sa propre variante
-    // minime : ici sans le "N° " préfixé quand le type est absent).
+    // « {type}: {numéro} » — RecuReglementService.pieceIdentite, dupliquée, écrit « {type} N° {numéro} ».
     private static String pieceIdentite(CfgTier tier) {
         String type = tier.getAdmIdentityDocumentType() != null ? tier.getAdmIdentityDocumentType().getCode() : null;
         if (type == null && tier.getIDNumber() == null) {
@@ -148,12 +133,7 @@ public class AutorisationVersementService {
         return sb.toString();
     }
 
-    /**
-     * RIB = BankCode + AgencyCode + AccountNumber + AccountKey, espace-séparés. {@code
-     * StlAccountView.RIB} (legacy) est une colonne *calculée* de la vue — pas de colonne de base
-     * du même nom (confirmé via {@code INFORMATION_SCHEMA.COLUMNS}) — donc reconstruite ici à
-     * partir des 4 colonnes réelles plutôt que mappée telle quelle.
-     */
+    // StlAccountView.RIB est une colonne calculée de vue : reconstruit à partir des 4 colonnes réelles.
     private static String rib(StlAccount compte) {
         return vide(compte.getBankCode()) + " " + vide(compte.getAgencyCode()) + " "
                 + vide(compte.getAccountNumber()) + " " + vide(compte.getAccountKey());

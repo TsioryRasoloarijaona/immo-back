@@ -37,28 +37,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * {@code GET /api/suivi-actions[/groupes]} — l'écran OMRAN « Suivi des actions ». Voir
- * {@code instructions/FEATURE-suivi-actions.md}.
- *
- * <h2>Pourquoi pas la vue OMRAN</h2>
- *
- * <p>L'écran lit {@code ComActionMessageView}. Mesurée : 6,6 s la page de 50, 9,3 s le comptage —
- * son {@code DISTINCT} et son rang corrélé sont évalués sur toutes les lignes. Les mêmes jointures
- * écrites sur {@code ComActionMessage} : 23 ms le comptage, 139 ms la page. D'où ce découpage :
- * <ol>
- *   <li>la page d'identifiants par {@code Specification} (filtres + périmètre) ;</li>
- *   <li><b>une</b> requête de projection pour les colonnes de ces lignes — jamais de chargement
- *       paresseux association par association ;</li>
- *   <li>pour les colonnes calculées de la vue (rang, alerte active, état), une requête groupée
- *       sur les identifiants de la page, et seulement si la colonne est demandée.</li>
- * </ol>
- *
- * <h2>Périmètre</h2>
- *
- * <p>{@code /api/suivi-actions} n'est pas une collection de {@code PerimetreInterceptor} : le
- * service applique lui-même {@link PerimetreCommercialService#filtreInteractions()} — le prédicat
- * de la hotline et des relances — à la liste <b>et</b> aux groupes, pour que la somme des effectifs
- * retombe sur le total de la liste.
+ * Écran OMRAN « Suivi des actions », sans sa vue {@code ComActionMessageView}, trop lente
+ * ({@code FEATURE-suivi-actions.md} §1) : page d'ids, une projection, colonnes calculées à la demande.
+ * Hors {@code PerimetreInterceptor} : {@code filtreInteractions()} appliqué ici, liste <b>et</b> groupes.
  */
 @Service
 @Transactional(readOnly = true)
@@ -70,14 +51,10 @@ public class SuiviActionService {
     private final UtilisateurAffiche utilisateurAffiche;
     private final EntityManager em;
 
-    /** Rôle qui voit le suivi <b>général</b> — celui qui garde déjà {@code GET /api/kpi/commerciaux}. */
+    /** Seul ce rôle voit le suivi <b>général</b>. */
     static final String ROLE_ADMINISTRATEUR = "ROLE_Administrateur";
 
-    /**
-     * {@code UserName} des actions générées. 1 083 actions liées au compte de Hamza ATCHANY — et
-     * d'autres pour 11 comptes — portent cette valeur : générées pendant sa session, OMRAN les
-     * affiche sous « Système », pas sous son nom.
-     */
+    /** Actions générées pendant une session : OMRAN les affiche sous « Système », pas sous l'utilisateur. */
     static final String UTILISATEUR_SYSTEME = "Système";
 
     public SuiviActionService(ComActionMessageRepository messageRepository,
@@ -91,7 +68,6 @@ public class SuiviActionService {
         this.em = em;
     }
 
-    /** Les filtres de l'écran. Tous optionnels, combinés en ET. */
     public record Filtres(LocalDateTime dateDebut, LocalDateTime dateFin, List<UUID> trancheIds,
                           List<String> utilisateurs, List<UUID> typeIds, List<UUID> categorieIds,
                           Boolean systeme) {
@@ -120,7 +96,7 @@ public class SuiviActionService {
         return page.map(m -> versDto(lignes.get(m.getId()), rangs, alertes, etatsParProspection));
     }
 
-    /** Replie la liste en groupes — mêmes filtres, même périmètre. */
+    /** Mêmes filtres, même portée, même périmètre que {@link #findAll}. */
     public ResultatGroupement grouper(Filtres filtres, ColonneSuiviAction groupeBy, Granularite granularite,
                                       List<AgregatDemande> agregats, TriGroupe tri,
                                       boolean inclureSansValeur, Pageable pageable) {
@@ -131,19 +107,9 @@ public class SuiviActionService {
     }
 
     /**
-     * <b>Qui voit quoi.</b> L'administrateur voit le suivi général ; tout autre utilisateur ne voit
-     * que <b>ses</b> actions — le filtre {@code utilisateur} n'élargit rien, il se combine en ET.
-     * Voir {@code instructions/FEATURE-suivi-actions.md} §3bis.
-     *
-     * <p>« Mes actions » = {@code UserName} égal à mon nom (la règle de l'écran OMRAN, et le
-     * libellé que {@link UtilisateurAffiche} écrit même quand le compte manque en base
-     * d'écriture), <b>ou</b> mon compte ({@code AdmUserId}) hors lignes « Système ». Le compte
-     * rattrape les 36 actions réelles écrites sous l'identifiant de connexion
-     * ({@code c.aittagadirt}) au lieu du nom ; l'exclusion de « Système » écarte les actions
-     * générées pendant la session, qu'OMRAN n'attribue pas à l'utilisateur non plus.
-     *
-     * <p>Un appelant non administrateur sans identité exploitable (hors jeton applicatif) ne voit
-     * rien — jamais tout.
+     * Admin : tout ; sinon <b>ses</b> actions seulement, le filtre {@code utilisateur} s'y ajoute en ET
+     * (§3bis) — {@code UserName} = mon nom, ou mon compte hors « Système ». Sans identité ⇒ rien,
+     * jamais tout.
      */
     private Specification<ComActionMessage> portee() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -172,11 +138,7 @@ public class SuiviActionService {
         };
     }
 
-    /**
-     * Les filtres de l'écran OMRAN. Période <b>fin exclue</b> ({@code DocDate < dateFin}), comme sa
-     * requête ; utilisateur en égalité exacte sur {@code UserName}. Type et catégorie sont en SQL
-     * ici, là où OMRAN les applique dans sa grille — même résultat, sans rapatrier les lignes.
-     */
+    /** Comme OMRAN : fin exclue, {@code UserName} en égalité exacte ; type et catégorie en SQL plutôt qu'en grille. */
     private static Specification<ComActionMessage> spec(Filtres f) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
@@ -207,7 +169,7 @@ public class SuiviActionService {
         };
     }
 
-    /** Toutes les colonnes de la page en une requête — une jointure LEFT par colonne affichée. */
+    /** Une requête pour toute la page, jamais de chargement paresseux association par association. */
     private Map<UUID, Tuple> projeter(List<UUID> ids) {
         List<Tuple> tuples = em.createQuery("""
                 SELECT m.id AS id, m.userName AS utilisateur, m.docDate AS dateAction,
@@ -245,9 +207,8 @@ public class SuiviActionService {
     }
 
     /**
-     * Rang de la vue : 1 + le nombre d'actions <b>plus récentes</b> du même tiers et du même type,
-     * hors actions système et impayées. Une action sans tiers ou sans type a le rang 1 — l'égalité
-     * SQL avec {@code NULL} ne compte rien, exactement comme dans la vue.
+     * Rang de la vue : 1 + actions plus récentes, même tiers et même type, hors système et impayées.
+     * Sans tiers ou sans type ⇒ rang 1, l'égalité avec NULL ne comptant rien, comme dans la vue.
      */
     private Map<UUID, Integer> rangs(List<UUID> ids) {
         List<?> lignes = em.createNativeQuery("""
@@ -281,10 +242,7 @@ public class SuiviActionService {
         return actives;
     }
 
-    /**
-     * Pour l'état d'une action de prospection : le statut du dossier <b>né de cette prospection</b>
-     * ({@code ComFolder.ComProspectionId}), s'il existe — la jointure {@code Pfolder} de la vue.
-     */
+    /** Statut du dossier né de la prospection ({@code ComFolder.ComProspectionId}) : la jointure {@code Pfolder} de la vue. */
     private Map<UUID, String> etatsDesDossiersNesDeProspection(Collection<Tuple> lignes) {
         List<UUID> prospectionIds = lignes.stream()
                 .filter(t -> t.get("dossierId") == null && t.get("prospectionId") != null)
@@ -346,13 +304,8 @@ public class SuiviActionService {
     }
 
     /**
-     * Tiers affiché : le tiers de l'action, sinon la fiche prospect de la prospection, sinon le nom
-     * saisi au premier contact ({@code TempDescription}) — {@code FEATURE-nom-pre-prospection-relances}
-     * §2. Les 1 529 actions réelles sans {@code CfgTierId} sont toutes sur une prospection.
-     *
-     * <p>Rejoue <b>exactement</b> la clé de groupe de {@link ColonneSuiviAction#TIERS_NOM}
-     * ({@code COALESCE(NULLIF(TRIM(a), ''), …)}, cf. {@code Chemin.repli}) : chaque terme est
-     * nettoyé et un terme blanc est sauté. Une ligne affichée « X » tombe ainsi dans le groupe « X ».
+     * Tiers, sinon prospect, sinon nom saisi ({@code FEATURE-nom-pre-prospection-relances.md} §2). Rejoue
+     * exactement la clé de groupe de {@link ColonneSuiviAction#TIERS_NOM} : ligne « X » ⇒ groupe « X ».
      */
     private static String tiersNom(Tuple t) {
         for (String alias : List.of("tiersNom", "prospectNom", "prospectionNomSaisi")) {

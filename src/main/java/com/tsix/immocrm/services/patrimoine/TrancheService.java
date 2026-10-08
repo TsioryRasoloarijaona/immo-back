@@ -22,13 +22,6 @@ public class TrancheService {
         this.trancheRepository = trancheRepository;
     }
 
-    /**
-     * {@code GET /api/tranches}: flat, paginated list of tranches, optionally scoped to one
-     * projet (Entité). Lets the front populate a Tranche checklist without the {@code GET
-     * /api/projets} + {@code GET /api/projets/{id}/tranches} N+1 workaround — see
-     * {@code instructions/filtres-avances.md} point 2. Restreint aux entités juridiques
-     * en exploitation ({@code CfgCompany.isActive}).
-     */
     public Page<TrancheListItemDto> findAll(UUID projetId, Pageable pageable) {
         Page<CfgTranche> page = projetId != null
                 ? trancheRepository.findDesEntitesActivesParProjet(projetId, pageable)

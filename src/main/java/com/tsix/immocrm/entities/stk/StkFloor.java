@@ -12,11 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo_StkFloor — floor lookup ("Étage"), referenced by {@code StkItem.StkFloorId}. Confirmed
- * against real data: {@code Code} holds the short label (e.g. "RDC"), {@code Description} the
- * long form (e.g. "Rez de chaussée").
- */
+/** Étage : {@code Code} = libellé court ("RDC"), {@code Description} = forme longue ("Rez de chaussée"). */
 @Getter
 @Setter
 @Entity

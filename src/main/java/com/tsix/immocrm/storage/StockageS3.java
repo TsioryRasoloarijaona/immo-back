@@ -41,8 +41,7 @@ public class StockageS3 implements StockageFichiers {
                         .key(cle)
                         .contentType(contentType)
                         .contentDisposition(contentDisposition(nomTelechargement))
-                        // Le serveur recalcule l'empreinte et refuse l'objet si elle diffère :
-                        // l'intégrité est vérifiée par le stockage, pas seulement supposée.
+                        // Le serveur recalcule l'empreinte et refuse l'objet si elle diffère.
                         .checksumSHA256(Base64.getEncoder().encodeToString(empreinte))
                         .build(),
                 RequestBody.fromBytes(contenu));
@@ -53,9 +52,7 @@ public class StockageS3 implements StockageFichiers {
 
     @Override
     public URI urlTelechargement(String cle, String nomTelechargement, String contentType) {
-        // Les en-têtes sont surchargés à la signature plutôt que lus depuis l'objet : le nom
-        // proposé au téléchargement suit ainsi la description courante en base, même si elle a
-        // été modifiée après le dépôt.
+        // En-têtes surchargés à la signature : le nom suit la description courante, même modifiée après dépôt.
         GetObjectRequest lecture = GetObjectRequest.builder()
                 .bucket(properties.getBucket())
                 .key(cle)
@@ -89,16 +86,8 @@ public class StockageS3 implements StockageFichiers {
     }
 
     /**
-     * <b>{@code inline}, jamais {@code attachment}</b> — le front affiche les PDF et les images
-     * dans un onglet sans les télécharger. C'est ce que le backend servait déjà avant le passage
-     * à S3 ({@code ContentDisposition.inline()} dans les contrôleurs, convention conservée par
-     * les générateurs de documents) ; {@code attachment} forçait un téléchargement sur les trois
-     * endpoints {@code /fichier} et cassait la visualisation. Un navigateur qui ne sait pas rendre
-     * le type — {@code .docx}, {@code .xlsx} — retombe de lui-même sur le téléchargement.
-     *
-     * <p>{@code filename} en repli ASCII pour les clients anciens, {@code filename*} en UTF-8
-     * (RFC 5987) pour le nom réel — les descriptions legacy sont accentuées et un en-tête HTTP
-     * ne transporte pas d'UTF-8 brut.
+     * {@code inline}, jamais {@code attachment} : le front affiche PDF et images dans un onglet. {@code filename} en repli
+     * ASCII, {@code filename*} en UTF-8 (RFC 5987) : les descriptions légataires sont accentuées.
      */
     private static String contentDisposition(String nom) {
         String propre = (nom == null || nom.isBlank()) ? "fichier" : nom.trim();

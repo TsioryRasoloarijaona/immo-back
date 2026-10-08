@@ -34,20 +34,13 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 /**
- * Import de l'export CSV des leads en pré-prospections — {@code POST /api/pre-prospections/import}
- * et son aperçu. Voir {@code instructions/FEATURE-creation-pre-prospection.md} §5.
- *
- * <p><b>Un fichier = une tranche.</b> L'export ne porte aucune tranche exploitable ; l'utilisateur
- * la choisit, et elle vaut pour toutes les lignes. L'aperçu en propose une, déduite du nom de
- * formulaire, pour pré-sélectionner la liste déroulante.
- *
- * <p>Les valeurs par défaut reprennent le motif des 2 700+ leads injectés par n8n depuis les mêmes
- * formulaires : Nature {@code 1 A TRAITER}, source {@code FACEBOOK}, type {@code WEB}, vocation
- * {@code VENTE} — chacune remplaçable par l'appelant.
+ * Import de l'export CSV des leads en pré-prospections. <b>Un fichier = une tranche</b>, choisie
+ * par l'utilisateur. Voir {@code instructions/FEATURE-creation-pre-prospection.md} §5.
  */
 @Service
 public class ImportPreProspectionService {
 
+    // Défauts = ceux des leads injectés par n8n depuis les mêmes formulaires.
     static final String CODE_ETAPE_DEFAUT = "1 A TRAITER";
     static final String CODE_ORIGINE_DEFAUT = "FACEBOOK";
     static final String CODE_TYPE_DEFAUT = "WEB";
@@ -132,10 +125,9 @@ public class ImportPreProspectionService {
                         "Même lead que la ligne " + memeLeadPlusHaut + " du fichier", null, List.of()));
                 continue;
             }
-            // Le réimport se juge sur TOUTE la table, périmètre compris — sinon un commercial
-            // restreint recréerait un lead déjà importé ailleurs. Mais seuls les doublons visibles
-            // de l'appelant sont nommés (ids, codes) ou font un DOUBLON : un contact hors
-            // périmètre n'est jamais révélé, comme partout dans l'API.
+            // Réimport jugé sur toute la table (sinon un commercial restreint recréerait un lead
+            // importé ailleurs), mais seuls les doublons visibles sont nommés ou font un DOUBLON :
+            // un contact hors périmètre n'est jamais révélé.
             List<ComProspection> tous = prospectionService.doublonsContact(null, l.nom(), l.email(), telephone);
             List<ComProspection> memeSoumission = tous.stream()
                     .filter(p -> p.getDocDate() != null

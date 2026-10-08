@@ -19,22 +19,9 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * {@code GET /api/dossiers/{id}/payeurs} — les tiers susceptibles de régler une échéance de ce
- * dossier, pour alimenter le champ « Réglé par » ({@code CreerReglementRequest.payeurId}).
- *
- * <p>Existe parce que {@code payeurId} est devenu obligatoire à la création d'un règlement (voir
- * {@code FEATURE-reglement-statut-preuve.md}) alors qu'aucun endpoint ne permettait de le peupler :
- * {@code DossierDetailDto} n'expose que l'acquéreur principal, et les co-acquéreurs
- * ({@code ComFolderCustomer}) n'étaient lus que par les générateurs de PDF. C'est exactement la
- * même liste que celle assemblée par {@link AutorisationVersementService} pour le bloc
- * « Nom et prénom des clients » du document.
- *
- * <p><b>Ce n'est pas une liste fermée.</b> Sur 654 règlements réels portant un payeur, 651 sont
- * l'acquéreur principal, 1 est un co-acquéreur et <b>2 ne sont ni l'un ni l'autre</b> (tiers
- * payeur). La création n'impose donc <i>pas</i> que {@code payeurId} appartienne à cette liste —
- * elle vérifie seulement que le {@code CfgTier} existe. Cet endpoint alimente une liste déroulante,
- * il ne définit pas une contrainte d'intégrité ; le cas du vrai tiers payeur reste à traiter par une
- * recherche de tiers générale, non implémentée à ce jour.
+ * Propositions pour « Réglé par » : acquéreur principal et co-acquéreurs, comme
+ * {@link AutorisationVersementService}. <b>Pas une liste fermée</b> : un payeur réel peut être un
+ * tiers extérieur, la création ne vérifie que l'existence du {@code CfgTier}.
  */
 @Service
 @Transactional(readOnly = true)
@@ -65,8 +52,7 @@ public class PayeurService {
         }
         for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
             CfgTier tier = coAcquereur.getCfgTier();
-            // Un même tiers peut être à la fois CfgCustomerId et ligne ComFolderCustomer : on ne
-            // le propose qu'une fois, avec son rôle le plus fort (acquéreur principal).
+            // Un tiers à la fois CfgCustomerId et ComFolderCustomer n'apparaît qu'une fois, en principal.
             if (tier != null && vus.add(tier.getId())) {
                 payeurs.add(toDto(tier, CO_ACQUEREUR, coAcquereur.getPartPercent()));
             }
@@ -78,8 +64,7 @@ public class PayeurService {
         return new PayeurDto(tier.getId(), TierNomFormatter.nom(tier), role, pieceIdentite(tier), quotePart);
     }
 
-    /** Même format que {@code AutorisationVersementService} ("{type}: {numéro}"), pour que la liste
-     * déroulante et le document imprimé désignent la personne de la même façon. */
+    /** Même format que {@code AutorisationVersementService}, pour que liste et document concordent. */
     private static String pieceIdentite(CfgTier tier) {
         String type = tier.getAdmIdentityDocumentType() != null ? tier.getAdmIdentityDocumentType().getCode() : null;
         if (type == null && tier.getIDNumber() == null) {

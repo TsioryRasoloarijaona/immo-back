@@ -40,42 +40,13 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Moteur d'agrégation des listes repliées — voir {@code instructions/FEATURE-groupement-listes.md}
- * et {@code instructions/FEATURE-colonnes-groupement-encaissements.md}.
- *
- * <h2>Pourquoi un moteur unique et générique</h2>
- *
- * <p>Les quatre listes visées (dossiers, prospections, pré-prospections, encaissements) posent
- * exactement le même problème : compter et agréger <em>par valeur d'une colonne</em>, sous les
- * filtres déjà actifs. Seules changent l'entité racine et la {@link Specification}. Quatre
- * implémentations divergeraient — c'est déjà arrivé aux trois mappeurs de
- * {@code ProspectionListItemDto}, comme le rappelle le javadoc de {@code Colonnes}.
- *
- * <h2>La règle non négociable : réutiliser la Specification de la liste</h2>
- *
- * <p>La {@code spec} passée ici <strong>doit être celle qui construit la liste</strong>, périmètre
- * commercial compris. Reconstruire les filtres en parallèle les ferait diverger au premier ajout,
- * et pour le périmètre ferait apparaître dans un total des lignes que l'appelant n'a pas le droit
- * de lire. C'est pourquoi ce service ne connaît aucun filtre : il les reçoit.
- *
- * <h2>Jointures explicitement LEFT</h2>
- *
- * <p>{@link Jointures} n'émet que des {@code LEFT JOIN}, et les mutualise. Une navigation
- * implicite ({@code root.get("stkItem").get("stkHierarchy")}) produirait des {@code INNER JOIN}
- * qui feraient disparaître les lignes à association nulle — donc des groupes entiers, en silence.
- *
- * <h2>Aucun littéral numérique ne descend en SQL</h2>
- *
- * <p>Règle transversale de ce fichier, et elle a une cicatrice : {@code cb.coalesce(sum, ZERO)}
- * tirait le type du résultat vers l'échelle du littéral et ramenait {@code 100,50 + 90,25} à
- * {@code 191,0} — une somme d'argent arrondie à l'unité, en silence. Toute substitution de
- * {@code NULL}, toute soustraction et toute division se font donc <strong>en Java, en
- * {@code BigDecimal}</strong>, sur des agrégats exacts remontés séparément.
+ * Agrégation des listes repliées ({@code FEATURE-groupement-listes.md}). La {@code spec} reçue doit
+ * être celle de la liste, périmètre compris : sinon un total montrerait des lignes interdites.
+ * Aucun littéral numérique en SQL ({@code coalesce(sum, 0)} arrondit à l'unité) : NULL, −, ÷ en Java.
  */
 @Service
 public class GroupementService {
 
-    /** Échelle d'une moyenne monétaire restituée au client. */
     private static final int ECHELLE_MOYENNE = 2;
 
     private final EntityManager em;
@@ -84,38 +55,19 @@ public class GroupementService {
         this.em = em;
     }
 
-    /**
-     * Ce que rend un appel à {@code /groupes} : la page de groupes, et le total général.
-     *
-     * @param groupes     les groupes de la page demandée
-     * @param totaux      les mêmes agrégats sur <strong>tout</strong> le périmètre filtré
-     * @param nombreTotal effectif dont {@code totaux} est tiré
-     */
+    /** @param totaux les mêmes agrégats sur <strong>toutes</strong> les lignes filtrées, pas la page */
     public record ResultatGroupement(Page<GroupeDto> groupes, Map<String, Object> totaux,
                                      long nombreTotal) {
 
-        /**
-         * Enveloppe HTTP correspondante.
-         *
-         * <p>Portée ici plutôt que par une fabrique sur {@code PageGroupesDto} : les services
-         * rendent déjà des DTO, alors que l'inverse — le paquet {@code dto} important
-         * {@code services} — fermerait un cycle entre les deux paquets.
-         */
+        /** Ici et non dans {@code PageGroupesDto} : {@code dto} important {@code services} ferait un cycle. */
         public PageGroupesDto versPage() {
             return PageGroupesDto.of(groupes, totaux, nombreTotal);
         }
     }
 
     /**
-     * Replie une liste en groupes, et calcule le total général.
-     *
-     * @param racine            entité racine ({@code ComFolder.class}, {@code StlSettlement.class})
-     * @param spec              la Specification de la liste, périmètre commercial inclus
-     * @param cle               chemin de la colonne groupée
-     * @param granularite       non nulle uniquement si la colonne groupée est une date
-     * @param agregats          agrégats demandés, déjà résolus contre le catalogue ; l'ordre est conservé
-     * @param tri               ordre de restitution des groupes
-     * @param inclureSansValeur inclure le groupe des lignes dont la colonne groupée est nulle
+     * @param spec        la Specification de la liste, périmètre commercial inclus
+     * @param granularite non nulle uniquement si la colonne groupée est une date
      */
     @Transactional(readOnly = true)
     public <E> ResultatGroupement grouper(Class<E> racine, Specification<E> spec, Chemin cle,
@@ -129,8 +81,6 @@ public class GroupementService {
         Jointures jointures = new Jointures(root);
 
         Expression<?> exprCle = expressionCle(cb, jointures, cle, granularite);
-        // Les chemins de libellé ne sont sélectionnés que pour un groupement par tiers : ailleurs
-        // le libellé EST la clé (colonne directe) ou s'en déduit (période).
         List<Expression<?>> exprLibelle = new ArrayList<>();
         if (cle.typeLibelle() == Chemin.TypeLibelle.TIER) {
             for (String cheminLibelle : cle.cheminsLibelle()) {
@@ -168,15 +118,7 @@ public class GroupementService {
         return totalGeneral(racine, spec, cle, granularite, agregats, inclureSansValeur, page);
     }
 
-    /**
-     * Compose les filtres de la liste et, si le groupe sans valeur est exclu, le
-     * {@code <clé> IS NOT NULL} qui le retire.
-     *
-     * <p>Le prédicat porte sur l'<strong>expression de clé</strong>, pas sur la colonne brute :
-     * pour une date groupée au mois, la clé est {@code YEAR()*100 + MONTH()}, nulle exactement
-     * quand la date l'est. Tester la colonne séparément marcherait ici mais divergerait de la
-     * requête de comptage, qui compte des clés.
-     */
+    /** {@code IS NOT NULL} sur l'expression de clé, pas la colonne brute : la requête de comptage compte des clés. */
     private static Predicate predicats(CriteriaBuilder cb, Predicate filtres, Expression<?> exprCle,
                                        boolean inclureSansValeur) {
         if (inclureSansValeur) {
@@ -186,14 +128,7 @@ public class GroupementService {
         return filtres != null ? cb.and(filtres, renseignee) : renseignee;
     }
 
-    /**
-     * Nombre total de groupes, pour l'enveloppe de pagination.
-     *
-     * <p><strong>{@code COUNT(DISTINCT x)} ignore les NULL en SQL</strong> — le groupe des lignes
-     * sans valeur existe donc dans la requête d'agrégation mais échapperait au total, qui serait
-     * systématiquement inférieur d'une unité dès qu'une ligne n'a pas de valeur. D'où le second
-     * terme, qui ajoute ce groupe s'il est peuplé.
-     */
+    /** {@code COUNT(DISTINCT)} ignore NULL : le second terme rajoute le groupe sans valeur s'il est peuplé. */
     private <E> long compterGroupes(Class<E> racine, Specification<E> spec, Chemin cle,
                                     Granularite granularite, boolean inclureSansValeur) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -209,21 +144,12 @@ public class GroupementService {
         Tuple t = em.createQuery(cq).getSingleResult();
         long distincts = t.get(0, Long.class);
         Number nuls = t.get(1, Number.class);
-        // Le second terme ne peut être atteint que si le groupe nul est inclus — le prédicat
-        // l'élimine sinon, et la somme vaut alors zéro d'elle-même.
         return distincts + (nuls != null && nuls.longValue() > 0 ? 1 : 0);
     }
 
     /**
-     * Le total général : les mêmes agrégats, sans {@code GROUP BY}.
-     *
-     * <p>Une requête de plus par appel, et elle est nécessaire. La page ne porte qu'une tranche des
-     * groupes : additionner ceux-là côté client donnerait un total juste sur une liste d'un seul
-     * groupe et faux partout ailleurs, sans que rien ne le signale.
-     *
-     * <p>Elle rejoue {@code inclureSansValeur} à l'identique — sinon le total général et la somme
-     * des groupes porteraient sur deux populations différentes, ce qui est exactement le genre
-     * d'écart qu'un écran ne rattrape jamais.
+     * Requête à part : la page ne porte qu'une partie des groupes. Rejoue {@code inclureSansValeur},
+     * sinon total et somme des groupes porteraient sur deux populations.
      */
     private <E> ResultatGroupement totalGeneral(Class<E> racine, Specification<E> spec, Chemin cle,
                                                 Granularite granularite, List<AgregatDemande> agregats,
@@ -250,14 +176,7 @@ public class GroupementService {
     // Agrégats
     // ------------------------------------------------------------------
 
-    /**
-     * Plan de calcul d'un agrégat : où lire ses termes dans le tuple, et comment les replier.
-     *
-     * <p>Un agrégat ne correspond pas toujours à une seule colonne sélectionnée. Une moyenne en
-     * demande deux (total et effectif non nul), une différence deux (ses deux termes), une moyenne
-     * de différence trois. Les indices sont donc portés ici plutôt que déduits d'un décalage
-     * régulier, qui serait faux dès le second agrégat de forme différente.
-     */
+    /** Indices explicites : un agrégat occupe une à trois colonnes du tuple (moyenne, différence). */
     private static final class Agregation {
         private final AgregatDemande demande;
         private int indexPrincipal = -1;
@@ -270,15 +189,8 @@ public class GroupementService {
     }
 
     /**
-     * Ajoute aux {@code selections} ce qu'il faut pour calculer chaque agrégat, et rend les plans
-     * de repliage.
-     *
-     * <p><strong>Une différence n'est jamais agrégée d'un bloc.</strong> On remonte
-     * {@code SUM(a)} et {@code SUM(b)} séparément pour soustraire en Java. Deux raisons, et la
-     * première suffit : {@code SUM(a - COALESCE(b, 0))} exigerait un littéral en SQL, celui-là
-     * même qui a déjà arrondi une somme d'argent à l'unité. La seconde est que {@code SUM} ignore
-     * les {@code NULL}, donc {@code SUM(a) - SUM(b)} vaut exactement {@code Σ(aᵢ - bᵢ)} en traitant
-     * un {@code b} absent comme zéro — ce qui est la sémantique voulue, obtenue sans rien écrire.
+     * Différence = {@code SUM(a)} et {@code SUM(b)} séparés, soustraits en Java : {@code SUM(a - COALESCE(b, 0))}
+     * exigerait un littéral SQL, et {@code SUM} ignorant NULL traite déjà un {@code b} absent comme zéro.
      */
     private static List<Agregation> planifier(CriteriaBuilder cb, Jointures jointures,
                                               List<AgregatDemande> agregats,
@@ -299,8 +211,8 @@ public class GroupementService {
                                 jointures.chemin(chemin.cheminSoustrait()).as(BigDecimal.class)));
                     }
                     if (demande.fonction() == FonctionAgregat.AVG) {
-                        // L'effectif des lignes RENSEIGNÉES, pas celui du groupe : diviser par le
-                        // second donnerait une moyenne tirée vers le bas par des cases vides.
+                        // Effectif des lignes renseignées, pas du groupe : les cases vides
+                        // tireraient la moyenne vers le bas.
                         plan.indexEffectif = selections.size();
                         selections.add(cb.count(principal));
                     }
@@ -320,12 +232,8 @@ public class GroupementService {
     }
 
     /**
-     * L'expression sur laquelle porte l'agrégat.
-     *
-     * <p>Rejoue la logique de {@link #expressionCle} sans la granularité : agréger une date, c'est
-     * en prendre le minimum ou le maximum réels, pas ceux de son entier de période. Un repli garde
-     * sa cascade — sans quoi un {@code COUNT} ne compterait que la première des sources, et
-     * annoncerait des cases vides là où la ligne affiche une valeur.
+     * Comme {@link #expressionCle} sans granularité (min/max réels d'une date). Un repli garde sa
+     * cascade, sinon {@code COUNT} ne compterait que la première source.
      */
     private static Expression<?> expressionAgregee(CriteriaBuilder cb, Jointures jointures,
                                                    Chemin chemin) {
@@ -340,7 +248,6 @@ public class GroupementService {
         return max ? cb.greatest((Expression) expression) : cb.least((Expression) expression);
     }
 
-    /** Replie les agrégats d'un tuple en {@code jeton → valeur}, dans l'ordre demandé. */
     private static Map<String, Object> valeurs(Tuple t, List<Agregation> plans) {
         Map<String, Object> resultats = new LinkedHashMap<>();
         for (Agregation plan : plans) {
@@ -352,8 +259,7 @@ public class GroupementService {
     private static Object valeur(Tuple t, Agregation plan) {
         Object brut = t.get(plan.indexPrincipal);
         return switch (plan.demande.fonction()) {
-            // Un extremum de rien n'existe pas : `null` le dit, `0` le masquerait derrière une
-            // valeur plausible. C'est l'inverse d'un total, qui vaut bien zéro quand il est vide.
+            // Extremum de rien = null, pas 0 ; un total vide, lui, vaut zéro.
             case MIN, MAX -> brut;
             case COUNT -> brut == null ? 0L : ((Number) brut).longValue();
             case SUM -> total(t, plan);
@@ -361,12 +267,7 @@ public class GroupementService {
         };
     }
 
-    /**
-     * Total d'un agrégat, différence comprise.
-     *
-     * <p>{@code SUM} d'un groupe dont toutes les lignes sont nulles rend {@code NULL} ; un total
-     * vaut zéro. Substitué ici et pas en SQL — voir l'entête de la classe.
-     */
+    /** {@code SUM} de lignes toutes nulles rend NULL : zéro substitué ici, pas en SQL. */
     private static BigDecimal total(Tuple t, Agregation plan) {
         BigDecimal somme = decimal(t.get(plan.indexPrincipal));
         if (plan.indexSoustrait >= 0) {
@@ -375,20 +276,10 @@ public class GroupementService {
         return somme;
     }
 
-    /**
-     * Moyenne, calculée en Java et jamais par {@code cb.avg()}.
-     *
-     * <p>{@code cb.avg()} rend un {@code double}. Sur de l'argent c'est la même famille de piège
-     * que le {@code COALESCE} qui arrondissait les sommes : une perte de précision qui ne se
-     * signale pas. On divise donc deux agrégats exacts, en {@code BigDecimal}.
-     *
-     * <p>La division reste exacte pour une différence : la moyenne est linéaire, donc
-     * {@code moyenne(a - b) = (Σa - Σb) / n}.
-     */
+    /** Jamais {@code cb.avg()}, qui rend un {@code double} : deux agrégats exacts divisés en {@code BigDecimal}. */
     private static BigDecimal moyenne(Tuple t, Agregation plan) {
         Number effectif = (Number) t.get(plan.indexEffectif);
         if (effectif == null || effectif.longValue() == 0) {
-            // Aucune valeur renseignée : pas de moyenne. Rendre zéro affirmerait une valeur.
             return null;
         }
         return total(t, plan)
@@ -409,17 +300,9 @@ public class GroupementService {
     // ------------------------------------------------------------------
 
     /**
-     * Clé de groupe, toujours une expression <strong>unique</strong>.
-     *
-     * <p>C'est ce qui rend {@code COUNT(DISTINCT)} et l'{@code ORDER BY} exprimables. Pour un
-     * groupement par tiers, les colonnes de nom s'ajoutent au {@code GROUP BY} mais pas à la clé :
-     * elles sont fonctionnellement dépendantes de l'identifiant, donc le nombre de groupes est
-     * bien le nombre d'identifiants distincts.
-     *
-     * <p>Une date est ramenée à un <strong>entier de période</strong> ({@code 202507}) plutôt qu'à
-     * une chaîne formatée : un seul {@code YEAR()/MONTH()} par dialecte, pas de dépendance à
-     * {@code FORMAT()} propre à SQL Server, et un tri chronologique gratuit puisque l'ordre
-     * numérique est l'ordre du temps.
+     * Une seule expression, pour que {@code COUNT(DISTINCT)} et {@code ORDER BY} restent exprimables
+     * (les noms d'un tiers dépendent de son id). Date ⇒ entier de période ({@code 202507}) : pas de
+     * {@code FORMAT()} propre à SQL Server, et l'ordre numérique est chronologique.
      */
     private static Expression<?> expressionCle(CriteriaBuilder cb, Jointures jointures,
                                                Chemin cle, Granularite granularite) {
@@ -442,12 +325,8 @@ public class GroupementService {
     }
 
     /**
-     * Cascade {@code COALESCE(NULLIF(TRIM(a), ''), NULLIF(TRIM(b), ''), …)}.
-     *
-     * <p>{@code NULLIF(TRIM(...), '')} et non la colonne nue : c'est ce qui reproduit
-     * {@code StringUtils.hasText} du mappeur, qui écarte aussi les chaînes blanches. Un
-     * {@code COALESCE} nu ne neutralise que {@code NULL} et ferait diverger l'en-tête de groupe de
-     * la valeur affichée sur la ligne — voir {@link Chemin#repli}.
+     * {@code NULLIF(TRIM(x), '')} reproduit le {@code StringUtils.hasText} du mappeur : un {@code COALESCE}
+     * nu garderait les blancs et l'en-tête divergerait de la ligne ({@link Chemin#repli}).
      */
     private static Expression<String> expressionRepli(CriteriaBuilder cb, Jointures jointures,
                                                       Chemin cle) {
@@ -469,9 +348,7 @@ public class GroupementService {
         if (cle.typeLibelle() != Chemin.TypeLibelle.TIER) {
             return exprCle;
         }
-        // Trier sur l'identifiant rendrait un ordre arbitraire. On rejoue la priorité de
-        // TierNomFormatter en COALESCE pour que l'ordre alphabétique soit celui des libellés
-        // effectivement affichés : raison sociale > description > nom de famille.
+        // Priorité de TierNomFormatter rejouée, pour trier sur le libellé affiché et non sur l'id.
         @SuppressWarnings("unchecked")
         Expression<String> raisonSociale = (Expression<String>) exprLibelle.get(0);
         @SuppressWarnings("unchecked")
@@ -502,7 +379,7 @@ public class GroupementService {
         return new GroupeDto(valeurCle, libelle, nombre, valeurs(t, plans));
     }
 
-    /** {@code 202507} → « juillet 2025 ». Le mois en toutes lettres, comme partout dans l'API. */
+    /** {@code 202507} → « juillet 2025 ». */
     private static String libellePeriode(Object cle, Granularite granularite) {
         if (cle == null) {
             return null;
@@ -525,16 +402,8 @@ public class GroupementService {
     // ------------------------------------------------------------------
 
     /**
-     * Prédicat restreignant une liste aux lignes d'un groupe — c'est ce qui rend un groupe
-     * <em>ouvrable</em>.
-     *
-     * <p>{@code valeur} est la {@code cle} renvoyée par {@code /groupes}, réémise telle quelle par
-     * le client. Elle est reconvertie d'après le type Java de la colonne visée, donc le front n'a
-     * rien à typer : c'est la seule façon d'éviter un langage de filtre générique et sa coercition.
-     *
-     * <p>{@code valeur} absente ou vide → le groupe des lignes <strong>sans valeur</strong>. Ce
-     * n'est pas un cas d'erreur : ce groupe est renvoyé par {@code /groupes} et doit pouvoir
-     * s'ouvrir comme les autres.
+     * {@code valeur} = la {@code cle} de {@code /groupes} réémise telle quelle, reconvertie d'après le
+     * type de la colonne. Absente ou vide ⇒ le groupe sans valeur, pas une erreur.
      */
     public static Predicate predicatDeGroupe(Root<?> root, CriteriaBuilder cb, Chemin cle,
                                              Granularite granularite, String valeur) {
@@ -567,12 +436,8 @@ public class GroupementService {
     // ------------------------------------------------------------------
 
     /**
-     * Résout un chemin pointé en {@code Path}, en mutualisant des jointures {@code LEFT}.
-     *
-     * <p>La mutualisation n'est pas une optimisation : sans elle,
-     * {@code stkItem.stkHierarchy.cfgProject.code} et
-     * {@code stkItem.stkHierarchy.cfgProject.cfgCompany.code} demandés ensemble produiraient deux
-     * jointures distinctes vers les mêmes tables.
+     * Jointures LEFT seulement (une navigation implicite ferait des INNER JOIN qui effaceraient des
+     * groupes) et mutualisées (sinon deux chemins au préfixe commun joindraient deux fois).
      */
     private static final class Jointures {
 

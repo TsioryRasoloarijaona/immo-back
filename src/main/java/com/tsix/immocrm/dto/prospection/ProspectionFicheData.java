@@ -5,14 +5,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * All fields needed to render the "Fiche Prospection" document (PDF), modeled on the legacy
- * "FICHE" (Yes.Com.Front.Prospection.Prospection) Stimulsoft template — a printable summary of a
- * prospection. Reuses the same field set as {@code GET /api/prospections/{id}} — most of this
- * document's content is already exposed via {@code ProspectionDetailDto}, so
- * {@code ProspectionFicheService} sources it the same way rather than re-deriving. The "PROFIL"
- * section (ComProspectionProfile/Category/Type) seen in the real template is not reproduced here
- * — out of scope for this pass, no dedicated read path for it exists yet on the prospection
- * detail. Not exposed as JSON — feeds {@code ProspectionFichePdfRenderer} only.
+ * Données du PDF « Fiche Prospection » (modèle Stimulsoft « FICHE »), sourcées comme
+ * {@code ProspectionDetailDto} ; la section « PROFIL » du modèle n'est pas reproduite. Pas exposé en JSON.
  */
 public record ProspectionFicheData(
         String code,

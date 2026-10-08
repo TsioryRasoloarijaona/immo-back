@@ -13,7 +13,7 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/** dbo_ComProspectionCategory — a "recherché" article category on a Prospection (GAP-04). */
+/** Catégorie d'article recherchée par une prospection. */
 @Getter
 @Setter
 @Entity

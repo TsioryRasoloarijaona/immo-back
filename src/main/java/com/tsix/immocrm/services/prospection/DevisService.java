@@ -45,10 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * GAP-07 — Devis/offres proposées sur une Prospection ({@code StlQuote}), reproduisant le
- * formulaire Offre legacy (entête + onglet "Montants" HT/TTC).
- */
+/** Offres d'une prospection ({@code StlQuote}) : le formulaire Offre legacy, entête et onglet « Montants ». */
 @Service
 @Transactional(readOnly = true)
 public class DevisService {
@@ -83,18 +80,12 @@ public class DevisService {
     }
 
     /**
-     * Numérote une nouvelle offre comme le fait l'app legacy — confirmé sur données réelles:
-     * {@code AdmSequence} (ligne {@code Code = "Offre"}) porte le compteur réel ({@code SeqValue}
-     * = 313, qui correspond exactement au plus grand {@code StlQuote.Code} existant, "26/00313").
-     * Compteur global, jamais réinitialisé par année (codes vus de "22/00001" à "26/00313" sans
-     * repartir à 0) ; seule l'année affichée change ({@code BasedOnSystemYear = true} → année
-     * système courante). Format: {@code "{année sur 2 chiffres}/{numéro sur 5 chiffres}"} (pas de
-     * préfixe/suffixe pour ce type de document, contrairement à "Dossier de vente").
+     * Compteur {@code AdmSequence "Offre"} partagé avec OMRAN, global : jamais remis à zéro par
+     * année, seule l'année affichée change ({@code BasedOnSystemYear}). Format {@code YY/NNNNN}.
      */
     private String genererCodeOffre() {
         AdmSequence sequence = sequenceRepository.findByCode("Offre").orElseGet(() -> {
-            // Auto-répare si la ligne de seed venait à manquer (ex. base de test fraîche) plutôt
-            // que de bloquer toute création d'offre.
+            // Crée la ligne si elle manque (base de test fraîche) plutôt que de bloquer toute offre.
             AdmSequence nouvelle = new AdmSequence();
             nouvelle.setId(UUID.randomUUID());
             nouvelle.setCode("Offre");
@@ -120,20 +111,6 @@ public class DevisService {
         return prefixe + anneeFormatee + separateur + numero + suffixe;
     }
 
-    /**
-     * {@code GET /api/devis} — liste globale des offres tous prospections confondues, symétrique
-     * de {@code GET /api/dossiers} (vs {@code GET /api/clients/{id}/dossiers} déjà existant pour
-     * une seule prospection: {@link #findByProspection}). Mêmes conventions de filtre que
-     * {@code DossierService.findAll}: {@code trancheId} répétable (OR), {@code search} en
-     * LIKE insensible à la casse sur le code de l'offre.
-     *
-     * @param search      recherche libre sur {@code StlQuote.code}
-     * @param trancheIds  {@code CfgTranche.id} — répétable, matche si l'offre porte une de ces
-     *                    tranches
-     * @param commercial  {@code CfgTier.id} (cfgCommercial) — filtre exact, une seule valeur
-     * @param dateDebut   borne inférieure (incluse) sur {@code docDate}
-     * @param dateFin     borne supérieure (incluse) sur {@code docDate}
-     */
     public Page<DevisDto> findAll(String search, List<UUID> trancheIds, UUID commercial,
                                    LocalDateTime dateDebut, LocalDateTime dateFin, Pageable pageable) {
         Specification<StlQuote> spec = (root, query, cb) -> {
@@ -155,10 +132,8 @@ public class DevisService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        // Périmètre commercial (§9bis.2) : cette liste globale porte tranche, commercial, montants
-        // et pointe vers la prospection d'origine — elle exposait donc le pipeline de tous les
-        // projets sous un préfixe d'URL que PerimetreInterceptor ne couvre pas. Prédicat neutre si
-        // l'appelant n'est pas restreint.
+        // Périmètre filtré ici : PerimetreInterceptor ne couvre pas ce préfixe d'URL
+        // (FEATURE-perimetre-commercial.md §9bis.2).
         return quoteRepository.findAll(spec.and(perimetreService.filtreDevis()), pageable).map(this::toDto);
     }
 
@@ -244,11 +219,8 @@ public class DevisService {
     }
 
     /**
-     * Persiste une {@link StlQuoteItem} par sous-article inclus dans l'offre, pour alimenter le
-     * tableau "SOUS ARTICLES" de la Fiche Offre vente ({@code OffreDevisPdfRenderer}). La remise
-     * est appliquée au même taux que la remise globale de l'offre sur chaque ligne (cohérent avec
-     * le legacy: une seule remise en % saisie au niveau de l'offre, répercutée telle quelle sur
-     * chaque sous-article).
+     * Lignes du tableau « SOUS ARTICLES » de la fiche Offre ; comme le legacy, la remise en % de
+     * l'offre s'applique telle quelle à chaque sous-article.
      */
     private void persisterLignesSousArticles(StlQuote quote, List<StkItem> sousArticles, BigDecimal remisePercent) {
         for (StkItem sousArticle : sousArticles) {
@@ -301,7 +273,6 @@ public class DevisService {
         }
     }
 
-    /** Résultat pur du calcul de l'onglet "Montants" — avant toute persistance. */
     private record MontantsCalcules(
             BigDecimal area, BigDecimal vatRatio,
             BigDecimal unitCostHT, BigDecimal unitCost,
@@ -317,15 +288,8 @@ public class DevisService {
     }
 
     /**
-     * Calcule l'intégralité de l'onglet "Montants" du formulaire Offre legacy, à partir du prix
-     * commercial de l'article ({@code ComSaleUnitCost(HT)}/{@code ComSalePrice(HT)}/{@code Vat} —
-     * confirmé sur données réelles: {@code ComSaleUnitCostHT × Area == ComSalePriceHT} et
-     * {@code ComSalePriceHT × (1+Vat) == ComSalePrice}) et de la somme des sous-articles inclus.
-     * Si {@code prixOverride} est fourni, il remplace le prix commercial TTC de l'article comme
-     * point de départ (HT recalculé via le taux de TVA de l'article). Sans article (offre libre),
-     * {@code prixOverride} devient directement le prix de vente TTC, sans ventilation HT/m²/TVA.
-     * La remise est répartie au prorata entre article et sous-articles pour les lignes "après
-     * remise" — partagé par {@link #creerDevis} pour qu'aperçu et persistance ne divergent jamais.
+     * Onglet « Montants » : {@code prixOverride} remplace le prix TTC de l'article (HT recalculé
+     * par sa TVA) ; sans article, il est le prix TTC brut, sans ventilation HT/m²/TVA.
      */
     private static MontantsCalcules calculerMontants(StkItem article, List<StkItem> sousArticles,
                                                        BigDecimal prixOverride, BigDecimal remisePercent) {
@@ -370,8 +334,7 @@ public class DevisService {
         BigDecimal discountAmountTTC = totalTTC.multiply(remisePercent)
                 .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
 
-        // Répartit la remise au prorata entre article et sous-articles pour la ventilation
-        // "après remise" (même principe que la répartition de remise du legacy).
+        // Remise répartie au prorata article / sous-articles, comme le legacy.
         BigDecimal partArticle = totalHT.signum() != 0
                 ? itemPriceHT.divide(totalHT, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
         BigDecimal itemPriceAfterDiscountHT = itemPriceHT.subtract(discountAmountHT.multiply(partArticle))
@@ -401,7 +364,6 @@ public class DevisService {
                 priceAfterDiscountHT, priceAfterDiscountTTC);
     }
 
-    /** HT = TTC / (1 + taux). Renvoie TTC tel quel si le taux est nul/absent. */
     private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
         if (vatRatio == null || vatRatio.signum() == 0) {
             return montantTTC;
@@ -481,14 +443,9 @@ public class DevisService {
     }
 
     /**
-     * Plan de financement (AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC) de l'offre, calculé sur son
-     * prix de vente TTC après remise — même règle métier que {@code
-     * DossierService#simulerSchemaFinancement} ({@link SchemaFinancementCalculator}, partagé pour
-     * ne jamais afficher des montants différents entre l'offre et le futur Dossier). Vide si
-     * l'offre n'a pas de prix. La catégorie ({@code ComSettlementCategory}) est résolue via la
-     * vocation de l'article principal quand il y en a un; sans article (offre libre), on ne peut
-     * pas la résoudre et {@code exclureDuPrix} retombe sur la convention observée en base
-     * (seule FRAIS SYNDIC est exclue du TTC soumis à la règle de prix).
+     * Même calcul que le dossier ({@link SchemaFinancementCalculator}), sur le TTC après remise.
+     * Sans vocation d'article, {@code exclureDuPrix} retombe sur la convention de la base :
+     * seule FRAIS SYNDIC est exclue.
      */
     List<LigneSchemaFinancementDto> calculerSchemaFinancement(StlQuote q) {
         BigDecimal prix = q.getPriceAfterDiscount();

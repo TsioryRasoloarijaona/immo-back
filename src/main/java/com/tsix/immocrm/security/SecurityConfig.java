@@ -18,45 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsUtils;
 
 /**
- * Phase 2 of the auth rollout: the whole API now requires an authenticated caller (a valid
- * {@code access_token} cookie, parsed by {@link JwtAuthenticationFilter}) except
- * {@code /api/auth/**} (login itself) and the Swagger/OpenAPI doc endpoints. There is no
- * "première connexion" gate any more: accounts come from Omran fully filled in, and an admin
- * reset makes them usable immediately (FEATURE-acces-arpent-depuis-omran.md B3).
- * <p>
- * Il n'y a plus <b>aucune</b> exception applicative à {@code authenticated()} : le trou
- * {@code permitAll} qui laissait passer les générateurs de documents a été refermé avec le
- * périmètre commercial. Ce point est structurant pour l'autorisation et pas seulement pour
- * l'authentification — {@code PerimetreCommercialService} déduit le périmètre du principal, donc
- * toute route accessible sans principal est, par construction, une route sans périmètre.
- * N'y rajoutez pas d'exception pour du confort de test manuel.
- * <p>
- * {@code /actuator/health} et {@code /actuator/prometheus} sont ouverts, et ce sont les seules
- * exceptions <b>non applicatives</b> : aucune donnée métier n'y transite. {@code health} ne rend
- * que {@code {"status":"UP"}} — {@code show-details=never} est posé dans
- * {@code application.properties} et doit y rester, sinon l'endpoint divulguerait l'état du
- * {@code DataSource} et du stockage objet. Elles existent parce que leurs appelants — sonde de
- * déploiement du pipeline, scrape Prometheus — n'ont aucun cookie JWT à présenter : derrière
- * l'authentification ils recevraient {@code 401}, et la sonde déclarerait le conteneur en échec
- * en permanence.
- * <p>
- * <b>Cette chaîne de filtres couvre bien le port de management.</b> {@code
- * management.server.port=9091} déplace l'actuator sur un port dédié, non proxifié par Caddy et
- * publié sur {@code 127.0.0.1} seulement — mais la sécurité continue de s'y appliquer. Vérifié
- * en production : {@code 9091/actuator/health} rend {@code 200} sans cookie (la règle matche),
- * {@code 9091/actuator/metrics} rend {@code 401} (aucune règle ne le couvre). Ces deux lignes
- * sont donc <b>porteuses</b>, pas décoratives : les retirer casse la sonde de déploiement et le
- * scrape.
- * <p>
- * Sur le port applicatif 8080 en revanche, ces chemins n'ont plus de handler MVC, donc le
- * matcher ne matche pas et {@code anyRequest().authenticated()} rend {@code 401}. C'est pourquoi
- * {@code https://api.tsiory.tech/actuator/health} ne répond plus depuis le passage au port de
- * management — ce n'est pas une panne.
- * <p>
- * Phase 3 adds {@link EnableMethodSecurity} so {@code @PreAuthorize("hasRole(...)")} works on
- * individual endpoints — {@code UtilisateurAdminController} is the first (and, until another
- * endpoint needs one, only) place in the app that checks a specific role rather than just
- * "authenticated at all".
+ * Toute route exige un principal, hors login, doc OpenAPI et sondes actuator : le périmètre se déduit du principal,
+ * donc une route ouverte est une route sans périmètre (FEATURE-perimetre-commercial.md §9bis.3). Pas d'exception
+ * de confort. Les règles actuator s'appliquent aussi au port de management (9091) : elles sont porteuses.
  */
 @SecurityScheme(name = "cleApi", type = SecuritySchemeType.APIKEY, in = SecuritySchemeIn.HEADER,
         paramName = ApiKeyAuthenticationFilter.EN_TETE,
@@ -86,83 +50,30 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Authentification sans session serveur, JWT dans un cookie httpOnly.
-                //
-                // La protection CSRF dédiée est désactivée parce que SameSite=Strict la remplace :
-                // le navigateur n'attache pas le cookie aux requêtes venues d'un autre site, donc
-                // une page hostile ne peut pas agir au nom de l'utilisateur.
-                //
-                // Cette justification tient tant que le frontend reste sur tsiory.tech
-                // (immo.tsiory.tech aujourd'hui — voir CorsConfig et app.jwt.cookie-same-site).
-                // L'héberger sur un autre domaine enregistrable imposerait SameSite=None, et
-                // ferait tomber cette protection. Ce qui subsisterait alors :
-                //
-                //  - les endpoints modifiant l'état consomment du JSON, et application/json n'est
-                //    pas un type de contenu « simple » : le navigateur impose un préflight, que
-                //    CORS refuse à une origine non listée ;
-                //  - MAIS les deux POST multipart de pièces jointes
-                //    (/api/dossiers/{id}/pieces-jointes et .../reglements/{id}/pieces-jointes)
-                //    ne seraient pas couverts : multipart/form-data EST un type simple, donc
-                //    soumissible sans préflight par un formulaire hébergé n'importe où, cookie
-                //    attaché. L'attaquant ne lirait pas la réponse, mais l'écriture aboutirait.
-                //
-                // Le remède, le cas échéant : exiger un en-tête applicatif sur les méthodes non
-                // sûres — sa seule présence force un préflight, donc le contrôle d'origine. Un
-                // double-submit par cookie ne conviendrait pas, un frontend d'un autre domaine ne
-                // pouvant pas lire un cookie posé par l'API.
+                // CSRF désactivé : SameSite=Strict le remplace tant que le front partage le domaine (CookieJwt).
+                // En SameSite=None, les POST multipart de pièces jointes (type simple, sans préflight) seraient
+                // exposés : il faudrait alors exiger un en-tête applicatif sur les méthodes non sûres.
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Deux refus distincts, deux codes distincts — et la distinction est
-                // fonctionnelle, pas décorative. 401 signifie « je ne sais pas qui tu es » et
-                // déclenche côté frontend le scénario « session expirée » : purge du cookie,
-                // retour à l'écran de connexion. 403 signifie « je sais qui tu es, ce n'est pas
-                // pour toi ». Servir 401 sur un simple manque de rôle déconnecte un utilisateur
-                // parfaitement authentifié, et se reconnecter n'y change rien puisque le rôle
-                // manquera encore.
-                //
-                // CE GESTIONNAIRE EST PORTEUR, et il doit poser le statut LUI-MÊME plutôt que
-                // déléguer à sendError(). Sans lui, le gestionnaire par défaut
-                // (AccessDeniedHandlerImpl) appelle response.sendError(403), ce qui déclenche un
-                // FORWARD vers /error. Ce forward repasse dans la chaîne de sécurité, à un moment
-                // où le contexte d'authentification de la requête initiale a déjà été vidé :
-                // anyRequest().authenticated() ne voit plus personne et récrit la réponse en 401.
-                // Un commercial ouvrant une route réservée à Administrateur recevait donc 401 en
-                // production. setStatus() n'engage aucun forward, donc le 403 parvient au client.
-                //
-                // Ce défaut a survécu longtemps parce qu'il est INVISIBLE SOUS MOCKMVC : MockMvc
-                // ne rejoue pas la dispatch ERROR, si bien qu'un test rendait 403 pendant que
-                // l'application rendait 401. Vérifié par comparaison de deux instances réelles
-                // lancées côte à côte sur la même base. Ne pas revenir au gestionnaire implicite
-                // au motif qu'« un test passe » — c'est exactement ce qui a masqué le problème.
-                // Voir AccesRefuseTest, qui passe par le vrai cookie.
+                // 401 = session expirée côté front (déconnexion), 403 = rôle manquant. setStatus et non sendError :
+                // sendError(403) forwarde vers /error, où le contexte est vidé et la réponse récrite en 401.
+                // Invisible sous MockMvc (pas de dispatch ERROR) ; voir AccesRefuseTest, qui passe par le vrai cookie.
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                         .accessDeniedHandler((request, response, denied) ->
                                 response.setStatus(HttpStatus.FORBIDDEN.value())))
                 .authorizeHttpRequests(auth -> auth
-                        // Real browser CORS preflight requests never carry the cookie — must be
-                        // let through unconditionally or actual cross-origin calls break in prod.
+                        // Un préflight CORS ne porte jamais le cookie : sans cette règle, tout appel cross-origin casse.
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé.
-                        // Voir le javadoc de la classe pour la portée réelle de ces deux règles.
-                        // /actuator/info ne porte que le tag d'image et le commit (InfosBuild),
-                        // déjà publics sur GHCR et GitHub ; le port 9091 n'écoute qu'en loopback.
+                        // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé. health reste muet tant que
+                        // show-details=never ; info ne porte que tag d'image et commit, déjà publics (InfosBuild).
                         .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
-                        // Les générateurs de documents (PDF/Word) étaient ouverts en permitAll pour
-                        // permettre des tests manuels, marqué TEMPORAIRE. Refermé avec le périmètre
-                        // commercial : sans authentification il n'y a pas de principal, donc pas de
-                        // périmètre — n'importe quel PDF de dossier (client, prix, échéancier)
-                        // était téléchargeable sans le moindre cookie, ce qui vidait la feature de
-                        // son sens pour tout document généré. Le front envoie déjà
-                        // credentials:'include' partout, l'impact UI est nul.
                         .anyRequest().authenticated())
-                // Clé d'API (X-Api-Key) des clients machine, AVANT le JWT : une clé présente fait
-                // foi (401 si invalide, 403 hors portée), le cookie n'est lu qu'en son absence.
-                // Voir FEATURE-cle-api-n8n.md §5.
+                // Clé d'API AVANT le JWT : une clé présente fait foi, le cookie n'est lu qu'en son absence (FEATURE-cle-api-n8n.md §5).
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(apiKeyAuthenticationFilter, JwtAuthenticationFilter.class);
         return http.build();

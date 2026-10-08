@@ -14,7 +14,7 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class CommercialService {
 
-    // Confirmed with the user: commercial staff assignable to a Dossier/Prospection.
+    // Liste validée avec l'utilisateur, pas déduite de la base.
     private static final Set<String> COMMERCIAL_KIND_CODES = Set.of("COM", "AGC", "ATC", "ACC", "RC");
 
     private final CfgTierRepository tierRepository;

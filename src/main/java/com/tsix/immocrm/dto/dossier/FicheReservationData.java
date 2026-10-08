@@ -3,11 +3,7 @@ package com.tsix.immocrm.dto.dossier;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/**
- * All fields needed to render the "Fiche de réservation" document (PDF or Word), modeled on the
- * legacy "FICHE RESERVATION MBR" template. Not exposed as JSON — feeds
- * {@code FicheReservationPdfRenderer} / {@code FicheReservationDocxRenderer} only.
- */
+/** Données de la « Fiche de réservation » (modèle légataire « FICHE RESERVATION MBR »), hors JSON. */
 public record FicheReservationData(
         String dossierCode,
         String clientNom,
@@ -20,8 +16,7 @@ public record FicheReservationData(
         BigDecimal superficie,
         String projetNom,
         String projetAdresse,
-        /** Legal entity the project is sold under (CfgProject.cfgCompany.description) — never
-         * hardcode a company name in a renderer, it's per-project (e.g. "ADMOD", "MAYLINE"). */
+        /** Entité juridique du projet ({@code CfgProject.cfgCompany}) : jamais de nom de société en dur. */
         String entrepriseNom,
         String modePaiement,
         BigDecimal montant,

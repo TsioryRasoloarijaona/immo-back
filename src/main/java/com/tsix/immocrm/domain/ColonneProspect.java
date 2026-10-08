@@ -4,35 +4,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Catalogue des colonnes sélectionnables de {@code GET /api/prospects}.
- *
- * <p>C'est la <strong>liste blanche</strong> du paramètre {@code ?colonnes=} et, exposée par
- * {@code GET /api/referentiels/colonnes/prospects}, la source du sélecteur de colonnes côté
- * front — qui n'a donc aucune liste à coder en dur.
- *
- * <h2>Pourquoi ce catalogue existe</h2>
- *
- * <p>La fiche prospect sert <strong>58 champs</strong>, la liste n'en servait que <strong>10</strong>.
- * L'écart n'était pas un choix de produit mais un défaut de conception : aucun moyen pour le front
- * d'en demander davantage. Les colonnes ajoutées ici sont celles que la fiche sert déjà — voir
- * {@code instructions/FEATURE-selecteur-colonnes-prospect-dossier.md}.
- *
- * <h2>Trois choses à savoir avant d'en ajouter</h2>
- *
- * <p><strong>1. Le défaut est intouchable.</strong> {@code parDefaut = true} reproduit exactement
- * les 10 colonnes servies avant ce lot. Y ajouter quoi que ce soit rompt le contrat des clients
- * existants, qui verraient apparaître des clés qu'ils n'ont pas demandées.
- *
- * <p><strong>2. Les associations coûtent une jointure paresseuse par ligne.</strong> Elles ne sont
- * déréférencées que si la colonne est demandée — même discipline que le lot B de la prospection.
- *
- * <p><strong>3. Les tranches d'intérêt sont volontairement absentes.</strong> Elles exigent une
- * requête <em>par prospect</em> ({@code CfgTrancheRepository.tranchesInteret}) : les servir en
- * liste ferait un N+1 de 20 requêtes par page. Elles restent sur la fiche, où la requête est
- * unique. Les exposer en liste demanderait un chargement par lot, comme l'enrichissement de la
- * prospection — un autre lot, avec sa propre mesure.
- *
- * <p>Sans JPA, comme le reste de {@code domain/}.
+ * Catalogue des colonnes de {@code GET /api/prospects} : liste blanche de {@code ?colonnes=}.
+ * Tranches d'intérêt exclues (N+1) : FEATURE-selecteur-colonnes-prospect-dossier.md §3.1.
  */
 public enum ColonneProspect implements Colonne {
 
@@ -86,17 +59,13 @@ public enum ColonneProspect implements Colonne {
     PAYS("pays", "Pays", Groupe.ADRESSE, TypeColonne.TEXTE, false),
     PAYS_RESIDENCE("paysResidence", "Pays de résidence", Groupe.ADRESSE, TypeColonne.TEXTE, false),
     TYPE_RESIDENCE("typeResidence", "Type de résidence", Groupe.ADRESSE, TypeColonne.TEXTE, false),
-    /**
-     * Alimentée par {@code CfgTier.Quality}, <strong>mesurée à 0 ligne sur 13 664</strong> : ce
-     * champ est toujours nul. Conservé au catalogue pour ne pas rompre le contrat de la fiche,
-     * qui l'expose déjà, mais il ne doit pas être proposé comme un filtre utile.
-     */
+    /** {@code CfgTier.Quality}, toujours vide ; gardée parce que la fiche l'expose déjà. */
     PROFESSION("profession", "Profession", Groupe.PROFESSION, TypeColonne.TEXTE, false),
     SALAIRE("salaire", "Salaire", Groupe.PROFESSION, TypeColonne.TEXTE, false),
     COMMERCIAL_ID("commercialId", "Id commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false),
     COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.IDENTITE, TypeColonne.TEXTE, false),
 
-    // -- Piste d'audit. Scalaires, ~100 % en base réelle.
+    // -- Piste d'audit.
     CREE_PAR("creePar", "Créé par", Groupe.AUDIT, TypeColonne.TEXTE, false),
     CREE_LE("creeLe", "Créé le", Groupe.AUDIT, TypeColonne.DATE, false),
     MODIFIE_PAR("modifiePar", "Modifié par", Groupe.AUDIT, TypeColonne.TEXTE, false),

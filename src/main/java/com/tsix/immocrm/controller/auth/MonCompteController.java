@@ -21,9 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Mon compte", description = "Profil de l'utilisateur authentifié et changement "
-        + "volontaire de son mot de passe. Aucun portail de première connexion : "
-        + "mustChangePassword/profileCompleted ne bloquent plus aucune route.")
+@Tag(name = "Mon compte")
 @RestController
 @RequestMapping("/api/mon-compte")
 public class MonCompteController {
@@ -37,23 +35,13 @@ public class MonCompteController {
     }
 
     @GetMapping
-    @Operation(summary = "Profil courant", description = "Le compte authentifié : identité, "
-            + "rôles, et l'état mustChangePassword/profileCompleted. Ces deux drapeaux restent "
-            + "renvoyés pour le contrat mais ne bloquent plus rien : il n'y a plus de portail de "
-            + "première connexion (les comptes viennent d'Omran, déjà renseignés), le front les "
-            + "ignore.")
+    @Operation(summary = "Profil courant")
     public UtilisateurCourantDto moi(@AuthenticationPrincipal AuthenticatedUser principal) {
         return monCompteService.moi(principal);
     }
 
     @PostMapping("/changer-mot-de-passe")
-    @Operation(
-            summary = "Change le mot de passe",
-            description = "Vérifie ancienMotDePasse puis stocke nouveauMotDePasse (bcrypt, min. "
-                    + "8 caractères). Efface mustChangePassword et réémet un cookie access_token "
-                    + "à jour — invalide tous les tokens émis avant cet appel (TokenVersion "
-                    + "incrémenté), y compris sur d'autres appareils."
-    )
+    @Operation(summary = "Change le mot de passe")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Mot de passe changé, nouveau cookie posé."),
             @ApiResponse(responseCode = "400", description = "Champs manquants, nouveau mot de passe trop court, ou ancien mot de passe incorrect.")
@@ -67,12 +55,7 @@ public class MonCompteController {
     }
 
     @PatchMapping("/profil")
-    @Operation(
-            summary = "Complète le profil (\"première connexion\")",
-            description = "Renseigne prenom/nom/telephone/email/dateNaissance (adresse "
-                    + "optionnelle) sur la fiche employé (CfgTier) liée au compte, et marque "
-                    + "profileCompleted=true. Réémet un cookie access_token à jour."
-    )
+    @Operation(summary = "Complète le profil (\"première connexion\")")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Profil complété, nouveau cookie posé."),
             @ApiResponse(responseCode = "400", description = "Un champ obligatoire manque, ou le compte n'est lié à aucune fiche employé.")

@@ -20,21 +20,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Authentification par clé d'API ({@code X-Api-Key}) pour les clients machine — n8n d'abord.
- * Voir {@code instructions/FEATURE-cle-api-n8n.md} §5.
- *
- * <p>Placé <b>avant</b> {@link JwtAuthenticationFilter}. Trois issues :
- * <ul>
- *   <li>pas d'en-tête : rien ne se passe, le cookie JWT est lu comme avant ;</li>
- *   <li>clé inconnue, révoquée ou compte désactivé : <b>401</b> immédiat — la clé présente fait
- *       foi, un cookie éventuel n'est pas consulté (sinon une clé révoquée « marcherait » encore
- *       depuis un navigateur connecté, et l'administrateur ne le verrait jamais) ;</li>
- *   <li>clé valide mais route hors portée : <b>403</b> {@code HORS_PORTEE}, écrit ici comme le
- *       sous forme de {@code ProblemDetail} avec un {@code code} ; sinon le principal est posé et la chaîne continue.</li>
- * </ul>
- *
- * <p>Le principal est le même {@link AuthenticatedUser} que celui du JWT : périmètre, auteur
- * ({@link UtilisateurAffiche}) et {@code @PreAuthorize} n'ont rien à savoir de la clé.
+ * {@code X-Api-Key} des clients machine, placé avant le JWT (FEATURE-cle-api-n8n.md §5). Clé présente mais invalide
+ * = 401 sans lire le cookie (sinon une clé révoquée marcherait depuis un navigateur connecté) ; hors portée = 403
+ * {@code HORS_PORTEE}. Même principal {@link AuthenticatedUser} que le JWT : périmètre et rôles s'appliquent pareil.
  */
 @Component
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {

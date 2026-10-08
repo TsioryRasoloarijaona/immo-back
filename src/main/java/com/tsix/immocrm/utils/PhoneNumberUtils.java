@@ -1,16 +1,8 @@
 package com.tsix.immocrm.utils;
 
 /**
- * Normalizes phone numbers for cross-column, format-agnostic lookups (see
- * {@code GET /api/hotline/recherche}). Legacy {@code CfgTier}/{@code ComProspection} phone data
- * is stored inconsistently — with/without the "+212" country code, with/without spaces —
- * confirmed empirically against the real {@code yesRems} database (e.g. "+212633659468",
- * "662653125" and "6 61 40 30 51" all refer to the same kind of number). Both the Java-side
- * search key and the JPQL query applied to each phone column (see
- * {@code CfgTierRepository#findByNormalizedPhone} and
- * {@code ComProspectionRepository#findByNormalizedTempTel}) strip everything but digits and keep
- * only the last 9 (a Moroccan local number, without country code), so "+212 6 12 34 56 78",
- * "212612345678" and "0612345678" all normalize to the same key.
+ * Clé de recherche hotline : chiffres seuls, 9 derniers gardés (numéro marocain sans indicatif), comme la requête
+ * appliquée aux colonnes ({@code CfgTierRepository#findByNormalizedPhone}) ; les deux doivent rester identiques.
  */
 public final class PhoneNumberUtils {
 
@@ -19,11 +11,7 @@ public final class PhoneNumberUtils {
     private PhoneNumberUtils() {
     }
 
-    /**
-     * Strips everything but digits from {@code rawPhoneNumber} and keeps only the last
-     * {@value #LOCAL_NUMBER_LENGTH} characters (returns the digits as-is if there are fewer).
-     * Returns an empty string for {@code null} or a number with no digits at all.
-     */
+    /** Moins de 9 chiffres : rendus tels quels ; {@code null} ou aucun chiffre : chaîne vide. */
     public static String normalize(String rawPhoneNumber) {
         if (rawPhoneNumber == null) {
             return "";

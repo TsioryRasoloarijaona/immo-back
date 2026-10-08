@@ -16,34 +16,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Métriques Micrometer du pipeline de synchronisation descendante, exposées sur
- * {@code /actuator/prometheus} (déjà câblé, port de management). Elles répondent aux deux
- * questions d'un tableau de suivi : <b>le pipeline est-il vivant ?</b> et <b>tout ce qui est
- * écrit dans la source — par ce backend comme par le logiciel de bureau — est-il bien importé
- * dans la copie ?</b>
- *
- * <p>Le signal central est le <b>retard par table</b> ({@code sync.watermark.lag}) : version
- * Change Tracking courante de la source moins le filigrane de la copie. {@code 0} = tout est
- * importé ; un retard qui persiste = une table bloquée (typiquement un ordre de clés étrangères
- * pas encore satisfait, qui converge normalement au cycle suivant). Les deux flux d'écriture
- * convergent ici, puisqu'ils passent tous deux par le Change Tracking de la source.
- *
- * <p>Même condition d'activation que {@link SynchronisationDescendante} : en mono-base, il n'y a
- * pas de pipeline, donc ni ce bean ni ses métriques.
- *
- * <h2>Métriques exposées</h2>
- * <ul>
- *   <li>{@code sync_cycle_duration_seconds} (timer) — durée d'un cycle.</li>
- *   <li>{@code sync_rows_merged_total} / {@code sync_rows_deleted_total} (compteurs) — lignes
- *       fusionnées / suppressions répercutées, cumulées.</li>
- *   <li>{@code sync_table_failures_total} (compteur) — passes de table en échec, cumulées.</li>
- *   <li>{@code sync_tables_failed} (jauge) — tables en échec au <b>dernier</b> cycle.</li>
- *   <li>{@code sync_last_success_timestamp_seconds} (jauge) — epoch du dernier cycle exécuté ;
- *       {@code time() - cette valeur} donne l'âge, sur lequel alerter (pipeline muet).</li>
- *   <li>{@code sync_source_version} (jauge) — version Change Tracking courante de la source au
- *       dernier cycle.</li>
- *   <li>{@code sync_watermark_lag{table="…"}} (multi-jauge) — retard par table.</li>
- * </ul>
+ * Métriques du pipeline de synchronisation descendante (FEATURE-moniteur-pipeline-synchro.md). Signal central :
+ * {@code sync_watermark_lag} par table, version source moins filigrane ; un retard qui persiste = table bloquée.
  */
 @Component
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -86,14 +60,7 @@ public class MoniteurSynchronisation {
                 .register(registry);
     }
 
-    /**
-     * Enregistre le résultat d'un cycle et rafraîchit le retard par table. Appelé en fin de
-     * cycle réel (jamais pour un cycle sauté : un cycle sauté signifie qu'un autre tourne, donc
-     * que le pipeline est vivant).
-     *
-     * @param resultat        le résumé du cycle
-     * @param retardsParTable retard (version source − filigrane) par nom de table
-     */
+    /** Jamais appelé pour un cycle sauté : un autre tourne, le pipeline est donc vivant. */
     void enregistrerCycle(ResultatSync resultat, Map<String, Long> retardsParTable) {
         dureeCycle.record(resultat.dureeMs(), TimeUnit.MILLISECONDS);
         lignesFusionnees.increment(resultat.fusions());

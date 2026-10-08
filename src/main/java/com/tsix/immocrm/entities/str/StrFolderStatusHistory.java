@@ -18,14 +18,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * dbo_StrFolderStatusHistory — the Dossier status-change audit log (confirmed: this is the
- * source {@link com.tsix.immocrm.domain.TransitionsValidees} was mined from). {@code Description}
- * is free text attached to a specific transition (confirmed real usage, e.g. "ANNULATION
- * AFFECTATION") — {@code PATCH /api/dossiers/{id}/statut}'s {@code note} is written here.
- *
- * <p>{@code AdmUserId} kept as a plain UUID (no {@code AdmUser} entity in this codebase, and no
- * auth/session context exists yet to populate it from our API) — same "unmapped FK" pattern used
- * for {@code AdmAttachedFile.CategoryId} elsewhere.
+ * Journal des changements de statut d'un dossier (source de {@link com.tsix.immocrm.domain.TransitionsValidees}).
+ * {@code Description} reçoit la {@code note} de {@code PATCH /api/dossiers/{id}/statut}.
  */
 @Getter
 @Setter

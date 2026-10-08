@@ -12,17 +12,9 @@ import org.hibernate.annotations.Nationalized;
 import java.util.UUID;
 
 /**
- * dbo_AdmSequence — the legacy document-numbering counter (e.g. {@code Code = "Dossier de
- * vente"}). Confirmed against real data: its {@code SeqValue} (379) exactly matches the highest
- * existing {@code ComFolder.Code} sequence number ("... 2026/00379") — this is the real,
- * authoritative source for the next Dossier number, not something to recompute via
- * {@code MAX(ComFolder.Code)}. One row per document type; the "Dossier de vente" row is global
- * (not scoped per project/tranche — every project/prefix shares the same counter, confirmed: real
- * codes count down 379→378→377 across different prefixes APF/ART/ARS with no gaps).
- *
- * <p>{@code SeqValueNumber} is the zero-padding width for the number (5 → "00380"),
- * {@code SeqYearNumber} the width for the year (4 → "2026"). {@code BasedOnSystemYear = true}
- * means the year in the formatted code is the current system year, not a stored one.
+ * Compteur de numérotation du légataire, une ligne par type de document : source du prochain code,
+ * pas {@code MAX(Code)}. La ligne « Dossier de vente » est globale, partagée par tous les préfixes.
+ * {@code SeqValueNumber}/{@code SeqYearNumber} = largeurs de remplissage ; {@code BasedOnSystemYear} = année système.
  */
 @Getter
 @Setter

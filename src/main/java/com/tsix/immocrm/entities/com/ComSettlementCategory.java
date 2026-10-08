@@ -17,13 +17,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * dbo_ComSettlementCategory — the real "Catégorie" lookup for échéancier lines
- * ({@code ComDocument.ComSettlementCategoryId}), e.g. AUTO-FINANCEMENT / AVANCE / FRAIS SYNDIC.
- * Confirmed against real data: {@code ComDocument.StlSettlementTypeId} is NULL on every real
- * échéance row — {@code StlSettlementType} is unrelated (it's the payment-method lookup used by
- * {@code StlSettlement}, a different entity). Categories are scoped per {@code StkVocation}
- * (e.g. "AVANCE" only exists for vocation VENTE) and the boolean flags below let business logic
- * find "the" advance/auto-financement/syndic category without hardcoding a UUID.
+ * « Catégorie » d'une échéance (AVANCE, AUTO-FINANCEMENT…), propre à chaque {@code StkVocation} ;
+ * les drapeaux {@code IsSale*} la désignent sans UUID en dur. Pas {@code StlSettlementType}, toujours NULL sur les échéances.
  */
 @Getter
 @Setter
@@ -56,9 +51,7 @@ public class ComSettlementCategory {
     @Column(name = "IsSaleAutoFinancment")
     private Boolean isSaleAutoFinancment;
 
-    // NOT the same as isCredit above (a generic accounting credit/debit flag, unrelated here) —
-    // this is the "Crédit" (bank loan) bucket of the Fiche Dossier de Vente MONTANTS box, part of
-    // the IsSale* family alongside isSaleExpense/isSaleAdvance/isSaleAutoFinancment/... below.
+    // Pas isCredit (crédit/débit comptable) : le « Crédit » bancaire du bloc MONTANTS de la fiche dossier.
     @Column(name = "IsSaleCredit")
     private Boolean isSaleCredit;
 

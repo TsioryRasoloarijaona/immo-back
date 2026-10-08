@@ -522,8 +522,7 @@ public class StkItem {
     @Column(name = "UndergroundParkingCoef", precision = 26, scale = 6)
     private BigDecimal undergroundParkingCoef;
 
-    // -- Fiche de réservation: "imm IMM01, porte {Description}, au {StkFloor}" — confirmed
-    // against real data (StkBuilding.Code = "IMM01", StkFloor.Description = "Rez de chaussée").
+    // Fiche de réservation : "imm {StkBuilding.Code}, porte {Description}, au {StkFloor.Description}".
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkBuildingId")
     private StkBuilding stkBuilding;
@@ -532,12 +531,10 @@ public class StkItem {
     @JoinColumn(name = "StkFloorId")
     private StkFloor stkFloor;
 
-    /** Physical nature (e.g. "TER" for terrain/land) — see {@link StkKind}. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkKindId")
     private StkKind stkKind;
 
-    /** "Type Présentation" (legacy "Articles" grid) — see {@link StkPresentationType}. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkPresentationTypeId")
     private StkPresentationType stkPresentationType;

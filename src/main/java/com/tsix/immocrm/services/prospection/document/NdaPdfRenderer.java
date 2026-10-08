@@ -19,10 +19,8 @@ import java.io.ByteArrayOutputStream;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Renders the "NDA AYAD PRIVATE" (Expression of Interest Form / Non-Disclosure Agreement) as a
- * PDF, modeled on the legacy template (see
- * {@code instructions/templates/NDA AYAD PRIVATE.pdf}) — English throughout, matching the
- * original form. Uses OpenPDF ({@code org.openpdf.text}).
+ * Renders the "NDA AYAD PRIVATE" PDF, modeled on {@code instructions/templates/NDA AYAD PRIVATE.pdf} —
+ * in English, like the original form.
  */
 @Component
 public class NdaPdfRenderer {

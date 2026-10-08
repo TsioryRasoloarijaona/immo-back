@@ -46,24 +46,12 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
 /**
- * Rend la « Fiche de réservation » en PDF, à l'identique du document légataire.
- *
- * <p>Le rapport d'origine ne dessine rien : chaque marque a un <b>fond de page pré-imprimé</b>
- * (cadre, logo, libellés, cases, paragraphes fixes, bandeau de pied) posé en filigrane, sur
- * lequel une quinzaine de valeurs sont incrustées. Ce générateur fait la même chose, et c'est
- * ce qui rend bordures, espacements et polices exacts : ils ne sont pas reproduits, ils sont
- * <i>les mêmes</i>. La version précédente redessinait tout en primitives, ce qui ne pouvait pas
- * coïncider — la police du fond n'est pas Helvetica.
- *
- * <p><b>La marque vient du préfixe du code dossier</b>, comme dans le rapport légataire, dont les
- * pages s'appellent APF / ARS / ART / MBR. C'est aussi ce qui décide de la société mentionnée,
- * du projet cité et des clauses imprimées : un dossier ADMOD et un dossier GHRIZA n'ont ni le
- * même en-tête, ni les mêmes conditions.
+ * « Fiche de réservation » : comme le rapport légataire, valeurs incrustées sur le <b>fond de page
+ * pré-imprimé</b> de la marque (préfixe du code dossier), qui porte en-tête, société et clauses.
  */
 @Component
 public class FicheReservationPdfRenderer {
 
-    /** Une fiche de réservation est un document contractuel : la police reste noire et nette. */
     private static final Color NOIR = Color.BLACK;
 
     /** Arial dans le rapport d'origine ; Helvetica en est l'équivalent métrique en PDF. */
@@ -117,13 +105,8 @@ public class FicheReservationPdfRenderer {
     static final String MARQUE_ARS = "ARS";
 
     /**
-     * Marque déduite du préfixe du code dossier (« ARS 2026/00370 » → {@code ARS}).
-     *
-     * <p>Un préfixe non couvert est un <b>refus explicite</b>, pas un repli. Émettre un reçu de
-     * réservation sous l'en-tête et les conditions d'une autre société serait pire qu'une erreur
-     * visible : c'est une pièce remise au client. Les marques MBR (Mansouria Beach Resort) et ART
-     * (Residence Tribeca) existent dans le rapport légataire et représentent 221 dossiers réels —
-     * les ajouter demande leur fond et le relevé de leurs cases.
+     * « ARS 2026/00370 » → {@code ARS}. Préfixe non couvert = <b>refus</b>, pas repli : pièce remise au
+     * client. MBR et ART existent côté légataire ; les ajouter demande leur fond et le relevé des cases.
      */
     private static String marque(String codeDossier) {
         String prefixe = codeDossier == null || codeDossier.length() < 3
@@ -145,12 +128,8 @@ public class FicheReservationPdfRenderer {
     }
 
     /**
-     * Refuse d'émettre si la société du projet ne correspond pas à la marque déduite du code.
-     *
-     * <p>Le nom de la société n'est plus une valeur incrustée : il fait partie du fond pré-imprimé,
-     * comme dans le rapport légataire. Cette garantie-là ne peut donc plus se vérifier en lisant le
-     * PDF — elle doit être <b>appliquée</b> ici. Sans ce contrôle, un dossier codé {@code APF…} mais
-     * rattaché à une autre entité sortirait sous l'en-tête et les clauses d'ADMOD, en silence.
+     * La société est dans le fond pré-imprimé, pas incrustée : sans ce contrôle, un dossier {@code APF…}
+     * d'une autre entité sortirait en silence sous l'en-tête et les clauses d'ADMOD.
      */
     private static void verifierCoherenceSociete(String marque, String entreprise) {
         String attendue = societeAttendue(marque);
@@ -191,11 +170,8 @@ public class FicheReservationPdfRenderer {
     }
 
     /**
-     * Écrit une valeur dans sa boîte, centrée verticalement.
-     *
-     * <p>{@code showTextAligned} placerait le texte sur une ligne de base, ce qui obligerait à
-     * réajuster à chaque changement de taille. Une colonne de la hauteur de la case, avec un
-     * décalage d'un tiers de cadratin, garde l'alignement optique sur les filets du fond.
+     * Centrée verticalement dans sa boîte par une colonne plutôt que {@code showTextAligned}, qui
+     * raisonne en ligne de base et obligerait à réajuster à chaque taille de police.
      */
     private static void ecrire(PdfContentByte canevas, Zone zone, String valeur) {
         if (zone == null || valeur == null || valeur.isBlank()) {
@@ -206,19 +182,17 @@ public class FicheReservationPdfRenderer {
         float largeur = zone.largeurCm() * CM;
         float interligne = zone.taille() * 1.15f;
 
-        // La colonne est construite AUTOUR de la ligne de base voulue, pas autour de la case.
-        // Sinon une case plus basse que l'interligne — les valeurs incrustées dans le paragraphe
-        // font 0,4 cm, soit 11,3 pt, pour un interligne de 11,5 pt à 10 pt de corps — ne peut
-        // accueillir aucune ligne : OpenPDF n'écrit rien, sans erreur ni trace.
+        // Colonne construite autour de la ligne de base, pas de la case : une case plus basse que
+        // l'interligne (cas des valeurs du paragraphe) ne recevrait aucune ligne, et OpenPDF n'écrit
+        // alors rien, sans erreur.
         float centre = (PAGE_H - zone.yCm() - zone.hauteurCm() / 2f) * CM;
         float ligneDeBase = centre - zone.taille() * 0.35f;
 
         ColumnText colonne = new ColumnText(canevas);
         colonne.setLeading(interligne);
         colonne.setAlignment(alignement(zone.alignement()));
-        // Hauteur volontairement limitée à une seule ligne : une valeur trop longue est tronquée,
-        // comme dans le document légataire (le mode de paiement l'est déjà sur la référence APF).
-        // Sans ça elle passerait à la ligne et déborderait de la case imprimée sur le fond.
+        // Une seule ligne : une valeur trop longue est tronquée, comme dans le document légataire,
+        // plutôt que de déborder de la case imprimée.
         colonne.setSimpleColumn(x, ligneDeBase - 0.2f, x + largeur, ligneDeBase + interligne);
         colonne.addText(new Phrase(valeur, police));
         try {

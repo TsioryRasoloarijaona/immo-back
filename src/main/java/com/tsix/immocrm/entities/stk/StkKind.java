@@ -13,12 +13,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * dbo.StkKind — the physical nature of a {@link StkItem} (e.g. "TER" for terrain/land, vs a
- * built lot). Distinct from {@link StkItemCategory}/{@link StkItemType} (marketing
- * category/type). Drives conditional wording in generated documents (the legacy "Acte de
- * réservation" template omits floor/building and the "achèvement des travaux" mention, and
- * renumbers a whole section, when {@code StkKind.Code == "TER"} — land has no construction to
- * complete and no keys/syndic to manage) — see {@code ActeReservationService}.
+ * Nature physique d'un article ("TER" = terrain), distincte de la catégorie/typologie commerciales.
+ * Pour "TER", l'acte de réservation omet étage/immeuble et l'achèvement des travaux : voir {@code ActeReservationService}.
  */
 @Getter
 @Setter

@@ -129,7 +129,9 @@ This repo is mid-way through building out a REST API (~27 endpoints across Prosp
     - `@ApiResponses`/`@ApiResponse` documenting at least the non-200 cases (404, 400, 409...) with what triggers them.
     - `@Schema(description = ...)` on every DTO `record` and on its individual components — explain what the field represents and where it comes from (e.g. "computed server-side", "null if not yet reached"), not just repeat the field name.
     - Write descriptions in French, matching the DTO/API layer's existing business language (see the "Naming mismatch" note above).
+    - **Where the text lives**: a description that fits on one line (≤ 120 characters) stays in the annotation. Anything longer goes in Markdown — `src/main/resources/api-docs/<domaine>/<Controller>.md` (`##` = Java method name, `### param <nom>`, `### reponse <code>`, text under `#` = the `@Tag`) or `api-docs/schemas/<Record>.md` (`##` = field). It is injected at startup; an orphan section or a text present in both places fails the boot. See `instructions/FEATURE-commentaires-et-docs-api.md`.
     This applies going forward to all endpoints, not only new ones — retrofit an existing endpoint's docs if you're touching it substantially anyway, but don't go out of scope to backfill unrelated ones.
+11. **Comments are for traps, not for history.** Keep a comment only when it states something non-obvious and true — a legacy-schema quirk, a SQL Server/Hibernate constraint, the reason a choice looks wrong but isn't — in **≤ 3 lines**, next to the line concerned. Point to the spec for the long reasoning (`// voir FEATURE-xxx.md §n`). **Never** put in code: measurements or dates ("1 507 / 48 213", "au 08/09/2026…") — they go in the spec; history ("jusqu'ici", "l'ancienne version") — that is git's job; paraphrase of the code; class Javadoc longer than 3 lines.
 
 ## L'aide en ligne d'OMRAN, extraite : `instructions/REFERENCE-aide-omran.md`
 

@@ -8,7 +8,6 @@ import java.util.UUID;
 
 public interface StrFolderStatusHistoryRepository extends JpaRepository<StrFolderStatusHistory, UUID> {
 
-    // GET /api/dossiers/{id}/historique — full, unpaged list (merged in-memory with the other
-    // event sources before pagination; see DossierHistoriqueService).
+    // Non paginée : fusionnée en mémoire avec les autres sources avant pagination (DossierHistoriqueService).
     List<StrFolderStatusHistory> findByComFolderIdOrderByDocDateAsc(UUID comFolderId);
 }

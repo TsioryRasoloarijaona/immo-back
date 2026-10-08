@@ -8,19 +8,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.UUID;
 
 /**
- * Garde du paramètre {@code trancheId} du tableau de bord et de {@code GET /api/clients}
- * ({@code instructions/FEATURE-dashboard-filtre-tranche.md}, R1) : réservé aux administrateurs.
- *
- * <p>Le contrôle lit les autorités de l'appelant authentifié — la même source que
- * {@code @PreAuthorize("hasRole('Administrateur')")} — et jamais un paramètre de requête. Sans
- * {@code trancheId}, il ne fait rien : l'accès d'un commercial reste exactement celui d'avant.
- *
- * <p>403 et non 404 : l'appelant a lui-même nommé un filtre qu'il n'a pas le droit d'utiliser, il
- * n'y a pas d'existence de ressource à cacher.
+ * {@code trancheId} du tableau de bord et des clients réservé aux administrateurs, lu dans les autorités
+ * (comme {@code hasRole}), jamais dans la requête ; 403, rien à cacher ({@code FEATURE-dashboard-filtre-tranche.md} R1).
  */
 public final class FiltreTrancheAdministrateur {
 
-    /** Autorité Spring de l'{@code AdmRole} « Administrateur » ({@code hasRole('Administrateur')}). */
     static final String ROLE_ADMINISTRATEUR = "ROLE_Administrateur";
 
     private FiltreTrancheAdministrateur() {

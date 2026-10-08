@@ -45,18 +45,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Backs {@code GET /api/encaissements} — reproduit l'écran legacy "Encaissements Vente" (module
- * Vente → onglet "Encaissements Vente" d'OMRAN Estate). Toujours restreint aux règlements liés à
- * au moins une échéance de Dossier de vente ({@code StlSettlementLine.ComDocumentId} non nul) —
- * un {@code StlSettlement} peut en théorie aussi servir des achats/locations (BuyDocumentId/
- * RntDocumentId), hors périmètre de cet endpoint.
- *
- * <p>Le filtre réel de l'écran legacy a été relevé dans la trace d'audit SQL Server du 11/09/2026
- * (écran {@code Yes.Com.Front.Credit.SettlementList}) et est transcrit dans
- * {@code instructions/FEATURE-encaissements-conformite-legataire.md}. Deux de ses clauses y sont
- * reproduites — {@code IsCredit = 1} et le filtre par tranche ; une troisième ne l'est pas : le
- * rattachement au module Vente par {@code AdmModuleId}, qui ferait entrer les encaissements non
- * affectés. Voir le §4 de la spec, décision produit ouverte.
+ * Écran « Encaissements Vente » d'OMRAN. Le filtre {@code AdmModuleId} du légataire n'est pas repris
+ * (il ferait entrer les non affectés) — voir {@code FEATURE-encaissements-conformite-legataire.md} §4.
  */
 @Service
 @Transactional(readOnly = true)
@@ -94,22 +84,14 @@ public class EncaissementService {
             spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
                     root, cb, groupeColonne.chemin(), granularite, groupeValeur));
         }
-        // Périmètre commercial : ne renvoie que les règlements rattachés à un dossier d'un projet
-        // affecté (plus ceux qu'aucun projet ne résout — §6.4). Prédicat neutre si l'appelant
-        // n'est pas restreint.
+        // Les règlements qu'aucun projet ne résout restent visibles (FEATURE-perimetre-commercial.md §6.4).
         return settlementRepository.findAll(spec.and(perimetreService.filtreEncaissements()), pageable)
                 .map(s -> toDto(s, colonnes));
     }
 
     /**
-     * Replie {@code GET /api/encaissements} en groupes — voir
-     * {@code instructions/FEATURE-colonnes-groupement-encaissements.md}.
-     *
-     * <p>Réutilise {@link #specEncaissements} <strong>à l'identique</strong>, périmètre commercial
-     * compris : c'est ce qui garantit que la somme des effectifs des groupes retombe sur le
-     * {@code totalElements} de la liste non groupée. Reconstruire les filtres en parallèle les
-     * ferait diverger au premier ajout — et pour le périmètre, ferait apparaître dans un total des
-     * règlements que l'appelant n'a pas le droit de lire.
+     * Même {@link #specEncaissements} et même périmètre que la liste : la somme des groupes retombe
+     * sur son {@code totalElements}, sans règlement que l'appelant n'a pas le droit de lire.
      */
     public ResultatGroupement grouper(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
                                        UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
@@ -127,13 +109,7 @@ public class EncaissementService {
                 agregats, tri, inclureSansValeur, pageable);
     }
 
-    /**
-     * Les filtres de la liste des encaissements, extraits pour être partagés avec le groupement.
-     *
-     * <p>N'inclut délibérément <strong>pas</strong> le périmètre commercial : les deux appelants
-     * l'ajoutent explicitement, ce qui rend son absence visible à la lecture plutôt que cachée dans
-     * une composition. Même convention que {@code DossierService#specDossiers}.
-     */
+    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement (comme {@code specDossiers}). */
     private static Specification<StlSettlement> specEncaissements(
             List<UUID> entiteIds, List<UUID> typeIds, List<String> etats, UUID compteId,
             UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
@@ -142,9 +118,8 @@ public class EncaissementService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Restreint aux règlements "Vente" : au moins une ligne rattachée à une échéance
-            // (ComDocument) de Dossier de vente — un StlSettlement pourrait sinon aussi bien
-            // servir un achat (BuyDocumentId) ou une location (RntDocumentId).
+            // Vente seulement : un StlSettlement peut aussi servir un achat (BuyDocumentId) ou une
+            // location (RntDocumentId).
             Subquery<UUID> venteSubquery = query.subquery(UUID.class);
             var line = venteSubquery.from(StlSettlementLine.class);
             venteSubquery.select(line.get("id"))
@@ -153,10 +128,8 @@ public class EncaissementService {
                             cb.isNotNull(line.get("comDocument"))));
             predicates.add(cb.exists(venteSubquery));
 
-            // Encaissement, jamais décaissement. L'écran legacy pose « AND IsCredit = 1 » sans
-            // condition ; nous le reproduisons à l'identique. Colonne renseignée sur la totalité
-            // des lignes réelles (0 NULL sur 3 243), et EcheancierService pose Boolean.TRUE à la
-            // création, donc le test strict n'escamote rien.
+            // Encaissement, jamais décaissement : « IsCredit = 1 » du légataire. Jamais NULL en base
+            // (FEATURE-encaissements-conformite-legataire.md §3.1), le test strict n'escamote rien.
             predicates.add(cb.isTrue(root.get("isCredit")));
 
             if (!CollectionUtils.isEmpty(entiteIds)) {
@@ -188,11 +161,8 @@ public class EncaissementService {
                 predicates.add(cb.exists(dossierSubquery));
             }
             if (!CollectionUtils.isEmpty(trancheIds)) {
-                // L'écran legacy passe par StlSettlementRelationView.CfgTrancheId ; le chemin par
-                // les lignes donne exactement le même résultat côté Vente (mesuré : 644 couples
-                // (règlement, tranche) des deux côtés, aucune divergence dans ce sens). Les 5
-                // couples que seule la vue porte sont des relations d'achat et de location, déjà
-                // hors du périmètre de cet endpoint — inutile donc de mapper la vue.
+                // Le légataire passe par StlSettlementRelationView ; côté Vente, le chemin par les
+                // lignes donne le même résultat (FEATURE-encaissements-conformite-legataire.md §3.2).
                 Subquery<UUID> trancheSubquery = query.subquery(UUID.class);
                 var trancheLine = trancheSubquery.from(StlSettlementLine.class);
                 trancheSubquery.select(trancheLine.get("id"))
@@ -240,28 +210,19 @@ public class EncaissementService {
         };
     }
 
-    /**
-     * {@code GET /api/encaissements/{id}} : détail d'un règlement, même forme que les lignes de
-     * {@link #findAll}. Pas de restriction "Vente uniquement" ici contrairement à {@code findAll}
-     * — un id direct désigne un {@code StlSettlement} précis, peu importe son origine ; en pratique
-     * seuls des ids issus de la liste (donc déjà scopés Vente) sont attendus côté front.
-     */
+    /** Pas de restriction « Vente » : un id direct désigne un règlement précis, quelle que soit son origine. */
     public EncaissementDetailDto findById(UUID id) {
         StlSettlement settlement = settlementRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Encaissement introuvable: " + id));
-        // Toutes les colonnes : une fiche dit tout. Contrairement à la liste, sa forme n'est pas
-        // filtrable — voir l'entête d'EncaissementDetailDto.
+        // Toutes les colonnes : la fiche n'est pas filtrable par ?colonnes=.
         return EncaissementDetailDto.de(
                 toDto(settlement, EnumSet.allOf(ColonneEncaissement.class)),
                 affectations(id));
     }
 
     /**
-     * Les échéances que ce règlement solde, montant croissant.
-     *
-     * <p>C'est la réponse à « ce règlement, il a payé quoi ? », que la forme de liste ne sait pas
-     * donner : elle n'expose qu'un {@code dossierCode}, celui de la première ligne. Sur les 8
-     * règlements réels qui couvrent plusieurs dossiers, ce champ en cache donc un ou deux.
+     * Échéances soldées, montant croissant. La liste n'expose que le dossier de la première ligne,
+     * or un règlement peut couvrir plusieurs dossiers ({@code FEATURE-affectations-encaissement.md}).
      */
     private List<AffectationDto> affectations(UUID settlementId) {
         return settlementLineRepository.findAffectationsBySettlementId(settlementId).stream()
@@ -287,15 +248,7 @@ public class EncaissementService {
                 Champs.de(dossier, ComFolder::getCode));
     }
 
-    /**
-     * Mappe un règlement, en ne payant que les colonnes demandées.
-     *
-     * <p>Deux d'entre elles coûtent une <strong>requête par ligne</strong> :
-     * {@code dossierId}/{@code dossierCode} (le dossier se résout par les lignes du règlement) et
-     * {@code montantBrutRestant} (somme des affectations). Elles restent dans la sélection par
-     * défaut — le comportement historique est intact — mais un client qui passe un
-     * {@code ?colonnes=} sans elles ne les paie plus.
-     */
+    /** {@code dossierId}/{@code dossierCode} coûtent une requête par ligne : chargés seulement si demandés. */
     private EncaissementDto toDto(StlSettlement s, Set<ColonneEncaissement> colonnes) {
         UUID dossierId = null;
         String dossierCode = null;
@@ -310,18 +263,15 @@ public class EncaissementService {
 
         BigDecimal montantBrut = s.getAmount() != null ? s.getAmount() : BigDecimal.ZERO;
 
-        // La part affectée vient désormais de l'association pré-agrégée, plus d'une requête par
-        // ligne : c'est ce qui rend la colonne sommable par /groupes, et c'est un N+1 de moins.
-        // La soustraction reste en Java — le total de groupe applique exactement la même, sur
-        // SUM(amount) - SUM(affecte), donc la ligne et sa bande « Total : » ne peuvent pas diverger.
+        // Part affectée pré-agrégée (sommable par /groupes). Le total de groupe fait la même
+        // soustraction, SUM(amount) - SUM(affecte) : ligne et bande « Total : » ne divergent pas.
         BigDecimal affecte = s.getAffectation() != null && s.getAffectation().getMontantAffecte() != null
                 ? s.getAffectation().getMontantAffecte()
                 : BigDecimal.ZERO;
         BigDecimal montantBrutRestant = montantBrut.subtract(affecte);
 
-        // Portée par la @Formula de l'entité, pour la même raison. Le repli sur le calcul Java
-        // couvre l'entité construite en mémoire et non relue — une formule n'est peuplée qu'au
-        // chargement, jamais à la construction.
+        // Net = brut − RS − timbre, porté par la @Formula de l'entité ; le repli Java couvre l'entité
+        // construite en mémoire, qu'une formule ne peuple jamais.
         BigDecimal montantNet = s.getMontantNetCalcule() != null
                 ? s.getMontantNetCalcule()
                 : montantBrut
@@ -334,8 +284,7 @@ public class EncaissementService {
         StlDeposit depot = s.getStlDeposit();
         CfgTier tier = s.getTier();
         CfgTier banque = s.getCfgBank();
-        // Seule association hors sélection par défaut : une jointure paresseuse de plus par ligne,
-        // payée seulement si la colonne est demandée — même discipline que ColonneProspect.
+        // Une jointure paresseuse par ligne, payée seulement si la colonne est demandée.
         CfgTier tierPayeur = colonnes.contains(ColonneEncaissement.TIER_PAYEUR_ID)
                 || colonnes.contains(ColonneEncaissement.TIER_PAYEUR_NOM)
                 ? s.getTierPayer() : null;

@@ -24,10 +24,7 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montan
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.pourcentageRatio;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 
-/**
- * Renders the "Fiche Bancaire" as a PDF, modeled on the legacy "FICHE BANCAIRE" template — a
- * mortgage-application support sheet. Uses OpenPDF ({@code org.openpdf.text}).
- */
+/** « Fiche Bancaire » en PDF (template legacy « FICHE BANCAIRE », appui de demande de crédit). */
 @Component
 public class FicheBancairePdfRenderer {
 
