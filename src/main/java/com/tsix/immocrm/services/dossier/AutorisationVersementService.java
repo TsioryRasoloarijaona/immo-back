@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -69,11 +70,11 @@ public class AutorisationVersementService {
         if (folder.getCfgCustomer() != null) {
             clients.add(toClient(folder.getCfgCustomer()));
         }
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            if (coAcquereur.getCfgTier() != null) {
-                clients.add(toClient(coAcquereur.getCfgTier()));
-            }
-        }
+        folderCustomerRepository.findByComFolderId(dossierId).stream()
+                .map(ComFolderCustomer::getCfgTier)
+                .filter(Objects::nonNull)
+                .map(AutorisationVersementService::toClient)
+                .forEach(clients::add);
 
         StlAccount compte = settlement.getStlAccount();
         String rib = compte != null ? rib(compte) : null;

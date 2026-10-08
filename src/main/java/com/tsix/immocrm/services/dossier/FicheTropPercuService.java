@@ -11,10 +11,10 @@ import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
-import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
@@ -69,9 +69,9 @@ public class FicheTropPercuService {
         if (folder.getCfgCustomer() != null) {
             acquereurs.add(toAcquereur(folder.getCfgCustomer()));
         }
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            acquereurs.add(toAcquereur(coAcquereur.getCfgTier()));
-        }
+        folderCustomerRepository.findByComFolderId(dossierId).stream()
+                .map(coAcquereur -> toAcquereur(coAcquereur.getCfgTier()))
+                .forEach(acquereurs::add);
 
         boolean superficieApproximative = article == null
                 || article.getTitleNumber() == null || article.getTitleNumber().isBlank();
@@ -90,14 +90,7 @@ public class FicheTropPercuService {
         for (StlSettlementLine ligne : lignes) {
             BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
             totalRegle = totalRegle.add(montant);
-            boolean credit = ligne.getStlSettlement() != null && Boolean.TRUE.equals(ligne.getStlSettlement().getIsCredit());
-            lignesReglement.add(new LigneReglement(
-                    ligne.getStlSettlement() != null && ligne.getStlSettlement().getDocDate() != null
-                            ? ligne.getStlSettlement().getDocDate().toLocalDate() : null,
-                    credit ? montant : montant.negate(),
-                    credit,
-                    ligne.getStlSettlement() != null ? ligne.getStlSettlement().getDescription() : null
-            ));
+            lignesReglement.add(toLigneReglement(ligne, montant));
         }
 
         BigDecimal prixApresRemise = folder.getPriceAfterDiscount() != null ? folder.getPriceAfterDiscount() : BigDecimal.ZERO;
@@ -128,6 +121,17 @@ public class FicheTropPercuService {
                 lignesReglement,
                 totalRegle,
                 resteAPayer
+        );
+    }
+
+    private static LigneReglement toLigneReglement(StlSettlementLine ligne, BigDecimal montant) {
+        StlSettlement reglement = ligne.getStlSettlement();
+        boolean credit = reglement != null && Boolean.TRUE.equals(reglement.getIsCredit());
+        return new LigneReglement(
+                reglement != null && reglement.getDocDate() != null ? reglement.getDocDate().toLocalDate() : null,
+                credit ? montant : montant.negate(),
+                credit,
+                Champs.de(reglement, StlSettlement::getDescription)
         );
     }
 

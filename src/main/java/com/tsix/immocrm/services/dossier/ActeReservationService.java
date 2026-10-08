@@ -66,7 +66,7 @@ public class ActeReservationService {
                 itemRepository.findByComFolderId(dossierId).stream()
                         .filter(it -> !it.getId().equals(article.getId()))
                         .map(it -> new SousArticle(
-                                it.getStkItemCategory() != null ? it.getStkItemCategory().getDescription() : null,
+                                Champs.de(it, StkItem::getStkItemCategory, StkItemCategory::getDescription),
                                 it.getArea()))
                         .toList();
 
@@ -91,7 +91,7 @@ public class ActeReservationService {
                 client != null ? nomClient(client) : null,
                 Champs.de(client, CfgTier::getIDNumber),
                 client != null ? adresse(client.getAddress(), client.getAddress2(), client.getAddress3(), client.getCity()) : null,
-                client != null ? (client.getMobile() != null ? client.getMobile() : client.getPhone()) : null,
+                telephone(client),
                 Champs.de(projet, CfgProject::getDescription),
                 Champs.de(projet, p -> adresse(p.getAddress(), p.getAddress2(), p.getAddress3(), p.getCity())),
                 Champs.de(projet, CfgProject::getCfgCompany, CfgCompany::getDescription),
@@ -143,6 +143,13 @@ public class ActeReservationService {
 
     private static String nomClient(CfgTier tier) {
         return TierNomFormatter.nom(tier);
+    }
+
+    private static String telephone(CfgTier client) {
+        if (client == null) {
+            return null;
+        }
+        return client.getMobile() != null ? client.getMobile() : client.getPhone();
     }
 
     private static String adresse(String a1, String a2, String a3, String ville) {

@@ -140,11 +140,12 @@ public class FicheTropPercuPdfRenderer {
     }
 
     private static String sousArticleLigne(SousArticle sousArticle, boolean superficieApproximative) {
-        boolean parking = "PAR".equals(sousArticle.categorieCode());
-        String label = vide(sousArticle.categorieLibelle())
-                + (parking ? " N°" : (superficieApproximative ? " approximative" : ""));
-        String valeur = parking ? vide(sousArticle.code())
-                : (sousArticle.area() != null ? sousArticle.area().toPlainString() + " m²" : "");
+        String libelle = vide(sousArticle.categorieLibelle());
+        if ("PAR".equals(sousArticle.categorieCode())) {
+            return libelle + " N° : " + vide(sousArticle.code());
+        }
+        String label = libelle + (superficieApproximative ? " approximative" : "");
+        String valeur = sousArticle.area() != null ? sousArticle.area().toPlainString() + " m²" : "";
         return label + " : " + valeur;
     }
 

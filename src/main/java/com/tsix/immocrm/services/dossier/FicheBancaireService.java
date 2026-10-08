@@ -9,7 +9,6 @@ import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
-import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -65,9 +64,9 @@ public class FicheBancaireService {
         if (folder.getCfgCustomer() != null) {
             acquereurs.add(toAcquereur(folder.getCfgCustomer(), folder.getPartPercent()));
         }
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            acquereurs.add(toAcquereur(coAcquereur.getCfgTier(), coAcquereur.getPartPercent()));
-        }
+        folderCustomerRepository.findByComFolderId(dossierId).stream()
+                .map(coAcquereur -> toAcquereur(coAcquereur.getCfgTier(), coAcquereur.getPartPercent()))
+                .forEach(acquereurs::add);
 
         BigDecimal superficieSousArticles = article == null ? BigDecimal.ZERO :
                 itemRepository.findByComFolderId(dossierId).stream()

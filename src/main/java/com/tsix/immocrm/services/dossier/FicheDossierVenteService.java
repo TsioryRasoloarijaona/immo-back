@@ -12,7 +12,6 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
-import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -84,9 +83,9 @@ public class FicheDossierVenteService {
         if (folder.getCfgCustomer() != null) {
             acquereurs.add(new Acquereur(TierNomFormatter.nom(folder.getCfgCustomer()), folder.getPartPercent()));
         }
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            acquereurs.add(new Acquereur(TierNomFormatter.nom(coAcquereur.getCfgTier()), coAcquereur.getPartPercent()));
-        }
+        folderCustomerRepository.findByComFolderId(dossierId).stream()
+                .map(coAcquereur -> new Acquereur(TierNomFormatter.nom(coAcquereur.getCfgTier()), coAcquereur.getPartPercent()))
+                .forEach(acquereurs::add);
 
         List<ComFolderItem> folderItems = folderItemRepository.findByComFolderId(dossierId);
         List<SousArticleDossier> sousArticles = folderItems.stream()

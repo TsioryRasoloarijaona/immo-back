@@ -4,7 +4,6 @@ import com.tsix.immocrm.dto.dossier.FicheVisiteTechniqueData;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
-import com.tsix.immocrm.entities.com.ComFolderCustomer;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
@@ -48,9 +47,9 @@ public class FicheVisiteTechniqueService {
         if (folder.getCfgCustomer() != null) {
             clientNoms.add(nomAvecTitre(folder.getCfgCustomer()));
         }
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            clientNoms.add(nomAvecTitre(coAcquereur.getCfgTier()));
-        }
+        folderCustomerRepository.findByComFolderId(dossierId).stream()
+                .map(coAcquereur -> nomAvecTitre(coAcquereur.getCfgTier()))
+                .forEach(clientNoms::add);
 
         return new FicheVisiteTechniqueData(
                 folder.getCode(),

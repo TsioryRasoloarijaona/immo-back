@@ -26,7 +26,11 @@ import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +47,9 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+
+import static java.util.Objects.requireNonNullElse;
 
 /**
  * Écran « Encaissements Vente » d'OMRAN. Le filtre {@code AdmModuleId} du légataire n'est pas repris
@@ -75,9 +82,9 @@ public class EncaissementService {
                                           ColonneEncaissement groupeColonne, String groupeValeur,
                                           Granularite granularite, Pageable pageable,
                                           Set<ColonneEncaissement> colonnes) {
-        Specification<StlSettlement> spec = specEncaissements(entiteIds, typeIds, etats, compteId,
-                depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin);
+        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
+                montantA, champDate, dateDebut, dateFin));
         if (groupeColonne != null) {
             // Dépliage d'un groupe : la même expression de clé que /groupes, donc une valeur
             // réémise telle quelle par le front retombe exactement sur les lignes comptées.
@@ -101,113 +108,136 @@ public class EncaissementService {
                                        ColonneEncaissement groupeBy, Granularite granularite,
                                        List<AgregatDemande> agregats, TriGroupe tri,
                                        boolean inclureSansValeur, Pageable pageable) {
-        Specification<StlSettlement> spec = specEncaissements(entiteIds, typeIds, etats, compteId,
-                depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin)
+        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
+                montantA, champDate, dateDebut, dateFin))
                 .and(perimetreService.filtreEncaissements());
         return groupementService.grouper(StlSettlement.class, spec, groupeBy.chemin(), granularite,
                 agregats, tri, inclureSansValeur, pageable);
     }
 
-    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement (comme {@code specDossiers}). */
-    private static Specification<StlSettlement> specEncaissements(
+    /** Filtres de la liste des encaissements, tels que reçus du contrôleur. */
+    private record FiltresEncaissements(
             List<UUID> entiteIds, List<UUID> typeIds, List<String> etats, UUID compteId,
             UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
             String search, Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
             ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+    }
+
+    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement (comme {@code specDossiers}). */
+    private static Specification<StlSettlement> specEncaissements(FiltresEncaissements f) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             // Vente seulement : un StlSettlement peut aussi servir un achat (BuyDocumentId) ou une
             // location (RntDocumentId).
-            Subquery<UUID> venteSubquery = query.subquery(UUID.class);
-            var line = venteSubquery.from(StlSettlementLine.class);
-            venteSubquery.select(line.get("id"))
-                    .where(cb.and(
-                            cb.equal(line.get("stlSettlement"), root),
-                            cb.isNotNull(line.get("comDocument"))));
-            predicates.add(cb.exists(venteSubquery));
+            predicates.add(existeLigne(root, query, cb, cb::isNotNull));
 
             // Encaissement, jamais décaissement : « IsCredit = 1 » du légataire. Jamais NULL en base
             // (FEATURE-encaissements-conformite-legataire.md §3.1), le test strict n'escamote rien.
             predicates.add(cb.isTrue(root.get("isCredit")));
 
-            if (!CollectionUtils.isEmpty(entiteIds)) {
-                predicates.add(root.get("cfgCompany").get("id").in(entiteIds));
+            ajouterFiltresReferentiels(predicates, root, cb, f);
+            if (f.dossierId() != null) {
+                predicates.add(existeLigne(root, query, cb,
+                        echeance -> cb.equal(echeance.get("comFolder").get("id"), f.dossierId())));
             }
-            if (!CollectionUtils.isEmpty(typeIds)) {
-                predicates.add(root.get("stlSettlementType").get("id").in(typeIds));
-            }
-            if (!CollectionUtils.isEmpty(etats)) {
-                List<String> etatsLower = etats.stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("status")).in(etatsLower));
-            }
-            if (compteId != null) {
-                predicates.add(cb.equal(root.get("stlAccount").get("id"), compteId));
-            }
-            if (depotId != null) {
-                predicates.add(cb.equal(root.get("stlDeposit").get("id"), depotId));
-            }
-            if (tierId != null) {
-                predicates.add(cb.equal(root.get("tier").get("id"), tierId));
-            }
-            if (dossierId != null) {
-                Subquery<UUID> dossierSubquery = query.subquery(UUID.class);
-                var dossierLine = dossierSubquery.from(StlSettlementLine.class);
-                dossierSubquery.select(dossierLine.get("id"))
-                        .where(cb.and(
-                                cb.equal(dossierLine.get("stlSettlement"), root),
-                                cb.equal(dossierLine.get("comDocument").get("comFolder").get("id"), dossierId)));
-                predicates.add(cb.exists(dossierSubquery));
-            }
-            if (!CollectionUtils.isEmpty(trancheIds)) {
+            if (!CollectionUtils.isEmpty(f.trancheIds())) {
                 // Le légataire passe par StlSettlementRelationView ; côté Vente, le chemin par les
                 // lignes donne le même résultat (FEATURE-encaissements-conformite-legataire.md §3.2).
-                Subquery<UUID> trancheSubquery = query.subquery(UUID.class);
-                var trancheLine = trancheSubquery.from(StlSettlementLine.class);
-                trancheSubquery.select(trancheLine.get("id"))
-                        .where(cb.and(
-                                cb.equal(trancheLine.get("stlSettlement"), root),
-                                trancheLine.get("comDocument").get("comFolder").get("stkItem")
-                                        .get("stkHierarchy").get("id").in(trancheIds)));
-                predicates.add(cb.exists(trancheSubquery));
+                predicates.add(existeLigne(root, query, cb,
+                        echeance -> echeance.get("comFolder").get("stkItem")
+                                .get("stkHierarchy").get("id").in(f.trancheIds())));
             }
-            if (StringUtils.hasText(reference)) {
-                predicates.add(cb.like(cb.lower(root.get("code")), "%" + reference.toLowerCase() + "%"));
+            ajouterFiltresTexte(predicates, root, cb, f);
+            if (f.comptabilise() != null) {
+                predicates.add(predicatComptabilise(root, cb, f.comptabilise()));
             }
-            if (StringUtils.hasText(search)) {
-                String pattern = "%" + search.toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("code")), pattern),
-                        cb.like(cb.lower(root.get("tier").get("description")), pattern),
-                        cb.like(cb.lower(root.get("tier").get("firstName")), pattern),
-                        cb.like(cb.lower(root.get("tier").get("lastName")), pattern)
-                ));
-            }
-            if (comptabilise != null) {
-                predicates.add(comptabilise
-                        ? cb.isTrue(root.get("isAccounted"))
-                        : cb.or(cb.isFalse(root.get("isAccounted")), cb.isNull(root.get("isAccounted"))));
-            }
-            if (montantDe != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), montantDe));
-            }
-            if (montantA != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("amount"), montantA));
-            }
-            if (dateDebut != null || dateFin != null) {
-                String champ = (champDate != null ? champDate : ChampDateEncaissement.DATE_PIECE).getChampEntite();
-                var colonne = root.<LocalDateTime>get(champ);
-                if (dateDebut != null) {
-                    predicates.add(cb.greaterThanOrEqualTo(colonne, dateDebut));
-                }
-                if (dateFin != null) {
-                    predicates.add(cb.lessThanOrEqualTo(colonne, dateFin));
-                }
-            }
+            ajouterFiltresMontantEtDate(predicates, root, cb, f);
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /** {@code EXISTS} une ligne de ce règlement dont l'échéance ({@code comDocument}) vérifie la condition. */
+    private static Predicate existeLigne(Root<StlSettlement> root, CriteriaQuery<?> query, CriteriaBuilder cb,
+                                         Function<Path<Object>, Predicate> conditionEcheance) {
+        Subquery<UUID> subquery = query.subquery(UUID.class);
+        var line = subquery.from(StlSettlementLine.class);
+        subquery.select(line.get("id"))
+                .where(cb.and(
+                        cb.equal(line.get("stlSettlement"), root),
+                        conditionEcheance.apply(line.get("comDocument"))));
+        return cb.exists(subquery);
+    }
+
+    private static void ajouterFiltresReferentiels(List<Predicate> predicates, Root<StlSettlement> root,
+                                                   CriteriaBuilder cb, FiltresEncaissements f) {
+        if (!CollectionUtils.isEmpty(f.entiteIds())) {
+            predicates.add(root.get("cfgCompany").get("id").in(f.entiteIds()));
+        }
+        if (!CollectionUtils.isEmpty(f.typeIds())) {
+            predicates.add(root.get("stlSettlementType").get("id").in(f.typeIds()));
+        }
+        if (!CollectionUtils.isEmpty(f.etats())) {
+            List<String> etatsLower = f.etats().stream().map(String::toLowerCase).toList();
+            predicates.add(cb.lower(root.get("status")).in(etatsLower));
+        }
+        if (f.compteId() != null) {
+            predicates.add(cb.equal(root.get("stlAccount").get("id"), f.compteId()));
+        }
+        if (f.depotId() != null) {
+            predicates.add(cb.equal(root.get("stlDeposit").get("id"), f.depotId()));
+        }
+        if (f.tierId() != null) {
+            predicates.add(cb.equal(root.get("tier").get("id"), f.tierId()));
+        }
+    }
+
+    private static void ajouterFiltresTexte(List<Predicate> predicates, Root<StlSettlement> root,
+                                            CriteriaBuilder cb, FiltresEncaissements f) {
+        if (StringUtils.hasText(f.reference())) {
+            predicates.add(cb.like(cb.lower(root.get("code")), "%" + f.reference().toLowerCase() + "%"));
+        }
+        if (StringUtils.hasText(f.search())) {
+            String pattern = "%" + f.search().toLowerCase() + "%";
+            predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("code")), pattern),
+                    cb.like(cb.lower(root.get("tier").get("description")), pattern),
+                    cb.like(cb.lower(root.get("tier").get("firstName")), pattern),
+                    cb.like(cb.lower(root.get("tier").get("lastName")), pattern)
+            ));
+        }
+    }
+
+    /** Non comptabilisé = {@code IsAccounted} à faux <b>ou</b> NULL. */
+    private static Predicate predicatComptabilise(Root<StlSettlement> root, CriteriaBuilder cb, boolean comptabilise) {
+        Path<Boolean> isAccounted = root.get("isAccounted");
+        if (comptabilise) {
+            return cb.isTrue(isAccounted);
+        }
+        return cb.or(cb.isFalse(isAccounted), cb.isNull(isAccounted));
+    }
+
+    private static void ajouterFiltresMontantEtDate(List<Predicate> predicates, Root<StlSettlement> root,
+                                                    CriteriaBuilder cb, FiltresEncaissements f) {
+        if (f.montantDe() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), f.montantDe()));
+        }
+        if (f.montantA() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("amount"), f.montantA()));
+        }
+        if (f.dateDebut() == null && f.dateFin() == null) {
+            return;
+        }
+        ChampDateEncaissement champDate = f.champDate() != null ? f.champDate() : ChampDateEncaissement.DATE_PIECE;
+        var colonne = root.<LocalDateTime>get(champDate.getChampEntite());
+        if (f.dateDebut() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(colonne, f.dateDebut()));
+        }
+        if (f.dateFin() != null) {
+            predicates.add(cb.lessThanOrEqualTo(colonne, f.dateFin()));
+        }
     }
 
     /** Pas de restriction « Vente » : un id direct désigne un règlement précis, quelle que soit son origine. */
@@ -275,8 +305,8 @@ public class EncaissementService {
         BigDecimal montantNet = s.getMontantNetCalcule() != null
                 ? s.getMontantNetCalcule()
                 : montantBrut
-                        .subtract(s.getAmountRS() != null ? s.getAmountRS() : BigDecimal.ZERO)
-                        .subtract(s.getAmountStamp() != null ? s.getAmountStamp() : BigDecimal.ZERO);
+                        .subtract(requireNonNullElse(s.getAmountRS(), BigDecimal.ZERO))
+                        .subtract(requireNonNullElse(s.getAmountStamp(), BigDecimal.ZERO));
 
         StlSettlementType type = s.getStlSettlementType();
         CfgCompany entite = s.getCfgCompany();

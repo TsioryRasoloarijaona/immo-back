@@ -177,7 +177,7 @@ public class FicheReservationPdfRenderer {
         if (zone == null || valeur == null || valeur.isBlank()) {
             return;
         }
-        Font police = FontFactory.getFont(POLICE, zone.taille(), NOIR);
+        Font police = FontFactory.getFont(POLICE, (float) zone.taille(), NOIR);
         float x = zone.xCm() * CM;
         float largeur = zone.largeurCm() * CM;
         float interligne = zone.taille() * 1.15f;
