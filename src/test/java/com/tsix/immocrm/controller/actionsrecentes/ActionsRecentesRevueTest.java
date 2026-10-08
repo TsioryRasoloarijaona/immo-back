@@ -223,6 +223,7 @@ class ActionsRecentesRevueTest {
             assertThat(cibles).as("portée %s : cibleId d'un dossier hors périmètre (interaction %s)", portee, m.getId())
                     .doesNotContain(fB.getId().toString());
             assertThat(libelles).as("portée %s : code d'un dossier hors périmètre", portee)
+                    .isNotEmpty()
                     .doesNotContain("DOS-ARV-HORS");
         }
     }
