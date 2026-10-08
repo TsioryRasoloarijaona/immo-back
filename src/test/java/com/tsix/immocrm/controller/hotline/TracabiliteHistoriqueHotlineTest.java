@@ -549,7 +549,8 @@ class TracabiliteHistoriqueHotlineTest {
         ComFolder sansJumelle = newDossier("DOS-TRACE-R1", tranche, client, null);
         ComFolder avecJumelle = newDossier("DOS-TRACE-R2", tranche, client, null);
         newLigneStatut(sansJumelle, client, statut(StatutDossier.RESERVATION), null, date, null);
-        newLigneStatut(avecJumelle, client, statut(StatutDossier.RESERVATION), UUID.randomUUID(), date, null);
+        // AdmUserId null (FK vers AdmUser en CI) : force le repli StrHistory.
+        newLigneStatut(avecJumelle, client, statut(StatutDossier.RESERVATION), null, date, null);
         // Même date, mais la ligne StrHistory vise l'autre dossier : elle ne doit pas signer sansJumelle.
         newStrHistory(avecJumelle.getId(), date, "Compte Legacy");
         entityManager.flush();
