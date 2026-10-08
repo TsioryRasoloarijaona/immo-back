@@ -12,13 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo.AdmRole — a business role (e.g. "Commercial", "Administrateur", "Comptabilité"), assigned
- * to {@link AdmUser} accounts via {@link AdmUserRole} (many-to-many). Drives API authorization
- * ({@code hasRole(role.code)}). Only {@code Code}/{@code Description} are mapped; the fine-grained
- * {@code WithXXXRestriction} flags (edit/delete action-message, attachment, audit...) are legacy
- * desktop-app permissions left unmapped until an endpoint actually needs them.
- */
+/** Rôle métier, attribué via {@link AdmUserRole} ; {@code Code} alimente {@code hasRole}. */
 @Getter
 @Setter
 @Entity

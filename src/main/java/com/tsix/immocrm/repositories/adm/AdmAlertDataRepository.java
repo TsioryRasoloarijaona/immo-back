@@ -14,24 +14,9 @@ public interface AdmAlertDataRepository extends JpaRepository<AdmAlertData, UUID
     Optional<AdmAlertData> findByRelatedKey(UUID relatedKey);
 
     /**
-     * Les alertes <b>encore actives</b> d'une prospection, telles que le logiciel de bureau les
-     * cible quand il les désarme — son prédicat, relevé dans sa trace d'audit :
-     *
-     * <pre>{@code
-     * UPDATE AdmAlertData SET Active=0 WHERE RelatedKey IN (
-     *   SELECT PKey FROM ComActionMessage LEFT JOIN StrStatus …
-     *   WHERE ISNULL(StrStatus.Sorting,'-1') <= -1 AND ComDocumentId IS NULL
-     *     AND ComProspectionId = …)
-     * }</pre>
-     *
-     * <p>{@code ISNULL(Sorting, -1) <= -1} ne retient que les interactions <b>sans statut de
-     * dossier</b> : tous les {@code StrStatus.Sorting} réels valent 1 ou plus. On l'écrit donc
-     * directement {@code StrFolderStatusId IS NULL}, sans jointure. {@code ComDocumentId IS NULL}
-     * épargne les rappels de paiement rattachés à une échéance.
-     *
-     * <p>Renvoyée en entités, pas en {@code UPDATE} de masse : chaque ligne modifiée passe ainsi
-     * par le collecteur Hibernate et redescend dans la copie de lecture avec la transaction,
-     * au lieu d'attendre le cycle de synchronisation suivant.
+     * Ce que le bureau désarme : son {@code ISNULL(Sorting,-1) <= -1} réécrit {@code StrFolderStatusId IS NULL}
+     * (tout Sorting réel ≥ 1). En entités, pas en {@code UPDATE} de masse : les lignes passent par le
+     * collecteur Hibernate vers la copie de lecture — voir FEATURE-alerte-admalertdata.md.
      */
     @Query(value = """
             SELECT a.* FROM AdmAlertData a

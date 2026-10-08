@@ -51,7 +51,7 @@ public class AdmCountry {
     @Column(name = "NationCode")
     private String nationCode;
 
-    // Numeric telephone dialing code, stored as text in the DB (e.g. "261").
+    // Indicatif numérique stocké en texte ("261").
     @Size(max = 255)
     @Nationalized
     @Column(name = "PhoneCode")

@@ -11,17 +11,14 @@ import java.util.UUID;
 
 public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> {
 
-    // Full, unpaged list — used for server-side aggregation (GET /api/dossiers/{id}/montants),
-    // where every line must be summed, not just one page of them. Order is irrelevant for a sum.
+    // Non paginée : les montants somment toutes les lignes, pas une page.
     List<ComDocument> findByComFolderIdOrderByDocDateAsc(UUID comFolderId);
 
-    // GET /api/dossiers/{id}/echeancier — most recent échéance first.
     Page<ComDocument> findByComFolderIdOrderByDocDateDesc(UUID comFolderId, Pageable pageable);
 
     /**
-     * Total "à payer" per client (sum of every échéance amount across all of their dossiers) —
-     * used by {@code GET /api/clients} (server-side aggregate, one round trip for every client
-     * on the page). Tuple: [cfgCustomerId, montantTotal].
+     * Tuple : [cfgCustomerId, total des échéances]. Le {@code COALESCE(…, 0)} à littéral entier peut
+     * arrondir la somme : défaut connu, non corrigé (FEATURE-commentaires-et-docs-api.md, défauts n° 9).
      */
     @Query("SELECT f.cfgCustomer.id, COALESCE(SUM(d.amount), 0) FROM ComDocument d JOIN d.comFolder f " +
             "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc " +
@@ -30,24 +27,9 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> 
     List<Object[]> sumAmountGroupedByClientId(List<UUID> clientIds);
 
     /**
-     * Bloc A de {@code GET /api/dashboard/annuel} — l'échéancier de l'année, agrégé par mois.
-     * Tuple : [mois (1-12), somme des montants, nombre d'échéances].
-     *
-     * <p><b>Ce n'est pas un encaissé.</b> {@code ComDocument.Amount} est une somme <em>due</em> ;
-     * des mois à venir sont donc renseignés. Le nom du champ servi le dit
-     * ({@code echeancier}), pas {@code realise}.
-     *
-     * <p>Les catégories retenues sont avance, crédit et autofinancement, <b>frais exclus</b>.
-     * La requête du légataire écrit ici {@code (… OR IsSaleExpense=1) AND IsSaleExpense=0}, deux
-     * clauses qui se contredisent : l'effet net est « frais exclus » et c'est cette intention qui
-     * est reprise, pas la contradiction.
-     *
-     * <p>Le seuil de concrétisation et les statuts de sortie sont passés par l'appelant plutôt que
-     * figés : voir {@code SyntheseAnnuelleService} pour leur résolution.
-     *
-     * <p>La somme est rendue <b>telle quelle, éventuellement {@code null}</b> — aucun
-     * {@code COALESCE(..., 0)} en SQL : le littéral entier y dégrade silencieusement l'échelle
-     * d'une somme d'argent. La substitution se fait en Java, en {@code BigDecimal}.
+     * Bloc A de {@code /api/dashboard/annuel} : [mois, somme, nombre] des sommes <em>dues</em>, pas encaissées.
+     * Frais exclus : le légataire écrit {@code (… OR IsSaleExpense=1) AND IsSaleExpense=0}, on reprend l'effet
+     * net. Somme {@code null} possible : pas de {@code COALESCE} entier en SQL, le zéro se substitue en Java.
      */
     @Query("SELECT MONTH(d.docDate), SUM(d.amount), COUNT(d) "
             + "FROM ComDocument d JOIN d.comFolder f JOIN f.strStatus s "
@@ -60,11 +42,7 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> 
             + "GROUP BY MONTH(d.docDate)")
     List<Object[]> echeancierParMois(int annee, int seuil, List<String> sorties);
 
-    /**
-     * Variante de {@link #echeancierParMois} restreinte à une liste de dossiers — même tuple. Sert le
-     * filtre par tranche du tableau de bord : {@code dossierIds} est l'assiette de
-     * {@code GET /api/dossiers?trancheId=…} (périmètre commercial compris), jamais vide.
-     */
+    /** Filtre par tranche : {@code dossierIds} = assiette de {@code /api/dossiers?trancheId=}, jamais vide. */
     @Query("SELECT MONTH(d.docDate), SUM(d.amount), COUNT(d) "
             + "FROM ComDocument d JOIN d.comFolder f JOIN f.strStatus s "
             + "JOIN d.comSettlementCategory cat " + "LEFT JOIN f.stkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr "

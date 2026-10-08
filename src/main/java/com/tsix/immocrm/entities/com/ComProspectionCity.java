@@ -13,7 +13,7 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/** dbo_ComProspectionCity — a "recherché" city on a Prospection (GAP-04, "Villes" tab). */
+/** Ville recherchée par une prospection (onglet « Villes »). */
 @Getter
 @Setter
 @Entity

@@ -197,52 +197,29 @@ public class StlSettlement {
     @Column(name = "BuySettlementId_old")
     private UUID buysettlementidOld;
 
-    /** "Entité" — l'entité juridique ({@link com.tsix.immocrm.entities.cfg.CfgCompany}) sur laquelle le règlement a été saisi. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
 
-    /** "Compte" — le compte bancaire de destination. */
+    /** Compte bancaire de destination. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")
     private StlAccount stlAccount;
 
-    /** "Dépôt" — la catégorie de dépôt (FOURNISSEUR/CLIENT/BANQUE). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlDepositId")
     private StlDeposit stlDeposit;
 
-    // ------------------------------------------------------------------
-    // Colonnes calculées — les deux que la bande « Total : » du légataire totalise.
-    //
-    // En @Formula et en association plutôt qu'en Java pour une raison précise : ce sont alors des
-    // propriétés ordinaires, donc sommables par le moteur de groupement générique. Calculées dans
-    // le mappeur, elles n'existaient nulle part en base et aucun total n'était exprimable.
-    // Voir instructions/FEATURE-colonnes-groupement-encaissements.md.
-    // ------------------------------------------------------------------
+    // Les deux colonnes de la bande « Total : », en propriétés mappées pour être sommables par le
+    // groupement générique — voir FEATURE-colonnes-groupement-encaissements.md §7.2.
 
-    /**
-     * "Montant net" — brut moins retenue à la source et droit de timbre.
-     *
-     * <p>Arithmétique sur la même ligne, donc une {@code @Formula} suffit et {@code SUM()} dessus
-     * est accepté. Mesuré sur les 643 règlements réels : {@code AmountRS} et {@code AmountStamp}
-     * sont non nuls mais <strong>valent zéro partout</strong>, donc ce montant égale aujourd'hui le
-     * montant brut sur la totalité des lignes. La formule est juste ; ce sont les données qui n'ont
-     * pas encore de retenue.
-     */
+    /** Brut moins retenue à la source et timbre ; même ligne, donc {@code SUM()} l'accepte. */
     @Formula("Amount - ISNULL(AmountRS, 0) - ISNULL(AmountStamp, 0)")
     private BigDecimal montantNetCalcule;
 
     /**
-     * Part déjà affectée à des échéances, pré-agrégée — le terme retranché de
-     * {@code montantBrutRestant}.
-     *
-     * <p><strong>{@code @ManyToOne} et non {@code @OneToOne}</strong>, bien que la cardinalité soit
-     * un-à-un : un {@code @OneToOne} optionnel ne se proxifie pas et Hibernate irait le charger sur
-     * chaque ligne, produisant le N+1 que cette association existe justement pour supprimer.
-     *
-     * <p>Nulle pour un règlement sans aucune ligne — le sous-select ne porte que ceux qui en ont.
-     * La part affectée vaut alors zéro, substitué en Java.
+     * Terme retranché de {@code montantBrutRestant}. {@code @ManyToOne} bien qu'un-à-un : un
+     * {@code @OneToOne} optionnel ne se proxifie pas et serait chargé sur chaque ligne (N+1).
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PKey", insertable = false, updatable = false)

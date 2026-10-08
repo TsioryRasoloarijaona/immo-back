@@ -12,26 +12,9 @@ import org.hibernate.annotations.Nationalized;
 import java.util.UUID;
 
 /**
- * Type de document du légataire — le discriminant qui sépare une prospection de vente
- * ({@code Code = 'ComProspection'}) d'une pré-prospection ({@code 'ComPreProspection'}), d'une
- * prospection de location ({@code 'RntProspection'}), d'un dossier ({@code 'ComFolder'}), etc.
- *
- * <p>Table de référentiel : <strong>162 lignes</strong> sur la base réelle, dont cinq concernent la
- * prospection. Les vues du logiciel de bureau font un {@code INNER JOIN} dessus, ce qui rend une
- * ligne sans {@code StrEntityId} invisible de tous ses écrans.
- *
- * <p><strong>Seules {@code PKey}, {@code Code} et {@code Description} sont mappées.</strong> La
- * table en porte 42 : une vingtaine de {@code BoolField0xxLabel}, deux colonnes {@code text} de
- * configuration d'écran, un bloc comptable. Même discipline que {@code ComSaleProspectionView} —
- * on ne mappe que ce qu'on sert.
- *
- * <p>{@code @Immutable} : référentiel de configuration du légataire, que nous ne créons ni ne
- * modifions jamais. Pas de {@code @Setter}, en conséquence.
- *
- * <p>Les {@code PKey} sont <strong>identiques entre {@code yesRemsProd} et {@code yesRemsCiCheck}</strong>
- * (vérifié le 10/09/2026) : les fixtures de test peuvent porter les UUID réels.
- *
- * @see com.tsix.immocrm.entities.com.ComProspection#getStrEntityId()
+ * Type de document du légataire (prospection de vente, pré-prospection, dossier…), jamais écrit par nous.
+ * Les vues du bureau font un {@code INNER JOIN} dessus : une ligne sans {@code StrEntityId} disparaît
+ * de tous ses écrans. PKey identiques entre bases réelle et de test : les fixtures portent les UUID réels.
  */
 @Getter
 @Entity
@@ -43,17 +26,12 @@ public class StrEntity {
     @Column(name = "PKey", nullable = false)
     private UUID id;
 
-    /**
-     * Identifiant métier stable — {@code ComProspection}, {@code ComPreProspection},
-     * {@code RntProspection}… <strong>C'est lui qui porte le sens</strong>, pas la description :
-     * un appelant qui teste le type doit tester ce champ.
-     */
+    /** Porte le sens ({@code ComProspection}, {@code ComPreProspection}…) : tester ce champ, pas la description. */
     @Size(max = 255)
     @Nationalized
     @Column(name = "Code")
     private String code;
 
-    /** Libellé d'affichage, traduit — « Prospection vente », « Pré-Prospection ». */
     @Size(max = 255)
     @Nationalized
     @Column(name = "Description")

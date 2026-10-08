@@ -340,7 +340,7 @@ public class CfgTier {
     @Column(name = "PaymentDelay")
     private Integer paymentDelay;
 
-    // -- GAP-05: Omran "Général" tab identity fields --
+    // Identité de l'onglet « Général » d'Omran.
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmTierTitleId")

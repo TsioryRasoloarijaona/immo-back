@@ -26,10 +26,6 @@ public class StkItemCategory {
     @Column(name = "PKey", nullable = false)
     private UUID id;
 
-    /**
-     * Nature physique à laquelle la catégorie se rattache — voir {@link StkKind}.
-     * La colonne est NOT NULL en base : une catégorie existe toujours au sein d'une nature.
-     */
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "StkKindId", nullable = false)

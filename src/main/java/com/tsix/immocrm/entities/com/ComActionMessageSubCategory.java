@@ -16,12 +16,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * dbo.ComActionMessageSubCategory — the "Résultat" of an interaction (e.g. "Rendez vous pris",
- * "RDV reporté", "Client injoignable ou Boite vocale", "Hors Budget"...), scoped to a
- * {@link ComActionMessageCategory}. {@code isRevivalMandatory} flags results that the legacy
- * app expects a follow-up alert date for (see {@code ComActionMessage.alertValidityDate}).
- * Confirmed empirically: the "Résultat" dropdown for hotline/prospection interactions is the set
- * of sub-categories under the category coded {@code "Prospection"} (23 rows in real data).
+ * « Résultat » d'une interaction, rattaché à une catégorie ; la liste hotline/prospection = celles
+ * de la catégorie {@code "Prospection"}. {@code isRevivalMandatory} : le légataire attend une date d'alerte.
  */
 @Getter
 @Setter

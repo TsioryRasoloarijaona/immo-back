@@ -18,12 +18,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Clé d'API d'un client machine (n8n, agent) — table applicative
- * {@code 011_AppApiClient.sql}, voir {@code instructions/FEATURE-cle-api-n8n.md}.
- *
- * <p>Seul le hash SHA-256 de la clé est stocké ; le secret n'est montré qu'à la création et à la
- * régénération. Le compte de service {@link AdmUser} porte l'auteur des écritures et le
- * périmètre ; la portée ({@code Portees}) limite les routes.
+ * Clé d'API d'un client machine (table applicative, voir FEATURE-cle-api-n8n.md) : seul le hash est
+ * stocké. Le compte de service porte l'auteur et le périmètre ; {@code Portees} limite les routes.
  */
 @Getter
 @Setter
@@ -41,7 +37,6 @@ public class AppApiClient {
     @Column(name = "Nom", nullable = false, length = 100)
     private String nom;
 
-    /** SHA-256 hexadécimal (64 caractères) de la clé complète. */
     @NotNull
     @Nationalized
     @Size(max = 64)

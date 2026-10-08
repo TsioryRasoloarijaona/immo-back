@@ -12,11 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo_StkBuilding — building lookup ("Immeuble"), referenced by {@code StkItem.StkBuildingId}.
- * Confirmed against real data: {@code Code} holds the short label shown on documents (e.g.
- * "IMM01"), {@code Description} the long form (e.g. "Immeuble 01").
- */
+/** Immeuble : {@code Code} = libellé court des documents ("IMM01"), {@code Description} = forme longue. */
 @Getter
 @Setter
 @Entity

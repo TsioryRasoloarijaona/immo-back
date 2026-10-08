@@ -10,9 +10,6 @@ public interface CfgTierKindRepository extends JpaRepository<CfgTierKind, UUID> 
 
     List<CfgTierKind> findByCfgTierTypeIdOrderBySortingAsc(UUID typeId);
 
-    /**
-     * {@code GET /api/referentiels/types-employe} — kinds under the "EMP" {@code CfgTierType},
-     * i.e. the employee types read from Omran ({@code typeEmployeCode} of GET /api/utilisateurs).
-     */
+    /** Types d'employé : sous le {@code CfgTierType} "EMP". */
     List<CfgTierKind> findByCfgTierTypeCodeOrderBySortingAsc(String tierTypeCode);
 }

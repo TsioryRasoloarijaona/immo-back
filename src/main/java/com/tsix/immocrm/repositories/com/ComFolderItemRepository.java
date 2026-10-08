@@ -8,11 +8,6 @@ import java.util.UUID;
 
 public interface ComFolderItemRepository extends JpaRepository<ComFolderItem, UUID> {
 
-    /**
-     * Every {@code ComFolderItem} row of a Dossier — the main article (IsUnderItem=false) plus
-     * its sous-articles (IsUnderItem=true) — each carrying its own per-dossier price/discount
-     * snapshot (unlike {@code StkItem}, which has no such override). Used by the "Fiche Dossier
-     * de Vente" SOUS ARTICLES table.
-     */
+    /** Article principal et sous-articles ({@code IsUnderItem}), chacun avec son prix figé pour ce dossier. */
     List<ComFolderItem> findByComFolderId(UUID comFolderId);
 }

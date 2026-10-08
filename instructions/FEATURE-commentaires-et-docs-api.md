@@ -289,6 +289,19 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   (auto-transitions exclues ; retours arrière comme FORMALISE → RESERVATION gardés
   sur confirmation explicite de l'utilisateur). `LIVRAISON_PROVISOIRE` : 0 occurrence,
   placée après FORMALISE par l'ordre de tri adjacent (9 → 71).
+- **`ComFolderRepository.findAll` (N+1 corrigé)** : une page de 20 déclenchait
+  jusqu'à 80 SELECT ; mesuré 0,72 s à `size=1`, 3,51 s à 20, 7,72 s à 50 (~0,15 s
+  par ligne, surtout réseau) sur 358 dossiers.
+- **`ComSaleProspectionViewRepository.findByIdIn`** : 7 ms pour 20 ids, 34 ms pour
+  100, contre 513 ms pour servir la page depuis la vue à `OFFSET 5000` — d'où
+  l'enrichissement par lot.
+- **`StlSettlementAffectation`** : 130 règlements sur 3 243 (4 %) sans ligne, d'où le
+  sous-select partant de `StlSettlement` ; pré-agrégation étroite 9 ms (large ~1 s).
+- **`StlSettlementLineRepository.encaissementsDeLAnnee`** : la jointure article
+  principal double les lignes des 3 dossiers à deux articles principaux et exclut les
+  37 qui n'en ont aucun.
+- **`AdmUserHabilitation`** : 346 lignes tranche, 302 PrjProject, 237 société,
+  196 projet.
 
 ## Annexe — Défauts possibles relevés pendant le nettoyage (non corrigés)
 
@@ -325,6 +338,14 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
     Administrateur, qui hérite alors de l'exemption de périmètre.
 11. **Spec périmée** : `FEATURE-kpi-performance-commerciaux.md` §3 (interactions sans
     employé exclues) contredit le code et `FEATURE-suivi-actions.md` §7.
+12. **Argent** : même motif `COALESCE(SUM(...), 0)` dans
+    `StlSettlementLineRepository.sumAmountByComDocumentId`, `sumAmountByStlSettlementId`,
+    `sumAmountByComFolderIdGroupedByComDocument` et `StkItemRepository.sumAreaGroupedByParentIdIn`
+    — vérifier s'ils arrondissent.
+13. **Visibilité** : `CfgTrancheRepository` / `CfgProjectRepository.findDesEntitesActives*`
+    excluent par jointure interne les lignes sans société (conflit possible avec R2).
+14. **Spec vs code** : `FEATURE-dashboard-omran.md` §4 exige la jointure
+    `StkItem … IsUnderItem = 0` pour le bloc C ; le code l'omet volontairement.
 
 ## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
 

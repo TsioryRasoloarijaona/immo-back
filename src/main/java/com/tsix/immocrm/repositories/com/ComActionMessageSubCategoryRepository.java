@@ -8,11 +8,6 @@ import java.util.UUID;
 
 public interface ComActionMessageSubCategoryRepository extends JpaRepository<ComActionMessageSubCategory, UUID> {
 
-    /**
-     * {@code GET /api/referentiels/resultats-interaction} — the "Résultat" dropdown for a
-     * hotline/prospection interaction: every sub-category under the
-     * {@code ComActionMessageCategory} coded {@code categoryCode} (confirmed empirically:
-     * {@code "Prospection"} — 23 rows in real data).
-     */
+    /** Liste « Résultat » hotline/prospection : {@code categoryCode = "Prospection"}. */
     List<ComActionMessageSubCategory> findByComActionMessageCategoryCodeOrderByDescriptionAsc(String categoryCode);
 }

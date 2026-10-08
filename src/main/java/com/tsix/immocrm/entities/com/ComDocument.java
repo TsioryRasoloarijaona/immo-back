@@ -78,9 +78,8 @@ public class ComDocument {
     @Column(name = "Notes", length = 1000)
     private String notes;
 
-    // NOT the "Catégorie" shown on the échéancier (Omran "Schéma de financement" tab) — that's
-    // ComSettlementCategoryId below. StlSettlementTypeId is NULL on every real échéance row;
-    // StlSettlementType is the payment-method lookup used by StlSettlement, not ComDocument.
+    // Pas la « Catégorie » de l'échéancier (c'est ComSettlementCategoryId) : toujours NULL sur les
+    // échéances réelles, StlSettlementType sert aux règlements.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlSettlementTypeId")
     private StlSettlementType stlSettlementType;
@@ -96,11 +95,7 @@ public class ComDocument {
     @Column(name = "PaymentAuthorizationDate")
     private LocalDateTime paymentAuthorizationDate;
 
-    // Compte destinataire du versement — confirmé colonne réelle (INFORMATION_SCHEMA), mais quasi
-    // jamais renseigné en données réelles (2 lignes sur toute la base) contrairement à son
-    // équivalent StlSettlement.StlAccountId (76% renseigné) — c'est ce dernier qui alimente le RIB
-    // sur l'Autorisation d'Encaissement (voir AutorisationVersementService), pas ce champ-ci.
-    // Laissé mappé (colonne réelle) même si non lu ailleurs pour l'instant.
+    // Presque jamais renseigné : le RIB de l'Autorisation d'Encaissement lit StlSettlement.StlAccountId.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")
     private StlAccount stlAccount;

@@ -13,16 +13,12 @@ import java.util.UUID;
 
 public interface StlSettlementRepository extends JpaRepository<StlSettlement, UUID>, JpaSpecificationExecutor<StlSettlement> {
 
-    /** {@code GET /api/prospects/{id}/reglements} (GAP-06) — every settlement for this tier, across all Dossiers. */
     Page<StlSettlement> findByTierIdOrderByDocDateDesc(UUID tierId, Pageable pageable);
 
     /**
-     * Point de contrôle unique du périmètre sur le chargement d'un encaissement par id — voir
-     * {@code PerimetreInterceptor}. Un règlement est dans le périmètre s'il porte au moins une
-     * ligne rattachée à un dossier d'un projet du périmètre, <b>ou</b> si aucune de ses lignes ne
-     * résout de projet du tout (§6.4 — un règlement non rattaché n'appartient à aucun périmètre et
-     * n'est masqué à personne). Même motif de sous-requête {@code EXISTS} que le filtre
-     * {@code dossierId} de {@code EncaissementService}.
+     * Contrôle unique du périmètre par id : une ligne sur un projet du périmètre, ou aucune ligne qui
+     * résout un projet (§6.4). Chemins implicites = jointures internes : une ligne sans projet ne compte
+     * dans aucun des deux {@code EXISTS}, c'est voulu.
      */
     @Query("SELECT COUNT(s) > 0 FROM StlSettlement s LEFT JOIN s.cfgCompany soc "
             + "WHERE s.id = :id AND (soc.isActive = true OR soc.id IS NULL) AND ("
@@ -33,12 +29,8 @@ public interface StlSettlementRepository extends JpaRepository<StlSettlement, UU
     boolean existsDansPerimetre(@Param("id") UUID id, @Param("projetIds") List<UUID> projetIds);
 
     /**
-     * Variante de {@link #existsDansPerimetre} pour un appelant non restreint par un périmètre :
-     * seule la visibilité par entité juridique s'applique (R4).
-     *
-     * <p>Le règlement porte sa société en FK directe ({@code StlSettlement.CfgCompanyId}), mesurée
-     * concordante avec celle déduite du dossier sur 644 règlements de vente sur 644 — inutile de
-     * repasser par les lignes ici.
+     * Appelant sans périmètre : visibilité par entité seule (R4), par la FK directe {@code CfgCompanyId},
+     * concordante avec la société du dossier (FEATURE-visibilite-transversale-entites.md).
      */
     @Query("SELECT COUNT(s) > 0 FROM StlSettlement s LEFT JOIN s.cfgCompany soc "
             + "WHERE s.id = :id AND (soc.isActive = true OR soc.id IS NULL)")

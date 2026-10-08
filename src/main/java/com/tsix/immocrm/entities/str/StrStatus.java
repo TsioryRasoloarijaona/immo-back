@@ -11,12 +11,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
-/**
- * Generic, cross-module workflow status (shared by several "Str*" tables — Dossier statuses
- * are the subset where {@code StrConfigEntityId} identifies the Dossier config entity).
- * Only the fields needed for read/display are mapped; the DB table also carries an
- * IsReadOnly/CanDelete/BoolField001-020 admin-configuration block not used here.
- */
+/** Statut générique, partagé par plusieurs modules : ceux des dossiers sont filtrés par {@code StrConfigEntityId}. */
 @Getter
 @Setter
 @Entity

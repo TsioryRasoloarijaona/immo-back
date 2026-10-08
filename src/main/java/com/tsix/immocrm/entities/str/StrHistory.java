@@ -12,10 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo_StrHistory — generic audit trail row (status/workflow changes), filtered by
- * {@code ObjectId} — feeds the "Historique" tab present on every Omran fiche (GAP-06).
- */
+/** Piste d'audit générique du légataire, filtrée par {@code ObjectId}. */
 @Getter
 @Setter
 @Entity

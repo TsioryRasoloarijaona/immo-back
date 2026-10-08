@@ -21,13 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * dbo_StlQuote (+ StlQuoteItem/StlQuoteDocument, not yet mapped) — the "Offres" tab (GAP-07). Now
- * carries the full HT/TTC "Montants" breakdown the legacy "Offre" screen shows (prix du m²,
- * prix article, prix sous-articles, total, remise, prix de vente), not just the final
- * {@code priceAfterDiscount}; still doesn't map the ~40 remaining rent/caution/commission
- * columns the real table carries, which don't apply to a sale offer.
- */
+/** Offre de vente (onglet « Offres ») ; les colonnes de location/caution ne sont pas mappées. */
 @Getter
 @Setter
 @Entity
@@ -74,12 +68,12 @@ public class StlQuote {
     @JoinColumn(name = "ComPaymentMethodId")
     private ComPaymentMethod comPaymentMethod;
 
-    // -- Montants (onglet "Montants" du formulaire Offre legacy) --------------------------------
+    // Onglet « Montants » du formulaire Offre du légataire.
 
     @Column(name = "Area", precision = 26, scale = 6)
     private BigDecimal area;
 
-    /** Taux de TVA (ex. 0.20 = 20%), repris de l'article au moment de la création de l'offre. */
+    /** Ratio (0.20 = 20 %), figé depuis l'article à la création de l'offre. */
     @Column(name = "VATRatio", precision = 26, scale = 6)
     private BigDecimal vatRatio;
 
@@ -97,7 +91,7 @@ public class StlQuote {
     @Column(name = "ItemPrice", precision = 26, scale = 6)
     private BigDecimal itemPrice;
 
-    /** "Prix sous articles" HT/TTC (somme des sous-articles inclus dans l'offre). */
+    /** "Prix sous articles" HT/TTC. */
     @Column(name = "UnderItemsPriceHT", precision = 26, scale = 6)
     private BigDecimal underItemsPriceHT;
 
@@ -142,14 +136,14 @@ public class StlQuote {
     @Column(name = "UnderItemsPriceAfterDiscount", precision = 26, scale = 6)
     private BigDecimal underItemsPriceAfterDiscount;
 
-    /** "Prix de vente" HT/TTC = total − remise. Ligne finale du formulaire Offre legacy. */
+    /** "Prix de vente" HT/TTC = total − remise. */
     @Column(name = "PriceAfterDiscountHT", precision = 26, scale = 6)
     private BigDecimal priceAfterDiscountHT;
 
     @Column(name = "PriceAfterDiscount", precision = 26, scale = 6)
     private BigDecimal priceAfterDiscount;
 
-    /** Taux de commission (ex. 0.03 = 3%) — champ "Commission" du formulaire Offre legacy. */
+    /** Ratio (0.03 = 3 %). */
     @Column(name = "CommissionRate", precision = 26, scale = 6)
     private BigDecimal commissionRate;
 

@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
 
-    /** Projets dont l'entité juridique est en exploitation — voir {@code CfgCompany.isActive}. */
+    /** Entité en exploitation ; chemin implicite = jointure interne, un projet sans société est exclu. */
     @Query("SELECT p FROM CfgProject p WHERE p.cfgCompany.isActive = true")
     List<CfgProject> findDesEntitesActives();
 
