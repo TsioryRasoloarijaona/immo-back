@@ -1,16 +1,15 @@
 name: Tests
 
-# Sur pull_request, jamais sur push:main. Des tests joues apres le merge ne gardent rien :
-# le code serait deja parti au deploiement (voir deploy.yml, declenche par push:main).
-# Pour que ce workflow serve de barriere, le declarer comme check requis dans les regles de
-# protection de la branche main.
+# A chaque push de branche (PR ouverte ou non), jamais sur push:main : apres le merge le code
+# part deja au deploiement (deploy.yml). Pas de pull_request en plus, sinon deux suites par
+# push ; le check du commit de tete s'affiche quand meme sur la PR et peut etre rendu requis.
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches-ignore: [main]
   workflow_dispatch:
 
-# Une PR poussee trois fois de suite n'a pas besoin de trois suites completes : seule la
-# derniere revision compte, contrairement au deploiement qu'on ne coupe jamais a mi-course.
+# Trois pushes de suite n'ont pas besoin de trois suites completes : seule la derniere
+# revision compte, contrairement au deploiement qu'on ne coupe jamais a mi-course.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
