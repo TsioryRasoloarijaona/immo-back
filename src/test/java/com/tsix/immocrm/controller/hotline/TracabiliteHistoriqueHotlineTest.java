@@ -529,4 +529,94 @@ class TracabiliteHistoriqueHotlineTest {
                 .andExpect(jsonPath("$.fiches[0].interactions[?(@.id=='" + surA.getId() + "')]").exists())
                 .andExpect(jsonPath("$.fiches[0].interactions[?(@.id=='" + surB.getId() + "')]").doesNotExist());
     }
+
+    // ================================================================= revue : cas limites
+
+    private void newStrHistory(UUID objectId, LocalDateTime date, String auteur) {
+        com.tsix.immocrm.entities.str.StrHistory s = new com.tsix.immocrm.entities.str.StrHistory();
+        s.setId(UUID.randomUUID());
+        s.setObjectId(objectId);
+        s.setDocDate(date);
+        s.setAdmUserDescription(auteur);
+        entityManager.persist(s);
+    }
+
+    @Test
+    void revue_auteurStatut_repliStrHistory_neLitQueLeMemeDossier() throws Exception {
+        LocalDateTime date = LocalDateTime.of(2021, 5, 4, 10, 0);
+        CfgTranche tranche = newTranche(newProjet("PRJ-TRACE-REPLI"));
+        CfgTier client = newTier("CLI-TRACE-REPLI", null);
+        ComFolder sansJumelle = newDossier("DOS-TRACE-R1", tranche, client, null);
+        ComFolder avecJumelle = newDossier("DOS-TRACE-R2", tranche, client, null);
+        newLigneStatut(sansJumelle, client, statut(StatutDossier.RESERVATION), null, date, null);
+        newLigneStatut(avecJumelle, client, statut(StatutDossier.RESERVATION), UUID.randomUUID(), date, null);
+        // Même date, mais la ligne StrHistory vise l'autre dossier : elle ne doit pas signer sansJumelle.
+        newStrHistory(avecJumelle.getId(), date, "Compte Legacy");
+        entityManager.flush();
+
+        mockMvc.perform(get("/api/dossiers/{id}/historique", avecJumelle.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type=='STATUT')].utilisateur").value("Compte Legacy"));
+        mockMvc.perform(get("/api/dossiers/{id}/historique", sansJumelle.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].type").value("STATUT"))
+                .andExpect(jsonPath("$.content[0].utilisateur").doesNotExist());
+    }
+
+    @Test
+    void revue_historiqueDuTiers_ligneSansDossier_resteVisiblePourUnRestreint() throws Exception {
+        CfgProject projetA = newProjet("PRJ-TRACE-NUL");
+        AdmUser restreint = newUser("trace.nul");
+        affecter(restreint, projetA);
+        CfgTier client = newTier("CLI-TRACE-NUL", null);
+        StrFolderStatusHistory orpheline = newLigneStatut(null, client, statut(StatutDossier.RESERVATION),
+                null, LocalDateTime.of(2019, 1, 1, 9, 0), null);
+
+        mockMvc.perform(get("/api/prospects/{id}/historique", client.getId()).with(connecte(restreint)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(orpheline.getId().toString()))
+                .andExpect(jsonPath("$.content[0].dossierId").doesNotExist());
+    }
+
+    @Test
+    void revue_historiqueDuTiers_paginationRestreinte_compteJuste() throws Exception {
+        CfgProject projetA = newProjet("PRJ-TRACE-PGA");
+        CfgProject projetB = newProjet("PRJ-TRACE-PGB");
+        AdmUser restreint = newUser("trace.page");
+        affecter(restreint, projetA);
+        CfgTier client = newTier("CLI-TRACE-PAGE", null);
+        ComFolder surA = newDossier("DOS-TRACE-PGA", newTranche(projetA), client, null);
+        ComFolder surB = newDossier("DOS-TRACE-PGB", newTranche(projetB), client, null);
+        for (int i = 0; i < 3; i++) {
+            newLigneStatut(surA, client, statut(StatutDossier.RESERVATION), null, LocalDateTime.of(2024, 1, 1 + i, 9, 0), null);
+            newLigneStatut(surB, client, statut(StatutDossier.RESERVATION), null, LocalDateTime.of(2024, 2, 1 + i, 9, 0), null);
+        }
+
+        mockMvc.perform(get("/api/prospects/{id}/historique", client.getId()).param("size", "2").param("page", "1")
+                        .with(connecte(restreint)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].dossierId").value(surA.getId().toString()));
+    }
+
+    @Test
+    void revue_hotline_interactionSurLaFicheMaisProspectionHorsPerimetre_resteInvisible() throws Exception {
+        CfgProject projetA = newProjet("PRJ-TRACE-HFA");
+        CfgProject projetB = newProjet("PRJ-TRACE-HFB");
+        AdmUser restreint = newUser("trace.hotfiche");
+        affecter(restreint, projetA);
+        String telephone = telephoneUnique();
+        CfgTier tier = newTier("CLI-TRACE-HF", telephone);
+        ComActionMessage surB = newInteraction(tier, newProspection("PSN-TRACE-HFB", newTranche(projetB), tier), "B");
+        ComActionMessage surFiche = newInteraction(tier, null, "fiche seule");
+
+        String json = mockMvc.perform(get("/api/hotline/recherche").param("telephone", telephone).with(connecte(restreint)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JSONArray ids = JsonPath.read(json, "$.fiches[0].interactions[*].id");
+        assertThat(ids).containsExactly(surFiche.getId().toString());
+        assertThat(ids).doesNotContain(surB.getId().toString());
+    }
 }
