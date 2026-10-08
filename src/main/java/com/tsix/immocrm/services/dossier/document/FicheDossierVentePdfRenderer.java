@@ -39,6 +39,8 @@ import static com.tsix.immocrm.services.dossier.document.MontantFormatter.vide;
 @Component
 public class FicheDossierVentePdfRenderer {
 
+    private static final String CATEGORIE = "Catégorie";
+
     private static final Color BORDER = Color.BLACK;
     private static final Color HEADER_BG = new Color(0xE7, 0xE7, 0xE7);
     private static final Color SETTLED_GREEN = new Color(0x1E, 0x7A, 0x1E);
@@ -137,7 +139,7 @@ public class FicheDossierVentePdfRenderer {
         PdfPTable table = grid4();
         row(table, "N° dossier", vide(data.dossierCode()), "Date", d(data.dateDocument()));
         row(table, "Statut", vide(data.statut()), "Client", vide(data.clientNom()));
-        row(table, "Catégorie", vide(data.categorieLibelle()), "Type", vide(data.typeLibelle()));
+        row(table, CATEGORIE,vide(data.categorieLibelle()), "Type", vide(data.typeLibelle()));
         row(table, "Article", vide(data.articleCode()), "Supperficie (m²)", surface(data.superficie()));
         row(table, "Commercial", vide(data.commercialNom()), "Prospection", vide(data.prospectionCode()));
         row(table, "Entité", vide(data.entrepriseNom()), "Programme", vide(data.projetNom()));
@@ -289,7 +291,7 @@ public class FicheDossierVentePdfRenderer {
             // widths array length always matches column count here
         }
         table.addCell(headerCell("Date"));
-        table.addCell(headerCell("Catégorie"));
+        table.addCell(headerCell(CATEGORIE));
         table.addCell(headerCell("Montant"));
         table.addCell(headerCell("Réglé"));
         table.addCell(headerCell("Reste / Notes"));
@@ -321,7 +323,7 @@ public class FicheDossierVentePdfRenderer {
             // widths array length always matches column count here
         }
         table.addCell(headerCell("Code"));
-        table.addCell(headerCell("Catégorie"));
+        table.addCell(headerCell(CATEGORIE));
         table.addCell(headerCell("Superficie (m²)"));
         table.addCell(headerCell("Prix"));
         table.addCell(headerCell("Remise"));

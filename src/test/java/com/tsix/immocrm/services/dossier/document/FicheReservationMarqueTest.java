@@ -52,9 +52,9 @@ class FicheReservationMarqueTest {
             byte[] rendu = pdf.render(fiche(code, cas[1]));
             assertThat(rendu).startsWith('%', 'P', 'D', 'F');
             // Le fond pèse ~1 Mo : un PDF nettement plus léger signifierait qu'il n'a pas été posé.
-            assertThat(rendu.length)
+            assertThat(rendu)
                     .as("le fond de page doit être embarqué pour " + code)
-                    .isGreaterThan(500_000);
+                    .hasSizeGreaterThan(500_000);
         }
     }
 
@@ -62,7 +62,8 @@ class FicheReservationMarqueTest {
     @DisplayName("Une marque non couverte est refusée, jamais rendue sous un autre en-tête")
     void marqueInconnue_refusee() {
         for (String code : new String[]{"MBR 2024/00001", "ART 2023/00050", "", "XX"}) {
-            assertThatThrownBy(() -> pdf.render(fiche(code, "BENACEUR")))
+            FicheReservationData donnees = fiche(code, "BENACEUR");
+            assertThatThrownBy(() -> pdf.render(donnees))
                     .as("marque non couverte : " + code)
                     .isInstanceOf(ConflictException.class);
         }
@@ -73,7 +74,8 @@ class FicheReservationMarqueTest {
     void societeIncoherente_refusee() {
         // Code APF (en-tête ADMOD) mais projet rattaché à MAYLINE : le document porterait
         // l'en-tête et les clauses d'ADMOD alors que le vendeur est un autre.
-        assertThatThrownBy(() -> pdf.render(fiche("APF 2022/00217", "MAYLINE")))
+        FicheReservationData donnees = fiche("APF 2022/00217", "MAYLINE");
+        assertThatThrownBy(() -> pdf.render(donnees))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Incohérence");
     }

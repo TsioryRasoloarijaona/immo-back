@@ -18,7 +18,6 @@ import org.springframework.stereotype.Component;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.RoundingMode;
-import java.util.List;
 
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.date;
 import static com.tsix.immocrm.services.dossier.document.MontantFormatter.montant;

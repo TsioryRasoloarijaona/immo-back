@@ -82,13 +82,7 @@ public class RecuReglementService {
         CfgTier beneficiaireTier = settlement.getTier() != null ? settlement.getTier() : folder.getCfgCustomer();
         Beneficiaire beneficiaire = beneficiaireTier != null ? toBeneficiaire(beneficiaireTier) : null;
 
-        List<Beneficiaire> coAcquereurs = new ArrayList<>();
-        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
-            CfgTier tier = coAcquereur.getCfgTier();
-            if (tier != null && (beneficiaireTier == null || !tier.getId().equals(beneficiaireTier.getId()))) {
-                coAcquereurs.add(toBeneficiaire(tier));
-            }
-        }
+        List<Beneficiaire> coAcquereurs = coAcquereurs(dossierId, beneficiaireTier);
 
         boolean superficieApproximative = article == null
                 || article.getTitleNumber() == null || article.getTitleNumber().isBlank();
@@ -96,15 +90,7 @@ public class RecuReglementService {
         List<StlSettlementLine> toutesLesLignes = settlementLineRepository.findByDossierIdOrderByStlSettlementDocDateAsc(dossierId);
         List<LigneReglement> lignesReglement = new ArrayList<>();
         for (StlSettlementLine ligne : toutesLesLignes) {
-            BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
-            boolean credit = ligne.getStlSettlement() != null && Boolean.TRUE.equals(ligne.getStlSettlement().getIsCredit());
-            lignesReglement.add(new LigneReglement(
-                    ligne.getStlSettlement() != null && ligne.getStlSettlement().getDocDate() != null
-                            ? ligne.getStlSettlement().getDocDate().toLocalDate() : null,
-                    credit ? montant : montant.negate(),
-                    credit,
-                    ligne.getStlSettlement() != null ? ligne.getStlSettlement().getDescription() : null
-            ));
+            lignesReglement.add(toLigneReglement(ligne));
         }
 
         MontantsDossierDto montants = dossierService.montants(dossierId);
@@ -140,6 +126,30 @@ public class RecuReglementService {
                 folder.getPriceAfterDiscount(),
                 lignesReglement,
                 resteAPayer
+        );
+    }
+
+    /** Co-acquéreurs du dossier, sans le bénéficiaire du reçu. */
+    private List<Beneficiaire> coAcquereurs(UUID dossierId, CfgTier beneficiaireTier) {
+        List<Beneficiaire> coAcquereurs = new ArrayList<>();
+        for (ComFolderCustomer coAcquereur : folderCustomerRepository.findByComFolderId(dossierId)) {
+            CfgTier tier = coAcquereur.getCfgTier();
+            if (tier != null && (beneficiaireTier == null || !tier.getId().equals(beneficiaireTier.getId()))) {
+                coAcquereurs.add(toBeneficiaire(tier));
+            }
+        }
+        return coAcquereurs;
+    }
+
+    private static LigneReglement toLigneReglement(StlSettlementLine ligne) {
+        BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
+        StlSettlement reglement = ligne.getStlSettlement();
+        boolean credit = reglement != null && Boolean.TRUE.equals(reglement.getIsCredit());
+        return new LigneReglement(
+                reglement != null && reglement.getDocDate() != null ? reglement.getDocDate().toLocalDate() : null,
+                credit ? montant : montant.negate(),
+                credit,
+                Champs.de(reglement, StlSettlement::getDescription)
         );
     }
 
