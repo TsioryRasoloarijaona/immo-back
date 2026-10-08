@@ -101,7 +101,7 @@ class ProspectionInteractionAlerteTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         em.flush();
-        return UUID.fromString(reponse.replaceAll(".*\"id\":\"([0-9a-f-]{36})\".*", "$1"));
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id"));
     }
 
     // --- Une interaction datée d'une alerte ---

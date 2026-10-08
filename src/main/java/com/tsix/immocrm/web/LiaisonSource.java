@@ -2,6 +2,7 @@ package com.tsix.immocrm.web;
 
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.util.ClassUtils;
 
 import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
@@ -22,6 +23,9 @@ public enum LiaisonSource {
             + "Réessayez dans quelques minutes."),
     LIAISON_COUPEE("La liaison avec la base OMRAN a été coupée pendant l'opération. "
             + "Vérifiez si la saisie a été enregistrée avant de la refaire.");
+
+    // mssql-jdbc est en scope runtime : classe résolue au chargement, pas importée ; égalité stricte, pas de sous-classes.
+    private static final Class<?> SQL_SERVER_EXCEPTION = classeOuNull("com.microsoft.sqlserver.jdbc.SQLServerException");
 
     private final String detail;
 
@@ -70,12 +74,19 @@ public enum LiaisonSource {
         if (t instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("08")) {
             return true;
         }
-        if ("com.microsoft.sqlserver.jdbc.SQLServerException".equals(t.getClass().getName())
-                && t.getMessage() != null) {
+        if (t.getClass() == SQL_SERVER_EXCEPTION && t.getMessage() != null) {
             String message = t.getMessage().toLowerCase(Locale.ROOT);
             return message.contains("connection is closed") || message.contains("connection reset");
         }
         return false;
+    }
+
+    private static Class<?> classeOuNull(String nom) {
+        try {
+            return ClassUtils.forName(nom, LiaisonSource.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
     }
 
     private static List<Throwable> chaine(Throwable erreur) {

@@ -14,6 +14,7 @@ import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -302,7 +303,7 @@ public class DocsApiMarkdown {
         Class<?> type = mp.getParameterType();
         if (mp.hasParameterAnnotation(RequestBody.class) || mp.hasParameterAnnotation(RequestPart.class)) return null;
         if (Arrays.stream(mp.getParameterAnnotations())
-                .anyMatch(a -> a.annotationType().getSimpleName().equals("AuthenticationPrincipal"))) return null;
+                .anyMatch(AuthenticationPrincipal.class::isInstance)) return null;
         RequestParam rp = mp.getParameterAnnotation(RequestParam.class);
         if (rp != null) {
             Class<?> element = type.isArray() ? type.getComponentType()

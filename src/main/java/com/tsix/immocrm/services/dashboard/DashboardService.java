@@ -16,8 +16,8 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -90,7 +90,8 @@ public class DashboardService {
 
             LocalDateTime dateEcheance = earliestOverdue(revival1, revival1ValidityDate, revival2, revival2ValidityDate, now);
             if (dateEcheance != null) {
-                long joursRetard = Duration.between(dateEcheance, now).toDays();
+                // Jours au calendrier mural, comme avant : un Duration zoné perdrait un jour à la fin du Ramadan.
+                long joursRetard = ChronoUnit.DAYS.between(dateEcheance, now);
                 relancesEnRetard.add(new RelanceDto(id, nomClient(socialReason, firstName, lastName), dateEcheance, joursRetard));
             }
         }

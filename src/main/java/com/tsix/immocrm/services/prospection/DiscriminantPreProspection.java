@@ -51,7 +51,7 @@ public final class DiscriminantPreProspection {
 
     /** Même test, sur une ligne déjà chargée. */
     public static boolean estPreProspection(ComProspection p) {
-        return ID_PRE_PROSPECTION.equals(p.getStrEntityId());
+        return p != null && ID_PRE_PROSPECTION.equals(p.getStrEntityId());
     }
 
     private static Subquery<UUID> idsPreProspection(CriteriaQuery<?> query, CriteriaBuilder cb) {

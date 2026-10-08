@@ -148,7 +148,7 @@ class ReglementStatutPreuveTest {
                         .contentType(MediaType.APPLICATION_JSON).content(corps(montant, type, payeur, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return UUID.fromString(json.replaceAll("^.*?\"id\"\\s*:\\s*\"([^\"]+)\".*$", "$1"));
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
     }
 
     private void deposerPreuve(ComFolder folder, UUID reglementId) throws Exception {
@@ -393,7 +393,7 @@ class ReglementStatutPreuveTest {
                         folder.getId(), reglementId).file(fichier))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        UUID pieceId = UUID.fromString(json.replaceAll("^.*?\"id\"\\s*:\\s*\"([^\"]+)\".*$", "$1"));
+        UUID pieceId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
 
         String cle = CleStockage.construire("test", PorteurPieceJointe.REGLEMENT, reglementId,
                 pieceId, ".pdf");
@@ -417,7 +417,7 @@ class ReglementStatutPreuveTest {
                         folder.getId(), reglementId).file(fichier))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return UUID.fromString(json.replaceAll("^.*?\"id\"\\s*:\\s*\"([^\"]+)\".*$", "$1"));
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
     }
 
     private void pointer(ComFolder folder, UUID reglementId) throws Exception {
