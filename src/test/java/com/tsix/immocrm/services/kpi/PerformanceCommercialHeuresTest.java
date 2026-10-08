@@ -11,6 +11,7 @@ import java.time.zone.ZoneOffsetTransition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** FIX-sonar-fiabilite.md, correction 6 : délai de prise en charge en heures réelles, fuseau marocain. */
+@SuppressWarnings("java:S8700") // comparaison exprès avec l'ancienne durée sur heure murale
 class PerformanceCommercialHeuresTest {
 
     private static final ZoneId CASABLANCA = ZoneId.of("Africa/Casablanca");

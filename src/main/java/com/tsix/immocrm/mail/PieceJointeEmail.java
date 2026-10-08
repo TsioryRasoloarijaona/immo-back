@@ -16,10 +16,10 @@ public record PieceJointeEmail(String nom, String contentType, byte[] contenu) {
     /** Le contenu comparé octet par octet, pas par référence de tableau. */
     @Override
     public boolean equals(Object o) {
-        return o instanceof PieceJointeEmail autre
-                && Objects.equals(nom, autre.nom)
-                && Objects.equals(contentType, autre.contentType)
-                && Arrays.equals(contenu, autre.contenu);
+        return o instanceof PieceJointeEmail(String autreNom, String autreType, byte[] autreContenu)
+                && Objects.equals(nom, autreNom)
+                && Objects.equals(contentType, autreType)
+                && Arrays.equals(contenu, autreContenu);
     }
 
     @Override

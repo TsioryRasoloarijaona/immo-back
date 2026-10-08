@@ -48,7 +48,7 @@ final class FichierDocMarkdown {
             String ligne = fin ? "" : lignes[i];
             String nette = ligne.strip();
             if (!fin && (nette.startsWith("```") || nette.startsWith("~~~"))) dansBlocCode = !dansBlocCode;
-            Titre m = (dansBlocCode && !fin) ? null : titre(ligne);
+            Titre m = (dansBlocCode && !fin) ? null : lireTitre(ligne);
             if (!fin && m == null) {
                 tampon.add(ligne);
                 continue;
@@ -103,7 +103,7 @@ final class FichierDocMarkdown {
      * {@code #} à {@code ###}, au moins un blanc, puis un nom non vide ; null sinon. {@code ####} et au-delà
      * restent du texte. Blancs = ceux de {@code \s} en regex (ASCII), pas {@code String.strip()}.
      */
-    static Titre titre(String ligne) {
+    static Titre lireTitre(String ligne) {
         int n = 0;
         while (n < ligne.length() && ligne.charAt(n) == '#') n++;
         if (n == 0 || n > 3 || n == ligne.length() || !blanc(ligne.charAt(n))) return null;
@@ -113,12 +113,13 @@ final class FichierDocMarkdown {
         while (fin > debut && blanc(ligne.charAt(fin - 1))) fin--;
         if (debut == fin) return null;
         String nom = ligne.substring(debut, fin);
-        if (nom.chars().anyMatch(c -> c == '\u0085' || c == ' ' || c == ' ')) return null;
+        // NEL, LS, PS : terminateurs de ligne Unicode, refusés par le « . » de l'ancienne regex.
+        if (nom.chars().anyMatch(c -> c == 0x0085 || c == 0x2028 || c == 0x2029)) return null;
         return new Titre(n, nom);
     }
 
     private static boolean blanc(char c) {
-        return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
+        return c == ' ' || c == '\t' || c == '\n' || c == 0x000B || c == '\f' || c == '\r';
     }
 
     /** Le texte d'une section : ses lignes, sans lignes vides de tête ni de queue ; null si vide. */

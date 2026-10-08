@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Revue FIX-sonar-fiabilite §5 : le lecteur manuel de titres rend ce que rendait l'ancienne regex. */
+@SuppressWarnings("java:S8786") // l'ancienne regex est la référence comparée, exprès
 class FichierDocMarkdownEquivalenceRegexTest {
 
     private static final Pattern ANCIEN = Pattern.compile("^(#{1,3})\\s+(.+?)\\s*$");
@@ -35,7 +36,7 @@ class FichierDocMarkdownEquivalenceRegexTest {
             for (String ligne : contenu.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1)) {
                 FichierDocMarkdown.Titre a = ancien(ligne);
                 if (a != null) titres++;
-                if (!java.util.Objects.equals(a, FichierDocMarkdown.titre(ligne))) ecarts.add(r.getFilename() + ": " + ligne);
+                if (!java.util.Objects.equals(a, FichierDocMarkdown.lireTitre(ligne))) ecarts.add(r.getFilename() + ": " + ligne);
             }
         }
         assertThat(ecarts).isEmpty();
@@ -51,7 +52,7 @@ class FichierDocMarkdownEquivalenceRegexTest {
                 "## A\u000B", "##\u000BA", "## é ü", "## A​", "##\fA", "", "texte",
         };
         for (String l : lignes) {
-            assertThat(FichierDocMarkdown.titre(l)).as("« %s »", l).isEqualTo(ancien(l));
+            assertThat(FichierDocMarkdown.lireTitre(l)).as("« %s »", l).isEqualTo(ancien(l));
         }
     }
 }

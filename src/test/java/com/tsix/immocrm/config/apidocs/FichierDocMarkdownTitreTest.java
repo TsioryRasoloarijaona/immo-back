@@ -9,23 +9,23 @@ class FichierDocMarkdownTitreTest {
 
     @Test
     void titre_niveauxEtNomSansBlancsAutour() {
-        assertThat(FichierDocMarkdown.titre("# ExempleController")).isEqualTo(new FichierDocMarkdown.Titre(1, "ExempleController"));
-        assertThat(FichierDocMarkdown.titre("## lire")).isEqualTo(new FichierDocMarkdown.Titre(2, "lire"));
-        assertThat(FichierDocMarkdown.titre("### param id   \t")).isEqualTo(new FichierDocMarkdown.Titre(3, "param id"));
-        assertThat(FichierDocMarkdown.titre("##\t  reponse 404  ")).isEqualTo(new FichierDocMarkdown.Titre(2, "reponse 404"));
-        assertThat(FichierDocMarkdown.titre("## # pas un titre de plus")).isEqualTo(new FichierDocMarkdown.Titre(2, "# pas un titre de plus"));
+        assertThat(FichierDocMarkdown.lireTitre("# ExempleController")).isEqualTo(new FichierDocMarkdown.Titre(1, "ExempleController"));
+        assertThat(FichierDocMarkdown.lireTitre("## lire")).isEqualTo(new FichierDocMarkdown.Titre(2, "lire"));
+        assertThat(FichierDocMarkdown.lireTitre("### param id   \t")).isEqualTo(new FichierDocMarkdown.Titre(3, "param id"));
+        assertThat(FichierDocMarkdown.lireTitre("##\t  reponse 404  ")).isEqualTo(new FichierDocMarkdown.Titre(2, "reponse 404"));
+        assertThat(FichierDocMarkdown.lireTitre("## # pas un titre de plus")).isEqualTo(new FichierDocMarkdown.Titre(2, "# pas un titre de plus"));
     }
 
     @Test
     void titre_pasUnTitre() {
-        assertThat(FichierDocMarkdown.titre("#### Détail")).isNull();
-        assertThat(FichierDocMarkdown.titre("##sansBlanc")).isNull();
-        assertThat(FichierDocMarkdown.titre("##")).isNull();
-        assertThat(FichierDocMarkdown.titre("## ")).isNull();
-        assertThat(FichierDocMarkdown.titre("##  \t ")).isNull();
-        assertThat(FichierDocMarkdown.titre(" ## indenté")).isNull();
-        assertThat(FichierDocMarkdown.titre("texte # avec dièse")).isNull();
-        assertThat(FichierDocMarkdown.titre("")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("#### Détail")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("##sansBlanc")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("##")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("## ")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("##  \t ")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre(" ## indenté")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("texte # avec dièse")).isNull();
+        assertThat(FichierDocMarkdown.lireTitre("")).isNull();
     }
 
     @Test
