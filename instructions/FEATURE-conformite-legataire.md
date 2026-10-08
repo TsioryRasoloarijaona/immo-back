@@ -150,3 +150,12 @@ Un changement de **comportement** en revanche, et il est voulu : après `POST /a
 prospection transformée **disparaît de `GET /api/prospections`** (elle est fermée). Un écran qui
 la cherchait encore après la vente ne la trouvera plus — c'est le comportement du logiciel de
 bureau, et l'ancien était le défaut.
+
+## §2bis — Texte de clôture « Création dossier de vente » (08/10/2026)
+
+Mesure `yesRemsProd` : 374 prospections liées à un dossier, 359 archivées ; OMRAN écrit
+`ClosingReasonText = "Création dossier de vente"` sur 356/359 (aucun motif codé « vendu » dans
+`ComProspectionClosingReason`), immo-crm n'écrivait rien. `cloturerLaProspection` écrit désormais
+ce texte (`DossierService.TEXTE_CLOTURE_VENTE`) ; les alertes restent éteintes par
+`AlerteRelanceService.desarmerToutes`, comme à l'archivage. Les 14 prospections immo-crm restées
+ouvertes avant le 11/09/2026 (commit 044c4c0) ne sont pas rattrapées (décision utilisateur).
