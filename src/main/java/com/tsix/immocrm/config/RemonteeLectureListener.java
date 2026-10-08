@@ -4,13 +4,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
- * {@code @EventListener} et non {@code AFTER_COMMIT} : {@link CollecteurLignesEcrites} publie déjà depuis
- * {@code afterCommit}, où un écouteur transactionnel ne serait jamais appelé. Une transaction annulée ne publie rien ;
- * la suite de tests (annulée) ne le déclenche donc jamais : éprouver {@link RemonteeLecture} directement.
+ * Synchrone : publié depuis {@code afterCommit}, il recopie avant que la réponse parte, sinon le front relit l'ancien
+ * état (FIX-rapatriement-synchrone.md). {@code @EventListener} et non {@code AFTER_COMMIT} : déjà en {@code afterCommit},
+ * un écouteur transactionnel ne serait jamais appelé. La suite de tests (annulée) ne publie rien.
  */
 @Component
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -24,13 +23,12 @@ public class RemonteeLectureListener {
         this.remonteeLecture = remonteeLecture;
     }
 
-    @Async("remonteeExecutor")
     @EventListener
     public void surEcrituresValidees(EcrituresValidees evenement) {
         try {
             remonteeLecture.remonter(evenement.lignes());
         } catch (RuntimeException e) {
-            // Hors du fil de la requête : une exception laissée filer se perdrait dans l'exécuteur.
+            // Levée en afterCommit, elle ferait échouer une requête dont l'écriture est pourtant validée sur la source.
             log.error("Rapatriement interrompu pour {} ligne(s).", evenement.lignes().size(), e);
         }
     }
