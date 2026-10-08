@@ -27,6 +27,9 @@ public class SourceDeVeriteProperties {
     /** Petit pool : seules les écritures, gestes d'utilisateur, passent ici. */
     private int taillePool = 5;
 
+    /** Pool à part : la recopie tourne pendant que la requête tient encore sa connexion du pool principal. */
+    private int taillePoolRemontee = 2;
+
     /** Plancher imposé par Hikari. Le keepalive empêche la box d'« oublier » une connexion inactive. */
     static final long KEEPALIVE_MIN_MS = 30_000;
 
@@ -139,6 +142,14 @@ public class SourceDeVeriteProperties {
 
     public void setTaillePool(int taillePool) {
         this.taillePool = taillePool;
+    }
+
+    public int getTaillePoolRemontee() {
+        return taillePoolRemontee;
+    }
+
+    public void setTaillePoolRemontee(int taillePoolRemontee) {
+        this.taillePoolRemontee = taillePoolRemontee;
     }
 
     public long getKeepaliveMs() {

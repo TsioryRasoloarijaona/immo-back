@@ -202,10 +202,7 @@ public class SynchronisationDescendante {
                         + "JOIN sys.tables t ON t.object_id = ctt.object_id", String.class);
         return tables.stream()
                 .filter(t -> !CollecteurLignesEcrites.JAMAIS_RAPATRIEES.contains(t))
-                .sorted(Comparator.comparingInt(t -> {
-                    int rang = CollecteurLignesEcrites.ORDRE_CLES_ETRANGERES.indexOf(t);
-                    return rang < 0 ? CollecteurLignesEcrites.ORDRE_CLES_ETRANGERES.size() : rang;
-                }))
+                .sorted(Comparator.comparingInt(CollecteurLignesEcrites::rang))
                 .toList();
     }
 

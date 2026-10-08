@@ -47,9 +47,34 @@ LECTURES   →  la copie locale du backend
 | Élément | Rôle |
 |---|---|
 | `config/SourceDeVeriteProperties` | coordonnées de la source, préfixe `app.source-de-verite` |
-| `config/DataSourceConfig` | les deux sources, l'aiguillage, l'exécuteur de rapatriement |
+| `config/DataSourceConfig` | les deux sources, l'aiguillage, le petit pool `hikari-remontee` du rapatriement |
 | `config/CollecteurLignesEcrites` | écouteurs Hibernate `POST_INSERT`/`POST_UPDATE` |
-| `config/RemonteeLecture` | recopie immédiate de la ligne écrite, par `MERGE` |
+| `config/RemonteeLecture` | recopie immédiate de la ligne écrite, par `MERGE`, **avant la réponse HTTP** |
+
+### Rapatriement synchrone (FIX-rapatriement-synchrone.md)
+
+Le rapatriement de nos propres écritures tourne **dans le fil de la requête** : la transaction
+publie `EcrituresValidees` en `afterCommit`, `RemonteeLectureListener` (sans `@Async`) recopie
+chaque ligne, puis seulement le contrôleur écrit sa réponse. Invariant : **quand un
+POST/PUT/PATCH/DELETE répond 2xx, chaque ligne qu'il a écrite est lisible dans la copie.**
+
+Pourquoi : en asynchrone, la réponse 201 partait avant la recopie, et le front, qui relit
+aussitôt, lisait l'ancien état (action ajoutée invisible, fiche restée « pré-prospection »,
+`GET /api/dossiers/{id}` en 404 ~10 s après le `POST`). L'écart grandit en production, où la
+source est jointe par Internet.
+
+- **Pool à part, `hikari-remontee`** (`SOURCE_DB_POOL_REMONTEE`, défaut 2). Pendant
+  `afterCommit`, la requête tient encore sa connexion du pool `ecriture` (Hibernate la garde
+  jusqu'au nettoyage de fin de transaction, après les `afterCommit`) ; relire la ligne sur le
+  même pool, c'est en emprunter une seconde : avec 5 écritures simultanées et un pool de 5,
+  chacune attendrait l'autre jusqu'au timeout. Sur un pool distinct, aucune attente croisée :
+  un rapatriement ne tient que `remontee` puis `lecture`, jamais l'inverse. La relecture des
+  passes `SynchronisationDescendante` (même `RemonteeLecture`) passe aussi par ce pool.
+- **Un échec de recopie ne fait pas échouer la requête** : l'écriture est validée sur la
+  source ; `log.error`, et la synchronisation périodique rattrape.
+- **Ordre parent → enfant** : `AdmEvent` (RDV d'une action « Visite ») est recopié avant
+  `ComActionMessage`, qui le référence.
+- L'exécuteur `remonteeExecutor` a disparu avec l'`@Async`.
 
 **La clé de routage est le drapeau `readOnly` de la transaction.** Le code le portait déjà :
 48 `@Transactional(readOnly = true)` sur 93, en défaut de classe surchargé méthode par méthode.
@@ -84,7 +109,7 @@ authentifié :
 | ✅ Routage en lecture | `Routage -> LECTURE`, ouverture du pool `hikari-lecture`, sessions sur la copie |
 | ✅ **Le numéro vient de la source** | code `26/14434` — suivant du compteur **source** (14433), pas de celui de la copie (14503) |
 | ✅ **Le compteur n'avance que d'un côté** | source 14434, copie **14503 inchangée** |
-| ✅ **Rapatriement immédiat** | la ligne est dans la copie sans attendre de synchronisation |
+| ✅ **Rapatriement immédiat** | la ligne est dans la copie sans attendre de synchronisation — garanti avant la réponse depuis FIX-rapatriement-synchrone (avant, recopie `@Async` : la réponse pouvait la devancer) |
 
 ### Trois défauts que seule cette vérification a révélés
 
@@ -345,9 +370,11 @@ baseline intégrale inutile. En recette, `SOURCE_DB_SYNC_MINUTES=1` raccourcit l
 
 ## Impact front
 
-**Aucun.** Ni les chemins d'URL, ni les DTO, ni les codes de statut ne changent. La seule
-différence observable est une latence supplémentaire sur les créations, à hauteur d'un
-aller-retour réseau par requête SQL d'écriture.
+**Aucun changement de contrat.** Ni les chemins d'URL, ni les DTO, ni les codes de statut ne
+changent. Le front peut **relire aussitôt** après une écriture 2xx : la recopie dans la copie
+est faite avant la réponse (section « Rapatriement synchrone »). Contrepartie : la latence
+d'une écriture inclut cette recopie — une relecture sur la source et un `MERGE` sur la copie
+par ligne écrite, en plus d'un aller-retour réseau par requête SQL d'écriture.
 
 ## Hors périmètre
 

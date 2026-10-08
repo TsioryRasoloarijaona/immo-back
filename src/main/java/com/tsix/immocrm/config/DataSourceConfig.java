@@ -12,12 +12,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.sql.DataSource;
@@ -75,6 +73,19 @@ public class DataSourceConfig {
 
     @Bean("ecriture")
     public DataSource ecriture(SourceDeVeriteProperties proprietes) {
+        return poolSource(proprietes, proprietes.getTaillePool(), "hikari-source-de-verite");
+    }
+
+    /**
+     * Réservé à {@link RemonteeLecture} : la recopie tourne en {@code afterCommit}, la requête tenant encore sa connexion
+     * {@code ecriture} ; sur le même pool, N écritures simultanées s'attendraient jusqu'au timeout.
+     */
+    @Bean("remontee")
+    public DataSource remontee(SourceDeVeriteProperties proprietes) {
+        return poolSource(proprietes, proprietes.getTaillePoolRemontee(), "hikari-remontee");
+    }
+
+    private static HikariDataSource poolSource(SourceDeVeriteProperties proprietes, int taille, String nom) {
         proprietes.verifierReglagesPool();
         HikariDataSource ds = DataSourceBuilder.create()
                 .type(HikariDataSource.class)
@@ -84,15 +95,15 @@ public class DataSourceConfig {
                 .password(proprietes.getPassword())
                 .build();
         ds.setConnectionTimeout(proprietes.getTimeoutConnexionMs());
-        ds.setMaximumPoolSize(proprietes.getTaillePool());
-        ds.setMinimumIdle(proprietes.getTaillePool());
+        ds.setMaximumPoolSize(taille);
+        ds.setMinimumIdle(taille);
         ds.setKeepaliveTime(proprietes.getKeepaliveMs());
         ds.setMaxLifetime(proprietes.getDureeVieMaxMs());
         ds.setValidationTimeout(proprietes.getValidationTimeoutMs());
         // Sans -1, un pool jamais démarré renvoie l'erreur brute du pilote (08S01), indiscernable d'une coupure en
         // cours d'opération ; avec -1, Hikari répond SQLTransientConnectionException (503 SOURCE_INJOIGNABLE).
         ds.setInitializationFailTimeout(-1);
-        ds.setPoolName("hikari-source-de-verite");
+        ds.setPoolName(nom);
         return ds;
     }
 
@@ -136,20 +147,5 @@ public class DataSourceConfig {
     @Bean
     public JdbcTemplate jdbcLecture(@Qualifier("lecture") DataSource lecture) {
         return new JdbcTemplate(lecture);
-    }
-
-    /**
-     * Pool distinct de {@code mailExecutor} : une source lente ne doit pas affamer l'envoi d'email. À l'arrêt on
-     * n'attend pas (la synchro périodique reprendra), contrairement aux mails qui doivent finir de partir.
-     */
-    @Bean("remonteeExecutor")
-    public TaskExecutor remonteeExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(500);
-        executor.setThreadNamePrefix("remontee-");
-        executor.initialize();
-        return executor;
     }
 }

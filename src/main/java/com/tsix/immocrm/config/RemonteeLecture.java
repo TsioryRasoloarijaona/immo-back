@@ -17,9 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Recopie aussitôt dans la copie une ligne écrite sur la source, pour que l'utilisateur voie ce qu'il vient de créer.
- * Relit la ligne sur la source (défauts, colonnes calculées, déclencheurs de {@code ComFolder}) ; écrit en JDBC direct,
- * donc sans repasser par {@link CollecteurLignesEcrites} (pas de boucle).
+ * Recopie dans la copie, avant la réponse HTTP, une ligne écrite sur la source, pour que l'utilisateur voie ce qu'il
+ * vient de créer. Relit la ligne sur la source (défauts, déclencheurs de {@code ComFolder}) par le pool {@code remontee} ;
+ * écrit en JDBC direct, donc sans repasser par {@link CollecteurLignesEcrites} (pas de boucle).
  */
 @Service
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -54,9 +54,9 @@ public class RemonteeLecture {
     private final Map<String, String> selectionsTout = new ConcurrentHashMap<>();
 
     public RemonteeLecture(@Qualifier("jdbcLecture") JdbcTemplate versLecture,
-                           @Qualifier("ecriture") DataSource ecriture) {
+                           @Qualifier("remontee") DataSource source) {
         this.versLecture = versLecture;
-        this.depuisEcriture = new JdbcTemplate(ecriture);
+        this.depuisEcriture = new JdbcTemplate(source);
     }
 
     /**
