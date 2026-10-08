@@ -68,10 +68,21 @@ source est jointe par Internet.
   jusqu'au nettoyage de fin de transaction, après les `afterCommit`) ; relire la ligne sur le
   même pool, c'est en emprunter une seconde : avec 5 écritures simultanées et un pool de 5,
   chacune attendrait l'autre jusqu'au timeout. Sur un pool distinct, aucune attente croisée :
-  un rapatriement ne tient que `remontee` puis `lecture`, jamais l'inverse. La relecture des
-  passes `SynchronisationDescendante` (même `RemonteeLecture`) passe aussi par ce pool.
+  une recopie prend une connexion `remontee` puis une `lecture`, jamais l'inverse. En
+  `afterCommit` la synchronisation de transaction est encore active, donc `DataSourceUtils`
+  lie ces deux connexions au fil : **une recopie tient sa connexion `remontee` (et sa
+  `lecture`) jusqu'à la fin de la transaction de la requête (`afterCompletion`)**, pas
+  instruction par instruction — une seule connexion `remontee` pour toute la recopie, et
+  **au plus 2 recopies simultanées** avec le pool par défaut ; une troisième attend.
+  La relecture des passes `SynchronisationDescendante` (même `RemonteeLecture`) passe aussi
+  par ce pool.
 - **Un échec de recopie ne fait pas échouer la requête** : l'écriture est validée sur la
   source ; `log.error`, et la synchronisation périodique rattrape.
+- **Connexion indisponible = recopie abandonnée d'un coup.** Si la connexion (`remontee` ou
+  `lecture`) ne s'obtient pas (pool épuisé, source coupée), le reste de la recopie est
+  abandonné avec un seul `log.error` donnant le nombre de lignes non rapatriées : sinon
+  chaque ligne attendrait à son tour le timeout de connexion (5 s), soit N × 5 s dans le
+  temps de réponse. Une erreur SQL sur **une** ligne (contrainte…) n'arrête pas les suivantes.
 - **Ordre parent → enfant** : `AdmEvent` (RDV d'une action « Visite ») est recopié avant
   `ComActionMessage`, qui le référence.
 - L'exécuteur `remonteeExecutor` a disparu avec l'`@Async`.

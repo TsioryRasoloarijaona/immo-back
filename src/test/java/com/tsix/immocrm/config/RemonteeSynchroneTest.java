@@ -10,10 +10,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +30,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -110,6 +120,31 @@ class RemonteeSynchroneTest {
         assertThat(fil.get()).isSameAs(Thread.currentThread());
         assertThat(recopies).containsExactly(List.of(
                 new LigneEcrite("AdmEvent", rdv), new LigneEcrite("ComActionMessage", message)));
+    }
+
+    /** Une erreur SQL sur une ligne (contrainte…) n'est pas une coupure : les lignes suivantes sont tentées. */
+    @Test
+    void erreurSqlSurUneLigne_lesSuivantesSontTentees() throws Exception {
+        Connection connexion = mock(Connection.class);
+        PreparedStatement requete = mock(PreparedStatement.class);
+        ResultSet vide = mock(ResultSet.class);
+        ResultSetMetaData meta = mock(ResultSetMetaData.class);
+        when(connexion.prepareStatement(anyString()))
+                .thenThrow(new SQLException("violation de contrainte", "23000", 547))
+                .thenReturn(requete);
+        when(requete.executeQuery()).thenReturn(vide);
+        when(vide.getMetaData()).thenReturn(meta);
+        DataSource source = mock(DataSource.class);
+        when(source.getConnection()).thenReturn(connexion);
+        DataSource copie = mock(DataSource.class);
+        when(copie.getConnection()).thenReturn(connexion);
+
+        new RemonteeLecture(new JdbcTemplate(copie), source).remonter(List.of(
+                new LigneEcrite("ComFolder", UUID.randomUUID()),
+                new LigneEcrite("ComFolder", UUID.randomUUID()),
+                new LigneEcrite("ComFolder", UUID.randomUUID())));
+
+        verify(source, times(3)).getConnection();
     }
 
     @Test

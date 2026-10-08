@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -62,16 +63,26 @@ public class RemonteeLecture {
     /**
      * Dans l'ordre reçu (celui des clés étrangères). Un échec est journalisé, jamais propagé : la source fait foi.
      * Une ligne absente de la source est supprimée de la copie (c'est ainsi que voyagent les DELETE), après les
-     * fusions et en ordre inverse, sinon un parent partirait avant ses enfants.
+     * fusions et en ordre inverse, sinon un parent partirait avant ses enfants. Sans connexion, tout s'arrête : chaque
+     * ligne suivante attendrait le timeout du pool, dans le temps de réponse de la requête.
      */
     public void remonter(Collection<LigneEcrite> lignes) {
         List<LigneEcrite> absentes = new ArrayList<>();
+        int traitees = 0;
         for (LigneEcrite ligne : lignes) {
             try {
                 if (!fusionner(ligne)) {
                     absentes.add(ligne);
                 }
+                traitees++;
+            } catch (CannotGetJdbcConnectionException e) {
+                log.error("Rapatriement abandonne, connexion indisponible : {} ligne(s) sur {} non rapatriee(s), "
+                                + "dont {} {}. Elles sont bien ecrites sur la source ; la synchronisation periodique "
+                                + "les reprendra.",
+                        lignes.size() - traitees, lignes.size(), ligne.table(), ligne.pkey(), e);
+                return;
             } catch (RuntimeException e) {
+                traitees++;
                 log.error("Ligne non rapatriee dans la base de lecture : {} {}. "
                                 + "Elle est bien ecrite sur la source ; la synchronisation periodique la reprendra.",
                         ligne.table(), ligne.pkey(), e);
@@ -80,6 +91,10 @@ public class RemonteeLecture {
         for (LigneEcrite ligne : absentes.reversed()) {
             try {
                 supprimer(ligne);
+            } catch (CannotGetJdbcConnectionException e) {
+                log.error("Suppressions abandonnees, connexion a la copie indisponible : {} ligne(s). "
+                        + "La synchronisation periodique les reprendra.", absentes.size(), e);
+                return;
             } catch (RuntimeException e) {
                 log.error("Suppression non repercutee dans la base de lecture : {} {}. "
                                 + "La synchronisation periodique la reprendra.",
