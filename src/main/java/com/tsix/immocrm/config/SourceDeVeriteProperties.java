@@ -27,15 +27,57 @@ public class SourceDeVeriteProperties {
     /** Petit pool : seules les écritures, gestes d'utilisateur, passent ici. */
     private int taillePool = 5;
 
+    /** Plancher imposé par Hikari. Le keepalive empêche la box d'« oublier » une connexion inactive. */
+    static final long KEEPALIVE_MIN_MS = 30_000;
+
+    private long keepaliveMs = 60_000;
+
+    private long dureeVieMaxMs = 600_000;
+
+    private long validationTimeoutMs = 3_000;
+
+    private int tentativesReconnexion = 3;
+
+    private int intervalleReconnexionS = 5;
+
+    /** 0 = désactivé. Doit couvrir la plus longue attente des tâches de fond sur ce pool, synchro et archivage
+     * de la trace compris (FEATURE-stabilite-connexion-source.md §Mesures). */
+    private int timeoutSocketMs = 300_000;
+
     public boolean estConfiguree() {
         return host != null && !host.isBlank();
     }
 
-    /** {@code trustServerCertificate=true} comme {@code spring.datasource.url} : certificats auto-signés. */
+    /**
+     * {@code trustServerCertificate=true} comme {@code spring.datasource.url} : certificats auto-signés. Jamais le mot
+     * de passe ici. {@code connectRetry*} ne rejoue que la reconnexion d'une connexion inactive, pas une instruction.
+     */
     public String urlJdbc() {
         return "jdbc:sqlserver://" + host + ":" + port
                 + ";databaseName=" + nom
-                + ";encrypt=true;trustServerCertificate=true";
+                + ";encrypt=true;trustServerCertificate=true"
+                + ";loginTimeout=" + loginTimeoutS()
+                + ";connectRetryCount=" + tentativesReconnexion
+                + ";connectRetryInterval=" + intervalleReconnexionS
+                + (timeoutSocketMs > 0 ? ";socketTimeout=" + timeoutSocketMs : "");
+    }
+
+    /** En secondes, arrondi au supérieur : 0 voudrait dire « attente par défaut du pilote ». */
+    int loginTimeoutS() {
+        return (int) Math.max(1, (timeoutConnexionMs + 999L) / 1000);
+    }
+
+    /** Hikari ignore en silence un keepalive ≥ durée de vie ou sous son plancher : refusé au démarrage. */
+    public void verifierReglagesPool() {
+        if (keepaliveMs < KEEPALIVE_MIN_MS) {
+            throw new IllegalStateException("app.source-de-verite.keepalive-ms (SOURCE_DB_KEEPALIVE_MS) = "
+                    + keepaliveMs + " : minimum " + KEEPALIVE_MIN_MS + " ms (plancher Hikari).");
+        }
+        if (keepaliveMs >= dureeVieMaxMs) {
+            throw new IllegalStateException("app.source-de-verite.keepalive-ms (SOURCE_DB_KEEPALIVE_MS) = "
+                    + keepaliveMs + " doit être inférieur à app.source-de-verite.duree-vie-max-ms "
+                    + "(SOURCE_DB_MAX_LIFETIME_MS) = " + dureeVieMaxMs + ", sinon Hikari ignore le keepalive.");
+        }
     }
 
     /** Sans identifiant : destiné aux journaux. */
@@ -97,5 +139,53 @@ public class SourceDeVeriteProperties {
 
     public void setTaillePool(int taillePool) {
         this.taillePool = taillePool;
+    }
+
+    public long getKeepaliveMs() {
+        return keepaliveMs;
+    }
+
+    public void setKeepaliveMs(long keepaliveMs) {
+        this.keepaliveMs = keepaliveMs;
+    }
+
+    public long getDureeVieMaxMs() {
+        return dureeVieMaxMs;
+    }
+
+    public void setDureeVieMaxMs(long dureeVieMaxMs) {
+        this.dureeVieMaxMs = dureeVieMaxMs;
+    }
+
+    public long getValidationTimeoutMs() {
+        return validationTimeoutMs;
+    }
+
+    public void setValidationTimeoutMs(long validationTimeoutMs) {
+        this.validationTimeoutMs = validationTimeoutMs;
+    }
+
+    public int getTentativesReconnexion() {
+        return tentativesReconnexion;
+    }
+
+    public void setTentativesReconnexion(int tentativesReconnexion) {
+        this.tentativesReconnexion = tentativesReconnexion;
+    }
+
+    public int getIntervalleReconnexionS() {
+        return intervalleReconnexionS;
+    }
+
+    public void setIntervalleReconnexionS(int intervalleReconnexionS) {
+        this.intervalleReconnexionS = intervalleReconnexionS;
+    }
+
+    public int getTimeoutSocketMs() {
+        return timeoutSocketMs;
+    }
+
+    public void setTimeoutSocketMs(int timeoutSocketMs) {
+        this.timeoutSocketMs = timeoutSocketMs;
     }
 }

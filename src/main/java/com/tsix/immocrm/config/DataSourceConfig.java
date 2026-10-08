@@ -21,6 +21,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
 import java.util.Map;
 
 /**
@@ -74,6 +75,7 @@ public class DataSourceConfig {
 
     @Bean("ecriture")
     public DataSource ecriture(SourceDeVeriteProperties proprietes) {
+        proprietes.verifierReglagesPool();
         HikariDataSource ds = DataSourceBuilder.create()
                 .type(HikariDataSource.class)
                 .driverClassName("com.microsoft.sqlserver.jdbc.SQLServerDriver")
@@ -83,6 +85,13 @@ public class DataSourceConfig {
                 .build();
         ds.setConnectionTimeout(proprietes.getTimeoutConnexionMs());
         ds.setMaximumPoolSize(proprietes.getTaillePool());
+        ds.setMinimumIdle(proprietes.getTaillePool());
+        ds.setKeepaliveTime(proprietes.getKeepaliveMs());
+        ds.setMaxLifetime(proprietes.getDureeVieMaxMs());
+        ds.setValidationTimeout(proprietes.getValidationTimeoutMs());
+        // Sans -1, un pool jamais démarré renvoie l'erreur brute du pilote (08S01), indiscernable d'une coupure en
+        // cours d'opération ; avec -1, Hikari répond SQLTransientConnectionException (503 SOURCE_INJOIGNABLE).
+        ds.setInitializationFailTimeout(-1);
         ds.setPoolName("hikari-source-de-verite");
         return ds;
     }
@@ -103,14 +112,22 @@ public class DataSourceConfig {
                 return cibleCourante();
             }
         };
-        routage.setTargetDataSources(Map.of(Cible.LECTURE, lecture, Cible.ECRITURE, ecriture));
-        routage.setDefaultTargetDataSource(ecriture);
+        DataSource ecritureSuivie = new ConnexionSourceSuivie(ecriture);
+        routage.setTargetDataSources(Map.of(Cible.LECTURE, lecture, Cible.ECRITURE, ecritureSuivie));
+        routage.setDefaultTargetDataSource(ecritureSuivie);
         routage.afterPropertiesSet();
 
         log.warn("Mode deux bases ACTIF : ecritures vers {}, lectures sur la base locale.",
                 proprietes.description());
 
-        return new LazyConnectionDataSourceProxy(routage);
+        // Défauts déclarés (Hikari : auto-commit ; SQL Server : READ COMMITTED) : sinon le proxy les sonde à chaque
+        // getConnection tant qu'il ne les connaît pas, et hors transaction la sonde part vers la source.
+        LazyConnectionDataSourceProxy proxy = new LazyConnectionDataSourceProxy();
+        proxy.setTargetDataSource(routage);
+        proxy.setDefaultAutoCommit(true);
+        proxy.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+        proxy.afterPropertiesSet();
+        return proxy;
     }
 
     /** Seul accès en écriture à la copie : via l'aiguillage, une transaction d'écriture irait à la source. */
