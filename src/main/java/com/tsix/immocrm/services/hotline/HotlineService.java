@@ -19,6 +19,7 @@ import com.tsix.immocrm.services.prospection.ContexteInteraction;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
+import jakarta.persistence.criteria.JoinType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -144,8 +145,13 @@ public class HotlineService {
         Pageable recentSorted = PageRequest.of(0, HISTORIQUE_LIMIT, Sort.by(Sort.Direction.DESC, "docDate"));
         Pageable recent = PageRequest.of(0, HISTORIQUE_LIMIT);
 
+        // Cascade en lecture, sans réécrire CfgTierId : une interaction saisie avant « Créer prospect »
+        // n'a que sa prospection. Jointure LEFT, sinon les interactions sans prospection disparaissent.
+        // Voir FIX-tracabilite-historique-hotline.md §5.
         Specification<ComActionMessage> interactionsDuTier = Specification
-                .<ComActionMessage>where((root, query, cb) -> cb.equal(root.get("cfgTier").get("id"), tierId))
+                .<ComActionMessage>where((root, query, cb) -> cb.or(
+                        cb.equal(root.get("cfgTier").get("id"), tierId),
+                        cb.equal(root.join("comProspection", JoinType.LEFT).get("cfgProspect").get("id"), tierId)))
                 .and(perimetreService.filtreInteractions());
 
         return new HotlineFicheDto(

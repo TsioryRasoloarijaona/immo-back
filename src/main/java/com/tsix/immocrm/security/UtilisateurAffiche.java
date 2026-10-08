@@ -12,8 +12,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Libellé d'auteur des colonnes d'audit légataires ({@code UserName}, {@code UserCreate}…) : {@code AdmUser.Description},
@@ -56,6 +62,21 @@ public class UtilisateurAffiche {
 
     public String nom(AuthenticatedUser principal) {
         return principal == null ? null : resoudre(principal).nom();
+    }
+
+    /**
+     * Libellé des comptes {@code AdmUser} par id, pour relire un auteur stocké en {@code AdmUserId}.
+     * Toujours une {@link HashMap} : {@code get(null)} y est permis, pas sur {@code Map.of()}.
+     */
+    public Map<UUID, String> noms(Collection<UUID> admUserIds) {
+        Set<UUID> ids = admUserIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, String> noms = new HashMap<>();
+        if (ids.isEmpty()) {
+            return noms;
+        }
+        userRepository.findAllById(ids).forEach(u -> noms.put(u.getId(),
+                StringUtils.hasText(u.getDescription()) ? u.getDescription() : u.getCode()));
+        return noms;
     }
 
     private Auteur resoudre(AuthenticatedUser principal) {

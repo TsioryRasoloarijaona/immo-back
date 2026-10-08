@@ -17,10 +17,13 @@ plus récentes en premier.
 
 ## interactions
 
-Journal des interactions (appels, messages, notes) enregistrées directement sur sa fiche — hors
-interactions déjà rattachées à une prospection ou un dossier précis, les plus récentes en premier.
+Journal des interactions (appels, messages, notes) de cette personne, les plus récentes en premier :
+celles posées sur sa fiche (`CfgTierId`) **et** celles de ses prospections, y compris saisies au
+stade pré-prospection avant la création de la fiche. Une interaction n'apparaît qu'une fois, et
+seulement si elle est dans le périmètre de l'utilisateur.
 
 ## historique
 
-Historique des changements de statut/workflow de cette personne (alimente l'onglet "Historique" de
-la fiche prospect), le plus récent en premier.
+Changements de statut des dossiers de vente de cette personne (utilisateur, date, état, n° dossier,
+article, détails — voir `HistoriqueDto`), le plus récent en premier ; mêmes lignes que
+GET /api/prospects/{id}/historique. Les dossiers hors périmètre n'y figurent pas.

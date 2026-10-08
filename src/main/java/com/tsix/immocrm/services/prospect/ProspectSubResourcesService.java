@@ -13,8 +13,10 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierContact;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stl.StlSettlement;
-import com.tsix.immocrm.entities.str.StrHistory;
+import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
+import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgRelationTypeRepository;
@@ -24,9 +26,13 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
-import com.tsix.immocrm.repositories.str.StrHistoryRepository;
+import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -50,29 +57,32 @@ public class ProspectSubResourcesService {
     private final ComFolderRepository folderRepository;
     private final StlSettlementRepository settlementRepository;
     private final StlSettlementLineRepository settlementLineRepository;
-    private final StrHistoryRepository historyRepository;
+    private final StrFolderStatusHistoryRepository statusHistoryRepository;
     private final CfgTierContactRepository tierContactRepository;
     private final CfgRelationTypeRepository relationTypeRepository;
     private final PerimetreCommercialService perimetreService;
     private final ProspectService prospectService;
+    private final UtilisateurAffiche utilisateurAffiche;
 
     public ProspectSubResourcesService(CfgTierRepository tierRepository,
                                         ComProspectionRepository prospectionRepository,
                                         ComFolderRepository folderRepository,
                                         StlSettlementRepository settlementRepository,
                                         StlSettlementLineRepository settlementLineRepository,
-                                        StrHistoryRepository historyRepository,
+                                        StrFolderStatusHistoryRepository statusHistoryRepository,
                                         CfgTierContactRepository tierContactRepository,
                                         CfgRelationTypeRepository relationTypeRepository,
                                         PerimetreCommercialService perimetreService,
-                                        ProspectService prospectService) {
+                                        ProspectService prospectService,
+                                        UtilisateurAffiche utilisateurAffiche) {
         this.perimetreService = perimetreService;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
         this.folderRepository = folderRepository;
         this.settlementRepository = settlementRepository;
         this.settlementLineRepository = settlementLineRepository;
-        this.historyRepository = historyRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
         this.tierContactRepository = tierContactRepository;
         this.relationTypeRepository = relationTypeRepository;
         this.prospectService = prospectService;
@@ -129,10 +139,31 @@ public class ProspectSubResourcesService {
                 Sort.by(Sort.Direction.DESC, "docDate"));
     }
 
+    /**
+     * Changements de statut des dossiers du tiers ({@code StrFolderStatusHistory.CfgTierId}), pas
+     * {@code StrHistory} dont aucune ligne ne vise un tiers. Un dossier hors périmètre masque ses
+     * lignes, comme {@link #dossiers}. Voir FIX-tracabilite-historique-hotline.md §4.
+     */
     public Page<HistoriqueDto> historique(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
-        return historyRepository.findByObjectIdOrderByDocDateDesc(prospectId, pageable)
-                .map(ProspectSubResourcesService::toHistoriqueDto);
+        Specification<ComFolder> dossierVisible = perimetreService.filtreDossiers();
+        Specification<StrFolderStatusHistory> spec = (root, query, cb) -> {
+            Subquery<UUID> visible = query.subquery(UUID.class);
+            Root<ComFolder> dossier = visible.from(ComFolder.class);
+            visible.select(dossier.get("id")).where(cb.and(
+                    cb.equal(dossier.get("id"), root.get("comFolder").get("id")),
+                    dossierVisible.toPredicate(dossier, query, cb)));
+            return cb.and(
+                    cb.equal(root.get("cfgTier").get("id"), prospectId),
+                    cb.or(cb.isNull(root.get("comFolder")), cb.exists(visible)));
+        };
+        // Tri imposé : un tri client sur un champ du DTO n'existe pas sur l'entité.
+        Pageable plusRecentDabord = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "docDate").and(Sort.by("id")));
+        Page<StrFolderStatusHistory> lignes = statusHistoryRepository.findAll(spec, plusRecentDabord);
+        Map<UUID, String> auteurs = utilisateurAffiche.noms(
+                lignes.getContent().stream().map(StrFolderStatusHistory::getAdmUserId).toList());
+        return lignes.map(h -> toHistoriqueDto(h, auteurs));
     }
 
     public List<ContactProspectDto> contacts(UUID prospectId) {
@@ -228,14 +259,20 @@ public class ProspectSubResourcesService {
         );
     }
 
-    private static HistoriqueDto toHistoriqueDto(StrHistory h) {
+    private static HistoriqueDto toHistoriqueDto(StrFolderStatusHistory h, Map<UUID, String> auteurs) {
+        ComFolder dossier = h.getComFolder();
+        StrStatus statut = h.getStrFolderStatus();
         return new HistoriqueDto(
                 h.getId(),
                 h.getDocDate(),
                 h.getDescription(),
-                h.getAdmUserDescription(),
-                h.getStrWorkflowDescription(),
-                h.getStrStatusDescription()
+                auteurs.get(h.getAdmUserId()),
+                null,
+                statut == null ? null
+                        : StringUtils.hasText(statut.getDescription()) ? statut.getDescription() : statut.getCode(),
+                Champs.de(dossier, ComFolder::getId),
+                Champs.de(dossier, ComFolder::getCode),
+                Champs.de(dossier, ComFolder::getStkItem, StkItem::getCode)
         );
     }
 

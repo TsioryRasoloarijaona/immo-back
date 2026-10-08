@@ -5,12 +5,14 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.repositories.cfg.CfgRelationTypeRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
+import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +55,9 @@ class ProspectSubResourcesTest {
 
     @Autowired
     private StrHistoryRepository historyRepository;
+
+    @Autowired
+    private StrFolderStatusHistoryRepository statusHistoryRepository;
 
     @Autowired
     private CfgRelationTypeRepository relationTypeRepository;
@@ -99,20 +104,40 @@ class ProspectSubResourcesTest {
                 .andExpect(jsonPath("$.content[?(@.id=='" + folder.getId() + "')]").exists());
     }
 
+    /** Source = StrFolderStatusHistory du tiers ; un StrHistory pointé sur le tiers n'est plus lu. */
     @Test
-    void getHistorique_returnsRowsForThisObjectId() throws Exception {
+    void getHistorique_returnsStatusRowsOfThisTiersDossiers() throws Exception {
         CfgTier prospect = newProspect("PROS-SUB-3");
-        StrHistory h = new StrHistory();
+        StrHistory ignoree = new StrHistory();
+        ignoree.setId(UUID.randomUUID());
+        ignoree.setObjectId(prospect.getId());
+        ignoree.setDocDate(LocalDateTime.now());
+        ignoree.setDescription("Creation");
+        historyRepository.save(ignoree);
+
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-SUB-HIST");
+        vocationRepository.save(vocation);
+        ComFolder folder = new ComFolder();
+        folder.setId(UUID.randomUUID());
+        folder.setCode("DOS-SUB-HIST");
+        folder.setStkVocation(vocation);
+        folder.setCfgCustomer(prospect);
+        folderRepository.save(folder);
+        StrFolderStatusHistory h = new StrFolderStatusHistory();
         h.setId(UUID.randomUUID());
-        h.setObjectId(prospect.getId());
+        h.setComFolder(folder);
+        h.setCfgTier(prospect);
         h.setDocDate(LocalDateTime.now());
-        h.setDescription("Creation");
-        h.setAdmUserDescription("admin");
-        historyRepository.save(h);
+        h.setDescription("Réservation");
+        statusHistoryRepository.save(h);
 
         mockMvc.perform(get("/api/prospects/{id}/historique", prospect.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.id=='" + h.getId() + "')].description").value("Creation"));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].description").value("Réservation"))
+                .andExpect(jsonPath("$.content[0].dossierCode").value("DOS-SUB-HIST"));
     }
 
     @Test

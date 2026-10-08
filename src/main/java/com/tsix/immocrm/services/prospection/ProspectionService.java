@@ -582,7 +582,10 @@ public class ProspectionService {
                 h.getDescription(),
                 h.getAdmUserDescription(),
                 h.getStrWorkflowDescription(),
-                h.getStrStatusDescription()
+                h.getStrStatusDescription(),
+                null,
+                null,
+                null
         );
     }
 
@@ -991,6 +994,12 @@ public class ProspectionService {
         verifierUniciteProspectProjet(prospection.getCfgProspect(), prospection.getStkHierarchy(), id);
 
         prospection.setCfgCommercial(commercial);
+        // Commercial référent du tiers (lu par la Hotline) : renseigné s'il manque, jamais écrasé.
+        CfgTier prospect = prospection.getCfgProspect();
+        if (prospect.getCfgCommercial() == null) {
+            prospect.setCfgCommercial(commercial);
+            tierRepository.save(prospect);
+        }
         // Bascule de type en place, comme OMRAN (FEATURE-creation-pre-prospection.md §1). Une ligne
         // sans type est typée au passage ; un type d'une autre nature (location…) n'est pas touché.
         if (prospection.getStrEntityId() == null || DiscriminantPreProspection.estPreProspection(prospection)) {

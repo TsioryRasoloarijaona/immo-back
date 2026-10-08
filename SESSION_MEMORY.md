@@ -1,5 +1,16 @@
 # Session Memory — immo-crm
-_Last updated: 2026-10-08 (end of day)_ · state and decisions only (≤ 3 KB); history = git log + FEATURES.md
+_Last updated: 2026-10-09_ · state and decisions only (≤ 3 KB); history = git log + FEATURES.md
+
+## In flight (09/10)
+
+- `fix/rapatriement-synchrone` (PR #114): copy of own writes now synchronous (pool `hikari-remontee`).
+- `fix/tracabilite-historique-hotline`: dossier UserCreate/UserUpdate, STATUT author, tier commercial
+  from `transformer`, tier history from `StrFolderStatusHistory` (perimeter-filtered), Hotline
+  interactions via cfgTier OR prospection.cfgProspect. Front follow-up: N° Dossier / Article columns.
+- Lot 4 awaiting user decisions: price fallback to `ComSalePriceFloor` when `ComSalePrice = 0`
+  (Total HT/TTC 0, negative discount); exclude CANCELED from totals and dossier « Réglé »;
+  prospect → client at CONCRETISATION; default interaction category.
+- Test data to delete (yesRems): pré/prospection 26/05959, tier 26/14454, dossier ARS 2026/00410.
 
 ## Current state
 
