@@ -59,6 +59,7 @@ public class PreProspectionController {
         this.importService = importService;
     }
 
+
     @GetMapping
     @Operation(
             summary = "Liste paginée des pré-prospections"

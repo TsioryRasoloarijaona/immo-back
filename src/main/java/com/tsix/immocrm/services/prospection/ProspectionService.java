@@ -17,6 +17,7 @@ import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
+import com.tsix.immocrm.domain.TypeActionRecente;
 import com.tsix.immocrm.domain.MarqueurTriProspection;
 import com.tsix.immocrm.dto.prospection.ActiviteProspectionDto;
 import com.tsix.immocrm.dto.prospection.FiltresAvancesProspection;
@@ -549,12 +550,19 @@ public class ProspectionService {
         );
     }
 
-    private void enregistrerHistorique(UUID prospectionId, String description) {
+    /** Sans utilisateur authentifié (formulaire public, import), auteur NULL : pas une erreur. */
+    private void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
+        LocalDateTime maintenant = LocalDateTime.now();
+        String description = type.description(suite);
         StrHistory historique = new StrHistory();
         historique.setId(UUID.randomUUID());
-        historique.setDocDate(LocalDateTime.now());
+        historique.setDocDate(maintenant);
+        historique.setUserDate(maintenant);
         historique.setObjectId(prospectionId);
-        historique.setDescription(description);
+        historique.setDescription(description.length() > 255 ? description.substring(0, 255) : description);
+        historique.setAdmUserId(auteur.compteId());
+        historique.setAdmUserDescription(auteur.nom());
         historyRepository.save(historique);
     }
 
@@ -659,7 +667,8 @@ public class ProspectionService {
 
         prospection = prospectionRepository.save(prospection);
         ecrireInteractionDeCreation(prospection);
-        enregistrerHistorique(prospection.getId(), "Prospection créée : prospect " + TierNomFormatter.nom(prospect));
+        enregistrerHistorique(prospection.getId(), TypeActionRecente.PROSPECTION_CREEE,
+                "prospect " + TierNomFormatter.nom(prospect));
         return detailEnrichi(prospection);
     }
 
@@ -813,7 +822,7 @@ public class ProspectionService {
         }
 
         p = prospectionRepository.save(p);
-        enregistrerHistorique(p.getId(), "Pré-prospection créée : " + nom);
+        enregistrerHistorique(p.getId(), TypeActionRecente.PRE_PROSPECTION_CREEE, nom);
         return p;
     }
 
@@ -836,7 +845,7 @@ public class ProspectionService {
         CfgTier tier = prospectService.createEntity(request);
         prospection.setCfgProspect(tier);
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(prospectionId, "Prospect créé et lié : " + TierNomFormatter.nom(tier));
+        enregistrerHistorique(prospectionId, TypeActionRecente.PROSPECT_CREE, TierNomFormatter.nom(tier));
         return detailEnrichi(prospection);
     }
 
@@ -866,7 +875,7 @@ public class ProspectionService {
 
         prospection.setCfgProspect(tier);
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(prospectionId, "Prospect existant rattaché : " + TierNomFormatter.nom(tier));
+        enregistrerHistorique(prospectionId, TypeActionRecente.PROSPECT_RATTACHE, TierNomFormatter.nom(tier));
         return detailEnrichi(prospection);
     }
 
@@ -961,7 +970,8 @@ public class ProspectionService {
             prospection.setIsClosed(false);
         }
         prospection = prospectionRepository.save(prospection);
-        enregistrerHistorique(id, "Transformée en prospection : commercial assigné, " + TierNomFormatter.nom(commercial));
+        enregistrerHistorique(id, TypeActionRecente.TRANSFORMEE_EN_PROSPECTION,
+                "commercial assigné, " + TierNomFormatter.nom(commercial));
         return detailEnrichi(prospection);
     }
 
@@ -975,17 +985,26 @@ public class ProspectionService {
         ComProspectionKind kind = prospectionKindRepository.findById(request.etapeId())
                 .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId()));
 
+        ComProspectionKind ancienne = prospection.getComProspectionKind();
         prospection.setComProspectionKind(kind);
         if (request.note() != null) {
             prospection.setNotes(request.note());
         }
         ComProspection enregistree = prospectionRepository.save(prospection);
+        if (ancienne == null || !ancienne.getId().equals(kind.getId())) {
+            enregistrerHistorique(id, TypeActionRecente.ETAPE_CHANGEE,
+                    codeEtape(ancienne) + " → " + codeEtape(kind));
+        }
 
         // La livraison n'a lieu qu'après commit : une étape annulée ne remercie personne.
         if (estEtapeApresVisite(kind)) {
             publisher.publishEvent(new VisiteEffectuee(enregistree.getId()));
         }
         return detailEnrichi(enregistree);
+    }
+
+    private static String codeEtape(ComProspectionKind kind) {
+        return kind != null && StringUtils.hasText(kind.getCode()) ? kind.getCode().trim() : "—";
     }
 
     // Sans casse ni espaces de bord : le référentiel voisin porte des codes suffixés d'un espace
@@ -1092,10 +1111,15 @@ public class ProspectionService {
             throw new InvalidRequestException("raisonId ou raisonTexte est requis");
         }
 
+        String raison = null;
         if (request.raisonId() != null) {
             ComProspectionClosingReason reason = closingReasonRepository.findById(request.raisonId())
                     .orElseThrow(() -> new InvalidRequestException("ComProspectionClosingReason introuvable: " + request.raisonId()));
             prospection.setComProspectionClosingReason(reason);
+            raison = StringUtils.hasText(reason.getDescription()) ? reason.getDescription().trim() : reason.getCode();
+        }
+        if (!StringUtils.hasText(raison)) {
+            raison = request.raisonTexte();
         }
         if (StringUtils.hasText(request.raisonTexte())) {
             prospection.setClosingReasonText(request.raisonTexte());
@@ -1107,6 +1131,7 @@ public class ProspectionService {
 
         ComProspection sauvee = prospectionRepository.save(prospection);
         alerteRelanceService.desarmerToutes(sauvee.getId());
+        enregistrerHistorique(id, TypeActionRecente.ARCHIVEE, raison);
         return detailEnrichi(sauvee);
     }
 
@@ -1127,7 +1152,9 @@ public class ProspectionService {
         prospection.setIsClosed(false);
         marquerModification(prospection, LocalDateTime.now());
 
-        return detailEnrichi(prospectionRepository.save(prospection));
+        ComProspection sauvee = prospectionRepository.save(prospection);
+        enregistrerHistorique(id, TypeActionRecente.DESARCHIVEE, null);
+        return detailEnrichi(sauvee);
     }
 
     /** OMRAN réécrit ces deux colonnes à chaque modification (trace d'audit). */
