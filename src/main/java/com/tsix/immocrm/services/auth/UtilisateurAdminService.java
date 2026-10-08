@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,11 +52,13 @@ public class UtilisateurAdminService {
     private final PerimetreCommercialService perimetreService;
     private final ApplicationEventPublisher evenements;
     private final EnvoiEmail envoiEmail;
+    private final Clock clock;
 
     public UtilisateurAdminService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                                     PasswordEncoder passwordEncoder, AdmUserRoleRepository userRoleRepository,
                                     PerimetreCommercialService perimetreService,
-                                    ApplicationEventPublisher evenements, EnvoiEmail envoiEmail) {
+                                    ApplicationEventPublisher evenements, EnvoiEmail envoiEmail, Clock clock) {
+        this.clock = clock;
         this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -156,7 +159,7 @@ public class UtilisateurAdminService {
             c.setId(UUID.randomUUID());
             c.setAdmUser(user);
             c.setTokenVersion(0);
-            c.setUserCreateDateTime(LocalDateTime.now());
+            c.setUserCreateDateTime(LocalDateTime.now(clock));
             return c;
         });
 
@@ -165,7 +168,7 @@ public class UtilisateurAdminService {
         credential.setMustChangePassword(false);
         credential.setProfileCompleted(true);
         credential.setTokenVersion(credential.getTokenVersion() + 1);
-        credential.setUserUpdateDateTime(LocalDateTime.now());
+        credential.setUserUpdateDateTime(LocalDateTime.now(clock));
         credentialRepository.save(credential);
 
         if (destinataire != null) {

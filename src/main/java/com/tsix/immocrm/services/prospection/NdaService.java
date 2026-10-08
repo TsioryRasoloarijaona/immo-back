@@ -13,6 +13,7 @@ import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -26,9 +27,11 @@ import java.util.UUID;
 public class NdaService {
 
     private final ComProspectionRepository prospectionRepository;
+    private final Clock clock;
 
-    public NdaService(ComProspectionRepository prospectionRepository) {
+    public NdaService(ComProspectionRepository prospectionRepository, Clock clock) {
         this.prospectionRepository = prospectionRepository;
+        this.clock = clock;
     }
 
     public NdaData collect(UUID prospectionId) {
@@ -52,7 +55,7 @@ public class NdaService {
                 Champs.de(prospect, CfgTier::getMobile),
                 Champs.de(prospect, CfgTier::getPhone1),
                 Champs.de(prospect, CfgTier::getEMail),
-                LocalDate.now()
+                LocalDate.now(clock)
         );
     }
 

@@ -41,6 +41,7 @@ import com.tsix.immocrm.utils.Requis;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -65,6 +66,7 @@ public class ProspectionQualificationService {
     private final ComProspectionProjectRepository projectLinkRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository stkItemRepository;
+    private final Clock clock;
 
     public ProspectionQualificationService(ComProspectionRepository prospectionRepository,
                                             ComProspectionCityRepository cityLinkRepository,
@@ -77,7 +79,9 @@ public class ProspectionQualificationService {
                                             ComProspectionProfileRepository profileRepository,
                                             ComProspectionProjectRepository projectLinkRepository,
                                             CfgTrancheRepository trancheRepository,
-                                            StkItemRepository stkItemRepository) {
+                                            StkItemRepository stkItemRepository,
+                                            Clock clock) {
+        this.clock = clock;
         this.prospectionRepository = prospectionRepository;
         this.cityLinkRepository = cityLinkRepository;
         this.cityRepository = cityRepository;
@@ -224,7 +228,7 @@ public class ProspectionQualificationService {
         link.setId(UUID.randomUUID());
         link.setComProspection(prospection);
         link.setComProspectionProfile(profile);
-        link.setUserCreateDateTime(LocalDateTime.now());
+        link.setUserCreateDateTime(LocalDateTime.now(clock));
         return toProfilDto(profileLinkRepository.save(link));
     }
 
@@ -266,7 +270,7 @@ public class ProspectionQualificationService {
         link.setId(UUID.randomUUID());
         link.setComProspection(prospection);
         link.setStkHierarchy(tranche);
-        link.setUserCreateDateTime(LocalDateTime.now());
+        link.setUserCreateDateTime(LocalDateTime.now(clock));
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())
                     .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));

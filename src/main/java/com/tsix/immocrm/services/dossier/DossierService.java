@@ -74,6 +74,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import static java.util.Objects.requireNonNullElse;
 
@@ -109,6 +110,7 @@ public class DossierService {
     private final StrHistoryRepository strHistoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
+    private final Clock clock;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -122,7 +124,9 @@ public class DossierService {
                            ComActionMessageRepository actionMessageRepository,
                            StrHistoryRepository strHistoryRepository,
                            UtilisateurAffiche utilisateurAffiche,
-                           AlerteRelanceService alerteRelanceService) {
+                           AlerteRelanceService alerteRelanceService,
+                           Clock clock) {
+        this.clock = clock;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
@@ -302,7 +306,7 @@ public class DossierService {
 
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
-        folder.setDocDate(LocalDateTime.now());
+        folder.setDocDate(LocalDateTime.now(clock));
         folder.setCode(genererCodeDossier(articles.get(0)));
         // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) ne portent que le
         // lien inverse StkItem.ComFolderId, posé plus bas.
@@ -473,7 +477,7 @@ public class DossierService {
                         ComDocument document = new ComDocument();
                         document.setId(UUID.randomUUID());
                         document.setComFolder(folder);
-                        document.setDocDate(LocalDateTime.now());
+                        document.setDocDate(LocalDateTime.now(clock));
                         document.setAmount(ligne.montant());
                         document.setComSettlementCategory(categorie);
                         document.setExcludeFromPrice(categorie.getExcludeFromPrice());
@@ -574,7 +578,7 @@ public class DossierService {
      */
     private void cloturerLaProspection(ComProspection prospection) {
         prospection.setIsClosed(true);
-        prospection.setClosingDate(LocalDateTime.now());
+        prospection.setClosingDate(LocalDateTime.now(clock));
         prospection.setClosingReasonText(TEXTE_CLOTURE_VENTE);
         prospectionRepository.save(prospection);
         alerteRelanceService.desarmerToutes(prospection.getId());
@@ -586,7 +590,7 @@ public class DossierService {
      */
     private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
         UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
 
         StrFolderStatusHistory historique = new StrFolderStatusHistory();
         historique.setId(UUID.randomUUID());
@@ -614,9 +618,9 @@ public class DossierService {
 
     // La date va sur la colonne jalon de l'étape (EtapeMilestone) ; la note va sur CancelDescription
     // pour ANNULATION (la cause d'annulation), sur Notes sinon.
-    private static void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
+    private void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
         if (cible == StatutDossier.ANNULATION) {
-            folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now());
+            folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now(clock));
             if (request.note() != null) {
                 folder.setCancelDescription(request.note());
             }

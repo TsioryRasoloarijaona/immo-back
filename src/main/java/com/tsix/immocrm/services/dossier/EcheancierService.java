@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +55,7 @@ public class EcheancierService {
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final Clock clock;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
@@ -61,7 +63,9 @@ public class EcheancierService {
                               StlSettlementLineRepository settlementLineRepository,
                               CfgTierRepository tierRepository,
                               ComSettlementCategoryRepository settlementCategoryRepository,
-                              UtilisateurAffiche utilisateurAffiche) {
+                              UtilisateurAffiche utilisateurAffiche,
+                              Clock clock) {
+        this.clock = clock;
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.settlementTypeRepository = settlementTypeRepository;
@@ -138,7 +142,7 @@ public class EcheancierService {
 
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
-        settlement.setDocDate(LocalDateTime.now());
+        settlement.setDocDate(LocalDateTime.now(clock));
         settlement.setEcheanceDate(dateEcheance);
         settlement.setSettlementDate(null);
         settlement.setAmount(montant);
@@ -147,7 +151,7 @@ public class EcheancierService {
         settlement.setStatus(StatutReglement.INITIAL.name());
         settlement.setIsCredit(Boolean.TRUE);
         settlement.setUserCreate(utilisateurAffiche.nom(principal));
-        settlement.setUserCreateDateTime(LocalDateTime.now());
+        settlement.setUserCreateDateTime(LocalDateTime.now(clock));
         settlement.setStlSettlementType(type);
         if (request.banqueId() != null) {
             CfgTier banque = tierRepository.findById(request.banqueId())
@@ -227,7 +231,7 @@ public class EcheancierService {
         document.setComFolder(folder);
         // Exposée en EcheanceDto.creeLe. UserCreate reste non posé : aucun champ ne l'expose.
         // Voir FEATURE-fiche-dossier-alignement-ecran.md §3.
-        document.setUserCreateDateTime(LocalDateTime.now());
+        document.setUserCreateDateTime(LocalDateTime.now(clock));
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
 
@@ -270,12 +274,12 @@ public class EcheancierService {
     }
 
     /** Total réglé fourni par l'appelant, pour ne pas payer une requête par échéance. */
-    static EcheanceDto buildDto(ComDocument d, BigDecimal montantRegle) {
+    EcheanceDto buildDto(ComDocument d, BigDecimal montantRegle) {
         BigDecimal montant = requireNonNullElse(d.getAmount(), BigDecimal.ZERO);
         BigDecimal regle = requireNonNullElse(montantRegle, BigDecimal.ZERO);
         BigDecimal reste = montant.subtract(regle);
         StatutEcheance statutCalcule =
-                StatutEcheance.calculer(montant, regle, d.getDocDate(), LocalDateTime.now());
+                StatutEcheance.calculer(montant, regle, d.getDocDate(), LocalDateTime.now(clock));
 
         return new EcheanceDto(
                 d.getId(),

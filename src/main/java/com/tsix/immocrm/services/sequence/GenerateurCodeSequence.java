@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -24,9 +25,11 @@ public class GenerateurCodeSequence {
     public static final String SEQUENCE_DOSSIER = "Dossier de vente";
 
     private final AdmSequenceRepository sequenceRepository;
+    private final Clock clock;
 
-    public GenerateurCodeSequence(AdmSequenceRepository sequenceRepository) {
+    public GenerateurCodeSequence(AdmSequenceRepository sequenceRepository, Clock clock) {
         this.sequenceRepository = sequenceRepository;
+        this.clock = clock;
     }
 
     /**
@@ -47,7 +50,7 @@ public class GenerateurCodeSequence {
 
         // Année système, jamais AdmSequence.SeqYear, resté figé sur la ligne réelle :
         // BasedOnSystemYear vaut 1 sur les trois compteurs.
-        int annee = LocalDate.now().getYear() % (int) Math.pow(10, largeurAnnee);
+        int annee = LocalDate.now(clock).getYear() % (int) Math.pow(10, largeurAnnee);
         return String.format("%0" + largeurAnnee + "d", annee)
                 + "/" + String.format("%0" + largeurNumero + "d", prochain);
     }

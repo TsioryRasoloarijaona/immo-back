@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.kpi;
 
+import com.tsix.immocrm.domain.FuseauMetier;
 import com.tsix.immocrm.domain.InteractionKpi;
 import com.tsix.immocrm.dto.kpi.ActionParTypeDto;
 import com.tsix.immocrm.dto.kpi.PerformanceCommercialDto;
@@ -21,11 +22,11 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -49,14 +50,13 @@ public class PerformanceCommercialService {
 
     private static final int JOURS_PAR_DEFAUT = 30;
 
-    private static final ZoneId FUSEAU_METIER = ZoneId.of("Africa/Casablanca");
-
     private final ComActionMessageRepository messageRepository;
     private final ComProspectionRepository prospectionRepository;
     private final ComFolderRepository folderRepository;
     private final CfgTierRepository tierRepository;
     private final AdmUserRepository userRepository;
     private final PerimetreCommercialService perimetreService;
+    private final Clock clock;
 
     /** {@code UserName} des actions générées — exclues, cf. {@code SuiviActionService}. */
     static final String UTILISATEUR_SYSTEME = "Système";
@@ -68,13 +68,15 @@ public class PerformanceCommercialService {
                                         ComFolderRepository folderRepository,
                                         CfgTierRepository tierRepository,
                                         AdmUserRepository userRepository,
-                                        PerimetreCommercialService perimetreService) {
+                                        PerimetreCommercialService perimetreService,
+                                        Clock clock) {
         this.messageRepository = messageRepository;
         this.prospectionRepository = prospectionRepository;
         this.folderRepository = folderRepository;
         this.tierRepository = tierRepository;
         this.userRepository = userRepository;
         this.perimetreService = perimetreService;
+        this.clock = clock;
     }
 
     /** Le commercial quand le compte en a un, sinon le compte : exactement un des deux renseigné. */
@@ -91,7 +93,7 @@ public class PerformanceCommercialService {
 
     /** Sans activité sur la période ⇒ omis : la plupart des comptes sont désactivés (§6). */
     public List<PerformanceCommercialDto> findAll(LocalDate du, LocalDate au) {
-        Periode periode = Periode.resoudre(du, au);
+        Periode periode = Periode.resoudre(du, au, LocalDate.now(clock));
         Comparator<PerformanceCommercialDto> parPerformance =
                 Comparator.comparingLong(PerformanceCommercialDto::dossiersCrees)
                         .thenComparingLong(PerformanceCommercialDto::appelsPasses)
@@ -107,7 +109,7 @@ public class PerformanceCommercialService {
         Cle cle = principal.employeeId() != null
                 ? Cle.commercial(principal.employeeId())
                 : Cle.compte(principal.admUserId());
-        Periode periode = Periode.resoudre(du, au);
+        Periode periode = Periode.resoudre(du, au, LocalDate.now(clock));
         PerformanceCommercialDto trouve = assembler(periode).get(cle);
         return trouve != null ? trouve : vide(cle, periode);
     }
@@ -178,7 +180,7 @@ public class PerformanceCommercialService {
 
     /** Heures réellement écoulées entre deux heures murales marocaines (changements d'heure du Ramadan compris). */
     static long heuresEcoulees(LocalDateTime debut, LocalDateTime fin) {
-        return Duration.between(debut.atZone(FUSEAU_METIER), fin.atZone(FUSEAU_METIER)).toHours();
+        return Duration.between(debut.atZone(FuseauMetier.ZONE), fin.atZone(FuseauMetier.ZONE)).toHours();
     }
 
     /**
@@ -296,8 +298,8 @@ public class PerformanceCommercialService {
     /** {@code au} inclus jusqu'à la fin de la journée : à minuit, « jusqu'à aujourd'hui » perdrait le jour. */
     private record Periode(LocalDate du, LocalDate au, LocalDateTime debut, LocalDateTime fin) {
 
-        static Periode resoudre(LocalDate du, LocalDate au) {
-            LocalDate fin = au != null ? au : LocalDate.now();
+        static Periode resoudre(LocalDate du, LocalDate au, LocalDate aujourdhui) {
+            LocalDate fin = au != null ? au : aujourdhui;
             LocalDate debut = du != null ? du : fin.minusDays(JOURS_PAR_DEFAUT - 1L);
             if (debut.isAfter(fin)) {
                 throw new InvalidRequestException(

@@ -18,6 +18,7 @@ import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -28,11 +29,14 @@ public class FicheReservationService {
 
     private final ComFolderRepository folderRepository;
     private final StlSettlementLineRepository settlementLineRepository;
+    private final Clock clock;
 
     public FicheReservationService(ComFolderRepository folderRepository,
-                                    StlSettlementLineRepository settlementLineRepository) {
+                                    StlSettlementLineRepository settlementLineRepository,
+                                    Clock clock) {
         this.folderRepository = folderRepository;
         this.settlementLineRepository = settlementLineRepository;
+        this.clock = clock;
     }
 
     public FicheReservationData collect(UUID dossierId) {
@@ -64,7 +68,7 @@ public class FicheReservationService {
                 Champs.de(reservation, StlSettlement::getAmount),
                 Champs.de(reservation, StlSettlement::getTier, FicheReservationService::clientNom),
                 folder.getPrice(),
-                LocalDate.now()
+                LocalDate.now(clock)
         );
     }
 

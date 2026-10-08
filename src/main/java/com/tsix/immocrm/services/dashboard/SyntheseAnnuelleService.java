@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,13 +49,16 @@ public class SyntheseAnnuelleService {
     private final StrStatusRepository strStatusRepository;
     private final PerimetreCommercialService perimetreService;
     private final DossierService dossierService;
+    private final Clock clock;
 
     public SyntheseAnnuelleService(ComDocumentRepository documentRepository,
                                    ComFolderRepository folderRepository,
                                    StlSettlementLineRepository settlementLineRepository,
                                    StrStatusRepository strStatusRepository,
                                    PerimetreCommercialService perimetreService,
-                                   DossierService dossierService) {
+                                   DossierService dossierService,
+                                   Clock clock) {
+        this.clock = clock;
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.settlementLineRepository = settlementLineRepository;
@@ -74,7 +78,7 @@ public class SyntheseAnnuelleService {
     }
 
     public SyntheseAnnuelleDto get(@Nullable Integer annee, @Nullable UUID trancheId) {
-        int cible = annee != null ? annee : LocalDate.now().getYear();
+        int cible = annee != null ? annee : LocalDate.now(clock).getYear();
         LocalDateTime debut = LocalDate.of(cible, 1, 1).atStartOfDay();
         LocalDateTime finExclue = LocalDate.of(cible + 1, 1, 1).atStartOfDay();
 

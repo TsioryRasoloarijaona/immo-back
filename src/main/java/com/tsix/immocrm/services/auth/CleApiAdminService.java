@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
@@ -34,9 +35,11 @@ public class CleApiAdminService {
     private final AdmUserRepository userRepository;
     private final CleApiService cleApiService;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final Clock clock;
 
     public CleApiAdminService(AppApiClientRepository clientRepository, AdmUserRepository userRepository,
-                              CleApiService cleApiService, UtilisateurAffiche utilisateurAffiche) {
+                              CleApiService cleApiService, UtilisateurAffiche utilisateurAffiche, Clock clock) {
+        this.clock = clock;
         this.clientRepository = clientRepository;
         this.userRepository = userRepository;
         this.cleApiService = cleApiService;
@@ -91,7 +94,7 @@ public class CleApiAdminService {
         client.setPortees(PorteeCleApi.versColonne(portees));
         client.setActif(true);
         client.setUserCreate(utilisateurAffiche.courant().nom());
-        client.setUserCreateDateTime(LocalDateTime.now());
+        client.setUserCreateDateTime(LocalDateTime.now(clock));
         client = clientRepository.save(client);
         return new CleApiCreeeDto(toDto(client), cle);
     }
@@ -119,7 +122,7 @@ public class CleApiAdminService {
         }
         client.setActif(false);
         client.setRevoquePar(utilisateurAffiche.courant().nom());
-        client.setRevoqueDateTime(LocalDateTime.now());
+        client.setRevoqueDateTime(LocalDateTime.now(clock));
         clientRepository.save(client);
     }
 
@@ -147,7 +150,7 @@ public class CleApiAdminService {
         compte.setDescription(nom);
         compte.setDisabled(false);
         compte.setUserCreate(utilisateurAffiche.courant().nom());
-        compte.setUserCreateDateTime(LocalDateTime.now());
+        compte.setUserCreateDateTime(LocalDateTime.now(clock));
         return userRepository.save(compte);
     }
 

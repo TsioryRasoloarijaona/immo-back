@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -35,11 +36,14 @@ public class CleApiService {
 
     private final AppApiClientRepository clientRepository;
     private final AdmUserRoleRepository userRoleRepository;
+    private final Clock clock;
     private final SecureRandom aleatoire = new SecureRandom();
 
-    public CleApiService(AppApiClientRepository clientRepository, AdmUserRoleRepository userRoleRepository) {
+    public CleApiService(AppApiClientRepository clientRepository, AdmUserRoleRepository userRoleRepository,
+                         Clock clock) {
         this.clientRepository = clientRepository;
         this.userRoleRepository = userRoleRepository;
+        this.clock = clock;
     }
 
     /** Une clé neuve, en clair — à montrer une seule fois. */
@@ -97,7 +101,7 @@ public class CleApiService {
     }
 
     public void tracerUsage(AppApiClient client) {
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         if (client.getDernierUsage() == null
                 || client.getDernierUsage().plusSeconds(SECONDES_ENTRE_DEUX_TRACES).isBefore(maintenant)) {
             clientRepository.toucher(client.getId(), maintenant);
