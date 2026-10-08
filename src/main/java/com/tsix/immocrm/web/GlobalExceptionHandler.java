@@ -1,5 +1,7 @@
 package com.tsix.immocrm.web;
 
+import com.tsix.immocrm.config.ConnexionSourceSuivie;
+import com.tsix.immocrm.config.SourceDeVeriteProperties;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
@@ -8,11 +10,17 @@ import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ProspectionExistanteException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
+import jakarta.persistence.PersistenceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import com.tsix.immocrm.domain.ColonneInconnueException;
 import com.tsix.immocrm.domain.FonctionAgregatInconnueException;
 import org.springframework.http.ProblemDetail;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -20,6 +28,39 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 /** Exceptions métier → {@link ProblemDetail} RFC 7807. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final ObjectProvider<SourceDeVeriteProperties> source;
+
+    /** Propriétés absentes en mono-base : d'où l'{@link ObjectProvider}. */
+    public GlobalExceptionHandler(ObjectProvider<SourceDeVeriteProperties> source) {
+        this.source = source;
+    }
+
+    /**
+     * Deux-bases, liaison avec la source perdue → 503 avec {@code code} ; sinon l'erreur est relancée telle quelle, ce que
+     * Spring traite comme « non gérée ici » : comportement inchangé (FEATURE-stabilite-connexion-source.md §2, R8).
+     */
+    @ExceptionHandler({DataAccessException.class, TransactionException.class, PersistenceException.class})
+    public ProblemDetail handleAccesBase(Exception ex) throws Exception {
+        SourceDeVeriteProperties proprietes = source.getIfAvailable();
+        // Mono-base (R6) : pas de suivi des connexions, donc R7 invérifiable : aucune 503.
+        if (proprietes == null || !proprietes.estConfiguree()) {
+            throw ex;
+        }
+        LiaisonSource cas = LiaisonSource.classer(ex, ConnexionSourceSuivie.obtenueDansLaRequete());
+        if (cas == null) {
+            throw ex;
+        }
+        // En chaîne, pas en Throwable : SLF4J imprimerait la pile (R9).
+        log.warn("Base injoignable ({}) : {} — {}", cas.code(),
+                proprietes.description(),
+                String.valueOf(LiaisonSource.racine(ex)).replace('\n', ' '));
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, cas.detail());
+        probleme.setProperty("code", cas.code());
+        return probleme;
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException ex) {

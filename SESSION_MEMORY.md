@@ -3,12 +3,13 @@ _Last updated: 2026-10-08_ · state and decisions only (≤ 3 KB); history = git
 
 ## Current state
 
-- `feat/import-selectif` (FEATURE-import-selectif.md): `POST /api/pre-prospections/import`
-  takes `statuts` (NOUVELLE/DOUBLON, default both); the rapport gains `statutsImportes` and `creees`.
-  A line's statut never depends on the selection. Same-submission check (`memeSoumission`) is uncapped,
-  so a re-import stays idempotent past 50 submissions per contact. `MethodArgumentTypeMismatch` → 400.
-- `main` = merge #99 (comments/OpenAPI cleanup: long texts in `src/main/resources/api-docs/*.md`).
-- Suite: 1 096 tests, ~10 min, against `yesRemsTest`.
+- `feat/stabilite-connexion-source` (FEATURE-stabilite-connexion-source.md): source pool keeps
+  connections alive (keepalive 60 s, maxLifetime 10 min, driver `connectRetryCount`, socketTimeout
+  5 min), all via `SOURCE_DB_*` env. Link failures → 503 `SOURCE_INJOIGNABLE` (no statement sent,
+  tracked per request by `ConnexionSourceSuivie`) or `LIAISON_COUPEE` (doubt). Two-base mode only;
+  single-base keeps the 500. 503 not in OpenAPI (would touch all 185 operations).
+- `main` = merge #100 (import sélectif).
+- Suite: 1 114 tests, ~10 min, against `yesRemsTest`.
 
 ## Open — by priority
 
@@ -36,3 +37,6 @@ _Last updated: 2026-10-08_ · state and decisions only (≤ 3 KB); history = git
 - Production writes only on explicit request; credentials never written down.
 - First place to look for an OMRAN screen rule: `instructions/REFERENCE-aide-omran.md`.
 - Source 115 has change tracking on 28 tables; `CfgCompany` is not tracked (each copy keeps its own).
+- Prod reaches the source over internet (`197.230.172.136:1433` port-forward). `LazyConnectionDataSourceProxy`
+  must keep its declared defaults, or every read contacts the source again.
+- Copy-pool failure is also worded « base OMRAN injoignable » (accepted, sev. 3).
