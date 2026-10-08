@@ -218,6 +218,8 @@ class ActionsRecentesRevueTest {
                     .andReturn().getResponse().getContentAsString();
             List<String> cibles = JsonPath.read(json, "$[*].cibleId");
             List<String> libelles = JsonPath.read(json, "$[*].cibleLibelle");
+            assertThat(cibles).as("portée %s : l'interaction est servie, avec la prospection pour cible", portee)
+                    .contains(pA.getId().toString());
             assertThat(cibles).as("portée %s : cibleId d'un dossier hors périmètre (interaction %s)", portee, m.getId())
                     .doesNotContain(fB.getId().toString());
             assertThat(libelles).as("portée %s : code d'un dossier hors périmètre", portee)
