@@ -119,6 +119,16 @@ class PreProspectionImportTest {
                 .param("trancheId", tranche.getId().toString()));
     }
 
+    /** Refusé avant tout décodage : un fichier de plus de 5 Mo n'est pas un export de leads. */
+    @Test
+    void apercu_fichierTropVolumineux_400() throws Exception {
+        byte[] gros = new byte[5 * 1024 * 1024 + 1];
+        java.util.Arrays.fill(gros, (byte) 'a');
+        mockMvc.perform(multipart("/api/pre-prospections/import/apercu")
+                        .file(new MockMultipartFile("fichier", "leads.csv", "text/csv", gros)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void apercu_extraitToutEtProposeLaTranche_sansRienEcrire() throws Exception {
         apercu(fichierType())
