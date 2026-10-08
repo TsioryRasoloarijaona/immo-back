@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
      * Spring traite comme « non gérée ici » : comportement inchangé (FEATURE-stabilite-connexion-source.md §2, R8).
      */
     @ExceptionHandler({DataAccessException.class, TransactionException.class, PersistenceException.class})
-    public ProblemDetail handleAccesBase(Exception ex) throws Exception {
+    public ProblemDetail handleAccesBase(RuntimeException ex) {
         SourceDeVeriteProperties proprietes = source.getIfAvailable();
         // Mono-base (R6) : pas de suivi des connexions, donc R7 invérifiable : aucune 503.
         if (proprietes == null || !proprietes.estConfiguree()) {
@@ -54,9 +54,11 @@ public class GlobalExceptionHandler {
             throw ex;
         }
         // En chaîne, pas en Throwable : SLF4J imprimerait la pile (R9).
-        log.warn("Base injoignable ({}) : {} — {}", cas.code(),
-                proprietes.description(),
-                String.valueOf(LiaisonSource.racine(ex)).replace('\n', ' '));
+        if (log.isWarnEnabled()) {
+            log.warn("Base injoignable ({}) : {} — {}", cas.code(),
+                    proprietes.description(),
+                    String.valueOf(LiaisonSource.racine(ex)).replace('\n', ' '));
+        }
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, cas.detail());
         probleme.setProperty("code", cas.code());
         return probleme;

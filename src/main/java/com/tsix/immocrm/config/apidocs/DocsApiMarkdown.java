@@ -125,69 +125,89 @@ public class DocsApiMarkdown {
             return;
         }
         Class<?> classe = candidats.get(0);
+        verifierDomaine(f, classe, erreurs);
+        if (f.texteTete != null) lireTexteDeTag(f, classe, erreurs);
+
+        Map<String, DocOperation> parMethode = new HashMap<>();
+        for (FichierDocMarkdown.Section s : f.sections.values()) {
+            DocOperation doc = lireOperation(f, classe, s, erreurs);
+            if (doc != null) parMethode.put(s.titre(), doc);
+        }
+        operations.put(classe, parMethode);
+    }
+
+    private static void verifierDomaine(FichierDocMarkdown f, Class<?> classe, List<String> erreurs) {
         String domaine = f.chemin.substring(0, f.chemin.indexOf('/'));
         String paquet = classe.getPackageName();
         if (!paquet.substring(paquet.lastIndexOf('.') + 1).equals(domaine)) {
             erreurs.add(ou(f, "# " + f.titre) + " : le contrôleur est dans " + paquet
                     + ", le fichier devrait être sous api-docs/" + paquet.substring(paquet.lastIndexOf('.') + 1) + "/");
         }
+    }
 
-        if (f.texteTete != null) {
-            List<Tag> tagsClasse = tagsDe(classe);
-            if (tagsClasse.size() != 1) {
-                erreurs.add(ou(f, "# " + f.titre) + " : texte de tag, mais le contrôleur porte "
-                        + tagsClasse.size() + " @Tag (un seul attendu)");
-            } else if (!tagsClasse.get(0).description().isBlank()) {
-                erreurs.add(ou(f, "# " + f.titre) + " : description déjà présente dans @Tag");
-            } else if (tags.putIfAbsent(tagsClasse.get(0).name(), f.texteTete) != null) {
-                erreurs.add(ou(f, "# " + f.titre) + " : tag « " + tagsClasse.get(0).name() + " » documenté deux fois");
-            }
+    private void lireTexteDeTag(FichierDocMarkdown f, Class<?> classe, List<String> erreurs) {
+        List<Tag> tagsClasse = tagsDe(classe);
+        if (tagsClasse.size() != 1) {
+            erreurs.add(ou(f, "# " + f.titre) + " : texte de tag, mais le contrôleur porte "
+                    + tagsClasse.size() + " @Tag (un seul attendu)");
+        } else if (!tagsClasse.get(0).description().isBlank()) {
+            erreurs.add(ou(f, "# " + f.titre) + " : description déjà présente dans @Tag");
+        } else if (tags.putIfAbsent(tagsClasse.get(0).name(), f.texteTete) != null) {
+            erreurs.add(ou(f, "# " + f.titre) + " : tag « " + tagsClasse.get(0).name() + " » documenté deux fois");
         }
+    }
 
-        Map<String, DocOperation> parMethode = new HashMap<>();
-        for (FichierDocMarkdown.Section s : f.sections.values()) {
-            String ici = ou(f, "## " + s.titre());
-            List<Method> methodes = Arrays.stream(classe.getMethods())
-                    .filter(m -> m.getName().equals(s.titre()))
-                    .filter(m -> AnnotatedElementUtils.hasAnnotation(m, RequestMapping.class))
-                    .toList();
-            if (methodes.size() != 1) {
-                erreurs.add(ici + " : " + (methodes.isEmpty()
-                        ? "aucune méthode de handler de ce nom" : "nom de méthode surchargé"));
-                continue;
-            }
-            Method methode = methodes.get(0);
-            Operation op = AnnotatedElementUtils.findMergedAnnotation(methode, Operation.class);
-            if (s.texte() != null && op != null && !op.description().isBlank()) {
-                erreurs.add(ici + " : description déjà présente dans @Operation");
-            }
-            Map<String, String> params = new LinkedHashMap<>();
-            Map<String, String> reponses = new LinkedHashMap<>();
-            Map<String, Parameter> parametres = parametres(methode);
-            Map<String, ApiResponse> apiReponses = reponses(methode, classe, op);
-            s.sousSections().forEach((titre, texte) -> {
-                String sous = ou(f, "## " + s.titre() + " / ### " + titre);
-                if (texte == null) {
-                    erreurs.add(sous + " : section vide");
-                } else if (titre.startsWith(PARAM)) {
-                    String nom = titre.substring(PARAM.length()).strip();
-                    if (!parametres.containsKey(nom)) erreurs.add(sous + " : aucun paramètre « " + nom + " »");
-                    else if (parametres.get(nom) != null && !parametres.get(nom).description().isBlank())
-                        erreurs.add(sous + " : description déjà présente dans @Parameter");
-                    else params.put(nom, texte);
-                } else if (titre.startsWith(REPONSE)) {
-                    String code = titre.substring(REPONSE.length()).strip();
-                    if (!apiReponses.containsKey(code)) erreurs.add(sous + " : aucune @ApiResponse « " + code + " »");
-                    else if (!apiReponses.get(code).description().isBlank())
-                        erreurs.add(sous + " : description déjà présente dans @ApiResponse");
-                    else reponses.put(code, texte);
-                } else {
-                    erreurs.add(sous + " : attendu « ### param <nom> » ou « ### reponse <code> »");
-                }
-            });
-            parMethode.put(methode.getName(), new DocOperation(f.chemin, s.texte(), params, reponses));
+    /** Null si la section ne désigne pas exactement une méthode de handler (l'erreur est alors notée). */
+    private static DocOperation lireOperation(FichierDocMarkdown f, Class<?> classe, FichierDocMarkdown.Section s,
+                                              List<String> erreurs) {
+        String ici = ou(f, "## " + s.titre());
+        List<Method> methodes = Arrays.stream(classe.getMethods())
+                .filter(m -> m.getName().equals(s.titre()))
+                .filter(m -> AnnotatedElementUtils.hasAnnotation(m, RequestMapping.class))
+                .toList();
+        if (methodes.size() != 1) {
+            erreurs.add(ici + " : " + (methodes.isEmpty()
+                    ? "aucune méthode de handler de ce nom" : "nom de méthode surchargé"));
+            return null;
         }
-        operations.put(classe, parMethode);
+        Method methode = methodes.get(0);
+        Operation op = AnnotatedElementUtils.findMergedAnnotation(methode, Operation.class);
+        if (s.texte() != null && op != null && !op.description().isBlank()) {
+            erreurs.add(ici + " : description déjà présente dans @Operation");
+        }
+        Map<String, String> params = new LinkedHashMap<>();
+        Map<String, String> reponses = new LinkedHashMap<>();
+        Map<String, Parameter> parametres = parametres(methode);
+        Map<String, ApiResponse> apiReponses = reponses(methode, classe, op);
+        s.sousSections().forEach((titre, texte) -> {
+            String sous = ou(f, "## " + s.titre() + " / ### " + titre);
+            if (texte == null) {
+                erreurs.add(sous + " : section vide");
+            } else if (titre.startsWith(PARAM)) {
+                lireParam(titre.substring(PARAM.length()).strip(), texte, sous, parametres, params, erreurs);
+            } else if (titre.startsWith(REPONSE)) {
+                lireReponse(titre.substring(REPONSE.length()).strip(), texte, sous, apiReponses, reponses, erreurs);
+            } else {
+                erreurs.add(sous + " : attendu « ### param <nom> » ou « ### reponse <code> »");
+            }
+        });
+        return new DocOperation(f.chemin, s.texte(), params, reponses);
+    }
+
+    private static void lireParam(String nom, String texte, String sous, Map<String, Parameter> parametres,
+                                  Map<String, String> params, List<String> erreurs) {
+        if (!parametres.containsKey(nom)) erreurs.add(sous + " : aucun paramètre « " + nom + " »");
+        else if (parametres.get(nom) != null && !parametres.get(nom).description().isBlank())
+            erreurs.add(sous + " : description déjà présente dans @Parameter");
+        else params.put(nom, texte);
+    }
+
+    private static void lireReponse(String code, String texte, String sous, Map<String, ApiResponse> apiReponses,
+                                    Map<String, String> reponses, List<String> erreurs) {
+        if (!apiReponses.containsKey(code)) erreurs.add(sous + " : aucune @ApiResponse « " + code + " »");
+        else if (!apiReponses.get(code).description().isBlank())
+            erreurs.add(sous + " : description déjà présente dans @ApiResponse");
+        else reponses.put(code, texte);
     }
 
     private void lireSchema(FichierDocMarkdown f, List<Class<?>> candidats, List<String> erreurs) {
@@ -232,6 +252,16 @@ public class DocsApiMarkdown {
      * {@code @Schema(hidden = true)}). Le nom suit {@code @JsonProperty} s'il est présent.
      */
     private static List<AnnotatedElement> elementsDuChamp(Class<?> classe, String nom) {
+        for (List<AnnotatedElement> e : candidatsDeChamp(classe)) {
+            if (nomJson(e).equals(nom)) {
+                return estOmis(e) ? List.of() : e;
+            }
+        }
+        return List.of();
+    }
+
+    /** Par propriété : composant, accesseur et champ d'un record, ou champ d'instance d'une classe. */
+    private static List<List<AnnotatedElement>> candidatsDeChamp(Class<?> classe) {
         List<List<AnnotatedElement>> candidats = new ArrayList<>();
         if (classe.isRecord()) {
             for (RecordComponent rc : classe.getRecordComponents()) {
@@ -250,16 +280,18 @@ public class DocsApiMarkdown {
                 }
             }
         }
-        for (List<AnnotatedElement> e : candidats) {
-            String nomJava = e.get(0) instanceof RecordComponent rc ? rc.getName() : ((Field) e.get(0)).getName();
-            String nomJson = e.stream().map(x -> valeurJackson(x, "JsonProperty")).filter(v -> v instanceof String t && !t.isEmpty())
-                    .map(String.class::cast).findFirst().orElse(nomJava);
-            if (!nomJson.equals(nom)) continue;
-            boolean omis = e.stream().anyMatch(x -> Boolean.TRUE.equals(valeurJackson(x, "JsonIgnore"))
-                    || (x.getAnnotation(Schema.class) != null && x.getAnnotation(Schema.class).hidden()));
-            return omis ? List.of() : e;
-        }
-        return List.of();
+        return candidats;
+    }
+
+    private static String nomJson(List<AnnotatedElement> e) {
+        String nomJava = e.get(0) instanceof RecordComponent rc ? rc.getName() : ((Field) e.get(0)).getName();
+        return e.stream().map(x -> valeurJackson(x, "JsonProperty")).filter(v -> v instanceof String t && !t.isEmpty())
+                .map(String.class::cast).findFirst().orElse(nomJava);
+    }
+
+    private static boolean estOmis(List<AnnotatedElement> e) {
+        return e.stream().anyMatch(x -> Boolean.TRUE.equals(valeurJackson(x, "JsonIgnore"))
+                || (x.getAnnotation(Schema.class) != null && x.getAnnotation(Schema.class).hidden()));
     }
 
     // Par nom simple : évite de lier ce code à une version précise de jackson-annotations.
@@ -288,10 +320,8 @@ public class DocsApiMarkdown {
             MethodParameter mp = new MethodParameter(methode, i);
             mp.initParameterNameDiscovery(noms);
             Parameter p = mp.getParameterAnnotation(Parameter.class);
-            if (p != null && p.hidden()) continue;
-            String nom = nomPublie(mp);
-            if (nom == null) continue;
-            out.put(p != null && !p.name().isBlank() ? p.name() : nom, p);
+            String nom = p != null && p.hidden() ? null : nomPublie(mp);
+            if (nom != null) out.put(p != null && !p.name().isBlank() ? p.name() : nom, p);
         }
         AnnotatedElementUtils.findMergedRepeatableAnnotations(methode, Parameter.class, Parameters.class).stream()
                 .filter(p -> !p.name().isBlank() && !p.hidden())
@@ -306,8 +336,7 @@ public class DocsApiMarkdown {
                 .anyMatch(AuthenticationPrincipal.class::isInstance)) return null;
         RequestParam rp = mp.getParameterAnnotation(RequestParam.class);
         if (rp != null) {
-            Class<?> element = type.isArray() ? type.getComponentType()
-                    : Collection.class.isAssignableFrom(type) ? mp.nested().getNestedParameterType() : type;
+            Class<?> element = typeElement(mp, type);
             if (MultipartFile.class.isAssignableFrom(element) || Map.class.isAssignableFrom(type)) return null;
             return nom(rp.name(), rp.value(), mp);
         }
@@ -317,9 +346,20 @@ public class DocsApiMarkdown {
         if (rh != null) return Map.class.isAssignableFrom(type) ? null : nom(rh.name(), rh.value(), mp);
         CookieValue cv = mp.getParameterAnnotation(CookieValue.class);
         if (cv != null) return nom(cv.name(), cv.value(), mp);
-        // Sans annotation : springdoc publie Pageable en un seul paramètre « pageable » (pas de
-        // @ParameterObject ici) et un type simple en paramètre de requête ; le reste est ignoré
-        // ou éclaté en champs, qu'on ne documente pas ici.
+        return nomSansAnnotation(mp, type);
+    }
+
+    /** Type d'un élément pour un tableau ou une collection, le type lui-même sinon. */
+    private static Class<?> typeElement(MethodParameter mp, Class<?> type) {
+        if (type.isArray()) return type.getComponentType();
+        if (Collection.class.isAssignableFrom(type)) return mp.nested().getNestedParameterType();
+        return type;
+    }
+
+    // Sans annotation : springdoc publie Pageable en un seul paramètre « pageable » (pas de
+    // @ParameterObject ici) et un type simple en paramètre de requête ; le reste est ignoré
+    // ou éclaté en champs, qu'on ne documente pas ici.
+    private static String nomSansAnnotation(MethodParameter mp, Class<?> type) {
         if (Pageable.class.isAssignableFrom(type)) return mp.getParameterName();
         if (BeanUtils.isSimpleValueType(type) && !Locale.class.equals(type) && !TimeZone.class.equals(type)
                 && !ZoneId.class.equals(type)) return mp.getParameterName();
@@ -328,7 +368,8 @@ public class DocsApiMarkdown {
 
     // Annotations lues brutes : l'alias name/value n'est pas résolu, on regarde les deux.
     private static String nom(String name, String value, MethodParameter mp) {
-        return !name.isBlank() ? name : !value.isBlank() ? value : mp.getParameterName();
+        if (!name.isBlank()) return name;
+        return !value.isBlank() ? value : mp.getParameterName();
     }
 
     /** Code → @ApiResponse déclarée sur la méthode, dans @Operation, ou sur la classe. */
@@ -423,6 +464,17 @@ public class DocsApiMarkdown {
             t.setDescription(texte);
         });
 
+        List<io.swagger.v3.oas.models.tags.Tag> courant = rejouerOrdre(sequence, finaux);
+        if (!new HashSet<>(courant).equals(new HashSet<>(finaux.values()))) {
+            throw new IllegalStateException("tags OpenAPI : l'ordre rejoué ne couvre pas les tags du document "
+                    + courant.stream().map(io.swagger.v3.oas.models.tags.Tag::getName).toList() + " ≠ " + finaux.keySet());
+        }
+        openApi.setTags(courant);
+    }
+
+    /** Ordre final des tags : chaque opération fusionne ses tags au {@code HashSet} courant, comme springdoc. */
+    private static List<io.swagger.v3.oas.models.tags.Tag> rejouerOrdre(
+            List<List<String>> sequence, Map<String, io.swagger.v3.oas.models.tags.Tag> finaux) {
         List<io.swagger.v3.oas.models.tags.Tag> courant = new ArrayList<>();
         for (List<String> nomsOperation : sequence) {
             Set<io.swagger.v3.oas.models.tags.Tag> ensemble = new HashSet<>();
@@ -430,14 +482,11 @@ public class DocsApiMarkdown {
                 io.swagger.v3.oas.models.tags.Tag t = finaux.get(nom);
                 if (t != null && ensemble.stream().noneMatch(x -> x.getName().equals(nom))) ensemble.add(t);
             }
-            if (ensemble.isEmpty()) continue;
-            ensemble.addAll(courant);
-            courant = new ArrayList<>(ensemble);
+            if (!ensemble.isEmpty()) {
+                ensemble.addAll(courant);
+                courant = new ArrayList<>(ensemble);
+            }
         }
-        if (!new HashSet<>(courant).equals(new HashSet<>(finaux.values()))) {
-            throw new IllegalStateException("tags OpenAPI : l'ordre rejoué ne couvre pas les tags du document "
-                    + courant.stream().map(io.swagger.v3.oas.models.tags.Tag::getName).toList() + " ≠ " + finaux.keySet());
-        }
-        openApi.setTags(courant);
+        return courant;
     }
 }

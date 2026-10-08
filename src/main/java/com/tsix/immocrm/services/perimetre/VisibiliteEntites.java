@@ -16,13 +16,16 @@ import jakarta.persistence.criteria.Predicate;
  */
 public final class VisibiliteEntites {
 
+    private static final String CFG_COMPANY = "cfgCompany";
+    private static final String IS_ACTIVE = "isActive";
+
     private VisibiliteEntites() {
     }
 
     /** {@code projet} doit être déjà joint en LEFT par l'appelant, qui le partage avec le périmètre. */
     public static Predicate depuisProjet(From<?, CfgProject> projet, CriteriaBuilder cb) {
-        Join<CfgProject, CfgCompany> societe = projet.join("cfgCompany", JoinType.LEFT);
-        return actifOuNonResolu(societe.get("isActive"), societe.get("id"), cb);
+        Join<CfgProject, CfgCompany> societe = projet.join(CFG_COMPANY, JoinType.LEFT);
+        return actifOuNonResolu(societe.get(IS_ACTIVE), societe.get("id"), cb);
     }
 
     /**
@@ -31,7 +34,7 @@ public final class VisibiliteEntites {
      */
     public static Predicate depuisSocieteDirecte(From<?, ?> racine, String attribut, CriteriaBuilder cb) {
         Join<?, CfgCompany> societe = racine.join(attribut, JoinType.LEFT);
-        return actifOuNonResolu(societe.get("isActive"), societe.get("id"), cb);
+        return actifOuNonResolu(societe.get(IS_ACTIVE), societe.get("id"), cb);
     }
 
     /**
@@ -41,10 +44,10 @@ public final class VisibiliteEntites {
     public static Predicate depuisDeuxProjets(From<?, CfgProject> projetPrincipal,
                                               From<?, CfgProject> projetSecondaire,
                                               CriteriaBuilder cb) {
-        Join<CfgProject, CfgCompany> principale = projetPrincipal.join("cfgCompany", JoinType.LEFT);
-        Join<CfgProject, CfgCompany> secondaire = projetSecondaire.join("cfgCompany", JoinType.LEFT);
+        Join<CfgProject, CfgCompany> principale = projetPrincipal.join(CFG_COMPANY, JoinType.LEFT);
+        Join<CfgProject, CfgCompany> secondaire = projetSecondaire.join(CFG_COMPANY, JoinType.LEFT);
         return actifOuNonResolu(
-                cb.coalesce(principale.get("isActive"), secondaire.get("isActive")),
+                cb.coalesce(principale.get(IS_ACTIVE), secondaire.get(IS_ACTIVE)),
                 cb.coalesce(principale.get("id"), secondaire.get("id")),
                 cb);
     }

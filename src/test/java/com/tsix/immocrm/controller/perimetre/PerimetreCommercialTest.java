@@ -588,9 +588,7 @@ class PerimetreCommercialTest {
                 .as("les lignes société/tranche/PrjProject du légataire doivent survivre au PUT")
                 .anyMatch(h -> h.getCfgCompany() != null && societe.getId().equals(h.getCfgCompany().getId()))
                 .anyMatch(h -> h.getCfgTranche() != null && trancheB.getId().equals(h.getCfgTranche().getId()))
-                .anyMatch(h -> prjProjectId.equals(h.getPrjProjectId()));
-
-        assertThat(restantes)
+                .anyMatch(h -> prjProjectId.equals(h.getPrjProjectId()))
                 .as("la ligne mixte survit, mais amputée de son seul CfgProjectId")
                 .anyMatch(h -> ligneMixte.getId().equals(h.getId())
                         && h.getCfgCompany() != null

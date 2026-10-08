@@ -147,6 +147,10 @@ public class ProspectSubResourcesService {
      */
     @Transactional
     public ContactProspectDto ajouterContact(UUID prospectId, CreerContactProspectRequest request) {
+        return creerContact(prospectId, request);
+    }
+
+    private ContactProspectDto creerContact(UUID prospectId, CreerContactProspectRequest request) {
         CfgTier prospect = tierRepository.findById(prospectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + prospectId));
         if (request.relationTypeId() == null) {
@@ -195,7 +199,7 @@ public class ProspectSubResourcesService {
                     "Cette prospection n'a pas de prospect : créer d'abord le prospect "
                     + "(POST /api/pre-prospections/{id}/creer-prospect) avant d'ajouter un contact.");
         }
-        return ajouterContact(prospection.getCfgProspect().getId(), request);
+        return creerContact(prospection.getCfgProspect().getId(), request);
     }
 
     @Transactional

@@ -268,9 +268,10 @@ class SuiviActionControllerTest {
         List<Map<String, Object>> lignes = JsonPath.read(json, "$.content");
         lignes.forEach(l -> rangs.put((String) l.get("id"), (Integer) l.get("rang")));
 
-        assertThat(rangs.get(recente.getId().toString())).isEqualTo(1);
-        assertThat(rangs.get(ancienne.getId().toString())).isEqualTo(2);
-        assertThat(rangs.get(autreType.getId().toString())).isEqualTo(1);
+        assertThat(rangs)
+                .containsEntry(recente.getId().toString(), 1)
+                .containsEntry(ancienne.getId().toString(), 2)
+                .containsEntry(autreType.getId().toString(), 1);
     }
 
     @Test

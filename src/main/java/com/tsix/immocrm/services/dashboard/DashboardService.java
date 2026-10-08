@@ -62,7 +62,7 @@ public class DashboardService {
                 .orElseGet(folderRepository::findDashboardProjection);
         if (trancheId != null) {
             Set<UUID> dossiersDeLaTranche = dossierService.idsDossiersDeTranche(trancheId);
-            rows = rows.stream().filter(row -> dossiersDeLaTranche.contains((UUID) row[0])).toList();
+            rows = rows.stream().filter(row -> dossiersDeLaTranche.contains(row[0])).toList();
         }
         LocalDateTime now = LocalDateTime.now(clock);
 

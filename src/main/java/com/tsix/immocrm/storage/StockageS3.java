@@ -53,16 +53,13 @@ public class StockageS3 implements StockageFichiers {
     @Override
     public URI urlTelechargement(String cle, String nomTelechargement, String contentType) {
         // En-têtes surchargés à la signature : le nom suit la description courante, même modifiée après dépôt.
-        GetObjectRequest lecture = GetObjectRequest.builder()
-                .bucket(properties.getBucket())
-                .key(cle)
-                .responseContentType(contentType)
-                .responseContentDisposition(contentDisposition(nomTelechargement))
-                .build();
-
         return URI.create(presigner.presignGetObject(GetObjectPresignRequest.builder()
                         .signatureDuration(Duration.ofMinutes(properties.getPresignMinutes()))
-                        .getObjectRequest(lecture)
+                        .getObjectRequest(lecture -> lecture
+                                .bucket(properties.getBucket())
+                                .key(cle)
+                                .responseContentType(contentType)
+                                .responseContentDisposition(contentDisposition(nomTelechargement)))
                         .build())
                 .url()
                 .toString());

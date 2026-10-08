@@ -41,7 +41,7 @@ class HorlogeCasablancaTest {
 
     @Test
     void horlogeDeProd_estCasablanca() {
-        assertThat(FuseauMetier.ZONE).isEqualTo(ZoneId.of("Africa/Casablanca"));
+        assertThat(ZoneId.of("Africa/Casablanca")).isEqualTo(FuseauMetier.ZONE);
         assertThat(new HorlogeConfig().horlogeMetier().getZone()).isEqualTo(FuseauMetier.ZONE);
     }
 

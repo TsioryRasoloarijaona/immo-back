@@ -77,8 +77,10 @@ public class EnvoiWhatsAppUltraMsg implements EnvoiWhatsApp {
     @Override
     public boolean envoyer(MessageWhatsApp message) {
         if (!actif) {
-            log.info("Envoi WhatsApp ignoré (service inactif) : destinataire {}.",
-                    NumeroMasque.de(message.destinataire()));
+            if (log.isInfoEnabled()) {
+                log.info("Envoi WhatsApp ignoré (service inactif) : destinataire {}.",
+                        NumeroMasque.de(message.destinataire()));
+            }
             return false;
         }
         try {
@@ -96,12 +98,16 @@ public class EnvoiWhatsAppUltraMsg implements EnvoiWhatsApp {
 
             if (!estAcceptee(reponse)) {
                 // Réponse journalisée telle quelle : sans le jeton (il n'est que dans la requête), seul diagnostic d'un refus.
-                log.error("UltraMsg a refusé le message pour {} : {}",
-                        NumeroMasque.de(message.destinataire()), reponse);
+                if (log.isErrorEnabled()) {
+                    log.error("UltraMsg a refusé le message pour {} : {}",
+                            NumeroMasque.de(message.destinataire()), reponse);
+                }
                 return false;
             }
 
-            log.info("Message WhatsApp envoyé à {}.", NumeroMasque.de(message.destinataire()));
+            if (log.isInfoEnabled()) {
+                log.info("Message WhatsApp envoyé à {}.", NumeroMasque.de(message.destinataire()));
+            }
             return true;
         } catch (Exception e) {
             // Large et avalée exprès : appelée après commit hors du fil de la requête, propager ne servirait à rien.

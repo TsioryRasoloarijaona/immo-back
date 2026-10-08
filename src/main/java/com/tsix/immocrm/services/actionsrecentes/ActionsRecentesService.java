@@ -52,6 +52,7 @@ public class ActionsRecentesService {
 
     public static final int LIMITE_MAX = 100;
     private static final int LIBELLE_INTERACTION_MAX = 120;
+    private static final String DOC_DATE = "docDate";
 
     /**
      * Ordre total du flux, le même en SQL (par source) et en Java (fusion) : date décroissante, puis
@@ -114,7 +115,7 @@ public class ActionsRecentesService {
         predicats.add(cb.isNull(h.get("strConfigEntityId")));
         ajouter(predicats, perimetreService.filtreProspections(), p, cq, cb);
 
-        cq.multiselect(h, p).where(predicats.toArray(Predicate[]::new)).orderBy(ordre(cb, h.get("docDate"), h.get("id")));
+        cq.multiselect(h, p).where(predicats.toArray(Predicate[]::new)).orderBy(ordre(cb, h.get(DOC_DATE), h.get("id")));
         return em.createQuery(cq).setMaxResults(filtre.limite()).getResultList().stream()
                 .map(t -> depuisHistoriqueProspection(t.get(0, StrHistory.class), t.get(1, ComProspection.class)))
                 .toList();
@@ -131,7 +132,7 @@ public class ActionsRecentesService {
         predicats.add(cb.equal(h.get("strConfigEntityId"), StatutDossier.CONFIG_ENTITY_ID));
         ajouter(predicats, perimetreService.filtreDossiers(), f, cq, cb);
 
-        cq.multiselect(h, f).where(predicats.toArray(Predicate[]::new)).orderBy(ordre(cb, h.get("docDate"), h.get("id")));
+        cq.multiselect(h, f).where(predicats.toArray(Predicate[]::new)).orderBy(ordre(cb, h.get(DOC_DATE), h.get("id")));
         return em.createQuery(cq).setMaxResults(filtre.limite()).getResultList().stream()
                 .map(t -> depuisHistoriqueDossier(t.get(0, StrHistory.class), t.get(1, ComFolder.class)))
                 .toList();
@@ -147,7 +148,7 @@ public class ActionsRecentesService {
         Fetch<ComActionMessage, ComProspection> prospection = m.fetch("comProspection", JoinType.LEFT);
         prospection.fetch("cfgProspect", JoinType.LEFT);
 
-        Expression<LocalDateTime> date = cb.coalesce(m.get("userCreateDateTime"), m.<LocalDateTime>get("docDate"));
+        Expression<LocalDateTime> date = cb.coalesce(m.get("userCreateDateTime"), m.<LocalDateTime>get(DOC_DATE));
         List<Predicate> predicats = new ArrayList<>();
         predicats.add(cb.isNotNull(date));
         // Sans fiche, rien à ouvrir : ignorée comme une ligne orpheline (R8).
@@ -167,11 +168,11 @@ public class ActionsRecentesService {
 
     private static List<Predicate> predicatsHistorique(CriteriaBuilder cb, Root<StrHistory> h, Filtre filtre) {
         List<Predicate> predicats = new ArrayList<>();
-        predicats.add(cb.isNotNull(h.get("docDate")));
+        predicats.add(cb.isNotNull(h.get(DOC_DATE)));
         if (filtre.auteur() != null) {
             predicats.add(cb.equal(h.get("admUserId"), filtre.auteur()));
         }
-        ajouterCurseur(predicats, cb, h.get("docDate"), h.get("id"), filtre);
+        ajouterCurseur(predicats, cb, h.get(DOC_DATE), h.get("id"), filtre);
         return predicats;
     }
 

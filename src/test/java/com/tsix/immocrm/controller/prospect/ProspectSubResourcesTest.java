@@ -127,12 +127,11 @@ class ProspectSubResourcesTest {
 
         String body = "{\"contactProspectId\":\"" + contact.getId() + "\",\"relationTypeId\":\"" + relationType.getId() + "\"}";
 
-        String response = mockMvc.perform(post("/api/prospects/{id}/contacts", prospect.getId())
+        mockMvc.perform(post("/api/prospects/{id}/contacts", prospect.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contactProspectId").value(contact.getId().toString()))
-                .andExpect(jsonPath("$.relationType").value("Conjoint"))
-                .andReturn().getResponse().getContentAsString();
+                .andExpect(jsonPath("$.relationType").value("Conjoint"));
 
         mockMvc.perform(get("/api/prospects/{id}/contacts", prospect.getId()))
                 .andExpect(status().isOk())

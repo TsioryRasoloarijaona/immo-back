@@ -124,41 +124,14 @@ public class PerformanceCommercialService {
 
         for (Object[] ligne : activite(periode, perimetre)) {
             Cle cle = auteur(ligne, comptes);
-            if (cle == null) {
-                continue;
-            }
-            Accumulateur acc = parCommercial.computeIfAbsent(cle, id -> new Accumulateur());
-            String typeCode = (String) ligne[3];
-            String typeLibelle = (String) ligne[4];
-            String resultat = (String) ligne[5];
-            if (InteractionKpi.TYPE_APPEL_SORTANT.equals(typeCode)) acc.appelsPasses++;
-            if (InteractionKpi.TYPE_APPEL_ENTRANT.equals(typeCode)) acc.appelsRecus++;
-            if (InteractionKpi.TYPE_VISITE.equals(typeCode)) acc.visitesRealisees++;
-            if (InteractionKpi.RESULTAT_VISITE_DECROCHEE.equals(resultat)) acc.visitesDecrochees++;
-            if (InteractionKpi.RESULTAT_RDV_PRIS.equals(resultat)) acc.rdvObtenus++;
-            acc.interactionsTotal++;
-            acc.parType.merge(StringUtils.hasText(typeLibelle) ? typeLibelle : SANS_TYPE, 1L, Long::sum);
-            if (ligne[6] != null) {
-                acc.prospections.add((UUID) ligne[6]);
+            if (cle != null) {
+                cumulerInteraction(parCommercial.computeIfAbsent(cle, id -> new Accumulateur()), ligne);
             }
         }
 
         for (Object[] ligne : prospections(periode, perimetre)) {
-            Accumulateur acc = parCommercial.computeIfAbsent(Cle.commercial((UUID) ligne[0]), id -> new Accumulateur());
-            acc.prospectionsAssignees++;
-            if (Boolean.TRUE.equals(ligne[2])) {
-                acc.prospectionsCloturees++;
-            }
-            LocalDateTime creation = (LocalDateTime) ligne[1];
-            LocalDateTime premiereInteraction = (LocalDateTime) ligne[3];
-            if (premiereInteraction != null) {
-                acc.prospectionsPrisesEnCharge++;
-                // Saisie rétroactive : une interaction peut précéder la prospection ; délai ramené à 0.
-                if (creation != null) {
-                    long heures = heuresEcoulees(creation, premiereInteraction);
-                    acc.delaisHeures.add(Math.max(0L, heures));
-                }
-            }
+            cumulerProspection(
+                    parCommercial.computeIfAbsent(Cle.commercial((UUID) ligne[0]), id -> new Accumulateur()), ligne);
         }
 
         for (Object[] ligne : dossiers(periode, perimetre)) {
@@ -176,6 +149,40 @@ public class PerformanceCommercialService {
                 cle.commercialId() != null ? noms.get(cle.commercialId()) : comptes.nom(cle.utilisateurId()),
                 periode)));
         return resultat;
+    }
+
+    private static void cumulerInteraction(Accumulateur acc, Object[] ligne) {
+        String typeCode = (String) ligne[3];
+        String typeLibelle = (String) ligne[4];
+        String resultat = (String) ligne[5];
+        if (InteractionKpi.TYPE_APPEL_SORTANT.equals(typeCode)) acc.appelsPasses++;
+        if (InteractionKpi.TYPE_APPEL_ENTRANT.equals(typeCode)) acc.appelsRecus++;
+        if (InteractionKpi.TYPE_VISITE.equals(typeCode)) acc.visitesRealisees++;
+        if (InteractionKpi.RESULTAT_VISITE_DECROCHEE.equals(resultat)) acc.visitesDecrochees++;
+        if (InteractionKpi.RESULTAT_RDV_PRIS.equals(resultat)) acc.rdvObtenus++;
+        acc.interactionsTotal++;
+        acc.parType.merge(StringUtils.hasText(typeLibelle) ? typeLibelle : SANS_TYPE, 1L, Long::sum);
+        if (ligne[6] != null) {
+            acc.prospections.add((UUID) ligne[6]);
+        }
+    }
+
+    private static void cumulerProspection(Accumulateur acc, Object[] ligne) {
+        acc.prospectionsAssignees++;
+        if (Boolean.TRUE.equals(ligne[2])) {
+            acc.prospectionsCloturees++;
+        }
+        LocalDateTime creation = (LocalDateTime) ligne[1];
+        LocalDateTime premiereInteraction = (LocalDateTime) ligne[3];
+        if (premiereInteraction == null) {
+            return;
+        }
+        acc.prospectionsPrisesEnCharge++;
+        // Saisie rétroactive : une interaction peut précéder la prospection ; délai ramené à 0.
+        if (creation != null) {
+            long heures = heuresEcoulees(creation, premiereInteraction);
+            acc.delaisHeures.add(Math.max(0L, heures));
+        }
     }
 
     /** Heures réellement écoulées entre deux heures murales marocaines (changements d'heure du Ramadan compris). */

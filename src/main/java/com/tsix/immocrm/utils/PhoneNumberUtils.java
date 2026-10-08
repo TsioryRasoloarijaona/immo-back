@@ -16,7 +16,7 @@ public final class PhoneNumberUtils {
         if (rawPhoneNumber == null) {
             return "";
         }
-        String digitsOnly = rawPhoneNumber.replaceAll("[^0-9]", "");
+        String digitsOnly = rawPhoneNumber.replaceAll("\\D", "");
         if (digitsOnly.length() <= LOCAL_NUMBER_LENGTH) {
             return digitsOnly;
         }

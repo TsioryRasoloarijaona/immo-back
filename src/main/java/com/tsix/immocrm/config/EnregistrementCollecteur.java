@@ -17,7 +17,7 @@ public class EnregistrementCollecteur {
 
     private static final Logger log = LoggerFactory.getLogger(EnregistrementCollecteur.class);
 
-    public EnregistrementCollecteur(EntityManagerFactory fabrique, ApplicationEventPublisher evenements) {
+    EnregistrementCollecteur(EntityManagerFactory fabrique, ApplicationEventPublisher evenements) {
         CollecteurLignesEcrites collecteur = new CollecteurLignesEcrites(evenements);
         EventListenerRegistry registre = fabrique.unwrap(SessionFactoryImplementor.class)
                 .getEventListenerRegistry();

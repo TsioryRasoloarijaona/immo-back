@@ -139,8 +139,7 @@ public class PieceJointeSupport {
             extension = CleStockage.normaliserExtension(
                     nomOriginal.substring(nomOriginal.lastIndexOf('.')));
         }
-        String legende = StringUtils.hasText(description) ? description
-                : (StringUtils.hasText(nomOriginal) ? nomOriginal : "Pièce jointe");
+        String legende = legende(description, nomOriginal);
 
         UUID pieceId = UUID.randomUUID();
         String cle = CleStockage.construire(stockageProperties.getPrefix(), porteur, porteurId,
@@ -207,6 +206,16 @@ public class PieceJointeSupport {
      */
     @Transactional
     public void marquerSupprime(AppFileObject objet, AuthenticatedUser principal) {
+        appliquerSuppressionLogique(objet, principal);
+    }
+
+    @Transactional
+    public void supprimer(UUID porteurId, UUID pieceId, String libellePorteur,
+                          AuthenticatedUser principal) {
+        appliquerSuppressionLogique(exigerFichier(porteurId, pieceId, libellePorteur), principal);
+    }
+
+    private void appliquerSuppressionLogique(AppFileObject objet, AuthenticatedUser principal) {
         objet.setDeletedAt(LocalDateTime.now(clock));
         objet.setDeletedBy(utilisateurAffiche.nom(principal));
         // saveAndFlush : hasFile est une @Formula sur AppFileObject, hors des espaces d'auto-flush
@@ -214,10 +223,11 @@ public class PieceJointeSupport {
         fileObjectRepository.saveAndFlush(objet);
     }
 
-    @Transactional
-    public void supprimer(UUID porteurId, UUID pieceId, String libellePorteur,
-                          AuthenticatedUser principal) {
-        marquerSupprime(exigerFichier(porteurId, pieceId, libellePorteur), principal);
+    private static String legende(String description, String nomOriginal) {
+        if (StringUtils.hasText(description)) {
+            return description;
+        }
+        return StringUtils.hasText(nomOriginal) ? nomOriginal : "Pièce jointe";
     }
 
     private void supprimerSiTransactionAnnulee(String cle) {

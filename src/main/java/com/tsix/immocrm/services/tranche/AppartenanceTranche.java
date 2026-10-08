@@ -24,6 +24,8 @@ import java.util.UUID;
  */
 public final class AppartenanceTranche {
 
+    private static final String STK_HIERARCHY = "stkHierarchy";
+
     private AppartenanceTranche() {
     }
 
@@ -40,12 +42,12 @@ public final class AppartenanceTranche {
         subquery.select(article.get("id"))
                 .where(cb.and(
                         cb.equal(article.get("comFolderId"), dossier.get("id")),
-                        article.get("stkHierarchy").get("id").in(trancheIds)));
+                        article.get(STK_HIERARCHY).get("id").in(trancheIds)));
         // L'EXISTS seul ne suffit pas : le lien inverse StkItem.ComFolderId manque sur des dossiers
         // dont l'article principal a bien une tranche. LEFT explicite : une navigation implicite
         // ferait un INNER JOIN sur toute la requête et écarterait un dossier sans article principal.
         Join<ComFolder, StkItem> principal = dossier.join("stkItem", JoinType.LEFT);
-        Join<StkItem, CfgTranche> trancheDuPrincipal = principal.join("stkHierarchy", JoinType.LEFT);
+        Join<StkItem, CfgTranche> trancheDuPrincipal = principal.join(STK_HIERARCHY, JoinType.LEFT);
         return cb.or(cb.exists(subquery), trancheDuPrincipal.get("id").in(trancheIds));
     }
 
@@ -56,6 +58,6 @@ public final class AppartenanceTranche {
 
     /** FK directe {@code ComProspection.StkHierarchyId}, pré-prospections comprises. */
     public static Predicate prospection(From<?, ComProspection> prospection, Collection<UUID> trancheIds) {
-        return prospection.get("stkHierarchy").get("id").in(trancheIds);
+        return prospection.get(STK_HIERARCHY).get("id").in(trancheIds);
     }
 }

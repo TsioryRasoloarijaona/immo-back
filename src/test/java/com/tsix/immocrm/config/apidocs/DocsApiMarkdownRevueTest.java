@@ -42,7 +42,8 @@ class DocsApiMarkdownRevueTest {
 
                 Texte.
                 """);
-        assertThatThrownBy(() -> new DocsApiMarkdown(fichiers, List.of(RevueController.class), noms -> Map.of()))
+        List<Class<?>> controleurs = List.of(RevueController.class);
+        assertThatThrownBy(() -> new DocsApiMarkdown(fichiers, controleurs, noms -> Map.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("### param corps");
     }

@@ -52,6 +52,11 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PerimetreCommercialService {
 
+    private static final String STK_ITEM = "stkItem";
+    private static final String STK_HIERARCHY = "stkHierarchy";
+    private static final String CFG_PROJECT = "cfgProject";
+    private static final String COM_FOLDER = "comFolder";
+
     private final AdmUserHabilitationRepository habilitationRepository;
     private final AdmUserRoleRepository userRoleRepository;
     private final AdmUserRepository userRepository;
@@ -140,9 +145,9 @@ public class PerimetreCommercialService {
     public Specification<ComFolder> filtreDossiers() {
         Optional<List<UUID>> perimetre = perimetreCourant();
         return (root, query, cb) -> {
-            Join<ComFolder, StkItem> article = root.join("stkItem", JoinType.LEFT);
-            Join<StkItem, CfgTranche> tranche = article.join("stkHierarchy", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
+            Join<ComFolder, StkItem> article = root.join(STK_ITEM, JoinType.LEFT);
+            Join<StkItem, CfgTranche> tranche = article.join(STK_HIERARCHY, JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
             return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
@@ -154,8 +159,8 @@ public class PerimetreCommercialService {
     public Specification<ComProspection> filtreProspections() {
         Optional<List<UUID>> perimetre = perimetreCourant();
         return (root, query, cb) -> {
-            Join<ComProspection, CfgTranche> tranche = root.join("stkHierarchy", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
+            Join<ComProspection, CfgTranche> tranche = root.join(STK_HIERARCHY, JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
             return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
@@ -179,15 +184,15 @@ public class PerimetreCommercialService {
             var ligne = dansPerimetre.from(StlSettlementLine.class);
             dansPerimetre.select(ligne.get("id")).where(cb.and(
                     cb.equal(ligne.get("stlSettlement"), root),
-                    ligne.get("comDocument").get("comFolder").get("stkItem")
-                            .get("stkHierarchy").get("cfgProject").get("id").in(projetIds)));
+                    ligne.get("comDocument").get(COM_FOLDER).get(STK_ITEM)
+                            .get(STK_HIERARCHY).get(CFG_PROJECT).get("id").in(projetIds)));
 
             Subquery<UUID> avecProjet = query.subquery(UUID.class);
             var ligne2 = avecProjet.from(StlSettlementLine.class);
             avecProjet.select(ligne2.get("id")).where(cb.and(
                     cb.equal(ligne2.get("stlSettlement"), root),
-                    cb.isNotNull(ligne2.get("comDocument").get("comFolder").get("stkItem")
-                            .get("stkHierarchy").get("cfgProject").get("id"))));
+                    cb.isNotNull(ligne2.get("comDocument").get(COM_FOLDER).get(STK_ITEM)
+                            .get(STK_HIERARCHY).get(CFG_PROJECT).get("id"))));
 
             return cb.and(visible, cb.or(cb.exists(dansPerimetre), cb.not(cb.exists(avecProjet))));
         };
@@ -201,7 +206,7 @@ public class PerimetreCommercialService {
         Optional<List<UUID>> perimetre = perimetreCourant();
         return (root, query, cb) -> {
             Join<StlQuote, CfgTranche> tranche = root.join("cfgTranche", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
             return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
     }
@@ -214,13 +219,13 @@ public class PerimetreCommercialService {
         Optional<List<UUID>> perimetre = perimetreCourant();
         return (root, query, cb) -> {
             Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.LEFT);
-            Join<ComProspection, CfgTranche> trancheProspection = prospection.join("stkHierarchy", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projetProspection = trancheProspection.join("cfgProject", JoinType.LEFT);
+            Join<ComProspection, CfgTranche> trancheProspection = prospection.join(STK_HIERARCHY, JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projetProspection = trancheProspection.join(CFG_PROJECT, JoinType.LEFT);
 
-            Join<ComActionMessage, ComFolder> dossier = root.join("comFolder", JoinType.LEFT);
-            Join<ComFolder, StkItem> article = dossier.join("stkItem", JoinType.LEFT);
-            Join<StkItem, CfgTranche> trancheDossier = article.join("stkHierarchy", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projetDossier = trancheDossier.join("cfgProject", JoinType.LEFT);
+            Join<ComActionMessage, ComFolder> dossier = root.join(COM_FOLDER, JoinType.LEFT);
+            Join<ComFolder, StkItem> article = dossier.join(STK_ITEM, JoinType.LEFT);
+            Join<StkItem, CfgTranche> trancheDossier = article.join(STK_HIERARCHY, JoinType.LEFT);
+            Join<CfgTranche, CfgProject> projetDossier = trancheDossier.join(CFG_PROJECT, JoinType.LEFT);
 
             // coalesce = "prospection d'abord, dossier ensuite" ; NULL = les deux chemins épuisés.
             Expression<UUID> projet = cb.coalesce(projetProspection.get("id"), projetDossier.get("id"));
@@ -251,24 +256,21 @@ public class PerimetreCommercialService {
      * le filtre se contourne par les ids. Hors périmètre ou masqué ⇒ 404, jamais 403 (§6.5).
      */
     public void verifierAccesDossier(UUID dossierId) {
-        verifier(dossierId,
-                projetIds -> folderRepository.existsDansPerimetre(dossierId, projetIds),
+        verifier(projetIds -> folderRepository.existsDansPerimetre(dossierId, projetIds),
                 () -> folderRepository.existsVisible(dossierId),
                 "Dossier introuvable: " + dossierId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour une prospection ou une pré-prospection. */
     public void verifierAccesProspection(UUID prospectionId) {
-        verifier(prospectionId,
-                projetIds -> prospectionRepository.existsDansPerimetre(prospectionId, projetIds),
+        verifier(projetIds -> prospectionRepository.existsDansPerimetre(prospectionId, projetIds),
                 () -> prospectionRepository.existsVisible(prospectionId),
                 "Prospection introuvable: " + prospectionId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour un encaissement (règlement). */
     public void verifierAccesEncaissement(UUID encaissementId) {
-        verifier(encaissementId,
-                projetIds -> settlementRepository.existsDansPerimetre(encaissementId, projetIds),
+        verifier(projetIds -> settlementRepository.existsDansPerimetre(encaissementId, projetIds),
                 () -> settlementRepository.existsVisible(encaissementId),
                 "Encaissement introuvable: " + encaissementId);
     }
@@ -277,7 +279,7 @@ public class PerimetreCommercialService {
      * Toujours une requête, même sans périmètre : la visibilité par entité vaut pour tous
      * ({@code FEATURE-visibilite-transversale-entites.md} R4). « Dans le périmètre » porte déjà les deux.
      */
-    private void verifier(UUID id, java.util.function.Predicate<List<UUID>> dansPerimetre,
+    private void verifier(java.util.function.Predicate<List<UUID>> dansPerimetre,
                           java.util.function.BooleanSupplier visible, String messageSiAbsent) {
         boolean autorise = perimetreCourant()
                 .map(dansPerimetre::test)

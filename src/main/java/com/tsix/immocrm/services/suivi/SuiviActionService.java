@@ -14,8 +14,10 @@ import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -56,6 +58,11 @@ public class SuiviActionService {
 
     /** Actions générées pendant une session : OMRAN les affiche sous « Système », pas sous l'utilisateur. */
     static final String UTILISATEUR_SYSTEME = "Système";
+
+    private static final String USER_NAME = "userName";
+    private static final String IS_SYSTEM = "isSystem";
+    private static final String PROSPECTION_ID = "prospectionId";
+    private static final String DOSSIER_ID = "dossierId";
 
     public SuiviActionService(ComActionMessageRepository messageRepository,
                               PerimetreCommercialService perimetreService,
@@ -126,13 +133,13 @@ public class SuiviActionService {
         return (root, query, cb) -> {
             List<Predicate> miennes = new ArrayList<>();
             if (StringUtils.hasText(monNom)) {
-                miennes.add(cb.equal(root.get("userName"), monNom));
+                miennes.add(cb.equal(root.get(USER_NAME), monNom));
             }
             if (monCompte != null) {
                 miennes.add(cb.and(
                         cb.equal(root.get("admUser").get("id"), monCompte),
-                        cb.or(cb.isNull(root.get("userName")),
-                                cb.notEqual(root.get("userName"), UTILISATEUR_SYSTEME))));
+                        cb.or(cb.isNull(root.get(USER_NAME)),
+                                cb.notEqual(root.get(USER_NAME), UTILISATEUR_SYSTEME))));
             }
             return miennes.isEmpty() ? cb.disjunction() : cb.or(miennes.toArray(new Predicate[0]));
         };
@@ -148,25 +155,34 @@ public class SuiviActionService {
             if (f.dateFin() != null) {
                 p.add(cb.lessThan(root.get("docDate"), f.dateFin()));
             }
-            if (f.trancheIds() != null && !f.trancheIds().isEmpty()) {
+            if (renseignee(f.trancheIds())) {
                 p.add(root.join("trancheResolue", JoinType.LEFT).get("id").in(f.trancheIds()));
             }
-            if (f.utilisateurs() != null && !f.utilisateurs().isEmpty()) {
-                p.add(root.get("userName").in(f.utilisateurs()));
+            if (renseignee(f.utilisateurs())) {
+                p.add(root.get(USER_NAME).in(f.utilisateurs()));
             }
-            if (f.typeIds() != null && !f.typeIds().isEmpty()) {
+            if (renseignee(f.typeIds())) {
                 p.add(root.get("comActionMessageType").get("id").in(f.typeIds()));
             }
-            if (f.categorieIds() != null && !f.categorieIds().isEmpty()) {
+            if (renseignee(f.categorieIds())) {
                 p.add(root.get("comActionMessageCategory").get("id").in(f.categorieIds()));
             }
             if (f.systeme() != null) {
-                p.add(f.systeme()
-                        ? cb.isTrue(root.get("isSystem"))
-                        : cb.or(cb.isFalse(root.get("isSystem")), cb.isNull(root.get("isSystem"))));
+                p.add(predicatSysteme(Boolean.TRUE.equals(f.systeme()), root, cb));
             }
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    private static boolean renseignee(Collection<?> valeurs) {
+        return valeurs != null && !valeurs.isEmpty();
+    }
+
+    /** Non système = {@code IsSystem} à 0 ou NULL. */
+    private static Predicate predicatSysteme(boolean systeme, Root<ComActionMessage> root, CriteriaBuilder cb) {
+        return systeme
+                ? cb.isTrue(root.get(IS_SYSTEM))
+                : cb.or(cb.isFalse(root.get(IS_SYSTEM)), cb.isNull(root.get(IS_SYSTEM)));
     }
 
     /** Une requête pour toute la page, jamais de chargement paresseux association par association. */
@@ -245,8 +261,8 @@ public class SuiviActionService {
     /** Statut du dossier né de la prospection ({@code ComFolder.ComProspectionId}) : la jointure {@code Pfolder} de la vue. */
     private Map<UUID, String> etatsDesDossiersNesDeProspection(Collection<Tuple> lignes) {
         List<UUID> prospectionIds = lignes.stream()
-                .filter(t -> t.get("dossierId") == null && t.get("prospectionId") != null)
-                .map(t -> t.get("prospectionId", UUID.class))
+                .filter(t -> t.get(DOSSIER_ID) == null && t.get(PROSPECTION_ID) != null)
+                .map(t -> t.get(PROSPECTION_ID, UUID.class))
                 .distinct()
                 .toList();
         if (prospectionIds.isEmpty()) {
@@ -294,8 +310,8 @@ public class SuiviActionService {
                 t.get("typeId", UUID.class),
                 t.get("categorieId", UUID.class),
                 t.get("tiersId", UUID.class),
-                t.get("prospectionId", UUID.class),
-                t.get("dossierId", UUID.class),
+                t.get(PROSPECTION_ID, UUID.class),
+                t.get(DOSSIER_ID, UUID.class),
                 t.get("trancheId", UUID.class),
                 t.get("creePar", String.class),
                 t.get("creeLe", LocalDateTime.class),
@@ -333,10 +349,10 @@ public class SuiviActionService {
      * dossier né d'elle, sinon la catégorie ; sinon la catégorie.
      */
     private static String etat(Tuple t, Map<UUID, String> etatsParProspection) {
-        if (t.get("dossierId") != null) {
+        if (t.get(DOSSIER_ID) != null) {
             return t.get("statutDossier", String.class);
         }
-        UUID prospectionId = t.get("prospectionId", UUID.class);
+        UUID prospectionId = t.get(PROSPECTION_ID, UUID.class);
         if (prospectionId != null && etatsParProspection.containsKey(prospectionId)) {
             return etatsParProspection.get(prospectionId);
         }

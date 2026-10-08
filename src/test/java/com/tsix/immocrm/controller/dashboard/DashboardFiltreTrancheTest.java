@@ -307,8 +307,8 @@ class DashboardFiltreTrancheTest {
                 .map(d -> new BigDecimal(d.get("totalAPayer").toString()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        assertThat(pipelineT).isEqualByComparingTo(sommeActifs).isEqualByComparingTo("500000");
-        assertThat(pipelineT).isLessThanOrEqualTo(pipelineTotal);
+        assertThat(pipelineT).isEqualByComparingTo(sommeActifs).isEqualByComparingTo("500000")
+                .isLessThanOrEqualTo(pipelineTotal);
         // B (annulé) appartient à T mais n'entre pas dans le pipeline ; panier = 500 000 / 1 actif.
         assertThat(new BigDecimal(JsonPath.parse(getJson("/api/dashboard?trancheId=" + t))
                 .read("$.panierMoyen").toString())).isEqualByComparingTo("500000");
@@ -378,10 +378,11 @@ class DashboardFiltreTrancheTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         Set<String> ids = new HashSet<>(JsonPath.parse(json).<List<String>>read("$.content[*].id"));
-        assertThat(ids).containsExactlyInAnyOrder(
-                dossierA.getCfgCustomer().getId().toString(),
-                dossierB.getCfgCustomer().getId().toString()); // B par son seul article annexe
-        assertThat(ids).doesNotContain(dossierC.getCfgCustomer().getId().toString());
+        assertThat(ids)
+                .containsExactlyInAnyOrder(
+                        dossierA.getCfgCustomer().getId().toString(),
+                        dossierB.getCfgCustomer().getId().toString()) // B par son seul article annexe
+                .doesNotContain(dossierC.getCfgCustomer().getId().toString());
     }
 
     // ------------------------------------------------------------------ outils

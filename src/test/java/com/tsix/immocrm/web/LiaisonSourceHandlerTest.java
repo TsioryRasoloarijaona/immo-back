@@ -119,7 +119,8 @@ class LiaisonSourceHandlerTest {
     @BeforeEach
     void preparer() throws SQLException {
         DataSource source = mock(DataSource.class);
-        when(source.getConnection()).thenReturn(mock(Connection.class));
+        Connection connexion = mock(Connection.class);
+        when(source.getConnection()).thenReturn(connexion);
         mockMvc = MockMvcBuilders.standaloneSetup(new Lanceur(source))
                 .setControllerAdvice(new GlobalExceptionHandler(
                         new StaticListableBeanFactory(java.util.Map.of("source", sourceConfiguree()))

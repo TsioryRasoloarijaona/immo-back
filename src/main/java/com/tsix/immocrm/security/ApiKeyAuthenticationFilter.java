@@ -74,8 +74,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         response.setStatus(statut.value());
         response.setContentType("application/problem+json");
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write("""
-                {"type":"about:blank","title":"%s","status":%d,"detail":"%s","code":"%s"}"""
+        response.getWriter().write(
+                "{\"type\":\"about:blank\",\"title\":\"%s\",\"status\":%d,\"detail\":\"%s\",\"code\":\"%s\"}"
                 .formatted(statut.getReasonPhrase(), statut.value(), echapper(detail), code));
     }
 

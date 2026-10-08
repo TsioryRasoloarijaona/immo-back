@@ -98,7 +98,7 @@ public class SynchronisationDescendante {
 
         for (String table : tablesSuivies()) {
             try {
-                fusionnees += passeDeFusion(table, versionCourante, suppressions);
+                fusionnees += passeDeFusion(table, suppressions);
                 tablesReussies.add(table);
             } catch (RuntimeException e) {
                 enEchec++;
@@ -153,7 +153,7 @@ public class SynchronisationDescendante {
     }
 
     /** Les suppressions sont collectées pour la fin de cycle (en ordre inverse des clés étrangères). */
-    private int passeDeFusion(String table, long versionCourante, List<LigneEcrite> suppressions) {
+    private int passeDeFusion(String table, List<LigneEcrite> suppressions) {
         Long filigrane = surCopie.query(
                 "SELECT DerniereVersion FROM dbo.AppSyncEtat WHERE TableNom = ?",
                 rs -> rs.next() ? rs.getObject(1, Long.class) : null, table);

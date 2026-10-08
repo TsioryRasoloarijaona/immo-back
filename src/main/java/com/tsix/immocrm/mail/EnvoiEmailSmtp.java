@@ -111,9 +111,11 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
             }
 
             expedieur.send(mime);
-            log.info("Email envoyé : sujet « {} », destinataire {}, {} pièce(s) jointe(s).",
-                    message.sujet(), AdresseMasquee.de(message.destinataire()),
-                    message.piecesJointes().size());
+            if (log.isInfoEnabled()) {
+                log.info("Email envoyé : sujet « {} », destinataire {}, {} pièce(s) jointe(s).",
+                        message.sujet(), AdresseMasquee.de(message.destinataire()),
+                        message.piecesJointes().size());
+            }
         } catch (Exception e) {
             // Large et avalée exprès : appelée depuis un écouteur @Async après commit, propager n'annulerait rien
             // et perdrait la trace dans l'exécuteur.

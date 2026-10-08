@@ -199,13 +199,14 @@ class DocsApiMarkdownTest {
 
     @Test
     void echoueSurMethodeInconnue() {
-        assertThatThrownBy(() -> docs(Map.of("apidocs/ExempleController.md", """
+        Map<String, String> fichiers = Map.of("apidocs/ExempleController.md", """
                 # ExempleController
 
                 ## supprimer
 
                 Texte.
-                """)))
+                """);
+        assertThatThrownBy(() -> docs(fichiers))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("apidocs/ExempleController.md, section « ## supprimer »")
                 .hasMessageContaining("aucune méthode de handler");
@@ -213,7 +214,7 @@ class DocsApiMarkdownTest {
 
     @Test
     void echoueSurParametreOuReponseInconnus() {
-        assertThatThrownBy(() -> docs(Map.of("apidocs/ExempleController.md", """
+        Map<String, String> fichiers = Map.of("apidocs/ExempleController.md", """
                 # ExempleController
 
                 ## lire
@@ -225,7 +226,8 @@ class DocsApiMarkdownTest {
                 ### reponse 409
 
                 Texte.
-                """)))
+                """);
+        assertThatThrownBy(() -> docs(fichiers))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("section « ## lire / ### param filtre » : aucun paramètre « filtre »")
                 .hasMessageContaining("section « ## lire / ### reponse 409 » : aucune @ApiResponse « 409 »");
@@ -271,10 +273,11 @@ class DocsApiMarkdownTest {
                 """), List.of(ParametresController.class), noms -> Map.of());
         assertThat(docs).isNotNull();
 
+        List<Class<?>> controleurs = List.of(ParametresController.class);
         for (String nom : List.of("corps", "requete", "principal", "cache", "page")) {
-            assertThatThrownBy(() -> new DocsApiMarkdown(Map.of("apidocs/ParametresController.md",
-                    "# ParametresController\n\n## lire\n\n### param " + nom + "\n\nTexte.\n"),
-                    List.of(ParametresController.class), noms -> Map.of()))
+            Map<String, String> fichiers = Map.of("apidocs/ParametresController.md",
+                    "# ParametresController\n\n## lire\n\n### param " + nom + "\n\nTexte.\n");
+            assertThatThrownBy(() -> new DocsApiMarkdown(fichiers, controleurs, noms -> Map.of()))
                     .as(nom)
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("### param " + nom + " » : aucun paramètre");
@@ -287,9 +290,11 @@ class DocsApiMarkdownTest {
                 noms -> Map.of("AvecChampsOmis", List.of(AvecChampsOmis.class));
         assertThat(new DocsApiMarkdown(Map.of("schemas/AvecChampsOmis.md",
                 "# AvecChampsOmis\n\n## publie\n\nTexte.\n\n## renomme\n\nTexte.\n"), List.of(), resolveur)).isNotNull();
+        List<Class<?>> aucunControleur = List.of();
         for (String champ : List.of("ignore", "cache", "nomJava", "CONSTANTE")) {
-            assertThatThrownBy(() -> new DocsApiMarkdown(Map.of("schemas/AvecChampsOmis.md",
-                    "# AvecChampsOmis\n\n## " + champ + "\n\nTexte.\n"), List.of(), resolveur))
+            Map<String, String> fichiers = Map.of("schemas/AvecChampsOmis.md",
+                    "# AvecChampsOmis\n\n## " + champ + "\n\nTexte.\n");
+            assertThatThrownBy(() -> new DocsApiMarkdown(fichiers, aucunControleur, resolveur))
                     .as(champ)
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("section « ## " + champ + " » : aucun champ publié");

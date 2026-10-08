@@ -35,24 +35,43 @@ final class FichierDocMarkdown {
     }
 
     private void analyser(String contenu) {
-        List<String> tampon = new ArrayList<>();
-        String section = null;
-        String sousSection = null;
-        String sectionTexte = null;
-        Map<String, String> sous = null;
-        boolean dansBlocCode = false;
+        Analyse analyse = new Analyse();
+        for (String ligne : contenu.split("\n", -1)) {
+            analyse.lire(ligne);
+        }
+        analyse.terminer();
+        if (titre == null) erreurs.add("titre « # » manquant");
+    }
 
-        String[] lignes = contenu.split("\n", -1);
-        for (int i = 0; i <= lignes.length; i++) {
-            boolean fin = i == lignes.length;
-            String ligne = fin ? "" : lignes[i];
+    /** État du découpage ligne à ligne : section et sous-section en cours, texte en attente. */
+    private final class Analyse {
+        private final List<String> tampon = new ArrayList<>();
+        private String section;
+        private String sousSection;
+        private String sectionTexte;
+        private Map<String, String> sous;
+        private boolean dansBlocCode;
+
+        void lire(String ligne) {
             String nette = ligne.strip();
-            if (!fin && (nette.startsWith("```") || nette.startsWith("~~~"))) dansBlocCode = !dansBlocCode;
-            Titre m = (dansBlocCode && !fin) ? null : lireTitre(ligne);
-            if (!fin && m == null) {
+            if (nette.startsWith("```") || nette.startsWith("~~~")) dansBlocCode = !dansBlocCode;
+            Titre m = dansBlocCode ? null : lireTitre(ligne);
+            if (m == null) {
                 tampon.add(ligne);
-                continue;
+                return;
             }
+            rangerTampon();
+            if (m.niveau() <= 2) cloreSection();
+            ouvrir(m);
+        }
+
+        void terminer() {
+            rangerTampon();
+            cloreSection();
+        }
+
+        /** Le texte accumulé revient au titre, à la section ou à la sous-section en cours. */
+        private void rangerTampon() {
             String texte = texte(tampon);
             tampon.clear();
             if (titre == null) {
@@ -64,14 +83,16 @@ final class FichierDocMarkdown {
             } else {
                 sous.put(sousSection, texte);
             }
-            if (fin || (m.niveau() <= 2 && section != null)) {
-                if (section != null) sections.put(section, new Section(section, sectionTexte, sous));
-                if (fin) break;
-                section = null;
-            }
-            int niveau = m.niveau();
+        }
+
+        private void cloreSection() {
+            if (section != null) sections.put(section, new Section(section, sectionTexte, sous));
+            section = null;
+        }
+
+        private void ouvrir(Titre m) {
             String nom = m.nom();
-            switch (niveau) {
+            switch (m.niveau()) {
                 case 1 -> {
                     if (titre != null) erreurs.add("second titre « # " + nom + " »");
                     else titre = nom;
@@ -82,21 +103,21 @@ final class FichierDocMarkdown {
                     section = nom;
                     sectionTexte = null;
                     sous = new LinkedHashMap<>();
-                    sousSection = null;
                 }
-                default -> {
-                    if (section == null) {
-                        erreurs.add("« ### " + nom + " » hors d'une section « ## »");
-                        sousSection = null;
-                    } else {
-                        if (sous.containsKey(nom)) erreurs.add("« ### " + nom + " » en double dans « ## " + section + " »");
-                        sousSection = nom;
-                    }
-                }
+                default -> ouvrirSousSection(nom);
             }
-            if (niveau <= 2) sousSection = null;
+            if (m.niveau() <= 2) sousSection = null;
         }
-        if (titre == null) erreurs.add("titre « # » manquant");
+
+        private void ouvrirSousSection(String nom) {
+            if (section == null) {
+                erreurs.add("« ### " + nom + " » hors d'une section « ## »");
+                sousSection = null;
+            } else {
+                if (sous.containsKey(nom)) erreurs.add("« ### " + nom + " » en double dans « ## " + section + " »");
+                sousSection = nom;
+            }
+        }
     }
 
     /**

@@ -105,7 +105,7 @@ public class ComActionMessage {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComActionMessageId")
-    private ComActionMessage comActionMessage;
+    private ComActionMessage messageParent;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
