@@ -160,7 +160,7 @@ public class PreProspectionController {
             @ApiResponse(responseCode = "200", description = "Rapport d'aperçu (`importe = false`, "
                     + "`preProspectionId` toujours null)."),
             @ApiResponse(responseCode = "400", description = "Fichier absent ou vide, colonne `Nom` "
-                    + "introuvable, plus de 5 000 lignes.", content = @Content)
+                    + "introuvable, plus de 5 000 lignes, fichier de plus de 5 Mo.", content = @Content)
     })
     public RapportImportPreProspectionsDto apercuImport(
             @Parameter(description = "Le fichier CSV exporté, tel quel.")

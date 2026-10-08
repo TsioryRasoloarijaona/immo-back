@@ -51,6 +51,8 @@ public class ImportPreProspectionService {
 
     private static final int NOTES_MAX = 1000;
 
+    static final long TAILLE_MAX_OCTETS = 5L * 1024 * 1024;
+
     /** Statuts importables, dans l'ordre de {@code statutsImportes} ; défaut quand {@code statuts} est absent. */
     static final List<StatutLigneImport> STATUTS_IMPORTABLES =
             List.of(StatutLigneImport.NOUVELLE, StatutLigneImport.DOUBLON);
@@ -323,6 +325,10 @@ public class ImportPreProspectionService {
     private static byte[] octets(MultipartFile fichier) {
         if (fichier == null || fichier.isEmpty()) {
             throw new InvalidRequestException("Fichier requis (champ multipart « fichier »)");
+        }
+        // Avant tout décodage : 5 000 lignes de leads pèsent bien moins ; la limite globale (50 Mo) vise les pièces jointes.
+        if (fichier.getSize() > TAILLE_MAX_OCTETS) {
+            throw new InvalidRequestException("Fichier trop volumineux : 5 Mo au plus — le découper");
         }
         try {
             return fichier.getBytes();
