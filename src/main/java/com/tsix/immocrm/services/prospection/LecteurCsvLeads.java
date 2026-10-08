@@ -13,7 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -155,7 +155,7 @@ public final class LecteurCsvLeads {
     }
 
     private static Map<Colonne, Integer> indexer(List<String> entete) {
-        Map<Colonne, Integer> index = new HashMap<>();
+        Map<Colonne, Integer> index = new EnumMap<>(Colonne.class);
         for (int i = 0; i < entete.size(); i++) {
             Colonne c = ENTETES.get(normaliserEntete(entete.get(i)));
             if (c != null) {
@@ -211,51 +211,89 @@ public final class LecteurCsvLeads {
 
     /** RFC 4180 : {@code ""} dans un champ cité vaut {@code "}, et un champ cité peut couvrir plusieurs lignes. */
     private static List<Enregistrement> decouper(String texte, char separateur) {
-        List<Enregistrement> resultat = new ArrayList<>();
-        List<String> champs = new ArrayList<>();
-        StringBuilder courant = new StringBuilder();
-        boolean cite = false;
-        int ligne = 1;
-        int debutEnregistrement = 1;
-        for (int i = 0; i < texte.length(); i++) {
-            char c = texte.charAt(i);
-            if (cite) {
-                if (c == '"') {
-                    if (i + 1 < texte.length() && texte.charAt(i + 1) == '"') {
-                        courant.append('"');
-                        i++;
-                    } else {
-                        cite = false;
-                    }
+        return new DecoupeurCsv(texte, separateur).decouper();
+    }
+
+    /** Automate de {@link #decouper} : une instance par fichier, état mutable non partagé. */
+    private static final class DecoupeurCsv {
+        private final String texte;
+        private final char separateur;
+        private final List<Enregistrement> resultat = new ArrayList<>();
+        private List<String> champs = new ArrayList<>();
+        private final StringBuilder courant = new StringBuilder();
+        private boolean cite = false;
+        private int ligne = 1;
+        private int debutEnregistrement = 1;
+        private int position = 0;
+
+        private DecoupeurCsv(String texte, char separateur) {
+            this.texte = texte;
+            this.separateur = separateur;
+        }
+
+        private List<Enregistrement> decouper() {
+            while (position < texte.length()) {
+                char c = texte.charAt(position);
+                if (cite) {
+                    lireDansCitation(c);
                 } else {
-                    if (c == '\n') {
-                        ligne++;
-                    }
-                    courant.append(c);
+                    lireHorsCitation(c);
                 }
-            } else if (c == '"') {
+                position++;
+            }
+            if (!courant.isEmpty() || !champs.isEmpty()) {
+                finirChamp();
+                resultat.add(new Enregistrement(debutEnregistrement, champs));
+            }
+            return resultat;
+        }
+
+        private void lireDansCitation(char c) {
+            if (c == '"') {
+                if (suivantEst('"')) {
+                    courant.append('"');
+                    position++;
+                } else {
+                    cite = false;
+                }
+                return;
+            }
+            if (c == '\n') {
+                ligne++;
+            }
+            courant.append(c);
+        }
+
+        private void lireHorsCitation(char c) {
+            if (c == '"') {
                 cite = true;
             } else if (c == separateur) {
-                champs.add(courant.toString());
-                courant.setLength(0);
+                finirChamp();
             } else if (c == '\n' || c == '\r') {
-                if (c == '\r' && i + 1 < texte.length() && texte.charAt(i + 1) == '\n') {
-                    i++;
+                if (c == '\r' && suivantEst('\n')) {
+                    position++;
                 }
-                champs.add(courant.toString());
-                courant.setLength(0);
-                resultat.add(new Enregistrement(debutEnregistrement, champs));
-                champs = new ArrayList<>();
-                ligne++;
-                debutEnregistrement = ligne;
+                finirEnregistrement();
             } else {
                 courant.append(c);
             }
         }
-        if (courant.length() > 0 || !champs.isEmpty()) {
-            champs.add(courant.toString());
-            resultat.add(new Enregistrement(debutEnregistrement, champs));
+
+        private boolean suivantEst(char attendu) {
+            return position + 1 < texte.length() && texte.charAt(position + 1) == attendu;
         }
-        return resultat;
+
+        private void finirChamp() {
+            champs.add(courant.toString());
+            courant.setLength(0);
+        }
+
+        private void finirEnregistrement() {
+            finirChamp();
+            resultat.add(new Enregistrement(debutEnregistrement, champs));
+            champs = new ArrayList<>();
+            ligne++;
+            debutEnregistrement = ligne;
+        }
     }
 }

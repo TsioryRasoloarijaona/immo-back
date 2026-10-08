@@ -232,8 +232,12 @@ public class ConfirmationVisiteService {
 
         String cp = nettoyer(codePostal);
         String cite = nettoyer(ville);
-        String ligneVille = (cp != null && cite != null) ? cp + " " + cite
-                : (cite != null ? cite : cp);
+        String ligneVille;
+        if (cp != null && cite != null) {
+            ligneVille = cp + " " + cite;
+        } else {
+            ligneVille = cite != null ? cite : cp;
+        }
         return new Adresse(propre, ligneVille);
     }
 

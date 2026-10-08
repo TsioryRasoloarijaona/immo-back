@@ -37,6 +37,7 @@ import static com.tsix.immocrm.services.prospection.document.MontantFormatter.vi
 public class OffreDevisPdfRenderer {
 
     private static final String LOGO_CLASSPATH = "documents/ayad-logo.png";
+    private static final String CATEGORIE = "Catégorie";
 
     private static final Color PURPLE = new Color(0x5A, 0x2C, 0x6E);
     private static final Color GRAY_LABEL = new Color(0xE4, 0xE4, 0xE4);
@@ -137,7 +138,7 @@ public class OffreDevisPdfRenderer {
         addFullRow(table, "Client", vide(data.clientNom()));
         addFullRow(table, "Tranche", vide(data.trancheDescription()));
         addRow(table, "Article", vide(data.articleCode()), "Sup. (m²)", surface(data.superficie()));
-        addRow(table, "Catégorie", vide(data.categorieLibelle()), "Type", vide(data.typeLibelle()));
+        addRow(table, CATEGORIE, vide(data.categorieLibelle()), "Type", vide(data.typeLibelle()));
         addFullRow(table, "Commercial", vide(data.commercialNom()));
         addFullRow(table, "Mode de paie.", vide(data.modePaiementLibelle()));
         return table;
@@ -245,7 +246,7 @@ public class OffreDevisPdfRenderer {
             // widths array length always matches column count here
         }
 
-        table.addCell(headerCell("Catégorie"));
+        table.addCell(headerCell(CATEGORIE));
         table.addCell(headerCell("Montant"));
 
         BigDecimal total = BigDecimal.ZERO;
@@ -272,7 +273,7 @@ public class OffreDevisPdfRenderer {
             // widths array length always matches column count here
         }
 
-        for (String header : new String[]{"Code", "Catégorie", "Tjs affecté", "Sup. (m²)",
+        for (String header : new String[]{"Code", CATEGORIE,"Tjs affecté", "Sup. (m²)",
                 "Prix TTC avant remise", "Remise", "Montant remise", "Prix TTC après remise"}) {
             table.addCell(headerCell(header));
         }

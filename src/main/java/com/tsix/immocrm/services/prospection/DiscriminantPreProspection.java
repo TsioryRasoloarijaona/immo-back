@@ -25,12 +25,14 @@ public final class DiscriminantPreProspection {
     // mémoire ; les requêtes, elles, résolvent par code.
     public static final UUID ID_PRE_PROSPECTION = UUID.fromString("B92DF3D8-158C-4E1E-827A-70FEB172A264");
 
+    private static final String STR_ENTITY_ID = "strEntityId";
+
     private DiscriminantPreProspection() {
     }
 
     /** Les pré-prospections. Une ligne sans {@code StrEntityId} n'en est pas une. */
     public static Specification<ComProspection> estPreProspection() {
-        return (root, query, cb) -> root.get("strEntityId").in(idsPreProspection(query, cb));
+        return (root, query, cb) -> root.get(STR_ENTITY_ID).in(idsPreProspection(query, cb));
     }
 
     /**
@@ -45,8 +47,8 @@ public final class DiscriminantPreProspection {
     public static Predicate nEstPasPreProspection(From<?, ComProspection> prospection,
                                                   CriteriaQuery<?> query, CriteriaBuilder cb) {
         return cb.or(
-                cb.isNull(prospection.get("strEntityId")),
-                cb.not(prospection.get("strEntityId").in(idsPreProspection(query, cb))));
+                cb.isNull(prospection.get(STR_ENTITY_ID)),
+                cb.not(prospection.get(STR_ENTITY_ID).in(idsPreProspection(query, cb))));
     }
 
     /** Même test, sur une ligne déjà chargée. */
