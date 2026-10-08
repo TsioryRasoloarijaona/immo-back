@@ -8,8 +8,12 @@ _Last updated: 2026-10-08_ · state and decisions only (≤ 3 KB); history = git
   5 min), all via `SOURCE_DB_*` env. Link failures → 503 `SOURCE_INJOIGNABLE` (no statement sent,
   tracked per request by `ConnexionSourceSuivie`) or `LIAISON_COUPEE` (doubt). Two-base mode only;
   single-base keeps the 500. 503 not in OpenAPI (would touch all 185 operations).
-- `main` = merge #100 (import sélectif).
-- Suite: 1 114 tests, ~10 min, against `yesRemsTest`.
+- `feat/actions-recentes` (FEATURE-actions-recentes.md): `GET /api/actions-recentes` = StrHistory
+  (prospection + dossier rows) ∪ ComActionMessage, périmètre via the existing filtres; interaction
+  target follows `filtreInteractions` order (prospection first). Prospection history now carries the
+  author; étape / archive / désarchive written. Type = Description prefix (`TypeActionRecente`,
+  shared with the writes). Cursor (date, id as upper-case string) — same order in SQL and Java.
+- Suite: 1 142 tests, ~10 min, against `yesRemsTest`.
 
 ## Open — by priority
 
