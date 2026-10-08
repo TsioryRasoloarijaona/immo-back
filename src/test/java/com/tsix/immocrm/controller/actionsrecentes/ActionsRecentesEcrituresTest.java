@@ -146,8 +146,7 @@ class ActionsRecentesEcrituresTest {
                 .andExpect(status().isOk());
 
         List<StrHistory> lignes = historique(pre.getId());
-        assertThat(lignes).hasSize(2);
-        assertThat(lignes).allSatisfy(h -> {
+        assertThat(lignes).hasSize(2).allSatisfy(h -> {
             assertThat(h.getAdmUserId()).isEqualTo(moi.getId());
             assertThat(h.getAdmUserDescription()).isEqualTo("Agent Récent");
         });

@@ -95,8 +95,9 @@ class ReglagesPoolSourceTest {
     void r1_keepaliveSuperieurOuEgalADureeDeVie_refuse() {
         SourceDeVeriteProperties p = proprietes();
         p.setKeepaliveMs(500_000);
+        DataSourceConfig config = new DataSourceConfig();
 
-        assertThatThrownBy(() -> new DataSourceConfig().ecriture(p))
+        assertThatThrownBy(() -> config.ecriture(p))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SOURCE_DB_KEEPALIVE_MS")
                 .hasMessageContaining("SOURCE_DB_MAX_LIFETIME_MS");
@@ -106,8 +107,9 @@ class ReglagesPoolSourceTest {
     void r1_keepaliveSousLePlancherHikari_refuse() {
         SourceDeVeriteProperties p = proprietes();
         p.setKeepaliveMs(29_999);
+        DataSourceConfig config = new DataSourceConfig();
 
-        assertThatThrownBy(() -> new DataSourceConfig().ecriture(p))
+        assertThatThrownBy(() -> config.ecriture(p))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SOURCE_DB_KEEPALIVE_MS")
                 .hasMessageContaining("30000");

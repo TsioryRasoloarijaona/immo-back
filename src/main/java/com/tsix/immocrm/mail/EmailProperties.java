@@ -67,6 +67,6 @@ public class EmailProperties {
     }
 
     public long piecesJointesMaxOctets() {
-        return (long) piecesJointesMaxMo * 1024L * 1024L;
+        return piecesJointesMaxMo * 1024L * 1024L;
     }
 }

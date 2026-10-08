@@ -10,7 +10,7 @@ import java.util.List;
  */
 public class DoublonsProspectException extends ConflictException {
 
-    private final List<ProspectDoublonDto> doublons;
+    private final transient List<ProspectDoublonDto> doublons;
 
     public DoublonsProspectException(List<ProspectDoublonDto> doublons) {
         super(doublons.size() + (doublons.size() > 1 ? " fiches" : " fiche")

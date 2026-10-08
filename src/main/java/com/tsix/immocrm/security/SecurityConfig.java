@@ -48,7 +48,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) {
         http
                 // CSRF désactivé : SameSite=Strict le remplace tant que le front partage le domaine (CookieJwt).
                 // En SameSite=None, les POST multipart de pièces jointes (type simple, sans préflight) seraient

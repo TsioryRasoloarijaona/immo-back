@@ -119,36 +119,36 @@ public final class Colonnes {
         List<AgregatDemande> resolus = new ArrayList<>();
         Set<String> jetonsVus = new LinkedHashSet<>();
         for (String demandee : demandees) {
-            if (demandee == null || demandee.isBlank()) {
-                continue;
+            if (demandee != null && !demandee.isBlank() && jetonsVus.add(demandee.trim())) {
+                resolus.add(resoudreAgregat(type, parNom, demandee.trim()));
             }
-            String jeton = demandee.trim();
-            if (!jetonsVus.add(jeton)) {
-                continue;
-            }
-            int separateur = jeton.indexOf(FonctionAgregat.SEPARATEUR);
-            String nom = (separateur < 0 ? jeton : jeton.substring(0, separateur)).trim();
-            String suffixe = separateur < 0 ? null : jeton.substring(separateur + 1).trim();
-
-            C colonne = parNom.get(nom.toLowerCase(Locale.ROOT));
-            if (colonne == null) {
-                throw new ColonneInconnueException(nom, noms(agregeables(type)));
-            }
-            List<FonctionAgregat> autorisees = FonctionAgregat.pour(colonne.chemin());
-            FonctionAgregat fonction = FonctionAgregat.DEFAUT;
-            if (suffixe != null) {
-                try {
-                    fonction = FonctionAgregat.valueOf(suffixe.toUpperCase(Locale.ROOT));
-                } catch (IllegalArgumentException inconnue) {
-                    throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
-                }
-            }
-            // Couvre aussi la colonne sans chemin : sa liste d'autorisées est vide.
-            if (!autorisees.contains(fonction)) {
-                throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
-            }
-            resolus.add(new AgregatDemande(jeton, colonne.nom(), colonne.chemin(), fonction));
         }
         return resolus;
+    }
+
+    private static <C extends Enum<C> & Colonne> AgregatDemande resoudreAgregat(
+            Class<C> type, Map<String, C> parNom, String jeton) {
+        int separateur = jeton.indexOf(FonctionAgregat.SEPARATEUR);
+        String nom = (separateur < 0 ? jeton : jeton.substring(0, separateur)).trim();
+        String suffixe = separateur < 0 ? null : jeton.substring(separateur + 1).trim();
+
+        C colonne = parNom.get(nom.toLowerCase(Locale.ROOT));
+        if (colonne == null) {
+            throw new ColonneInconnueException(nom, noms(agregeables(type)));
+        }
+        List<FonctionAgregat> autorisees = FonctionAgregat.pour(colonne.chemin());
+        FonctionAgregat fonction = FonctionAgregat.DEFAUT;
+        if (suffixe != null) {
+            try {
+                fonction = FonctionAgregat.valueOf(suffixe.toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException inconnue) {
+                throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
+            }
+        }
+        // Couvre aussi la colonne sans chemin : sa liste d'autorisées est vide.
+        if (!autorisees.contains(fonction)) {
+            throw new FonctionAgregatInconnueException(jeton, nom, autorisees);
+        }
+        return new AgregatDemande(jeton, colonne.nom(), colonne.chemin(), fonction);
     }
 }

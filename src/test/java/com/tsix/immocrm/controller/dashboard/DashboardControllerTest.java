@@ -135,7 +135,7 @@ class DashboardControllerTest {
 
         String json = getDashboardJson();
         JSONArray after = JsonPath.parse(json).read("$.relancesEnRetard");
-        assertThat(after.size()).isEqualTo(countBefore + 1);
+        assertThat(after).hasSize(countBefore + 1);
 
         JSONArray match = JsonPath.parse(json)
                 .read("$.relancesEnRetard[?(@.dossierId=='" + folderId + "')]");

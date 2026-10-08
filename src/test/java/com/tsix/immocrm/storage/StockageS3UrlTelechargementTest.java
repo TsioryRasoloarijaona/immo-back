@@ -64,10 +64,11 @@ class StockageS3UrlTelechargementTest {
     void porteLeContentTypeEtLeNomAccentueEnUtf8AvecSonRepliAscii() {
         String url = urlDecodee("Pièce d'identité");
 
-        assertThat(url).contains("response-content-type=application/pdf");
-        // Repli ASCII pour les clients anciens...
-        assertThat(url).contains("filename=\"Pi_ce_d_identit_\"");
-        // ...et nom réel en RFC 5987, un en-tête HTTP ne transportant pas d'UTF-8 brut.
-        assertThat(url).contains("filename*=UTF-8''Pi%C3%A8ce%20d%27identit%C3%A9");
+        assertThat(url)
+                .contains("response-content-type=application/pdf")
+                // Repli ASCII pour les clients anciens...
+                .contains("filename=\"Pi_ce_d_identit_\"")
+                // ...et nom réel en RFC 5987, un en-tête HTTP ne transportant pas d'UTF-8 brut.
+                .contains("filename*=UTF-8''Pi%C3%A8ce%20d%27identit%C3%A9");
     }
 }

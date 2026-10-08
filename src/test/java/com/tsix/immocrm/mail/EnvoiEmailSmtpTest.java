@@ -115,7 +115,7 @@ class EnvoiEmailSmtpTest {
         MimeMessage envoye = capteur.envoyes.get(0);
 
         assertThat(envoye.getSubject()).isEqualTo("Vos identifiants Arpent");
-        assertThat(envoye.getAllRecipients()[0].toString()).isEqualTo("jean.rakoto@exemple.ma");
+        assertThat(envoye.getAllRecipients()[0]).hasToString("jean.rakoto@exemple.ma");
         assertThat(envoye.getFrom()[0].toString()).contains(properties.getExpediteur());
 
         // Le mot de passe est en ASCII pur (l'alphabet de génération exclut les caractères

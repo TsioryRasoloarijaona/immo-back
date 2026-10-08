@@ -117,8 +117,10 @@ public class DataSourceConfig {
         routage.setDefaultTargetDataSource(ecritureSuivie);
         routage.afterPropertiesSet();
 
-        log.warn("Mode deux bases ACTIF : ecritures vers {}, lectures sur la base locale.",
-                proprietes.description());
+        if (log.isWarnEnabled()) {
+            log.warn("Mode deux bases ACTIF : ecritures vers {}, lectures sur la base locale.",
+                    proprietes.description());
+        }
 
         // Défauts déclarés (Hikari : auto-commit ; SQL Server : READ COMMITTED) : sinon le proxy les sonde à chaque
         // getConnection tant qu'il ne les connaît pas, et hors transaction la sonde part vers la source.

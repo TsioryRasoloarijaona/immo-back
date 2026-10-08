@@ -8,7 +8,7 @@ import com.tsix.immocrm.dto.prospection.ProspectionExistanteDto;
  */
 public class ProspectionExistanteException extends ConflictException {
 
-    private final ProspectionExistanteDto prospectionExistante;
+    private final transient ProspectionExistanteDto prospectionExistante;
 
     public ProspectionExistanteException(String prospectNom, ProspectionExistanteDto existante) {
         super("Le prospect " + prospectNom + " a déjà une prospection ouverte sur le projet "

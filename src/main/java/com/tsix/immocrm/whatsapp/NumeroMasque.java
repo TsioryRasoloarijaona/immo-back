@@ -20,7 +20,7 @@ public final class NumeroMasque {
         if (propre.length() < 8) {
             return "***";
         }
-        String debut = propre.startsWith("+") ? propre.substring(0, 4) : propre.substring(0, 3);
+        String debut = propre.substring(0, propre.startsWith("+") ? 4 : 3);
         String fin = propre.substring(propre.length() - 2);
         return debut + "*".repeat(propre.length() - debut.length() - 2) + fin;
     }

@@ -56,8 +56,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 @Service
 @Transactional(readOnly = true)
@@ -163,12 +166,16 @@ public class ProspectService {
 
     @Transactional
     public ProspectDetailDto create(CreerProspectRequest request) {
-        return toDetail(createEntity(request));
+        return toDetail(creerEntite(request));
     }
 
     /** Comme {@link #create}, mais rend l'entité — sert aussi {@code POST /api/pre-prospections/{id}/creer-prospect}. */
     @Transactional
     public CfgTier createEntity(CreerProspectRequest request) {
+        return creerEntite(request);
+    }
+
+    private CfgTier creerEntite(CreerProspectRequest request) {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
@@ -193,15 +200,7 @@ public class ProspectService {
         tier.setIsFundReader(false);
         // Même compteur qu'OMRAN, sinon codes en collision. Voir FIX-creation-prospect-prospection.md §3.
         tier.setCode(generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
-        applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
-                request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
-                request.email(), request.adresse(), request.ville(), request.codePostal(),
-                request.dateNaissance(), request.lieuNaissance(), request.nombreEnfants(), request.typeId(),
-                request.kindId(), request.commercialId(), request.titreId(), request.sexeId(),
-                request.paysResidenceId(), request.paysId(), request.nationaliteId(), request.situationFamilialeId(),
-                request.typeResidenceId(), request.regimeMatrimonialId(), request.professionId(), request.salaireId(),
-                request.employeur(), request.anciennete(), request.filsDe(), request.etDe(), request.adresse2(),
-                request.adresse3(), request.pieceIdentite());
+        applyFields(tier, ChampsProspect.de(request));
         // Sans type PRO, un prospect créé sans typeId n'apparaîtrait pas dans sa propre liste.
         if (request.typeId() == null) {
             tier.setCfgTierType(resolveTypeProspectParDefaut());
@@ -322,38 +321,39 @@ public class ProspectService {
         CfgTier tier = tierRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + id));
 
-        applyFields(tier, request.prenom(), request.nom(), request.raisonSociale(), request.telephone(),
-                request.indicatifTelephone(), request.mobile(), request.indicatifMobile(),
-                request.email(), request.adresse(), request.ville(), request.codePostal(),
-                request.dateNaissance(), request.lieuNaissance(), request.nombreEnfants(), request.typeId(),
-                request.kindId(), request.commercialId(), request.titreId(), request.sexeId(),
-                request.paysResidenceId(), request.paysId(), request.nationaliteId(), request.situationFamilialeId(),
-                request.typeResidenceId(), request.regimeMatrimonialId(), request.professionId(), request.salaireId(),
-                request.employeur(), request.anciennete(), request.filsDe(), request.etDe(), request.adresse2(),
-                request.adresse3(), request.pieceIdentite());
+        applyFields(tier, ChampsProspect.de(request));
 
         return toDetail(tierRepository.save(tier));
     }
 
-    private void applyFields(CfgTier tier, String prenom, String nom, String raisonSociale, String telephone,
-                              String indicatifTelephone, String mobile, String indicatifMobile,
-                              String email, String adresse, String ville, String codePostal,
-                              LocalDateTime dateNaissance, String lieuNaissance, Integer nombreEnfants,
-                              UUID typeId, UUID kindId, UUID commercialId, UUID titreId, UUID sexeId,
-                              UUID paysResidenceId, UUID paysId, UUID nationaliteId, UUID situationFamilialeId,
-                              UUID typeResidenceId, UUID regimeMatrimonialId, UUID professionId, UUID salaireId,
-                              String employeur, Integer anciennete, String filsDe, String etDe, String adresse2,
-                              String adresse3, PieceIdentiteRequest pieceIdentite) {
+    private void applyFields(CfgTier tier, ChampsProspect c) {
         // Les deux contrôles avant toute écriture : un mobile valide et un fixe fautif n'écrivent
         // rien, sans dépendre du rollback. Voir FEATURE-indicatif-telephone.md §5.
         NumeroTelephoneSupport.NumeroNormalise fixe =
-                numeroSupport.valider(telephone, indicatifTelephone, "telephone");
+                numeroSupport.valider(c.telephone(), c.indicatifTelephone(), "telephone");
         NumeroTelephoneSupport.NumeroNormalise portable =
-                numeroSupport.valider(mobile, indicatifMobile, "mobile");
+                numeroSupport.valider(c.mobile(), c.indicatifMobile(), "mobile");
 
-        if (prenom != null) tier.setFirstName(prenom);
-        if (nom != null) tier.setLastName(nom);
-        if (raisonSociale != null) tier.setSocialReason(raisonSociale);
+        appliquerNomEtCoordonnees(tier, c, fixe, portable);
+        appliquerEtatCivil(tier, c);
+        appliquerClassement(tier, c);
+        appliquerSituation(tier, c);
+        if (c.pieceIdentite() != null) {
+            appliquerPieceIdentite(tier, c.pieceIdentite());
+        }
+        // CfgTier.Description est le nom qu'affichent les vues SQL et templates Stimulsoft du
+        // légataire ; recalculé à chaque changement de nom, pas seulement à la création.
+        if (c.prenom() != null || c.nom() != null || c.raisonSociale() != null) {
+            tier.setDescription(TierNomFormatter.nom(tier));
+        }
+    }
+
+    private static void appliquerNomEtCoordonnees(CfgTier tier, ChampsProspect c,
+                                                  NumeroTelephoneSupport.NumeroNormalise fixe,
+                                                  NumeroTelephoneSupport.NumeroNormalise portable) {
+        if (c.prenom() != null) tier.setFirstName(c.prenom());
+        if (c.nom() != null) tier.setLastName(c.nom());
+        if (c.raisonSociale() != null) tier.setSocialReason(c.raisonSociale());
         if (fixe != null) {
             tier.setPhone(fixe.numero());
             tier.setPhoneIndicatif(fixe.indicatif());
@@ -362,101 +362,88 @@ public class ProspectService {
             tier.setMobile(portable.numero());
             tier.setMobileIndicatif(portable.indicatif());
         }
-        if (email != null) tier.setEMail(email);
-        if (adresse != null) tier.setAddress(adresse);
-        if (adresse2 != null) tier.setAddress2(adresse2);
-        if (adresse3 != null) tier.setAddress3(adresse3);
-        if (ville != null) tier.setCity(ville);
-        if (codePostal != null) tier.setZipCode(codePostal);
-        if (dateNaissance != null) tier.setBirthDate(dateNaissance);
-        if (lieuNaissance != null) tier.setBirthPlace(lieuNaissance);
-        if (nombreEnfants != null) tier.setNbrChildren(nombreEnfants);
-        if (employeur != null) tier.setEmployer(employeur);
-        if (anciennete != null) tier.setAntiquity(anciennete);
-        if (filsDe != null) tier.setFatherName(filsDe);
-        if (etDe != null) tier.setMotherName(etDe);
-        if (typeId != null) {
-            CfgTierType type = tierTypeRepository.findById(typeId)
-                    .orElseThrow(() -> new InvalidRequestException("CfgTierType introuvable: " + typeId));
-            tier.setCfgTierType(type);
+        if (c.email() != null) tier.setEMail(c.email());
+        if (c.adresse() != null) tier.setAddress(c.adresse());
+        if (c.adresse2() != null) tier.setAddress2(c.adresse2());
+        if (c.adresse3() != null) tier.setAddress3(c.adresse3());
+        if (c.ville() != null) tier.setCity(c.ville());
+        if (c.codePostal() != null) tier.setZipCode(c.codePostal());
+    }
+
+    private static void appliquerEtatCivil(CfgTier tier, ChampsProspect c) {
+        if (c.dateNaissance() != null) tier.setBirthDate(c.dateNaissance());
+        if (c.lieuNaissance() != null) tier.setBirthPlace(c.lieuNaissance());
+        if (c.nombreEnfants() != null) tier.setNbrChildren(c.nombreEnfants());
+        if (c.employeur() != null) tier.setEmployer(c.employeur());
+        if (c.anciennete() != null) tier.setAntiquity(c.anciennete());
+        if (c.filsDe() != null) tier.setFatherName(c.filsDe());
+        if (c.etDe() != null) tier.setMotherName(c.etDe());
+    }
+
+    private void appliquerClassement(CfgTier tier, ChampsProspect c) {
+        if (c.typeId() != null) {
+            tier.setCfgTierType(exiger(tierTypeRepository::findById, c.typeId(), "CfgTierType"));
         }
-        if (kindId != null) {
-            CfgTierKind kind = tierKindRepository.findById(kindId)
-                    .orElseThrow(() -> new InvalidRequestException("CfgTierKind introuvable: " + kindId));
-            tier.setCfgTierKind(kind);
+        if (c.kindId() != null) {
+            tier.setCfgTierKind(exiger(tierKindRepository::findById, c.kindId(), "CfgTierKind"));
         }
-        if (commercialId != null) {
-            CfgTier commercial = tierRepository.findById(commercialId)
-                    .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + commercialId));
-            tier.setCfgCommercial(commercial);
+        if (c.commercialId() != null) {
+            tier.setCfgCommercial(exiger(tierRepository::findById, c.commercialId(), "Commercial (CfgTier)"));
         }
-        if (titreId != null) {
-            AdmTierTitle titre = tierTitleRepository.findById(titreId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmTierTitle introuvable: " + titreId));
-            tier.setAdmTierTitle(titre);
+        if (c.titreId() != null) {
+            tier.setAdmTierTitle(exiger(tierTitleRepository::findById, c.titreId(), "AdmTierTitle"));
         }
-        if (sexeId != null) {
-            AdmSexType sexe = sexTypeRepository.findById(sexeId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmSexType introuvable: " + sexeId));
-            tier.setAdmSexType(sexe);
+        if (c.sexeId() != null) {
+            tier.setAdmSexType(exiger(sexTypeRepository::findById, c.sexeId(), "AdmSexType"));
         }
-        if (paysResidenceId != null) {
-            AdmCountry pays = countryRepository.findById(paysResidenceId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmCountry introuvable: " + paysResidenceId));
-            tier.setAdmCountryResidence(pays);
+        if (c.paysResidenceId() != null) {
+            tier.setAdmCountryResidence(exiger(countryRepository::findById, c.paysResidenceId(), "AdmCountry"));
         }
-        if (paysId != null) {
-            AdmCountry pays = countryRepository.findById(paysId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmCountry introuvable: " + paysId));
-            tier.setAdmCountry(pays);
+        if (c.paysId() != null) {
+            tier.setAdmCountry(exiger(countryRepository::findById, c.paysId(), "AdmCountry"));
         }
-        if (nationaliteId != null) {
-            AdmNationality nationalite = nationalityRepository.findById(nationaliteId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmNationality introuvable: " + nationaliteId));
-            tier.setAdmNationality(nationalite);
+    }
+
+    private void appliquerSituation(CfgTier tier, ChampsProspect c) {
+        if (c.nationaliteId() != null) {
+            tier.setAdmNationality(exiger(nationalityRepository::findById, c.nationaliteId(), "AdmNationality"));
         }
-        if (situationFamilialeId != null) {
-            AdmFamilySituation situation = familySituationRepository.findById(situationFamilialeId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmFamilySituation introuvable: " + situationFamilialeId));
-            tier.setAdmFamilySituation(situation);
+        if (c.situationFamilialeId() != null) {
+            tier.setAdmFamilySituation(exiger(familySituationRepository::findById, c.situationFamilialeId(),
+                    "AdmFamilySituation"));
         }
-        if (typeResidenceId != null) {
-            AdmResidenceType typeResidence = residenceTypeRepository.findById(typeResidenceId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmResidenceType introuvable: " + typeResidenceId));
-            tier.setAdmResidenceType(typeResidence);
+        if (c.typeResidenceId() != null) {
+            tier.setAdmResidenceType(exiger(residenceTypeRepository::findById, c.typeResidenceId(),
+                    "AdmResidenceType"));
         }
-        if (regimeMatrimonialId != null) {
-            AdmMatrimonialRegime regime = matrimonialRegimeRepository.findById(regimeMatrimonialId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmMatrimonialRegime introuvable: " + regimeMatrimonialId));
-            tier.setAdmMatrimonialRegime(regime);
+        if (c.regimeMatrimonialId() != null) {
+            tier.setAdmMatrimonialRegime(exiger(matrimonialRegimeRepository::findById, c.regimeMatrimonialId(),
+                    "AdmMatrimonialRegime"));
         }
-        if (professionId != null) {
-            AdmProfession profession = professionRepository.findById(professionId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmProfession introuvable: " + professionId));
-            tier.setAdmProfession(profession);
+        if (c.professionId() != null) {
+            tier.setAdmProfession(exiger(professionRepository::findById, c.professionId(), "AdmProfession"));
         }
-        if (salaireId != null) {
-            AdmSalary salaire = salaryRepository.findById(salaireId)
-                    .orElseThrow(() -> new InvalidRequestException("AdmSalary introuvable: " + salaireId));
-            tier.setAdmSalary(salaire);
+        if (c.salaireId() != null) {
+            tier.setAdmSalary(exiger(salaryRepository::findById, c.salaireId(), "AdmSalary"));
         }
-        if (pieceIdentite != null) {
-            if (pieceIdentite.typeId() != null) {
-                AdmIdentityDocumentType type = identityDocumentTypeRepository.findById(pieceIdentite.typeId())
-                        .orElseThrow(() -> new InvalidRequestException("AdmIdentityDocumentType introuvable: " + pieceIdentite.typeId()));
-                tier.setAdmIdentityDocumentType(type);
-            }
-            if (pieceIdentite.numero() != null) tier.setIDNumber(pieceIdentite.numero());
-            if (pieceIdentite.delivreeLe() != null) tier.setIDDate(pieceIdentite.delivreeLe());
-            if (pieceIdentite.lieuDelivrance() != null) tier.setIDPlace(pieceIdentite.lieuDelivrance());
-            if (pieceIdentite.valideJusquau() != null) tier.setIDValidateDate(pieceIdentite.valideJusquau());
-            if (pieceIdentite.lieuValidite() != null) tier.setIDValidatePlace(pieceIdentite.lieuValidite());
+    }
+
+    private void appliquerPieceIdentite(CfgTier tier, PieceIdentiteRequest pieceIdentite) {
+        if (pieceIdentite.typeId() != null) {
+            tier.setAdmIdentityDocumentType(exiger(identityDocumentTypeRepository::findById, pieceIdentite.typeId(),
+                    "AdmIdentityDocumentType"));
         }
-        // CfgTier.Description est le nom qu'affichent les vues SQL et templates Stimulsoft du
-        // légataire ; recalculé à chaque changement de nom, pas seulement à la création.
-        if (prenom != null || nom != null || raisonSociale != null) {
-            tier.setDescription(TierNomFormatter.nom(tier));
-        }
+        if (pieceIdentite.numero() != null) tier.setIDNumber(pieceIdentite.numero());
+        if (pieceIdentite.delivreeLe() != null) tier.setIDDate(pieceIdentite.delivreeLe());
+        if (pieceIdentite.lieuDelivrance() != null) tier.setIDPlace(pieceIdentite.lieuDelivrance());
+        if (pieceIdentite.valideJusquau() != null) tier.setIDValidateDate(pieceIdentite.valideJusquau());
+        if (pieceIdentite.lieuValidite() != null) tier.setIDValidatePlace(pieceIdentite.lieuValidite());
+    }
+
+    /** Référentiel désigné par l'appelant : absent ⇒ 400 « {@code <libelle>} introuvable: id ». */
+    private static <T> T exiger(Function<UUID, Optional<T>> recherche, UUID id, String libelle) {
+        return recherche.apply(id)
+                .orElseThrow(() -> new InvalidRequestException(libelle + " introuvable: " + id));
     }
 
     // Un référentiel n'est déréférencé que si sa colonne est demandée : chacun coûte un chargement
@@ -493,32 +480,25 @@ public class ProspectService {
                 tier.getZipCode(),
                 tier.getEmployer(),
                 tier.getAntiquity(),
-                colonnes.contains(ColonneProspect.KIND) && tier.getCfgTierKind() != null
-                        ? tier.getCfgTierKind().getDescription() : null,
-                colonnes.contains(ColonneProspect.TITRE) && tier.getAdmTierTitle() != null
-                        ? tier.getAdmTierTitle().getDescription() : null,
-                colonnes.contains(ColonneProspect.SEXE) && tier.getAdmSexType() != null
-                        ? tier.getAdmSexType().getDescription() : null,
-                colonnes.contains(ColonneProspect.NATIONALITE) && tier.getAdmNationality() != null
-                        ? tier.getAdmNationality().getDescription() : null,
-                colonnes.contains(ColonneProspect.SITUATION_FAMILIALE) && tier.getAdmFamilySituation() != null
-                        ? tier.getAdmFamilySituation().getDescription() : null,
-                colonnes.contains(ColonneProspect.REGIME_MATRIMONIAL) && tier.getAdmMatrimonialRegime() != null
-                        ? tier.getAdmMatrimonialRegime().getDescription() : null,
-                colonnes.contains(ColonneProspect.PAYS) && tier.getAdmCountry() != null
-                        ? tier.getAdmCountry().getDescription() : null,
-                colonnes.contains(ColonneProspect.PAYS_RESIDENCE) && tier.getAdmCountryResidence() != null
-                        ? tier.getAdmCountryResidence().getDescription() : null,
-                colonnes.contains(ColonneProspect.TYPE_RESIDENCE) && tier.getAdmResidenceType() != null
-                        ? tier.getAdmResidenceType().getDescription() : null,
+                siDemandee(colonnes, ColonneProspect.KIND, tier::getCfgTierKind, CfgTierKind::getDescription),
+                siDemandee(colonnes, ColonneProspect.TITRE, tier::getAdmTierTitle, AdmTierTitle::getDescription),
+                siDemandee(colonnes, ColonneProspect.SEXE, tier::getAdmSexType, AdmSexType::getDescription),
+                siDemandee(colonnes, ColonneProspect.NATIONALITE, tier::getAdmNationality,
+                        AdmNationality::getDescription),
+                siDemandee(colonnes, ColonneProspect.SITUATION_FAMILIALE, tier::getAdmFamilySituation,
+                        AdmFamilySituation::getDescription),
+                siDemandee(colonnes, ColonneProspect.REGIME_MATRIMONIAL, tier::getAdmMatrimonialRegime,
+                        AdmMatrimonialRegime::getDescription),
+                siDemandee(colonnes, ColonneProspect.PAYS, tier::getAdmCountry, AdmCountry::getDescription),
+                siDemandee(colonnes, ColonneProspect.PAYS_RESIDENCE, tier::getAdmCountryResidence,
+                        AdmCountry::getDescription),
+                siDemandee(colonnes, ColonneProspect.TYPE_RESIDENCE, tier::getAdmResidenceType,
+                        AdmResidenceType::getDescription),
                 // CfgTier.Quality n'est jamais renseignée en base : toujours nulle.
                 tier.getQuality(),
-                colonnes.contains(ColonneProspect.SALAIRE) && tier.getAdmSalary() != null
-                        ? tier.getAdmSalary().getDescription() : null,
-                colonnes.contains(ColonneProspect.COMMERCIAL_ID) && tier.getCfgCommercial() != null
-                        ? tier.getCfgCommercial().getId() : null,
-                colonnes.contains(ColonneProspect.COMMERCIAL_NOM) && tier.getCfgCommercial() != null
-                        ? TierNomFormatter.nom(tier.getCfgCommercial()) : null,
+                siDemandee(colonnes, ColonneProspect.SALAIRE, tier::getAdmSalary, AdmSalary::getDescription),
+                siDemandee(colonnes, ColonneProspect.COMMERCIAL_ID, tier::getCfgCommercial, CfgTier::getId),
+                siDemandee(colonnes, ColonneProspect.COMMERCIAL_NOM, tier::getCfgCommercial, TierNomFormatter::nom),
                 tier.getUserCreate(),
                 tier.getUserCreateDateTime(),
                 tier.getUserUpdate(),
@@ -526,19 +506,43 @@ public class ProspectService {
         );
     }
 
-    private ProspectDetailDto toDetail(CfgTier tier) {
-        PieceIdentiteDto pieceIdentite = null;
-        if (tier.getAdmIdentityDocumentType() != null || StringUtils.hasText(tier.getIDNumber())) {
-            pieceIdentite = new PieceIdentiteDto(
-                    tier.getAdmIdentityDocumentType() != null ? tier.getAdmIdentityDocumentType().getId() : null,
-                    tier.getAdmIdentityDocumentType() != null ? tier.getAdmIdentityDocumentType().getDescription() : null,
-                    tier.getIDNumber(),
-                    tier.getIDDate(),
-                    tier.getIDPlace(),
-                    tier.getIDValidateDate(),
-                    tier.getIDValidatePlace()
-            );
+    /** Référentiel déréférencé seulement si sa colonne est demandée ; {@code null} sinon ou s'il manque. */
+    private static <R, T> T siDemandee(Set<ColonneProspect> colonnes, ColonneProspect colonne,
+                                       Supplier<R> reference, Function<R, T> valeur) {
+        if (!colonnes.contains(colonne)) {
+            return null;
         }
+        return siPresent(reference.get(), valeur);
+    }
+
+    private static <R, T> T siPresent(R reference, Function<R, T> valeur) {
+        return reference != null ? valeur.apply(reference) : null;
+    }
+
+    private static PieceIdentiteDto pieceIdentite(CfgTier tier) {
+        if (tier.getAdmIdentityDocumentType() == null && !StringUtils.hasText(tier.getIDNumber())) {
+            return null;
+        }
+        return new PieceIdentiteDto(
+                siPresent(tier.getAdmIdentityDocumentType(), AdmIdentityDocumentType::getId),
+                siPresent(tier.getAdmIdentityDocumentType(), AdmIdentityDocumentType::getDescription),
+                tier.getIDNumber(),
+                tier.getIDDate(),
+                tier.getIDPlace(),
+                tier.getIDValidateDate(),
+                tier.getIDValidatePlace()
+        );
+    }
+
+    /** « Prénom Nom », sans espace de bord si l'un des deux manque. */
+    private static String nomCommercial(CfgTier commercial) {
+        String prenom = commercial.getFirstName() != null ? commercial.getFirstName() + " " : "";
+        String nom = commercial.getLastName() != null ? commercial.getLastName() : "";
+        return (prenom + nom).trim();
+    }
+
+    private ProspectDetailDto toDetail(CfgTier tier) {
+        PieceIdentiteDto pieceIdentite = pieceIdentite(tier);
 
         return new ProspectDetailDto(
                 tier.getId(),
@@ -567,34 +571,31 @@ public class ProspectService {
                 tier.getNotes(),
                 tier.getIce(),
                 tier.getIsOldCustomer(),
-                tier.getCfgTierType() != null ? tier.getCfgTierType().getId() : null,
-                tier.getCfgTierType() != null ? tier.getCfgTierType().getDescription() : null,
-                tier.getCfgTierKind() != null ? tier.getCfgTierKind().getId() : null,
-                tier.getCfgTierKind() != null ? tier.getCfgTierKind().getDescription() : null,
-                tier.getCfgCommercial() != null ? tier.getCfgCommercial().getId() : null,
-                tier.getCfgCommercial() != null
-                        ? ((tier.getCfgCommercial().getFirstName() != null ? tier.getCfgCommercial().getFirstName() + " " : "")
-                        + (tier.getCfgCommercial().getLastName() != null ? tier.getCfgCommercial().getLastName() : "")).trim()
-                        : null,
-                tier.getAdmTierTitle() != null ? tier.getAdmTierTitle().getId() : null,
-                tier.getAdmTierTitle() != null ? tier.getAdmTierTitle().getDescription() : null,
-                tier.getAdmSexType() != null ? tier.getAdmSexType().getId() : null,
-                tier.getAdmSexType() != null ? tier.getAdmSexType().getDescription() : null,
-                tier.getAdmCountryResidence() != null ? tier.getAdmCountryResidence().getId() : null,
-                tier.getAdmCountryResidence() != null ? tier.getAdmCountryResidence().getDescription() : null,
-                tier.getAdmCountry() != null ? tier.getAdmCountry().getId() : null,
-                tier.getAdmCountry() != null ? tier.getAdmCountry().getDescription() : null,
-                tier.getAdmNationality() != null ? tier.getAdmNationality().getId() : null,
-                tier.getAdmNationality() != null ? tier.getAdmNationality().getDescription() : null,
-                tier.getAdmFamilySituation() != null ? tier.getAdmFamilySituation().getId() : null,
-                tier.getAdmFamilySituation() != null ? tier.getAdmFamilySituation().getDescription() : null,
-                tier.getAdmResidenceType() != null ? tier.getAdmResidenceType().getId() : null,
-                tier.getAdmResidenceType() != null ? tier.getAdmResidenceType().getDescription() : null,
-                tier.getAdmMatrimonialRegime() != null ? tier.getAdmMatrimonialRegime().getId() : null,
-                tier.getAdmMatrimonialRegime() != null ? tier.getAdmMatrimonialRegime().getDescription() : null,
-                tier.getAdmProfession() != null ? tier.getAdmProfession().getId() : null,
-                tier.getAdmSalary() != null ? tier.getAdmSalary().getId() : null,
-                tier.getAdmSalary() != null ? tier.getAdmSalary().getDescription() : null,
+                siPresent(tier.getCfgTierType(), CfgTierType::getId),
+                siPresent(tier.getCfgTierType(), CfgTierType::getDescription),
+                siPresent(tier.getCfgTierKind(), CfgTierKind::getId),
+                siPresent(tier.getCfgTierKind(), CfgTierKind::getDescription),
+                siPresent(tier.getCfgCommercial(), CfgTier::getId),
+                siPresent(tier.getCfgCommercial(), ProspectService::nomCommercial),
+                siPresent(tier.getAdmTierTitle(), AdmTierTitle::getId),
+                siPresent(tier.getAdmTierTitle(), AdmTierTitle::getDescription),
+                siPresent(tier.getAdmSexType(), AdmSexType::getId),
+                siPresent(tier.getAdmSexType(), AdmSexType::getDescription),
+                siPresent(tier.getAdmCountryResidence(), AdmCountry::getId),
+                siPresent(tier.getAdmCountryResidence(), AdmCountry::getDescription),
+                siPresent(tier.getAdmCountry(), AdmCountry::getId),
+                siPresent(tier.getAdmCountry(), AdmCountry::getDescription),
+                siPresent(tier.getAdmNationality(), AdmNationality::getId),
+                siPresent(tier.getAdmNationality(), AdmNationality::getDescription),
+                siPresent(tier.getAdmFamilySituation(), AdmFamilySituation::getId),
+                siPresent(tier.getAdmFamilySituation(), AdmFamilySituation::getDescription),
+                siPresent(tier.getAdmResidenceType(), AdmResidenceType::getId),
+                siPresent(tier.getAdmResidenceType(), AdmResidenceType::getDescription),
+                siPresent(tier.getAdmMatrimonialRegime(), AdmMatrimonialRegime::getId),
+                siPresent(tier.getAdmMatrimonialRegime(), AdmMatrimonialRegime::getDescription),
+                siPresent(tier.getAdmProfession(), AdmProfession::getId),
+                siPresent(tier.getAdmSalary(), AdmSalary::getId),
+                siPresent(tier.getAdmSalary(), AdmSalary::getDescription),
                 tier.getEmployer(),
                 tier.getAntiquity(),
                 tier.getFatherName(),
@@ -616,5 +617,41 @@ public class ProspectService {
         return trancheRepository.tranchesInteret(tier.getId()).stream()
                 .map(t -> new TrancheInteretDto(t.getId(), t.getCode(), t.getDescription()))
                 .toList();
+    }
+
+    /** Champs communs à la création et à la modification : {@code null} = champ laissé tel quel. */
+    private record ChampsProspect(String prenom, String nom, String raisonSociale, String telephone,
+                                  String indicatifTelephone, String mobile, String indicatifMobile,
+                                  String email, String adresse, String ville, String codePostal,
+                                  LocalDateTime dateNaissance, String lieuNaissance, Integer nombreEnfants,
+                                  UUID typeId, UUID kindId, UUID commercialId, UUID titreId, UUID sexeId,
+                                  UUID paysResidenceId, UUID paysId, UUID nationaliteId, UUID situationFamilialeId,
+                                  UUID typeResidenceId, UUID regimeMatrimonialId, UUID professionId, UUID salaireId,
+                                  String employeur, Integer anciennete, String filsDe, String etDe, String adresse2,
+                                  String adresse3, PieceIdentiteRequest pieceIdentite) {
+
+        static ChampsProspect de(CreerProspectRequest r) {
+            return new ChampsProspect(r.prenom(), r.nom(), r.raisonSociale(), r.telephone(),
+                    r.indicatifTelephone(), r.mobile(), r.indicatifMobile(),
+                    r.email(), r.adresse(), r.ville(), r.codePostal(),
+                    r.dateNaissance(), r.lieuNaissance(), r.nombreEnfants(), r.typeId(),
+                    r.kindId(), r.commercialId(), r.titreId(), r.sexeId(),
+                    r.paysResidenceId(), r.paysId(), r.nationaliteId(), r.situationFamilialeId(),
+                    r.typeResidenceId(), r.regimeMatrimonialId(), r.professionId(), r.salaireId(),
+                    r.employeur(), r.anciennete(), r.filsDe(), r.etDe(), r.adresse2(),
+                    r.adresse3(), r.pieceIdentite());
+        }
+
+        static ChampsProspect de(ModifierProspectRequest r) {
+            return new ChampsProspect(r.prenom(), r.nom(), r.raisonSociale(), r.telephone(),
+                    r.indicatifTelephone(), r.mobile(), r.indicatifMobile(),
+                    r.email(), r.adresse(), r.ville(), r.codePostal(),
+                    r.dateNaissance(), r.lieuNaissance(), r.nombreEnfants(), r.typeId(),
+                    r.kindId(), r.commercialId(), r.titreId(), r.sexeId(),
+                    r.paysResidenceId(), r.paysId(), r.nationaliteId(), r.situationFamilialeId(),
+                    r.typeResidenceId(), r.regimeMatrimonialId(), r.professionId(), r.salaireId(),
+                    r.employeur(), r.anciennete(), r.filsDe(), r.etDe(), r.adresse2(),
+                    r.adresse3(), r.pieceIdentite());
+        }
     }
 }

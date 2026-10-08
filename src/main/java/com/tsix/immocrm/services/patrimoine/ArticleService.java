@@ -67,8 +67,9 @@ public class ArticleService {
             throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
         }
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
-        var spec = StkItemSpecifications.build(List.of(trancheId), null, false, effectiveStatut, categorieIds, typeIds,
-                null, false, entiteId, natureId, vocationId, etageId, prixDe, prixA, surfaceDe, surfaceA);
+        var spec = StkItemSpecifications.build(new FiltresArticle(List.of(trancheId), null, false, effectiveStatut,
+                categorieIds, typeIds, null, false, entiteId, natureId, vocationId, etageId,
+                prixDe, prixA, surfaceDe, surfaceA));
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
         Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());
@@ -81,8 +82,9 @@ public class ArticleService {
                                              UUID entiteId, UUID natureId, UUID vocationId, UUID etageId,
                                              BigDecimal prixDe, BigDecimal prixA, BigDecimal surfaceDe, BigDecimal surfaceA,
                                              Pageable pageable) {
-        var spec = StkItemSpecifications.build(trancheIds, null, false, statut, categorieIds, typeIds, search, true,
-                entiteId, natureId, vocationId, etageId, prixDe, prixA, surfaceDe, surfaceA);
+        var spec = StkItemSpecifications.build(new FiltresArticle(trancheIds, null, false, statut,
+                categorieIds, typeIds, search, true, entiteId, natureId, vocationId, etageId,
+                prixDe, prixA, surfaceDe, surfaceA));
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
         Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());

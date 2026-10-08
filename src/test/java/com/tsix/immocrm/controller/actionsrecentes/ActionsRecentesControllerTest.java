@@ -394,7 +394,7 @@ class ActionsRecentesControllerTest {
             String json = mockMvc.perform(requete).andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             List<String> ids = JsonPath.read(json, "$[*].id");
-            assertThat(ids.size()).isLessThanOrEqualTo(3);
+            assertThat(ids).hasSizeLessThanOrEqualTo(3);
             if (ids.isEmpty()) {
                 break;
             }

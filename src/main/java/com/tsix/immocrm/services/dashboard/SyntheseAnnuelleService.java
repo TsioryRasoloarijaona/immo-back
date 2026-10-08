@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -79,8 +80,8 @@ public class SyntheseAnnuelleService {
 
     public SyntheseAnnuelleDto get(@Nullable Integer annee, @Nullable UUID trancheId) {
         int cible = annee != null ? annee : LocalDate.now(clock).getYear();
-        LocalDateTime debut = LocalDate.of(cible, 1, 1).atStartOfDay();
-        LocalDateTime finExclue = LocalDate.of(cible + 1, 1, 1).atStartOfDay();
+        LocalDateTime debut = LocalDate.of(cible, Month.JANUARY, 1).atStartOfDay();
+        LocalDateTime finExclue = LocalDate.of(cible + 1, Month.JANUARY, 1).atStartOfDay();
 
         Assiette assiette = trancheId != null
                 ? new Assiette(null, List.copyOf(dossierService.idsDossiersDeTranche(trancheId)))

@@ -165,11 +165,6 @@ public enum ColonneDossier implements Colonne {
     private final boolean parDefaut;
     private final Chemin chemin;
 
-    /** Colonne ni groupable ni agrégeable — le cas par défaut, cf. {@link Colonne#chemin()}. */
-    ColonneDossier(String nom, String libelle, Groupe groupe, TypeColonne type, boolean parDefaut) {
-        this(nom, libelle, groupe, type, parDefaut, null);
-    }
-
     ColonneDossier(String nom, String libelle, Groupe groupe, TypeColonne type, boolean parDefaut,
                    Chemin chemin) {
         this.nom = nom;

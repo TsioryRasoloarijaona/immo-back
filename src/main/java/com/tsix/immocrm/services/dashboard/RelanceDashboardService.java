@@ -42,6 +42,10 @@ import java.util.UUID;
 @Service
 public class RelanceDashboardService {
 
+    private static final String COM_PROSPECTION = "comProspection";
+    private static final String ALERT_VALIDITY_DATE = "alertValidityDate";
+    private static final String USER_CREATE_DATE_TIME = "userCreateDateTime";
+
     private final ComActionMessageRepository messageRepository;
     private final ComProspectionRepository prospectionRepository;
     private final PerimetreCommercialService perimetreService;
@@ -91,7 +95,7 @@ public class RelanceDashboardService {
         LocalDateTime debut = premier.atStartOfDay();
         LocalDateTime finExclue = premier.plusMonths(1).atStartOfDay();
         return (root, query, cb) -> {
-            Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.INNER);
+            Join<ComActionMessage, ComProspection> prospection = root.join(COM_PROSPECTION, JoinType.INNER);
             return cb.and(
                     cb.greaterThanOrEqualTo(prospection.get("docDate"), debut),
                     cb.lessThan(prospection.get("docDate"), finExclue),
@@ -105,7 +109,7 @@ public class RelanceDashboardService {
             return (root, query, cb) -> cb.conjunction();
         }
         return (root, query, cb) -> AppartenanceTranche.prospection(
-                root.join("comProspection", JoinType.INNER), List.of(trancheId));
+                root.join(COM_PROSPECTION, JoinType.INNER), List.of(trancheId));
     }
 
     /**
@@ -114,10 +118,10 @@ public class RelanceDashboardService {
      */
     private static Specification<ComActionMessage> relanceVivante() {
         return (root, query, cb) -> cb.and(
-                cb.isNotNull(root.get("alertValidityDate")),
+                cb.isNotNull(root.get(ALERT_VALIDITY_DATE)),
                 cb.or(cb.isNull(root.get("withoutRevival")), cb.isFalse(root.get("withoutRevival"))),
                 cb.isNull(root.get("comDocument")),
-                cb.isNotNull(root.get("comProspection")));
+                cb.isNotNull(root.get(COM_PROSPECTION)));
     }
 
     /**
@@ -128,12 +132,12 @@ public class RelanceDashboardService {
         LocalDate premierJour = echeance.debut(aujourdhui);
         LocalDateTime finExclue = echeance.fin(aujourdhui).plusDays(1).atStartOfDay();
         return (root, query, cb) -> {
-            Predicate avantLaFin = cb.lessThan(root.get("alertValidityDate"), finExclue);
+            Predicate avantLaFin = cb.lessThan(root.get(ALERT_VALIDITY_DATE), finExclue);
             if (premierJour == null) {
                 return avantLaFin;
             }
             return cb.and(
-                    cb.greaterThanOrEqualTo(root.get("alertValidityDate"), premierJour.atStartOfDay()),
+                    cb.greaterThanOrEqualTo(root.get(ALERT_VALIDITY_DATE), premierJour.atStartOfDay()),
                     avantLaFin);
         };
     }
@@ -151,7 +155,7 @@ public class RelanceDashboardService {
 
     private static Specification<ComActionMessage> miennesOuNonAffectees(@Nullable UUID moi) {
         return (root, query, cb) -> {
-            Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.INNER);
+            Join<ComActionMessage, ComProspection> prospection = root.join(COM_PROSPECTION, JoinType.INNER);
             Join<ComProspection, CfgTier> commercial = prospection.join("cfgCommercial", JoinType.LEFT);
             Join<ComActionMessage, CfgTier> employe = root.join("cfgEmployee", JoinType.LEFT);
 
@@ -168,7 +172,7 @@ public class RelanceDashboardService {
     /** Tri imposé ; l'{@code id} départage les ex æquo, nombreux puisque les dates légataires sont à minuit. */
     private static Pageable trierParEcheance(Pageable pageable) {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                Sort.by(Sort.Order.asc("alertValidityDate"), Sort.Order.asc("id")));
+                Sort.by(Sort.Order.asc(ALERT_VALIDITY_DATE), Sort.Order.asc("id")));
     }
 
     private static RelanceProspectionDto toDto(ComActionMessage message, LocalDate aujourdhui) {
@@ -211,11 +215,11 @@ public class RelanceDashboardService {
                 // Discriminant de GET /api/pre-prospections, partagé à l'identique.
                 .and(DiscriminantPreProspection.estPreProspection())
                 .and((root, query, cb) -> cb.and(
-                        cb.greaterThanOrEqualTo(root.get("userCreateDateTime"), debut),
-                        cb.lessThan(root.get("userCreateDateTime"), finExclue)));
+                        cb.greaterThanOrEqualTo(root.get(USER_CREATE_DATE_TIME), debut),
+                        cb.lessThan(root.get(USER_CREATE_DATE_TIME), finExclue)));
 
         Pageable trie = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                Sort.by(Sort.Order.desc("userCreateDateTime"), Sort.Order.asc("id")));
+                Sort.by(Sort.Order.desc(USER_CREATE_DATE_TIME), Sort.Order.asc("id")));
 
         return prospectionRepository.findAll(spec, trie).map(RelanceDashboardService::toPreProspectDto);
     }

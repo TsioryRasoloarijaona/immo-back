@@ -127,7 +127,7 @@ class UtilisateurAdminEmailTest {
 
         mockMvc.perform(post(URL, user.getId()))
                 .andExpect(status().isOk())
-                // Le service d'envoi de test est actif (application.properties de test).
+                // Le service d'envoi est actif dans les propriétés de test.
                 .andExpect(jsonPath("$.emailEnvoye").value(true))
                 // Masquée : l'administrateur vérifie la destination sans que l'adresse complète
                 // soit réémise dans la réponse.
