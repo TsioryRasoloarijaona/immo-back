@@ -1,5 +1,6 @@
 package com.tsix.immocrm.web;
 
+import com.microsoft.sqlserver.jdbc.SQLServerException;
 import com.tsix.immocrm.config.ConnexionSourceSuivie;
 import com.tsix.immocrm.config.SourceDeVeriteProperties;
 import org.hibernate.exception.JDBCConnectionException;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.sql.DataSource;
+import java.lang.reflect.Constructor;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
@@ -41,6 +43,13 @@ class LiaisonSourceHandlerTest {
         return new SQLTransientConnectionException(
                 "hikari-source-de-verite - Connection is not available, request timed out after 5001ms.", "08S01",
                 new SQLException("The TCP/IP connection to the host 127.0.0.1, port 1 has failed.", "08S01"));
+    }
+
+    // Constructeurs (message, cause) non publics dans mssql-jdbc.
+    private static SQLServerException sqlServerException(String message) throws Exception {
+        Constructor<SQLServerException> c = SQLServerException.class.getDeclaredConstructor(String.class, Throwable.class);
+        c.setAccessible(true);
+        return c.newInstance(message, null);
     }
 
     private static SQLException connexionReinitialisee() {
@@ -158,5 +167,18 @@ class LiaisonSourceHandlerTest {
                 new SQLException("Incorrect syntax near 'FROM'.", "42000", 102)), false)).isNull();
         assertThat(LiaisonSource.classer(new DataAccessResourceFailureException("x",
                 new SQLException("sans état", (String) null)), false)).isNull();
+    }
+
+    /** Sans SQLState : seul le message d'une {@code SQLServerException} (classe exacte) désigne la coupure. */
+    @Test
+    void classer_sqlServerExceptionSansEtat_parLeMessage() throws Exception {
+        assertThat(LiaisonSource.classer(new DataAccessResourceFailureException("x",
+                sqlServerException("Connection reset")), true))
+                .isEqualTo(LiaisonSource.LIAISON_COUPEE);
+        assertThat(LiaisonSource.classer(new DataAccessResourceFailureException("x",
+                sqlServerException("Incorrect syntax near 'FROM'.")), true))
+                .isNull();
+        assertThat(LiaisonSource.classer(new DataAccessResourceFailureException("x",
+                new SQLException("Connection reset", (String) null)), true)).isNull();
     }
 }

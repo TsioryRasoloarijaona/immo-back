@@ -71,7 +71,7 @@ public class DocsApiMarkdownConfig {
             }
         };
         scanner.addIncludeFilter((lecteur, fabrique) ->
-                noms.contains(ClassUtils.getShortName(lecteur.getClassMetadata().getClassName()).replaceFirst(".*\\.", "")));
+                noms.contains(nomSimple(lecteur.getClassMetadata().getClassName())));
         Map<String, List<Class<?>>> out = new HashMap<>();
         for (String paquet : paquets) {
             scanner.findCandidateComponents(paquet).stream()
@@ -79,5 +79,11 @@ public class DocsApiMarkdownConfig {
                     .forEach(c -> out.computeIfAbsent(c.getSimpleName(), k -> new ArrayList<>()).add(c));
         }
         return out;
+    }
+
+    /** {@code a.b.Externe$Interne} → {@code Interne} : ce qui suit le dernier point du nom court. */
+    static String nomSimple(String nomDeClasse) {
+        String court = ClassUtils.getShortName(nomDeClasse);
+        return court.substring(court.lastIndexOf('.') + 1);
     }
 }

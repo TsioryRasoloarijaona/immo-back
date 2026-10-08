@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Un fichier {@code api-docs/**.md} découpé en sections : {@code #} (titre et texte de tête),
@@ -16,8 +14,9 @@ final class FichierDocMarkdown {
     record Section(String titre, String texte, Map<String, String> sousSections) {
     }
 
-    // Seuls # à ### structurent le fichier ; #### et au-delà restent du texte.
-    private static final Pattern TITRE = Pattern.compile("^(#{1,3})\\s+(.+?)\\s*$");
+    /** Une ligne de titre : {@code niveau} = nombre de {@code #}, {@code nom} sans blancs autour. */
+    record Titre(int niveau, String nom) {
+    }
 
     final String chemin;
     String titre;
@@ -49,8 +48,8 @@ final class FichierDocMarkdown {
             String ligne = fin ? "" : lignes[i];
             String nette = ligne.strip();
             if (!fin && (nette.startsWith("```") || nette.startsWith("~~~"))) dansBlocCode = !dansBlocCode;
-            Matcher m = (dansBlocCode && !fin) ? null : TITRE.matcher(ligne);
-            if (!fin && (m == null || !m.matches())) {
+            Titre m = (dansBlocCode && !fin) ? null : lireTitre(ligne);
+            if (!fin && m == null) {
                 tampon.add(ligne);
                 continue;
             }
@@ -65,14 +64,14 @@ final class FichierDocMarkdown {
             } else {
                 sous.put(sousSection, texte);
             }
-            if (fin || (m.group(1).length() <= 2 && section != null)) {
+            if (fin || (m.niveau() <= 2 && section != null)) {
                 if (section != null) sections.put(section, new Section(section, sectionTexte, sous));
                 if (fin) break;
                 section = null;
             }
-            String niveau = m.group(1);
-            String nom = m.group(2);
-            switch (niveau.length()) {
+            int niveau = m.niveau();
+            String nom = m.nom();
+            switch (niveau) {
                 case 1 -> {
                     if (titre != null) erreurs.add("second titre « # " + nom + " »");
                     else titre = nom;
@@ -95,9 +94,32 @@ final class FichierDocMarkdown {
                     }
                 }
             }
-            if (niveau.length() <= 2) sousSection = null;
+            if (niveau <= 2) sousSection = null;
         }
         if (titre == null) erreurs.add("titre « # » manquant");
+    }
+
+    /**
+     * {@code #} à {@code ###}, au moins un blanc, puis un nom non vide ; null sinon. {@code ####} et au-delà
+     * restent du texte. Blancs = ceux de {@code \s} en regex (ASCII), pas {@code String.strip()}.
+     */
+    static Titre lireTitre(String ligne) {
+        int n = 0;
+        while (n < ligne.length() && ligne.charAt(n) == '#') n++;
+        if (n == 0 || n > 3 || n == ligne.length() || !blanc(ligne.charAt(n))) return null;
+        int debut = n;
+        int fin = ligne.length();
+        while (debut < fin && blanc(ligne.charAt(debut))) debut++;
+        while (fin > debut && blanc(ligne.charAt(fin - 1))) fin--;
+        if (debut == fin) return null;
+        String nom = ligne.substring(debut, fin);
+        // NEL, LS, PS : terminateurs de ligne Unicode, refusés par le « . » de l'ancienne regex.
+        if (nom.chars().anyMatch(c -> c == 0x0085 || c == 0x2028 || c == 0x2029)) return null;
+        return new Titre(n, nom);
+    }
+
+    private static boolean blanc(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == 0x000B || c == '\f' || c == '\r';
     }
 
     /** Le texte d'une section : ses lignes, sans lignes vides de tête ni de queue ; null si vide. */

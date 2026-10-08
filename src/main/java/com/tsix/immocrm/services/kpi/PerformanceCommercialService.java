@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -47,6 +48,8 @@ import java.util.UUID;
 public class PerformanceCommercialService {
 
     private static final int JOURS_PAR_DEFAUT = 30;
+
+    private static final ZoneId FUSEAU_METIER = ZoneId.of("Africa/Casablanca");
 
     private final ComActionMessageRepository messageRepository;
     private final ComProspectionRepository prospectionRepository;
@@ -150,7 +153,7 @@ public class PerformanceCommercialService {
                 acc.prospectionsPrisesEnCharge++;
                 // Saisie rétroactive : une interaction peut précéder la prospection ; délai ramené à 0.
                 if (creation != null) {
-                    long heures = Duration.between(creation, premiereInteraction).toHours();
+                    long heures = heuresEcoulees(creation, premiereInteraction);
                     acc.delaisHeures.add(Math.max(0L, heures));
                 }
             }
@@ -171,6 +174,11 @@ public class PerformanceCommercialService {
                 cle.commercialId() != null ? noms.get(cle.commercialId()) : comptes.nom(cle.utilisateurId()),
                 periode)));
         return resultat;
+    }
+
+    /** Heures réellement écoulées entre deux heures murales marocaines (changements d'heure du Ramadan compris). */
+    static long heuresEcoulees(LocalDateTime debut, LocalDateTime fin) {
+        return Duration.between(debut.atZone(FUSEAU_METIER), fin.atZone(FUSEAU_METIER)).toHours();
     }
 
     /**

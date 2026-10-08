@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -90,7 +91,7 @@ public class DashboardService {
 
             LocalDateTime dateEcheance = earliestOverdue(revival1, revival1ValidityDate, revival2, revival2ValidityDate, now);
             if (dateEcheance != null) {
-                long joursRetard = Duration.between(dateEcheance, now).toDays();
+                long joursRetard = joursEntre(dateEcheance, now);
                 relancesEnRetard.add(new RelanceDto(id, nomClient(socialReason, firstName, lastName), dateEcheance, joursRetard));
             }
         }
@@ -122,6 +123,11 @@ public class DashboardService {
     }
 
     /** Une relance sans {@code ValidityDate} n'est jamais en retard ; si les deux le sont, la plus ancienne. */
+    // Jours au calendrier mural : offset fixe exprès (aucun changement d'heure), un fuseau perdrait un jour fin Ramadan.
+    static long joursEntre(LocalDateTime debut, LocalDateTime fin) {
+        return Duration.between(debut.atOffset(ZoneOffset.UTC), fin.atOffset(ZoneOffset.UTC)).toDays();
+    }
+
     private static LocalDateTime earliestOverdue(LocalDateTime revival1, LocalDateTime revival1ValidityDate,
                                                   LocalDateTime revival2, LocalDateTime revival2ValidityDate,
                                                   LocalDateTime now) {
