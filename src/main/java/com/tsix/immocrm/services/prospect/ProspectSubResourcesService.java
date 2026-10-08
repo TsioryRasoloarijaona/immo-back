@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
 import com.tsix.immocrm.dto.prospect.ReglementProspectDto;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
+import com.tsix.immocrm.services.dossier.AuteurStatutDossier;
 import com.tsix.immocrm.services.dossier.DossierService;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
@@ -27,7 +28,6 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
-import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -43,9 +43,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /** Sous-ressources de la fiche prospect : prospections, dossiers, règlements, historique, contacts. */
 @Service
@@ -62,7 +62,7 @@ public class ProspectSubResourcesService {
     private final CfgRelationTypeRepository relationTypeRepository;
     private final PerimetreCommercialService perimetreService;
     private final ProspectService prospectService;
-    private final UtilisateurAffiche utilisateurAffiche;
+    private final AuteurStatutDossier auteurStatut;
 
     public ProspectSubResourcesService(CfgTierRepository tierRepository,
                                         ComProspectionRepository prospectionRepository,
@@ -74,9 +74,9 @@ public class ProspectSubResourcesService {
                                         CfgRelationTypeRepository relationTypeRepository,
                                         PerimetreCommercialService perimetreService,
                                         ProspectService prospectService,
-                                        UtilisateurAffiche utilisateurAffiche) {
+                                        AuteurStatutDossier auteurStatut) {
         this.perimetreService = perimetreService;
-        this.utilisateurAffiche = utilisateurAffiche;
+        this.auteurStatut = auteurStatut;
         this.tierRepository = tierRepository;
         this.prospectionRepository = prospectionRepository;
         this.folderRepository = folderRepository;
@@ -161,9 +161,8 @@ public class ProspectSubResourcesService {
         Pageable plusRecentDabord = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Direction.DESC, "docDate").and(Sort.by("id")));
         Page<StrFolderStatusHistory> lignes = statusHistoryRepository.findAll(spec, plusRecentDabord);
-        Map<UUID, String> auteurs = utilisateurAffiche.noms(
-                lignes.getContent().stream().map(StrFolderStatusHistory::getAdmUserId).toList());
-        return lignes.map(h -> toHistoriqueDto(h, auteurs));
+        Function<StrFolderStatusHistory, String> auteur = auteurStatut.resoudre(lignes.getContent());
+        return lignes.map(h -> toHistoriqueDto(h, auteur.apply(h)));
     }
 
     public List<ContactProspectDto> contacts(UUID prospectId) {
@@ -259,14 +258,14 @@ public class ProspectSubResourcesService {
         );
     }
 
-    private static HistoriqueDto toHistoriqueDto(StrFolderStatusHistory h, Map<UUID, String> auteurs) {
+    private static HistoriqueDto toHistoriqueDto(StrFolderStatusHistory h, String auteur) {
         ComFolder dossier = h.getComFolder();
         StrStatus statut = h.getStrFolderStatus();
         return new HistoriqueDto(
                 h.getId(),
                 h.getDocDate(),
                 h.getDescription(),
-                auteurs.get(h.getAdmUserId()),
+                auteur,
                 null,
                 statut == null ? null
                         : StringUtils.hasText(statut.getDescription()) ? statut.getDescription() : statut.getCode(),

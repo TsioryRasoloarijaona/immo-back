@@ -564,6 +564,65 @@ class TracabiliteHistoriqueHotlineTest {
                 .andExpect(jsonPath("$.content[0].utilisateur").doesNotExist());
     }
 
+    // ================================================================= FIX-historique-tiers-auteur.md
+
+    @Test
+    void historiqueDuTiers_repliStrHistory_signeCommeLeDossierEtPasLAutreDossier() throws Exception {
+        LocalDateTime date = LocalDateTime.of(2022, 6, 7, 11, 30);
+        String telephone = telephoneUnique();
+        CfgTier client = newTier("CLI-TRACE-TAUT", telephone);
+        CfgTranche tranche = newTranche(newProjet("PRJ-TRACE-TAUT"));
+        ComFolder avecJumelle = newDossier("DOS-TRACE-TA1", tranche, client, null);
+        ComFolder sansJumelle = newDossier("DOS-TRACE-TA2", tranche, client, null);
+        newLigneStatut(avecJumelle, client, statut(StatutDossier.RESERVATION), null, date, null);
+        newLigneStatut(sansJumelle, client, statut(StatutDossier.RESERVATION), null, date, null);
+        newStrHistory(avecJumelle.getId(), date, "Compte Legacy");
+        entityManager.flush();
+
+        String jsonPathAvec = "$.content[?(@.dossierId=='" + avecJumelle.getId() + "')].utilisateur";
+        String jsonPathSans = "$.content[?(@.dossierId=='" + sansJumelle.getId() + "')]";
+        String tiers = mockMvc.perform(get("/api/prospects/{id}/historique", client.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andReturn().getResponse().getContentAsString();
+        JSONArray auteurTiers = JsonPath.read(tiers, jsonPathAvec);
+        assertThat(auteurTiers).containsExactly("Compte Legacy");
+        JSONArray ligneSans = JsonPath.read(tiers, jsonPathSans);
+        assertThat(ligneSans).hasSize(1);
+        JSONArray auteurSans = JsonPath.read(tiers, jsonPathSans + ".utilisateur");
+        assertThat(auteurSans).allSatisfy(a -> assertThat(a).isNull());
+
+        String dossier = mockMvc.perform(get("/api/dossiers/{id}/historique", avecJumelle.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JSONArray auteurDossier = JsonPath.read(dossier, "$.content[?(@.type=='STATUT')].utilisateur");
+        assertThat(auteurDossier).containsExactlyElementsOf(auteurTiers);
+
+        String hotline = mockMvc.perform(get("/api/hotline/recherche").param("telephone", telephone).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JSONArray auteurHotline = JsonPath.read(hotline,
+                "$.fiches[0].historique[?(@.dossierId=='" + avecJumelle.getId() + "')].utilisateur");
+        assertThat(auteurHotline).containsExactly("Compte Legacy");
+    }
+
+    @Test
+    void historiqueDuTiers_compteAdmUser_primeSurLaJumelle() throws Exception {
+        LocalDateTime date = LocalDateTime.of(2022, 6, 8, 11, 30);
+        CfgTier client = newTier("CLI-TRACE-TAU2", null);
+        ComFolder dossier = newDossier("DOS-TRACE-TAU2", newTranche(newProjet("PRJ-TRACE-TAU2")), client, null);
+        newLigneStatut(dossier, client, statut(StatutDossier.RESERVATION), moi.getId(), date, null);
+        newStrHistory(dossier.getId(), date, "Compte Legacy");
+        entityManager.flush();
+
+        mockMvc.perform(get("/api/prospects/{id}/historique", client.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].utilisateur").value(AUTEUR));
+        mockMvc.perform(get("/api/dossiers/{id}/historique", dossier.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type=='STATUT')].utilisateur").value(AUTEUR));
+    }
+
     @Test
     void revue_historiqueDuTiers_ligneSansDossier_resteVisiblePourUnRestreint() throws Exception {
         CfgProject projetA = newProjet("PRJ-TRACE-NUL");
