@@ -148,8 +148,8 @@ passent.
 
 ## importer
 
-Crée une pré-prospection par ligne `NOUVELLE` ou `DOUBLON` du fichier, **toutes rattachées à
-`trancheId`** — la tranche choisie par l'utilisateur après l'aperçu (`POST
+Crée une pré-prospection par ligne `NOUVELLE` ou `DOUBLON` du fichier — **seulement les statuts
+choisis dans `statuts`** (défaut : les deux) —, **toutes rattachées à `trancheId`** — la tranche choisie par l'utilisateur après l'aperçu (`POST
 /api/pre-prospections/import/apercu`). **Une seule tranche par fichier** : un fichier qui en mêle
 plusieurs doit être découpé avant l'import.
 
@@ -185,10 +185,10 @@ du lead |
 recopiés dans `Notes` |
 
 **Sort de chaque ligne** (`statut`) :
-- `NOUVELLE` — créée.
+- `NOUVELLE` — créée si sélectionnée.
 - `DOUBLON` — même contact (nom, téléphone sur ses 9 derniers chiffres, email ; casse ignorée)
 qu'une prospection existante ou qu'une ligne plus haut, mais **autre date** : c'est une nouvelle
-soumission, **créée quand même** et signalée.
+soumission, **créée si sélectionnée** et signalée.
 - `DEJA_IMPORTEE` — même contact **et même date** (à la minute) : le même lead réimporté,
 **ignoré**. Réimporter un fichier, ou un export qui chevauche le précédent, ne crée donc rien deux
 fois.
@@ -200,6 +200,26 @@ message « Lead déjà importé » et rien d'autre ; un simple homonyme hors pé
 - `ERREUR` — nom vide, date vide ou illisible, champ trop long : **ignorée**, les autres lignes
 passent.
 
+**Sélection par statut** (`statuts`) : elle ne décide que de ce qui est écrit, **jamais du statut**.
+Chaque ligne garde, dans le rapport d'import, le statut que lui donnait l'aperçu du même fichier —
+les lignes non sélectionnées comptent toujours pour détecter les doublons internes au fichier (une
+`DOUBLON` « même contact que la ligne 3 du fichier » reste `DOUBLON` même si la ligne 3 n'est pas
+importée). Une ligne non sélectionnée a `preProspectionId` et `code` null, et son `message` le dit
+(« Non importée (statut non sélectionné) », ou le message du doublon suivi de « — non importée
+(statut non sélectionné) »). Le rapport donne `statutsImportes` et `creees` (lignes réellement
+écrites) ; `nouvelles` et `doublons` restent des compteurs de classification.
+
+La classification est relative à l'état de la base : importer d'abord les `DOUBLON` seuls, puis
+réimporter le fichier avec `NOUVELLE`, fait d'une `NOUVELLE` dont le contact vient d'être créé une
+`DOUBLON` — filtrée si l'on ne choisit que `NOUVELLE`. L'aperçu le montre avant chaque import.
+
+### param statuts
+
+Statuts à importer : `NOUVELLE`, `DOUBLON`, ou les deux. Répété (`statuts=NOUVELLE&statuts=DOUBLON`)
+ou séparé par des virgules (`statuts=NOUVELLE,DOUBLON`). **Absent : les deux.**
+`DEJA_IMPORTEE` et `ERREUR` ne sont jamais importables : les demander, ou envoyer une
+valeur inconnue ou vide (`statuts=`), renvoie 400 sans rien écrire.
+
 ### param trancheId
 
 Tranche (CfgTranche.id) choisie dans la liste déroulante. **Obligatoire** : toutes les lignes du
@@ -208,7 +228,7 @@ fichier y sont rattachées.
 ### reponse 400
 
 `trancheId` absent ou inconnu ; fichier absent, vide, sans colonne `Nom` ou de plus de 5 000 lignes
-; référentiel fourni inconnu.
+; référentiel fourni inconnu ; `statuts` vide, inconnu, `DEJA_IMPORTEE` ou `ERREUR`. Rien n'est écrit.
 
 ## creerProspect
 

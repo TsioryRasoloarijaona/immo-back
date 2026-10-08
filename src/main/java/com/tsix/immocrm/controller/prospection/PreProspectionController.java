@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.StatutLigneImport;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
@@ -168,7 +169,7 @@ public class PreProspectionController {
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-            summary = "Import CSV de leads — étape 2 : création, toutes lignes sur une seule tranche")
+            summary = "Import CSV de leads — étape 2 : création des statuts choisis, sur une seule tranche")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Import effectué ; rapport ligne par ligne."),
             @ApiResponse(responseCode = "400", content = @Content),
@@ -188,9 +189,10 @@ public class PreProspectionController {
             @Parameter(description = "Type (ComActionMessageType). Défaut : `WEB`.")
             @RequestParam(required = false) UUID typeContactId,
             @Parameter(description = "Action commerciale / campagne (ComAction). Défaut : aucune.")
-            @RequestParam(required = false) UUID actionCommercialeId) {
+            @RequestParam(required = false) UUID actionCommercialeId,
+            @RequestParam(required = false) List<StatutLigneImport> statuts) {
         return importService.importer(fichier, trancheId, new ImportPreProspectionService.Rattachement(
-                etapeId, origineId, origineSupportId, typeContactId, actionCommercialeId));
+                etapeId, origineId, origineSupportId, typeContactId, actionCommercialeId), statuts);
     }
 
     @PostMapping("/{id}/creer-prospect")

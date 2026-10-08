@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,6 +51,10 @@ public class ImportPreProspectionService {
 
     private static final int NOTES_MAX = 1000;
 
+    /** Statuts importables, dans l'ordre de {@code statutsImportes} ; défaut quand {@code statuts} est absent. */
+    static final List<StatutLigneImport> STATUTS_IMPORTABLES =
+            List.of(StatutLigneImport.NOUVELLE, StatutLigneImport.DOUBLON);
+
     private final ProspectionService prospectionService;
     private final CfgTrancheRepository trancheRepository;
     private final ComProspectionKindRepository kindRepository;
@@ -76,15 +81,18 @@ public class ImportPreProspectionService {
     /** Lit et classe chaque ligne, sans rien écrire. */
     @Transactional(readOnly = true)
     public RapportImportPreProspectionsDto apercu(MultipartFile fichier) {
-        return traiter(LecteurCsvLeads.lire(octets(fichier)), null, null);
+        return traiter(LecteurCsvLeads.lire(octets(fichier)), null, null, List.of());
     }
 
     /**
-     * Crée une pré-prospection par ligne {@code NOUVELLE} ou {@code DOUBLON}, toutes sur
-     * {@code trancheId}. Tout ou rien : une tranche hors périmètre (403) n'écrit aucune ligne.
+     * Crée une pré-prospection par ligne dont le statut est dans {@code statuts} (défaut :
+     * {@code NOUVELLE} et {@code DOUBLON}), toutes sur {@code trancheId}. Tout ou rien : une
+     * tranche hors périmètre (403) ou une sélection invalide (400) n'écrit aucune ligne.
      */
     @Transactional
-    public RapportImportPreProspectionsDto importer(MultipartFile fichier, UUID trancheId, Rattachement demande) {
+    public RapportImportPreProspectionsDto importer(MultipartFile fichier, UUID trancheId, Rattachement demande,
+                                                    List<StatutLigneImport> statuts) {
+        List<StatutLigneImport> selection = selection(statuts);
         Requis.champ(trancheId, "trancheId est requis : un fichier est importé sur une seule tranche");
         CfgTranche tranche = trancheRepository.findById(trancheId)
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + trancheId));
@@ -98,16 +106,39 @@ public class ImportPreProspectionService {
                 demande.typeContactId() != null ? demande.typeContactId()
                         : typeRepository.findFirstByCode(CODE_TYPE_DEFAUT).map(t -> t.getId()).orElse(null),
                 demande.actionCommercialeId());
-        return traiter(lignes, tranche, rattachement);
+        return traiter(lignes, tranche, rattachement, selection);
     }
 
-    /** @param tranche {@code null} = aperçu, rien n'est écrit */
+    /** {@code null} = défaut ; vide, {@code DEJA_IMPORTEE} ou {@code ERREUR} → 400. Ordre de {@link #STATUTS_IMPORTABLES}. */
+    static List<StatutLigneImport> selection(List<StatutLigneImport> statuts) {
+        if (statuts == null) {
+            return STATUTS_IMPORTABLES;
+        }
+        if (statuts.isEmpty() || statuts.contains(null)) {
+            throw new InvalidRequestException("statuts vide : choisir NOUVELLE, DOUBLON ou les deux");
+        }
+        for (StatutLigneImport s : statuts) {
+            if (!STATUTS_IMPORTABLES.contains(s)) {
+                throw new InvalidRequestException("statuts : " + s + " n'est pas importable "
+                        + "(valeurs admises : NOUVELLE, DOUBLON)");
+            }
+        }
+        return STATUTS_IMPORTABLES.stream().filter(statuts::contains).toList();
+    }
+
+    /**
+     * @param tranche   {@code null} = aperçu, rien n'est écrit
+     * @param selection statuts à écrire ; sans effet sur la classification (FEATURE-import-selectif.md R2)
+     */
     private RapportImportPreProspectionsDto traiter(List<LigneLead> lignes, CfgTranche tranche,
-                                                    Rattachement rattachement) {
+                                                    Rattachement rattachement, List<StatutLigneImport> selection) {
         // Doublons internes au fichier : l'aperçu n'écrit rien, la base ne peut donc pas les voir.
         Map<String, Integer> contactsVus = new HashMap<>();
         Map<String, Integer> soumissionsVues = new HashMap<>();
         List<LigneImportDto> resultat = new ArrayList<>();
+        // Les lignes écrites par cet import ne comptent pas pour classer les suivantes : sinon le
+        // statut dépendrait de la sélection et divergerait de l'aperçu.
+        Set<UUID> creeesIci = new HashSet<>();
 
         for (LigneLead l : lignes) {
             if (l.erreur() != null) {
@@ -129,9 +160,11 @@ public class ImportPreProspectionService {
             // importé ailleurs), mais seuls les doublons visibles sont nommés ou font un DOUBLON :
             // un contact hors périmètre n'est jamais révélé.
             List<ComProspection> tous = prospectionService.doublonsContact(null, l.nom(), l.email(), telephone);
-            List<ComProspection> memeSoumission = tous.stream()
-                    .filter(p -> p.getDocDate() != null
-                            && p.getDocDate().truncatedTo(ChronoUnit.MINUTES).equals(minute))
+            List<ComProspection> avant = tous.stream().filter(p -> !creeesIci.contains(p.getId())).toList();
+            // Requête dédiée : doublonsContact est plafonné, ses lignes récentes peuvent évincer la soumission.
+            List<ComProspection> memeSoumission = prospectionService
+                    .memeSoumission(l.nom(), l.email(), telephone, minute).stream()
+                    .filter(p -> !creeesIci.contains(p.getId()))
                     .toList();
             if (!memeSoumission.isEmpty()) {
                 List<ComProspection> nommables = prospectionService.visibles(memeSoumission);
@@ -140,38 +173,40 @@ public class ImportPreProspectionService {
                         null, ids(nommables)));
                 continue;
             }
-            List<ComProspection> existants = prospectionService.visibles(tous);
-
             Integer memeContactPlusHaut = contactsVus.get(contact);
-            StatutLigneImport statut;
+            StatutLigneImport statut = !prospectionService.visibles(avant).isEmpty() || memeContactPlusHaut != null
+                    ? StatutLigneImport.DOUBLON : StatutLigneImport.NOUVELLE;
+            // Nommés : y compris les lignes créées plus haut par cet import.
+            List<ComProspection> existants = statut == StatutLigneImport.DOUBLON
+                    ? prospectionService.visibles(tous) : List.of();
             String message = null;
             if (!existants.isEmpty()) {
-                statut = StatutLigneImport.DOUBLON;
                 message = "Même contact que " + codes(existants) + " (autre soumission)";
-            } else if (memeContactPlusHaut != null) {
-                statut = StatutLigneImport.DOUBLON;
+            } else if (statut == StatutLigneImport.DOUBLON) {
                 message = "Même contact que la ligne " + memeContactPlusHaut + " du fichier (autre soumission)";
-            } else {
-                statut = StatutLigneImport.NOUVELLE;
             }
             contactsVus.putIfAbsent(contact, l.numeroLigne());
             soumissionsVues.put(soumission, l.numeroLigne());
 
             ComProspection creee = null;
-            if (tranche != null) {
+            if (tranche != null && !selection.contains(statut)) {
+                message = message == null ? "Non importée (statut non sélectionné)"
+                        : message + " — non importée (statut non sélectionné)";
+            } else if (tranche != null) {
                 creee = prospectionService.ecrirePreProspection(new CreerPreProspectionRequest(
                         l.nom(), telephone, l.email(), notes(l), tranche.getId(), null,
                         rattachement.etapeId(), rattachement.origineId(), rattachement.origineSupportId(),
                         rattachement.typeContactId(), rattachement.actionCommercialeId(), null),
                         l.dateCreation());
+                creeesIci.add(creee.getId());
             }
             resultat.add(ligne(l, telephone, statut, message, creee, ids(existants)));
         }
-        return rapport(lignes, tranche, resultat);
+        return rapport(lignes, tranche, resultat, selection);
     }
 
     private RapportImportPreProspectionsDto rapport(List<LigneLead> lignes, CfgTranche tranche,
-                                                    List<LigneImportDto> resultat) {
+                                                    List<LigneImportDto> resultat, List<StatutLigneImport> selection) {
         Set<String> formulaires = new LinkedHashSet<>();
         lignes.stream().map(LigneLead::formulaire).filter(f -> f != null).forEach(formulaires::add);
 
@@ -212,7 +247,9 @@ public class ImportPreProspectionService {
                 compter(resultat, StatutLigneImport.DOUBLON),
                 compter(resultat, StatutLigneImport.DEJA_IMPORTEE),
                 compter(resultat, StatutLigneImport.ERREUR),
-                resultat);
+                resultat,
+                tranche != null ? selection : null,
+                (int) resultat.stream().filter(l -> l.preProspectionId() != null).count());
     }
 
     /** {@code "APF FORM 02*2026 - GISK"} → la tranche de code {@code APF}, si elle existe. */

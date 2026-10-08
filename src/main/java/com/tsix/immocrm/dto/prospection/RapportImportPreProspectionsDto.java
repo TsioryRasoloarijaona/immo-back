@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.prospection;
 
+import com.tsix.immocrm.domain.StatutLigneImport;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -24,13 +25,19 @@ public record RapportImportPreProspectionsDto(
         int totalLignes,
         @Schema(description = "Lignes `NOUVELLE`.")
         int nouvelles,
-        @Schema(description = "Lignes `DOUBLON` — créées elles aussi.")
+        @Schema(description = "Lignes `DOUBLON` — créées si sélectionnées (`statuts`).")
         int doublons,
         @Schema(description = "Lignes `DEJA_IMPORTEE` — ignorées.")
         int dejaImportees,
         @Schema(description = "Lignes `ERREUR` — ignorées.")
         int erreurs,
         @Schema(description = "Le détail, ligne par ligne, dans l'ordre du fichier.")
-        List<LigneImportDto> lignes
+        List<LigneImportDto> lignes,
+        @Schema(description = "Statuts effectivement importés, dans l'ordre `NOUVELLE`, `DOUBLON` (défaut : les "
+                + "deux). Null dans l'aperçu.")
+        List<StatutLigneImport> statutsImportes,
+        @Schema(description = "Lignes réellement écrites (`preProspectionId` non null). 0 dans l'aperçu.",
+                example = "18")
+        int creees
 ) {
 }

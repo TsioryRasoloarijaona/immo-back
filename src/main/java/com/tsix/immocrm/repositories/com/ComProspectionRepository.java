@@ -145,6 +145,15 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                 @Param("email") String email,
                                                 @Param("telephone") String telephone, Pageable pageable);
 
+    /** Même contact que {@link #trouverDoublonsContact}, DocDate dans [debut, fin[ — sans plafond (réimport idempotent). */
+    @Query("SELECT p FROM ComProspection p WHERE p.docDate >= :debut AND p.docDate < :fin "
+            + "AND lower(trim(coalesce(p.tempDescription, ''))) = :nom "
+            + "AND lower(trim(coalesce(p.tempEMail, ''))) = :email "
+            + "AND right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :telephone")
+    List<ComProspection> trouverMemeSoumission(@Param("nom") String nom, @Param("email") String email,
+                                               @Param("telephone") String telephone,
+                                               @Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
     /**
      * Règle « une prospection ouverte par prospect × projet » (FEATURE-doublons-prospect-projet.md §3) ;
      * ouverte = {@code IsClosed} 0 ou NULL. {@code exclu} : passer un id inexistant plutôt que {@code null},

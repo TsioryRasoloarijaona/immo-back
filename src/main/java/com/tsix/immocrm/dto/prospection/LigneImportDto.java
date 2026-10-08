@@ -25,9 +25,9 @@ public record LigneImportDto(
                 + "dans les notes.", example = "APF FORM 02*2026 - GISK")
         String formulaire,
         StatutLigneImport statut,
-        @Schema(description = "Explication du statut, en clair — null pour `NOUVELLE`.")
+        @Schema(description = "Explication du statut, en clair — null pour une `NOUVELLE` importée (ou en aperçu).")
         String message,
-        @Schema(description = "Pré-prospection créée. **Toujours null dans l'aperçu**, et pour "
+        @Schema(description = "Pré-prospection créée. Null dans l'aperçu, hors sélection (`statuts`), et pour "
                 + "`DEJA_IMPORTEE` / `ERREUR`.")
         UUID preProspectionId,
         @Schema(description = "Code de la pré-prospection créée (`AA/NNNNN`). Null comme "
