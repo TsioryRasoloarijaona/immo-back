@@ -50,5 +50,5 @@ en CI. `grep -rn "\.now()" src/main/java` ne doit plus renvoyer que des `Instant
   Si le SQL Server **source** n'est pas à l'heure de Casablanca (UTC+1 hors Ramadan), une interaction
   écrite par l'appli paraît « dans le futur » pendant l'écart et disparaît de ces colonnes. Fuseau du
   serveur source non documenté ; le SQL Server local répond `(UTC+00:00) Casablanca` avec
-  `SYSDATETIME() = SYSUTCDATETIME()` (données de fuseau Windows à vérifier). À mesurer sur la
+  `SYSDATETIME() = SYSUTCDATETIME()` (données de fuseau Windows à vérifier). **Mesuré sur la source le 08/10 : `+01:00, (UTC+01:00) Casablanca` — même zone que l’horloge, décision levée.** Requête :
   source : `SELECT SYSDATETIMEOFFSET(), CURRENT_TIMEZONE()`.

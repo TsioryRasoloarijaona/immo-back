@@ -135,76 +135,93 @@ public class ImportPreProspectionService {
     private RapportImportPreProspectionsDto traiter(List<LigneLead> lignes, CfgTranche tranche,
                                                     Rattachement rattachement, List<StatutLigneImport> selection) {
         // Doublons internes au fichier : l'aperçu n'écrit rien, la base ne peut donc pas les voir.
-        Map<String, Integer> contactsVus = new HashMap<>();
-        Map<String, Integer> soumissionsVues = new HashMap<>();
-        List<LigneImportDto> resultat = new ArrayList<>();
         // Les lignes écrites par cet import ne comptent pas pour classer les suivantes : sinon le
         // statut dépendrait de la sélection et divergerait de l'aperçu.
-        Set<UUID> creeesIci = new HashSet<>();
-
+        EtatImport etat = new EtatImport(tranche, rattachement, selection,
+                new HashMap<>(), new HashMap<>(), new HashSet<>());
+        List<LigneImportDto> resultat = new ArrayList<>();
         for (LigneLead l : lignes) {
-            if (l.erreur() != null) {
-                resultat.add(ligne(l, null, StatutLigneImport.ERREUR, l.erreur(), null, List.of()));
-                continue;
-            }
-            String telephone = telephone(l);
-            String contact = cleContact(l.nom(), telephone, l.email());
-            LocalDateTime minute = l.dateCreation().truncatedTo(ChronoUnit.MINUTES);
-            String soumission = contact + "|" + minute;
-
-            Integer memeLeadPlusHaut = soumissionsVues.get(soumission);
-            if (memeLeadPlusHaut != null) {
-                resultat.add(ligne(l, telephone, StatutLigneImport.DEJA_IMPORTEE,
-                        "Même lead que la ligne " + memeLeadPlusHaut + " du fichier", null, List.of()));
-                continue;
-            }
-            // Réimport jugé sur toute la table (sinon un commercial restreint recréerait un lead
-            // importé ailleurs), mais seuls les doublons visibles sont nommés ou font un DOUBLON :
-            // un contact hors périmètre n'est jamais révélé.
-            List<ComProspection> tous = prospectionService.doublonsContact(null, l.nom(), l.email(), telephone);
-            List<ComProspection> avant = tous.stream().filter(p -> !creeesIci.contains(p.getId())).toList();
-            // Requête dédiée : doublonsContact est plafonné, ses lignes récentes peuvent évincer la soumission.
-            List<ComProspection> memeSoumission = prospectionService
-                    .memeSoumission(l.nom(), l.email(), telephone, minute).stream()
-                    .filter(p -> !creeesIci.contains(p.getId()))
-                    .toList();
-            if (!memeSoumission.isEmpty()) {
-                List<ComProspection> nommables = prospectionService.visibles(memeSoumission);
-                resultat.add(ligne(l, telephone, StatutLigneImport.DEJA_IMPORTEE,
-                        nommables.isEmpty() ? "Lead déjà importé" : "Déjà en base : " + codes(nommables),
-                        null, ids(nommables)));
-                continue;
-            }
-            Integer memeContactPlusHaut = contactsVus.get(contact);
-            StatutLigneImport statut = !prospectionService.visibles(avant).isEmpty() || memeContactPlusHaut != null
-                    ? StatutLigneImport.DOUBLON : StatutLigneImport.NOUVELLE;
-            // Nommés : y compris les lignes créées plus haut par cet import.
-            List<ComProspection> existants = statut == StatutLigneImport.DOUBLON
-                    ? prospectionService.visibles(tous) : List.of();
-            String message = null;
-            if (!existants.isEmpty()) {
-                message = "Même contact que " + codes(existants) + " (autre soumission)";
-            } else if (statut == StatutLigneImport.DOUBLON) {
-                message = "Même contact que la ligne " + memeContactPlusHaut + " du fichier (autre soumission)";
-            }
-            contactsVus.putIfAbsent(contact, l.numeroLigne());
-            soumissionsVues.put(soumission, l.numeroLigne());
-
-            ComProspection creee = null;
-            if (tranche != null && !selection.contains(statut)) {
-                message = message == null ? "Non importée (statut non sélectionné)"
-                        : message + " — non importée (statut non sélectionné)";
-            } else if (tranche != null) {
-                creee = prospectionService.ecrirePreProspection(new CreerPreProspectionRequest(
-                        l.nom(), telephone, l.email(), notes(l), tranche.getId(), null,
-                        rattachement.etapeId(), rattachement.origineId(), rattachement.origineSupportId(),
-                        rattachement.typeContactId(), rattachement.actionCommercialeId(), null),
-                        l.dateCreation());
-                creeesIci.add(creee.getId());
-            }
-            resultat.add(ligne(l, telephone, statut, message, creee, ids(existants)));
+            resultat.add(traiterLigne(l, etat));
         }
         return rapport(lignes, tranche, resultat, selection);
+    }
+
+    /** État partagé entre les lignes d'un même import (doublons internes au fichier, lignes créées). */
+    private record EtatImport(CfgTranche tranche, Rattachement rattachement, List<StatutLigneImport> selection,
+                              Map<String, Integer> contactsVus, Map<String, Integer> soumissionsVues,
+                              Set<UUID> creeesIci) {
+    }
+
+    private LigneImportDto traiterLigne(LigneLead l, EtatImport etat) {
+        if (l.erreur() != null) {
+            return ligne(l, null, StatutLigneImport.ERREUR, l.erreur(), null, List.of());
+        }
+        String telephone = telephone(l);
+        String contact = cleContact(l.nom(), telephone, l.email());
+        LocalDateTime minute = l.dateCreation().truncatedTo(ChronoUnit.MINUTES);
+        String soumission = contact + "|" + minute;
+
+        Integer memeLeadPlusHaut = etat.soumissionsVues().get(soumission);
+        if (memeLeadPlusHaut != null) {
+            return ligne(l, telephone, StatutLigneImport.DEJA_IMPORTEE,
+                    "Même lead que la ligne " + memeLeadPlusHaut + " du fichier", null, List.of());
+        }
+        // Réimport jugé sur toute la table (sinon un commercial restreint recréerait un lead
+        // importé ailleurs), mais seuls les doublons visibles sont nommés ou font un DOUBLON :
+        // un contact hors périmètre n'est jamais révélé.
+        Set<UUID> creeesIci = etat.creeesIci();
+        List<ComProspection> tous = prospectionService.doublonsContact(null, l.nom(), l.email(), telephone);
+        List<ComProspection> avant = tous.stream().filter(p -> !creeesIci.contains(p.getId())).toList();
+        // Requête dédiée : doublonsContact est plafonné, ses lignes récentes peuvent évincer la soumission.
+        List<ComProspection> memeSoumission = prospectionService
+                .memeSoumission(l.nom(), l.email(), telephone, minute).stream()
+                .filter(p -> !creeesIci.contains(p.getId()))
+                .toList();
+        if (!memeSoumission.isEmpty()) {
+            List<ComProspection> nommables = prospectionService.visibles(memeSoumission);
+            return ligne(l, telephone, StatutLigneImport.DEJA_IMPORTEE,
+                    nommables.isEmpty() ? "Lead déjà importé" : "Déjà en base : " + codes(nommables),
+                    null, ids(nommables));
+        }
+        Integer memeContactPlusHaut = etat.contactsVus().get(contact);
+        StatutLigneImport statut = !prospectionService.visibles(avant).isEmpty() || memeContactPlusHaut != null
+                ? StatutLigneImport.DOUBLON : StatutLigneImport.NOUVELLE;
+        // Nommés : y compris les lignes créées plus haut par cet import.
+        List<ComProspection> existants = statut == StatutLigneImport.DOUBLON
+                ? prospectionService.visibles(tous) : List.of();
+        String message = messageDoublon(statut, existants, memeContactPlusHaut);
+        etat.contactsVus().putIfAbsent(contact, l.numeroLigne());
+        etat.soumissionsVues().put(soumission, l.numeroLigne());
+
+        ComProspection creee = null;
+        if (etat.tranche() != null && !etat.selection().contains(statut)) {
+            message = message == null ? "Non importée (statut non sélectionné)"
+                    : message + " — non importée (statut non sélectionné)";
+        } else if (etat.tranche() != null) {
+            creee = creerPreProspection(l, telephone, etat);
+            creeesIci.add(creee.getId());
+        }
+        return ligne(l, telephone, statut, message, creee, ids(existants));
+    }
+
+    private static String messageDoublon(StatutLigneImport statut, List<ComProspection> existants,
+                                         Integer memeContactPlusHaut) {
+        if (!existants.isEmpty()) {
+            return "Même contact que " + codes(existants) + " (autre soumission)";
+        }
+        if (statut == StatutLigneImport.DOUBLON) {
+            return "Même contact que la ligne " + memeContactPlusHaut + " du fichier (autre soumission)";
+        }
+        return null;
+    }
+
+    private ComProspection creerPreProspection(LigneLead l, String telephone, EtatImport etat) {
+        Rattachement rattachement = etat.rattachement();
+        return prospectionService.ecrirePreProspection(new CreerPreProspectionRequest(
+                l.nom(), telephone, l.email(), notes(l), etat.tranche().getId(), null,
+                rattachement.etapeId(), rattachement.origineId(), rattachement.origineSupportId(),
+                rattachement.typeContactId(), rattachement.actionCommercialeId(), null),
+                l.dateCreation());
     }
 
     private RapportImportPreProspectionsDto rapport(List<LigneLead> lignes, CfgTranche tranche,

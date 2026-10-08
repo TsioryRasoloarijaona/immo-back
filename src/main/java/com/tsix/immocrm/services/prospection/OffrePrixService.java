@@ -114,31 +114,10 @@ public class OffrePrixService {
                 ? Optional.empty()
                 : quoteRepository.findFirstByComProspectionIdOrderByDocDateDesc(prospectionId);
 
-        UUID offreId;
-        String offreCode;
-        BigDecimal prixFinal;
         boolean reutilisee = existante.isPresent();
-
-        if (existante.isPresent()) {
-            StlQuote offre = existante.get();
-            offreId = offre.getId();
-            offreCode = offre.getCode();
-            prixFinal = offre.getPriceAfterDiscount();
-        } else {
-            DevisDto cree = devisService.creerDevis(prospectionId, new CreerDevisRequest(
-                    prospection.getStkHierarchy() != null ? prospection.getStkHierarchy().getId() : null,
-                    article.getId(),
-                    null,
-                    null,
-                    null,
-                    request != null ? request.modePaiementId() : null,
-                    request != null ? request.prix() : null,
-                    request != null ? request.remisePercent() : null,
-                    request != null ? request.notes() : null));
-            offreId = cree.id();
-            offreCode = cree.code();
-            prixFinal = cree.montants() != null ? cree.montants().prixVenteTTC() : null;
-        }
+        OffreRetenue offre = existante
+                .map(q -> new OffreRetenue(q.getId(), q.getCode(), q.getPriceAfterDiscount()))
+                .orElseGet(() -> creerOffre(prospectionId, prospection, article, request));
 
         CfgTier prospect = prospection.getCfgProspect();
         CfgTranche tranche = prospection.getStkHierarchy();
@@ -146,23 +125,53 @@ public class OffrePrixService {
         CfgTier commercial = prospection.getCfgCommercial();
 
         String email = ProspectionService.emailProspect(prospect, prospection);
-        String emailPropre = email != null && email.trim().contains("@") ? email.trim() : null;
 
         return new Preparation(
-                offreId, offreCode, reutilisee, prixFinal,
+                offre.id(), offre.code(), reutilisee, offre.prixFinal(),
                 request != null ? request.remisePercent() : null,
                 TierNomFormatter.nom(prospect),
-                emailPropre,
-                prospect != null
-                        ? NumeroWhatsApp.international(prospect.getMobileIndicatif(), prospect.getMobile())
-                        : null,
+                emailPropre(email),
+                numeroWhatsApp(prospect),
                 prospect != null && StringUtils.hasText(prospect.getMobile()),
                 lieu(projet, tranche),
                 nettoyer(article.getCode()),
                 article.getArea(),
                 commercial != null ? TierNomFormatter.nom(commercial) : null,
-                commercial != null && StringUtils.hasText(commercial.getMobile())
-                        ? commercial.getMobile().trim() : null);
+                mobileCommercial(commercial));
+    }
+
+    private record OffreRetenue(UUID id, String code, BigDecimal prixFinal) {
+    }
+
+    private OffreRetenue creerOffre(UUID prospectionId, ComProspection prospection, StkItem article,
+                                    EnvoyerOffrePrixRequest request) {
+        DevisDto cree = devisService.creerDevis(prospectionId, new CreerDevisRequest(
+                prospection.getStkHierarchy() != null ? prospection.getStkHierarchy().getId() : null,
+                article.getId(),
+                null,
+                null,
+                null,
+                request != null ? request.modePaiementId() : null,
+                request != null ? request.prix() : null,
+                request != null ? request.remisePercent() : null,
+                request != null ? request.notes() : null));
+        return new OffreRetenue(cree.id(), cree.code(),
+                cree.montants() != null ? cree.montants().prixVenteTTC() : null);
+    }
+
+    private static String emailPropre(String email) {
+        return email != null && email.trim().contains("@") ? email.trim() : null;
+    }
+
+    private static String numeroWhatsApp(CfgTier prospect) {
+        return prospect != null
+                ? NumeroWhatsApp.international(prospect.getMobileIndicatif(), prospect.getMobile())
+                : null;
+    }
+
+    private static String mobileCommercial(CfgTier commercial) {
+        return commercial != null && StringUtils.hasText(commercial.getMobile())
+                ? commercial.getMobile().trim() : null;
     }
 
     /** R6 — 409 et non 400 : la requête est bien formée, c'est l'état de la prospection qui s'y oppose. */
@@ -195,7 +204,7 @@ public class OffrePrixService {
             return pdfRenderer.render(documentService.collect(prospectionId, offreId));
         } catch (RuntimeException e) {
             log.error("Fiche Offre {} illisible : l'offre part sans document.", offreId, e);
-            return null;
+            return new byte[0];
         }
     }
 
@@ -227,14 +236,15 @@ public class OffrePrixService {
         variables.put("offreCode", p.offreCode());
         variables.put("nomCommercial", p.nomCommercial());
         variables.put("mobileCommercial", p.mobileCommercial());
-        variables.put("avecDocument", pdf != null);
+        boolean avecDocument = pdf.length > 0;
+        variables.put("avecDocument", avecDocument);
 
-        var pieces = pdf != null
+        var pieces = avecDocument
                 ? java.util.List.of(new PieceJointeEmail(nomFichier(p.offreCode()), TYPE_PDF, pdf))
                 : java.util.List.<PieceJointeEmail>of();
 
         envoiEmail.envoyer(new MessageEmail(p.email(), sujet(p), TEMPLATE, variables,
-                corpsTexte(p, pdf != null), pieces));
+                corpsTexte(p, avecDocument), pieces));
 
         return CanalEnvoiDto.envoye(p.email(), pieces.size());
     }
@@ -315,8 +325,12 @@ public class OffrePrixService {
         if (p.nomProspect() != null) {
             texte.append(' ').append(p.nomProspect());
         }
-        texte.append(",\n\nSuite à votre visite, nous avons le plaisir de vous adresser notre "
-                + "offre de prix.\n\n");
+        texte.append("""
+                ,
+
+                Suite à votre visite, nous avons le plaisir de vous adresser notre offre de prix.
+
+                """);
         if (p.lieu() != null) {
             texte.append("Projet : ").append(p.lieu()).append('\n');
         }

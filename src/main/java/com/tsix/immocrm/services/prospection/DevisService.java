@@ -107,11 +107,16 @@ public class DevisService {
         int largeurNumero = sequence.getSeqValueNumber() != null ? sequence.getSeqValueNumber() : 5;
         String separateur = sequence.getSeparator() != null ? sequence.getSeparator() : "/";
         int annee = LocalDateTime.now(clock).getYear() % (int) Math.pow(10, largeurAnnee);
-        String anneeFormatee = String.format("%0" + largeurAnnee + "d", annee);
-        String numero = String.format("%0" + largeurNumero + "d", prochain);
+        String anneeFormatee = completerParZeros(annee, largeurAnnee);
+        String numero = completerParZeros(prochain, largeurNumero);
         String prefixe = sequence.getSeqPrefix() != null ? sequence.getSeqPrefix() : "";
         String suffixe = sequence.getSeqSuffix() != null ? sequence.getSeqSuffix() : "";
         return prefixe + anneeFormatee + separateur + numero + suffixe;
+    }
+
+    private static String completerParZeros(int valeur, int largeur) {
+        String format = "%0" + largeur + "d";
+        return String.format(format, valeur);
     }
 
     public Page<DevisDto> findAll(String search, List<UUID> trancheIds, UUID commercial,
@@ -227,27 +232,18 @@ public class DevisService {
      */
     private void persisterLignesSousArticles(StlQuote quote, List<StkItem> sousArticles, BigDecimal remisePercent) {
         for (StkItem sousArticle : sousArticles) {
-            BigDecimal vatRatio = sousArticle.getVat() != null ? sousArticle.getVat()
-                    : quote.getVatRatio() != null ? quote.getVatRatio() : BigDecimal.ZERO;
-            BigDecimal priceBeforeDiscount = sousArticle.getComSalePrice() != null
-                    ? sousArticle.getComSalePrice() : BigDecimal.ZERO;
-            BigDecimal priceBeforeDiscountHT = sousArticle.getComSalePriceHT() != null
-                    ? sousArticle.getComSalePriceHT() : diviserParTaux(priceBeforeDiscount, vatRatio);
-            BigDecimal discountAmount = priceBeforeDiscount.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-            BigDecimal discountAmountHT = priceBeforeDiscountHT.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+            BigDecimal vatRatio = tauxTvaSousArticle(sousArticle, quote);
+            BigDecimal priceBeforeDiscount = prixTtcOuZero(sousArticle);
+            BigDecimal priceBeforeDiscountHT = prixHtOuDeduit(sousArticle, priceBeforeDiscount, vatRatio);
+            BigDecimal discountAmount = pourcentage(priceBeforeDiscount, remisePercent);
+            BigDecimal discountAmountHT = pourcentage(priceBeforeDiscountHT, remisePercent);
             BigDecimal priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
             BigDecimal priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
             BigDecimal area = sousArticle.getArea();
-            BigDecimal unitCost = area != null && area.signum() != 0
-                    ? priceBeforeDiscount.divide(area, 6, RoundingMode.HALF_UP) : null;
-            BigDecimal unitCostHT = area != null && area.signum() != 0
-                    ? priceBeforeDiscountHT.divide(area, 6, RoundingMode.HALF_UP) : null;
-            BigDecimal unitCostAfterDiscount = area != null && area.signum() != 0
-                    ? priceAfterDiscount.divide(area, 6, RoundingMode.HALF_UP) : null;
-            BigDecimal unitCostAfterDiscountHT = area != null && area.signum() != 0
-                    ? priceAfterDiscountHT.divide(area, 6, RoundingMode.HALF_UP) : null;
+            BigDecimal unitCost = parSurface(priceBeforeDiscount, area);
+            BigDecimal unitCostHT = parSurface(priceBeforeDiscountHT, area);
+            BigDecimal unitCostAfterDiscount = parSurface(priceAfterDiscount, area);
+            BigDecimal unitCostAfterDiscountHT = parSurface(priceAfterDiscountHT, area);
 
             StlQuoteItem item = new StlQuoteItem();
             item.setId(UUID.randomUUID());
@@ -274,6 +270,32 @@ public class DevisService {
             item.setIsUnderItem(Boolean.TRUE);
             quoteItemRepository.save(item);
         }
+    }
+
+    /** TVA du sous-article, à défaut celle de l'offre, à défaut zéro. */
+    private static BigDecimal tauxTvaSousArticle(StkItem sousArticle, StlQuote quote) {
+        if (sousArticle.getVat() != null) {
+            return sousArticle.getVat();
+        }
+        return quote.getVatRatio() != null ? quote.getVatRatio() : BigDecimal.ZERO;
+    }
+
+    private static BigDecimal prixTtcOuZero(StkItem article) {
+        return article.getComSalePrice() != null ? article.getComSalePrice() : BigDecimal.ZERO;
+    }
+
+    /** Prix HT de l'article s'il est renseigné, sinon déduit du TTC par la TVA. */
+    private static BigDecimal prixHtOuDeduit(StkItem article, BigDecimal prixTTC, BigDecimal vatRatio) {
+        return article.getComSalePriceHT() != null ? article.getComSalePriceHT() : diviserParTaux(prixTTC, vatRatio);
+    }
+
+    private static BigDecimal pourcentage(BigDecimal montant, BigDecimal pourcent) {
+        return montant.multiply(pourcent).divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+    }
+
+    /** Montant au m², ou null sans surface exploitable. */
+    private static BigDecimal parSurface(BigDecimal montant, BigDecimal area) {
+        return area != null && area.signum() != 0 ? montant.divide(area, 6, RoundingMode.HALF_UP) : null;
     }
 
     private record MontantsCalcules(
@@ -308,23 +330,24 @@ public class DevisService {
         BigDecimal vatRatio = article.getVat() != null ? article.getVat() : BigDecimal.ZERO;
         BigDecimal area = article.getArea();
 
-        BigDecimal itemPrice = prixOverride != null ? prixOverride
-                : article.getComSalePrice() != null ? article.getComSalePrice() : BigDecimal.ZERO;
-        BigDecimal itemPriceHT = prixOverride != null
-                ? diviserParTaux(itemPrice, vatRatio)
-                : article.getComSalePriceHT() != null ? article.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
+        BigDecimal itemPrice;
+        BigDecimal itemPriceHT;
+        if (prixOverride != null) {
+            itemPrice = prixOverride;
+            itemPriceHT = diviserParTaux(itemPrice, vatRatio);
+        } else {
+            itemPrice = prixTtcOuZero(article);
+            itemPriceHT = prixHtOuDeduit(article, itemPrice, vatRatio);
+        }
 
-        BigDecimal unitCostHT = area != null && area.signum() != 0
-                ? itemPriceHT.divide(area, 6, RoundingMode.HALF_UP) : null;
-        BigDecimal unitCost = area != null && area.signum() != 0
-                ? itemPrice.divide(area, 6, RoundingMode.HALF_UP) : null;
+        BigDecimal unitCostHT = parSurface(itemPriceHT, area);
+        BigDecimal unitCost = parSurface(itemPrice, area);
 
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         for (StkItem sousArticle : sousArticles) {
-            BigDecimal prixSousArticle = sousArticle.getComSalePrice() != null ? sousArticle.getComSalePrice() : BigDecimal.ZERO;
-            BigDecimal prixSousArticleHT = sousArticle.getComSalePriceHT() != null
-                    ? sousArticle.getComSalePriceHT() : diviserParTaux(prixSousArticle, vatRatio);
+            BigDecimal prixSousArticle = prixTtcOuZero(sousArticle);
+            BigDecimal prixSousArticleHT = prixHtOuDeduit(sousArticle, prixSousArticle, vatRatio);
             underItemsPrice = underItemsPrice.add(prixSousArticle);
             underItemsPriceHT = underItemsPriceHT.add(prixSousArticleHT);
         }
@@ -332,10 +355,8 @@ public class DevisService {
         BigDecimal totalHT = itemPriceHT.add(underItemsPriceHT);
         BigDecimal totalTTC = itemPrice.add(underItemsPrice);
 
-        BigDecimal discountAmountHT = totalHT.multiply(remisePercent)
-                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-        BigDecimal discountAmountTTC = totalTTC.multiply(remisePercent)
-                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+        BigDecimal discountAmountHT = pourcentage(totalHT, remisePercent);
+        BigDecimal discountAmountTTC = pourcentage(totalTTC, remisePercent);
 
         // Remise répartie au prorata article / sous-articles, comme le legacy.
         BigDecimal partArticle = totalHT.signum() != 0
@@ -349,10 +370,8 @@ public class DevisService {
         BigDecimal underItemsPriceAfterDiscountTTC = underItemsPrice.subtract(discountAmountTTC.multiply(BigDecimal.ONE.subtract(partArticle)))
                 .setScale(6, RoundingMode.HALF_UP);
 
-        BigDecimal unitCostAfterDiscountHT = area != null && area.signum() != 0
-                ? itemPriceAfterDiscountHT.divide(area, 6, RoundingMode.HALF_UP) : null;
-        BigDecimal unitCostAfterDiscountTTC = area != null && area.signum() != 0
-                ? itemPriceAfterDiscountTTC.divide(area, 6, RoundingMode.HALF_UP) : null;
+        BigDecimal unitCostAfterDiscountHT = parSurface(itemPriceAfterDiscountHT, area);
+        BigDecimal unitCostAfterDiscountTTC = parSurface(itemPriceAfterDiscountTTC, area);
 
         BigDecimal priceAfterDiscountHT = totalHT.subtract(discountAmountHT);
         BigDecimal priceAfterDiscountTTC = totalTTC.subtract(discountAmountTTC);

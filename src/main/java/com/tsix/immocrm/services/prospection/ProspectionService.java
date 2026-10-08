@@ -113,6 +113,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -130,6 +131,19 @@ public class ProspectionService {
 
     /** {@code ComActionMessage.Description} comme OMRAN, sans exception : {@code 07/09/2026 17:13 Khadija ELKORRI}. */
     private static final DateTimeFormatter FORMAT_LIBELLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    private static final String IS_CLOSED = "isClosed";
+    private static final String IS_OLD_CUSTOMER = "isOldCustomer";
+
+    private static final String PROSPECTION_INTROUVABLE = "Prospection introuvable: ";
+    private static final String ORIGINE_INTROUVABLE = "ComProspectionOrigin introuvable: ";
+    private static final String ORIGINE_SUPPORT_INTROUVABLE = "ComProspectionOriginSupport introuvable: ";
+    private static final String VOCATION_INTROUVABLE = "StkVocation introuvable: ";
+    private static final String TYPE_CONTACT_INTROUVABLE = "ComActionMessageType introuvable: ";
+    private static final String ACTION_INTROUVABLE = "ComAction introuvable: ";
+    private static final String ETAPE_INTROUVABLE = "ComProspectionKind introuvable: ";
+    private static final String TRANCHE_INTROUVABLE = "CfgTranche introuvable: ";
+    private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
 
     private final ComProspectionRepository prospectionRepository;
     // Vue légataire du bloc « activité » : une ligne à la fois, jamais pour une liste
@@ -237,8 +251,8 @@ public class ProspectionService {
             Boolean ouvertes, FiltresAvancesProspection filtres, Set<ColonneProspection> colonnes,
             ColonneProspection groupeColonne, String groupeValeur, Granularite granularite,
             Pageable pageable) {
-        Specification<ComProspection> spec = specProspections(etapes, origines, commerciaux, trancheIds,
-                dateDebut, dateFin, search, ouvertes, filtres)
+        Specification<ComProspection> spec = specProspections(new CriteresListe(etapes, origines, commerciaux,
+                trancheIds, dateDebut, dateFin, search, ouvertes), filtres)
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
@@ -249,8 +263,8 @@ public class ProspectionService {
      * la liste par construction ({@code FEATURE-dashboard-filtre-tranche.md} R3).
      */
     public long compterProspections(UUID trancheId, Boolean ouvertes) {
-        return prospectionRepository.count(specProspections(null, null, null, List.of(trancheId),
-                null, null, null, ouvertes, null)
+        return prospectionRepository.count(specProspections(new CriteresListe(null, null, null,
+                List.of(trancheId), null, null, null, ouvertes), null)
                 .and(perimetreService.filtreProspections()));
     }
 
@@ -258,8 +272,8 @@ public class ProspectionService {
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeColonne, String groupeValeur,
             Granularite granularite, Pageable pageable) {
-        Specification<ComProspection> spec = specPreProspections(etapes, origines, commerciaux, trancheIds,
-                dateDebut, dateFin, search, ouvertes)
+        Specification<ComProspection> spec = specPreProspections(new CriteresListe(etapes, origines, commerciaux,
+                trancheIds, dateDebut, dateFin, search, ouvertes))
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut forcée : ComSaleProspectionView exclut les pré-prospections, la
@@ -273,16 +287,16 @@ public class ProspectionService {
             String search, Boolean ouvertes, FiltresAvancesProspection filtres,
             ColonneProspection groupeBy, Granularite granularite, List<AgregatDemande> agregats,
             TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return grouper(specProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes, filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
+        return grouper(specProspections(new CriteresListe(etapes, origines, commerciaux, trancheIds, dateDebut,
+                dateFin, search, ouvertes), filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     public ResultatGroupement grouperPreProspections(List<String> etapes, List<String> origines,
             List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
             String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
             List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return grouper(specPreProspections(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin,
-                search, ouvertes), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
+        return grouper(specPreProspections(new CriteresListe(etapes, origines, commerciaux, trancheIds, dateDebut,
+                dateFin, search, ouvertes)), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
     private ResultatGroupement grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
@@ -306,64 +320,75 @@ public class ProspectionService {
      * Partagé par la liste et ses groupes, pour qu'ils portent les mêmes lignes. Périmètre
      * <b>exclu</b> : chaque appelant l'ajoute explicitement.
      */
-    private static Specification<ComProspection> specProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes, FiltresAvancesProspection filtres) {
-        return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
+    private static Specification<ComProspection> specProspections(CriteresListe criteres,
+                                                                  FiltresAvancesProspection filtres) {
+        return buildSpec(criteres)
                 .and(filtresAvances(filtres))
                 .and(DiscriminantPreProspection.nEstPasPreProspection());
     }
 
-    private static Specification<ComProspection> specPreProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes) {
-        return buildSpec(etapes, origines, commerciaux, trancheIds, dateDebut, dateFin, search, ouvertes)
+    private static Specification<ComProspection> specPreProspections(CriteresListe criteres) {
+        return buildSpec(criteres)
                 .and(DiscriminantPreProspection.estPreProspection());
     }
 
-    private static Specification<ComProspection> buildSpec(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (etapes != null && !etapes.isEmpty()) {
-                List<String> etapesLower = etapes.stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("comProspectionKind").get("code")).in(etapesLower));
-            }
-            if (origines != null && !origines.isEmpty()) {
-                List<String> originesLower = origines.stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("comProspectionOrigin").get("code")).in(originesLower));
-            }
-            if (commerciaux != null && !commerciaux.isEmpty()) {
-                predicates.add(root.get("cfgCommercial").get("id").in(commerciaux));
-            }
-            if (trancheIds != null && !trancheIds.isEmpty()) {
-                predicates.add(AppartenanceTranche.prospection(root, trancheIds));
-            }
-            if (dateDebut != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), dateDebut));
-            }
-            if (dateFin != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("docDate"), dateFin));
-            }
-            if (StringUtils.hasText(search)) {
-                String pattern = "%" + search.toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("code")), pattern),
-                        cb.like(cb.lower(root.get("tempDescription")), pattern),
-                        cb.like(cb.lower(root.get("tempTel")), pattern),
-                        cb.like(cb.lower(root.get("tempEMail")), pattern)
-                ));
-            }
-            // Ternaire : absent = tout, true = ouvertes, false = archivées. NULL compte comme
-            // ouverte — OMRAN écrit 0 et NULL (FEATURE-creation-pre-prospection.md §2).
-            if (ouvertes != null) {
-                predicates.add(ouvertes
-                        ? cb.or(cb.isFalse(root.get("isClosed")), cb.isNull(root.get("isClosed")))
-                        : cb.isTrue(root.get("isClosed")));
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+    /** Filtres simples communs aux listes de prospections et de pré-prospections. */
+    private record CriteresListe(List<String> etapes, List<String> origines, List<UUID> commerciaux,
+                                 List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+                                 String search, Boolean ouvertes) {
+    }
+
+    private static Specification<ComProspection> buildSpec(CriteresListe c) {
+        return (root, query, cb) -> predicatDeBase(c, root, cb);
+    }
+
+    private static Predicate predicatDeBase(CriteresListe c, Root<ComProspection> root, CriteriaBuilder cb) {
+        List<Predicate> predicates = new ArrayList<>();
+        if (estRenseignee(c.etapes())) {
+            List<String> etapesLower = c.etapes().stream().map(String::toLowerCase).toList();
+            predicates.add(cb.lower(root.get("comProspectionKind").get("code")).in(etapesLower));
+        }
+        if (estRenseignee(c.origines())) {
+            List<String> originesLower = c.origines().stream().map(String::toLowerCase).toList();
+            predicates.add(cb.lower(root.get("comProspectionOrigin").get("code")).in(originesLower));
+        }
+        if (estRenseignee(c.commerciaux())) {
+            predicates.add(root.get("cfgCommercial").get("id").in(c.commerciaux()));
+        }
+        if (estRenseignee(c.trancheIds())) {
+            predicates.add(AppartenanceTranche.prospection(root, c.trancheIds()));
+        }
+        if (c.dateDebut() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), c.dateDebut()));
+        }
+        if (c.dateFin() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("docDate"), c.dateFin()));
+        }
+        if (StringUtils.hasText(c.search())) {
+            predicates.add(predicatRecherche(root, cb, c.search()));
+        }
+        if (c.ouvertes() != null) {
+            predicates.add(predicatOuvertes(root, cb, c.ouvertes()));
+        }
+        return cb.and(predicates.toArray(new Predicate[0]));
+    }
+
+    private static Predicate predicatRecherche(Root<ComProspection> root, CriteriaBuilder cb, String search) {
+        String pattern = "%" + search.toLowerCase() + "%";
+        return cb.or(
+                cb.like(cb.lower(root.get("code")), pattern),
+                cb.like(cb.lower(root.get("tempDescription")), pattern),
+                cb.like(cb.lower(root.get("tempTel")), pattern),
+                cb.like(cb.lower(root.get("tempEMail")), pattern)
+        );
+    }
+
+    // Ternaire : absent = tout, true = ouvertes, false = archivées. NULL compte comme
+    // ouverte — OMRAN écrit 0 et NULL (FEATURE-creation-pre-prospection.md §2).
+    private static Predicate predicatOuvertes(Root<ComProspection> root, CriteriaBuilder cb, boolean ouvertes) {
+        return ouvertes
+                ? cb.or(cb.isFalse(root.get(IS_CLOSED)), cb.isNull(root.get(IS_CLOSED)))
+                : cb.isTrue(root.get(IS_CLOSED));
     }
 
     /** Voir {@link FiltresAvancesProspection} ; prédicat neutre quand aucun n'est renseigné. */
@@ -372,38 +397,11 @@ public class ProspectionService {
             if (f == null) {
                 return cb.conjunction();
             }
-            List<Predicate> predicates = new ArrayList<>();
-            // -- Portés par l'entité. Filtre actif = jointure interne, qui écarte les lignes sans
-            //    valeur : voulu (une prospection sans tranche n'a pas de projet).
-            if (estRenseignee(f.projetId())) {
-                predicates.add(root.get("stkHierarchy").get("cfgProject").get("id").in(f.projetId()));
-            }
-            if (estRenseignee(f.societeId())) {
-                predicates.add(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("id")
-                        .in(f.societeId()));
-            }
-            if (estRenseignee(f.vocationId())) {
-                predicates.add(root.get("stkVocation").get("id").in(f.vocationId()));
-            }
-            if (estRenseignee(f.typeContactId())) {
-                predicates.add(root.get("comActionMessageType").get("id").in(f.typeContactId()));
-            }
-            if (estRenseignee(f.raisonFermetureId())) {
-                predicates.add(root.get("comProspectionClosingReason").get("id").in(f.raisonFermetureId()));
-            }
-            if (estRenseignee(f.paysId())) {
-                predicates.add(root.get("admCountry").get("id").in(f.paysId()));
-            }
-            if (estRenseignee(f.actionId())) {
-                predicates.add(root.get("comAction").get("id").in(f.actionId()));
-            }
-            if (estRenseignee(f.origineSupportId())) {
-                predicates.add(root.get("comProspectionOriginSupport").get("id").in(f.origineSupportId()));
-            }
+            List<Predicate> predicates = predicatsDeLEntite(f, root);
             if (f.ancienClient() != null) {
-                predicates.add(f.ancienClient()
-                        ? cb.isTrue(root.get("isOldCustomer"))
-                        : cb.or(cb.isFalse(root.get("isOldCustomer")), cb.isNull(root.get("isOldCustomer"))));
+                predicates.add(Boolean.TRUE.equals(f.ancienClient())
+                        ? cb.isTrue(root.get(IS_OLD_CUSTOMER))
+                        : cb.or(cb.isFalse(root.get(IS_OLD_CUSTOMER)), cb.isNull(root.get(IS_OLD_CUSTOMER))));
             }
             // -- Type de document : sous-requête par code, un code inconnu rend un résultat vide.
             //    Une ligne sans StrEntityId est écartée (NULL IN (…) est inconnu) : voulu.
@@ -419,6 +417,40 @@ public class ProspectionService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Filtres avancés portés par l'entité. Filtre actif = jointure interne, qui écarte les lignes
+     * sans valeur : voulu (une prospection sans tranche n'a pas de projet).
+     */
+    private static List<Predicate> predicatsDeLEntite(FiltresAvancesProspection f, Root<ComProspection> root) {
+        List<Predicate> predicates = new ArrayList<>();
+        if (estRenseignee(f.projetId())) {
+            predicates.add(root.get("stkHierarchy").get("cfgProject").get("id").in(f.projetId()));
+        }
+        if (estRenseignee(f.societeId())) {
+            predicates.add(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("id")
+                    .in(f.societeId()));
+        }
+        if (estRenseignee(f.vocationId())) {
+            predicates.add(root.get("stkVocation").get("id").in(f.vocationId()));
+        }
+        if (estRenseignee(f.typeContactId())) {
+            predicates.add(root.get("comActionMessageType").get("id").in(f.typeContactId()));
+        }
+        if (estRenseignee(f.raisonFermetureId())) {
+            predicates.add(root.get("comProspectionClosingReason").get("id").in(f.raisonFermetureId()));
+        }
+        if (estRenseignee(f.paysId())) {
+            predicates.add(root.get("admCountry").get("id").in(f.paysId()));
+        }
+        if (estRenseignee(f.actionId())) {
+            predicates.add(root.get("comAction").get("id").in(f.actionId()));
+        }
+        if (estRenseignee(f.origineSupportId())) {
+            predicates.add(root.get("comProspectionOriginSupport").get("id").in(f.origineSupportId()));
+        }
+        return predicates;
     }
 
     /**
@@ -449,7 +481,7 @@ public class ProspectionService {
             criteres.add(cb.lessThanOrEqualTo(vue.get("lastCommunicationDate"), f.communicationJusqua()));
         }
         if (f.avecAlerteActive() != null) {
-            criteres.add(f.avecAlerteActive()
+            criteres.add(Boolean.TRUE.equals(f.avecAlerteActive())
                     ? cb.isNotNull(vue.get("lastActiveAlertDate"))
                     : cb.isNull(vue.get("lastActiveAlertDate")));
         }
@@ -464,7 +496,7 @@ public class ProspectionService {
     public ProspectionDetailDto findById(UUID id) {
         return prospectionRepository.findById(id)
                 .map(this::detailEnrichi)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
     }
 
     /**
@@ -537,7 +569,7 @@ public class ProspectionService {
      */
     public Page<HistoriqueDto> historique(UUID prospectionId, Pageable pageable) {
         if (!prospectionRepository.existsById(prospectionId)) {
-            throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
+            throw new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId);
         }
         return historyRepository.findByObjectIdOrderByDocDateDesc(prospectionId, pageable)
                 .map(ProspectionService::toHistoriqueDto);
@@ -601,6 +633,19 @@ public class ProspectionService {
         // = … ne sont jamais vrais pour NULL (FEATURE-vues-legacy-prospection.md §8).
         prospection.setStrEntityId(idProspectionDeVente());
 
+        rattacherReferentiels(prospection, request);
+        rattacherTrancheALaCreation(prospection, prospect, request);
+        appliquerMontantsDemandes(prospection, request);
+        prospection.setNotes(notes);
+
+        prospection = prospectionRepository.save(prospection);
+        ecrireInteractionDeCreation(prospection);
+        enregistrerHistorique(prospection.getId(), TypeActionRecente.PROSPECTION_CREEE,
+                "prospect " + TierNomFormatter.nom(prospect));
+        return detailEnrichi(prospection);
+    }
+
+    private void rattacherReferentiels(ComProspection prospection, CreerProspectionRequest request) {
         if (request.commercialId() != null) {
             CfgTier commercial = tierRepository.findById(request.commercialId())
                     .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
@@ -608,56 +653,55 @@ public class ProspectionService {
         }
         if (request.origineId() != null) {
             ComProspectionOrigin origine = prospectionOriginRepository.findById(request.origineId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId()));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_INTROUVABLE + request.origineId()));
             prospection.setComProspectionOrigin(origine);
         }
         if (request.origineSupportId() != null) {
             ComProspectionOriginSupport support = prospectionOriginSupportRepository.findById(request.origineSupportId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId()));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_SUPPORT_INTROUVABLE + request.origineSupportId()));
             prospection.setComProspectionOriginSupport(support);
         }
         if (request.vocationId() != null) {
             StkVocation vocation = vocationRepository.findById(request.vocationId())
-                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId()));
+                    .orElseThrow(() -> new InvalidRequestException(VOCATION_INTROUVABLE + request.vocationId()));
             prospection.setStkVocation(vocation);
         }
         if (request.typeContactId() != null) {
             ComActionMessageType typeContact = actionMessageTypeRepository.findById(request.typeContactId())
-                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId()));
+                    .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.typeContactId()));
             prospection.setComActionMessageType(typeContact);
         }
         if (request.actionCommercialeId() != null) {
             ComAction action = actionRepository.findById(request.actionCommercialeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId()));
+                    .orElseThrow(() -> new InvalidRequestException(ACTION_INTROUVABLE + request.actionCommercialeId()));
             prospection.setComAction(action);
         }
         if (request.etapeId() != null) {
             ComProspectionKind kind = prospectionKindRepository.findById(request.etapeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId()));
+                    .orElseThrow(() -> new InvalidRequestException(ETAPE_INTROUVABLE + request.etapeId()));
             prospection.setComProspectionKind(kind);
         }
+    }
 
-        // Même validation croisée que modifierTranchePrincipale : l'article appartient à la tranche.
+    // Même validation croisée que modifierTranchePrincipale : l'article appartient à la tranche.
+    private void rattacherTrancheALaCreation(ComProspection prospection, CfgTier prospect,
+                                             CreerProspectionRequest request) {
         if (request.trancheId() != null) {
             CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de prospection sur la tranche " + tranche.getCode());
             verifierUniciteProspectProjet(prospect, tranche, null);
             if (request.articleId() != null) {
-                StkItem article = stkItemRepository.findById(request.articleId())
-                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
-                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-                    throw new InvalidRequestException(
-                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-                }
-                prospection.setStkItem(article);
+                prospection.setStkItem(articleDeLaTranche(request.articleId(), tranche));
             }
             prospection.setStkHierarchy(tranche);
         } else if (request.articleId() != null) {
             throw new InvalidRequestException("articleId nécessite trancheId");
         }
+    }
 
+    private static void appliquerMontantsDemandes(ComProspection prospection, CreerProspectionRequest request) {
         if (request.surface() != null) prospection.setArea(request.surface());
         if (request.surfaceJusqua() != null) prospection.setAreaTo(request.surfaceJusqua());
         if (request.prix() != null) prospection.setPrice(request.prix());
@@ -667,13 +711,24 @@ public class ProspectionService {
         if (request.financementCredit() != null) prospection.setFundingCredit(request.financementCredit());
         if (request.financementAutre() != null) prospection.setFundingOther(request.financementAutre());
         if (request.ancienClient() != null) prospection.setIsOldCustomer(request.ancienClient());
-        prospection.setNotes(notes);
+    }
 
-        prospection = prospectionRepository.save(prospection);
-        ecrireInteractionDeCreation(prospection);
-        enregistrerHistorique(prospection.getId(), TypeActionRecente.PROSPECTION_CREEE,
-                "prospect " + TierNomFormatter.nom(prospect));
-        return detailEnrichi(prospection);
+    /** L'article demandé, à condition qu'il appartienne à la tranche (400 sinon). */
+    private StkItem articleDeLaTranche(UUID articleId, CfgTranche tranche) {
+        StkItem article = stkItemRepository.findById(articleId)
+                .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId));
+        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+            throw new InvalidRequestException(
+                    "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
+        }
+        return article;
+    }
+
+    /** Vrai si la prospection porte un article qui n'est pas de {@code tranche}. */
+    private static boolean articleHorsTranche(ComProspection prospection, CfgTranche tranche) {
+        StkItem article = prospection.getStkItem();
+        return article != null
+                && (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId()));
     }
 
     // Résolu par code ; le repli sur la constante évite, sur un référentiel incomplet, une
@@ -701,7 +756,7 @@ public class ProspectionService {
      */
     @Transactional
     public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
-        ComProspection p = ecrirePreProspection(request, LocalDateTime.now(clock));
+        ComProspection p = nouvellePreProspection(request, LocalDateTime.now(clock));
         List<DoublonPreProspectionDto> doublons = visibles(doublonsContact(p)).stream()
                 .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
                 .toList();
@@ -753,7 +808,11 @@ public class ProspectionService {
     /** @param dateDocument maintenant pour une saisie, la colonne « Créé » de l'export pour un import */
     @Transactional
     public ComProspection ecrirePreProspection(CreerPreProspectionRequest request, LocalDateTime dateDocument) {
-        String nom = Requis.champ(texteLibre(request.nom()), "nom est requis (champ Nom)");
+        return nouvellePreProspection(request, dateDocument);
+    }
+
+    private ComProspection nouvellePreProspection(CreerPreProspectionRequest request, LocalDateTime dateDocument) {
+        String nom =Requis.champ(texteLibre(request.nom()), "nom est requis (champ Nom)");
         String telephone = texteLibre(request.telephone());
         String email = texteLibre(request.email());
         String notes = texteLibre(request.notes());
@@ -781,17 +840,11 @@ public class ProspectionService {
 
         if (request.trancheId() != null) {
             CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de pré-prospection sur la tranche " + tranche.getCode());
             if (request.articleId() != null) {
-                StkItem article = stkItemRepository.findById(request.articleId())
-                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
-                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-                    throw new InvalidRequestException(
-                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-                }
-                p.setStkItem(article);
+                p.setStkItem(articleDeLaTranche(request.articleId(), tranche));
             }
             p.setStkHierarchy(tranche);
         } else if (request.articleId() != null) {
@@ -799,27 +852,27 @@ public class ProspectionService {
         }
         if (request.etapeId() != null) {
             p.setComProspectionKind(prospectionKindRepository.findById(request.etapeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId())));
+                    .orElseThrow(() -> new InvalidRequestException(ETAPE_INTROUVABLE + request.etapeId())));
         }
         if (request.origineId() != null) {
             p.setComProspectionOrigin(prospectionOriginRepository.findById(request.origineId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId())));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_INTROUVABLE + request.origineId())));
         }
         if (request.origineSupportId() != null) {
             p.setComProspectionOriginSupport(prospectionOriginSupportRepository.findById(request.origineSupportId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId())));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_SUPPORT_INTROUVABLE + request.origineSupportId())));
         }
         if (request.typeContactId() != null) {
             p.setComActionMessageType(actionMessageTypeRepository.findById(request.typeContactId())
-                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId())));
+                    .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.typeContactId())));
         }
         if (request.actionCommercialeId() != null) {
             p.setComAction(actionRepository.findById(request.actionCommercialeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId())));
+                    .orElseThrow(() -> new InvalidRequestException(ACTION_INTROUVABLE + request.actionCommercialeId())));
         }
         if (request.vocationId() != null) {
             p.setStkVocation(vocationRepository.findById(request.vocationId())
-                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId())));
+                    .orElseThrow(() -> new InvalidRequestException(VOCATION_INTROUVABLE + request.vocationId())));
         } else {
             // Défaut silencieux : une base sans référentiel de vocation (yesRemsTest) laisse NULL.
             vocationRepository.findFirstByCode(CODE_VOCATION_VENTE).ifPresent(p::setStkVocation);
@@ -840,7 +893,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto creerProspect(UUID prospectionId, CreerProspectRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId));
 
         if (prospection.getCfgProspect() != null) {
             throw new InvalidRequestException("Cette prospection a déjà un prospect lié: " + prospectionId);
@@ -861,7 +914,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto lierProspect(UUID prospectionId, LierProspectRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId));
 
         if (prospection.getCfgProspect() != null) {
             throw new InvalidRequestException("Cette prospection a déjà un prospect lié: " + prospectionId);
@@ -921,7 +974,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto transformer(UUID id, TransformerProspectionRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         if (prospection.getCfgProspect() == null) {
             throw new InvalidRequestException(
@@ -932,33 +985,7 @@ public class ProspectionService {
         CfgTier commercial = tierRepository.findById(request.commercialId())
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
 
-        if (request.trancheId() != null) {
-            CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
-            perimetreService.verifierEcritureSurTranche(tranche,
-                    "Transformation de prospection sur la tranche " + tranche.getCode());
-            if (request.articleId() != null) {
-                StkItem article = stkItemRepository.findById(request.articleId())
-                        .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
-                if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-                    throw new InvalidRequestException(
-                            "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-                }
-                prospection.setStkItem(article);
-            } else if (prospection.getStkItem() != null
-                    && (prospection.getStkItem().getStkHierarchy() == null
-                        || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {
-                // Article de l'ancienne tranche : désassigné plutôt que laissé incohérent.
-                prospection.setStkItem(null);
-            }
-            prospection.setStkHierarchy(tranche);
-        } else if (request.articleId() != null) {
-            throw new InvalidRequestException("articleId nécessite trancheId");
-        } else if (prospection.getStkHierarchy() == null) {
-            throw new InvalidRequestException(
-                    "Une tranche (projet) est obligatoire pour transformer en prospection : "
-                    + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
-        }
+        rattacherTrancheALaTransformation(prospection, request);
 
         // Le couple (prospect, projet) devient une prospection ici.
         verifierUniciteProspectProjet(prospection.getCfgProspect(), prospection.getStkHierarchy(), id);
@@ -979,15 +1006,37 @@ public class ProspectionService {
         return detailEnrichi(prospection);
     }
 
+    private void rattacherTrancheALaTransformation(ComProspection prospection, TransformerProspectionRequest request) {
+        if (request.trancheId() != null) {
+            CfgTranche tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            perimetreService.verifierEcritureSurTranche(tranche,
+                    "Transformation de prospection sur la tranche " + tranche.getCode());
+            if (request.articleId() != null) {
+                prospection.setStkItem(articleDeLaTranche(request.articleId(), tranche));
+            } else if (articleHorsTranche(prospection, tranche)) {
+                // Article de l'ancienne tranche : désassigné plutôt que laissé incohérent.
+                prospection.setStkItem(null);
+            }
+            prospection.setStkHierarchy(tranche);
+        } else if (request.articleId() != null) {
+            throw new InvalidRequestException("articleId nécessite trancheId");
+        } else if (prospection.getStkHierarchy() == null) {
+            throw new InvalidRequestException(
+                    "Une tranche (projet) est obligatoire pour transformer en prospection : "
+                    + "fournir trancheId, ou rattacher d'abord une tranche (PATCH /api/prospections/{id}/tranche-principale).");
+        }
+    }
+
     /** Pas de table de transitions : seule la valeur d'arrivée compte ({@link #ETAPE_APRES_VISITE} → remerciement). */
     @Transactional
     public ProspectionDetailDto changerEtape(UUID id, ChangerEtapeRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         Requis.champ(request.etapeId(), "etapeId est requis");
         ComProspectionKind kind = prospectionKindRepository.findById(request.etapeId())
-                .orElseThrow(() -> new InvalidRequestException("ComProspectionKind introuvable: " + request.etapeId()));
+                .orElseThrow(() -> new InvalidRequestException(ETAPE_INTROUVABLE + request.etapeId()));
 
         ComProspectionKind ancienne = prospection.getComProspectionKind();
         prospection.setComProspectionKind(kind);
@@ -1022,31 +1071,31 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto modifierProspection(UUID id, ModifierProspectionRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         if (request.origineId() != null) {
             ComProspectionOrigin origine = prospectionOriginRepository.findById(request.origineId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOrigin introuvable: " + request.origineId()));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_INTROUVABLE + request.origineId()));
             prospection.setComProspectionOrigin(origine);
         }
         if (request.origineSupportId() != null) {
             ComProspectionOriginSupport support = prospectionOriginSupportRepository.findById(request.origineSupportId())
-                    .orElseThrow(() -> new InvalidRequestException("ComProspectionOriginSupport introuvable: " + request.origineSupportId()));
+                    .orElseThrow(() -> new InvalidRequestException(ORIGINE_SUPPORT_INTROUVABLE + request.origineSupportId()));
             prospection.setComProspectionOriginSupport(support);
         }
         if (request.vocationId() != null) {
             StkVocation vocation = vocationRepository.findById(request.vocationId())
-                    .orElseThrow(() -> new InvalidRequestException("StkVocation introuvable: " + request.vocationId()));
+                    .orElseThrow(() -> new InvalidRequestException(VOCATION_INTROUVABLE + request.vocationId()));
             prospection.setStkVocation(vocation);
         }
         if (request.typeContactId() != null) {
             ComActionMessageType typeContact = actionMessageTypeRepository.findById(request.typeContactId())
-                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.typeContactId()));
+                    .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.typeContactId()));
             prospection.setComActionMessageType(typeContact);
         }
         if (request.actionCommercialeId() != null) {
             ComAction action = actionRepository.findById(request.actionCommercialeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComAction introuvable: " + request.actionCommercialeId()));
+                    .orElseThrow(() -> new InvalidRequestException(ACTION_INTROUVABLE + request.actionCommercialeId()));
             prospection.setComAction(action);
         }
         if (request.surface() != null) prospection.setArea(request.surface());
@@ -1070,11 +1119,11 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto modifierTranchePrincipale(UUID id, ModifierTranchePrincipaleRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+                .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
         // Sinon le périmètre se contournerait en déplaçant la prospection vers un autre projet.
         perimetreService.verifierEcritureSurTranche(tranche,
                 "Rattachement de prospection à la tranche " + tranche.getCode());
@@ -1085,7 +1134,7 @@ public class ProspectionService {
 
         if (request.articleId() != null) {
             StkItem article = stkItemRepository.findById(request.articleId())
-                    .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
+                    .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + request.articleId()));
             if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
                 throw new InvalidRequestException(
                         "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
@@ -1109,7 +1158,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto archiver(UUID id, ArchiverProspectionRequest request) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         if (request.raisonId() == null && !StringUtils.hasText(request.raisonTexte())) {
             throw new InvalidRequestException("raisonId ou raisonTexte est requis");
@@ -1147,7 +1196,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto desarchiver(UUID id) {
         ComProspection prospection = prospectionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         if (!Boolean.TRUE.equals(prospection.getIsClosed())) {
             throw new ConflictException("La prospection " + id + " n'est pas archivée");
@@ -1169,7 +1218,7 @@ public class ProspectionService {
 
     public Page<InteractionDto> findInteractions(UUID prospectionId, Pageable pageable) {
         if (!prospectionRepository.existsById(prospectionId)) {
-            throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
+            throw new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId);
         }
         return actionMessageRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId, pageable)
                 .map(ProspectionService::toInteractionDto);
@@ -1178,7 +1227,7 @@ public class ProspectionService {
     @Transactional
     public InteractionDto addInteraction(UUID prospectionId, CreerInteractionRequest request) {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
+                .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId));
 
         if (!StringUtils.hasText(request.description())) {
             throw new InvalidRequestException("description est requise");
@@ -1207,7 +1256,7 @@ public class ProspectionService {
         message.setUserCreate(nomAuteur);
         message.setUserCreateDateTime(maintenant);
 
-        message.setIsIn(request.entrante() != null ? request.entrante() : true);
+        message.setIsIn(!Boolean.FALSE.equals(request.entrante()));
         message.setAlertValidityDate(request.dateAlerte());
 
         // Drapeaux posés comme les saisies manuelles du légataire : la vue calcule le dernier
@@ -1222,7 +1271,7 @@ public class ProspectionService {
 
         if (request.actionTypeId() != null) {
             ComActionMessageType actionType = actionMessageTypeRepository.findById(request.actionTypeId())
-                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageType introuvable: " + request.actionTypeId()));
+                    .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.actionTypeId()));
             message.setComActionMessageType(actionType);
         }
 
@@ -1448,79 +1497,83 @@ public class ProspectionService {
         // Associations déréférencées seulement si leur colonne est demandée : chacune coûte un
         // chargement paresseux par ligne (deux pour la société).
         CfgTranche tranche = p.getStkHierarchy();
-        CfgProject projet = colonnes.contains(ColonneProspection.SOCIETE_ID)
+        boolean societeDemandee = colonnes.contains(ColonneProspection.SOCIETE_ID)
                 || colonnes.contains(ColonneProspection.SOCIETE_CODE)
-                || colonnes.contains(ColonneProspection.SOCIETE_LIBELLE)
-                ? (tranche != null ? tranche.getCfgProject() : null)
-                : null;
-        CfgCompany societe = projet != null ? projet.getCfgCompany() : null;
+                || colonnes.contains(ColonneProspection.SOCIETE_LIBELLE);
+        CfgProject projet = societeDemandee ? Champs.de(tranche, CfgTranche::getCfgProject) : null;
+        CfgCompany societe = Champs.de(projet, CfgProject::getCfgCompany);
+        CfgTier prospect = p.getCfgProspect();
+        CfgTier commercial = p.getCfgCommercial();
         return new ProspectionListItemDto(
                 p.getId(),
                 p.getCode(),
                 p.getDocDate(),
                 p.getTempDescription(),
-                p.getCfgProspect() != null ? p.getCfgProspect().getId() : null,
-                TierNomFormatter.nom(p.getCfgProspect()),
-                p.getCfgCommercial() != null ? p.getCfgCommercial().getId() : null,
-                TierNomFormatter.nom(p.getCfgCommercial()),
-                p.getComProspectionOrigin() != null ? p.getComProspectionOrigin().getCode() : null,
-                p.getComProspectionKind() != null ? p.getComProspectionKind().getCode() : null,
+                Champs.de(prospect, CfgTier::getId),
+                TierNomFormatter.nom(prospect),
+                Champs.de(commercial, CfgTier::getId),
+                TierNomFormatter.nom(commercial),
+                Champs.de(p.getComProspectionOrigin(), ComProspectionOrigin::getCode),
+                Champs.de(p.getComProspectionKind(), ComProspectionKind::getCode),
                 p.getIsClosed(),
                 p.getPrice(),
                 p.getArea(),
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getId() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getCode() : null,
-                p.getStkHierarchy() != null ? p.getStkHierarchy().getDescription() : null,
-                telephoneProspect(p.getCfgProspect(), p),
-                emailProspect(p.getCfgProspect(), p),
-                alerte != null ? alerte.getDateAlerte() : null,
-                alerte != null ? alerte.getMessage() : null,
-                vue != null ? vue.getInactivityTimeout() : null,
-                vue != null ? vue.getActionsMessageNumber() : null,
-                vue != null ? vue.getLastActionDate() : null,
-                vue != null ? vue.getLastCommunicationDate() : null,
-                vue != null ? videEnNull(vue.getLastCommunicationResult()) : null,
-                vue != null ? vue.getNbrVisit() : null,
-                vue != null ? vue.getLastVisitDate() : null,
-                vue != null ? vue.getCfgProjectId() : null,
-                vue != null ? videEnNull(vue.getCfgProjectCode()) : null,
-                vue != null ? videEnNull(vue.getCfgProjectDescription()) : null,
-                vue != null ? videEnNull(vue.getCfgTierIdNumber()) : null,
-                vue != null ? vue.getComFolderId() : null,
-                vue != null ? videEnNull(vue.getComFolderCode()) : null,
-                vue != null ? videEnNull(vue.getStatus()) : null,
-                p.getCfgProspect() != null ? p.getCfgProspect().getCode() : null,
-                p.getCfgProspect() != null ? p.getCfgProspect().getMobile() : null,
-                p.getCfgProspect() != null ? p.getCfgProspect().getMobileIndicatif() : null,
-                p.getCfgProspect() != null ? p.getCfgProspect().getEMail() : null,
-                p.getCfgCommercial() != null ? p.getCfgCommercial().getCode() : null,
+                Champs.de(tranche, CfgTranche::getId),
+                Champs.de(tranche, CfgTranche::getCode),
+                Champs.de(tranche, CfgTranche::getDescription),
+                telephoneProspect(prospect, p),
+                emailProspect(prospect, p),
+                Champs.de(alerte, DerniereAlerteProjection::getDateAlerte),
+                Champs.de(alerte, DerniereAlerteProjection::getMessage),
+                Champs.de(vue, ComSaleProspectionView::getInactivityTimeout),
+                Champs.de(vue, ComSaleProspectionView::getActionsMessageNumber),
+                Champs.de(vue, ComSaleProspectionView::getLastActionDate),
+                Champs.de(vue, ComSaleProspectionView::getLastCommunicationDate),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getLastCommunicationResult)),
+                Champs.de(vue, ComSaleProspectionView::getNbrVisit),
+                Champs.de(vue, ComSaleProspectionView::getLastVisitDate),
+                Champs.de(vue, ComSaleProspectionView::getCfgProjectId),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getCfgProjectCode)),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getCfgProjectDescription)),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getCfgTierIdNumber)),
+                Champs.de(vue, ComSaleProspectionView::getComFolderId),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getComFolderCode)),
+                videEnNull(Champs.de(vue, ComSaleProspectionView::getStatus)),
+                Champs.de(prospect, CfgTier::getCode),
+                Champs.de(prospect, CfgTier::getMobile),
+                Champs.de(prospect, CfgTier::getMobileIndicatif),
+                Champs.de(prospect, CfgTier::getEMail),
+                Champs.de(commercial, CfgTier::getCode),
                 p.getIsOldCustomer(),
                 p.getClosingDate(),
-                colonnes.contains(ColonneProspection.RAISON_FERMETURE)
-                        && p.getComProspectionClosingReason() != null
-                        ? p.getComProspectionClosingReason().getDescription() : null,
-                colonnes.contains(ColonneProspection.TYPE_PROSPECT)
-                        && p.getCfgProspect() != null && p.getCfgProspect().getCfgTierType() != null
-                        ? p.getCfgProspect().getCfgTierType().getCode() : null,
-                colonnes.contains(ColonneProspection.ORIGINE_SUPPORT)
-                        && p.getComProspectionOriginSupport() != null
-                        ? p.getComProspectionOriginSupport().getDescription() : null,
-                colonnes.contains(ColonneProspection.ACTION_COMMERCIALE) && p.getComAction() != null
-                        ? p.getComAction().getDescription() : null,
-                colonnes.contains(ColonneProspection.PAYS) && p.getAdmCountry() != null
-                        ? p.getAdmCountry().getDescription() : null,
-                societe != null ? societe.getId() : null,
-                societe != null ? societe.getCode() : null,
-                societe != null ? societe.getDescription() : null,
+                siDemandee(colonnes, ColonneProspection.RAISON_FERMETURE, () -> Champs.de(
+                        p.getComProspectionClosingReason(), ComProspectionClosingReason::getDescription)),
+                siDemandee(colonnes, ColonneProspection.TYPE_PROSPECT, () -> Champs.de(
+                        prospect, CfgTier::getCfgTierType, CfgTierType::getCode)),
+                siDemandee(colonnes, ColonneProspection.ORIGINE_SUPPORT, () -> Champs.de(
+                        p.getComProspectionOriginSupport(), ComProspectionOriginSupport::getDescription)),
+                siDemandee(colonnes, ColonneProspection.ACTION_COMMERCIALE, () -> Champs.de(
+                        p.getComAction(), ComAction::getDescription)),
+                siDemandee(colonnes, ColonneProspection.PAYS, () -> Champs.de(
+                        p.getAdmCountry(), AdmCountry::getDescription)),
+                Champs.de(societe, CfgCompany::getId),
+                Champs.de(societe, CfgCompany::getCode),
+                Champs.de(societe, CfgCompany::getDescription),
                 p.getUserCreate(),
                 p.getUserCreateDateTime(),
                 p.getUserUpdate(),
                 p.getUserUpdateDateTime(),
                 // Connu sans jointure, mais conditionné comme ses deux voisins pour rester cohérent.
-                colonnes.contains(ColonneProspection.TYPE_PROSPECTION_ID) ? p.getStrEntityId() : null,
-                type != null ? type.getCode() : null,
-                type != null ? type.getDescription() : null
+                siDemandee(colonnes, ColonneProspection.TYPE_PROSPECTION_ID, p::getStrEntityId),
+                Champs.de(type, StrEntity::getCode),
+                Champs.de(type, StrEntity::getDescription)
         );
+    }
+
+    /** Valeur lue seulement si sa colonne est demandée : la lecture peut coûter un chargement paresseux. */
+    private static <T> T siDemandee(Set<ColonneProspection> colonnes, ColonneProspection colonne,
+                                    Supplier<T> lecture) {
+        return colonnes.contains(colonne) ? lecture.get() : null;
     }
 
     /** Passer par {@link #detailEnrichi(ComProspection)} pour une réponse d'API. */

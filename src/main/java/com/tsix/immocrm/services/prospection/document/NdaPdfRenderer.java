@@ -93,9 +93,10 @@ public class NdaPdfRenderer {
             document.add(spacer());
 
             Paragraph footer = new Paragraph(
-                    "Ayad Developpement - 100 Boulevard Mohamed Zerktouni, Casablanca 20250, Morocco\n"
-                            + "Email: issam@ayaddeveloppement.com - Telephone: +212 5222-73496 or +212 6 49 044 133\n"
-                            + "© AYAD Private Limited",
+                    """
+                    Ayad Developpement - 100 Boulevard Mohamed Zerktouni, Casablanca 20250, Morocco
+                    Email: issam@ayaddeveloppement.com - Telephone: +212 5222-73496 or +212 6 49 044 133
+                    © AYAD Private Limited""",
                     FOOTER);
             footer.setAlignment(Element.ALIGN_CENTER);
             document.add(footer);
