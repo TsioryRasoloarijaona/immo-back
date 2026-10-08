@@ -89,6 +89,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class DossierService {
 
+    /** Texte exact d'OMRAN : c'est lui qui distingue une prospection vendue d'une prospection perdue. */
+    public static final String TEXTE_CLOTURE_VENTE = "Création dossier de vente";
+
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
     private final ComProspectionRepository prospectionRepository;
@@ -565,13 +568,14 @@ public class DossierService {
     }
 
     /**
-     * Comme OMRAN à chaque vente : ferme la prospection, sans motif de clôture (le légataire n'en
-     * pose presque jamais), et désarme ses relances hors échéance. Voir
+     * Comme OMRAN à chaque vente : ferme la prospection avec le texte de clôture qu'il écrit
+     * (pas de motif codé), et désarme toutes ses alertes, comme l'archivage. Voir
      * {@code FEATURE-conformite-legataire.md} §2.
      */
     private void cloturerLaProspection(ComProspection prospection) {
         prospection.setIsClosed(true);
         prospection.setClosingDate(LocalDateTime.now());
+        prospection.setClosingReasonText(TEXTE_CLOTURE_VENTE);
         prospectionRepository.save(prospection);
         alerteRelanceService.desarmerToutes(prospection.getId());
     }

@@ -55,6 +55,9 @@ class DossierCreateTest {
     private ComProspectionRepository prospectionRepository;
 
     @Autowired
+    private com.tsix.immocrm.repositories.adm.AdmAlertDataRepository alerteRepository;
+
+    @Autowired
     private ComActionMessageRepository actionMessageRepository;
 
     @Autowired
@@ -213,6 +216,20 @@ class DossierCreateTest {
         sansAlerte.setWithoutRevival(false);
         actionMessageRepository.save(sansAlerte);
 
+        // L'alerte de tableau de bord liée à la relance : la vente l'éteint, comme l'archivage.
+        com.tsix.immocrm.entities.adm.AdmAlertData alerte = new com.tsix.immocrm.entities.adm.AdmAlertData();
+        alerte.setId(UUID.randomUUID());
+        alerte.setCode(alerte.getId().toString());
+        alerte.setDescription(com.tsix.immocrm.entities.adm.AdmAlertData.DESCRIPTION_ALERTE);
+        alerte.setGroupping(com.tsix.immocrm.entities.adm.AdmAlertData.GROUPE_PROSPECTION);
+        alerte.setMessage("relance avant vente");
+        alerte.setAlertDate(LocalDateTime.now().plusDays(7));
+        alerte.setRelatedKey(relance.getId());
+        alerte.setRightKey(com.tsix.immocrm.entities.adm.AdmAlertData.DROIT_COMMUNICATION);
+        alerte.setActive(true);
+        // saveAndFlush : le désarmement passe par une requête native, sans auto-flush.
+        alerteRepository.saveAndFlush(alerte);
+
         String body = """
                 {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-CLOTURE"}
                 """.formatted(prospection.getId(), item.getId(), modePaie.getId());
@@ -228,9 +245,13 @@ class DossierCreateTest {
                 .as("la prospection transformée doit sortir du pipeline")
                 .isTrue();
         org.assertj.core.api.Assertions.assertThat(fermee.getClosingDate()).isNotNull();
-        // Aucun motif : seules 20 des 354 clôtures réelles en portent un (5,6 %). En exiger un
-        // serait plus strict que le légataire ; en inventer un fabriquerait une statistique fausse.
+        // Aucun motif codé (le légataire n'en pose pas), mais son texte de clôture « vente ».
         org.assertj.core.api.Assertions.assertThat(fermee.getComProspectionClosingReason()).isNull();
+        org.assertj.core.api.Assertions.assertThat(fermee.getClosingReasonText())
+                .isEqualTo(com.tsix.immocrm.services.dossier.DossierService.TEXTE_CLOTURE_VENTE);
+        org.assertj.core.api.Assertions.assertThat(alerteRepository.findById(alerte.getId()).orElseThrow().getActive())
+                .as("l'alerte de la prospection vendue doit être éteinte")
+                .isFalse();
 
         org.assertj.core.api.Assertions.assertThat(
                         actionMessageRepository.findById(relance.getId()).orElseThrow().getWithoutRevival())
