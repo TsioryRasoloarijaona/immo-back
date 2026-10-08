@@ -54,7 +54,6 @@ final class FichierDocMarkdown {
                 tampon.add(ligne);
                 continue;
             }
-            // Clôture de ce qui était en cours.
             String texte = texte(tampon);
             tampon.clear();
             if (titre == null) {

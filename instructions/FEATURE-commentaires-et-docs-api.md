@@ -302,6 +302,24 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
   37 qui n'en ont aucun.
 - **`AdmUserHabilitation`** : 346 lignes tranche, 302 PrjProject, 237 société,
   196 projet.
+- **Actuator (`SecurityConfig`)** : vérifié en production, `9091/actuator/health` rend
+  200 sans cookie, `9091/actuator/metrics` 401. Sur le port 8080 les chemins actuator
+  n'ont pas de handler et répondent 401 : `https://api.tsiory.tech/actuator/health` qui
+  ne répond pas n'est **pas** une panne.
+- **CSRF désactivé (`CookieJwt` / `SecurityConfig`)** : scénario écarté par
+  `SameSite=Strict` — un formulaire HTML d'un autre site poste vers l'API, le cookie
+  part avec, l'attaquant ne lit pas la réponse mais l'écriture passe. Si SameSite passe
+  à `None`, il faut un en-tête applicatif.
+- **`UtilisateurAffiche`** : 13 lignes constatées du 18 au 22/09, invisibles sous tout
+  commercial dans le « Suivi des actions » d'OMRAN.
+- **`CleApiService` — SHA-256 et pas BCrypt** : BCrypt coûterait ~100 ms par appel.
+- **`EmailConfig`** : pool dimensionné sur quinze comptes actifs.
+- **`StockageFichiers` / `StockageProperties`** : URL présignée et TTL 15 min pour ne pas
+  faire transiter un téléchargement de 35 Mo par l'API.
+- **`RemonteeLecture`** : lots de 500 — une table de 14 000 lignes se traverse en
+  quelques dizaines d'aller-retours.
+- **`SynchronisationDescendante`** : la copie porte le schéma complet et ses 1 219 FK.
+- **`ArchivageTraceOmran`** : première passe ~43 000 lignes (42 793 dans la spec).
 
 ## Annexe — Défauts possibles relevés pendant le nettoyage (non corrigés)
 
@@ -346,6 +364,11 @@ nettoyage et absents de toute autre spec. La conclusion reste dans le code.
     excluent par jointure interne les lignes sans société (conflit possible avec R2).
 14. **Spec vs code** : `FEATURE-dashboard-omran.md` §4 exige la jointure
     `StkItem … IsUnderItem = 0` pour le bloc C ; le code l'omet volontairement.
+15. **Sécurité** : `JwtAuthenticationFilter` reprend les rôles des claims du token, pas
+    de la base : un rôle retiré reste actif jusqu'à expiration ou incrément de
+    `tokenVersion` (choix « stateless » non écrit).
+16. **Calcul dupliqué** : `PhoneNumberUtils` (9 derniers chiffres) et `NumeroTelephone`
+    (zéro de tête retiré) normalisent différemment les téléphones.
 
 ## Annexe — Incohérences du contrat relevées (non corrigées : I1 fige le texte)
 

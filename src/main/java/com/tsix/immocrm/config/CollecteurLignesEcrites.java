@@ -22,38 +22,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Note ce que la transaction courante écrit sur la source de vérité, pour le rapatrier ensuite
- * dans la copie de lecture.
- *
- * <p>Branché comme écouteur Hibernate {@code POST_INSERT} / {@code POST_UPDATE} par
- * {@link EnregistrementCollecteur}. <b>Aucun service n'appelle cette classe</b> : c'est tout
- * l'intérêt du montage. Une méthode d'écriture ajoutée demain sera couverte sans que personne
- * ait à y penser — là où une publication explicite par service serait oubliée tôt ou tard, en
- * silence.
- *
- * <h2>Pourquoi une variable liée au fil</h2>
- *
- * <p>Hibernate appelle ces écouteurs pendant le vidage de session, sur le fil de la requête et
- * sans contexte applicatif où ranger quoi que ce soit. La collecte y est donc rattachée, puis
- * vidée à la fin de la transaction — <b>validée ou annulée</b>, {@code afterCompletion} étant
- * appelé dans les deux cas. Le dépôt utilise déjà ce motif dans {@code web/ColonnesSelection}.
- *
- * <p>L'événement est publié dans {@code beforeCommit}, donc <b>avec</b> sa charge utile : son
- * écouteur est {@code @Async} et s'exécutera sur un autre fil, où cette variable n'existe plus.
+ * Écouteur Hibernate (insert, update, delete) qui note les lignes écrites sur la source pour les rapatrier dans la
+ * copie : aucun service ne l'appelle, une nouvelle écriture est couverte d'office. Collecte liée au fil, publiée avec
+ * sa charge utile (écouteur {@code @Async}) et vidée en fin de transaction, validée ou annulée.
  */
 public class CollecteurLignesEcrites
         implements PostInsertEventListener, PostUpdateEventListener, PostDeleteEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(CollecteurLignesEcrites.class);
 
-    /**
-     * Ordre des clés étrangères : un parent avant ses enfants. Rapatrier une prospection avant
-     * son tiers ferait échouer l'insertion sur une contrainte — et cet échec-là serait légitime.
-     *
-     * <p>Les tables absentes de cette liste passent en dernier, sans être écartées : mieux vaut
-     * tenter et journaliser un échec que taire silencieusement une écriture. La synchronisation
-     * périodique reste le filet.
-     */
+    /** Parent avant enfant. Une table absente passe en dernier sans être écartée : tenter et journaliser plutôt que taire. */
     static final List<String> ORDRE_CLES_ETRANGERES = List.of(
             "CfgProject", "CfgTranche", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
@@ -61,17 +39,9 @@ public class CollecteurLignesEcrites
             "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject");
 
-    /**
-     * Tables que le rapatriement ne doit <b>jamais</b> toucher.
-     *
-     * <p>{@code AdmSequence} porte les compteurs de numérotation. Toute cette architecture existe
-     * pour qu'un <b>seul</b> compteur serve — le recopier dans la copie y réinstallerait la
-     * divergence qu'on vient d'éteindre. Elle est bien écrite à chaque création (Hibernate la
-     * collecte, c'est mesuré), d'où cette exclusion explicite plutôt qu'implicite.
-     */
+    /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */
     static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
 
-    /** {@code @Table(name = ...)} par classe d'entité — résolu une fois, relu souvent. */
     private static final Map<Class<?>, String> TABLES = new ConcurrentHashMap<>();
 
     private static final ThreadLocal<LinkedHashSet<LigneEcrite>> EN_COURS = new ThreadLocal<>();
@@ -92,12 +62,7 @@ public class CollecteurLignesEcrites
         noter(evenement.getEntity(), evenement.getId());
     }
 
-    /**
-     * Une suppression se collecte comme une écriture : le rapatriement relit la ligne sur la
-     * source, et c'est son <b>absence</b> qui déclenche la suppression dans la copie (voir
-     * {@code RemonteeLecture#remonter}). Sans cette collecte, un {@code DELETE} validé sur la
-     * source laissait un fantôme dans la copie — que le CRM continuait d'afficher.
-     */
+    /** Collectée comme une écriture : c'est l'absence de la ligne à la relecture qui la supprime de la copie. */
     @Override
     public void onPostDelete(PostDeleteEvent evenement) {
         noter(evenement.getEntity(), evenement.getId());
@@ -105,8 +70,7 @@ public class CollecteurLignesEcrites
 
     private void noter(Object entite, Object id) {
         if (entite == null || !(id instanceof UUID pkey)) {
-            // Toutes les entités de ce schéma ont une PKey uniqueidentifier. Une clé d'un autre
-            // type signalerait un mapping inattendu, pas une ligne à rapatrier.
+            // Toute PKey de ce schéma est un uniqueidentifier : une autre clé est un mapping inattendu.
             return;
         }
         String table = tableDe(entite.getClass());
@@ -117,8 +81,7 @@ public class CollecteurLignesEcrites
         LinkedHashSet<LigneEcrite> collecte = EN_COURS.get();
         if (collecte == null) {
             if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-                // Écriture hors transaction gérée par Spring : rien à quoi accrocher la
-                // publication. La synchronisation périodique rattrapera cette ligne.
+                // Hors transaction Spring : rien où accrocher la publication, la synchro périodique rattrapera.
                 return;
             }
             collecte = new LinkedHashSet<>();
@@ -142,7 +105,7 @@ public class CollecteurLignesEcrites
         });
     }
 
-    /** Visible pour les tests : ce que la transaction courante a collecté jusqu'ici. */
+    /** Visible pour les tests. */
     static List<LigneEcrite> collecteCourante() {
         LinkedHashSet<LigneEcrite> collecte = EN_COURS.get();
         return collecte == null ? List.of() : List.copyOf(collecte);
@@ -153,21 +116,9 @@ public class CollecteurLignesEcrites
     }
 
     /**
-     * Publie la collecte une fois la validation acquise, et nettoie la variable de fil quoi
-     * qu'il advienne.
-     *
-     * <p><b>Pourquoi {@code afterCommit} et non {@code beforeCommit}</b>, contrairement au motif
-     * employé ailleurs dans le dépôt : le vidage de session d'Hibernate — celui qui déclenche
-     * {@code POST_INSERT} — a lieu à l'intérieur de {@code doCommit()}, donc <b>après</b> que
-     * Spring a déjà déroulé tous les {@code beforeCommit}. Publier là serait publier une
-     * collecte vide, et la synchronisation enregistrée au premier {@code POST_INSERT} arriverait
-     * de toute façon trop tard pour recevoir ce rappel. Mesuré : la collecte fonctionnait, la
-     * publication ne partait jamais.
-     *
-     * <p>Corollaire : l'écouteur ne peut pas être un
-     * {@code @TransactionalEventListener(AFTER_COMMIT)} — enregistré à ce stade, il ne serait
-     * pas appelé non plus. C'est un {@code @EventListener} ordinaire, et la garantie
-     * « seulement si la transaction a été validée » vient de ce rappel-ci, pas de l'annotation.
+     * {@code afterCommit} et non {@code beforeCommit} : le vidage Hibernate (qui déclenche les POST_*) a lieu dans
+     * {@code doCommit()}, après les {@code beforeCommit} ; y publier enverrait une collecte vide. Pour la même raison
+     * l'écouteur est un {@code @EventListener} ordinaire, pas un {@code @TransactionalEventListener}.
      */
     private final class Publication implements TransactionSynchronization {
 

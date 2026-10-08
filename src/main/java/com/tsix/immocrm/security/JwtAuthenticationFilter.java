@@ -24,16 +24,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Reads the {@code access_token} httpOnly cookie, verifies its signature/expiry, and — only if
- * its embedded {@code tokenVersion} claim still matches {@code AppUserCredential.tokenVersion} in
- * DB (a password change/admin reset bumps that, instantly invalidating older tokens without a
- * blacklist table) — populates the {@link SecurityContextHolder} with an
- * {@link AuthenticatedUser} principal and {@code ROLE_<AdmRole.Code>} authorities.
- * <p>
- * Never throws or rejects the request itself: a missing/invalid/stale-version cookie simply
- * leaves the security context empty, and {@code anyRequest().authenticated()} in
- * {@code SecurityConfig} is what turns that into a 401 — this filter's only job is "identify the
- * caller if possible".
+ * Lit le cookie JWT ; n'authentifie que si son {@code tokenVersion} égale celui d'{@code AppUserCredential}
+ * (un changement ou une réinitialisation de mot de passe l'incrémente : les anciens jetons meurent sans liste noire).
+ * Ne rejette jamais lui-même : contexte vide, et c'est {@code anyRequest().authenticated()} qui rend 401.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -92,7 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 new UsernamePasswordAuthenticationToken(principal, null, authorities));
                     });
         } catch (JwtException | IllegalArgumentException ex) {
-            // Malformed/expired/bad-signature token — leave the request unauthenticated.
+            // Jeton malformé, expiré ou mal signé : la requête reste anonyme.
         }
     }
 }

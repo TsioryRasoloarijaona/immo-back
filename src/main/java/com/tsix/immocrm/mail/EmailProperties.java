@@ -3,49 +3,26 @@ package com.tsix.immocrm.mail;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration de l'envoi d'email, préfixe {@code app.mail}.
- *
- * <p><b>Aucun secret ici.</b> L'hôte, le port, l'identifiant et le mot de passe de la boîte
- * passent par les propriétés natives de Spring ({@code spring.mail.*}), qui alimentent
- * l'autoconfiguration de {@code JavaMailSender} ; ils viennent de l'environnement du
- * processus comme {@code DB_PWD} et {@code JWT_SECRET}. Cette classe ne porte que ce qui
- * relève de l'application : qui signe le message, et où l'utilisateur doit se connecter.
- *
- * <p>Nommée {@code EmailProperties} et non {@code MailProperties} pour ne pas entrer en
- * collision avec la classe homonyme de Spring Boot, qui porte justement les
- * {@code spring.mail.*}.
- *
- * <p>Voir {@code instructions/FEATURE-service-envoi-email.md}.
+ * {@code app.mail} : expéditeur et URL seulement, les secrets SMTP passent par {@code spring.mail.*}. Pas
+ * {@code MailProperties}, homonyme de Spring Boot (FEATURE-service-envoi-email.md §4).
  */
 @ConfigurationProperties(prefix = "app.mail")
 public class EmailProperties {
 
-    /**
-     * Interrupteur général. À {@code false}, les envois sont ignorés et tracés, mais les
-     * endpoints qui les déclenchent continuent de fonctionner normalement — le mot de passe
-     * temporaire reste dans la réponse HTTP.
-     */
+    /** Faux : envois ignorés et tracés, les endpoints qui les déclenchent fonctionnent normalement. */
     private boolean actif = true;
 
-    /** Adresse d'expédition, ex. {@code no-reply@exemple.ma}. Vide = service inactif. */
+    /** Vide : repli sur le compte SMTP (voir {@code EnvoiEmailSmtp}). */
     private String expediteur;
 
-    /** Nom affiché à côté de l'adresse d'expédition dans le client de messagerie. */
     private String nomExpediteur = "Ayad Estate";
 
-    /**
-     * URL de l'application, citée dans le corps du message pour que le destinataire sache où
-     * se connecter. Jamais utilisée pour fabriquer un lien portant le mot de passe.
-     */
+    /** Citée dans le corps du message ; jamais utilisée pour fabriquer un lien portant le mot de passe. */
     private String urlApplication;
 
     /**
-     * Taille cumulée maximale des pièces jointes d'un message, en mégaoctets.
-     *
-     * <p>Calibré sur les fichiers réels : un {@code PLAN_ETAGE} pèse 4,6 Mo en moyenne et jusqu'à
-     * 5 Mo, un {@code PLAN} 1,5 Mo. Dix mégaoctets laissent donc passer deux plans d'étage ou six
-     * plans ordinaires, tout en restant sous les limites usuelles des boîtes destinataires — un
-     * message trop lourd n'est pas rejeté chez nous mais chez le client, silencieusement.
+     * Plafond cumulé : un message trop lourd est rejeté par la boîte destinataire, en silence
+     * (FEATURE-mail-confirmation-visite.md §4).
      */
     private int piecesJointesMaxMo = 10;
 
@@ -89,7 +66,6 @@ public class EmailProperties {
         this.piecesJointesMaxMo = piecesJointesMaxMo;
     }
 
-    /** Le plafond de {@link #getPiecesJointesMaxMo()} exprimé en octets. */
     public long piecesJointesMaxOctets() {
         return (long) piecesJointesMaxMo * 1024L * 1024L;
     }

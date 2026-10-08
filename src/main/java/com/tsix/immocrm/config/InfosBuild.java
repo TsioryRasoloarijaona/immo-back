@@ -10,26 +10,8 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * Quelle version de l'application tourne — lisible dans Grafana et sur {@code /actuator/info}.
- *
- * <p>Le tag d'image ({@code sha-15be641}) et le SHA complet du commit entrent dans l'image au
- * build : le workflow les passe en {@code build-args}, le {@code Dockerfile} les fixe en
- * variables d'environnement {@code APP_BUILD_TAG} / {@code APP_BUILD_COMMIT}, et
- * {@code application.properties} les relit. Hors image (IDE, tests), les deux valent
- * {@code inconnu}.
- *
- * <p>Deux sorties, pour deux usages :
- * <ul>
- *   <li>la jauge {@code immo_back_build_info{tag,commit} = 1}, le motif Prometheus classique
- *       pour porter une version : la valeur est constante, l'information est dans les labels.
- *       Un panneau Grafana « Version déployée » l'affiche par {@code {{tag}}} ; un changement de
- *       tag se voit sur l'axe du temps comme une nouvelle série ;</li>
- *   <li>{@code GET /actuator/info} → {@code {"build":{"tag":…,"commit":…}}}, pour un
- *       {@code curl} depuis l'hôte (port 9091, loopback seulement).</li>
- * </ul>
- *
- * <p>Sans plugin Maven {@code build-info} ni {@code git-commit-id} : le {@code pom.xml} ne bouge
- * pas, et la vérité vient du pipeline qui a réellement construit l'image, pas d'un checkout.
+ * Version déployée : jauge {@code immo_back_build_info{tag,commit} = 1} et {@code /actuator/info}. Tag et commit
+ * viennent des {@code build-args} du pipeline via l'environnement (pas de plugin Maven) ; {@code inconnu} hors image.
  */
 @Component
 public class InfosBuild implements InfoContributor {

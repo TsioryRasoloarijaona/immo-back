@@ -17,24 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Recopie dans la base de lecture une ligne qui vient d'être écrite sur la source de vérité.
- *
- * <p>Sans elle, ce qu'un utilisateur crée n'apparaîtrait qu'au cycle de synchronisation suivant :
- * il validerait un formulaire et ne verrait pas sa fiche. Cette classe ne traite donc que
- * <b>l'immédiat</b> — le rattrapage de masse, y compris de ce qu'OMRAN écrit de son côté, reste
- * le travail de la synchronisation périodique.
- *
- * <p><b>Elle relit la ligne depuis la source</b> au lieu de recopier l'entité en mémoire : c'est
- * la seule façon d'emporter ce que la base a réellement enregistré — valeurs par défaut,
- * colonnes calculées, et les déclencheurs que porte {@code ComFolder}.
- *
- * <p>Les écritures passent par {@code jdbcLecture}, donc en JDBC direct et non par JPA :
- * elles ne repassent pas par {@link CollecteurLignesEcrites}, et aucune boucle ne se forme.
- *
- * <p>Même condition d'activation que {@link DataSourceConfig}, et ce n'est pas une précaution
- * de confort : ce service dépend de {@code jdbcLecture} et de la source {@code ecriture}, qui
- * n'existent qu'en mode deux bases. Sans la condition, le contexte échouerait au démarrage en
- * mono-base — donc sur toute la suite de tests.
+ * Recopie aussitôt dans la copie une ligne écrite sur la source, pour que l'utilisateur voie ce qu'il vient de créer.
+ * Relit la ligne sur la source (défauts, colonnes calculées, déclencheurs de {@code ComFolder}) ; écrit en JDBC direct,
+ * donc sans repasser par {@link CollecteurLignesEcrites} (pas de boucle).
  */
 @Service
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
@@ -42,41 +27,19 @@ public class RemonteeLecture {
 
     private static final Logger log = LoggerFactory.getLogger(RemonteeLecture.class);
 
-    /**
-     * Colonne d'identité par table, quand ce n'est pas {@code PKey}. {@code AppFileObject} est en
-     * relation 1:1 avec sa ligne {@code AdmAttachedFile} et en partage la clé sous un autre nom.
-     */
+    /** Clé quand ce n'est pas {@code PKey} : {@code AppFileObject} partage celle de son {@code AdmAttachedFile}. */
     static final Map<String, String> CLES_PRIMAIRES = Map.of("AppFileObject", "AdmAttachedFileId");
 
     /**
-     * Colonnes que la source possède mais que la copie n'a <b>volontairement</b> pas — à ne pas
-     * confondre avec une dérive de schéma, qui doit continuer d'échouer bruyamment.
-     *
-     * <p>{@code AttachedFile} est le binaire FILESTREAM que lit le logiciel de bureau ; la copie
-     * l'a physiquement supprimé ({@code 004_drop_attachedfile_filestream.sql} — FILESTREAM
-     * n'existe pas sur SQL Server Linux) et son binaire vit sur S3, pointé par
-     * {@code AppFileObject}. Exclure la colonne du {@code SELECT} — et non du seul {@code MERGE} —
-     * évite aussi de faire transiter le fichier une seconde fois sur le réseau à chaque dépôt.
+     * Absentes de la copie <b>volontairement</b> (une dérive de schéma doit, elle, échouer) : {@code AttachedFile} est
+     * le FILESTREAM d'OMRAN, inexistant sur SQL Server Linux, binaire sur S3. Exclue du SELECT : il ne transite pas.
      */
     private static final Map<String, Set<String>> COLONNES_ABSENTES_DE_LA_COPIE =
             Map.of("AdmAttachedFile", Set.of("AttachedFile"));
 
     /**
-     * Colonnes dont la valeur (non nulle) désigne une ligne rattachée à un <b>module hors du
-     * périmètre répliqué</b> : la ligne référence alors une table non suivie, jamais présente dans
-     * la copie, et son {@code MERGE} échouerait sur la clé étrangère. On l'écarte de la copie
-     * plutôt que de faire échouer toute la table en boucle (son filigrane resterait figé et aucune
-     * autre ligne ne passerait).
-     *
-     * <p>{@code StlSettlementLine} : une ligne d'encaissement porte le document réglé par
-     * exactement une clé — {@code ComDocumentId} (vente, dans le périmètre) OU {@code BuyDocumentId}
-     * (achat) / {@code RntDocumentId} (location) / {@code StlDocumentId} (hors périmètre). Mesuré
-     * sur 3 227 lignes réelles : les 665 lignes de vente ({@code ComDocumentId} renseigné) ont ces
-     * trois colonnes nulles ; les 2 562 autres pointent vers un module non répliqué. Les exclure
-     * garde exactement les lignes de vente — les seules dont la copie a les parents.
-     *
-     * <p>Distinct de {@link #COLONNES_ABSENTES_DE_LA_COPIE} (qui retire une <i>colonne</i> de
-     * toutes les lignes) : ici on retire des <i>lignes entières</i>, sur critère de contenu.
+     * Non nulle = ligne d'un module non répliqué, dont le MERGE échouerait sur la clé étrangère et bloquerait la table :
+     * la ligne entière est écartée (FIX-synchro-lignes-hors-perimetre.md).
      */
     static final Map<String, List<String>> COLONNES_HORS_PERIMETRE =
             Map.of("StlSettlementLine", List.of("BuyDocumentId", "RntDocumentId", "StlDocumentId"));
@@ -84,13 +47,10 @@ public class RemonteeLecture {
     private final JdbcTemplate versLecture;
     private final JdbcTemplate depuisEcriture;
 
-    /** Instruction {@code MERGE} par table — construite une fois, réutilisée ensuite. */
     private final Map<String, String> fusions = new ConcurrentHashMap<>();
 
-    /** {@code SELECT} d'une ligne (par clé) par table — même régime que {@link #fusions}. */
     private final Map<String, String> selections = new ConcurrentHashMap<>();
 
-    /** {@code SELECT} de toutes les lignes (baseline) par table — même régime que {@link #fusions}. */
     private final Map<String, String> selectionsTout = new ConcurrentHashMap<>();
 
     public RemonteeLecture(@Qualifier("jdbcLecture") JdbcTemplate versLecture,
@@ -100,18 +60,9 @@ public class RemonteeLecture {
     }
 
     /**
-     * Rapatrie les lignes indiquées, dans l'ordre reçu — qui est déjà celui des clés étrangères.
-     *
-     * <p>Chaque ligne est traitée indépendamment : l'échec de l'une n'empêche pas les suivantes.
-     * Un échec est journalisé et <b>jamais propagé</b> — la ligne existe sur la source de vérité,
-     * qui fait foi, et la synchronisation périodique la reprendra. Faire échouer la requête de
-     * l'utilisateur pour un problème de copie serait signaler une perte qui n'a pas eu lieu.
-     *
-     * <p><b>Une ligne absente de la source est supprimée de la copie.</b> C'est ainsi que les
-     * {@code DELETE} voyagent : la suppression est collectée comme une écriture, la relecture ne
-     * trouve rien, et l'absence — la source faisant foi — se propage. Les suppressions passent
-     * <b>après</b> les fusions et en <b>ordre inverse</b> : la copie porte les clés étrangères du
-     * schéma complet, un parent supprimé avant ses enfants serait refusé.
+     * Dans l'ordre reçu (celui des clés étrangères). Un échec est journalisé, jamais propagé : la source fait foi.
+     * Une ligne absente de la source est supprimée de la copie (c'est ainsi que voyagent les DELETE), après les
+     * fusions et en ordre inverse, sinon un parent partirait avant ses enfants.
      */
     public void remonter(Collection<LigneEcrite> lignes) {
         List<LigneEcrite> absentes = new ArrayList<>();
@@ -137,12 +88,7 @@ public class RemonteeLecture {
         }
     }
 
-    /**
-     * {@code true} si la ligne existe sur la source et a été fusionnée dans la copie.
-     * Package-private : {@link SynchronisationDescendante} rejoue exactement ce chemin pour les
-     * deltas du Change Tracking — un seul {@code MERGE} dans le dépôt, quel que soit le sens
-     * d'arrivée de la ligne.
-     */
+    /** Vrai si la ligne existe sur la source. Réutilisé par {@link SynchronisationDescendante} : un seul MERGE. */
     boolean fusionner(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
         List<Map<String, Object>> trouvees = depuisEcriture.queryForList(
@@ -160,12 +106,7 @@ public class RemonteeLecture {
         return true;
     }
 
-    /**
-     * Répercute une suppression. Idempotente par nature ({@code DELETE} d'une ligne déjà
-     * absente : zéro ligne, zéro erreur) — le cas d'une ligne jamais rapatriée est donc gratuit.
-     * Package-private pour {@link SynchronisationDescendante}, même raison que
-     * {@link #fusionner}.
-     */
+    /** Idempotente : une ligne déjà absente ne coûte rien. */
     void supprimer(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
         int lignes = versLecture.update(
@@ -176,16 +117,8 @@ public class RemonteeLecture {
     }
 
     /**
-     * Fusionne dans la copie <b>toutes</b> les lignes de la table telles que la source les porte
-     * — le régime « baseline » de {@link SynchronisationDescendante}, pris quand le filigrane
-     * Change Tracking est absent ou périmé. <b>Ne supprime jamais rien</b> : la copie peut
-     * porter des lignes que la source n'a pas (héritées d'avant la bascule), et seule une
-     * suppression explicitement rapportée par le Change Tracking fait foi.
-     *
-     * <p>Par lots de {@value #TAILLE_LOT_BASELINE}, sur le même {@code MERGE} que le reste :
-     * une table de 14 000 lignes se traverse en quelques dizaines d'aller-retours, pas 14 000.
-     *
-     * @return le nombre de lignes fusionnées
+     * Baseline de {@link SynchronisationDescendante}. Ne supprime jamais : la copie peut porter des lignes que la
+     * source n'a pas, et seule une suppression rapportée par le Change Tracking fait foi.
      */
     int fusionnerTout(String table) {
         String cle = CLES_PRIMAIRES.getOrDefault(table, "PKey");
@@ -209,12 +142,7 @@ public class RemonteeLecture {
 
     private static final int TAILLE_LOT_BASELINE = 500;
 
-    /**
-     * {@code SELECT … FROM dbo.[table]} — la projection sans clause {@code WHERE}. {@code SELECT *}
-     * pour le cas courant ; une liste explicite de colonnes, lue sur la source, pour les tables
-     * dont la copie ne possède pas tout (cf. {@link #COLONNES_ABSENTES_DE_LA_COPIE}) — la colonne
-     * écartée ne quitte alors jamais la source.
-     */
+    /** {@code SELECT *}, sauf pour une table de {@link #COLONNES_ABSENTES_DE_LA_COPIE} : liste lue sur la source. */
     private String projection(String table) {
         Set<String> exclues = COLONNES_ABSENTES_DE_LA_COPIE.get(table);
         String colonnes = "*";
@@ -229,28 +157,19 @@ public class RemonteeLecture {
         return "SELECT " + colonnes + " FROM dbo." + crochets(table);
     }
 
-    /**
-     * {@code SELECT} d'une ligne par sa clé, filtré hors-périmètre le cas échéant : une ligne
-     * écartée par {@link #predicatPerimetre} renvoie zéro tuple, donc {@link #fusionner} la voit
-     * « absente » et ne la copie pas (au pire un {@code DELETE} sans objet côté copie).
-     */
+    /** Une ligne hors périmètre rend zéro tuple : {@link #fusionner} la voit absente et ne la copie pas. */
     private String selection(String table, String cle) {
         String sql = projection(table) + " WHERE " + crochets(cle) + " = ?";
         String filtre = predicatPerimetre(table);
         return filtre == null ? sql : sql + " AND " + filtre;
     }
 
-    /** {@code SELECT} de toutes les lignes (baseline), filtré hors-périmètre le cas échéant. */
     private String selectionTout(String table) {
         String filtre = predicatPerimetre(table);
         return filtre == null ? projection(table) : projection(table) + " WHERE " + filtre;
     }
 
-    /**
-     * Prédicat {@code WHERE} qui écarte les lignes hors périmètre (cf.
-     * {@link #COLONNES_HORS_PERIMETRE}), ou {@code null} si la table n'en a pas. Chaque colonne
-     * listée doit être {@code NULL} pour que la ligne soit répliquée.
-     */
+    /** Chaque colonne de {@link #COLONNES_HORS_PERIMETRE} doit être {@code NULL} ; {@code null} si la table n'en a pas. */
     static String predicatPerimetre(String table) {
         List<String> colonnes = COLONNES_HORS_PERIMETRE.get(table);
         if (colonnes == null) {
@@ -262,15 +181,8 @@ public class RemonteeLecture {
     }
 
     /**
-     * {@code MERGE} plutôt que « tenter un {@code UPDATE}, insérer s'il n'a rien touché » : une
-     * seule instruction, donc idempotente et rejouable sans condition de course.
-     *
-     * <p>{@code WITH (HOLDLOCK)} n'est pas optionnel — sans lui, deux fusions simultanées sur la
-     * même clé peuvent toutes deux conclure « pas trouvé » et insérer.
-     *
-     * <p>Les colonnes sont celles que la <b>source</b> renvoie. Si la copie n'en possède pas
-     * autant, l'instruction échoue et la trace le dit : une dérive de schéma entre les deux
-     * bases doit se voir, pas se faire absorber en silence.
+     * Une seule instruction, donc rejouable. {@code HOLDLOCK} obligatoire : sinon deux fusions simultanées concluent
+     * « absent » et insèrent toutes deux. Colonnes de la source : une dérive de schéma doit échouer, pas s'absorber.
      */
     static String fusion(String table, String cle, List<String> colonnes) {
         String affectations = colonnes.stream()
@@ -296,10 +208,7 @@ public class RemonteeLecture {
         return parametres.toArray();
     }
 
-    /**
-     * Les noms de ce schéma viennent de tables héritées et comptent des mots réservés
-     * ({@code Usage}). Les crocheter systématiquement évite d'avoir à savoir lesquels.
-     */
+    /** Le schéma légataire compte des mots réservés ({@code Usage}) : tout crocheter. */
     private static String crochets(String identifiant) {
         return "[" + identifiant.replace("]", "]]") + "]";
     }

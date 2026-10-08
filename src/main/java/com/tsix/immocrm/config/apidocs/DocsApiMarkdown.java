@@ -349,8 +349,6 @@ public class DocsApiMarkdown {
         return new ArrayList<>(out);
     }
 
-    // ---------------------------------------------------------------- injection
-
     /** {@code OperationCustomizer} : appelé par springdoc pour chaque opération, dans l'ordre de traitement. */
     public io.swagger.v3.oas.models.Operation personnaliserOperation(
             io.swagger.v3.oas.models.Operation operation, HandlerMethod handler) {
@@ -406,12 +404,9 @@ public class DocsApiMarkdown {
     }
 
     /**
-     * Pose les descriptions de tag et rétablit l'ordre de la liste globale. Springdoc la reconstruit
-     * à chaque opération en itérant un {@code HashSet} de tags dont le hash inclut la description,
-     * et omet un @Tag sans description : on rejoue donc cette construction avec les descriptions
-     * finales, pour obtenir l'ordre qu'aurait donné le texte resté dans l'annotation. Piège : un
-     * retour à la ligne change le hash, donc l'ordre — un texte de tag garde ses paragraphes sur
-     * une ligne, identique à l'ancien texte d'annotation.
+     * Springdoc ordonne {@code $.tags} par un {@code HashSet} hashé sur la description (et omet un @Tag sans description) :
+     * on rejoue sa construction avec les textes finaux. Piège : un retour à la ligne ajouté change le hash, donc l'ordre
+     * — un texte de tag garde chaque paragraphe sur une ligne, octet pour octet.
      */
     private void ordonnerTags(OpenAPI openApi, List<List<String>> sequence) {
         Map<String, io.swagger.v3.oas.models.tags.Tag> finaux = new LinkedHashMap<>();

@@ -10,22 +10,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Envoie les identifiants Arpent (identifiant Omran + mot de passe + lien vers l'application),
- * une fois la transaction d'origine réellement validée.
- *
- * <p>La combinaison des deux annotations porte tout le comportement voulu :
- * <ul>
- *   <li>{@code AFTER_COMMIT} — rien ne part si la réinitialisation a été annulée. Sans
- *       cette phase, un mot de passe jamais enregistré serait quand même envoyé.</li>
- *   <li>{@code @Async("mailExecutor")} — la latence SMTP (1 à 3 s chez Hostinger) sort du
- *       temps de réponse HTTP.</li>
- * </ul>
- *
- * <p><b>À savoir pour les tests</b> : la suite de ce dépôt est {@code @Transactional} et donc
- * annulée à la fin de chaque test, si bien qu'un écouteur {@code AFTER_COMMIT} ne se déclenche
- * <b>jamais</b> sous test. C'est pourquoi {@link #surMotDePasseEmis} est publique et sans état
- * — elle s'appelle directement. La publication de l'événement, elle, se vérifie avec
- * {@code @RecordApplicationEvents}, qui capture même dans une transaction annulée.
+ * Identifiants Arpent par email : {@code AFTER_COMMIT} (rien ne part si la réinitialisation est annulée) et
+ * {@code @Async} (latence SMTP hors réponse HTTP). Jamais déclenché sous la suite de tests (annulée) : appeler
+ * {@link #surMotDePasseEmis} directement (FEATURE-service-envoi-email.md §5).
  */
 @Component
 public class EmailMotDePasseListener {
@@ -37,10 +24,7 @@ public class EmailMotDePasseListener {
     private final EnvoiEmail envoiEmail;
     private final String urlArpent;
 
-    /**
-     * @param urlArpent lien « Se connecter à Arpent » ({@code app.arpent.url}) — ne porte jamais
-     *                  ni identifiant ni mot de passe
-     */
+    /** @param urlArpent lien « Se connecter à Arpent » : ne porte jamais ni identifiant ni mot de passe */
     public EmailMotDePasseListener(EnvoiEmail envoiEmail,
                                    @Value("${app.arpent.url:https://arpent.ayaddeveloppement.com}") String urlArpent) {
         this.envoiEmail = envoiEmail;
@@ -53,10 +37,7 @@ public class EmailMotDePasseListener {
         envoiEmail.envoyer(construire(evenement));
     }
 
-    /**
-     * Séparée de l'envoi pour être vérifiable telle quelle : un test peut comparer les
-     * variables transmises au template sans avoir à inspecter du HTML rendu.
-     */
+    /** Séparée de l'envoi : un test compare les variables du template sans lire de HTML. */
     MessageEmail construire(MotDePasseTemporaireEmis evenement) {
         Map<String, Object> variables = new LinkedHashMap<>();
         variables.put("nomComplet", evenement.nomComplet());
@@ -72,11 +53,7 @@ public class EmailMotDePasseListener {
                 corpsTexte(evenement));
     }
 
-    /**
-     * Alternative texte brut, construite en Java plutôt qu'avec un second template Thymeleaf :
-     * cela éviterait d'ajouter un résolveur en mode TEXT à côté de celui, autoconfiguré, qui
-     * sert le HTML — beaucoup de plomberie pour huit lignes de texte.
-     */
+    /** En Java plutôt qu'en template : évite un second résolveur Thymeleaf en mode TEXT. */
     private String corpsTexte(MotDePasseTemporaireEmis evenement) {
         return """
                 Bonjour %s,

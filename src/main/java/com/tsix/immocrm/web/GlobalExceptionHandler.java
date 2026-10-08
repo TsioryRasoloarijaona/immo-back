@@ -16,10 +16,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/**
- * Translates domain exceptions into RFC 7807 {@link ProblemDetail} responses,
- * shared by every REST controller in the application.
- */
+/** Exceptions métier → {@link ProblemDetail} RFC 7807. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -33,32 +30,17 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    /**
-     * Nom hors catalogue passé à {@code ?colonnes=}.
-     *
-     * <p>Le corps porte la liste des noms valides : une faute de frappe se corrige alors depuis
-     * la réponse, sans aller lire la doc. Ignorer le nom en silence laisserait le front croire à
-     * une colonne vide plutôt qu'à une erreur d'appel.
-     */
+    /** Le corps liste les noms valides : ignorer le nom laisserait croire à une colonne vide. */
     @ExceptionHandler(ColonneInconnueException.class)
     public ProblemDetail handleColonneInconnue(ColonneInconnueException ex) {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         probleme.setProperty("colonne", ex.colonne());
-        // Les noms viennent de l'exception, pas d'un catalogue code en dur : trois listes sont
-        // desormais filtrables, et repondre les colonnes de prospection a une faute de frappe sur
-        // un prospect designerait le mauvais ecran.
+        // Noms tirés de l'exception, pas d'un catalogue en dur : chaque liste a le sien.
         probleme.setProperty("colonnesValides", ex.nomsValides());
         return probleme;
     }
 
-    /**
-     * Fonction d'agrégat refusée — {@code ?agregats=dateDocument:SUM}, ou un nom de fonction qui
-     * n'existe pas.
-     *
-     * <p>Le corps porte les fonctions acceptées <strong>par la colonne visée</strong>, pas la liste
-     * générale : une date accepte MIN/MAX/COUNT, un montant les cinq. Répondre la liste complète
-     * enverrait réessayer avec une valeur qui sera refusée elle aussi.
-     */
+    /** Le corps porte les fonctions acceptées par la colonne visée (une date : MIN/MAX/COUNT), pas la liste générale. */
     @ExceptionHandler(FonctionAgregatInconnueException.class)
     public ProblemDetail handleFonctionAgregatInconnue(FonctionAgregatInconnueException ex) {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
@@ -73,11 +55,7 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
-    /**
-     * Écriture refusée sur une ressource explicitement nommée par l'appelant (typiquement un projet
-     * hors de son périmètre commercial). Les <em>lectures</em> hors périmètre passent au contraire
-     * par {@link ResourceNotFoundException} (404) — voir {@link ForbiddenException}.
-     */
+    /** Écriture sur une ressource nommée par l'appelant ; une lecture hors périmètre est un 404, pas un 403. */
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail handleForbidden(ForbiddenException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
@@ -88,11 +66,7 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    /**
-     * Création de prospect refusée faute de confirmation : la liste des fiches existantes voyage
-     * dans {@code doublons}, pour que l'écran demande « est-ce l'une de ces personnes ? » —
-     * {@code FEATURE-doublons-prospect-projet.md} §2.
-     */
+    /** FEATURE-doublons-prospect-projet.md §2. */
     @ExceptionHandler(DoublonsProspectException.class)
     public ProblemDetail handleDoublonsProspect(DoublonsProspectException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
@@ -100,11 +74,7 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
-    /**
-     * Un prospect n'a qu'une prospection ouverte par projet : celle qui existe est nommée dans
-     * {@code prospectionExistante} pour que l'écran propose de l'ouvrir —
-     * {@code FEATURE-doublons-prospect-projet.md} §3.
-     */
+    /** Une prospection ouverte par prospect et par projet (FEATURE-doublons-prospect-projet.md §3). */
     @ExceptionHandler(ProspectionExistanteException.class)
     public ProblemDetail handleProspectionExistante(ProspectionExistanteException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
@@ -119,12 +89,7 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
-    /**
-     * Thrown when a {@code ?sort=} query param on a paginated {@code GET} names a property that
-     * doesn't exist on the underlying JPA entity — e.g. {@code sort=dateDocument} instead of the
-     * real {@code ComFolder} column {@code docDate} (a DTO field name, not the entity's). Without
-     * this handler it surfaces as an unhandled 500; the real problem is a bad request param.
-     */
+    /** {@code ?sort=} sur un nom de champ DTO au lieu de l'attribut d'entité : 400 au lieu d'un 500. */
     @ExceptionHandler(PropertyReferenceException.class)
     public ProblemDetail handleInvalidSortProperty(PropertyReferenceException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,

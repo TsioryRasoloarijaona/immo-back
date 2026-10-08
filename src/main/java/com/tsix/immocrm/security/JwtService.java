@@ -15,13 +15,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Signs and parses the JWT carried in the {@code access_token} httpOnly cookie (see
- * {@code AuthController}). Stateless: every claim needed to authorize a request is embedded in
- * the token itself — {@code tokenVersion} is the one exception, checked against
- * {@code AppUserCredential.tokenVersion} on each request once the enforcing filter lands, so a
- * password change/admin reset can invalidate previously issued tokens without a blacklist table.
- */
+/** Signe et lit le JWT du cookie ; seul {@code tokenVersion} est revérifié en base à chaque requête. */
 @Service
 public class JwtService {
 
@@ -58,7 +52,7 @@ public class JwtService {
                 .compact();
     }
 
-    /** @throws io.jsonwebtoken.JwtException if the token is malformed, expired, or has an invalid signature. */
+    /** @throws io.jsonwebtoken.JwtException jeton malformé, expiré ou mal signé */
     public Claims parse(String token) {
         Jws<Claims> jws = Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
         return jws.getPayload();

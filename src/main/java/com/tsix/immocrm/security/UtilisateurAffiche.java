@@ -16,32 +16,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Résout l'auteur de l'utilisateur connecté pour les colonnes d'audit legacy
- * ({@code UserCreate}, {@code UserName}, {@code AdmUserId}…).
- *
- * <p>Ces colonnes stockent un <b>libellé</b>, pas un identifiant : en données réelles elles
- * contiennent « Dounya SAFSAF », soit {@code AdmUser.Description}. Jamais demandé au front —
- * toujours déduit du token.
- *
- * <h2>Le compte peut manquer dans la base où l'on écrit</h2>
- *
- * <p>En deux bases, les écritures partent vers la source de vérité alors que la connexion
- * (`AppUserCredential`) est vérifiée sur la copie. Un compte qui n'existe que dans la copie — le
- * cas des comptes du banc, et de tout compte créé sur la base du VPS avant le passage en deux
- * bases — n'était alors <b>pas trouvé</b> : l'interaction partait sans {@code UserName}, sans
- * {@code AdmUserId}, avec un libellé sans nom. 13 lignes constatées du 18 au 22/09, invisibles
- * sous tout commercial dans le « Suivi des actions » d'OMRAN, qui filtre sur {@code UserName}.
- * Voir {@code instructions/FEATURE-suivi-actions.md} §6.
- *
- * <p>Résolution, dans l'ordre :
- * <ol>
- *   <li>le compte dans la base de la transaction courante — {@link Auteur#compte()} renseigné, donc
- *       {@code AdmUserId} posable sans violer la clé étrangère ;</li>
- *   <li>à défaut, sa description <b>lue sur la copie</b> (deux bases seulement) — le même libellé
- *       qu'OMRAN écrirait, donc regroupé avec ses autres actions ; {@code compte} reste nul, la clé
- *       étrangère l'interdit ;</li>
- *   <li>à défaut, l'identifiant de connexion du token.</li>
- * </ol>
+ * Libellé d'auteur des colonnes d'audit légataires ({@code UserName}, {@code UserCreate}…) : {@code AdmUser.Description},
+ * jamais demandé au front. En deux bases, le compte peut manquer dans la base d'écriture : repli sur sa description
+ * lue sur la copie, puis sur le login, sans {@code AdmUserId} (clé étrangère) — voir FEATURE-suivi-actions.md §6.
  */
 @Component
 public class UtilisateurAffiche {
@@ -49,7 +26,7 @@ public class UtilisateurAffiche {
     private static final Logger log = LoggerFactory.getLogger(UtilisateurAffiche.class);
 
     private final AdmUserRepository userRepository;
-    /** Absent en mono-base : source et copie ne font qu'une, il n'y a rien d'autre à lire. */
+    /** Absent en mono-base. */
     private final ObjectProvider<JdbcTemplate> jdbcLecture;
 
     public UtilisateurAffiche(AdmUserRepository userRepository,
@@ -58,14 +35,7 @@ public class UtilisateurAffiche {
         this.jdbcLecture = jdbcLecture;
     }
 
-    /**
-     * L'auteur résolu.
-     *
-     * @param compte le compte dans la base de la transaction courante, ou {@code null} s'il n'y
-     *               existe pas — ne poser {@code AdmUserId} que depuis ce champ
-     * @param nom    le libellé à écrire dans {@code UserName}/{@code UserCreate}, ou {@code null}
-     *               hors contexte authentifié
-     */
+    /** {@code compte} est nul s'il n'existe pas dans la base de la transaction : ne poser {@code AdmUserId} que depuis lui. */
     public record Auteur(AdmUser compte, String nom) {
 
         static final Auteur ANONYME = new Auteur(null, null);
@@ -75,10 +45,7 @@ public class UtilisateurAffiche {
         }
     }
 
-    /**
-     * L'auteur de la requête en cours. {@code @WithMockUser} et les endpoints ouverts portent un
-     * principal d'un autre type : traités comme « pas d'auteur », jamais comme une erreur.
-     */
+    /** Un principal d'un autre type ({@code @WithMockUser}, route ouverte) = pas d'auteur, pas une erreur. */
     public Auteur courant() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser utilisateur) {

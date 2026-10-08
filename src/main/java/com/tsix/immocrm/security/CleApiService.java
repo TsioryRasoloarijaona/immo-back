@@ -21,11 +21,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Génération, hachage et résolution des clés d'API — {@code instructions/FEATURE-cle-api-n8n.md} §2.
- *
- * <p>Une clé vaut {@code ak_} + 43 caractères base64url (32 octets aléatoires, 256 bits). Seul
- * son SHA-256 est stocké : l'entropie rend le dictionnaire impossible, et le hash déterministe
- * permet une recherche par égalité à chaque requête là où BCrypt coûterait ~100 ms par appel.
+ * Génération, hachage et résolution des clés d'API (FEATURE-cle-api-n8n.md §2). SHA-256 et non BCrypt : 256 bits
+ * aléatoires rendent le dictionnaire inutile, et un hash déterministe permet la recherche par égalité à chaque requête.
  */
 @Service
 public class CleApiService {
@@ -71,13 +68,8 @@ public class CleApiService {
     }
 
     /**
-     * Résout une clé présentée par une requête. Vide si la clé est inconnue, révoquée, ou si son
-     * compte de service est désactivé — trois cas que l'appelant traite pareil (401), sans dire
-     * lequel.
-     *
-     * <p>Le principal est le même {@link AuthenticatedUser} que celui du JWT : {@code username} =
-     * {@code AdmUser.Code}, aucune porte d'onboarding à franchir ({@code mustChangePassword} faux,
-     * {@code profileCompleted} vrai), rôles lus dans {@code AdmUserRole}.
+     * Vide si la clé est inconnue, révoquée ou son compte désactivé : l'appelant rend 401 sans dire lequel.
+     * Rôles relus dans {@code AdmUserRole} à chaque requête, pas figés à la création de la clé.
      */
     @Transactional(readOnly = true)
     public Optional<ClientResolu> resoudre(String cle) {
@@ -104,7 +96,6 @@ public class CleApiService {
                 });
     }
 
-    /** Trace du dernier usage, au plus une fois par minute. */
     public void tracerUsage(AppApiClient client) {
         LocalDateTime maintenant = LocalDateTime.now();
         if (client.getDernierUsage() == null
