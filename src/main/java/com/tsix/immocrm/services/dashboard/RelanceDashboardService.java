@@ -27,6 +27,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -44,13 +45,16 @@ public class RelanceDashboardService {
     private final ComActionMessageRepository messageRepository;
     private final ComProspectionRepository prospectionRepository;
     private final PerimetreCommercialService perimetreService;
+    private final Clock clock;
 
     public RelanceDashboardService(ComActionMessageRepository messageRepository,
                                    ComProspectionRepository prospectionRepository,
-                                   PerimetreCommercialService perimetreService) {
+                                   PerimetreCommercialService perimetreService,
+                                   Clock clock) {
         this.messageRepository = messageRepository;
         this.prospectionRepository = prospectionRepository;
         this.perimetreService = perimetreService;
+        this.clock = clock;
     }
 
     // ---------------------------------------------------------------- relances
@@ -61,7 +65,7 @@ public class RelanceDashboardService {
                                                 @Nullable AuthenticatedUser principal,
                                                 @Nullable UUID trancheId,
                                                 Pageable pageable) {
-        LocalDate aujourdhui = LocalDate.now();
+        LocalDate aujourdhui = LocalDate.now(clock);
         UUID moi = principal != null ? principal.employeeId() : null;
 
         Specification<ComActionMessage> spec = perimetreService.filtreInteractions()
@@ -199,7 +203,7 @@ public class RelanceDashboardService {
     /** Pas de {@code portee} : un lead du jour n'a pas de commercial. Seul le périmètre s'applique. */
     @Transactional(readOnly = true)
     public Page<NouveauPreProspectDto> nouveauxPreProspects(@Nullable LocalDate jour, Pageable pageable) {
-        LocalDate cible = jour != null ? jour : LocalDate.now();
+        LocalDate cible = jour != null ? jour : LocalDate.now(clock);
         LocalDateTime debut = cible.atStartOfDay();
         LocalDateTime finExclue = cible.plusDays(1).atStartOfDay();
 

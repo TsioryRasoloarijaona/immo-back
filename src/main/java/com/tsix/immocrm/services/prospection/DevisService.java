@@ -40,6 +40,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,13 +61,15 @@ public class DevisService {
     private final AdmSequenceRepository sequenceRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final PerimetreCommercialService perimetreService;
+    private final Clock clock;
 
     public DevisService(ComProspectionRepository prospectionRepository, StlQuoteRepository quoteRepository,
                          StlQuoteItemRepository quoteItemRepository, CfgTrancheRepository trancheRepository,
                          StkItemRepository stkItemRepository, CfgTierRepository tierRepository,
                          ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository,
                          ComSettlementCategoryRepository settlementCategoryRepository,
-                         PerimetreCommercialService perimetreService) {
+                         PerimetreCommercialService perimetreService, Clock clock) {
+        this.clock = clock;
         this.perimetreService = perimetreService;
         this.prospectionRepository = prospectionRepository;
         this.quoteRepository = quoteRepository;
@@ -103,7 +106,7 @@ public class DevisService {
         int largeurAnnee = sequence.getSeqYearNumber() != null ? sequence.getSeqYearNumber() : 2;
         int largeurNumero = sequence.getSeqValueNumber() != null ? sequence.getSeqValueNumber() : 5;
         String separateur = sequence.getSeparator() != null ? sequence.getSeparator() : "/";
-        int annee = LocalDateTime.now().getYear() % (int) Math.pow(10, largeurAnnee);
+        int annee = LocalDateTime.now(clock).getYear() % (int) Math.pow(10, largeurAnnee);
         String anneeFormatee = String.format("%0" + largeurAnnee + "d", annee);
         String numero = String.format("%0" + largeurNumero + "d", prochain);
         String prefixe = sequence.getSeqPrefix() != null ? sequence.getSeqPrefix() : "";
@@ -202,7 +205,7 @@ public class DevisService {
         StlQuote quote = new StlQuote();
         quote.setId(UUID.randomUUID());
         quote.setCode(genererCodeOffre());
-        quote.setDocDate(LocalDateTime.now());
+        quote.setDocDate(LocalDateTime.now(clock));
         quote.setComProspection(prospection);
         quote.setCfgTranche(tranche);
         quote.setStkItem(article);

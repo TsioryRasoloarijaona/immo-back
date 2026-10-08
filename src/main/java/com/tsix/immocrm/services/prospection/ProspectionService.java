@@ -102,6 +102,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -172,6 +173,7 @@ public class ProspectionService {
     // Événement plutôt qu'appel direct : le mail ne part que si l'interaction est écrite, et
     // l'envoi ne peut rien annuler (FEATURE-mail-confirmation-visite.md §3).
     private final ApplicationEventPublisher publisher;
+    private final Clock clock;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -195,7 +197,9 @@ public class ProspectionService {
                                ComSaleProspectionViewRepository prospectionViewRepository,
                                StrEntityRepository strEntityRepository,
                                ApplicationEventPublisher publisher,
-                               AlerteRelanceService alerteRelanceService) {
+                               AlerteRelanceService alerteRelanceService,
+                               Clock clock) {
+        this.clock = clock;
         this.alerteRelanceService = alerteRelanceService;
         this.prospectionViewRepository = prospectionViewRepository;
         this.strEntityRepository = strEntityRepository;
@@ -553,7 +557,7 @@ public class ProspectionService {
     /** Sans utilisateur authentifié (formulaire public, import), auteur NULL : pas une erreur. */
     private void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
         UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         String description = type.description(suite);
         StrHistory historique = new StrHistory();
         historique.setId(UUID.randomUUID());
@@ -587,7 +591,7 @@ public class ProspectionService {
         ComProspection prospection = new ComProspection();
         prospection.setId(UUID.randomUUID());
         prospection.setCode(genererCodeProspection());
-        prospection.setDocDate(LocalDateTime.now());
+        prospection.setDocDate(LocalDateTime.now(clock));
         prospection.setCfgProspect(prospect);
         // false et non NULL : la vue de travail OMRAN filtre en IsClosed = 0, que NULL ne
         // satisfait jamais — la prospection n'apparaîtrait dans aucune liste.
@@ -697,7 +701,7 @@ public class ProspectionService {
      */
     @Transactional
     public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
-        ComProspection p = ecrirePreProspection(request, LocalDateTime.now());
+        ComProspection p = ecrirePreProspection(request, LocalDateTime.now(clock));
         List<DoublonPreProspectionDto> doublons = visibles(doublonsContact(p)).stream()
                 .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
                 .toList();
@@ -761,7 +765,7 @@ public class ProspectionService {
         ComProspection p = new ComProspection();
         p.setId(UUID.randomUUID());
         p.setCode(genererCodeProspection());
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         p.setDocDate(dateDocument);
         p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         p.setTempDescription(nom);
@@ -1124,7 +1128,7 @@ public class ProspectionService {
         if (StringUtils.hasText(request.raisonTexte())) {
             prospection.setClosingReasonText(request.raisonTexte());
         }
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         prospection.setIsClosed(true);
         prospection.setClosingDate(maintenant);
         marquerModification(prospection, maintenant);
@@ -1150,7 +1154,7 @@ public class ProspectionService {
         }
 
         prospection.setIsClosed(false);
-        marquerModification(prospection, LocalDateTime.now());
+        marquerModification(prospection, LocalDateTime.now(clock));
 
         ComProspection sauvee = prospectionRepository.save(prospection);
         enregistrerHistorique(id, TypeActionRecente.DESARCHIVEE, null);
@@ -1180,7 +1184,7 @@ public class ProspectionService {
             throw new InvalidRequestException("description est requise");
         }
 
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         UtilisateurAffiche.Auteur resolu = utilisateurAffiche.courant();
         AdmUser auteur = resolu.compte();
         String nomAuteur = resolu.nom();
@@ -1266,7 +1270,7 @@ public class ProspectionService {
      * {@code FIX-creation-prospect-prospection.md} §4 ; une catégorie introuvable n'empêche rien.
      */
     private void ecrireInteractionDeCreation(ComProspection prospection) {
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         UtilisateurAffiche.Auteur resolu = utilisateurAffiche.courant();
         AdmUser auteur = resolu.compte();
         String nomAuteur = resolu.nom();

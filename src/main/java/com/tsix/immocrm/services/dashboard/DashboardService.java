@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -36,10 +37,12 @@ public class DashboardService {
     private final PerimetreCommercialService perimetreService;
     private final DossierService dossierService;
     private final ProspectionService prospectionService;
+    private final Clock clock;
 
     public DashboardService(ComFolderRepository folderRepository, ComProspectionRepository prospectionRepository,
                              PerimetreCommercialService perimetreService, DossierService dossierService,
-                             ProspectionService prospectionService) {
+                             ProspectionService prospectionService, Clock clock) {
+        this.clock = clock;
         this.folderRepository = folderRepository;
         this.prospectionRepository = prospectionRepository;
         this.perimetreService = perimetreService;
@@ -61,7 +64,7 @@ public class DashboardService {
             Set<UUID> dossiersDeLaTranche = dossierService.idsDossiersDeTranche(trancheId);
             rows = rows.stream().filter(row -> dossiersDeLaTranche.contains((UUID) row[0])).toList();
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         Map<String, Long> parEtape = new LinkedHashMap<>();
         BigDecimal valeurPipeline = BigDecimal.ZERO;

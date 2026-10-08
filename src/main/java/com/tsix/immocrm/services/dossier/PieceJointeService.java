@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -30,10 +31,12 @@ public class PieceJointeService {
 
     private final ComFolderRepository folderRepository;
     private final PieceJointeSupport support;
+    private final Clock clock;
 
-    public PieceJointeService(ComFolderRepository folderRepository, PieceJointeSupport support) {
+    public PieceJointeService(ComFolderRepository folderRepository, PieceJointeSupport support, Clock clock) {
         this.folderRepository = folderRepository;
         this.support = support;
+        this.clock = clock;
     }
 
     public List<PieceJointeDto> findByDossier(UUID dossierId) {
@@ -56,7 +59,7 @@ public class PieceJointeService {
                                   AuthenticatedUser principal) {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
-        String category = "Dossier de vente N° " + folder.getCode() + " du " + LocalDateTime.now().format(DATE_LEGACY);
+        String category = "Dossier de vente N° " + folder.getCode() + " du " + LocalDateTime.now(clock).format(DATE_LEGACY);
         return support.deposer(dossierId, PorteurPieceJointe.DOSSIER, category, fichier, description,
                 typeId, principal);
     }

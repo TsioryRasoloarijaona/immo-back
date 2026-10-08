@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -36,11 +37,13 @@ public class MonCompteService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PerimetreCommercialService perimetreService;
+    private final Clock clock;
 
     public MonCompteService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
                              AdmUserRoleRepository userRoleRepository, CfgTierRepository tierRepository,
                              PasswordEncoder passwordEncoder, JwtService jwtService,
-                             PerimetreCommercialService perimetreService) {
+                             PerimetreCommercialService perimetreService, Clock clock) {
+        this.clock = clock;
         this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -78,7 +81,7 @@ public class MonCompteService {
         credential.setPasswordHash(passwordEncoder.encode(request.nouveauMotDePasse()));
         credential.setMustChangePassword(false);
         credential.setTokenVersion(credential.getTokenVersion() + 1);
-        credential.setUserUpdateDateTime(LocalDateTime.now());
+        credential.setUserUpdateDateTime(LocalDateTime.now(clock));
         credentialRepository.save(credential);
 
         List<String> roles = roles(user);
@@ -114,7 +117,7 @@ public class MonCompteService {
 
         AppUserCredential credential = findCredential(principal);
         credential.setProfileCompleted(true);
-        credential.setUserUpdateDateTime(LocalDateTime.now());
+        credential.setUserUpdateDateTime(LocalDateTime.now(clock));
         credentialRepository.save(credential);
 
         List<String> roles = roles(user);

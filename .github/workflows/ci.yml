@@ -26,6 +26,9 @@ jobs:
       SA_PWD: Ci-Ephemere-Passw0rd!
       DB_TEST: yesRemsCi
       SQLCMD: /opt/mssql-tools18/bin/sqlcmd
+      # L'appli lit « maintenant » sur l'horloge Africa/Casablanca, les tests sur l'horloge système :
+      # le runner (UTC) doit être dans la même zone, sinon la suite casse chaque soir 23h-0h UTC.
+      TZ: Africa/Casablanca
 
     steps:
       - uses: actions/checkout@v4

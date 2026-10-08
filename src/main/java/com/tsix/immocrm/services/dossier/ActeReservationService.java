@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -40,12 +41,14 @@ public class ActeReservationService {
     private final ComFolderRepository folderRepository;
     private final StkItemRepository itemRepository;
     private final ComDocumentRepository documentRepository;
+    private final Clock clock;
 
     public ActeReservationService(ComFolderRepository folderRepository, StkItemRepository itemRepository,
-                                   ComDocumentRepository documentRepository) {
+                                   ComDocumentRepository documentRepository, Clock clock) {
         this.folderRepository = folderRepository;
         this.itemRepository = itemRepository;
         this.documentRepository = documentRepository;
+        this.clock = clock;
     }
 
     public ActeReservationData collect(UUID dossierId) {
@@ -112,7 +115,7 @@ public class ActeReservationService {
                 Champs.de(tranche, CfgTranche::getSyndicPeriod),
                 requireNonNullElse(Champs.de(tranche, CfgTranche::getCommerceTribunal), "Casablanca"),
                 TierNomFormatter.nom(folder.getCfgCommercial()),
-                LocalDate.now()
+                LocalDate.now(clock)
         );
     }
 

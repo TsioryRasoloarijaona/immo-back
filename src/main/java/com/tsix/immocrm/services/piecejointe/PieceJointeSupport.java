@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +51,7 @@ public class PieceJointeSupport {
     private final StockageProperties stockageProperties;
     private final UtilisateurAffiche utilisateurAffiche;
     private final DepotBinaireSource depotBinaireSource;
+    private final Clock clock;
 
     public PieceJointeSupport(AdmAttachedFileSummaryRepository summaryRepository,
                               AdmAttachedFileRepository fileRepository,
@@ -58,7 +60,9 @@ public class PieceJointeSupport {
                               StockageFichiers stockage,
                               StockageProperties stockageProperties,
                               UtilisateurAffiche utilisateurAffiche,
-                              DepotBinaireSource depotBinaireSource) {
+                              DepotBinaireSource depotBinaireSource,
+                              Clock clock) {
+        this.clock = clock;
         this.summaryRepository = summaryRepository;
         this.fileRepository = fileRepository;
         this.typeRepository = typeRepository;
@@ -161,7 +165,7 @@ public class PieceJointeSupport {
         entity.setDescription(legende);
         entity.setExtension(extension);
         entity.setAdmAttachedFileTypeId(typeId);
-        entity.setUserCreateDateTime(LocalDateTime.now());
+        entity.setUserCreateDateTime(LocalDateTime.now(clock));
         entity.setUserCreate(utilisateurAffiche.nom(principal));
         entity = fileRepository.save(entity);
 
@@ -174,7 +178,7 @@ public class PieceJointeSupport {
         objet.setContentType(stocke.contentType());
         objet.setSizeBytes(stocke.tailleOctets());
         objet.setSha256(stocke.sha256());
-        objet.setUploadedAt(LocalDateTime.now());
+        objet.setUploadedAt(LocalDateTime.now(clock));
         objet.setUploadedBy(utilisateurAffiche.nom(principal));
         fileObjectRepository.save(objet);
 
@@ -203,7 +207,7 @@ public class PieceJointeSupport {
      */
     @Transactional
     public void marquerSupprime(AppFileObject objet, AuthenticatedUser principal) {
-        objet.setDeletedAt(LocalDateTime.now());
+        objet.setDeletedAt(LocalDateTime.now(clock));
         objet.setDeletedBy(utilisateurAffiche.nom(principal));
         // saveAndFlush : hasFile est une @Formula sur AppFileObject, hors des espaces d'auto-flush
         // d'Hibernate ; sans flush, une relecture dans la même transaction voit encore la pièce.
