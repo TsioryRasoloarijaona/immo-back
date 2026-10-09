@@ -14,4 +14,7 @@ public interface StrHistoryRepository extends JpaRepository<StrHistory, UUID> {
     Page<StrHistory> findByObjectIdOrderByDocDateDesc(UUID objectId, Pageable pageable);
 
     List<StrHistory> findByObjectIdInOrderByDocDateDesc(Collection<UUID> objectIds);
+
+    /** Événements sans statut d'un objet (aucune ligne légataire de dossier n'en a). */
+    List<StrHistory> findByObjectIdAndStrStatusIdIsNullOrderByDocDateAsc(UUID objectId);
 }

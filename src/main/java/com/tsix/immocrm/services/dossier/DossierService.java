@@ -368,7 +368,8 @@ public class DossierService {
 
         folder = folderRepository.save(folder);
         if (statutInitial != null) {
-            enregistrerHistoriqueStatut(folder, statutInitial, noteAvecTransformation(folder, statutInitial, null));
+            enregistrerHistoriqueStatut(folder, statutInitial, null);
+            basculerProspectEnClient(folder, statutInitial);
         }
 
         for (StkItem item : articles) {
@@ -604,7 +605,8 @@ public class DossierService {
         folder.setStrStatus(strStatus);
         appliquerChampEtape(folder, cible, request);
         marquerModification(folder);
-        enregistrerHistoriqueStatut(folder, strStatus, noteAvecTransformation(folder, strStatus, request.note()));
+        enregistrerHistoriqueStatut(folder, strStatus, request.note());
+        basculerProspectEnClient(folder, strStatus);
 
         List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
                 .map(DossierService::toArticleSummary)
@@ -613,16 +615,29 @@ public class DossierService {
     }
 
     /**
-     * Bascule prospect → client si le statut cible le demande ; la mention s'ajoute à la ligne
-     * d'historique de ce changement de statut (FEATURE-lot4 §3).
+     * Bascule prospect → client si le statut cible le demande, avec sa propre ligne d'historique :
+     * la note du changement de statut reste intacte (NVARCHAR(255)). FEATURE-lot4 §3.
      */
-    private String noteAvecTransformation(ComFolder folder, StrStatus statutCible, String note) {
-        if (!transformationProspectClient.appliquer(folder, statutCible)) {
-            return note;
+    private void basculerProspectEnClient(ComFolder folder, StrStatus statutCible) {
+        if (transformationProspectClient.appliquer(folder, statutCible)) {
+            enregistrerEvenementHistorique(folder, TransformationProspectClient.MENTION_HISTORIQUE);
         }
-        return StringUtils.hasText(note)
-                ? note + " — " + TransformationProspectClient.MENTION_HISTORIQUE
-                : TransformationProspectClient.MENTION_HISTORIQUE;
+    }
+
+    /** Ligne {@code StrHistory} sans statut : un événement du dossier qui n'est pas un changement de statut. */
+    private void enregistrerEvenementHistorique(ComFolder folder, String description) {
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        StrHistory evenement = new StrHistory();
+        evenement.setId(UUID.randomUUID());
+        evenement.setDocDate(maintenant);
+        evenement.setUserDate(maintenant);
+        evenement.setObjectId(folder.getId());
+        evenement.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        evenement.setAdmUserId(auteur.compteId());
+        evenement.setAdmUserDescription(auteur.nom());
+        evenement.setDescription(description);
+        strHistoryRepository.save(evenement);
     }
 
     /** GEN0016 : toute écriture sur le dossier signe {@code UserUpdate}/{@code UserUpdateDateTime}. */

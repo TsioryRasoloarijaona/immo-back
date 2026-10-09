@@ -149,9 +149,11 @@ class ProspectDevientClientTest {
         changerStatut(folder, CONCRETISATION);
 
         assertThat(codeTypeDe(client)).isEqualTo(CLIENT);
+        // Deux lignes distinctes : le changement de statut, intact, et la bascule.
         mockMvc.perform(get(HISTORIQUE, folder.getId()))
-                .andExpect(jsonPath(DERNIER_EVENEMENT)
-                        .value("Statut changé vers CONCRETISATION — " + MENTION));
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[*].description", org.hamcrest.Matchers.containsInAnyOrder(
+                        "Statut changé vers CONCRETISATION", MENTION)));
     }
 
     @Test
@@ -263,5 +265,28 @@ class ProspectDevientClientTest {
                 .andExpect(status().isCreated());
 
         assertThat(codeTypeDe(prospect)).isEqualTo(CLIENT);
+    }
+
+    /**
+     * Revue lot 4 : StrFolderStatusHistory.Description est un NVARCHAR(255). Une note valide de
+     * 240 caractères ne doit pas faire échouer la bascule parce que la mention lui est accolée.
+     */
+    @Test
+    void noteLongueMaisValide_laBasculeReussitEtLaMentionEstEcrite() throws Exception {
+        statut(CONCRETISATION, true);
+        type(CLIENT);
+        CfgTier client = tiers(PROSPECT);
+        ComFolder folder = dossier(statut(RESERVATION, false), client);
+        String note = "n".repeat(240);
+
+        mockMvc.perform(patch(STATUT, folder.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"" + CONCRETISATION + "\",\"note\":\"" + note + "\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(codeTypeDe(client)).isEqualTo(CLIENT);
+        mockMvc.perform(get(HISTORIQUE, folder.getId()))
+                .andExpect(jsonPath("$.content[*].description",
+                        org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString(MENTION))));
     }
 }

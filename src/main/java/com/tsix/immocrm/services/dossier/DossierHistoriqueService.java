@@ -12,6 +12,7 @@ import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
+import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -44,14 +45,17 @@ public class DossierHistoriqueService {
     private final StlSettlementLineRepository settlementLineRepository;
     private final AdmAttachedFileSummaryRepository attachedFileSummaryRepository;
     private final AuteurStatutDossier auteurStatut;
+    private final StrHistoryRepository strHistoryRepository;
 
     public DossierHistoriqueService(ComFolderRepository folderRepository,
                                      StrFolderStatusHistoryRepository statusHistoryRepository,
                                      ComDocumentRepository documentRepository,
                                      StlSettlementLineRepository settlementLineRepository,
                                      AdmAttachedFileSummaryRepository attachedFileSummaryRepository,
-                                     AuteurStatutDossier auteurStatut) {
+                                     AuteurStatutDossier auteurStatut,
+                                     StrHistoryRepository strHistoryRepository) {
         this.auteurStatut = auteurStatut;
+        this.strHistoryRepository = strHistoryRepository;
         this.folderRepository = folderRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.documentRepository = documentRepository;
@@ -68,6 +72,10 @@ public class DossierHistoriqueService {
         List<StrFolderStatusHistory> statuts = statusHistoryRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
         Function<StrFolderStatusHistory, String> auteur = auteurStatut.resoudre(statuts);
         statuts.forEach(h -> evenements.add(toStatutEvent(h, auteur.apply(h))));
+        // Événements liés au statut sans en être un (ex. « Prospect transformé en client »).
+        strHistoryRepository.findByObjectIdAndStrStatusIdIsNullOrderByDocDateAsc(dossierId)
+                .forEach(s -> evenements.add(new HistoriqueEvenementDto(s.getDocDate(), HistoriqueEvenementDto.STATUT,
+                        s.getAdmUserDescription(), s.getDescription())));
         documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).forEach(d -> evenements.add(toEcheanceEvent(d)));
         settlementLineRepository.findByDossierIdOrderByEcheanceDateAsc(dossierId).forEach(l -> evenements.add(toReglementEvent(l)));
         attachedFileSummaryRepository.findByDossierId(dossierId).stream()

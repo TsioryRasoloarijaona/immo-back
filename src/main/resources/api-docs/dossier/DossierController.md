@@ -199,8 +199,9 @@ Change le statut du dossier. La transition doit figurer dans la table des transi
 **Prospect → client, comme OMRAN** : si le statut cible porte l'indicateur « Transforme le prospect
 en client » (`StrStatus.BoolField011` : CONCRETISATION, COMPROMIS, FORMALISE…), et que le client du
 dossier est de type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`), son type devient le type client
-correspondant (`CLI`, `CLIRNT`, `CLIPRM`, `CLIROM`), dans la même transaction. La ligne
-d'historique du changement de statut porte alors la mention « Prospect transformé en client ».
+correspondant (`CLI`, `CLIRNT`, `CLIPRM`, `CLIROM`), dans la même transaction. Une ligne
+d'historique distincte « Prospect transformé en client » (type `STATUT`) s'ajoute alors à celle du
+changement de statut, dont la note reste intacte.
 Déjà client, type absent ou inconnu : rien ne change. Jamais de retour client → prospect.
 
 ### reponse 400
