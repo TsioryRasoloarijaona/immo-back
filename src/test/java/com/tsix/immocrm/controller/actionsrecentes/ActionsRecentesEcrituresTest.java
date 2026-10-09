@@ -184,7 +184,7 @@ class ActionsRecentesEcrituresTest {
         assertThat(descriptions(p.getId())).containsExactlyInAnyOrder(
                 "Étape changée : — → AR-ETAPE-A",
                 "Étape changée : AR-ETAPE-A → AR-ETAPE-B");
-        assertThat(historique(p.getId())).allSatisfy(h -> assertThat(h.getAdmUserId()).isEqualTo(moi.getId()));
+        assertThat(historique(p.getId())).hasSize(2).allSatisfy(h -> assertThat(h.getAdmUserId()).isEqualTo(moi.getId()));
     }
 
     @Test

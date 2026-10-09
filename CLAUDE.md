@@ -81,6 +81,15 @@ C'est une base de **lecture**. Aucune écriture, aucun `UPDATE` de confort : les
 données se livrent en script SQL que l'utilisateur applique lui-même, sur cette base comme sur
 `yesRemsDev` (le VPS).
 
+## Qualité : SonarCloud
+
+Le Quality Gate (SonarCloud, analyse de chaque PR et de `main`) tombe dès **un** bug sur le nouveau
+code, tests compris. Les règles déjà enfreintes ici et leur correction sont dans le skill
+`regles-qualite` (`../.claude/skills/regles-qualite/SKILL.md`) — à lire avant de coder. Trois pièges
+récurrents : `allMatch` sur une liste possiblement vide dans un test (S5841), ternaires imbriqués
+(S3358), littéral répété 3 fois (S1192). Un UUID aléatoire dans une colonne clé étrangère casse la CI
+(la base de CI porte les FK, pas `yesRemsTest`).
+
 ## Architecture
 
 - **Entities mirror an existing DB schema.** Every entity's `@Table`/`@Column` names are PascalCase matching the SQL Server table/column names exactly (e.g. `CfgTranche`, `PKey`, `StkVocationId`). Primary keys are `UUID` mapped from a `PKey` column. Do not rename columns/tables when adding fields — check the actual DB schema (see `.idea/dataSources.xml` for the configured local `yesRems` DB connection) rather than guessing.

@@ -113,8 +113,7 @@ class FicheReservationMarqueTest {
                 java.util.List.of(GabaritFicheReservation.APF)}) {
             @SuppressWarnings("unchecked")
             var zones = (java.util.Map<String, GabaritFicheReservation.Zone>) gabarit.get(0);
-            assertThat(zones).hasSize(14);
-            assertThat(zones.values()).allSatisfy(z -> {
+            assertThat(zones.values()).hasSize(14).allSatisfy(z -> {
                 assertThat(z.xCm()).isBetween(0f, GabaritFicheReservation.PAGE_L);
                 assertThat(z.yCm()).isBetween(0f, GabaritFicheReservation.PAGE_H);
                 assertThat(z.xCm() + z.largeurCm()).isLessThanOrEqualTo(GabaritFicheReservation.PAGE_L);

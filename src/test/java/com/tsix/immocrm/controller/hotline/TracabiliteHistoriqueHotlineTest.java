@@ -590,7 +590,7 @@ class TracabiliteHistoriqueHotlineTest {
         JSONArray ligneSans = JsonPath.read(tiers, jsonPathSans);
         assertThat(ligneSans).hasSize(1);
         JSONArray auteurSans = JsonPath.read(tiers, jsonPathSans + ".utilisateur");
-        assertThat(auteurSans).allSatisfy(a -> assertThat(a).isNull());
+        assertThat(auteurSans).hasSize(1).containsOnlyNulls();
 
         String dossier = mockMvc.perform(get("/api/dossiers/{id}/historique", avecJumelle.getId()).with(connecte(moi)))
                 .andExpect(status().isOk())
