@@ -105,7 +105,8 @@ jobs:
         # Celui du VPS client s'appelle `vpd-ayad` (créé avec cette orthographe le 23/09) ;
         # tant que le workflow visait `vps_ayad`, un Environment sans secret, le job retombait
         # sur les secrets du dépôt et redéployait le VPS de dev — constaté le 25/09.
-        cible: [vps_tsiory, vpd-ayad]
+        # Le VPS de dev `vps_tsiory` est éteint définitivement (09/10) : plus déployé.
+        cible: [vpd-ayad]
     environment: ${{ matrix.cible }}
     steps:
       - name: Préparer la clé SSH
