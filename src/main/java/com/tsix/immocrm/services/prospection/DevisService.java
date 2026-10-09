@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.prospection;
 
+import com.tsix.immocrm.domain.ConventionRemise;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
@@ -260,7 +261,7 @@ public class DevisService {
             item.setUnitCostHT(unitCostHT);
             item.setPriceBeforeDiscount(priceBeforeDiscount);
             item.setPriceBeforeDiscountHT(priceBeforeDiscountHT);
-            item.setDiscount(remisePercent);
+            item.setDiscount(ConventionRemise.ratioDepuisPourcentage(remisePercent));
             item.setDiscountAmount(discountAmount);
             item.setDiscountAmountHT(discountAmountHT);
             item.setUnitCostAfterDiscount(unitCostAfterDiscount);
@@ -402,7 +403,7 @@ public class DevisService {
         quote.setUnderItemsPrice(m.underItemsPrice());
         quote.setPriceBeforeDiscountHT(m.totalHT());
         quote.setPriceBeforeDiscount(m.totalTTC());
-        quote.setDiscount(m.discountPercent());
+        quote.setDiscount(ConventionRemise.ratioDepuisPourcentage(m.discountPercent()));
         quote.setDiscountAmountHT(m.discountAmountHT());
         quote.setDiscountAmount(m.discountAmountTTC());
         quote.setUnitCostAfterDiscountHT(m.unitCostAfterDiscountHT());
@@ -415,14 +416,15 @@ public class DevisService {
         quote.setPriceAfterDiscount(m.priceAfterDiscountTTC());
     }
 
-    private static MontantsOffreDto toMontantsDto(StlQuote q) {
+    /** Aussi lu par le PDF de l'offre ({@code OffreDevisDocumentService}) : une seule lecture de la remise. */
+    static MontantsOffreDto toMontantsDto(StlQuote q) {
         return new MontantsOffreDto(
                 q.getVatRatio(),
                 q.getUnitCostHT(), q.getUnitCost(),
                 q.getItemPriceHT(), q.getItemPrice(),
                 q.getUnderItemsPriceHT(), q.getUnderItemsPrice(),
                 q.getPriceBeforeDiscountHT(), q.getPriceBeforeDiscount(),
-                q.getDiscount(), q.getDiscountAmountHT(), q.getDiscountAmount(),
+                ConventionRemise.pourcentage(q.getDiscount()), q.getDiscountAmountHT(), q.getDiscountAmount(),
                 q.getUnitCostAfterDiscountHT(), q.getUnitCostAfterDiscount(),
                 q.getItemPriceAfterDiscountHT(), q.getItemPriceAfterDiscount(),
                 q.getUnderItemsPriceAfterDiscountHT(), q.getUnderItemsPriceAfterDiscount(),

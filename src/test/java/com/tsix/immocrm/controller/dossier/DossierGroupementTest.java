@@ -93,6 +93,51 @@ class DossierGroupementTest {
         return folderRepository.save(folder);
     }
 
+    /** Écrit comme le logiciel de bureau : Discount en ratio 0–1 du HT, DiscountAmount en HT. */
+    private UUID newFolderRemiseOmran(String code, StrStatus statut, String ratio, String montantHT) {
+        ComFolder folder = new ComFolder();
+        folder.setId(UUID.randomUUID());
+        folder.setCode(code);
+        folder.setStkVocation(vocation);
+        folder.setStrStatus(statut);
+        folder.setDiscount(new BigDecimal(ratio));
+        folder.setDiscountAmount(new BigDecimal(montantHT));
+        return folderRepository.save(folder).getId();
+    }
+
+    @Test
+    void remise_ratioOmran_listeGroupeEtAgregatEnPourcentage() throws Exception {
+        StrStatus statut = newStatut("GRP-REMISE");
+        UUID cinqPourcent = newFolderRemiseOmran("GRPR-1", statut, "0.050000", "41666.666667");
+        newFolderRemiseOmran("GRPR-2", statut, "0.100000", "83333.333333");
+
+        mockMvc.perform(get("/api/dossiers/{id}", cinqPourcent))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.remise").value(5.0))
+                .andExpect(jsonPath("$.remiseMontant").value(41666.666667));
+
+        mockMvc.perform(get("/api/dossiers")
+                        .param("search", "GRPR-1")
+                        .param("colonnes", "code,remise,remiseMontant"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].remise").value(5.0))
+                .andExpect(jsonPath("$.content[0].remiseMontant").value(41666.666667));
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "remise")
+                        .param("search", "GRPR-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.cle==5.0)].nombre").value(1))
+                .andExpect(jsonPath("$.content[?(@.cle==10.0)].nombre").value(1));
+
+        mockMvc.perform(get("/api/dossiers/groupes")
+                        .param("groupBy", "statut")
+                        .param("agregats", "remise:MAX")
+                        .param("search", "GRPR-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0]['agregats']['remise:MAX']").value(10.0));
+    }
+
     // ------------------------------------------------------------------
     // Cas nominal
     // ------------------------------------------------------------------

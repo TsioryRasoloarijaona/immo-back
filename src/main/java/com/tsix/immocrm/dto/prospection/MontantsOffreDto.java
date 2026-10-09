@@ -34,7 +34,7 @@ public record MontantsOffreDto(
         @Schema(description = "Total TTC, avant remise.")
         BigDecimal totalTTC,
 
-        @Schema(description = "Taux de remise appliqué au total, en %.")
+        @Schema(description = "Taux de remise appliqué au total, en % (5 = 5 %) : `StlQuote.Discount` (ratio 0–1) × 100.")
         BigDecimal remisePercent,
         @Schema(description = "Montant de la remise, HT.")
         BigDecimal remiseHT,

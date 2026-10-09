@@ -38,13 +38,13 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("comProspection.code")),
 
     // -- Financier, déjà servi par la fiche. Scalaires de ComFolder : coût nul.
-    // `REMISE` et `PROBABILITE_FINALISATION` sont des ratios en fraction (1.00 = 100 %) : sommables
-    // quand même, c'est au client de choisir ce qu'il additionne.
+    // `REMISE` est en pourcentage 0–100, `PROBABILITE_FINALISATION` en fraction (1.00 = 100 %) :
+    // sommables quand même, c'est au client de choisir ce qu'il additionne.
     PRIX_AVANT_REMISE("prixAvantRemise", "Prix avant remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
             Chemin.groupableEtAgregeable("priceBeforeDiscount")),
     REMISE("remise", "Remise (%)", Groupe.FINANCIER, TypeColonne.NOMBRE, false,
-            Chemin.groupableEtAgregeable("discount")),
-    REMISE_MONTANT("remiseMontant", "Remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            Chemin.groupableEtAgregeable("remisePourcentage")),
+    REMISE_MONTANT("remiseMontant", "Remise HT", Groupe.FINANCIER, TypeColonne.MONTANT, false,
             Chemin.groupableEtAgregeable("discountAmount")),
     PRIX_APRES_REMISE("prixApresRemise", "Prix après remise", Groupe.FINANCIER, TypeColonne.MONTANT, false,
             Chemin.groupableEtAgregeable("priceAfterDiscount")),

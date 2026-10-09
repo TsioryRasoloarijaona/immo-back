@@ -411,4 +411,8 @@ public class ComFolder {
 
     @Formula("DATEDIFF(day, AgreementDate, DeliveryDateReal)")
     private Integer delaiLivraison;
+
+    /** {@code Discount} (ratio OMRAN) en pourcentage, pour grouper/agréger en SQL : ConventionRemise#pourcentage. */
+    @Formula("Discount * 100")
+    private BigDecimal remisePourcentage;
 }
