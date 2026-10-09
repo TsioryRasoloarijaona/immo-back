@@ -1,6 +1,6 @@
 package com.tsix.immocrm.services.prospection;
 
-import com.tsix.immocrm.dto.prospection.MontantsOffreDto;
+import com.tsix.immocrm.domain.ConventionRemise;
 import com.tsix.immocrm.dto.prospection.OffreDevisData;
 import com.tsix.immocrm.dto.prospection.OffreDevisData.SousArticleLigne;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -63,25 +63,9 @@ public class OffreDevisDocumentService {
                 Champs.de(article, StkItem::getStkItemType, StkItemType::getDescription),
                 TierNomFormatter.nom(quote.getCfgCommercial()),
                 quote.getComPaymentMethod() != null ? quote.getComPaymentMethod().getDescription() : null,
-                toMontantsDto(quote),
+                DevisService.toMontantsDto(quote),
                 lignes.stream().map(OffreDevisDocumentService::toLigne).toList(),
                 devisService.calculerSchemaFinancement(quote)
-        );
-    }
-
-    private static MontantsOffreDto toMontantsDto(StlQuote q) {
-        return new MontantsOffreDto(
-                q.getVatRatio(),
-                q.getUnitCostHT(), q.getUnitCost(),
-                q.getItemPriceHT(), q.getItemPrice(),
-                q.getUnderItemsPriceHT(), q.getUnderItemsPrice(),
-                q.getPriceBeforeDiscountHT(), q.getPriceBeforeDiscount(),
-                q.getDiscount(), q.getDiscountAmountHT(), q.getDiscountAmount(),
-                q.getUnitCostAfterDiscountHT(), q.getUnitCostAfterDiscount(),
-                q.getItemPriceAfterDiscountHT(), q.getItemPriceAfterDiscount(),
-                q.getUnderItemsPriceAfterDiscountHT(), q.getUnderItemsPriceAfterDiscount(),
-                q.getPriceAfterDiscountHT(), q.getPriceAfterDiscount(),
-                q.getCommissionRate()
         );
     }
 
@@ -92,7 +76,7 @@ public class OffreDevisDocumentService {
                 Boolean.TRUE.equals(item.getAlwaysAffected()),
                 item.getArea(),
                 item.getPriceBeforeDiscount(),
-                item.getDiscount(),
+                ConventionRemise.pourcentage(item.getDiscount()),
                 item.getDiscountAmount(),
                 item.getPriceAfterDiscount()
         );

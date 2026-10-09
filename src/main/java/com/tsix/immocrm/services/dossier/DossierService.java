@@ -6,6 +6,7 @@ import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.ConventionRemise;
 import com.tsix.immocrm.domain.EtapeMilestone;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
@@ -417,13 +418,11 @@ public class DossierService {
         BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
         BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
 
-        BigDecimal discountPercent;
         BigDecimal discountAmount;
         BigDecimal discountAmountHT;
         BigDecimal priceAfterDiscount;
         BigDecimal priceAfterDiscountHT;
         if (remiseExplicite) {
-            discountPercent = remisePercent;
             discountAmount = priceBeforeDiscount.multiply(remisePercent)
                     .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
             discountAmountHT = priceBeforeDiscountHT.multiply(remisePercent)
@@ -435,9 +434,6 @@ public class DossierService {
             priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
             discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
             discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
-            discountPercent = priceBeforeDiscount.signum() != 0
-                    ? discountAmount.multiply(BigDecimal.valueOf(100)).divide(priceBeforeDiscount, 6, RoundingMode.HALF_UP)
-                    : BigDecimal.ZERO;
         }
 
         // Remise répartie au prorata HT entre principal et annexes, comme DevisService#calculerMontants.
@@ -457,8 +453,9 @@ public class DossierService {
         folder.setUnderItemsPriceHT(underItemsPriceHT);
         folder.setPriceBeforeDiscount(priceBeforeDiscount);
         folder.setPriceBeforeDiscountHT(priceBeforeDiscountHT);
-        folder.setDiscount(discountPercent);
-        folder.setDiscountAmount(discountAmount);
+        // Convention OMRAN : ratio du HT et montant HT (ComFolder n'a pas de DiscountAmountHT).
+        folder.setDiscount(ConventionRemise.ratioDuHT(discountAmountHT, priceBeforeDiscountHT));
+        folder.setDiscountAmount(discountAmountHT);
         folder.setPriceAfterDiscount(priceAfterDiscount);
         folder.setPriceAfterDiscountHT(priceAfterDiscountHT);
         folder.setItemPriceAfter(itemPriceAfter);
@@ -575,8 +572,10 @@ public class DossierService {
                 .map(LigneSchemaFinancementDto::montant)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // DiscountAmount est HT (convention OMRAN) : le montant TTC de la réponse est l'écart des prix TTC.
         return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
-                apercu.getDiscountAmount(), apercu.getDiscount(), prixApresRemise);
+                apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
+                ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise);
     }
 
     /**
@@ -897,7 +896,7 @@ public class DossierService {
                 Champs.de(f.getComProspection(), ComProspection::getId),
                 Champs.de(f.getComProspection(), ComProspection::getCode),
                 f.getPriceBeforeDiscount(),
-                f.getDiscount(),
+                ConventionRemise.pourcentage(f.getDiscount()),
                 f.getDiscountAmount(),
                 f.getPriceAfterDiscount(),
                 // Le « montant d'avance » vient d'AgreementAmount : ComFolder n'a pas d'AdvanceAmount.
@@ -969,7 +968,7 @@ public class DossierService {
                 TierNomFormatter.nom(f.getCfgLawyer()),
                 articles,
                 f.getPriceBeforeDiscount(),
-                f.getDiscount(),
+                ConventionRemise.pourcentage(f.getDiscount()),
                 f.getDiscountAmount(),
                 f.getPriceAfterDiscount(),
                 f.getPrice(),

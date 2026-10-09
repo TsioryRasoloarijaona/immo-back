@@ -44,7 +44,9 @@ class AppliquerMontantsRemiseTotalTest {
                 () -> assertThat(f.getItemPrice()).isEqualByComparingTo("1000000"),
                 () -> assertThat(f.getUnderItemsPrice()).isEqualByComparingTo("200000"),
                 () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("1200000"),
-                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("60000"),
+                // Convention OMRAN : DiscountAmount HT, Discount ratio 0–1 du HT.
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("50000"),
+                () -> assertThat(f.getDiscount()).isEqualByComparingTo("0.05"),
                 () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1140000"),
                 () -> assertThat(f.getItemPriceHT()).isEqualByComparingTo("833333.333333"),
                 () -> assertThat(f.getUnderItemsPriceHT()).isEqualByComparingTo("166666.666667"),
@@ -93,8 +95,32 @@ class AppliquerMontantsRemiseTotalTest {
         assertAll(
                 () -> assertThat(f.getItemPrice()).isEqualByComparingTo("1000000"),
                 () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("1200000"),
-                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("60000"),
-                () -> assertThat(f.getDiscount()).isEqualByComparingTo("5"),
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("50000"),
+                () -> assertThat(f.getDiscount()).isEqualByComparingTo("0.05"),
                 () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1140000"));
+    }
+
+    @Test
+    void prixNegocieAuDessusDuPrixDeReference_remiseNegative_ratioEtMontantHtNegatifs() {
+        ComFolder f = new ComFolder();
+
+        DossierService.appliquerMontants(f, appartement(), List.of(), new BigDecimal("1100000"), null, BigDecimal.ZERO);
+
+        assertAll(
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("-83333.333334"),
+                () -> assertThat(f.getDiscount()).isEqualByComparingTo("-0.1"),
+                () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1100000"));
+    }
+
+    @Test
+    void remiseSurPrixNul_baseHtNulle_ratioZeroSansDivisionParZero() {
+        ComFolder f = new ComFolder();
+
+        DossierService.appliquerMontants(f, appartement(), List.of(), BigDecimal.ZERO, CINQ, BigDecimal.ZERO);
+
+        assertAll(
+                () -> assertThat(f.getDiscount()).isEqualByComparingTo("0"),
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("0"),
+                () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("0"));
     }
 }

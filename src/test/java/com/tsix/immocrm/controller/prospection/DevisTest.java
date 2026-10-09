@@ -82,6 +82,9 @@ class DevisTest {
     @Autowired
     private StlQuoteRepository quoteRepository;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     private CfgTranche creerTranche(String code) {
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
@@ -263,12 +266,55 @@ class DevisTest {
                 + "\",\"remisePercent\":10}";
 
         // Total TTC = 120 000, remise 10% = 12 000 -> prix de vente TTC = 108 000.
-        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.montants.remisePercent").value(10))
+                .andExpect(jsonPath("$.montants.remisePercent").value(10.0))
+                .andExpect(jsonPath("$.montants.remiseHT").value(10000))
                 .andExpect(jsonPath("$.montants.remiseTTC").value(12000))
-                .andExpect(jsonPath("$.montants.prixVenteTTC").value(108000));
+                .andExpect(jsonPath("$.montants.prixVenteTTC").value(108000))
+                .andReturn().getResponse().getContentAsString();
+
+        // Relue en base : ratio 0–1, montant HT et montant TTC, comme le logiciel de bureau.
+        entityManager.flush();
+        entityManager.clear();
+        StlQuote relue = quoteRepository.findById(
+                UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id").toString())).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getDiscount()).isEqualByComparingTo("0.1"),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getDiscountAmountHT()).isEqualByComparingTo("10000"),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getDiscountAmount()).isEqualByComparingTo("12000"));
+    }
+
+    @Test
+    void listerDevis_offreEcriteParLeLogicielDeBureau_remiseRatioExposeeEnPourcentage() throws Exception {
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode("PSN-DEVIS-OMRAN");
+        prospectionRepository.save(prospection);
+        CfgTranche tranche = creerTranche("TR-DEVIS-OMRAN");
+
+        // Valeurs de l'offre réelle 26/00312 : Discount = 0,24 (ratio), montants HT et TTC.
+        StlQuote omran = new StlQuote();
+        omran.setId(UUID.randomUUID());
+        omran.setCode("OMRAN-24");
+        omran.setDocDate(java.time.LocalDateTime.of(2026, 9, 1, 0, 0));
+        omran.setComProspection(prospection);
+        omran.setCfgTranche(tranche);
+        omran.setPriceBeforeDiscountHT(new BigDecimal("1440000"));
+        omran.setPriceBeforeDiscount(new BigDecimal("1728000"));
+        omran.setDiscount(new BigDecimal("0.240000"));
+        omran.setDiscountAmountHT(new BigDecimal("345600"));
+        omran.setDiscountAmount(new BigDecimal("414720"));
+        omran.setPriceAfterDiscountHT(new BigDecimal("1094400"));
+        omran.setPriceAfterDiscount(new BigDecimal("1313280"));
+        quoteRepository.save(omran);
+
+        mockMvc.perform(get("/api/prospections/{id}/devis", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].montants.remisePercent").value(24.0))
+                .andExpect(jsonPath("$.content[0].montants.remiseHT").value(345600))
+                .andExpect(jsonPath("$.content[0].montants.remiseTTC").value(414720));
     }
 
     /**

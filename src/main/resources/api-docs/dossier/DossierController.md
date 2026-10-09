@@ -183,6 +183,10 @@ cacher). Le projet est déduit du premier article via sa tranche.
   **après** remise, et `remise`/`remiseMontant` sont déduits de l'écart avec le prix de référence
   de l'article.
 
+Dans les deux modes, la base est écrite comme le logiciel de bureau l'écrit : `ComFolder.Discount`
+en ratio 0–1 du HT avant remise, `ComFolder.DiscountAmount` en HT. L'API relit `remise` en
+pourcentage (0–100) et `remiseMontant` en HT.
+
 **Prix de référence d'un article** : `comSalePrice` s'il est > 0, sinon `comSalePriceFloor` (prix
 plancher) s'il est > 0 ; il sert de base pour l'article principal, les annexes, la simulation et
 les offres. Sans prix de référence, la base avant remise est le prix négocié (remise nulle). C'est

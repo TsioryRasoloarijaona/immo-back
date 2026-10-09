@@ -36,10 +36,10 @@ public record DossierListItemDto(
         @Schema(description = "Prix avant remise.")
         BigDecimal prixAvantRemise,
 
-        @Schema(description = "Taux de remise, en pourcentage.")
+        @Schema(description = "Taux de remise en pourcentage (5 = 5 %), jamais un ratio 0–1.")
         BigDecimal remise,
 
-        @Schema(description = "Montant de la remise.")
+        @Schema(description = "Montant de la remise, hors taxes (`ComFolder.DiscountAmount`).")
         BigDecimal remiseMontant,
 
         @Schema(description = "Prix après remise.")

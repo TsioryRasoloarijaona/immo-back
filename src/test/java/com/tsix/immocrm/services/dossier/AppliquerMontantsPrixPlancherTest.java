@@ -40,7 +40,13 @@ class AppliquerMontantsPrixPlancherTest {
         DossierService.appliquerMontants(folder, article("0", "900000"), List.of(),
                 new BigDecimal("850000"), null, BigDecimal.ZERO);
 
-        assertThat(folder.getDiscountAmount()).isEqualByComparingTo("50000").isNotNegative();
+        // DiscountAmount est HT (convention OMRAN) : la remise TTC est l'écart des prix TTC.
+        assertThat(remiseTTC(folder)).isEqualByComparingTo("50000").isNotNegative();
+        assertThat(folder.getDiscountAmount()).isEqualByComparingTo("41666.666667");
+    }
+
+    private static BigDecimal remiseTTC(ComFolder folder) {
+        return folder.getPriceBeforeDiscount().subtract(folder.getPriceAfterDiscount());
     }
 
     @Test
@@ -62,7 +68,8 @@ class AppliquerMontantsPrixPlancherTest {
                 new BigDecimal("1000000"), BigDecimal.TEN, BigDecimal.ZERO);
 
         assertThat(folder.getPriceBeforeDiscount()).isEqualByComparingTo("1000000");
-        assertThat(folder.getDiscountAmount()).isEqualByComparingTo("100000");
+        assertThat(remiseTTC(folder)).isEqualByComparingTo("100000");
+        assertThat(folder.getDiscount()).isEqualByComparingTo("0.1");
     }
 
     @Test
@@ -74,6 +81,6 @@ class AppliquerMontantsPrixPlancherTest {
                 new BigDecimal("1120000"), null, BigDecimal.ZERO);
 
         assertThat(folder.getUnderItemsPrice()).isEqualByComparingTo("120000");
-        assertThat(folder.getDiscountAmount()).isEqualByComparingTo("0");
+        assertThat(remiseTTC(folder)).isEqualByComparingTo("0");
     }
 }

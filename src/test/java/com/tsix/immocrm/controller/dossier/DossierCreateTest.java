@@ -506,7 +506,8 @@ class DossierCreateTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.prixAvantRemise").value(1000000.00))
                 .andExpect(jsonPath("$.remise").value(10.0))
-                .andExpect(jsonPath("$.remiseMontant").value(100000.00))
+                // HT : 833 333,333333 − 900 000 / 1,2.
+                .andExpect(jsonPath("$.remiseMontant").value(83333.333333))
                 .andExpect(jsonPath("$.prixApresRemise").value(900000.00))
                 .andExpect(jsonPath("$.prix").value(900000.00))
                 // Total à payer = prix négocié (900 000, TTC) + Frais Syndic (16 800) — contrairement
@@ -549,14 +550,21 @@ class DossierCreateTest {
                 {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REMISE-TEST","prix":1000000.00,"remisePercent":10}
                 """.formatted(prospection.getId(), item.getId(), modePaie.getId());
 
-        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+        String creation = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.prixAvantRemise").value(1000000.00))
-                .andExpect(jsonPath("$.remise").value(10))
-                .andExpect(jsonPath("$.remiseMontant").value(100000.00))
+                .andExpect(jsonPath("$.remise").value(10.0))
+                .andExpect(jsonPath("$.remiseMontant").value(83333.333333))
                 .andExpect(jsonPath("$.prixApresRemise").value(900000.00))
                 .andExpect(jsonPath("$.prix").value(900000.00))
-                .andExpect(jsonPath("$.totalAPayer").value(916800.00));
+                .andExpect(jsonPath("$.totalAPayer").value(916800.00))
+                .andReturn().getResponse().getContentAsString();
+
+        // Relu en base : les colonnes sont dans la convention du logiciel de bureau (ratio, HT).
+        com.tsix.immocrm.entities.com.ComFolder folder = recharger(creation);
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscount()).isEqualByComparingTo("0.1"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscountAmount()).isEqualByComparingTo("83333.333333"));
     }
 
     @Test
@@ -565,8 +573,8 @@ class DossierCreateTest {
                         .content(corpsAppartementEtParking("ANNEXE", "1200000.00", "5")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.prixAvantRemise").value(1200000.00))
-                .andExpect(jsonPath("$.remise").value(5))
-                .andExpect(jsonPath("$.remiseMontant").value(60000.00))
+                .andExpect(jsonPath("$.remise").value(5.0))
+                .andExpect(jsonPath("$.remiseMontant").value(50000.00))
                 .andExpect(jsonPath("$.prixApresRemise").value(1140000.00))
                 .andExpect(jsonPath("$.totalAPayer").value(1140000.00))
                 .andReturn().getResponse().getContentAsString();
@@ -576,7 +584,8 @@ class DossierCreateTest {
                 () -> org.assertj.core.api.Assertions.assertThat(folder.getItemPrice()).isEqualByComparingTo("1000000"),
                 () -> org.assertj.core.api.Assertions.assertThat(folder.getUnderItemsPrice()).isEqualByComparingTo("200000"),
                 () -> org.assertj.core.api.Assertions.assertThat(folder.getPriceBeforeDiscount()).isEqualByComparingTo("1200000"),
-                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscountAmount()).isEqualByComparingTo("60000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscountAmount()).isEqualByComparingTo("50000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscount()).isEqualByComparingTo("0.05"),
                 () -> org.assertj.core.api.Assertions.assertThat(folder.getPriceAfterDiscount()).isEqualByComparingTo("1140000"));
     }
 
@@ -673,9 +682,12 @@ class DossierCreateTest {
                 () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.prixAvantRemise"))
                         .isEqualByComparingTo(folder.getPriceBeforeDiscount()),
                 () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.montantRemise"))
-                        .isPositive().isEqualByComparingTo(folder.getDiscountAmount()),
+                        .isPositive()
+                        .isEqualByComparingTo(folder.getPriceBeforeDiscount().subtract(folder.getPriceAfterDiscount())),
+                // Le taux annoncé est celui que le dossier créé expose, et la base en garde le ratio.
                 () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.remisePercent"))
-                        .isEqualByComparingTo(folder.getDiscount()),
+                        .isEqualByComparingTo(montant(creation, "$.remise"))
+                        .isEqualByComparingTo(folder.getDiscount().movePointRight(2)),
                 () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.prixApresRemise"))
                         .isEqualByComparingTo(folder.getPriceAfterDiscount()));
     }
@@ -710,7 +722,7 @@ class DossierCreateTest {
         mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.prixAvantRemise").value(950000.00))
-                .andExpect(jsonPath("$.remise").value(0))
+                .andExpect(jsonPath("$.remise").value(0.0))
                 .andExpect(jsonPath("$.remiseMontant").value(0))
                 .andExpect(jsonPath("$.prixApresRemise").value(950000.00));
     }

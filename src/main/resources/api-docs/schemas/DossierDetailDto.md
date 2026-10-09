@@ -1,5 +1,16 @@
 # DossierDetailDto
 
+## remise
+
+Taux de remise **en pourcentage** (5 = 5 %), jamais un ratio 0–1 : `ComFolder.Discount` (ratio du
+prix HT avant remise, la convention du logiciel de bureau) × 100. Négatif = majoration (prix négocié
+au-dessus du prix de référence). Même échelle sur tous les dossiers, quel que soit leur auteur.
+
+## remiseMontant
+
+Montant de la remise **hors taxes** (`ComFolder.DiscountAmount`, qui n'a pas de pendant TTC en base)
+= `prixAvantRemiseHT` − `prixHT`. Le montant TTC se déduit par `prixAvantRemise` − `prixApresRemise`.
+
 ## probabiliteFinalisation
 
 Probabilité de finalisation du dossier.
