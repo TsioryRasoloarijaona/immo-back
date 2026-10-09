@@ -28,6 +28,8 @@ public class RemonteeLecture {
 
     private static final Logger log = LoggerFactory.getLogger(RemonteeLecture.class);
 
+    private static final String WHERE = " WHERE ";
+
     /** Clé quand ce n'est pas {@code PKey} : {@code AppFileObject} partage celle de son {@code AdmAttachedFile}. */
     static final Map<String, String> CLES_PRIMAIRES = Map.of("AppFileObject", "AdmAttachedFileId");
 
@@ -125,7 +127,7 @@ public class RemonteeLecture {
     void supprimer(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
         int lignes = versLecture.update(
-                "DELETE FROM dbo." + crochets(ligne.table()) + " WHERE " + crochets(cle) + " = ?",
+                "DELETE FROM dbo." + crochets(ligne.table()) + WHERE + crochets(cle) + " = ?",
                 ligne.pkey());
         log.debug("Suppression repercutee dans la copie : {} {} ({} ligne).",
                 ligne.table(), ligne.pkey(), lignes);
@@ -174,14 +176,14 @@ public class RemonteeLecture {
 
     /** Une ligne hors périmètre rend zéro tuple : {@link #fusionner} la voit absente et ne la copie pas. */
     private String selection(String table, String cle) {
-        String sql = projection(table) + " WHERE " + crochets(cle) + " = ?";
+        String sql = projection(table) + WHERE + crochets(cle) + " = ?";
         String filtre = predicatPerimetre(table);
         return filtre == null ? sql : sql + " AND " + filtre;
     }
 
     private String selectionTout(String table) {
         String filtre = predicatPerimetre(table);
-        return filtre == null ? projection(table) : projection(table) + " WHERE " + filtre;
+        return filtre == null ? projection(table) : projection(table) + WHERE + filtre;
     }
 
     /** Chaque colonne de {@link #COLONNES_HORS_PERIMETRE} doit être {@code NULL} ; {@code null} si la table n'en a pas. */

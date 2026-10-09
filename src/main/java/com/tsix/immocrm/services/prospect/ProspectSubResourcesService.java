@@ -267,12 +267,18 @@ public class ProspectSubResourcesService {
                 h.getDescription(),
                 auteur,
                 null,
-                statut == null ? null
-                        : StringUtils.hasText(statut.getDescription()) ? statut.getDescription() : statut.getCode(),
+                libelleStatut(statut),
                 Champs.de(dossier, ComFolder::getId),
                 Champs.de(dossier, ComFolder::getCode),
                 Champs.de(dossier, ComFolder::getStkItem, StkItem::getCode)
         );
+    }
+
+    private static String libelleStatut(StrStatus statut) {
+        if (statut == null) {
+            return null;
+        }
+        return StringUtils.hasText(statut.getDescription()) ? statut.getDescription() : statut.getCode();
     }
 
     private static ContactProspectDto toContactDto(CfgTierContact link) {
