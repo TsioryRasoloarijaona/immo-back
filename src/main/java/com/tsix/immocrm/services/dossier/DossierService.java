@@ -394,7 +394,6 @@ public class DossierService {
      * Remise explicite : {@code prixNegocie} est le total (principal + annexes) <b>avant</b> remise ;
      * sinon c'est le prix <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
      */
-    // Package-private : DossierMontantsBackfill (src/test) réutilise ce calcul exact.
     static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
                                            BigDecimal prixNegocie, BigDecimal remisePercent,
                                            BigDecimal fraisSyndic) {
