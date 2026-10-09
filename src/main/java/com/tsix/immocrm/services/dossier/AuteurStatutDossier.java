@@ -49,7 +49,9 @@ public class AuteurStatutDossier {
         Map<Jumelle, String> parJumelle = new HashMap<>();
         if (!dossiersARepli.isEmpty()) {
             strHistoryRepository.findByObjectIdInOrderByDocDateDesc(dossiersARepli).forEach(s -> {
-                if (s.getDocDate() != null && StringUtils.hasText(s.getAdmUserDescription())) {
+                // Un événement sans statut mais libellé (« Prospect transformé en client ») ne signe jamais un statut.
+                boolean evenement = s.getStrStatusId() == null && StringUtils.hasText(s.getDescription());
+                if (!evenement && s.getDocDate() != null && StringUtils.hasText(s.getAdmUserDescription())) {
                     parJumelle.putIfAbsent(new Jumelle(s.getObjectId(), s.getDocDate()), s.getAdmUserDescription());
                 }
             });

@@ -15,6 +15,10 @@ public interface StrHistoryRepository extends JpaRepository<StrHistory, UUID> {
 
     List<StrHistory> findByObjectIdInOrderByDocDateDesc(Collection<UUID> objectIds);
 
-    /** Événements sans statut d'un objet (aucune ligne légataire de dossier n'en a). */
-    List<StrHistory> findByObjectIdAndStrStatusIdIsNullOrderByDocDateAsc(UUID objectId);
+    /**
+     * Événements écrits par l'API sur un objet : sans statut, avec entité et libellé. Une ligne
+     * « jumelle » de statut (sans libellé) n'en est pas un — elle ne sert qu'à signer l'auteur.
+     */
+    List<StrHistory> findByObjectIdAndStrConfigEntityIdAndStrStatusIdIsNullAndDescriptionIsNotNullOrderByDocDateAsc(
+            UUID objectId, UUID strConfigEntityId);
 }

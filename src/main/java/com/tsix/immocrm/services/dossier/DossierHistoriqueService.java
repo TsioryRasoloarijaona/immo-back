@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.HistoriqueEvenementDto;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import com.tsix.immocrm.entities.com.ComDocument;
@@ -73,7 +74,8 @@ public class DossierHistoriqueService {
         Function<StrFolderStatusHistory, String> auteur = auteurStatut.resoudre(statuts);
         statuts.forEach(h -> evenements.add(toStatutEvent(h, auteur.apply(h))));
         // Événements liés au statut sans en être un (ex. « Prospect transformé en client »).
-        strHistoryRepository.findByObjectIdAndStrStatusIdIsNullOrderByDocDateAsc(dossierId)
+        strHistoryRepository.findByObjectIdAndStrConfigEntityIdAndStrStatusIdIsNullAndDescriptionIsNotNullOrderByDocDateAsc(
+                        dossierId, StatutDossier.CONFIG_ENTITY_ID)
                 .forEach(s -> evenements.add(new HistoriqueEvenementDto(s.getDocDate(), HistoriqueEvenementDto.STATUT,
                         s.getAdmUserDescription(), s.getDescription())));
         documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).forEach(d -> evenements.add(toEcheanceEvent(d)));
