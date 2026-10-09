@@ -270,8 +270,7 @@ public class DossierController {
     @Operation(summary = "Prévisualise le schéma de financement (étape avant création du dossier)")
     @ApiResponses({
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "400", description = "`articleIds` manquant/vide, `prix` "
-                    + "manquant, `remisePercent` hors de [0 ; 100], ou un des articles est introuvable.")
+            @ApiResponse(responseCode = "400")
     })
     public SchemaFinancementDto simulerSchemaFinancement(@RequestBody SimulerSchemaFinancementRequest request) {
         return dossierService.simulerSchemaFinancement(request);

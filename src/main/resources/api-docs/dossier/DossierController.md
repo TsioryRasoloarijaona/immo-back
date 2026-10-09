@@ -143,8 +143,8 @@ endpoint à chaque changement de prix/article pour afficher le récapitulatif av
 via `POST /api/dossiers`. `articleIds` accepte le même format que la création réelle (le premier
 article détermine la tranche — barème AVANCE/SYNDIC — et la vocation — catégorie d'échéance). Les
 articles n'ont pas besoin d'être DISPONIBLE ici : rien n'est réservé. Si `remisePercent` est fourni,
-AVANCE et AUTO-FINANCEMENT sont calculés sur le prix **après** remise (`prix` étant alors le prix
-avant remise, articles suivants comptés comme annexes) — mêmes montants que ceux que `POST
+AVANCE et AUTO-FINANCEMENT sont calculés sur le prix **après** remise (`prix` étant alors le total
+avant remise, annexes comprises — articles suivants de `articleIds`) — mêmes montants que ceux que `POST
 /api/dossiers` persistera pour les mêmes paramètres. FRAIS SYNDIC ne dépend pas du prix (barème de
 la tranche) et n'est donc jamais remisé.
 
@@ -152,6 +152,11 @@ la tranche) et n'est donc jamais remisé.
 
 Schéma calculé. `lignes` peut être vide si aucune catégorie AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC
 n'existe pour la vocation de l'article (cas très inhabituel — même règle qu'à la création).
+
+### reponse 400
+
+`articleIds` manquant/vide, `prix` manquant, `remisePercent` hors de [0 ; 100], un des articles est
+introuvable, ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
 
 ## create
 
@@ -168,8 +173,9 @@ cacher). Le projet est déduit du premier article via sa tranche.
 
 **Remise commerciale** — deux modes, selon `remisePercent` :
 - `remisePercent` **fourni** (écran de création où le commercial saisit la remise) : `prix` est le
-  prix **avant** remise et sert de base à la place du prix commercial de l'article ; les annexes
-  (articles suivants de `articleIds`) s'y ajoutent ; la remise est appliquée sur ce total et se
+  total TTC **avant** remise, annexes comprises (articles suivants de `articleIds`, comptés à leur
+  prix de référence) ; le principal vaut `prix` − annexes, à la place du prix commercial de
+  l'article ; la remise est appliquée sur ce total et se
   répercute sur `prixApresRemise`, `prix`, `totalAPayer` **et** sur le schéma de financement (AVANCE
   / AUTO-FINANCEMENT calculés sur le prix après remise). Les FRAIS SYNDIC viennent du barème de la
   tranche et ne sont jamais remisés.
@@ -188,8 +194,8 @@ client », le tiers passe au type client (voir `PATCH /api/dossiers/{id}/statut`
 ### reponse 400
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
-de paiement introuvable, prospection sans prospect lié, article déjà occupé, ou `remisePercent` hors
-de [0 ; 100].
+de paiement introuvable, prospection sans prospect lié, article déjà occupé, `remisePercent` hors
+de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
 
 ## changerStatut
 

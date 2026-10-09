@@ -391,19 +391,14 @@ public class DossierService {
 
     /**
      * Ventilation HT/TTC/remise, comme {@code DevisService#calculerMontants} (annexes = sous-articles).
-     * Remise explicite : {@code prixNegocie} est le prix <b>avant</b> remise ; sinon c'est le prix
-     * <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
+     * Remise explicite : {@code prixNegocie} est le total (principal + annexes) <b>avant</b> remise ;
+     * sinon c'est le prix <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
      */
-    // Package-private : DossierMontantsBackfill (src/test) réutilise ce calcul exact.
     static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
                                            BigDecimal prixNegocie, BigDecimal remisePercent,
                                            BigDecimal fraisSyndic) {
         boolean remiseExplicite = remisePercent != null;
         BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
-
-        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(principal, prixNegocie, remiseExplicite, vatRatio);
-        BigDecimal itemPrice = prixPrincipal.ttc();
-        BigDecimal itemPriceHT = prixPrincipal.ht();
 
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
@@ -413,6 +408,11 @@ public class DossierService {
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
+
+        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(principal, prixNegocie, remiseExplicite,
+                vatRatio, underItemsPrice);
+        BigDecimal itemPrice = prixPrincipal.ttc();
+        BigDecimal itemPriceHT = prixPrincipal.ht();
 
         BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
         BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
@@ -476,10 +476,17 @@ public class DossierService {
     }
 
     private static PrixTtcHt prixPrincipalAvantRemise(StkItem principal, BigDecimal prixNegocie,
-                                                      boolean remiseExplicite, BigDecimal vatRatio) {
+                                                      boolean remiseExplicite, BigDecimal vatRatio,
+                                                      BigDecimal prixAnnexes) {
         if (remiseExplicite && prixNegocie != null) {
-            // Prix saisi = prix avant remise du principal ; HT redérivé du taux de TVA.
-            return new PrixTtcHt(prixNegocie, diviserParTaux(prixNegocie, vatRatio));
+            // Prix saisi = total avant remise, annexes comprises (même sens que sans remise) :
+            // le principal est le reste ; HT redérivé du taux de TVA. Voir FEATURE-remise-dossier.md §2.
+            if (prixNegocie.compareTo(prixAnnexes) < 0) {
+                throw new InvalidRequestException("prix inférieur au prix des annexes (" + prixAnnexes
+                        + ") : avec remisePercent, prix est le total avant remise, annexes comprises: " + prixNegocie);
+            }
+            BigDecimal itemPrice = prixNegocie.subtract(prixAnnexes);
+            return new PrixTtcHt(itemPrice, diviserParTaux(itemPrice, vatRatio));
         }
         Optional<PrixArticle.PrixDeReference> reference = PrixArticle.prixDeReference(principal);
         if (reference.isPresent()) {
@@ -568,7 +575,8 @@ public class DossierService {
                 .map(LigneSchemaFinancementDto::montant)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return new SchemaFinancementDto(lignes, totalGeneral);
+        return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
+                apercu.getDiscountAmount(), apercu.getDiscount(), prixApresRemise);
     }
 
     /**

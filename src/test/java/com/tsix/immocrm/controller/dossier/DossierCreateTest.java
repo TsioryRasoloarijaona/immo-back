@@ -560,38 +560,129 @@ class DossierCreateTest {
     }
 
     @Test
-    void create_avecRemisePercentEtAnnexe_remiseSurLeTotalPrincipalPlusAnnexes() throws Exception {
-        ComProspection prospection = newProspectionWithProspect();
-
-        StkItem principal = newAvailableItem("LOT-REMISE-PRINCIPAL");
-        principal.setVat(new java.math.BigDecimal("0.20"));
-        principal.setComSalePrice(new java.math.BigDecimal("1000000.00"));
-        principal.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
-        stkItemRepository.save(principal);
-
-        StkItem annexe = newAvailableItem("LOT-REMISE-ANNEXE");
-        annexe.setComSalePrice(new java.math.BigDecimal("200000.00"));
-        annexe.setComSalePriceHT(new java.math.BigDecimal("166666.666667"));
-        stkItemRepository.save(annexe);
-
-        ComPaymentMethod modePaie = new ComPaymentMethod();
-        modePaie.setId(UUID.randomUUID());
-        modePaie.setCode("VIREMENT-REMISE-ANNEXE");
-        paymentMethodRepository.save(modePaie);
-
-        // Prix avant remise = 1 000 000 (principal, saisi) + 200 000 (annexe) = 1 200 000
-        // Remise 5 % => 60 000 ; prix dû 1 140 000. Pas de tranche configurée => pas de syndic.
-        String body = """
-                {"prospectionId":"%s","articleIds":["%s","%s"],"modePaieId":"%s","cin":"CIN-REMISE-ANNEXE","prix":1000000.00,"remisePercent":5}
-                """.formatted(prospection.getId(), principal.getId(), annexe.getId(), modePaie.getId());
-
-        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+    void create_avecRemisePercentEtAnnexe_prixEstLeTotal_annexeNonRecomptee() throws Exception {
+        String creation = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsAppartementEtParking("ANNEXE", "1200000.00", "5")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.prixAvantRemise").value(1200000.00))
                 .andExpect(jsonPath("$.remise").value(5))
                 .andExpect(jsonPath("$.remiseMontant").value(60000.00))
                 .andExpect(jsonPath("$.prixApresRemise").value(1140000.00))
-                .andExpect(jsonPath("$.totalAPayer").value(1140000.00));
+                .andExpect(jsonPath("$.totalAPayer").value(1140000.00))
+                .andReturn().getResponse().getContentAsString();
+
+        com.tsix.immocrm.entities.com.ComFolder folder = recharger(creation);
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getItemPrice()).isEqualByComparingTo("1000000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getUnderItemsPrice()).isEqualByComparingTo("200000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getPriceBeforeDiscount()).isEqualByComparingTo("1200000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getDiscountAmount()).isEqualByComparingTo("60000"),
+                () -> org.assertj.core.api.Assertions.assertThat(folder.getPriceAfterDiscount()).isEqualByComparingTo("1140000"));
+    }
+
+    @Test
+    void create_remiseZeroAvecAnnexe_rienNEstAjouteAuPrix() throws Exception {
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsAppartementEtParking("ANNEXE0", "1200000.00", "0")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1200000.00))
+                .andExpect(jsonPath("$.remiseMontant").value(0))
+                .andExpect(jsonPath("$.prixApresRemise").value(1200000.00));
+    }
+
+    @Test
+    void create_remiseAvecPrixInferieurAuxAnnexes_returns400() throws Exception {
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpsAppartementEtParking("ANNEXEKO", "150000.00", "5")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Appartement 1 000 000 + parking 200 000, sans tranche (pas de syndic). */
+    private String corpsAppartementEtParking(String suffixe, String prix, String remisePercent) {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem principal = newAvailableItem("LOT-" + suffixe + "-PRINC");
+        principal.setVat(new java.math.BigDecimal("0.20"));
+        principal.setComSalePrice(new java.math.BigDecimal("1000000.00"));
+        principal.setComSalePriceHT(new java.math.BigDecimal("833333.333333"));
+        stkItemRepository.save(principal);
+        StkItem annexe = newAvailableItem("LOT-" + suffixe + "-PARK");
+        annexe.setComSalePrice(new java.math.BigDecimal("200000.00"));
+        annexe.setComSalePriceHT(new java.math.BigDecimal("166666.666667"));
+        stkItemRepository.save(annexe);
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-" + suffixe);
+        paymentMethodRepository.save(modePaie);
+        return """
+                {"prospectionId":"%s","articleIds":["%s","%s"],"modePaieId":"%s","cin":"CIN-%s","prix":%s,"remisePercent":%s}
+                """.formatted(prospection.getId(), principal.getId(), annexe.getId(), modePaie.getId(),
+                suffixe, prix, remisePercent);
+    }
+
+    /** ComFolder relu en base (flush + clear) : on compare ce qui est enregistré, pas l'entité en cache. */
+    private com.tsix.immocrm.entities.com.ComFolder recharger(String reponseCreation) {
+        entityManager.flush();
+        entityManager.clear();
+        return folderRepository
+                .findById(UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponseCreation, "$.id"))).orElseThrow();
+    }
+
+    @Test
+    void simulationPuisCreation_avecRemiseEtAnnexe_memesMontantsDeRemise() throws Exception {
+        assertSimulationEgaleCreation("EGAL-EXPL", "1200000.00", "5");
+    }
+
+    @Test
+    void simulationPuisCreation_sansRemise_memesMontantsDeRemiseDeduits() throws Exception {
+        assertSimulationEgaleCreation("EGAL-DED", "1080000.00", null);
+    }
+
+    /** Mêmes entrées → la simulation annonce exactement ce que la création enregistre sur ComFolder. */
+    private void assertSimulationEgaleCreation(String suffixe, String prix, String remisePercent) throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem principal = newAvailableItem("LOT-" + suffixe + "-PRINC");
+        principal.setVat(new java.math.BigDecimal("0.20"));
+        principal.setComSalePrice(new java.math.BigDecimal("1000000.00"));
+        stkItemRepository.save(principal);
+        StkItem annexe = newAvailableItem("LOT-" + suffixe + "-PARK");
+        annexe.setComSalePrice(new java.math.BigDecimal("200000.00"));
+        stkItemRepository.save(annexe);
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode("VIREMENT-" + suffixe);
+        paymentMethodRepository.save(modePaie);
+        String remise = remisePercent != null ? ",\"remisePercent\":" + remisePercent : "";
+
+        String simulation = mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"articleIds":["%s","%s"],"prix":%s%s}"""
+                                .formatted(principal.getId(), annexe.getId(), prix, remise)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String creation = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"prospectionId":"%s","articleIds":["%s","%s"],"modePaieId":"%s","cin":"CIN-%s","prix":%s%s}"""
+                                .formatted(prospection.getId(), principal.getId(), annexe.getId(),
+                                        modePaie.getId(), suffixe, prix, remise)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        com.tsix.immocrm.entities.com.ComFolder folder = recharger(creation);
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.prixAvantRemise"))
+                        .isEqualByComparingTo(folder.getPriceBeforeDiscount()),
+                () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.montantRemise"))
+                        .isPositive().isEqualByComparingTo(folder.getDiscountAmount()),
+                () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.remisePercent"))
+                        .isEqualByComparingTo(folder.getDiscount()),
+                () -> org.assertj.core.api.Assertions.assertThat(montant(simulation, "$.prixApresRemise"))
+                        .isEqualByComparingTo(folder.getPriceAfterDiscount()));
+    }
+
+    private static java.math.BigDecimal montant(String json, String chemin) {
+        Object valeur = com.jayway.jsonpath.JsonPath.read(json, chemin);
+        return new java.math.BigDecimal(String.valueOf(valeur));
     }
 
     @Test
