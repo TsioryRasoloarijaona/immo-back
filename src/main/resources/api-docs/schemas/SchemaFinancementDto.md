@@ -12,9 +12,10 @@ que `POST /api/dossiers` enregistrera (`remiseMontant` du dossier) avec les mêm
 
 ## remisePercent
 
-Taux de remise en pourcentage, de 0 à 100 (5 = 5 %), jamais un ratio 0–1. Le taux saisi s'il a été
-fourni ; sinon le taux déduit de l'écart entre le prix de référence de l'article (+ annexes) et le
-`prix` négocié. Exactement la valeur que `POST /api/dossiers` enregistrera dans `ComFolder.Discount`.
+Taux de remise en pourcentage (5 = 5 %), jamais un ratio 0–1. De 0 à 100 quand il est saisi
+(`remisePercent` de la requête) ; déduit de l'écart entre le prix de référence de l'article (+ annexes)
+et le `prix` négocié, il peut être négatif (prix négocié > prix de référence). Exactement la valeur
+que `POST /api/dossiers` enregistrera dans `ComFolder.Discount`.
 
 ## prixApresRemise
 

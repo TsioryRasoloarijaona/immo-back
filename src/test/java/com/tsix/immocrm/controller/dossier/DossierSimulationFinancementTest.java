@@ -244,15 +244,15 @@ class DossierSimulationFinancementTest {
     }
 
     @Test
-    void simuler_remiseExpliciteAvecAnnexe_remiseSurPrincipalPlusAnnexe() throws Exception {
+    void simuler_remiseExpliciteAvecAnnexe_prixEstLeTotal_annexeNonRecomptee() throws Exception {
         StkItem principal = articleAvecPrix("LOT-SIM-REM-PRINC", "1000000.00");
         StkItem annexe = articleAvecPrix("LOT-SIM-REM-PARK", "200000.00");
 
         String body = """
-                {"articleIds":["%s","%s"],"prix":1000000,"remisePercent":5}"""
+                {"articleIds":["%s","%s"],"prix":1200000,"remisePercent":5}"""
                 .formatted(principal.getId(), annexe.getId());
 
-        // (1 000 000 saisi + 200 000 annexe) × 5 % = 60 000 ; après remise 1 140 000.
+        // prix = total 1 200 000 (appartement 1 000 000 + parking 200 000) ; 5 % = 60 000.
         mockMvc.perform(post("/api/dossiers/simulation-financement")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
@@ -260,6 +260,37 @@ class DossierSimulationFinancementTest {
                 .andExpect(jsonPath("$.montantRemise").value(60000.0))
                 .andExpect(jsonPath("$.remisePercent").value(5))
                 .andExpect(jsonPath("$.prixApresRemise").value(1140000.0));
+    }
+
+    @Test
+    void simuler_remiseZeroAvecAnnexe_rienNEstAjouteAuPrix() throws Exception {
+        StkItem principal = articleAvecPrix("LOT-SIM-REM0-PRINC", "1000000.00");
+        StkItem annexe = articleAvecPrix("LOT-SIM-REM0-PARK", "200000.00");
+
+        String body = """
+                {"articleIds":["%s","%s"],"prix":1200000,"remisePercent":0}"""
+                .formatted(principal.getId(), annexe.getId());
+
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1200000.0))
+                .andExpect(jsonPath("$.montantRemise").value(0.0))
+                .andExpect(jsonPath("$.prixApresRemise").value(1200000.0));
+    }
+
+    @Test
+    void simuler_remiseAvecPrixInferieurAuxAnnexes_returns400() throws Exception {
+        StkItem principal = articleAvecPrix("LOT-SIM-REMKO-PRINC", "1000000.00");
+        StkItem annexe = articleAvecPrix("LOT-SIM-REMKO-PARK", "200000.00");
+
+        String body = """
+                {"articleIds":["%s","%s"],"prix":150000,"remisePercent":5}"""
+                .formatted(principal.getId(), annexe.getId());
+
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

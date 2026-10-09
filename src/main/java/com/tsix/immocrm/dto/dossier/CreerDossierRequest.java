@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * {@code prix} se lit de deux façons selon que {@code remisePercent} est fourni : les deux modes sont voulus.
+ * {@code prix} = total principal + annexes ; avant remise si {@code remisePercent} est fourni, après sinon.
  * {@code modePaieId} et {@code cin} sont requis par décision métier, bien que leurs colonnes soient nullables ;
  * {@code cin} s'écrit sur le {@code CfgTier.IDNumber} du prospect, pas sur le dossier.
  */

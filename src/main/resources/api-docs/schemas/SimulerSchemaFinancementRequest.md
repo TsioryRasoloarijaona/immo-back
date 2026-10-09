@@ -2,8 +2,9 @@
 
 ## prix
 
-Prix de vente TTC envisagé. Avec `remisePercent` : prix AVANT remise. Sans `remisePercent` : prix
-négocié, utilisé tel quel. Obligatoire.
+Total TTC envisagé, article principal + annexes. Avec `remisePercent` : total AVANT remise (le
+principal vaut `prix` − prix des annexes ; `prix` inférieur au prix des annexes ⇒ 400). Sans
+`remisePercent` : prix négocié, utilisé tel quel. Même sens que dans `POST /api/dossiers`. Obligatoire.
 
 ## remisePercent
 
