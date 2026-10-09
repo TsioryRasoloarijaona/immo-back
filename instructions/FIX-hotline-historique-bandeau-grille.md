@@ -28,6 +28,10 @@ la création génère désormais les échéances (3 lignes sur ARS 2026/00411).
 Attendu : ne l'afficher **que si** le schéma de financement du dossier est réellement vide (0 échéance
 chargée) ; sinon un bandeau neutre « Dossier créé. » ou rien. Ne pas l'afficher pendant le chargement.
 
+Même cause, même correctif (ajouté après revue) : la ligne « Ajouter une échéance » s'ouvrait
+d'office à la création (`initialOpen={fromCreation}`), pré-remplie du montant total, même avec les
+échéances déjà générées → risque de doublon. Elle ne s'ouvre plus que si le schéma est vide.
+
 ## 3. Combo « Source de contact » trié
 
 OMRAN — changelog 0001166 (`REFERENCE-aide-omran.md` l.839) : « Dans la prospection ordonner le combo
