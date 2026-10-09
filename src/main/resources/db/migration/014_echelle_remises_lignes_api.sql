@@ -62,7 +62,9 @@ PRINT 'StlQuote mis a jour : ' + CAST(@@ROWCOUNT AS varchar(10));
 IF EXISTS (SELECT 1 FROM dbo.ComFolder f JOIN #dossiers d ON d.PKey = f.PKey WHERE ABS(f.Discount) >= 1)
    OR EXISTS (SELECT 1 FROM dbo.StlQuote q JOIN #offres o ON o.PKey = q.PKey WHERE ABS(q.Discount) >= 1)
 BEGIN
-    RAISERROR('Une remise ciblee est encore hors de l''echelle 0-1', 16, 1);
+    -- THROW et non RAISERROR : seul THROW respecte XACT_ABORT et annule la transaction.
+    ROLLBACK TRANSACTION;
+    THROW 50000, 'Une remise ciblee est encore hors de l''echelle 0-1 : rien n''a ete modifie', 1;
 END
 
 COMMIT TRANSACTION;
