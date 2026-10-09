@@ -290,6 +290,13 @@ public class DossierController {
     }
 
     @PatchMapping("/{id}/statut")
+    @Operation(summary = "Change le statut du dossier de vente")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Statut changé."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "404"),
+            @ApiResponse(responseCode = "409")
+    })
     public DossierDetailDto changerStatut(@PathVariable UUID id, @RequestBody ChangerStatutRequest request) {
         return dossierService.changerStatut(id, request);
     }

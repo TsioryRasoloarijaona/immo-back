@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.EtapeMilestone;
+import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
@@ -121,6 +122,7 @@ public class DossierService {
     private final StrHistoryRepository strHistoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
+    private final TransformationProspectClient transformationProspectClient;
     private final Clock clock;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
@@ -136,8 +138,10 @@ public class DossierService {
                            StrHistoryRepository strHistoryRepository,
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
+                           TransformationProspectClient transformationProspectClient,
                            Clock clock) {
         this.clock = clock;
+        this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
@@ -365,6 +369,7 @@ public class DossierService {
         folder = folderRepository.save(folder);
         if (statutInitial != null) {
             enregistrerHistoriqueStatut(folder, statutInitial, null);
+            basculerProspectEnClient(folder, statutInitial);
         }
 
         for (StkItem item : articles) {
@@ -403,9 +408,8 @@ public class DossierService {
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
         for (StkItem annexe : annexes) {
-            BigDecimal prixAnnexe = annexe.getComSalePrice() != null ? annexe.getComSalePrice() : BigDecimal.ZERO;
-            BigDecimal prixAnnexeHT = annexe.getComSalePriceHT() != null
-                    ? annexe.getComSalePriceHT() : diviserParTaux(prixAnnexe, vatRatio);
+            BigDecimal prixAnnexe = PrixArticle.ttcOuZero(annexe);
+            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, vatRatio);
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
@@ -477,17 +481,13 @@ public class DossierService {
             // Prix saisi = prix avant remise du principal ; HT redérivé du taux de TVA.
             return new PrixTtcHt(prixNegocie, diviserParTaux(prixNegocie, vatRatio));
         }
-        BigDecimal itemPrice;
-        if (principal.getComSalePrice() != null) {
-            itemPrice = principal.getComSalePrice();
-        } else if (prixNegocie != null) {
-            itemPrice = prixNegocie;
-        } else {
-            itemPrice = BigDecimal.ZERO;
+        Optional<PrixArticle.PrixDeReference> reference = PrixArticle.prixDeReference(principal);
+        if (reference.isPresent()) {
+            return new PrixTtcHt(reference.get().ttc(), reference.get().ht(vatRatio));
         }
-        BigDecimal itemPriceHT = principal.getComSalePriceHT() != null
-                ? principal.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
-        return new PrixTtcHt(itemPrice, itemPriceHT);
+        // Sans prix de référence, la base avant remise est le prix négocié : remise nulle.
+        BigDecimal itemPrice = prixNegocie != null ? prixNegocie : BigDecimal.ZERO;
+        return new PrixTtcHt(itemPrice, diviserParTaux(itemPrice, vatRatio));
     }
 
     /** Hors de [0 ; 100] ⇒ 400 : sinon prix gonflé, ou prix après remise et schéma négatifs. */
@@ -500,12 +500,8 @@ public class DossierService {
         }
     }
 
-    /** HT = TTC / (1 + taux), TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
     private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
-        if (vatRatio == null || vatRatio.signum() == 0) {
-            return montantTTC;
-        }
-        return montantTTC.divide(BigDecimal.ONE.add(vatRatio), 6, RoundingMode.HALF_UP);
+        return PrixArticle.diviserParTaux(montantTTC, vatRatio);
     }
 
     /**
@@ -610,11 +606,38 @@ public class DossierService {
         appliquerChampEtape(folder, cible, request);
         marquerModification(folder);
         enregistrerHistoriqueStatut(folder, strStatus, request.note());
+        basculerProspectEnClient(folder, strStatus);
 
         List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
                 .map(DossierService::toArticleSummary)
                 .toList();
         return toDetail(folderRepository.save(folder), articles);
+    }
+
+    /**
+     * Bascule prospect → client si le statut cible le demande, avec sa propre ligne d'historique :
+     * la note du changement de statut reste intacte (NVARCHAR(255)). FEATURE-lot4 §3.
+     */
+    private void basculerProspectEnClient(ComFolder folder, StrStatus statutCible) {
+        if (transformationProspectClient.appliquer(folder, statutCible)) {
+            enregistrerEvenementHistorique(folder, TransformationProspectClient.MENTION_HISTORIQUE);
+        }
+    }
+
+    /** Ligne {@code StrHistory} sans statut : un événement du dossier qui n'est pas un changement de statut. */
+    private void enregistrerEvenementHistorique(ComFolder folder, String description) {
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        StrHistory evenement = new StrHistory();
+        evenement.setId(UUID.randomUUID());
+        evenement.setDocDate(maintenant);
+        evenement.setUserDate(maintenant);
+        evenement.setObjectId(folder.getId());
+        evenement.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        evenement.setAdmUserId(auteur.compteId());
+        evenement.setAdmUserDescription(auteur.nom());
+        evenement.setDescription(description);
+        strHistoryRepository.save(evenement);
     }
 
     /** GEN0016 : toute écriture sur le dossier signe {@code UserUpdate}/{@code UserUpdateDateTime}. */

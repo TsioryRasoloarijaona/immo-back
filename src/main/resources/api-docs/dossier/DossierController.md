@@ -174,14 +174,47 @@ cacher). Le projet est déduit du premier article via sa tranche.
   / AUTO-FINANCEMENT calculés sur le prix après remise). Les FRAIS SYNDIC viennent du barème de la
   tranche et ne sont jamais remisés.
 - `remisePercent` **absent** (comportement historique, inchangé) : `prix` est le prix négocié
-  **après** remise, et `remise`/`remiseMontant` sont déduits de l'écart avec le prix commercial de
-  l'article.
+  **après** remise, et `remise`/`remiseMontant` sont déduits de l'écart avec le prix de référence
+  de l'article.
+
+**Prix de référence d'un article** : `comSalePrice` s'il est > 0, sinon `comSalePriceFloor` (prix
+plancher) s'il est > 0 ; il sert de base pour l'article principal, les annexes, la simulation et
+les offres. Sans prix de référence, la base avant remise est le prix négocié (remise nulle). C'est
+la valeur exposée par `prixSuggere` sur les articles.
+
+**Prospect → client** : si le statut initial porte l'indicateur OMRAN « Transforme le prospect en
+client », le tiers passe au type client (voir `PATCH /api/dossiers/{id}/statut`).
 
 ### reponse 400
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
 de paiement introuvable, prospection sans prospect lié, article déjà occupé, ou `remisePercent` hors
 de [0 ; 100].
+
+## changerStatut
+
+Change le statut du dossier. La transition doit figurer dans la table des transitions validées
+(sinon **409**, avec `transitionsAutorisees`) ; un dossier sans statut courant accepte tout statut.
+
+**Prospect → client, comme OMRAN** : si le statut cible porte l'indicateur « Transforme le prospect
+en client » (`StrStatus.BoolField011` : CONCRETISATION, COMPROMIS, FORMALISE…), et que le client du
+dossier est de type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`), son type devient le type client
+correspondant (`CLI`, `CLIRNT`, `CLIPRM`, `CLIROM`), dans la même transaction. Une ligne
+d'historique distincte « Prospect transformé en client » (type `STATUT`) s'ajoute alors à celle du
+changement de statut, dont la note reste intacte.
+Déjà client, type absent ou inconnu : rien ne change. Jamais de retour client → prospect.
+
+### reponse 400
+
+`statut` absent ou inconnu.
+
+### reponse 404
+
+Dossier introuvable.
+
+### reponse 409
+
+Transition non autorisée depuis le statut courant ; le corps liste `transitionsAutorisees`.
 
 ## addReglement
 

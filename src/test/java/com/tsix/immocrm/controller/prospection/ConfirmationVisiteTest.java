@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.mail.EnvoiEmailMemoire;
 import com.tsix.immocrm.mail.MessageEmail;
 import com.tsix.immocrm.mail.VisitePlanifiee;
@@ -79,6 +80,7 @@ class ConfirmationVisiteTest {
             "https://www.google.com/maps/search/?api=1&query=100+BD+ZERKTOUNI%2C+20000+Casablanca";
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private FixtureInteraction fixtureInteraction;
     @Autowired private ApplicationEvents evenements;
     @Autowired private EnvoiEmailMemoire envoiEmail;
     @Autowired private EnvoiWhatsAppMemoire envoiWhatsApp;
@@ -244,8 +246,9 @@ class ConfirmationVisiteTest {
         ComProspection p = prospectionNominale();
         ComActionMessageSubCategory resultat = newResultat(RESULTAT_VISITE);
         String body = """
-                {"description":"le prospect veut visiter","resultatId":"%s","dateRdv":"2026-09-15T15:30:00"}"""
-                .formatted(resultat.getId());
+                {"description":"le prospect veut visiter","resultatId":"%s","dateRdv":"2026-09-15T15:30:00",
+                 "actionTypeId":"%s"}"""
+                .formatted(resultat.getId(), fixtureInteraction.typeTelephone().getId());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -266,7 +269,8 @@ class ConfirmationVisiteTest {
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"simple appel de suivi\"}"))
+                        .content("{\"description\":\"simple appel de suivi\",\"actionTypeId\":\""
+                                + fixtureInteraction.typeNote().getId() + "\"}"))
                 .andExpect(status().isCreated());
 
         assertThat(evenements.stream(VisitePlanifiee.class)).isEmpty();

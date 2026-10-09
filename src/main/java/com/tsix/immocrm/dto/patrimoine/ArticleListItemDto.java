@@ -1,6 +1,7 @@
 package com.tsix.immocrm.dto.patrimoine;
 
 import com.tsix.immocrm.domain.StatutArticle;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -12,7 +13,7 @@ public record ArticleListItemDto(
         BigDecimal area,
         BigDecimal salePrice,
         BigDecimal comSalePrice,
-        // comSalePrice peut valoir 0 alors qu'un prix plancher existe : aucun repli appliqué ici.
+        // Bruts, sans repli : le prix de référence (repli sur le plancher) est prixSuggere.
         BigDecimal salePriceFloor,
         BigDecimal comSalePriceFloor,
         StatutArticle statut,
@@ -52,6 +53,11 @@ public record ArticleListItemDto(
         // StkBuilding.
         UUID immeubleId,
         String immeubleCode,
-        String immeubleLibelle
+        String immeubleLibelle,
+        @Schema(description = "Prix de référence TTC : comSalePrice s'il est > 0, sinon comSalePriceFloor s'il est > 0, sinon null.",
+                nullable = true)
+        BigDecimal prixSuggere,
+        @Schema(description = "Vrai quand prixSuggere est le prix plancher (prix commercial à 0).")
+        boolean prixSuggereEstPlancher
 ) {
 }

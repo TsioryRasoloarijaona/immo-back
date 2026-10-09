@@ -606,6 +606,33 @@ class TracabiliteHistoriqueHotlineTest {
         assertThat(auteurHotline).containsExactly("Compte Legacy");
     }
 
+    /** FEATURE-lot4 §3 : la ligne « Prospect transformé en client » est un événement, jamais une jumelle. */
+    @Test
+    void evenementSansStatut_neSigneJamaisLaLigneDeStatut_etApparaitSeul() throws Exception {
+        LocalDateTime date = LocalDateTime.of(2022, 6, 9, 11, 30);
+        CfgTier client = newTier("CLI-TRACE-EVT", null);
+        ComFolder dossier = newDossier("DOS-TRACE-EVT", newTranche(newProjet("PRJ-TRACE-EVT")), client, null);
+        newLigneStatut(dossier, client, statut(StatutDossier.CONCRETISATION), null, date, null);
+        com.tsix.immocrm.entities.str.StrHistory evenement = new com.tsix.immocrm.entities.str.StrHistory();
+        evenement.setId(UUID.randomUUID());
+        evenement.setObjectId(dossier.getId());
+        evenement.setDocDate(date);
+        evenement.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        evenement.setDescription("Prospect transformé en client");
+        evenement.setAdmUserDescription("Auteur Evenement");
+        entityManager.persist(evenement);
+        entityManager.flush();
+
+        String json = mockMvc.perform(get("/api/dossiers/{id}/historique", dossier.getId()).with(connecte(moi)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andReturn().getResponse().getContentAsString();
+        JSONArray auteurStatut = JsonPath.read(json, "$.content[?(@.description=='Statut changé vers CONCRETISATION')].utilisateur");
+        assertThat(auteurStatut).hasSize(1).containsOnlyNulls();
+        JSONArray auteurEvenement = JsonPath.read(json, "$.content[?(@.description=='Prospect transformé en client')].utilisateur");
+        assertThat(auteurEvenement).containsExactly("Auteur Evenement");
+    }
+
     @Test
     void historiqueDuTiers_compteAdmUser_primeSurLaJumelle() throws Exception {
         LocalDateTime date = LocalDateTime.of(2022, 6, 8, 11, 30);

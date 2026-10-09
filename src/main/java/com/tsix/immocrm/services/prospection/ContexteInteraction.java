@@ -13,7 +13,7 @@ import java.util.UUID;
 public final class ContexteInteraction {
 
     /** {@code ComActionMessageCategory.PKey} de la catégorie « Prospection ». */
-    private static final UUID CATEGORIE_PROSPECTION =
+    public static final UUID CATEGORIE_PROSPECTION =
             UUID.fromString("69f8e7d6-1111-1111-1111-1aa8b1f02008");
 
     private ContexteInteraction() {

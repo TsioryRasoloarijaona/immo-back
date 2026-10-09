@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.Acquereur;
 import com.tsix.immocrm.dto.dossier.FicheDossierVenteData.DetailReglement;
@@ -101,8 +102,12 @@ public class FicheDossierVenteService {
                 .toList();
 
         // Règlements de tout le dossier, groupés par échéance — évite une requête par échéance.
+        // Les annulés sont écartés ici : ni dans les totaux, ni dans le détail de la fiche.
         Map<UUID, List<StlSettlementLine>> reglementsParEcheance = new LinkedHashMap<>();
         for (StlSettlementLine ligne : settlementLineRepository.findByDossierIdOrderByEcheanceDateAsc(dossierId)) {
+            if (!StatutReglement.compteDansLesTotaux(ligne)) {
+                continue;
+            }
             reglementsParEcheance.computeIfAbsent(ligne.getComDocument().getId(), k -> new ArrayList<>()).add(ligne);
         }
 

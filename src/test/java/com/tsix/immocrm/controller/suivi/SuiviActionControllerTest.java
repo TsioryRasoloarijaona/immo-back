@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
@@ -72,6 +73,11 @@ class SuiviActionControllerTest {
     private static final String URL = "/api/suivi-actions";
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private FixtureInteraction fixtureInteraction;
+
+    private String corpsNote() {
+        return "{\"description\":\"appel\",\"actionTypeId\":\"" + fixtureInteraction.typeNote().getId() + "\"}";
+    }
     @Autowired private ComActionMessageRepository messageRepository;
     @Autowired private ComActionMessageCategoryRepository categorieRepository;
     @Autowired private ComActionMessageTypeRepository typeRepository;
@@ -522,7 +528,7 @@ class SuiviActionControllerTest {
         ComProspection p = newProspection(tranche);
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"appel\"}")
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote())
                         .with(connecte(compte.getId(), compte.getCode(), "Commercial")))
                 .andExpect(status().isCreated());
 
@@ -541,7 +547,7 @@ class SuiviActionControllerTest {
         ComProspection p = newProspection(tranche);
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"appel\"}")
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote())
                         .with(connecte(UUID.randomUUID(), "fantome", "Commercial")))
                 .andExpect(status().isCreated());
 

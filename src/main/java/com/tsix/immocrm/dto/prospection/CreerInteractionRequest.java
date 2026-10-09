@@ -11,12 +11,12 @@ public record CreerInteractionRequest(
 
         // Nommé `description` alors qu'il alimente `note` en sortie : asymétrie assumée, voir
         // instructions/FIX-interaction-note.md §6.
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                example = "la cliente cherche 2 chambres et salon, rdv mercredi 10h")
+        @Schema(example = "la cliente cherche 2 chambres et salon, rdv mercredi 10h")
         String description,
 
         Boolean entrante,
 
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         UUID actionTypeId,
 
         UUID resultatId,

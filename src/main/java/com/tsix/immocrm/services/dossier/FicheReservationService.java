@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.FicheReservationData;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -72,14 +74,15 @@ public class FicheReservationService {
         );
     }
 
-    /** Le règlement de l'échéance AVANCE, à défaut le plus ancien du dossier. */
+    /** Le règlement non annulé de l'échéance AVANCE, à défaut le plus ancien du dossier. */
     private StlSettlementLine findReservationLine(UUID dossierId) {
-        List<StlSettlementLine> avance = settlementLineRepository.findAvanceLinesByDossierIdOrderByDateAsc(dossierId);
-        if (!avance.isEmpty()) {
-            return avance.get(0);
-        }
-        List<StlSettlementLine> all = settlementLineRepository.findByDossierIdOrderByEcheanceDateAsc(dossierId);
-        return all.isEmpty() ? null : all.get(0);
+        return premiereQuiCompte(settlementLineRepository.findAvanceLinesByDossierIdOrderByDateAsc(dossierId))
+                .or(() -> premiereQuiCompte(settlementLineRepository.findByDossierIdOrderByEcheanceDateAsc(dossierId)))
+                .orElse(null);
+    }
+
+    private static Optional<StlSettlementLine> premiereQuiCompte(List<StlSettlementLine> lignes) {
+        return lignes.stream().filter(StatutReglement::compteDansLesTotaux).findFirst();
     }
 
     private static String clientNom(CfgTier tier) {
