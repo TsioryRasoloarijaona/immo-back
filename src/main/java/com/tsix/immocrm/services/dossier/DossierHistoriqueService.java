@@ -12,24 +12,19 @@ import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
-import com.tsix.immocrm.repositories.str.StrHistoryRepository;
-import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -48,18 +43,15 @@ public class DossierHistoriqueService {
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
     private final AdmAttachedFileSummaryRepository attachedFileSummaryRepository;
-    private final StrHistoryRepository strHistoryRepository;
-    private final UtilisateurAffiche utilisateurAffiche;
+    private final AuteurStatutDossier auteurStatut;
 
     public DossierHistoriqueService(ComFolderRepository folderRepository,
                                      StrFolderStatusHistoryRepository statusHistoryRepository,
                                      ComDocumentRepository documentRepository,
                                      StlSettlementLineRepository settlementLineRepository,
                                      AdmAttachedFileSummaryRepository attachedFileSummaryRepository,
-                                     StrHistoryRepository strHistoryRepository,
-                                     UtilisateurAffiche utilisateurAffiche) {
-        this.strHistoryRepository = strHistoryRepository;
-        this.utilisateurAffiche = utilisateurAffiche;
+                                     AuteurStatutDossier auteurStatut) {
+        this.auteurStatut = auteurStatut;
         this.folderRepository = folderRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.documentRepository = documentRepository;
@@ -74,7 +66,7 @@ public class DossierHistoriqueService {
 
         List<HistoriqueEvenementDto> evenements = new ArrayList<>();
         List<StrFolderStatusHistory> statuts = statusHistoryRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
-        Function<StrFolderStatusHistory, String> auteur = auteursDesStatuts(dossierId, statuts);
+        Function<StrFolderStatusHistory, String> auteur = auteurStatut.resoudre(statuts);
         statuts.forEach(h -> evenements.add(toStatutEvent(h, auteur.apply(h))));
         documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).forEach(d -> evenements.add(toEcheanceEvent(d)));
         settlementLineRepository.findByDossierIdOrderByEcheanceDateAsc(dossierId).forEach(l -> evenements.add(toReglementEvent(l)));
@@ -90,28 +82,6 @@ public class DossierHistoriqueService {
         int debut = Math.min((int) pageable.getOffset(), evenements.size());
         int fin = Math.min(debut + pageable.getPageSize(), evenements.size());
         return new PageImpl<>(evenements.subList(debut, fin), pageable, evenements.size());
-    }
-
-    /**
-     * Le compte {@code AdmUserId}, sinon le nom écrit sur la ligne {@code StrHistory} jumelle (même
-     * dossier, même date) : c'est le seul nom gardé quand le compte manquait dans la base d'écriture.
-     */
-    private Function<StrFolderStatusHistory, String> auteursDesStatuts(UUID dossierId,
-                                                                      List<StrFolderStatusHistory> statuts) {
-        Map<UUID, String> parCompte = utilisateurAffiche.noms(
-                statuts.stream().map(StrFolderStatusHistory::getAdmUserId).toList());
-        Map<LocalDateTime, String> parDate = new HashMap<>();
-        if (statuts.stream().anyMatch(h -> !parCompte.containsKey(h.getAdmUserId()))) {
-            strHistoryRepository.findByObjectIdOrderByDocDateDesc(dossierId, Pageable.unpaged()).forEach(s -> {
-                if (s.getDocDate() != null && StringUtils.hasText(s.getAdmUserDescription())) {
-                    parDate.putIfAbsent(s.getDocDate(), s.getAdmUserDescription());
-                }
-            });
-        }
-        return h -> {
-            String nom = parCompte.get(h.getAdmUserId());
-            return nom != null ? nom : parDate.get(h.getDocDate());
-        };
     }
 
     private static HistoriqueEvenementDto toStatutEvent(StrFolderStatusHistory h, String auteur) {
