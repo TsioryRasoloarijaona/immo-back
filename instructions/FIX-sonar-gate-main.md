@@ -25,6 +25,10 @@ Deux autres problèmes sur du code écrit le 08-09/10, à corriger au passage :
 - S3358 et S1192 : refactorisation pure, aucun changement de résultat.
 - Respecter le skill `regles-qualite` (§1, §3).
 
+**Annulé après analyse de la PR** : la constante `WHERE` dans `RemonteeLecture` a fait reclasser
+la ligne SQL dynamique en nouveau code → S2077 (vulnérabilité) → gate sécurité en échec. S1192
+n'étant qu'un code smell, le fichier est revenu à l'état de `main`.
+
 ## Vérification
 
 - `gate.mjs back` sur `TracabiliteHistoriqueHotline*,ProspectSubResources*,Remontee*` : vert.
