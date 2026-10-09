@@ -568,7 +568,8 @@ public class DossierService {
                 .map(LigneSchemaFinancementDto::montant)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return new SchemaFinancementDto(lignes, totalGeneral);
+        return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
+                apercu.getDiscountAmount(), apercu.getDiscount(), prixApresRemise);
     }
 
     /**

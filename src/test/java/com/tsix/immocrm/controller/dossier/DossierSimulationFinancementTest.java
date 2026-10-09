@@ -212,6 +212,75 @@ class DossierSimulationFinancementTest {
                 .andExpect(jsonPath("$.totalGeneral").value(1393200.0 + 16800.0));
     }
 
+    /** Article sans tranche (pas de barème) : seuls les montants de remise sont observés. */
+    private StkItem articleAvecPrix(String code, String prixTtc) {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode("VOC-" + code);
+        stkVocationRepository.save(vocation);
+
+        StkItemType itemType = new StkItemType();
+        itemType.setId(UUID.randomUUID());
+        itemType.setCode("TYPE-" + code);
+        itemType.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemTypeRepository.save(itemType);
+
+        StkItemCategory itemCategory = new StkItemCategory();
+        itemCategory.setId(UUID.randomUUID());
+        itemCategory.setCode("CAT-" + code);
+        itemCategory.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemCategoryRepository.save(itemCategory);
+
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode(code);
+        article.setStkItemType(itemType);
+        article.setStkItemCategory(itemCategory);
+        article.setStkVocation(vocation);
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
+        article.setVat(new BigDecimal("0.20"));
+        article.setComSalePrice(new BigDecimal(prixTtc));
+        return stkItemRepository.save(article);
+    }
+
+    @Test
+    void simuler_remiseExpliciteAvecAnnexe_remiseSurPrincipalPlusAnnexe() throws Exception {
+        StkItem principal = articleAvecPrix("LOT-SIM-REM-PRINC", "1000000.00");
+        StkItem annexe = articleAvecPrix("LOT-SIM-REM-PARK", "200000.00");
+
+        String body = """
+                {"articleIds":["%s","%s"],"prix":1000000,"remisePercent":5}"""
+                .formatted(principal.getId(), annexe.getId());
+
+        // (1 000 000 saisi + 200 000 annexe) × 5 % = 60 000 ; après remise 1 140 000.
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1200000.0))
+                .andExpect(jsonPath("$.montantRemise").value(60000.0))
+                .andExpect(jsonPath("$.remisePercent").value(5))
+                .andExpect(jsonPath("$.prixApresRemise").value(1140000.0));
+    }
+
+    @Test
+    void simuler_sansRemise_tauxDeduitDuPrixDeReference() throws Exception {
+        StkItem principal = articleAvecPrix("LOT-SIM-DED-PRINC", "1000000.00");
+        StkItem annexe = articleAvecPrix("LOT-SIM-DED-PARK", "200000.00");
+
+        String body = """
+                {"articleIds":["%s","%s"],"prix":1080000}"""
+                .formatted(principal.getId(), annexe.getId());
+
+        // Référence 1 200 000, prix négocié 1 080 000 : remise 120 000 = 10 % de 1 200 000.
+        mockMvc.perform(post("/api/dossiers/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prixAvantRemise").value(1200000.0))
+                .andExpect(jsonPath("$.montantRemise").value(120000.0))
+                .andExpect(jsonPath("$.remisePercent").value(10.0))
+                .andExpect(jsonPath("$.prixApresRemise").value(1080000.0));
+    }
+
     @Test
     void simuler_remisePercentHorsBornes_returns400() throws Exception {
         StkVocation vocation = new StkVocation();
