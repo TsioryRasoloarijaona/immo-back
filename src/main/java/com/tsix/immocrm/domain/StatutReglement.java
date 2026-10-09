@@ -1,5 +1,7 @@
 package com.tsix.immocrm.domain;
 
+import com.tsix.immocrm.entities.stl.StlSettlementLine;
+
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
@@ -28,6 +30,23 @@ public enum StatutReglement {
 
     /** Statut d'un règlement qui vient d'être créé, comme les lignes legacy. */
     public static final StatutReglement INITIAL = IN_WORK;
+
+    /**
+     * Seule règle « compte dans les totaux » (FEATURE-lot4 §2) : JPQL sur l'alias {@code st} du
+     * règlement, SQL sur l'alias {@code s} de {@code StlSettlement}, Java par {@link #compteDansLesTotaux}.
+     */
+    public static final String JPQL_COMPTE_DANS_LES_TOTAUX = "(st.status IS NULL OR st.status <> 'CANCELED')";
+    public static final String SQL_COMPTE_DANS_LES_TOTAUX = "(s.Status IS NULL OR s.Status <> 'CANCELED')";
+
+    /** NULL, IN_WORK, POINTED ou valeur inconnue comptent ; seul CANCELED est exclu. */
+    public static boolean compteDansLesTotaux(String status) {
+        return lireCode(status).filter(statut -> statut == CANCELED).isEmpty();
+    }
+
+    /** La ligne compte si son règlement compte (ligne sans règlement : comptée). */
+    public static boolean compteDansLesTotaux(StlSettlementLine ligne) {
+        return ligne.getStlSettlement() == null || compteDansLesTotaux(ligne.getStlSettlement().getStatus());
+    }
 
     public static boolean estValide(StatutReglement depuis, StatutReglement vers) {
         return TRANSITIONS.getOrDefault(depuis, Set.of()).contains(vers);

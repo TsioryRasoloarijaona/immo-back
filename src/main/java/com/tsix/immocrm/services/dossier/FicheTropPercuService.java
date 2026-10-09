@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.FicheTropPercuData;
 import com.tsix.immocrm.dto.dossier.FicheTropPercuData.Acquereur;
@@ -84,7 +85,8 @@ public class FicheTropPercuService {
                                 Comparator.nullsLast(Comparator.reverseOrder())))
                         .toList();
 
-        List<StlSettlementLine> lignes = settlementLineRepository.findByDossierIdOrderByStlSettlementDocDateAsc(dossierId);
+        List<StlSettlementLine> lignes = settlementLineRepository.findByDossierIdOrderByStlSettlementDocDateAsc(dossierId)
+                .stream().filter(StatutReglement::compteDansLesTotaux).toList();
         List<LigneReglement> lignesReglement = new ArrayList<>();
         BigDecimal totalRegle = BigDecimal.ZERO;
         for (StlSettlementLine ligne : lignes) {

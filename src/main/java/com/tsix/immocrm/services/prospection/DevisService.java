@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.prospection;
 
+import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
@@ -234,7 +235,7 @@ public class DevisService {
         for (StkItem sousArticle : sousArticles) {
             BigDecimal vatRatio = tauxTvaSousArticle(sousArticle, quote);
             BigDecimal priceBeforeDiscount = prixTtcOuZero(sousArticle);
-            BigDecimal priceBeforeDiscountHT = prixHtOuDeduit(sousArticle, priceBeforeDiscount, vatRatio);
+            BigDecimal priceBeforeDiscountHT = prixHtOuDeduit(sousArticle, vatRatio);
             BigDecimal discountAmount = pourcentage(priceBeforeDiscount, remisePercent);
             BigDecimal discountAmountHT = pourcentage(priceBeforeDiscountHT, remisePercent);
             BigDecimal priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
@@ -281,12 +282,12 @@ public class DevisService {
     }
 
     private static BigDecimal prixTtcOuZero(StkItem article) {
-        return article.getComSalePrice() != null ? article.getComSalePrice() : BigDecimal.ZERO;
+        return PrixArticle.ttcOuZero(article);
     }
 
-    /** Prix HT de l'article s'il est renseigné, sinon déduit du TTC par la TVA. */
-    private static BigDecimal prixHtOuDeduit(StkItem article, BigDecimal prixTTC, BigDecimal vatRatio) {
-        return article.getComSalePriceHT() != null ? article.getComSalePriceHT() : diviserParTaux(prixTTC, vatRatio);
+    /** Prix de référence HT de l'article (renseigné, sinon déduit du TTC par la TVA), 0 sans prix. */
+    private static BigDecimal prixHtOuDeduit(StkItem article, BigDecimal vatRatio) {
+        return PrixArticle.htOuZero(article, vatRatio);
     }
 
     private static BigDecimal pourcentage(BigDecimal montant, BigDecimal pourcent) {
@@ -337,7 +338,7 @@ public class DevisService {
             itemPriceHT = diviserParTaux(itemPrice, vatRatio);
         } else {
             itemPrice = prixTtcOuZero(article);
-            itemPriceHT = prixHtOuDeduit(article, itemPrice, vatRatio);
+            itemPriceHT = prixHtOuDeduit(article, vatRatio);
         }
 
         BigDecimal unitCostHT = parSurface(itemPriceHT, area);
@@ -347,7 +348,7 @@ public class DevisService {
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         for (StkItem sousArticle : sousArticles) {
             BigDecimal prixSousArticle = prixTtcOuZero(sousArticle);
-            BigDecimal prixSousArticleHT = prixHtOuDeduit(sousArticle, prixSousArticle, vatRatio);
+            BigDecimal prixSousArticleHT = prixHtOuDeduit(sousArticle, vatRatio);
             underItemsPrice = underItemsPrice.add(prixSousArticle);
             underItemsPriceHT = underItemsPriceHT.add(prixSousArticleHT);
         }
@@ -387,10 +388,7 @@ public class DevisService {
     }
 
     private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
-        if (vatRatio == null || vatRatio.signum() == 0) {
-            return montantTTC;
-        }
-        return montantTTC.divide(BigDecimal.ONE.add(vatRatio), 6, RoundingMode.HALF_UP);
+        return PrixArticle.diviserParTaux(montantTTC, vatRatio);
     }
 
     private static void appliquerMontants(StlQuote quote, MontantsCalcules m) {

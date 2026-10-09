@@ -321,6 +321,24 @@ class SyntheseAnnuelleTest {
 
     // ---------------------------------------------------------------- bloc C
 
+    /** FEATURE-lot4 §2 : un règlement annulé ne compte ni dans le réglé, ni dans les encaissements. */
+    @Test
+    void reglementAnnule_excluDuMontantRegleEtDesEncaissements() throws Exception {
+        ComFolder dossier = newDossier(concretisation(), jourDe(2, 1), "1000000");
+        ComDocument echeance = newEcheance(dossier, newCategorieAvance(), jourDe(2, 10), "400000");
+        newReglement(echeance, newType(false), true, jourDe(2, 10), null, "100000");
+        StlSettlement annule = newReglement(echeance, newType(false), true, jourDe(2, 10), null, "250000")
+                .getStlSettlement();
+        annule.setStatus("CANCELED");
+        settlementRepository.save(annule);
+
+        mockMvc.perform(get(URL).param("annee", String.valueOf(ANNEE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ventesConcretisees.montantRegle").value(100000))
+                .andExpect(jsonPath("$.encaissements.nombreLignes").value(1))
+                .andExpect(jsonPath("$.encaissements.montantTotal").value(100000));
+    }
+
     /**
      * Un règlement non pointé est rattaché à l'année de son <b>échéance</b> : {@code SettlementDate}
      * n'est renseignée que sur les pointés, 14 lignes réelles sur 3 244.

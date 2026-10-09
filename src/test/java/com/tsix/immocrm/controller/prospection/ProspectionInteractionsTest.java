@@ -5,6 +5,7 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -51,6 +52,17 @@ class ProspectionInteractionsTest {
 
     @Autowired
     private ComActionMessageSubCategoryRepository actionMessageSubCategoryRepository;
+
+    @Autowired
+    private FixtureInteraction fixtureInteraction;
+
+    private String note() {
+        return fixtureInteraction.typeNote().getId().toString();
+    }
+
+    private String telephone() {
+        return fixtureInteraction.typeTelephone().getId().toString();
+    }
 
     private ComProspection newProspection(String code) {
         ComProspection p = new ComProspection();
@@ -151,7 +163,7 @@ class ProspectionInteractionsTest {
     void addInteraction_happyPath_returns201() throws Exception {
         ComProspection prospection = newProspection("PSN-INTER-2");
         String body = """
-                {"description":"Relance telephonique","entrante":false}""";
+                {"description":"Relance telephonique","entrante":false,"actionTypeId":"%s"}""".formatted(note());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -193,7 +205,7 @@ class ProspectionInteractionsTest {
         prospection = prospectionRepository.save(prospection);
 
         String body = """
-                {"description":"Appel abouti","entrante":true}""";
+                {"description":"Appel abouti","entrante":true,"actionTypeId":"%s"}""".formatted(note());
         String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -226,7 +238,7 @@ class ProspectionInteractionsTest {
         String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"description":"Lead brut rappele"}"""))
+                                {"description":"Lead brut rappele","actionTypeId":"%s"}""".formatted(note())))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
@@ -247,12 +259,14 @@ class ProspectionInteractionsTest {
     }
 
     @Test
-    void addInteraction_missingDescription_returns400() throws Exception {
+    void addInteraction_noteSansMessage_returns400() throws Exception {
         ComProspection prospection = newProspection("PSN-INTER-3");
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isBadRequest());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actionTypeId\":\"" + note() + "\",\"description\":\"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("message")));
     }
 
     @Test
@@ -260,8 +274,9 @@ class ProspectionInteractionsTest {
         ComProspection prospection = newProspection("PSN-INTER-4");
         ComActionMessageSubCategory resultat = newResultat("Rendez vous pris", true);
         String body = """
-                {"description":"RDV pris avec le prospect","resultatId":"%s","dateRdv":"2026-09-01T10:00:00"}"""
-                .formatted(resultat.getId());
+                {"description":"RDV pris avec le prospect","resultatId":"%s","dateRdv":"2026-09-01T10:00:00",
+                 "actionTypeId":"%s","dateAlerte":"2026-09-01T09:00:00"}"""
+                .formatted(resultat.getId(), telephone());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -275,7 +290,8 @@ class ProspectionInteractionsTest {
         ComProspection prospection = newProspection("PSN-INTER-5");
         ComActionMessageSubCategory resultat = newResultat("RDV reporté", true);
         String body = """
-                {"description":"Sans date de RDV","resultatId":"%s"}""".formatted(resultat.getId());
+                {"description":"Sans date de RDV","resultatId":"%s","actionTypeId":"%s",
+                 "dateAlerte":"2026-09-01T09:00:00"}""".formatted(resultat.getId(), telephone());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -287,8 +303,9 @@ class ProspectionInteractionsTest {
         ComProspection prospection = newProspection("PSN-INTER-6");
         ComActionMessageSubCategory resultat = newResultat("Le prospect veut faire une visite du projet", true);
         String body = """
-                {"description":"Le prospect veut visiter le showroom","resultatId":"%s","dateRdv":"2026-09-15T10:00:00"}"""
-                .formatted(resultat.getId());
+                {"description":"Le prospect veut visiter le showroom","resultatId":"%s","dateRdv":"2026-09-15T10:00:00",
+                 "actionTypeId":"%s","dateAlerte":"2026-09-15T09:00:00"}"""
+                .formatted(resultat.getId(), telephone());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -302,7 +319,8 @@ class ProspectionInteractionsTest {
         ComProspection prospection = newProspection("PSN-INTER-7");
         ComActionMessageSubCategory resultat = newResultat("Le prospect veut faire une visite du projet", true);
         String body = """
-                {"description":"Sans date de visite","resultatId":"%s"}""".formatted(resultat.getId());
+                {"description":"Sans date de visite","resultatId":"%s","actionTypeId":"%s",
+                 "dateAlerte":"2026-09-15T09:00:00"}""".formatted(resultat.getId(), telephone());
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", prospection.getId())
                         .contentType(MediaType.APPLICATION_JSON).content(body))

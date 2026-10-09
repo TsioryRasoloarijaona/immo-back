@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.stl;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -20,13 +21,11 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Synchronize({"StlSettlement", "StlSettlementLine"})
-@Subselect("""
-        SELECT s.PKey        AS StlSettlementId,
-               SUM(l.Amount) AS Affecte
-        FROM StlSettlement s
-        LEFT JOIN StlSettlementLine l ON l.StlSettlementId = s.PKey
-        GROUP BY s.PKey
-        """)
+@Subselect("SELECT s.PKey AS StlSettlementId, "
+        + "SUM(CASE WHEN " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + " THEN l.Amount END) AS Affecte "
+        + "FROM StlSettlement s "
+        + "LEFT JOIN StlSettlementLine l ON l.StlSettlementId = s.PKey "
+        + "GROUP BY s.PKey")
 @Getter
 @Setter
 public class StlSettlementAffectation {

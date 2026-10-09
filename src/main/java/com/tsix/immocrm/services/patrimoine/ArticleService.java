@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
@@ -31,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -114,6 +116,7 @@ public class ArticleService {
         var presentationType = item.getStkPresentationType();
         ComFolder dossier = item.getComFolderId() != null ? dossiers.get(item.getComFolderId()) : null;
         CfgTier client = Champs.de(dossier, ComFolder::getCfgCustomer);
+        Optional<PrixArticle.PrixDeReference> prixSuggere = PrixArticle.prixDeReference(item);
 
         return new ArticleDetailDto(
                 item.getId(),
@@ -158,7 +161,9 @@ public class ArticleService {
                 Champs.de(presentationType, StkPresentationType::getId),
                 Champs.de(presentationType, StkPresentationType::getCode),
                 Champs.de(presentationType, StkPresentationType::getDescription),
-                superficieSousArticles
+                superficieSousArticles,
+                prixSuggere.map(PrixArticle.PrixDeReference::ttc).orElse(null),
+                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false)
         );
     }
 
@@ -216,6 +221,7 @@ public class ArticleService {
         ComFolder dossier = item.getComFolderId() != null ? dossiersParFolderId.get(item.getComFolderId()) : null;
         CfgTier client = Champs.de(dossier, ComFolder::getCfgCustomer);
         BigDecimal superficieSousArticles = superficiesSousArticlesParArticleId.getOrDefault(item.getId(), BigDecimal.ZERO);
+        Optional<PrixArticle.PrixDeReference> prixSuggere = PrixArticle.prixDeReference(item);
 
         return new ArticleListItemDto(
                 item.getId(),
@@ -254,7 +260,9 @@ public class ArticleService {
                 Champs.de(etage, StkFloor::getDescription),
                 Champs.de(immeuble, StkBuilding::getId),
                 Champs.de(immeuble, StkBuilding::getCode),
-                Champs.de(immeuble, StkBuilding::getDescription)
+                Champs.de(immeuble, StkBuilding::getDescription),
+                prixSuggere.map(PrixArticle.PrixDeReference::ttc).orElse(null),
+                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false)
         );
     }
 

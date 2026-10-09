@@ -2,9 +2,10 @@
 
 ## description
 
-Texte libre décrivant l'interaction — ce que le commercial a constaté ou fait. **Ressort dans le
-champ `note` de la réponse**, pas dans `description` : ce dernier est un libellé `JJ/MM/AAAA HH:MM
-<auteur>` généré par le serveur, que l'appelant ne peut pas imposer.
+Message : texte libre décrivant l'interaction — ce que le commercial a constaté ou fait.
+**Obligatoire (non vide) pour une action Note**, facultatif pour toute autre action. **Ressort dans
+le champ `note` de la réponse**, pas dans `description` : ce dernier est un libellé `JJ/MM/AAAA
+HH:MM <auteur>` généré par le serveur, que l'appelant ne peut pas imposer.
 
 ## entrante
 
@@ -15,21 +16,23 @@ Par défaut true si omis.
 
 Id de l'"Action" (nature de l'interaction : Instruction, Mail entrant/Sortant, Message
 entrant/sortant, Note, Téléphone entrant/Sortant, Visite, WEB). Référentiel : GET
-/api/referentiels/types-contact-prospection. Optionnel.
+/api/referentiels/types-contact-prospection. **Toujours obligatoire** (400 sinon). Le type de code
+`Note` rend le message obligatoire et le résultat facultatif.
 
 ## resultatId
 
 Id du "Résultat" de l'interaction (ex: "Rendez vous pris", "Hors Budget", "Client injoignable ou
 Boite vocale", "Le prospect veut faire une visite du projet"...). Référentiel : GET
-/api/referentiels/resultats-interaction. Optionnel — mais si le résultat choisi a
-necessiteDateRdv=true ("Rendez vous pris", "RDV reporté" ou "Le prospect veut faire une visite du
-projet"), dateRdv devient obligatoire.
+/api/referentiels/resultats-interaction. **Obligatoire pour toute action autre qu'une Note**
+(400 sinon), facultatif pour une Note. Si le résultat choisi a necessiteDateRdv=true ("Rendez vous
+pris", "RDV reporté" ou "Le prospect veut faire une visite du projet"), dateRdv devient
+obligatoire ; s'il a alerteRecommandee=true, dateAlerte devient obligatoire.
 
 ## dateAlerte
 
 Date jusqu'à laquelle une relance sur cette interaction reste pertinente (alimente le
-rappel/l'alerte de suivi). Recommandé quand le référentiel resultat indique alerteRecommandee=true,
-mais jamais imposé côté serveur. Optionnel.
+rappel/l'alerte de suivi). **Obligatoire quand le résultat choisi a alerteRecommandee=true**
+(résultat paramétré « avec alerte », `IsRevivalMandatory`), 400 sinon ; facultatif autrement.
 
 ## dateRdv
 

@@ -282,14 +282,25 @@ casser.
 
 ## addInteraction
 
-Journalise un appel/message/visite/note sur cette prospection. `actionTypeId` ("Action") et
-`resultatId` ("Résultat") sont optionnels mais recommandés pour un suivi exploitable — voir GET
-/api/referentiels/types-contact-prospection et GET /api/referentiels/resultats-interaction. Si le
-résultat choisi est "Rendez vous pris", "RDV reporté" ou "Le prospect veut faire une visite du
-projet", `dateRdv` devient obligatoire et une entrée calendrier est créée, visible ensuite via GET
-/api/calendrier/evenements.
+Journalise un appel/message/visite/note sur cette prospection — voir GET
+/api/referentiels/types-contact-prospection et GET /api/referentiels/resultats-interaction.
 
-**Une confirmation part alors automatiquement au prospect, par email ET par WhatsApp** (date, heure,
+**Champs obligatoires (règle OMRAN GEN0005)** :
+- `actionTypeId` ("Action") : toujours obligatoire.
+- Action de type **Note** (code `Note`, insensible à la casse) : `description` (le message) est
+  obligatoire et non vide, `resultatId` est facultatif.
+- Toute autre action : `resultatId` ("Résultat") est obligatoire, `description` est facultative.
+- Résultat paramétré « avec alerte » (`alerteRecommandee = true` dans le référentiel) : `dateAlerte`
+  est obligatoire.
+- Résultat "Rendez vous pris", "RDV reporté" ou "Le prospect veut faire une visite du projet" :
+  `dateRdv` est obligatoire et une entrée calendrier est créée, visible ensuite via GET
+  /api/calendrier/evenements.
+
+**Catégorie** : celle du résultat s'il y en a un, sinon la catégorie « Prospection » de l'écran
+parent, comme OMRAN. Une interaction sans résultat (note) reste donc visible dans « Dernière
+action », « Dernier échange » et « Résultat » de la liste des prospections.
+
+**Quand un rendez-vous est créé, une confirmation part automatiquement au prospect, par email ET par WhatsApp** (date, heure,
 adresse du projet, conseiller ; les plans seulement par email). Les deux canaux sont indépendants —
 57 % des prospects ont une adresse email, 99 % un numéro exploitable, donc l'essentiel est prévenu
 par au moins un des deux. L'envoi a lieu après validation de la transaction et hors du temps de
@@ -297,9 +308,8 @@ réponse : il ne peut ni retarder ni faire échouer cet appel, et la réponse ne
 Pour connaître l'issue, ou pour renvoyer après avoir corrigé une coordonnée, voir POST
 /api/prospections/{id}/interactions/{interactionId}/email-visite.
 
-**Le corps de requête ne change pas** : `description` reste le champ d'entrée et reste obligatoire.
-Seule sa destination en base a été corrigée — il alimente désormais le champ `note` de la réponse,
-et non plus le libellé. Le libellé `description` de la réponse est **généré par le serveur**
+`description` est le champ d'entrée du message : il alimente le champ `note` de la réponse, pas
+le libellé. Le libellé `description` de la réponse est **généré par le serveur**
 (`JJ/MM/AAAA HH:MM <auteur>`) et ne peut pas être imposé : c'est ce qui rend les interactions créées
 ici indiscernables de celles de l'application de bureau.
 
@@ -316,8 +326,10 @@ ne touche à aucune relance existante** — c'est la règle du légataire, véri
 
 ### reponse 400
 
-`description` manquante, `actionTypeId`/`resultatId` inconnu, ou `dateRdv` manquante alors que le
-résultat choisi l'exige.
+`ProblemDetail` dont `detail` nomme le champ : `actionTypeId` manquant ; message manquant pour une
+note ; `resultatId` manquant pour une action autre qu'une note ; `dateAlerte` manquante pour un
+résultat « avec alerte » ; `dateRdv` manquante alors que le résultat l'exige ; `actionTypeId` ou
+`resultatId` inconnu.
 
 ## renvoyerEmailVisite
 

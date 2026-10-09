@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,14 @@ class ProspectionInteractionNoteTest {
 
     @Autowired
     private ComActionMessageRepository actionMessageRepository;
+
+    @Autowired
+    private FixtureInteraction fixtureInteraction;
+
+    /** Corps d'une note : l'action Note est obligatoire, le résultat non (FEATURE-lot4 §4). */
+    private String corpsNote(String json) {
+        return json.replaceFirst("\\{", "{\"actionTypeId\":\"" + fixtureInteraction.typeNote().getId() + "\",");
+    }
 
     private ComProspection newProspection() {
         ComProspection p = new ComProspection();
@@ -100,7 +109,7 @@ class ProspectionInteractionNoteTest {
                 {"description":"visite effectuee, tres interesse par le T3","entrante":false}""";
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote(body)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.note").value("visite effectuee, tres interesse par le T3"));
 
@@ -124,7 +133,7 @@ class ProspectionInteractionNoteTest {
                 {"description":"note quelconque"}""";
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote(body)))
                 .andExpect(status().isCreated())
                 // jj/MM/aaaa hh:mm, éventuellement suivi du nom de l'auteur.
                 .andExpect(jsonPath("$.description")
@@ -144,7 +153,7 @@ class ProspectionInteractionNoteTest {
                 {"description":"saisie sans utilisateur applicatif"}""";
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote(body)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.note").value("saisie sans utilisateur applicatif"))
                 .andExpect(jsonPath("$.employeId").doesNotExist());
@@ -166,7 +175,7 @@ class ProspectionInteractionNoteTest {
                 {"description":"rdv fixe au 15/09 a 10h"}""";
 
         mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote(body)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/prospections/{id}/interactions", p.getId()))

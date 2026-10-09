@@ -41,4 +41,8 @@ public class StrStatus {
 
     @Column(name = "StrConfigEntityId")
     private UUID strConfigEntityId;
+
+    // OMRAN « Transforme le prospect en client » ; NULL vaut faux.
+    @Column(name = "BoolField011")
+    private Boolean transformeProspectEnClient;
 }

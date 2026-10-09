@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.RecuReglementData;
@@ -87,11 +88,11 @@ public class RecuReglementService {
         boolean superficieApproximative = article == null
                 || article.getTitleNumber() == null || article.getTitleNumber().isBlank();
 
-        List<StlSettlementLine> toutesLesLignes = settlementLineRepository.findByDossierIdOrderByStlSettlementDocDateAsc(dossierId);
-        List<LigneReglement> lignesReglement = new ArrayList<>();
-        for (StlSettlementLine ligne : toutesLesLignes) {
-            lignesReglement.add(toLigneReglement(ligne));
-        }
+        List<LigneReglement> lignesReglement = settlementLineRepository.findByDossierIdOrderByStlSettlementDocDateAsc(dossierId)
+                .stream()
+                .filter(StatutReglement::compteDansLesTotaux)
+                .map(RecuReglementService::toLigneReglement)
+                .toList();
 
         MontantsDossierDto montants = dossierService.montants(dossierId);
         BigDecimal resteAPayer = BigDecimal.ZERO;

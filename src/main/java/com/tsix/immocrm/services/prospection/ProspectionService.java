@@ -111,6 +111,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -119,11 +120,6 @@ import java.util.stream.Collectors;
 @Service
 @Transactional(readOnly = true)
 public class ProspectionService {
-
-    // Résultats qui exigent une date de rendez-vous et créent un AdmEvent ; la visite de projet
-    // suit le même mécanisme, distinguée au calendrier par AdmEvent.comActionMessageSubCategory.
-    private static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
-            "Rendez vous pris", "RDV reporté", "Le prospect veut faire une visite du projet");
 
     // Le remerciement suit l'étape, pas un résultat d'interaction : « Réalisée » / « Non réalisée »
     // ne sont jamais saisis. Voir FEATURE-offre-apres-visite.md §1.
@@ -1238,9 +1234,13 @@ public class ProspectionService {
         ComProspection prospection = prospectionRepository.findById(prospectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + prospectionId));
 
-        if (!StringUtils.hasText(request.description())) {
-            throw new InvalidRequestException("description est requise");
-        }
+        ComActionMessageType actionType = request.actionTypeId() == null ? null
+                : actionMessageTypeRepository.findById(request.actionTypeId())
+                .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.actionTypeId()));
+        ComActionMessageSubCategory resultat = request.resultatId() == null ? null
+                : actionMessageSubCategoryRepository.findById(request.resultatId())
+                .orElseThrow(() -> new InvalidRequestException("ComActionMessageSubCategory introuvable: " + request.resultatId()));
+        ReglesInteraction.verifier(actionType, resultat, request);
 
         LocalDateTime maintenant = LocalDateTime.now(clock);
         UtilisateurAffiche.Auteur resolu = utilisateurAffiche.courant();
@@ -1277,35 +1277,22 @@ public class ProspectionService {
         // Passe à 1 quand une relance suivante ou la vente la désarme, jamais à la création.
         message.setWithoutRevival(false);
         message.setCfgTier(prospection.getCfgProspect());
+        message.setComActionMessageType(actionType);
+        message.setComActionMessageSubCategory(resultat);
+        // Jamais fournie par le client : celle du résultat, sinon celle de l'écran parent, comme OMRAN.
+        // Sans catégorie, la vue ComSaleProspectionView ignore l'interaction.
+        message.setComActionMessageCategory(Optional.ofNullable(resultat)
+                .map(ComActionMessageSubCategory::getComActionMessageCategory)
+                .orElseGet(() -> actionMessageCategoryRepository.findById(ContexteInteraction.CATEGORIE_PROSPECTION)
+                        .orElse(null)));
 
-        if (request.actionTypeId() != null) {
-            ComActionMessageType actionType = actionMessageTypeRepository.findById(request.actionTypeId())
-                    .orElseThrow(() -> new InvalidRequestException(TYPE_CONTACT_INTROUVABLE + request.actionTypeId()));
-            message.setComActionMessageType(actionType);
-        }
-
-        if (request.resultatId() != null) {
-            ComActionMessageSubCategory resultat = actionMessageSubCategoryRepository.findById(request.resultatId())
-                    .orElseThrow(() -> new InvalidRequestException("ComActionMessageSubCategory introuvable: " + request.resultatId()));
-            message.setComActionMessageSubCategory(resultat);
-            // Catégorie jamais fournie par le client : toujours déduite du résultat.
-            message.setComActionMessageCategory(resultat.getComActionMessageCategory());
-
-            if (RESULTATS_AVEC_DATE_PLANIFIEE.contains(resultat.getCode())) {
-                if (request.dateRdv() == null) {
-                    throw new InvalidRequestException(
-                            "dateRdv est requise lorsque le résultat est \"" + resultat.getCode() + "\"");
-                }
-                AdmEvent evenement = new AdmEvent();
-                evenement.setId(UUID.randomUUID());
-                evenement.setSubject(request.description());
-                evenement.setStartHour(request.dateRdv());
-                evenement.setComActionMessageSubCategory(resultat);
-                message.setAdmEvent(admEventRepository.save(evenement));
-            }
-        } else if (request.dateRdv() != null) {
-            throw new InvalidRequestException("dateRdv nécessite un resultatId (\"Rendez vous pris\", "
-                    + "\"RDV reporté\" ou \"Le prospect veut faire une visite du projet\")");
+        if (ReglesInteraction.exigeUneDateDeRdv(resultat)) {
+            AdmEvent evenement = new AdmEvent();
+            evenement.setId(UUID.randomUUID());
+            evenement.setSubject(request.description());
+            evenement.setStartHour(request.dateRdv());
+            evenement.setComActionMessageSubCategory(resultat);
+            message.setAdmEvent(admEventRepository.save(evenement));
         }
 
         ComActionMessage enregistree = actionMessageRepository.save(message);

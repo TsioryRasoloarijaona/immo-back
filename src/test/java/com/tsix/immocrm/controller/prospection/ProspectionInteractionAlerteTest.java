@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.prospection;
 import com.tsix.immocrm.entities.adm.AdmAlertData;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.repositories.adm.AdmAlertDataRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
@@ -58,6 +59,9 @@ class ProspectionInteractionAlerteTest {
     @Autowired
     private EntityManager em;
 
+    @Autowired
+    private FixtureInteraction fixtureInteraction;
+
     private ComProspection newProspection(String prefixe) {
         ComProspection p = new ComProspection();
         p.setId(UUID.randomUUID());
@@ -95,9 +99,12 @@ class ProspectionInteractionAlerteTest {
         return m;
     }
 
+    /** Postée comme une Note : seule action dispensée de résultat (FEATURE-lot4 §4). */
     private UUID poster(ComProspection p, String corps) throws Exception {
+        String corpsNote = corps.replaceFirst("\\{",
+                "{\"actionTypeId\":\"" + fixtureInteraction.typeNote().getId() + "\",");
         String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
-                        .contentType(MediaType.APPLICATION_JSON).content(corps))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpsNote))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         em.flush();

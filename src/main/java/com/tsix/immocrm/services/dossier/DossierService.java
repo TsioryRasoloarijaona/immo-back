@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.EtapeMilestone;
+import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TransitionsValidees;
@@ -121,6 +122,7 @@ public class DossierService {
     private final StrHistoryRepository strHistoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
+    private final TransformationProspectClient transformationProspectClient;
     private final Clock clock;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
@@ -136,8 +138,10 @@ public class DossierService {
                            StrHistoryRepository strHistoryRepository,
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
+                           TransformationProspectClient transformationProspectClient,
                            Clock clock) {
         this.clock = clock;
+        this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
@@ -364,7 +368,7 @@ public class DossierService {
 
         folder = folderRepository.save(folder);
         if (statutInitial != null) {
-            enregistrerHistoriqueStatut(folder, statutInitial, null);
+            enregistrerHistoriqueStatut(folder, statutInitial, noteAvecTransformation(folder, statutInitial, null));
         }
 
         for (StkItem item : articles) {
@@ -403,9 +407,8 @@ public class DossierService {
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
         for (StkItem annexe : annexes) {
-            BigDecimal prixAnnexe = annexe.getComSalePrice() != null ? annexe.getComSalePrice() : BigDecimal.ZERO;
-            BigDecimal prixAnnexeHT = annexe.getComSalePriceHT() != null
-                    ? annexe.getComSalePriceHT() : diviserParTaux(prixAnnexe, vatRatio);
+            BigDecimal prixAnnexe = PrixArticle.ttcOuZero(annexe);
+            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, vatRatio);
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
@@ -477,17 +480,13 @@ public class DossierService {
             // Prix saisi = prix avant remise du principal ; HT redérivé du taux de TVA.
             return new PrixTtcHt(prixNegocie, diviserParTaux(prixNegocie, vatRatio));
         }
-        BigDecimal itemPrice;
-        if (principal.getComSalePrice() != null) {
-            itemPrice = principal.getComSalePrice();
-        } else if (prixNegocie != null) {
-            itemPrice = prixNegocie;
-        } else {
-            itemPrice = BigDecimal.ZERO;
+        Optional<PrixArticle.PrixDeReference> reference = PrixArticle.prixDeReference(principal);
+        if (reference.isPresent()) {
+            return new PrixTtcHt(reference.get().ttc(), reference.get().ht(vatRatio));
         }
-        BigDecimal itemPriceHT = principal.getComSalePriceHT() != null
-                ? principal.getComSalePriceHT() : diviserParTaux(itemPrice, vatRatio);
-        return new PrixTtcHt(itemPrice, itemPriceHT);
+        // Sans prix de référence, la base avant remise est le prix négocié : remise nulle.
+        BigDecimal itemPrice = prixNegocie != null ? prixNegocie : BigDecimal.ZERO;
+        return new PrixTtcHt(itemPrice, diviserParTaux(itemPrice, vatRatio));
     }
 
     /** Hors de [0 ; 100] ⇒ 400 : sinon prix gonflé, ou prix après remise et schéma négatifs. */
@@ -500,12 +499,8 @@ public class DossierService {
         }
     }
 
-    /** HT = TTC / (1 + taux), TTC tel quel si le taux est nul/absent. Même formule que DevisService. */
     private static BigDecimal diviserParTaux(BigDecimal montantTTC, BigDecimal vatRatio) {
-        if (vatRatio == null || vatRatio.signum() == 0) {
-            return montantTTC;
-        }
-        return montantTTC.divide(BigDecimal.ONE.add(vatRatio), 6, RoundingMode.HALF_UP);
+        return PrixArticle.diviserParTaux(montantTTC, vatRatio);
     }
 
     /**
@@ -609,12 +604,25 @@ public class DossierService {
         folder.setStrStatus(strStatus);
         appliquerChampEtape(folder, cible, request);
         marquerModification(folder);
-        enregistrerHistoriqueStatut(folder, strStatus, request.note());
+        enregistrerHistoriqueStatut(folder, strStatus, noteAvecTransformation(folder, strStatus, request.note()));
 
         List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
                 .map(DossierService::toArticleSummary)
                 .toList();
         return toDetail(folderRepository.save(folder), articles);
+    }
+
+    /**
+     * Bascule prospect → client si le statut cible le demande ; la mention s'ajoute à la ligne
+     * d'historique de ce changement de statut (FEATURE-lot4 §3).
+     */
+    private String noteAvecTransformation(ComFolder folder, StrStatus statutCible, String note) {
+        if (!transformationProspectClient.appliquer(folder, statutCible)) {
+            return note;
+        }
+        return StringUtils.hasText(note)
+                ? note + " — " + TransformationProspectClient.MENTION_HISTORIQUE
+                : TransformationProspectClient.MENTION_HISTORIQUE;
     }
 
     /** GEN0016 : toute écriture sur le dossier signe {@code UserUpdate}/{@code UserUpdateDateTime}. */
