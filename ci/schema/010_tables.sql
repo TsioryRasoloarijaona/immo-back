@@ -4377,6 +4377,106 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+CREATE TABLE [dbo].[PrjMarketLine](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[EstimatedUnitPriceHT] [decimal](26, 6) NULL,
+	[VatRatio] [decimal](26, 6) NULL,
+	[EstimatedUnitPriceTTC] [decimal](26, 6) NULL,
+	[Notes] [nvarchar](1000) COLLATE French_CI_AS NULL,
+	[PrjMarketId] [uniqueidentifier] NULL,
+	[Sorting] [int] NULL,
+	[Unity] [nvarchar](50) COLLATE French_CI_AS NULL,
+	[Quantity] [decimal](26, 6) NULL,
+	[UnitPriceHT] [decimal](26, 16) NULL,
+	[UnitPriceTTC] [decimal](26, 6) NULL,
+	[BuyItemId] [uniqueidentifier] NULL,
+	[WeightingRatio] [decimal](26, 6) NULL,
+	[PrjMarketLineGroupingId] [uniqueidentifier] NULL,
+	[IsStock] [bit] NULL,
+	[Groupping1Id] [uniqueidentifier] NULL,
+	[Groupping2Id] [uniqueidentifier] NULL,
+	[Groupping3Id] [uniqueidentifier] NULL,
+	[StlCategoryId] [uniqueidentifier] NULL,
+	[FODECRatio] [decimal](26, 16) NULL,
+	[UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserCreateDateTime] [datetime] NULL,
+	[UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserUpdateDateTime] [datetime] NULL,
+	[BuyConsultationLineId] [uniqueidentifier] NULL,
+ CONSTRAINT [PrjMarketLine_PK] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PrjMarketLineEstimation](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UnitPriceHT] [decimal](26, 6) NULL,
+	[VatRatio] [decimal](26, 6) NULL,
+	[UnitPriceTTC] [decimal](26, 6) NULL,
+	[Notes] [nvarchar](1000) COLLATE French_CI_AS NULL,
+	[PrjMarketId] [uniqueidentifier] NULL,
+	[Sorting] [int] NULL,
+	[Unity] [nvarchar](50) COLLATE French_CI_AS NULL,
+	[Quantity] [decimal](26, 6) NULL,
+	[BuyItemId] [uniqueidentifier] NULL,
+	[WeightingRatio] [decimal](26, 6) NULL,
+	[PrjMarketLineGroupingId] [uniqueidentifier] NULL,
+	[IsStock] [bit] NULL,
+	[Groupping1Id] [uniqueidentifier] NULL,
+	[Groupping2Id] [uniqueidentifier] NULL,
+	[Groupping3Id] [uniqueidentifier] NULL,
+	[StlCategoryId] [uniqueidentifier] NULL,
+	[FODECRatio] [decimal](26, 16) NULL,
+	[UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserCreateDateTime] [datetime] NULL,
+	[UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserUpdateDateTime] [datetime] NULL,
+	[BuyConsultationLineId] [uniqueidentifier] NULL,
+ CONSTRAINT [PrjMarketLineEstimation_PK] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PrjMarketLineGrouping](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Sorting] [int] NULL,
+	[ParentId] [uniqueidentifier] NULL,
+	[PrjMarketId] [uniqueidentifier] NULL,
+	[UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserCreateDateTime] [datetime] NULL,
+	[UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserUpdateDateTime] [datetime] NULL,
+	[IsStock] [bit] NULL,
+	[Notes] [nvarchar](1000) COLLATE French_CI_AS NULL,
+ CONSTRAINT [PrjMarketLineGrouping_PK] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE TABLE [dbo].[PrjMarketType](
 	[PKey] [uniqueidentifier] NOT NULL,
 	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
@@ -4562,6 +4662,88 @@ CREATE NONCLUSTERED INDEX [_dta_index_PrjWorkingOut_5_1472724299__K16_K1_21_23_2
 	[PKey] ASC
 )
 INCLUDE([WarrantyAmount],[AdvanceAmount],[insuranceDECAmount],[insuranceTRCAmount],[proportionAmount],[nonRefundableRetainer],[WorkingOutAdvanceAmount]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PrjWorkingOutLine](
+	[Pkey] [uniqueidentifier] NOT NULL,
+	[Sorting] [int] NULL,
+	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Unity] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[QuantityOrigin] [decimal](26, 6) NULL,
+	[Coefficient] [decimal](26, 6) NULL,
+	[Quantity] [decimal](26, 6) NULL,
+	[QuantityOld] [decimal](26, 6) NULL,
+	[UnitPriceHT] [decimal](26, 6) NULL,
+	[VatRatio] [decimal](26, 6) NULL,
+	[UnitPriceTTC] [decimal](26, 6) NULL,
+	[Notes] [nvarchar](1000) COLLATE French_CI_AS NULL,
+	[PrjWorkingOutId] [uniqueidentifier] NULL,
+	[PrjMarketLineId] [uniqueidentifier] NULL,
+	[BuyItemId] [uniqueidentifier] NULL,
+	[StlCategoryId] [uniqueidentifier] NULL,
+	[FODECRatio] [decimal](26, 16) NULL,
+	[UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserCreateDateTime] [datetime] NULL,
+	[UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserUpdateDateTime] [datetime] NULL,
+	[BuyConsultationLineId] [uniqueidentifier] NULL,
+ CONSTRAINT [PrjWorkingOutLine_PK] PRIMARY KEY CLUSTERED
+(
+	[Pkey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PrjWorkingOutLineExtra](
+	[Pkey] [uniqueidentifier] NOT NULL,
+	[Sorting] [int] NULL,
+	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Description] [nvarchar](500) COLLATE French_CI_AS NULL,
+	[Unity] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[Quantity] [decimal](26, 6) NULL,
+	[UnitPriceHT] [decimal](26, 6) NULL,
+	[VatRatio] [decimal](26, 6) NULL,
+	[UnitPriceTTC] [decimal](26, 6) NULL,
+	[Notes] [nvarchar](1000) COLLATE French_CI_AS NULL,
+	[PrjWorkingOutId] [uniqueidentifier] NULL,
+	[UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserCreateDateTime] [datetime] NULL,
+	[UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+	[UserUpdateDateTime] [datetime] NULL,
+	[StlCategoryId] [uniqueidentifier] NULL,
+	[PrjMarketLineId] [uniqueidentifier] NULL,
+	[FODECRatio] [decimal](26, 16) NULL,
+ CONSTRAINT [PrjWorkingOutLineExtra_PK] PRIMARY KEY CLUSTERED
+(
+	[Pkey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PrjWorkingOutRetainedLine](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[PrjWorkingOutId] [uniqueidentifier] NOT NULL,
+	[Sorting] [int] NULL,
+	[Description] [nvarchar](500) COLLATE French_CI_AS NULL,
+	[Amount] [decimal](26, 6) NULL,
+ CONSTRAINT [PrjWorkingOutRetainedLine_PK] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
 GO
 SET ANSI_NULLS ON
 GO

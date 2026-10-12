@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.time.LocalDateTime;
@@ -64,6 +65,16 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     List<StlSettlementLine> findByDossierIdOrderByStlSettlementDocDateAsc(UUID dossierId);
 
     List<StlSettlementLine> findByComDocumentIdOrderByStlSettlement_DocDateDesc(UUID echeanceId);
+
+    /** Tuple : [buyDocumentId, réglé] — factures fournisseur (module Chantier), règlements annulés exclus. */
+    @Query("SELECT l.buyDocumentId, SUM(l.amount) FROM StlSettlementLine l JOIN l.stlSettlement st "
+            + "WHERE l.buyDocumentId IN :factureIds" + COMPTE + " GROUP BY l.buyDocumentId")
+    List<Object[]> sumAmountByBuyDocumentIds(Collection<UUID> factureIds);
+
+    /** Toutes les lignes d'une facture fournisseur, annulées comprises (la fiche les affiche barrées). */
+    @Query("SELECT l FROM StlSettlementLine l JOIN FETCH l.stlSettlement st LEFT JOIN FETCH st.stlSettlementType "
+            + "WHERE l.buyDocumentId = :factureId ORDER BY st.docDate ASC, st.code ASC")
+    List<StlSettlementLine> findByBuyDocumentId(UUID factureId);
 
     /**
      * Lignes d'un règlement sur ce dossier : le montant réglé pour le dossier est la somme de leurs

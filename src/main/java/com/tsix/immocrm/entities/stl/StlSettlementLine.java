@@ -31,6 +31,10 @@ public class StlSettlementLine {
     @JoinColumn(name = "ComDocumentId")
     private ComDocument comDocument;
 
+    // Facture fournisseur réglée (module Chantier) ; id brut, BuyDocument n'est lu qu'en lecture seule.
+    @Column(name = "BuyDocumentId")
+    private UUID buyDocumentId;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "UserCreate")
