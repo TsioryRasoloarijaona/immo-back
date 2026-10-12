@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Seule recherche d'une tranche par id pour les onglets, la copie et la suppression : une tranche d'une entité
+ * Seule recherche d'une tranche par id pour les onglets et la suppression : une tranche d'une entité
  * inactive est masquée (404, administrateur compris), comme {@link ProgrammeVisible}.
  */
 @Component

@@ -3,7 +3,6 @@ package com.tsix.immocrm.config;
 import com.tsix.immocrm.services.note.NoteService;
 import com.tsix.immocrm.services.patrimoine.ActionArticleService;
 import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
-import com.tsix.immocrm.services.patrimoine.ChargementTrancheService;
 import com.tsix.immocrm.services.patrimoine.EtagesTrancheService;
 import com.tsix.immocrm.services.patrimoine.FraisTrancheService;
 import com.tsix.immocrm.services.patrimoine.PlancherCouvertService;
@@ -68,11 +67,11 @@ class RoutageEcrituresTest {
     @Test
     void ecrituresPatrimoine_reconnuesEtJamaisEnLectureSeule() {
         // + FEATURE-patrimoine-audit-actions.md §8 : actions d'article et notes.
-        // + FEATURE-patrimoine-tranche-onglets.md §7 : onglets, copie et suppression de tranche.
+        // + FEATURE-patrimoine-tranche-onglets.md §7 : onglets et suppression de tranche.
         List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class,
                 ZoneProjetService.class, SuppressionProjetService.class, ActionArticleService.class, NoteService.class,
                 TerrainsTrancheService.class, EtagesTrancheService.class, PlancherCouvertService.class,
-                FraisTrancheService.class, ChargementTrancheService.class, SuppressionTrancheService.class);
+                FraisTrancheService.class, SuppressionTrancheService.class);
         for (Class<?> service : patrimoine) {
             List<Method> ecritures = java.util.Arrays.stream(service.getDeclaredMethods())
                     .filter(m -> Modifier.isPublic(m.getModifiers()) && ECRITURE.matcher(m.getName()).matches())

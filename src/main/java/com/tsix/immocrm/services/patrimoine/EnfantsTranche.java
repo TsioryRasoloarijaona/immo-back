@@ -7,7 +7,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTrancheStatusRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheStkItemRepository;
 import org.springframework.stereotype.Component;
 
-/** Dépôts des lignes enfants mappées d'une tranche (onglets et seuils), pour la copie et la suppression. */
+/** Dépôts des lignes enfants mappées d'une tranche (onglets et seuils), retirées avec elle. */
 @Component
 record EnfantsTranche(CfgTrancheStkItemRepository terrains, CfgTrancheLevelRepository etages,
                       CfgTrancheCoveredFloorRepository planchers, CfgTrancheSettlementCategoryRepository frais,

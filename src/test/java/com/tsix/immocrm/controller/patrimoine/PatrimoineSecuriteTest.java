@@ -64,12 +64,11 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.POST, ZONES),
                 Arguments.of(HttpMethod.PATCH, ZONES + "/" + UUID.randomUUID()),
                 Arguments.of(HttpMethod.DELETE, ZONES + "/" + UUID.randomUUID()),
-                // FEATURE-patrimoine-tranche-onglets.md : onglets, copie et suppression de tranche.
+                // FEATURE-patrimoine-tranche-onglets.md : onglets et suppression de tranche.
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/terrains"),
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/etages"),
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/plancher-couvert"),
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/frais"),
-                Arguments.of(HttpMethod.POST, TRANCHE + "/charger-depuis/" + UUID.randomUUID()),
                 Arguments.of(HttpMethod.DELETE, TRANCHE));
     }
 
