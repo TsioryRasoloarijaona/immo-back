@@ -33,6 +33,7 @@ class ReferencesArticle {
 
     private static final String CODE_STR_ENTITY_ARTICLE = "StkItem";
     private static final String INTROUVABLE = "%s introuvable : %s";
+    private static final String CHAMP_VOCATION = "vocationId";
 
     private final CfgTrancheRepository trancheRepository;
     private final StkVocationRepository vocationRepository;
@@ -65,16 +66,16 @@ class ReferencesArticle {
 
     StkVocation vocation(UUID id) {
         StkVocation vocation = vocationRepository.findById(id)
-                .orElseThrow(() -> new ChampInvalideException("vocationId", INTROUVABLE.formatted("Vocation", id)));
+                .orElseThrow(() -> new ChampInvalideException(CHAMP_VOCATION, INTROUVABLE.formatted("Vocation", id)));
         if (!ClassementArticle.vocationEligible(vocation.getCode())) {
-            throw new ChampInvalideException("vocationId", "La vocation « Projet » est réservée aux terrains.");
+            throw new ChampInvalideException(CHAMP_VOCATION, "La vocation « Projet » est réservée aux terrains.");
         }
         return vocation;
     }
 
     StkVocation vocationParDefaut() {
         return vocationRepository.findFirstByCode(ClassementArticle.VOCATION_VENTE)
-                .orElseThrow(() -> new ChampInvalideException("vocationId",
+                .orElseThrow(() -> new ChampInvalideException(CHAMP_VOCATION,
                         "Aucune vocation VENTE paramétrée : choisissez une vocation."));
     }
 

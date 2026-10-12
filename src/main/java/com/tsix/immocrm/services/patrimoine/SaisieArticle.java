@@ -11,7 +11,6 @@ import com.tsix.immocrm.utils.Champs;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -208,6 +207,9 @@ final class SaisieArticle {
     }
 
     private static boolean memeValeur(BigDecimal a, BigDecimal b) {
-        return Objects.equals(a, b) || (a != null && b != null && a.compareTo(b) == 0);
+        if (a == null || b == null) {
+            return a == null && b == null;
+        }
+        return a.compareTo(b) == 0;
     }
 }

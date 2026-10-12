@@ -46,6 +46,7 @@ class TrancheEcritureTest {
     private static final String CHAMP = "$.champ";
     private static final String AUTEUR = "Compte ADM-TRA-ECR";
     private static final String CODE_PROGRAMME = "PRJ-TRA-ECR";
+    private static final String CODE_MINIMAL = "TRA-ECR-1";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
@@ -88,15 +89,31 @@ class TrancheEcritureTest {
         return trancheRepository.findById(UUID.fromString(noeud.get("id").asText())).orElseThrow();
     }
 
+    /** Valeurs initiales d'OMRAN, colonne par colonne : une tranche créée avec le seul corps minimal. */
+    private CfgTranche creerTrancheMinimale() throws Exception {
+        return relire(creer(corpsMinimal(CODE_MINIMAL))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+    }
+
     @Test
-    void creation_201_valeursInitialesOmranColonneParColonne() throws Exception {
-        String reponse = creer(corpsMinimal("TRA-ECR-1"))
+    void creation_201_reponsePorteProgrammeEntiteEtAuteur() throws Exception {
+        String reponse = creer(corpsMinimal(CODE_MINIMAL))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.projetCode").value(CODE_PROGRAMME))
                 .andExpect(jsonPath("$.entiteCode").value("ENT-TRA-ECR"))
                 .andExpect(jsonPath("$.creePar").value(AUTEUR))
                 .andReturn().getResponse().getContentAsString();
         CfgTranche t = relire(reponse);
+
+        assertAll("auteur et horodatage",
+                () -> assertThat(t.getUserCreate()).isEqualTo(AUTEUR),
+                () -> assertThat(t.getUserUpdateDateTime()).isNotNull().isEqualTo(t.getUserCreateDateTime()));
+    }
+
+    @Test
+    void creation_drapeauxInitiauxOmran() throws Exception {
+        CfgTranche t = creerTrancheMinimale();
 
         assertAll("drapeaux",
                 () -> assertThat(t.getIsForSale()).isTrue(),
@@ -115,6 +132,12 @@ class TrancheEcritureTest {
                 () -> assertThat(t.getAdvanceBasedOnAmount()).isFalse(),
                 () -> assertThat(t.getIsActiveAdvancePercentDiscount()).isFalse(),
                 () -> assertThat(t.getCancellationPenalityBasedOnItemPrice()).isTrue());
+    }
+
+    @Test
+    void creation_delaisInitiauxOmran() throws Exception {
+        CfgTranche t = creerTrancheMinimale();
+
         assertAll("délais",
                 () -> assertThat(t.getAgreementFirstDelay()).isEqualTo(60),
                 () -> assertThat(t.getAgreementSecondDelay()).isEqualTo(30),
@@ -129,19 +152,38 @@ class TrancheEcritureTest {
                 () -> assertThat(t.getPaymentBalanceDelay()).isZero(),
                 () -> assertThat(t.getMaxEcheanceDelai()).isZero(),
                 () -> assertThat(t.getCountItemBasePrevision()).isZero());
-        assertAll("montants",
+    }
+
+    @Test
+    void creation_tauxEtEcartsTypesInitiauxOmran() throws Exception {
+        CfgTranche t = creerTrancheMinimale();
+
+        assertAll("taux et écarts-types",
                 () -> assertThat(t.getEcarttypeConcretisation()).isEqualByComparingTo("5"),
                 () -> assertThat(t.getEcarttypeFinalisation()).isEqualByComparingTo("3"),
                 () -> assertThat(t.getAdvancePercent()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getConcretisationPercent()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getAdvancePercentDiscount()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getCancellationPenalityPercent()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getCancellationPenalityPercentDiscount()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getAgreementFirstPenaltyPercent()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getAgreementSecondPenaltyPercent()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getCreditPercent()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getBaseEcarttypeConcretisation()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getBaseEcarttypeFinalisation()).isEqualByComparingTo("0"),
+                () -> assertThat(t.getBaseConcretisationPercent()).isEqualByComparingTo("0"));
+    }
+
+    @Test
+    void creation_montantsInitiauxAZero() throws Exception {
+        CfgTranche t = creerTrancheMinimale();
+
+        assertAll("montants",
                 () -> assertThat(t.getAdvanceAmount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getBeforeReservationAmount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getBeforeReservationAmountDiscount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getDefaultExpenseAmount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getDefaultExpenseAmountDiscount()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getCancellationPenalityPercent()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getCancellationPenalityPercentDiscount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getArticleTransferPenality()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getArticleTransferPenalityDiscount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getSliceTransferPenality()).isEqualByComparingTo("0"),
@@ -152,18 +194,18 @@ class TrancheEcritureTest {
                 () -> assertThat(t.getOtherExpenseAmountDiscount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getSyndicAmount()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getSyndicAmountDiscount()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getAgreementFirstPenaltyPercent()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getAgreementSecondPenaltyPercent()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getCreditPercent()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getCoveredFloorArea()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getTotalSaleBasePrevision()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getBaseEcarttypeConcretisation()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getBaseEcarttypeFinalisation()).isEqualByComparingTo("0"),
-                () -> assertThat(t.getBaseConcretisationPercent()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getUnitConcretisation()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getUnitFinalisation()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getUnitTurnover()).isEqualByComparingTo("0"),
                 () -> assertThat(t.getUnitTurnoverHT()).isEqualByComparingTo("0"));
+    }
+
+    @Test
+    void creation_textesVidesDatesEtClesNulles() throws Exception {
+        CfgTranche t = creerTrancheMinimale();
+
         assertAll("textes vides, dates et clés nulles",
                 () -> assertThat(t.getAddress()).isEmpty(),
                 () -> assertThat(t.getCity()).isEmpty(),
@@ -172,9 +214,7 @@ class TrancheEcritureTest {
                 () -> assertThat(t.getCancellationRightCode()).isEmpty(),
                 () -> assertThat(t.getSavAddress()).isEmpty(),
                 () -> assertThat(t.getDeliveryDate()).isNull(),
-                () -> assertThat(t.getAdmCountry()).isNull(),
-                () -> assertThat(t.getUserCreate()).isEqualTo(AUTEUR),
-                () -> assertThat(t.getUserUpdateDateTime()).isNotNull().isEqualTo(t.getUserCreateDateTime()));
+                () -> assertThat(t.getAdmCountry()).isNull());
     }
 
     @Test
