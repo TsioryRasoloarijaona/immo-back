@@ -1,5 +1,8 @@
 package com.tsix.immocrm.config;
 
+import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
+import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.TrancheService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -48,8 +51,21 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|changer)[A-Z].*"
-                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add)$");
+                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|changer)[A-Z].*"
+                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|affecter|desaffecter)$");
+
+    /** FEATURE-patrimoine-ecriture.md §11 : chacun de ces services doit exposer des écritures reconnues, toutes routées vers la source. */
+    @Test
+    void ecrituresPatrimoine_reconnuesEtJamaisEnLectureSeule() {
+        List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class);
+        for (Class<?> service : patrimoine) {
+            List<Method> ecritures = java.util.Arrays.stream(service.getDeclaredMethods())
+                    .filter(m -> Modifier.isPublic(m.getModifiers()) && ECRITURE.matcher(m.getName()).matches())
+                    .toList();
+            assertThat(ecritures).as(service.getSimpleName()).isNotEmpty()
+                    .noneMatch(m -> lectureSeuleEffective(service, m));
+        }
+    }
 
     @Test
     void aucuneMethodeDEcritureNEstMarqueeEnLectureSeule() {

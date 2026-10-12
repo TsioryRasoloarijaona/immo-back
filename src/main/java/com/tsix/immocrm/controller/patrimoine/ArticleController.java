@@ -3,8 +3,12 @@ package com.tsix.immocrm.controller.patrimoine;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
+import com.tsix.immocrm.dto.patrimoine.AffectationSousArticleDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
+import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.patrimoine.SousArticleEcritureDto;
+import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
 import com.tsix.immocrm.services.patrimoine.ArticlePieceJointeService;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,8 +21,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,11 +42,20 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/articles")
 public class ArticleController {
 
+    private static final String ROLE_ADMINISTRATEUR = "hasRole('Administrateur')";
+    private static final String REFUS_ROLE = "L'appelant n'a pas le rôle Administrateur.";
+    private static final String ID_ARTICLE = "Identifiant de l'article (StkItem.PKey).";
+    private static final String ID_SOUS_ARTICLE = "Identifiant du sous-article (StkItem.PKey).";
+    private static final String AUCUN_ARTICLE = "Aucun article avec cet id.";
+
     private final ArticleService articleService;
+    private final ArticleEcritureService ecritureService;
     private final ArticlePieceJointeService pieceJointeService;
 
-    public ArticleController(ArticleService articleService, ArticlePieceJointeService pieceJointeService) {
+    public ArticleController(ArticleService articleService, ArticleEcritureService ecritureService,
+                             ArticlePieceJointeService pieceJointeService) {
         this.articleService = articleService;
+        this.ecritureService = ecritureService;
         this.pieceJointeService = pieceJointeService;
     }
 
@@ -94,6 +111,81 @@ public class ArticleController {
             @RequestParam(required = false) List<UUID> typeId,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(articleService.findSousArticles(id, statut, categorieId, typeId, pageable));
+    }
+
+    // -- Écritures (Administrateur) : FEATURE-patrimoine-ecriture.md §5 --
+
+    @PostMapping
+    @PreAuthorize(ROLE_ADMINISTRATEUR)
+    @Operation(summary = "Crée un article principal")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Article créé ; renvoie sa fiche, prix calculés."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403", description = REFUS_ROLE),
+            @ApiResponse(responseCode = "409", description = "Code déjà utilisé dans la tranche.")
+    })
+    public ResponseEntity<ArticleDetailDto> create(@RequestBody ArticleEcritureDto demande) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ecritureService.create(demande));
+    }
+
+    @PatchMapping("/{id}")
+    @PreAuthorize(ROLE_ADMINISTRATEUR)
+    @Operation(summary = "Modifie un article ou un sous-article (champs absents inchangés)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Article modifié ; renvoie sa fiche."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403", description = REFUS_ROLE),
+            @ApiResponse(responseCode = "404", description = AUCUN_ARTICLE),
+            @ApiResponse(responseCode = "409")
+    })
+    public ArticleDetailDto update(@Parameter(description = ID_ARTICLE) @PathVariable UUID id,
+                                   @RequestBody ArticleEcritureDto demande) {
+        return ecritureService.update(id, demande);
+    }
+
+    @PostMapping("/{id}/sous-articles")
+    @PreAuthorize(ROLE_ADMINISTRATEUR)
+    @Operation(summary = "Crée un sous-article rattaché à l'article")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Sous-article créé ; renvoie sa fiche."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403", description = REFUS_ROLE),
+            @ApiResponse(responseCode = "404", description = AUCUN_ARTICLE),
+            @ApiResponse(responseCode = "409", description = "Code déjà pris dans la tranche, ou article affecté à un dossier.")
+    })
+    public ResponseEntity<ArticleDetailDto> createSousArticle(@Parameter(description = ID_ARTICLE) @PathVariable UUID id,
+                                                              @RequestBody SousArticleEcritureDto demande) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ecritureService.createSousArticle(id, demande));
+    }
+
+    @PostMapping("/{id}/sous-articles/{sousArticleId}/affecter")
+    @PreAuthorize(ROLE_ADMINISTRATEUR)
+    @Operation(summary = "Rattache un sous-article libre de la tranche à l'article")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Rattaché ; renvoie la fiche de l'article, prix de vente recalculé."),
+            @ApiResponse(responseCode = "400", description = "L'article cible est lui-même un sous-article."),
+            @ApiResponse(responseCode = "403", description = REFUS_ROLE),
+            @ApiResponse(responseCode = "404", description = "Article ou sous-article introuvable."),
+            @ApiResponse(responseCode = "409")
+    })
+    public ArticleDetailDto affecter(@Parameter(description = ID_ARTICLE) @PathVariable UUID id,
+                                     @Parameter(description = ID_SOUS_ARTICLE) @PathVariable UUID sousArticleId,
+                                     @RequestBody(required = false) AffectationSousArticleDto demande) {
+        return ecritureService.affecter(id, sousArticleId, demande);
+    }
+
+    @PostMapping("/{id}/sous-articles/{sousArticleId}/desaffecter")
+    @PreAuthorize(ROLE_ADMINISTRATEUR)
+    @Operation(summary = "Détache un sous-article de l'article (il redevient libre)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Détaché ; renvoie la fiche de l'article, prix de vente recalculé."),
+            @ApiResponse(responseCode = "403", description = REFUS_ROLE),
+            @ApiResponse(responseCode = "404", description = "Article ou sous-article introuvable."),
+            @ApiResponse(responseCode = "409")
+    })
+    public ArticleDetailDto desaffecter(@Parameter(description = ID_ARTICLE) @PathVariable UUID id,
+                                        @Parameter(description = ID_SOUS_ARTICLE) @PathVariable UUID sousArticleId) {
+        return ecritureService.desaffecter(id, sousArticleId);
     }
 
     // -- Pièces jointes (AdmAttachedFile, CategoryId = StkItem.PKey — voir ArticlePieceJointeService) --

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -421,5 +422,8 @@ public class CfgTranche {
     @Column(name = "CreditPercent", precision = 26, scale = 6)
     private BigDecimal creditPercent;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
 
 }

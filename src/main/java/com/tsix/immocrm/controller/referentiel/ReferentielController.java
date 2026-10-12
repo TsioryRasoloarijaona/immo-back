@@ -12,6 +12,7 @@ import com.tsix.immocrm.dto.referentiel.ResultatInteractionDto;
 import com.tsix.immocrm.dto.referentiel.TitreDto;
 import com.tsix.immocrm.dto.referentiel.TypeReglementDto;
 import com.tsix.immocrm.dto.referentiel.VilleDto;
+import com.tsix.immocrm.services.referentiel.ReferentielPatrimoineService;
 import com.tsix.immocrm.services.referentiel.ReferentielService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -41,10 +42,16 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/referentiels")
 public class ReferentielController {
 
-    private final ReferentielService referentielService;
+    private static final String POUR_SOUS_ARTICLE = "Présent : nature Bâtiment seulement, paramétrées « Pour les sous "
+            + "articles » (true) ou non (false). Absent : toutes.";
 
-    public ReferentielController(ReferentielService referentielService) {
+    private final ReferentielService referentielService;
+    private final ReferentielPatrimoineService referentielPatrimoineService;
+
+    public ReferentielController(ReferentielService referentielService,
+                                 ReferentielPatrimoineService referentielPatrimoineService) {
         this.referentielService = referentielService;
+        this.referentielPatrimoineService = referentielPatrimoineService;
     }
 
     @GetMapping("/roles")
@@ -90,8 +97,20 @@ public class ReferentielController {
     }
 
     @GetMapping("/vocations")
-    public List<ReferentielItemDto> getVocations() {
-        return referentielService.vocations();
+    @Operation(summary = "Vocations d'article (StkVocation)")
+    public List<ReferentielItemDto> getVocations(
+            @Parameter(description = "true : sans la vocation PROJET, réservée aux terrains (formulaire article). "
+                    + "Absent : toutes.")
+            @RequestParam(required = false) Boolean pourArticle) {
+        return Boolean.TRUE.equals(pourArticle)
+                ? referentielPatrimoineService.vocationsPourArticle()
+                : referentielService.vocations();
+    }
+
+    @GetMapping("/immeubles")
+    @Operation(summary = "Immeubles (StkBuilding), triés par ordre d'affichage puis code")
+    public List<ReferentielItemDto> getImmeubles() {
+        return referentielPatrimoineService.immeubles();
     }
 
     @GetMapping("/natures")
@@ -179,13 +198,23 @@ public class ReferentielController {
     }
 
     @GetMapping("/categories-bien")
-    public List<ReferentielItemDto> getCategoriesBien() {
-        return referentielService.categoriesBien();
+    @Operation(summary = "Catégories de bien (StkItemCategory)")
+    public List<ReferentielItemDto> getCategoriesBien(
+            @Parameter(description = POUR_SOUS_ARTICLE)
+            @RequestParam(required = false) Boolean pourSousArticle) {
+        return pourSousArticle == null
+                ? referentielService.categoriesBien()
+                : referentielPatrimoineService.categories(pourSousArticle);
     }
 
     @GetMapping("/types-bien")
-    public List<ReferentielItemDto> getTypesBien() {
-        return referentielService.typesBien();
+    @Operation(summary = "Types de bien (StkItemType)")
+    public List<ReferentielItemDto> getTypesBien(
+            @Parameter(description = POUR_SOUS_ARTICLE)
+            @RequestParam(required = false) Boolean pourSousArticle) {
+        return pourSousArticle == null
+                ? referentielService.typesBien()
+                : referentielPatrimoineService.types(pourSousArticle);
     }
 
     @GetMapping("/types-relation-contact")

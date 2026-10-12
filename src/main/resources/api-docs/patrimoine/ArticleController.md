@@ -45,6 +45,74 @@ caves annexées à un lot. `statut` filtre sur la disponibilité (défaut: DISPO
 `categorieId`/`typeId` filtrent comme sur `GET /api/tranches/{id}/articles`. Chaque sous-article
 renvoyé porte son propre `description` (son nom), pas seulement son `code`.
 
+## create
+
+Réservé au rôle `Administrateur`. Crée un **article principal** (lot bâti). Obligatoires : `trancheId`, `code`
+(unique **dans la tranche**, sous-articles compris, casse ignorée — le même code dans une autre tranche est permis),
+`description`, `categorieId` et `typeId` (nature Bâtiment, non paramétrés « Pour les sous articles »), `immeubleId`,
+`etageId`. `vocationId` vaut VENTE par défaut ; PROJET est refusée. Surfaces : provisoire 1 par défaut, définitive =
+provisoire par défaut, toutes deux > 0. Le serveur pose la nature Bâtiment, le type de document OMRAN « StkItem »
+(sans lui l'article est invisible dans OMRAN), laisse les colonnes d'affectation vides, met à 0 les nombres et à vide
+les textes non saisis, et **calcule les prix stockés** : prix du m² TTC = HT × (1 + TVA) arrondi à 6 décimales, prix
+article = prix du m² × surface (provisoire sur `surfaceProvisoire`, définitif sur `surfaceDefinitive`), prix de vente =
+prix article + sous-articles rattachés.
+
+### reponse 400
+
+Champ obligatoire absent ; tranche, vocation, catégorie, type, immeuble ou étage introuvable ; catégorie ou type hors
+nature Bâtiment ou paramétré pour les sous-articles ; vocation PROJET ; surface ≤ 0 (« La valeur de la supérficie
+provisoire doit être strictement supérieure à 0 ! ») ; prix négatif ; TVA ou remise hors de [0 ; 1] ; texte trop long.
+Le ProblemDetail porte `champ`.
+
+## update
+
+Réservé au rôle `Administrateur`. Vaut pour un article comme pour un sous-article. PATCH : absent ou `null` = inchangé,
+`""` = vider un texte facultatif. `trancheId` ne se modifie pas (400). Un sous-article garde la vocation de son article
+(400 si elle change) et ses listes sont celles « Pour les sous articles ». Les prix stockés ne sont recalculés que si
+une surface, un prix au m² ou la TVA change ; le prix de vente de l'article parent suit alors.
+
+### reponse 400
+
+Mêmes causes qu'à la création, plus un changement de `trancheId`, ou de vocation sur un sous-article.
+
+### reponse 409
+
+Code déjà pris dans la tranche ; ou **article occupé** (dossier de vente ou de location, ou parent qui en a un) dont la
+demande change un champ protégé — code, vocation, catégorie, type, surfaces, prix au m², TVA, remises : « L'article X
+est affecté au dossier Y : ses prix, surfaces et classification ne se modifient plus ». Description, notes, adresse,
+titre foncier, titré, surfaces intérieure/murs/parties communes, immeuble et étage restent modifiables. `champ` nomme
+le premier champ protégé changé.
+
+## createSousArticle
+
+Réservé au rôle `Administrateur`. Crée un lot annexe (parking, jardin, terrasse) **rattaché** à l'article `id` : même
+tranche, même vocation et même nature que lui ; immeuble de l'article par défaut ; catégorie et type paramétrés « Pour
+les sous articles » ; non titré par défaut. Le prix de vente de l'article est recalculé.
+
+### reponse 400
+
+L'article `id` est lui-même un sous-article ; sinon mêmes causes qu'à la création d'un article.
+
+## affecter
+
+Réservé au rôle `Administrateur`. Le sous-article doit être **libre** dans la même tranche (voir
+`GET /api/tranches/{id}/sous-articles-libres`). Corps facultatif `{ "toujoursAffecte": true }`.
+
+### reponse 409
+
+« Ce sous article n'est pas libre » : déjà rattaché, toujours affecté, affecté à un dossier, pas un sous-article, ou dans
+une autre tranche ; ou article cible affecté à un dossier.
+
+## desaffecter
+
+Réservé au rôle `Administrateur`. Le sous-article redevient libre (`toujoursAffecte` remis à faux) ; le prix de vente de
+l'article est recalculé.
+
+### reponse 409
+
+Le sous-article n'est pas rattaché à cet article ; il a un dossier (« Vous ne pouvez pas désaffecter un sous article
+ayant un dossier de vente ! », idem location) ; ou l'article est affecté à un dossier.
+
 ## getPiecesJointes
 
 Retourne toutes les pièces jointes rattachées à l'article `id` (`AdmAttachedFile.CategoryId =

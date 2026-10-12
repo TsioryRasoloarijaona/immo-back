@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.StatutArticle;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -66,6 +67,64 @@ public record ArticleDetailDto(
                 nullable = true)
         BigDecimal prixSuggere,
         @Schema(description = "Vrai quand prixSuggere est le prix plancher (prix commercial à 0).")
-        boolean prixSuggereEstPlancher
+        boolean prixSuggereEstPlancher,
+
+        // -- Saisies et prix stockés, mêmes noms que ArticleEcritureDto (FEATURE-patrimoine-ecriture.md §10) --
+        @Schema(description = "Superficie provisoire en m² (AreaFloor) ; la définitive est `area`.")
+        BigDecimal surfaceProvisoire,
+        @Schema(description = "Prix du m² provisoire HT (ComSaleUnitCostFloorHT).")
+        BigDecimal prixM2ProvisoireHT,
+        @Schema(description = "Prix du m² provisoire TTC (ComSaleUnitCostFloor), calculé.")
+        BigDecimal prixM2ProvisoireTTC,
+        @Schema(description = "Prix du m² définitif HT (ComSaleUnitCostHT).")
+        BigDecimal prixM2DefinitifHT,
+        @Schema(description = "Prix du m² définitif TTC (ComSaleUnitCost), calculé.")
+        BigDecimal prixM2DefinitifTTC,
+        @Schema(description = "Prix de l'article seul, provisoire HT (SalePriceFloorHT).")
+        BigDecimal prixArticleProvisoireHT,
+        @Schema(description = "Prix de l'article seul, provisoire TTC (SalePriceFloor).")
+        BigDecimal prixArticleProvisoireTTC,
+        @Schema(description = "Prix de l'article seul, définitif HT (SalePriceHT).")
+        BigDecimal prixArticleDefinitifHT,
+        @Schema(description = "Prix de l'article seul, définitif TTC (SalePrice).")
+        BigDecimal prixArticleDefinitifTTC,
+        @Schema(description = "Prix de vente provisoire HT = article + sous-articles rattachés (ComSalePriceFloorHT).")
+        BigDecimal prixVenteProvisoireHT,
+        @Schema(description = "Prix de vente définitif HT = article + sous-articles rattachés (ComSalePriceHT).")
+        BigDecimal prixVenteDefinitifHT,
+        @Schema(description = "TVA en fraction (Vat), même valeur que tauxTVA.")
+        BigDecimal tauxTva,
+        @Schema(description = "Niveau de remise 1 (DiscountMax), fraction.")
+        BigDecimal remiseMax1,
+        @Schema(description = "Niveau de remise 2 (DiscountMax2), fraction.")
+        BigDecimal remiseMax2,
+        @Schema(description = "Titré (IsTitled).")
+        Boolean estTitre,
+        @Schema(description = "Toujours affecté à son article (AlwaysAffected).")
+        Boolean toujoursAffecte,
+        @Schema(description = "Lot annexe (IsUnderItem) ; peut être libre, sans parent.")
+        Boolean estSousArticle,
+        @Schema(description = "Affecté à un dossier de vente ou de location, ou rattaché à un article qui l'est.")
+        boolean occupe,
+        @Schema(description = "Vocation (StkVocation.id).")
+        UUID vocationId,
+        @Schema(description = "Libellé de la vocation.")
+        String vocationLibelle,
+        @Schema(description = "Notes (StkItem.Notes).")
+        String notes,
+        @Schema(description = "Superficie intérieure en m² (InteriorArea).")
+        BigDecimal surfaceInterieure,
+        @Schema(description = "Superficie des murs en m² (WallsArea).")
+        BigDecimal surfaceMurs,
+        @Schema(description = "Superficie des parties communes en m² (CommonPartsArea).")
+        BigDecimal surfacePartiesCommunes,
+        @Schema(description = "Auteur de la création (UserCreate).")
+        String creePar,
+        @Schema(description = "Date de création (UserCreateDateTime).")
+        LocalDateTime creeLe,
+        @Schema(description = "Auteur de la dernière modification (UserUpdate).")
+        String modifiePar,
+        @Schema(description = "Date de la dernière modification (UserUpdateDateTime).")
+        LocalDateTime modifieLe
 ) {
 }
