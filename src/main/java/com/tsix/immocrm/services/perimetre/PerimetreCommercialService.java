@@ -386,7 +386,7 @@ public class PerimetreCommercialService {
     }
 
     /** Ligne mixte : elle porte aussi une portée du légataire et doit survivre ({@link #remplacerProjets}). */
-    private static boolean porteUneAutrePortee(AdmUserHabilitation habilitation) {
+    public static boolean porteUneAutrePortee(AdmUserHabilitation habilitation) {
         return habilitation.getCfgCompany() != null
                 || habilitation.getCfgTranche() != null
                 || habilitation.getPrjProjectId() != null;

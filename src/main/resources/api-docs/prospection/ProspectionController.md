@@ -245,6 +245,10 @@ Le prospect lié a déjà une prospection **ouverte** sur le projet de la tranch
 `prospectionExistante` à la place ; une prospection fermée ne bloque pas. Voir
 `FEATURE-doublons-prospect-projet.md` §3.
 
+Aussi : la ligne **n'est plus une pré-prospection** (déjà typée prospection de vente ou location) —
+la transformer réécrirait son commercial ; pour en changer, `POST /api/equipe/reaffecter`. Une ligne
+sans type reste acceptée.
+
 ## archiver
 
 Sort la prospection du pipeline : `fermee = true`, `dateFermeture` = maintenant, motif posé depuis

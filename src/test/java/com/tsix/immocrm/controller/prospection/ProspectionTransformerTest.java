@@ -226,6 +226,22 @@ class ProspectionTransformerTest {
     }
 
     @Test
+    void transformer_ligneQuiNEstPlusUnePreProspection_returns409() throws Exception {
+        CfgTier commercial = newTier("COMM-TRANS-6");
+        ComProspection prospection = newProspectionAvecProspect("PSN-TRANS-6");
+        // Déjà typée prospection de vente (StrEntity « ComProspection »).
+        prospection.setStrEntityId(UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601"));
+        prospectionRepository.save(prospection);
+
+        String body = "{\"commercialId\":\"" + commercial.getId() + "\",\"trancheId\":\""
+                + trancheA.getId() + "\"}";
+
+        mockMvc.perform(post("/api/prospections/{id}/transformer", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void transformer_missingCommercialId_returns400() throws Exception {
         ComProspection prospection = newProspectionAvecProspect("PSN-TRANS-5");
 
