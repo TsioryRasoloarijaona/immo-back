@@ -317,7 +317,7 @@ class AuditOmranEcouteurTest {
                     .containsExactlyInAnyOrder(AJOUT, SUPPRESSION);
             assertThat(ecrites).filteredOn(l -> SUPPRESSION.equals(l.getAction())).singleElement()
                     .satisfies(l -> assertThat(details(l))
-                            .containsExactly(new ChangementAudit("CfgCompany", "", "ENT-AUDIT-COMMIT")));
+                            .containsExactly(new ChangementAudit("CfgCompany", "", "Entité ENT-AUDIT-COMMIT")));
         } finally {
             jdbc.update("DELETE FROM AdmWebHistorics WHERE ObjectId = ?", id);
             jdbc.update("DELETE FROM CfgCompany WHERE PKey = ?", id);

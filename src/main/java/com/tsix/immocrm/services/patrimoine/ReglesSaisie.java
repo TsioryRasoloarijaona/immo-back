@@ -83,6 +83,15 @@ final class ReglesSaisie {
         return recherche == null || recherche.isBlank() ? null : "%" + recherche.trim().toLowerCase() + "%";
     }
 
+    /**
+     * Recherche des écrans de configuration OMRAN : saisie privée de ses espaces, comparée aux colonnes privées des
+     * leurs ({@code REPLACE(x, ' ', '') LIKE}) ; la collation French_CI_AS ignore la casse.
+     */
+    static String motifSansEspaces(String recherche) {
+        String texte = recherche == null ? "" : recherche.replace(" ", "");
+        return texte.isEmpty() ? null : "%" + texte + "%";
+    }
+
     /** Règle à nous (OMRAN n'en a aucune) : fin ≥ début quand les deux sont connues. */
     static void periode(LocalDateTime debut, LocalDateTime fin, String champFin, String libelle) {
         if (debut != null && fin != null && fin.isBefore(debut)) {

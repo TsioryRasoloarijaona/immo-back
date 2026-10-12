@@ -42,6 +42,9 @@ class PatrimoineSecuriteTest {
     private static final String ARTICLE = "/api/articles/" + ID;
     private static final String SOUS_ARTICLE = ARTICLE + "/sous-articles/" + UUID.randomUUID();
     private static final String ZONES = PROJETS + "/" + ID + "/zones";
+    private static final String ENTITES = "/api/entites-juridiques";
+    private static final String ACTIONNAIRES = "/api/actionnaires";
+    private static final String GROUPES = "/api/groupes-actionnaires";
     private static final String TRANCHE = "/api/tranches/" + ID;
 
     @Autowired private MockMvc mockMvc;
@@ -69,7 +72,41 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/etages"),
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/plancher-couvert"),
                 Arguments.of(HttpMethod.PUT, TRANCHE + "/frais"),
-                Arguments.of(HttpMethod.DELETE, TRANCHE));
+                Arguments.of(HttpMethod.DELETE, TRANCHE),
+                // FEATURE-entites-juridiques.md §2 : entités, actionnaires, groupes.
+                Arguments.of(HttpMethod.POST, ENTITES),
+                Arguments.of(HttpMethod.PATCH, ENTITES + "/" + ID),
+                Arguments.of(HttpMethod.DELETE, ENTITES + "/" + ID),
+                Arguments.of(HttpMethod.POST, ENTITES + "/" + ID + "/repartition/depuis-groupe/" + UUID.randomUUID()),
+                Arguments.of(HttpMethod.POST, ACTIONNAIRES),
+                Arguments.of(HttpMethod.PATCH, ACTIONNAIRES + "/" + ID),
+                Arguments.of(HttpMethod.DELETE, ACTIONNAIRES + "/" + ID),
+                Arguments.of(HttpMethod.POST, GROUPES),
+                Arguments.of(HttpMethod.PATCH, GROUPES + "/" + ID),
+                Arguments.of(HttpMethod.DELETE, GROUPES + "/" + ID));
+    }
+
+    @Test
+    void commercial_403_surRemplacementDeRepartition() throws Exception {
+        AdmUser commercial = fixture.utilisateur("COM-SECU-REP");
+        mockMvc.perform(request(HttpMethod.PUT, ENTITES + "/" + ID + "/repartition")
+                        .with(connecte(commercial, "Commercial")).contentType(MediaType.APPLICATION_JSON).content("[]"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Hors {@code PorteeCleApi} : même une clé à toutes les portées ne lit ni entités, ni actionnaires, ni groupes. */
+    @ParameterizedTest(name = "GET {0}")
+    @MethodSource("lecturesHorsPortee")
+    void cleApi_403_lecturesP5HorsPortee(String url) throws Exception {
+        String cle = cleToutesPortees("CLE-SECU-P5");
+
+        mockMvc.perform(request(HttpMethod.GET, url).header(ApiKeyAuthenticationFilter.EN_TETE, cle))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+    }
+
+    static Stream<String> lecturesHorsPortee() {
+        return Stream.of(ENTITES, ENTITES + "/" + ID, ACTIONNAIRES, GROUPES);
     }
 
     @ParameterizedTest(name = "{0} {1}")
@@ -81,9 +118,8 @@ class PatrimoineSecuriteTest {
                 .andExpect(status().isForbidden());
     }
 
-    @Test
-    void cleApi_403_horsPortee() throws Exception {
-        AdmUser compte = fixture.utilisateur("CLE-SECU-PAT");
+    private String cleToutesPortees(String codeCompte) {
+        AdmUser compte = fixture.utilisateur(codeCompte);
         String cle = cleApiService.genererCle();
         AppApiClient client = new AppApiClient();
         client.setId(UUID.randomUUID());
@@ -95,6 +131,12 @@ class PatrimoineSecuriteTest {
         client.setActif(true);
         client.setUserCreateDateTime(LocalDateTime.now());
         clientRepository.save(client);
+        return cle;
+    }
+
+    @Test
+    void cleApi_403_horsPortee() throws Exception {
+        String cle = cleToutesPortees("CLE-SECU-PAT");
 
         mockMvc.perform(request(HttpMethod.POST, PROJETS).header(ApiKeyAuthenticationFilter.EN_TETE, cle)
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))

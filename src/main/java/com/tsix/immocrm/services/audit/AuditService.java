@@ -8,10 +8,10 @@ import com.tsix.immocrm.entities.adm.AdmWebHistorics;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmWebHistoricsRepository;
-import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.patrimoine.EntiteJuridiqueVisible;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -35,16 +35,16 @@ public class AuditService {
     private final CfgProjectRepository projectRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository articleRepository;
-    private final CfgCompanyRepository companyRepository;
+    private final EntiteJuridiqueVisible entiteVisible;
 
     public AuditService(AdmWebHistoricsRepository repository, CfgProjectRepository projectRepository,
                         CfgTrancheRepository trancheRepository, StkItemRepository articleRepository,
-                        CfgCompanyRepository companyRepository) {
+                        EntiteJuridiqueVisible entiteVisible) {
         this.repository = repository;
         this.projectRepository = projectRepository;
         this.trancheRepository = trancheRepository;
         this.articleRepository = articleRepository;
-        this.companyRepository = companyRepository;
+        this.entiteVisible = entiteVisible;
     }
 
     public Page<LigneAuditDto> lignes(UUID objetId, int page, int taille) {
@@ -60,14 +60,14 @@ public class AuditService {
     }
 
     /**
-     * Seules les fiches du registre ont un journal, et il est lisible exactement quand leur {@code GET …/{id}} l'est
-     * (simple existence aujourd'hui). Autre id : 404, comme une fiche absente.
+     * Seules les fiches du registre ont un journal, et il est lisible exactement quand leur {@code GET …/{id}} l'est :
+     * existence pour programme, tranche, article ; habilitation pour une entité juridique. Sinon 404.
      */
     private void verifierFicheLisible(UUID objetId) {
         boolean fiche = projectRepository.existsById(objetId)
                 || trancheRepository.existsById(objetId)
                 || articleRepository.existsById(objetId)
-                || companyRepository.existsById(objetId);
+                || entiteVisible.existe(objetId);
         if (!fiche) {
             throw new ResourceNotFoundException("Fiche introuvable: " + objetId);
         }

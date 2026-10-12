@@ -53,7 +53,7 @@ public class EcouteurAuditOmran implements PostInsertEventListener, PostUpdateEv
 
     private void noter(SharedSessionContractImplementor session, Object entite, Object id, EntityPersister persister,
                        ActionAudit action, Object[] avant, Object[] apres) {
-        if (entite == null || !(id instanceof UUID pkey) || RegistreAuditOmran.pour(entite.getClass()).isEmpty()) {
+        if (entite == null || !(id instanceof UUID pkey) || !RegistreAuditOmran.trace(entite.getClass(), action)) {
             return;
         }
         tampon(session).noter(entite, pkey, persister, action, avant, apres);

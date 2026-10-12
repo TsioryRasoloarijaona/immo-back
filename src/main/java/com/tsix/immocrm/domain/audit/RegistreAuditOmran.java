@@ -1,15 +1,21 @@
 package com.tsix.immocrm.domain.audit;
 
+import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgCompanyShareholder;
+import com.tsix.immocrm.entities.cfg.CfgGroupShareholder;
+import com.tsix.immocrm.entities.cfg.CfgGroupShareholderLine;
 import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
 import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
 import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgShareholder;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
 import com.tsix.immocrm.entities.stk.StkItem;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -33,6 +39,14 @@ public final class RegistreAuditOmran {
     static final TypeObjetAudit TERRAIN = new TypeObjetAudit("Yes.Stk.LandProjectItem", "Terrain");
     static final TypeObjetAudit ENTITE_JURIDIQUE = new TypeObjetAudit("Yes.Cfg.CfgCompany", "Entité juridique");
     static final TypeObjetAudit TERRAIN_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheStkItem", "Tranche");
+    // Lot P5 : Séquence mesurée en production ; les tables d'actionnaires y sont vides, d'où le nom de
+    // classe et le DisplayName OMRAN (Yes.Cfg/CfgShareholder.cs…), libellé = DefaultLabel.
+    static final TypeObjetAudit SEQUENCE = new TypeObjetAudit("Yes.Adm.Sequence", "Séquence");
+    static final TypeObjetAudit ACTIONNAIRE = new TypeObjetAudit("Yes.Cfg.CfgShareholder", "Actionnaire");
+    static final TypeObjetAudit GROUPE_ACTIONNAIRES =
+            new TypeObjetAudit("Yes.Cfg.CfgGroupShareholder", "Groupe d'actionnaire");
+    static final TypeObjetAudit LIGNE_GROUPE = new TypeObjetAudit("Yes.Cfg.CfgGroupShareholderLine", "Répartition");
+    static final TypeObjetAudit REPARTITION_ENTITE = new TypeObjetAudit("Yes.Cfg.CfgCompanyShareholder", "Répartition");
     // Libellés OMRAN tels quels (FEATURE-patrimoine-tranche-onglets.md §0), « Prospection de projet » compris.
     static final TypeObjetAudit ETAGE_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheLevel",
             "Prospection de projet");
@@ -47,7 +61,7 @@ public final class RegistreAuditOmran {
             // OMRAN libelle une tranche par sa Description (60 lignes sur 84), pas par son Code.
             racine(CfgTranche.class, t -> TRANCHE, t -> premierRenseigne(t.getDescription(), t.getCode())),
             racine(StkItem.class, RegistreAuditOmran::typeArticle, RegistreAuditOmran::libelleArticle),
-            racine(CfgCompany.class, c -> ENTITE_JURIDIQUE, CfgCompany::getCode),
+            racine(CfgCompany.class, c -> ENTITE_JURIDIQUE, c -> premierRenseigne(c.getDescription(), c.getCode())),
             enfantDeTranche(CfgTrancheStkItem.class, TERRAIN_DE_TRANCHE, l -> texte(l.getSorting()),
                     CfgTrancheStkItem::getCfgTranche),
             enfantDeTranche(CfgTrancheLevel.class, ETAGE_DE_TRANCHE, l -> texte(l.getId()),
@@ -58,12 +72,23 @@ public final class RegistreAuditOmran {
                     CfgTrancheSettlementCategory::getCfgTranche),
             // Racine comme en production ; libellé = AdmUserId.
             racine(AdmUserHabilitation.class, h -> HABILITATION,
-                    h -> h.getAdmUser() == null ? "" : texte(h.getAdmUser().getId())))
+                    h -> h.getAdmUser() == null ? "" : texte(h.getAdmUser().getId())),
+            racine(AdmSequence.class, s -> SEQUENCE, AdmSequence::getCode),
+            racine(CfgShareholder.class, a -> ACTIONNAIRE, CfgShareholder::getDescription),
+            racine(CfgGroupShareholder.class, g -> GROUPE_ACTIONNAIRES, CfgGroupShareholder::getDescription),
+            new DescripteurAudit<>(CfgGroupShareholderLine.class, l -> LIGNE_GROUPE,
+                    l -> partDe(l.getCfgShareholder(), l.getSharingNumber()),
+                    l -> l.getCfgGroupShareholder() == null ? null
+                            : new ParentAudit(GROUPE_ACTIONNAIRES.objectType(), l.getCfgGroupShareholder().getId())),
+            new DescripteurAudit<>(CfgCompanyShareholder.class, l -> REPARTITION_ENTITE,
+                    l -> partDe(l.getCfgShareholder(), l.getSharingNumber()),
+                    l -> l.getCfgCompany() == null ? null
+                            : new ParentAudit(ENTITE_JURIDIQUE.objectType(), l.getCfgCompany().getId())))
             .collect(Collectors.toUnmodifiableMap(DescripteurAudit::classe, d -> d));
 
     private static final Set<String> OBJECT_TYPES = Stream.of(PROGRAMME, TRANCHE, ARTICLE, SOUS_ARTICLE, TERRAIN,
                     ENTITE_JURIDIQUE, TERRAIN_DE_TRANCHE, ETAGE_DE_TRANCHE, PLANCHER_DE_TRANCHE, FRAIS_DE_TRANCHE,
-                    HABILITATION)
+                    HABILITATION, SEQUENCE, ACTIONNAIRE, GROUPE_ACTIONNAIRES, LIGNE_GROUPE, REPARTITION_ENTITE)
             .map(TypeObjetAudit::objectType)
             .collect(Collectors.toUnmodifiableSet());
 
@@ -72,6 +97,15 @@ public final class RegistreAuditOmran {
 
     public static Optional<DescripteurAudit<?>> pour(Class<?> classe) {
         return Optional.ofNullable(DESCRIPTEURS.get(classe));
+    }
+
+    /**
+     * Entité du registre et action tracée. Un compteur {@code AdmSequence} qui avance n'est pas tracé : OMRAN
+     * l'incrémente par un UPDATE brut ({@code Sequence.GetNewValue}), seules création et suppression le sont.
+     */
+    public static boolean trace(Class<?> classe, ActionAudit action) {
+        return DESCRIPTEURS.containsKey(classe)
+                && !(classe == AdmSequence.class && action == ActionAudit.MODIFICATION);
     }
 
     /** {@code ObjectType} que ce registre écrit : seules lignes que la lecture du journal sert (§10). */
@@ -112,6 +146,13 @@ public final class RegistreAuditOmran {
             return premierRenseigne(article.getCode(), article.getDescription());
         }
         return premierRenseigne(article.getDescription(), article.getCode());
+    }
+
+    /** {@code CfgShareholderDescriptionHistory} d'OMRAN : libellé de l'actionnaire, espace, part. */
+    static String partDe(CfgShareholder actionnaire, Object part) {
+        String nom = actionnaire == null || actionnaire.getDescription() == null ? "" : actionnaire.getDescription();
+        String valeur = part instanceof BigDecimal decimal ? decimal.toPlainString() : String.valueOf(part);
+        return nom + " " + (part == null ? "" : valeur);
     }
 
     private static String premierRenseigne(String premier, String second) {

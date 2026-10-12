@@ -27,3 +27,4 @@ public class ProgrammeVisible {
                 .orElseThrow(() -> new ResourceNotFoundException(PROJET_INTROUVABLE + id));
     }
 }
+

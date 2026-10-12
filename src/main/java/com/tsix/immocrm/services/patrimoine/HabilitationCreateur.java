@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
@@ -42,6 +43,16 @@ class HabilitationCreateur {
         }
         AdmUserHabilitation habilitation = nouvelle(createur);
         habilitation.setCfgTranche(tranche);
+        habilitationRepository.save(habilitation);
+    }
+
+    /** {@code CfgCompany.AfterInsert} : sans elle, l'entité n'apparaît ni dans OMRAN ni dans l'écran du CRM. */
+    void surEntite(AdmUser createur, CfgCompany entite) {
+        if (absent(createur, entite.getCode())) {
+            return;
+        }
+        AdmUserHabilitation habilitation = nouvelle(createur);
+        habilitation.setCfgCompany(entite);
         habilitationRepository.save(habilitation);
     }
 

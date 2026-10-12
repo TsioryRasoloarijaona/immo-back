@@ -45,6 +45,12 @@ schéma) ; `AdmMessage` n'a aucune FK en production. `AuditSchemaTest` échoue e
 quatre FK de production (CASCADE vers la tranche et la catégorie de règlement). `TrancheOngletsSchemaTest` échoue en
 premier si une table manque.
 
+**P5** (`FEATURE-entites-juridiques.md`) : `066_entites_tables.sql` crée `CfgShareholder`, `CfgGroupShareholderLine`
+et `CfgCompanyShareholder` (`CfgCompany` et `CfgGroupShareholder` étaient déjà dans 010). `067_entites_fk.sql` : leurs
+4 FK de production, règles `ON DELETE` comprises. Piège : `CfgCompany_CfgGroupShareholder_FK1` (dans 020) est
+`ON DELETE CASCADE` — supprimer un groupe supprime ses sociétés. yesRemsTest : les 4 tables (avec `CfgGroupShareholder`)
+créées par `-Q`, une commande par table. `EntitesSchemaTest` échoue en premier si l'une manque.
+
 ## Pourquoi le schéma de production plutôt que `yesRemsTest`
 
 `yesRemsTest`, la base locale contre laquelle la suite tourne historiquement, **n'est pas une
