@@ -42,6 +42,7 @@ class PatrimoineSecuriteTest {
     private static final String ARTICLE = "/api/articles/" + ID;
     private static final String SOUS_ARTICLE = ARTICLE + "/sous-articles/" + UUID.randomUUID();
     private static final String ZONES = PROJETS + "/" + ID + "/zones";
+    private static final String TRANCHE = "/api/tranches/" + ID;
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
@@ -62,7 +63,13 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.DELETE, PROJETS + "/" + ID),
                 Arguments.of(HttpMethod.POST, ZONES),
                 Arguments.of(HttpMethod.PATCH, ZONES + "/" + UUID.randomUUID()),
-                Arguments.of(HttpMethod.DELETE, ZONES + "/" + UUID.randomUUID()));
+                Arguments.of(HttpMethod.DELETE, ZONES + "/" + UUID.randomUUID()),
+                // FEATURE-patrimoine-tranche-onglets.md : onglets et suppression de tranche.
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/terrains"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/etages"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/plancher-couvert"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/frais"),
+                Arguments.of(HttpMethod.DELETE, TRANCHE));
     }
 
     @ParameterizedTest(name = "{0} {1}")

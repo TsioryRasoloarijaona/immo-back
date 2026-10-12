@@ -14,6 +14,10 @@ import java.util.UUID;
 
 public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpecificationExecutor<StkItem> {
 
+    /** Terrains d'une nature et d'une vocation (codes), sans filtre société ni statut, comme {@code AddLand} d'OMRAN. */
+    @Query("SELECT i FROM StkItem i WHERE i.stkKind.code = :nature AND i.stkVocation.code = :vocation ORDER BY i.code ASC")
+    List<StkItem> parNatureEtVocation(@Param("nature") String nature, @Param("vocation") String vocation);
+
     // StkHierarchyId = la tranche. Les listes filtrées passent par StkItemSpecifications.
     List<StkItem> findByStkHierarchyId(UUID trancheId);
 
