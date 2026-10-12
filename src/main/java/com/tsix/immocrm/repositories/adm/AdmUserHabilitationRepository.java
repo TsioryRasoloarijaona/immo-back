@@ -37,6 +37,17 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
             + "WHERE h.admUser.id = :admUserId ORDER BY p.code")
     List<Object[]> findProjetsByAdmUserId(@Param("admUserId") UUID admUserId);
 
+    /** Tuples [admUserId, projetId] des lignes de portée projet de ces comptes. */
+    @Query("SELECT h.admUser.id, h.cfgProject.id FROM AdmUserHabilitation h "
+            + "WHERE h.admUser.id IN :admUserIds AND h.cfgProject IS NOT NULL")
+    List<Object[]> findProjetIdsByAdmUserIdIn(@Param("admUserIds") List<UUID> admUserIds);
+
+    /** Lignes de portée projet d'un compte sur ces projets (retrait par l'écran « Mon équipe »). */
+    @Query("SELECT h FROM AdmUserHabilitation h "
+            + "WHERE h.admUser.id = :admUserId AND h.cfgProject.id IN :projetIds")
+    List<AdmUserHabilitation> findByAdmUserIdAndProjetIdIn(@Param("admUserId") UUID admUserId,
+                                                           @Param("projetIds") List<UUID> projetIds);
+
     /** Tuple : [admUserId, nombreProjets]. */
     @Query("SELECT h.admUser.id, COUNT(h) FROM AdmUserHabilitation h "
             + "WHERE h.admUser.id IN :admUserIds AND h.cfgProject IS NOT NULL GROUP BY h.admUser.id")
