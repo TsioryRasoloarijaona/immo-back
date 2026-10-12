@@ -12,12 +12,15 @@ import java.util.Set;
  * Champs obligatoires d'une interaction, règle OMRAN GEN0005 : note ⇒ message, autre action ⇒
  * résultat, résultat « avec alerte » ⇒ date d'alerte, résultat RDV ⇒ date de RDV (FEATURE-lot4 §4).
  */
-final class ReglesInteraction {
+public final class ReglesInteraction {
 
     static final String CODE_NOTE = "Note";
 
-    /** Codes exacts des résultats qui exigent {@code dateRdv} et créent un {@code AdmEvent}. */
-    static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
+    /**
+     * Codes exacts des résultats qui exigent {@code dateRdv} et créent un {@code AdmEvent} ; ce sont aussi
+     * les « visites » de « Ma journée » (FEATURE-parcours-commercial.md §2).
+     */
+    public static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris",
             "RDV reporté",
             "Le prospect veut faire une visite du projet");
@@ -30,7 +33,7 @@ final class ReglesInteraction {
                 && CODE_NOTE.equalsIgnoreCase(actionType.getCode().trim());
     }
 
-    static boolean exigeUneDateDeRdv(ComActionMessageSubCategory resultat) {
+    public static boolean exigeUneDateDeRdv(ComActionMessageSubCategory resultat) {
         return resultat != null && RESULTATS_AVEC_DATE_PLANIFIEE.contains(resultat.getCode());
     }
 

@@ -145,6 +145,18 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                 @Param("email") String email,
                                                 @Param("telephone") String telephone, Pageable pageable);
 
+    /**
+     * Boîte de tri : autre ligne au même numéro (9 derniers chiffres) <b>ou</b> au même e-mail. Critères déjà
+     * normalisés par {@code ProspectService.critereTelephone/critereEmail}, {@code ""} = critère absent.
+     */
+    @Query("SELECT p FROM ComProspection p WHERE p.id <> :exclu AND ("
+            + "(:telephone <> '' AND right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :telephone) "
+            + "OR (:email <> '' AND lower(trim(coalesce(p.tempEMail, ''))) = :email)) "
+            + "ORDER BY p.docDate DESC")
+    List<ComProspection> trouverMemeTelephoneOuEmail(@Param("exclu") UUID exclu,
+                                                     @Param("telephone") String telephone,
+                                                     @Param("email") String email, Pageable pageable);
+
     /** Même contact que {@link #trouverDoublonsContact}, DocDate dans [debut, fin[ — sans plafond (réimport idempotent). */
     @Query("SELECT p FROM ComProspection p WHERE p.docDate >= :debut AND p.docDate < :fin "
             + "AND lower(trim(coalesce(p.tempDescription, ''))) = :nom "
