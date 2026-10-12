@@ -59,7 +59,7 @@ public class ParcoursCommercialController {
     }
 
     @GetMapping("/api/boite-de-tri")
-    @Operation(summary = "Boîte de tri : mes pré-prospections ouvertes, les plus récentes d'abord")
+    @Operation(summary = "Boîte de tri : mes pré-prospections ouvertes non traitées, les plus récentes d'abord")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Page de lignes, éventuellement vide.")})
     public PageDto<LigneTriDto> boiteDeTri(
             @Parameter(description = "Vrai pour lever la limite des 6 mois.", example = "false")
@@ -69,7 +69,7 @@ public class ParcoursCommercialController {
     }
 
     @PostMapping("/api/boite-de-tri/{id}/injoignable")
-    @Operation(summary = "« Pas joignable » : relance demain 10:00, la ligne reste dans la boîte")
+    @Operation(summary = "« Pas joignable » : relance demain 10:00, la ligne quitte la boîte")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Interaction créée, porteuse de la relance."),
             @ApiResponse(responseCode = "404", description = "Ligne inconnue, hors périmètre, ou d'un autre commercial."),

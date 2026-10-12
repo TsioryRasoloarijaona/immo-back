@@ -90,12 +90,16 @@ public class BoiteDeTriService {
 
     // ---------------------------------------------------------------- lecture
 
-    /** Pré-prospections du commercial appelant, ouvertes, les plus récentes d'abord ; {@code toutes} lève les 6 mois. */
+    /**
+     * Pré-prospections ouvertes du commercial appelant, sans interaction saisie (une ligne traitée revient par sa
+     * relance dans « Ma journée »), les plus récentes d'abord ; {@code toutes} lève les 6 mois.
+     */
     public Page<LigneTriDto> lister(boolean toutes, Pageable pageable) {
         UUID commercial = portee.commercialLu(null);
         LocalDate aujourdhui = LocalDate.now(clock);
         Specification<ComProspection> spec = perimetreService.filtreProspections()
-                .and(LignesParcours.aTrier(commercial, toutes ? null : aujourdhui.minusMonths(LignesParcours.MOIS_RECENTS)));
+                .and(LignesParcours.aTrier(commercial, toutes ? null : aujourdhui.minusMonths(LignesParcours.MOIS_RECENTS)))
+                .and(LignesParcours.sansInteraction());
         Page<ComProspection> page = prospectionRepository.findAll(spec, PageRequest.of(pageable.getPageNumber(),
                 pageable.getPageSize(), Sort.by(Sort.Order.desc(LignesParcours.DOC_DATE), Sort.Order.asc("id"))));
         Map<UUID, DerniereAlerteProjection> alertes = page.isEmpty() ? Map.of()
@@ -158,7 +162,7 @@ public class BoiteDeTriService {
 
     /**
      * Interaction « Téléphone Sortant / injoignable » portant une relance demain 10:00 ; les relances précédentes
-     * sont soldées par {@code addInteraction} (AlerteRelanceService). La ligne reste dans la boîte.
+     * sont soldées par {@code addInteraction} (AlerteRelanceService). La ligne quitte la boîte.
      */
     @Transactional
     public InteractionDto marquerInjoignable(UUID prospectionId) {
