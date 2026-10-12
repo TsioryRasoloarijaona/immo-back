@@ -21,4 +21,9 @@ public final class Champs {
         U intermediaire = de(source, premier);
         return intermediaire == null ? null : second.apply(intermediaire);
     }
+
+    /** Texte légataire écrit {@code ""} (OMRAN n'écrit jamais NULL) relu comme absent : {@code null}, sinon rogné. */
+    public static String videEnNull(String texte) {
+        return texte == null || texte.isBlank() ? null : texte.trim();
+    }
 }

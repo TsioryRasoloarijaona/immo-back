@@ -70,6 +70,8 @@ class DossierEnteteEcranTest {
     private StkItemCategoryRepository itemCategoryRepository;
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository categoryRepository;
 
     private static String suffixe() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -202,11 +204,18 @@ class DossierEnteteEcranTest {
     @Test
     void echeanceCreeeParLApi_porteSaDateDeCreation() throws Exception {
         ComFolder f = dossierDeLaCapture();
+        com.tsix.immocrm.entities.com.ComSettlementCategory avance = new com.tsix.immocrm.entities.com.ComSettlementCategory();
+        avance.setId(UUID.randomUUID());
+        avance.setCode("AVANCE");
+        avance.setDescription("Avance");
+        avance.setStkVocation(f.getStkVocation());
+        categoryRepository.save(avance);
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier", f.getId())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"montant\":50000,\"dateEcheance\":\"2026-06-01T00:00:00\"}"))
+                        .content("{\"montant\":50000,\"dateEcheance\":\"2026-06-01T00:00:00\",\"categorieId\":\""
+                                + avance.getId() + "\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.creeLe").exists());
     }

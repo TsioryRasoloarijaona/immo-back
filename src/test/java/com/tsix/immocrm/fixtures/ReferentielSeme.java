@@ -24,6 +24,18 @@ public final class ReferentielSeme {
      */
     public static final UUID PRJ_PROJECT = UUID.fromString("B4E9D2C1-3A78-4F60-8D15-6E90C7B2A833");
 
+    /** {@code StrEntity} « StlSettlementIn », {@code StrEntityId} de tout encaissement. */
+    public static final UUID STR_ENTITY_ENCAISSEMENT = UUID.fromString("D7061C59-A039-4EF8-A6ED-B0E886F8EDFF");
+
+    /** {@code StrEntity} « StlSettlementOut ». */
+    public static final UUID STR_ENTITY_DECAISSEMENT = UUID.fromString("8287D7A9-2D51-4F2E-8F47-0F1B738F1A11");
+
+    /** {@code AdmModule} « COM » (vente). */
+    public static final UUID ADM_MODULE_COM = UUID.fromString("00002C2D-BDFA-4541-94F7-C708A0E00001");
+
+    /** {@code StlCurrency} « MAD », valeur du paramètre {@code AdmParamsGuid} « DefaultCurrency ». */
+    public static final UUID STL_CURRENCY_MAD = UUID.fromString("24EB36A2-2E81-4A12-AF02-6259CFA25BD6");
+
     private ReferentielSeme() {
     }
 }

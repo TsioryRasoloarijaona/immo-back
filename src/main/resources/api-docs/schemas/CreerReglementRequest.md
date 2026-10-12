@@ -24,9 +24,10 @@ SYNDIC / BANQUE / CERTIFIÉ / EFFET ; libre pour ESPÈCES.
 
 ## payeurId
 
-Tiers ayant effectivement réglé (`StlSettlement.TierId`) — « réglé par », peut différer de
-l'acquéreur principal (co-acquéreur, tiers payeur...). **Requis** : alimente le bloc « Versement
-effectué par » de l'autorisation d'encaissement. Confirmé renseigné sur >99% des règlements réels.
+Tiers ayant effectivement réglé (`StlSettlement.TierPayerId`) — « réglé par », peut différer de
+l'acquéreur principal (co-acquéreur, tiers payeur...). `TierId` reçoit, comme dans OMRAN, le client
+du dossier. **Requis** : alimente le bloc « Versement effectué par » de l'autorisation
+d'encaissement et le bénéficiaire du reçu.
 
 ## statut
 

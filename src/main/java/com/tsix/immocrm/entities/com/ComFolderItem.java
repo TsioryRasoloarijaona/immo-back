@@ -1,5 +1,7 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.stk.StkBuilding;
+import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
@@ -40,6 +42,14 @@ public class ComFolderItem {
 
     @Column(name = "ParentId")
     private UUID parentId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkBuildingId")
+    private StkBuilding stkBuilding;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkFloorId")
+    private StkFloor stkFloor;
 
     @Size(max = 255)
     @Nationalized

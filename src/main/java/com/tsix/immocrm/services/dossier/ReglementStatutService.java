@@ -12,11 +12,14 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -34,11 +37,17 @@ public class ReglementStatutService {
     private final StlSettlementRepository settlementRepository;
     private final StlSettlementLineRepository settlementLineRepository;
     private final PieceJointeSupport pieceJointeSupport;
+    private final UtilisateurAffiche utilisateurAffiche;
+    private final Clock clock;
 
     public ReglementStatutService(ComFolderRepository folderRepository,
                                   StlSettlementRepository settlementRepository,
                                   StlSettlementLineRepository settlementLineRepository,
-                                  PieceJointeSupport pieceJointeSupport) {
+                                  PieceJointeSupport pieceJointeSupport,
+                                  UtilisateurAffiche utilisateurAffiche,
+                                  Clock clock) {
+        this.utilisateurAffiche = utilisateurAffiche;
+        this.clock = clock;
         this.folderRepository = folderRepository;
         this.settlementRepository = settlementRepository;
         this.settlementLineRepository = settlementLineRepository;
@@ -93,6 +102,9 @@ public class ReglementStatutService {
         }
 
         settlement.setStatus(cible.name());
+        // GEN0016 : toute modification du règlement est signée.
+        settlement.setUserUpdate(utilisateurAffiche.courant().nom());
+        settlement.setUserUpdateDateTime(LocalDateTime.now(clock));
         settlement = settlementRepository.save(settlement);
 
         // Le DTO porte la part d'une seule échéance ; un règlement éclaté en couvre plusieurs :
