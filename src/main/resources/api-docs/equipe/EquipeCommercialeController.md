@@ -22,7 +22,10 @@ périmètre. Pour lister les prospections d'un commercial : `GET /api/prospectio
 ## aDistribuer
 
 Pré-prospections ouvertes, sans commercial, dont la tranche est sur un projet de l'appelant (toutes
-pour Administrateur / Direction Générale sans `projet`, lignes sans tranche comprises).
+pour Administrateur / Direction Générale sans `projet`, lignes sans tranche comprises), **reçues dans la
+période** (`ComProspection.DocDate` entre `du` et `au`, 30 derniers jours par défaut, même règle que
+`entonnoir` et `commerciaux`). La plus ancienne est celle de la période. Pour lister ces lignes :
+`GET /api/pre-prospections?ouvertes=true&dateDebut=…&dateFin=…` puis garder celles sans commercial.
 
 ## distribuer
 

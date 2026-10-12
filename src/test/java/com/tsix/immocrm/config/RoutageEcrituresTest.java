@@ -65,8 +65,8 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|changer)[A-Z].*"
-                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|affecter|desaffecter)$");
+                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|changer|marquer)[A-Z].*"
+                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|affecter|desaffecter|avancer)$");
 
     /** FEATURE-patrimoine-ecriture.md §11 : chacun de ces services doit exposer des écritures reconnues, toutes routées vers la source. */
     @Test

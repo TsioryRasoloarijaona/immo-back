@@ -16,8 +16,11 @@ public final class ReglesInteraction {
 
     static final String CODE_NOTE = "Note";
 
-    /** Codes exacts des résultats qui exigent {@code dateRdv} et créent un {@code AdmEvent}. */
-    static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
+    /**
+     * Codes exacts des résultats qui exigent {@code dateRdv} et créent un {@code AdmEvent} ; ce sont aussi
+     * les « visites » de « Ma journée » (FEATURE-parcours-commercial.md §2).
+     */
+    public static final Set<String> RESULTATS_AVEC_DATE_PLANIFIEE = Set.of(
             "Rendez vous pris",
             "RDV reporté",
             "Le prospect veut faire une visite du projet");

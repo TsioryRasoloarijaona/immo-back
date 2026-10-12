@@ -285,7 +285,7 @@ public class ProspectService {
     }
 
     /** Critère téléphone : 9 derniers chiffres, ou {@code ""} si trop court ou bidon (chiffres tous égaux). */
-    private static String critereTelephone(String telephone) {
+    public static String critereTelephone(String telephone) {
         String neuf = neufDerniers(telephone);
         if (neuf.length() < CHIFFRES_TELEPHONE || neuf.chars().allMatch(c -> c == neuf.charAt(0))) {
             return "";
@@ -294,7 +294,7 @@ public class ProspectService {
     }
 
     /** Critère email : minuscules sans espaces de bord, ou {@code ""} sans {@code @} (« - », « nd », « . »). */
-    private static String critereEmail(String email) {
+    public static String critereEmail(String email) {
         String e = chaine(email).trim().toLowerCase(Locale.ROOT);
         return e.contains("@") ? e : "";
     }
