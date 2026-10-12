@@ -14,6 +14,7 @@ public enum TypeActionRecente {
     ETAPE_CHANGEE("Étape changée : "),
     ARCHIVEE("Archivée : "),
     DESARCHIVEE("Désarchivée"),
+    COMMERCIAL_REAFFECTE("Commercial réaffecté : "),
     DOSSIER_STATUT(null),
     INTERACTION(null),
     AUTRE(null);

@@ -7,7 +7,8 @@ interaction, avec la fiche qu'elle concerne.
 
 Code stable de l'action. Historique de prospection : lu au début de la description
 (`PRE_PROSPECTION_CREEE`, `PROSPECT_CREE`, `PROSPECT_RATTACHE`, `TRANSFORMEE_EN_PROSPECTION`,
-`PROSPECTION_CREEE`, `ETAPE_CHANGEE`, `ARCHIVEE`, `DESARCHIVEE`, et `AUTRE` pour un début inconnu —
+`PROSPECTION_CREEE`, `ETAPE_CHANGEE`, `ARCHIVEE`, `DESARCHIVEE`, `COMMERCIAL_REAFFECTE` (écran « Mon
+équipe »), et `AUTRE` pour un début inconnu —
 servie, jamais rejetée). `DOSSIER_STATUT` : changement de statut d'un dossier. `INTERACTION` : note ou
 interaction saisie.
 

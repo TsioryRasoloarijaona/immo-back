@@ -98,7 +98,32 @@ public class PerformanceCommercialService {
                 Comparator.comparingLong(PerformanceCommercialDto::dossiersCrees)
                         .thenComparingLong(PerformanceCommercialDto::appelsPasses)
                         .reversed();
-        return assembler(periode).values().stream().sorted(parPerformance).toList();
+        return assembler(periode, perimetreAppelant()).values().stream().sorted(parPerformance).toList();
+    }
+
+    /** Membre d'une équipe : son employé s'il en a un, sinon son compte (même clé que {@link #findMoi}). */
+    public record Membre(UUID employeId, UUID compteId) {
+    }
+
+    /**
+     * Une ligne par membre, dans l'ordre reçu, à zéro s'il n'a rien sur la période ; {@code perimetre}
+     * explicite ({@code null} = sans restriction) — utilisé par l'écran « Mon équipe ».
+     */
+    public List<PerformanceCommercialDto> pourMembres(List<Membre> membres, LocalDate du, LocalDate au,
+                                                      @Nullable List<UUID> perimetre) {
+        Periode periode = Periode.resoudre(du, au, LocalDate.now(clock));
+        Map<Cle, PerformanceCommercialDto> parCle = assembler(periode, perimetre);
+        return membres.stream()
+                .map(m -> m.employeId() != null ? Cle.commercial(m.employeId()) : Cle.compte(m.compteId()))
+                .map(cle -> {
+                    PerformanceCommercialDto trouve = parCle.get(cle);
+                    return trouve != null ? trouve : vide(cle, periode);
+                })
+                .toList();
+    }
+
+    private @Nullable List<UUID> perimetreAppelant() {
+        return perimetreService.perimetreCourant().orElse(null);
     }
 
     /** Rien sur la période ⇒ 200 à zéro ; 404 seulement sans compte identifiable (§6). */
@@ -110,15 +135,14 @@ public class PerformanceCommercialService {
                 ? Cle.commercial(principal.employeeId())
                 : Cle.compte(principal.admUserId());
         Periode periode = Periode.resoudre(du, au, LocalDate.now(clock));
-        PerformanceCommercialDto trouve = assembler(periode).get(cle);
+        PerformanceCommercialDto trouve = assembler(periode, perimetreAppelant()).get(cle);
         return trouve != null ? trouve : vide(cle, periode);
     }
 
     // ---------------------------------------------------------------- assemblage
 
-    private Map<Cle, PerformanceCommercialDto> assembler(Periode periode) {
-        // null = pas de restriction.
-        List<UUID> perimetre = perimetreService.perimetreCourant().orElse(null);
+    /** {@code perimetre} null = pas de restriction. */
+    private Map<Cle, PerformanceCommercialDto> assembler(Periode periode, @Nullable List<UUID> perimetre) {
         Map<Cle, Accumulateur> parCommercial = new LinkedHashMap<>();
         Comptes comptes = comptes();
 

@@ -128,7 +128,7 @@ public class PerimetreCommercialService {
      * Un principal d'un autre type ({@code @WithMockUser}, route anonyme) est « non restreint » (§6.3) :
      * c'est {@code SecurityConfig} qui décide qui atteint l'endpoint, pas ce service.
      */
-    private static Optional<UUID> admUserIdCourant() {
+    public static Optional<UUID> admUserIdCourant() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user) {
             return Optional.ofNullable(user.admUserId());
@@ -385,7 +385,7 @@ public class PerimetreCommercialService {
     }
 
     /** Ligne mixte : elle porte aussi une portée du légataire et doit survivre ({@link #remplacerProjets}). */
-    private static boolean porteUneAutrePortee(AdmUserHabilitation habilitation) {
+    public static boolean porteUneAutrePortee(AdmUserHabilitation habilitation) {
         return habilitation.getCfgCompany() != null
                 || habilitation.getCfgTranche() != null
                 || habilitation.getPrjProjectId() != null;

@@ -585,8 +585,12 @@ public class ProspectionService {
         );
     }
 
-    /** Sans utilisateur authentifié (formulaire public, import), auteur NULL : pas une erreur. */
-    private void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
+    /**
+     * Sans utilisateur authentifié (formulaire public, import), auteur NULL : pas une erreur. Partagée avec
+     * l'écran « Mon équipe » (réaffectation).
+     */
+    @Transactional
+    public void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
         UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
         LocalDateTime maintenant = LocalDateTime.now(clock);
         String description = type.description(suite);
@@ -975,6 +979,7 @@ public class ProspectionService {
         ComProspection prospection = prospectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
+        verifierEncorePreProspection(prospection);
         if (prospection.getCfgProspect() == null) {
             throw new InvalidRequestException(
                     "Un prospect doit être créé (POST /api/pre-prospections/{id}/creer-prospect) avant de transformer: " + id);
@@ -1009,6 +1014,17 @@ public class ProspectionService {
         enregistrerHistorique(id, TypeActionRecente.TRANSFORMEE_EN_PROSPECTION,
                 "commercial assigné, " + TierNomFormatter.nom(commercial));
         return detailEnrichi(prospection);
+    }
+
+    /**
+     * 409 sur une ligne déjà typée autrement (prospection de vente, location) : la transformer réécrirait
+     * son commercial. Une ligne sans type reste acceptée, comme avant (voir FEATURE-equipe-commerciale.md §2).
+     */
+    public static void verifierEncorePreProspection(ComProspection prospection) {
+        if (prospection.getStrEntityId() != null && !DiscriminantPreProspection.estPreProspection(prospection)) {
+            throw new ConflictException("La ligne " + prospection.getCode()
+                    + " n'est plus une pré-prospection : elle ne peut pas être transformée ni distribuée.");
+        }
     }
 
     private void rattacherTrancheALaTransformation(ComProspection prospection, TransformerProspectionRequest request) {
