@@ -47,4 +47,7 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
 
     /** Par code exact — sert la tranche suggérée à l'import CSV des leads. */
     Optional<CfgTranche> findFirstByCode(String code);
+
+    /** Unicité du code sur toute la table, pas par programme (collation French_CI_AS). */
+    Optional<CfgTranche> findFirstByCodeAndIdNot(String code, UUID id);
 }

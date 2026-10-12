@@ -2,6 +2,8 @@ package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.config.ConnexionSourceSuivie;
 import com.tsix.immocrm.config.SourceDeVeriteProperties;
+import com.tsix.immocrm.exceptions.ChampEnConflitException;
+import com.tsix.immocrm.exceptions.ChampInvalideException;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
@@ -30,6 +32,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    /** Nom du champ du corps en faute, propriété du ProblemDetail (FEATURE-patrimoine-ecriture.md §8). */
+    private static final String PROPRIETE_CHAMP = "champ";
 
     private final ObjectProvider<SourceDeVeriteProperties> source;
 
@@ -108,6 +112,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ChampInvalideException.class)
+    public ProblemDetail handleChampInvalide(ChampInvalideException ex) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        probleme.setProperty(PROPRIETE_CHAMP, ex.getChamp());
+        return probleme;
+    }
+
+    @ExceptionHandler(ChampEnConflitException.class)
+    public ProblemDetail handleChampEnConflit(ChampEnConflitException ex) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        probleme.setProperty(PROPRIETE_CHAMP, ex.getChamp());
+        return probleme;
     }
 
     /** FEATURE-doublons-prospect-projet.md §2. */

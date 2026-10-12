@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
+import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -163,8 +164,57 @@ public class ArticleService {
                 Champs.de(presentationType, StkPresentationType::getDescription),
                 superficieSousArticles,
                 prixSuggere.map(PrixArticle.PrixDeReference::ttc).orElse(null),
-                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false)
+                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false),
+                item.getAreaFloor(),
+                item.getComSaleUnitCostFloorHT(),
+                item.getComSaleUnitCostFloor(),
+                item.getComSaleUnitCostHT(),
+                item.getComSaleUnitCost(),
+                item.getSalePriceFloorHT(),
+                item.getSalePriceFloor(),
+                item.getSalePriceHT(),
+                item.getSalePrice(),
+                item.getComSalePriceFloorHT(),
+                item.getComSalePriceHT(),
+                item.getVat(),
+                item.getDiscountMax(),
+                item.getDiscountMax2(),
+                item.getIsTitled(),
+                item.getAlwaysAffected(),
+                item.getIsUnderItem(),
+                estOccupe(item),
+                Champs.de(item.getStkVocation(), StkVocation::getId),
+                Champs.de(item.getStkVocation(), StkVocation::getDescription),
+                item.getNotes(),
+                item.getInteriorArea(),
+                item.getWallsArea(),
+                item.getCommonPartsArea(),
+                item.getUserCreate(),
+                item.getUserCreateDateTime(),
+                item.getUserUpdate(),
+                item.getUserUpdateDateTime()
         );
+    }
+
+    /**
+     * Règle « article occupé » des écritures patrimoine (FEATURE-patrimoine-ecriture.md §5.4.4) : un dossier de vente ou
+     * de location, ou un parent qui en a un. Plus large que {@link #statutOf}, qui ne lit que la vente.
+     */
+    public static boolean estOccupe(StkItem item) {
+        if (item.getComFolderId() != null || item.getRntFolderId() != null) {
+            return true;
+        }
+        StkItem parent = item.getParent();
+        return parent != null && (parent.getComFolderId() != null || parent.getRntFolderId() != null);
+    }
+
+    /** Sous-articles libres d'une tranche : à affecter à un article. */
+    public Page<ArticleListItemDto> findSousArticlesLibres(UUID trancheId, Pageable pageable) {
+        if (!trancheRepository.existsById(trancheId)) {
+            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
+        }
+        return stkItemRepository.findSousArticlesLibres(trancheId, pageable)
+                .map(item -> toListItem(item, Collections.emptyMap(), Collections.emptyMap()));
     }
 
     /** Même défaut DISPONIBLE que {@link #findByTranche}. */

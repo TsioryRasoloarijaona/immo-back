@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
@@ -17,4 +18,7 @@ public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
 
     @Query("SELECT p FROM CfgProject p WHERE p.cfgCompany.isActive = true")
     Page<CfgProject> findDesEntitesActives(Pageable pageable);
+
+    /** Unicité du code (collation French_CI_AS : « = » ignore déjà la casse). */
+    Optional<CfgProject> findFirstByCodeAndIdNot(String code, UUID id);
 }

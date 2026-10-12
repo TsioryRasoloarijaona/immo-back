@@ -3,6 +3,7 @@ package com.tsix.immocrm.entities.stk;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.str.StrEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -538,4 +539,13 @@ public class StkItem {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkPresentationTypeId")
     private StkPresentationType stkPresentationType;
+
+    /** Type de document OMRAN : sans lui, l'article n'apparaît dans aucune liste d'OMRAN (filtre StkItemView.StrEntityId). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StrEntityId")
+    private StrEntity strEntity;
+
+    // Écrite par le module Location seul : lue pour la règle « article occupé », jamais écrite ici.
+    @Column(name = "RntFolderId", insertable = false, updatable = false)
+    private UUID rntFolderId;
 }

@@ -301,8 +301,8 @@ public class ReferentielService {
     }
 
     public List<ReferentielItemDto> etages() {
-        return floorRepository.findAll().stream().map(f -> new ReferentielItemDto(
-                f.getId(), f.getCode(), f.getDescription(), null)).toList();
+        return floorRepository.findAllByOrderBySortingAscCodeAsc().stream().map(f -> new ReferentielItemDto(
+                f.getId(), f.getCode(), f.getDescription(), f.getSorting())).toList();
     }
 
     public List<ReferentielItemDto> tierTypes() {
