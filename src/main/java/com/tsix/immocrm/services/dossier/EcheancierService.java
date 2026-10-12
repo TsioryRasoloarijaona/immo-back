@@ -269,7 +269,7 @@ public class EcheancierService {
         return new ReglementDto(
                 s.getId(),
                 echeanceId,
-                s.getCode(),
+                Champs.videEnNull(s.getCode()),
                 s.getDocDate(),
                 s.getEcheanceDate(),
                 s.getSettlementDate(),
@@ -339,17 +339,15 @@ public class EcheancierService {
         if (dateEcheance != null) document.setDocDate(dateEcheance);
         if (montant != null) document.setAmount(montant);
         if (description != null) document.setDescription(description);
-        if (exclureDuPrix != null) document.setExcludeFromPrice(exclureDuPrix);
         if (notes != null) document.setNotes(notes);
         if (categorieId != null) {
             ComSettlementCategory categorie = settlementCategoryRepository.findById(categorieId)
                     .orElseThrow(() -> new InvalidRequestException("ComSettlementCategory introuvable: " + categorieId));
             document.setComSettlementCategory(categorie);
+            // Comme OMRAN (ComDocument.cs:1146) : la catégorie impose son ExcludeFromPrice à chaque changement.
+            document.setExcludeFromPrice(Boolean.TRUE.equals(categorie.getExcludeFromPrice()));
         }
-    }
-
-    private static String videEnNull(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
+        if (exclureDuPrix != null) document.setExcludeFromPrice(exclureDuPrix);
     }
 
     /** Total réglé fourni par l'appelant, pour ne pas payer une requête par échéance. */
@@ -362,7 +360,8 @@ public class EcheancierService {
 
         return new EcheanceDto(
                 d.getId(),
-                d.getCode(),
+                // Code et référence : "" en base (convention OMRAN), null dans l'API.
+                Champs.videEnNull(d.getCode()),
                 d.getDocDate(),
                 d.getAmount(),
                 d.getAmountHT(),
@@ -377,7 +376,7 @@ public class EcheancierService {
                 reste,
                 statutCalcule.name(),
                 // QuittanceCode n'est jamais NULL mais souvent "" : null pour que le client masque.
-                videEnNull(d.getQuittanceCode()),
+                Champs.videEnNull(d.getQuittanceCode()),
                 d.getUserCreateDateTime()
         );
     }

@@ -118,8 +118,13 @@ public class DossierOmran {
         ligne.setAddress(requireNonNullElse(sousArticle.getAddress(), ""));
         ligne.setNotes(requireNonNullElse(sousArticle.getNotes(), ""));
         ligne.setContenance(requireNonNullElse(sousArticle.getContenance(), ""));
+        BigDecimal surface = requireNonNullElse(sousArticle.getArea(), BigDecimal.ZERO);
+        ligne.setStkBuilding(sousArticle.getStkBuilding());
+        ligne.setStkFloor(sousArticle.getStkFloor());
         ligne.setAreaFloor(requireNonNullElse(sousArticle.getAreaFloor(), BigDecimal.ZERO));
-        ligne.setArea(requireNonNullElse(sousArticle.getArea(), BigDecimal.ZERO));
+        ligne.setArea(surface);
+        // OMRAN recopie StkItem.Area dans AreaNet : StkItem n'a pas de colonne AreaNet (seulement AreaNetOld).
+        ligne.setAreaNet(surface);
         ligne.setVATRatio(tva);
         ligne.setDiscount(BigDecimal.ZERO);
         ligne.setPriceBeforeDiscountHT(prixHT);

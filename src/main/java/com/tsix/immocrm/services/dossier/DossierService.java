@@ -378,13 +378,15 @@ public class DossierService {
         dossierOmran.completerALaCreation(folder, principal, sousArticles, statutInitial, auteur, maintenant);
 
         CfgTranche tranche = principal.getStkHierarchy();
-        // Montants toujours écrits : sans `prix`, le prix de référence des articles (aucune remise).
+        // Montants toujours écrits : sans `prix`, total des prix de référence des articles, remise explicite
+        // nulle (prix avant remise = prix) ; même règle que le script 015, étape 1 bis.
         BigDecimal prix = request.prix() != null ? request.prix() : prixDeReference(articles);
+        BigDecimal remisePercent = remiseAppliquee(request);
         BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, prix).stream()
                 .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
                 .map(SchemaFinancementCalculator.Ligne::montant)
                 .findFirst().orElse(BigDecimal.ZERO);
-        appliquerMontants(folder, principal, annexes, prix, request.remisePercent(), fraisSyndic);
+        appliquerMontants(folder, principal, annexes, prix, remisePercent, fraisSyndic);
 
         folder = folderRepository.save(folder);
         for (StkItem sousArticle : sousArticles) {
@@ -433,7 +435,15 @@ public class DossierService {
         return List.copyOf(parId.values());
     }
 
-    /** Prix de référence cumulé des articles demandés (0 sans prix) : la remise déduite est nulle. */
+    /** Remise saisie ; sans `prix` ni remise, 0 explicite : sinon un principal sans prix porterait les annexes en remise. */
+    private static BigDecimal remiseAppliquee(CreerDossierRequest request) {
+        if (request.remisePercent() != null || request.prix() != null) {
+            return request.remisePercent();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /** Prix de référence cumulé des articles demandés (0 sans prix). */
     private static BigDecimal prixDeReference(List<StkItem> articles) {
         return articles.stream().map(PrixArticle::ttcOuZero).reduce(BigDecimal.ZERO, BigDecimal::add);
     }

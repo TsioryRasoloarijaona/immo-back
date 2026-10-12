@@ -8,7 +8,9 @@
 -- Idempotent : les cibles sont les lignes encore incompletes (StrEntityId / AdmModuleId NULL) ; rejoue, rien ne bouge.
 -- Comptes attendus sur yesRemsProd au 12/10/2026 : 30 dossiers (11 sans statut, 9 sans montants, 1 sans
 -- article), 67 echeances (2 sans categorie, non modifiees), 11 reglements, 30 lignes d'historique,
--- 5 sous-articles a rattacher.
+-- 5 sous-articles a rattacher. Apres : 29 dossiers dans ComSaleFolderView, pas 30 : la vue joint
+-- article -> tranche -> projet -> societe en INNER JOIN et APF 2026/00393 n'a pas d'article (non recuperable ici).
+-- Requiert SQL Server 2017 ou plus (STRING_AGG, FORMAT).
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
@@ -109,11 +111,13 @@ WHERE s.ComFolderId IS NULL AND s.PKey <> f.StkItemId;
 PRINT 'StkItem rattaches : ' + CAST(@@ROWCOUNT AS varchar(10));
 
 INSERT INTO dbo.ComFolderItem (PKey, ComFolderId, StkItemId, StkItemTypeId, StkItemCategoryId, ParentId, Code,
-        Description, Address, Notes, Contenance, AreaFloor, Area, VATRatio, Discount, PriceBeforeDiscountHT, PriceHT,
+        Description, Address, Notes, Contenance, StkBuildingId, StkFloorId, AreaNet, AreaFloor, Area, VATRatio,
+        Discount, PriceBeforeDiscountHT, PriceHT,
         PriceBeforeDiscount, Price, AlwaysAffected, IsUnderItem, IsUnderItemOrigin, IsTitled,
         UserCreate, UserCreateDateTime, UserUpdate, UserUpdateDateTime)
 SELECT NEWID(), f.PKey, s.PKey, s.StkItemTypeId, s.StkItemCategoryId, s.ParentId, ISNULL(s.Code, N''),
        ISNULL(s.Description, N''), ISNULL(s.Address, N''), ISNULL(s.Notes, N''), ISNULL(s.Contenance, N''),
+       s.StkBuildingId, s.StkFloorId, ISNULL(s.Area, 0),
        ISNULL(s.AreaFloor, 0), ISNULL(s.Area, 0), ISNULL(s.Vat, 0), 0, p.HT, p.HT, p.TTC, p.TTC,
        ISNULL(s.AlwaysAffected, 0), 1, ISNULL(s.IsUnderItemOrigin, 0), ISNULL(s.IsTitled, 0),
        @auteur, GETDATE(), @auteur, GETDATE()
@@ -222,12 +226,14 @@ OUTER APPLY (SELECT SUM(ISNULL(s.Area, 0)) AS Surface
              FROM dbo.StkItem s WHERE s.ComFolderId = f.PKey AND s.PKey <> f.StkItemId) sous;
 PRINT 'ComFolder repris : ' + CAST(@@ROWCOUNT AS varchar(10));
 
--- 1 bis. Dossiers sans montants : meme calcul que DossierService.appliquerMontants sans remise,
--- au prix de reference cumule de l'article principal et de ses annexes (remise nulle).
+-- 1 bis. Dossiers sans montants : meme calcul que POST /api/dossiers sans prix (DossierService.appliquerMontants
+-- avec remise explicite 0) : prix = prix de reference cumule du principal et des annexes, prix avant remise = prix,
+-- HT du principal deduit du TTC, HT des annexes = leur HT de reference.
 IF OBJECT_ID('tempdb..#prix') IS NOT NULL DROP TABLE #prix;
 SELECT f.PKey AS DossierId,
        ISNULL(a.Vat, 0) AS Tva,
-       r.TTC AS ItemTTC, r.HT AS ItemHT,
+       r.TTC AS ItemTTC,
+       CASE WHEN ISNULL(a.Vat, 0) = 0 THEN r.TTC ELSE ROUND(r.TTC / (1 + a.Vat), 6) END AS ItemHT,
        ISNULL(ann.TTC, 0) AS AnnexesTTC, ISNULL(ann.HT, 0) AS AnnexesHT,
        CASE WHEN t.SyndicAmount IS NOT NULL AND t.SyndicPeriod > 0
             THEN ROUND(t.SyndicAmount * t.SyndicPeriod, 2) ELSE 0 END AS Syndic
@@ -261,23 +267,18 @@ SET f.VATRatio = p.Tva,
     f.ItemPrice = p.ItemTTC, f.ItemPriceHT = p.ItemHT,
     f.UnderItemsPrice = p.AnnexesTTC, f.UnderItemsPriceHT = p.AnnexesHT,
     f.PriceBeforeDiscount = m.AvantTTC, f.PriceBeforeDiscountHT = m.AvantHT,
-    f.PriceAfterDiscount = m.AvantTTC, f.PriceAfterDiscountHT = m.ApresHT,
-    f.DiscountAmount = m.AvantHT - m.ApresHT,
-    f.Discount = CASE WHEN m.AvantHT <> 0 THEN ROUND((m.AvantHT - m.ApresHT) / m.AvantHT, 6) ELSE 0 END,
-    f.ItemPriceAfter = p.ItemTTC,
-    f.ItemPriceAfterHT = ROUND(p.ItemHT - (m.AvantHT - m.ApresHT) * m.Part, 6),
-    f.UnderItemsPriceAfter = p.AnnexesTTC,
-    f.UnderItemsPriceAfterHT = ROUND(p.AnnexesHT - (m.AvantHT - m.ApresHT) * (1 - m.Part), 6),
-    f.Price = m.AvantTTC, f.PriceHT = m.ApresHT,
+    f.PriceAfterDiscount = m.AvantTTC, f.PriceAfterDiscountHT = m.AvantHT,
+    f.DiscountAmount = 0,
+    f.Discount = 0,
+    f.ItemPriceAfter = p.ItemTTC, f.ItemPriceAfterHT = p.ItemHT,
+    f.UnderItemsPriceAfter = p.AnnexesTTC, f.UnderItemsPriceAfterHT = p.AnnexesHT,
+    f.Price = m.AvantTTC, f.PriceHT = m.AvantHT,
     f.TotalToPay = m.AvantTTC + p.Syndic
 FROM dbo.ComFolder f
 JOIN #prix p ON p.DossierId = f.PKey
 CROSS APPLY (
     SELECT p.ItemTTC + p.AnnexesTTC AS AvantTTC,
-           p.ItemHT + p.AnnexesHT AS AvantHT,
-           CASE WHEN p.Tva = 0 THEN p.ItemTTC + p.AnnexesTTC
-                ELSE ROUND((p.ItemTTC + p.AnnexesTTC) / (1 + p.Tva), 6) END AS ApresHT,
-           CASE WHEN p.ItemHT + p.AnnexesHT <> 0 THEN ROUND(p.ItemHT / (p.ItemHT + p.AnnexesHT), 10) ELSE 1 END AS Part
+           p.ItemHT + p.AnnexesHT AS AvantHT
 ) m
 WHERE f.Price IS NULL;
 PRINT 'ComFolder sans montants recalcules : ' + CAST(@@ROWCOUNT AS varchar(10));
@@ -380,7 +381,7 @@ END
 
 COMMIT TRANSACTION;
 
-PRINT 'Apres : visibles dans les vues OMRAN (attendu 30 dossiers, 11 reglements ; echeances a reste > 0 d''un dossier actif)';
+PRINT 'Apres : visibles dans les vues OMRAN (attendu 29 dossiers sur 30 - APF 2026/00393 sans article -, 11 reglements ; echeances a reste > 0 d''un dossier actif)';
 SELECT (SELECT COUNT(*) FROM dbo.ComSaleFolderView v JOIN #dossiers d ON d.PKey = v.PKey) AS DossiersDansComSaleFolderView,
        (SELECT COUNT(*) FROM dbo.StlSettlementView v JOIN #reglements r ON r.PKey = v.PKey) AS ReglementsDansStlSettlementView,
        (SELECT COUNT(*) FROM dbo.ComImpayedView v JOIN #echeances e ON e.PKey = v.ComDocumentId) AS EcheancesDansComImpayedView;

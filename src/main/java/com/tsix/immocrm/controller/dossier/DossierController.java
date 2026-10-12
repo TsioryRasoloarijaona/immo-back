@@ -95,6 +95,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
+import static java.util.Objects.requireNonNullElse;
 
 @Tag(name = "Dossiers")
 @RestController
@@ -654,7 +655,8 @@ public class DossierController {
             @Parameter(description = "Identifiant du règlement (StlSettlement.PKey).")
             @PathVariable UUID reglementId) {
         RecuReglementData data = recuReglementService.collect(id, reglementId);
-        String nomFichier = "recu-reglement-" + (data.receiptCode() != null ? data.receiptCode() : reglementId);
+        String nomFichier = "recu-reglement-" + requireNonNullElse(
+                com.tsix.immocrm.utils.Champs.videEnNull(data.receiptCode()), reglementId.toString());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
@@ -676,7 +678,8 @@ public class DossierController {
             @Parameter(description = "Identifiant du règlement (StlSettlement.PKey).")
             @PathVariable UUID reglementId) {
         AutorisationVersementData data = autorisationVersementService.collect(id, reglementId);
-        String nomFichier = "autorisation-versement-" + (data.documentCode() != null ? data.documentCode() : reglementId);
+        String nomFichier = "autorisation-versement-" + requireNonNullElse(
+                com.tsix.immocrm.utils.Champs.videEnNull(data.documentCode()), reglementId.toString());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
