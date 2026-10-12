@@ -195,16 +195,34 @@ la valeur exposée par `prixSuggere` sur les articles.
 **Prospect → client** : si le statut initial porte l'indicateur OMRAN « Transforme le prospect en
 client », le tiers passe au type client (voir `PATCH /api/dossiers/{id}/statut`).
 
+**Sans `prix`** : les montants du dossier sont quand même écrits, au prix de référence cumulé des
+articles demandés (remise nulle) ; aucun schéma de financement n'est généré.
+
+**Écrit comme OMRAN** (le dossier apparaît dans les listes du logiciel de bureau) : statut initial
+`RESERVATION` (obligatoire), date du dossier **à minuit** (`dateDocument` sans heure), libellé
+« `<code>` du jj/mm/aaaa », surfaces, constantes et prix contractuel / montant du contrat calculés
+depuis l'échéancier. Les sous-articles du lot principal encore libres (`StkItem.ParentId`) sont
+rattachés au dossier avec les annexes de la requête (une ligne `ComFolderItem` et une ligne
+d'historique « AFFECTATION » chacun) et figurent dans `articles` ; le prix, lui, ne compte que les
+articles de `articleIds`. Voir `FEATURE-interop-omran-ecritures.md` §3.
+
 ### reponse 400
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
 de paiement introuvable, prospection sans prospect lié, article déjà occupé, `remisePercent` hors
 de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
 
+### reponse 500
+
+Configuration incomplète : le statut `RESERVATION` des dossiers de vente est introuvable. Rien n'est
+écrit (comme OMRAN, qui refuse un dossier sans statut) ; le `detail` le dit explicitement.
+
 ## changerStatut
 
 Change le statut du dossier. La transition doit figurer dans la table des transitions validées
-(sinon **409**, avec `transitionsAutorisees`) ; un dossier sans statut courant accepte tout statut.
+(sinon **409**, avec `transitionsAutorisees`). Un dossier **sans statut** (lignes anciennes, à
+reprendre par le script 015) est refusé en **409** ; un statut à code inconnu accepte tout statut.
+La modification signe `UserUpdate`/`UserUpdateDateTime` (`modifiePar`/`modifieLe`).
 
 **Prospect → client, comme OMRAN** : si le statut cible porte l'indicateur « Transforme le prospect
 en client » (`StrStatus.BoolField011` : CONCRETISATION, COMPROMIS, FORMALISE…), et que le client du
@@ -224,7 +242,28 @@ Dossier introuvable.
 
 ### reponse 409
 
-Transition non autorisée depuis le statut courant ; le corps liste `transitionsAutorisees`.
+Transition non autorisée depuis le statut courant ; le corps liste `transitionsAutorisees`. Ou
+dossier sans statut : « Dossier sans statut : reprise nécessaire (script 015) ».
+
+## addEcheance
+
+Ajoute une échéance (`ComDocument`). `categorieId` est **obligatoire** : sans catégorie, l'échéance
+est invisible des écrans d'impayés d'OMRAN. Sans `description`, celle de la catégorie ; sans
+`dateEcheance`, aujourd'hui. La date est enregistrée **à minuit**. Société, module, TVA de la
+catégorie, montants HT/TTC (HT = montant ÷ (1 + TVA), 6 décimales) sont complétés comme OMRAN.
+
+### reponse 400
+
+`categorieId` absent, ou catégorie introuvable.
+
+## updateEcheance
+
+Mise à jour partielle : seuls les champs fournis changent ; les montants HT/TTC sont recalculés et
+la modification est signée (`UserUpdate`). Une échéance sans catégorie exige `categorieId`.
+
+### reponse 400
+
+Catégorie introuvable, ou échéance sans catégorie et `categorieId` absent.
 
 ## addReglement
 
@@ -241,6 +280,11 @@ flag était annoncé mais pas appliqué jusqu'ici.
 Versement effectué par » de l'**autorisation d'encaissement**, à ouvrir juste après création via
 `GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement` (le `reglementId`
 est l'`id` renvoyé ici).
+
+**Tiers** : comme OMRAN, `StlSettlement.TierId` reçoit le **client du dossier** et le payeur saisi
+(`payeurId`) va dans `TierPayerId` ; c'est lui que renvoient `payeurId`/`payeurNom` et qu'impriment
+le reçu et l'autorisation d'encaissement. La date du règlement est celle du jour, **à minuit** ; le
+libellé suit le format OMRAN « `<type> <code banque> N° <référence> du jj/mm/aaaa` ».
 
 `dateReglement` et `statut=POINTED` sont **refusés** (400) : pointer un règlement exige une preuve
 de paiement, impossible à fournir avant que le règlement existe. Pour saisir un règlement déjà
@@ -259,7 +303,8 @@ Contrepartie en lecture du `POST` ci-dessus — tous les versements déjà enreg
 échéance, plus récent d'abord, avec le détail complet de chacun : type de règlement
 (`typeId`/`typeCode`/`typeLibelle`, voir `GET /api/referentiels/types-reglement`), banque
 (`banqueId`/`banqueNom`, pertinent seulement si le type le requiert), tiers réglant
-(`payeurId`/`payeurNom` — peut différer de l'acquéreur principal), date du document (saisie), date
+(`payeurId`/`payeurNom` : `TierPayerId`, à défaut `TierId` — peut différer de l'acquéreur
+principal), date du document (saisie), date
 d'échéance, date de règlement effectif (souvent absente), référence (n° de chèque...) et notes. `GET
 /api/dossiers/{id}/echeancier` ne renvoie que le total réglé/reste par échéance
 (`montantRegle`/`reste`) — cet endpoint donne le détail ligne par ligne derrière ce total.

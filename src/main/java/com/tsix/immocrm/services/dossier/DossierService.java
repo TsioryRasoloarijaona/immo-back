@@ -48,12 +48,15 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.exceptions.ConfigurationIncompleteException;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
+import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
@@ -95,6 +98,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -105,6 +109,9 @@ public class DossierService {
 
     private static final String DOSSIER_INTROUVABLE = "Dossier introuvable: ";
     private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
+    /** Libellés d'historique d'OMRAN à la création ({@code Sale.cs:3401} et {@code RessourceWithWorkFlow.cs:175}). */
+    static final String AFFECTATION = "AFFECTATION";
+    static final String CREATION = "Création";
 
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
@@ -124,6 +131,9 @@ public class DossierService {
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
     private final TransformationProspectClient transformationProspectClient;
+    private final ComFolderItemRepository folderItemRepository;
+    private final DossierOmran dossierOmran;
+    private final LigneEcheancierOmran ligneEcheancier;
     private final Clock clock;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
@@ -140,8 +150,14 @@ public class DossierService {
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
                            TransformationProspectClient transformationProspectClient,
+                           ComFolderItemRepository folderItemRepository,
+                           DossierOmran dossierOmran,
+                           LigneEcheancierOmran ligneEcheancier,
                            Clock clock) {
         this.clock = clock;
+        this.folderItemRepository = folderItemRepository;
+        this.dossierOmran = dossierOmran;
+        this.ligneEcheancier = ligneEcheancier;
         this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
@@ -294,7 +310,8 @@ public class DossierService {
     /**
      * Articles DISPONIBLE ({@code ComFolderId IS NULL}) ; {@code StkVocation}, NOT NULL, vient du
      * premier article. {@code modePaieId} et {@code cin} sont exigés par décision métier (colonnes
-     * nullables) ; le CIN saisi à la vente écrase celui du client. Sans {@code prix}, ni montants ni schéma.
+     * nullables) ; le CIN saisi à la vente écrase celui du client. Sans {@code prix}, montants au prix de
+     * référence et pas de schéma. Colonnes OMRAN : {@link DossierOmran}, {@code FEATURE-interop-omran-ecritures.md} §3.
      */
     @Transactional
     public DossierDetailDto create(CreerDossierRequest request) {
@@ -333,61 +350,104 @@ public class DossierService {
                     "Création de dossier sur l'article " + article.getCode());
         }
 
+        // Avant toute écriture : sans statut initial, OMRAN refuse le dossier (RessourceWithWorkFlow.cs:411).
+        StrStatus statutInitial = statutInitialObligatoire();
+
         CfgTier client = prospection.getCfgProspect();
         client.setIDNumber(request.cin());
         tierRepository.save(client);
 
+        StkItem principal = articles.get(0);
+        List<StkItem> annexes = articles.subList(1, articles.size());
+        List<StkItem> sousArticles = sousArticlesRattaches(principal, annexes);
+        String auteur = utilisateurAffiche.courant().nom();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
-        folder.setDocDate(LocalDateTime.now(clock));
-        folder.setUserCreate(utilisateurAffiche.courant().nom());
-        folder.setUserCreateDateTime(LocalDateTime.now(clock));
-        folder.setCode(genererCodeDossier(articles.get(0)));
+        folder.setCode(genererCodeDossier(principal));
         // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) ne portent que le
         // lien inverse StkItem.ComFolderId, posé plus bas.
-        folder.setStkItem(articles.get(0));
-        folder.setStkVocation(articles.get(0).getStkVocation());
+        folder.setStkItem(principal);
+        folder.setStkVocation(principal.getStkVocation());
         folder.setCfgCustomer(client);
         folder.setCfgCommercial(prospection.getCfgCommercial());
         folder.setComProspection(prospection);
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
-        // Tout dossier réel commence en RESERVATION. Ligne StrStatus absente : on crée quand même.
-        StrStatus statutInitial = strStatusRepository.findByStrConfigEntityIdAndCode(
-                StatutDossier.CONFIG_ENTITY_ID, StatutDossier.RESERVATION.getCode());
-        folder.setStrStatus(statutInitial);
+        dossierOmran.completerALaCreation(folder, principal, sousArticles, statutInitial, auteur, maintenant);
 
-        CfgTranche tranche = articles.get(0).getStkHierarchy();
-        if (request.prix() != null) {
-            List<StkItem> annexes = articles.size() > 1 ? articles.subList(1, articles.size()) : List.of();
-            BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
-                    .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
-                    .map(SchemaFinancementCalculator.Ligne::montant)
-                    .findFirst().orElse(BigDecimal.ZERO);
-            appliquerMontants(folder, articles.get(0), annexes, request.prix(), request.remisePercent(), fraisSyndic);
-        }
+        CfgTranche tranche = principal.getStkHierarchy();
+        // Montants toujours écrits : sans `prix`, le prix de référence des articles (aucune remise).
+        BigDecimal prix = request.prix() != null ? request.prix() : prixDeReference(articles);
+        BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, prix).stream()
+                .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
+                .map(SchemaFinancementCalculator.Ligne::montant)
+                .findFirst().orElse(BigDecimal.ZERO);
+        appliquerMontants(folder, principal, annexes, prix, request.remisePercent(), fraisSyndic);
 
         folder = folderRepository.save(folder);
-        if (statutInitial != null) {
-            enregistrerHistoriqueStatut(folder, statutInitial, null);
-            basculerProspectEnClient(folder, statutInitial);
+        for (StkItem sousArticle : sousArticles) {
+            enregistrerHistoriqueDossier(folder, statutInitial, AFFECTATION, sousArticle.getId());
         }
+        enregistrerHistoriqueStatut(folder, statutInitial, "", principal.getId(), CREATION);
+        basculerProspectEnClient(folder, statutInitial);
 
-        for (StkItem item : articles) {
-            item.setComFolderId(folder.getId());
-            stkItemRepository.save(item);
-        }
+        rattacherArticles(folder, principal, sousArticles, auteur, maintenant);
 
         if (request.prix() != null) {
             // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
             // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû.
-            genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
+            List<ComDocument> lignes = genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
+            dossierOmran.completerDepuisEcheancier(folder, lignes);
+        } else {
+            dossierOmran.completerDepuisEcheancier(folder, List.of());
         }
 
         cloturerLaProspection(prospection);
 
-        List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
+        List<ArticleSummaryDto> articleDtos = Stream.concat(Stream.of(principal), sousArticles.stream())
+                .map(DossierService::toArticleSummary)
+                .toList();
         return toDetail(folder, articleDtos);
+    }
+
+    /** RESERVATION de l'entité dossier ; son absence est un défaut de configuration (500, rien d'écrit). */
+    private StrStatus statutInitialObligatoire() {
+        StrStatus statut = strStatusRepository.findByStrConfigEntityIdAndCode(
+                StatutDossier.CONFIG_ENTITY_ID, StatutDossier.RESERVATION.getCode());
+        if (statut == null) {
+            throw new ConfigurationIncompleteException("Statut initial " + StatutDossier.RESERVATION.getCode()
+                    + " introuvable pour l'entité dossier (StrStatus) : configuration à compléter, dossier non créé");
+        }
+        return statut;
+    }
+
+    /** Annexes de la requête, puis sous-articles libres du lot principal ({@code StkItem.ParentId}). */
+    private List<StkItem> sousArticlesRattaches(StkItem principal, List<StkItem> annexes) {
+        Map<UUID, StkItem> parId = new LinkedHashMap<>();
+        annexes.forEach(annexe -> parId.put(annexe.getId(), annexe));
+        stkItemRepository.findByParentId(principal.getId()).stream()
+                .filter(enfant -> enfant.getComFolderId() == null && !principal.getId().equals(enfant.getId()))
+                .forEach(enfant -> parId.putIfAbsent(enfant.getId(), enfant));
+        return List.copyOf(parId.values());
+    }
+
+    /** Prix de référence cumulé des articles demandés (0 sans prix) : la remise déduite est nulle. */
+    private static BigDecimal prixDeReference(List<StkItem> articles) {
+        return articles.stream().map(PrixArticle::ttcOuZero).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** {@code StkItem.ComFolderId} sur tous les articles, et une ligne {@code ComFolderItem} par sous-article. */
+    private void rattacherArticles(ComFolder folder, StkItem principal, List<StkItem> sousArticles,
+                                   String auteur, LocalDateTime maintenant) {
+        principal.setComFolderId(folder.getId());
+        stkItemRepository.save(principal);
+        for (StkItem sousArticle : sousArticles) {
+            sousArticle.setComFolderId(folder.getId());
+            stkItemRepository.save(sousArticle);
+            folderItemRepository.save(DossierOmran.ligneSousArticle(folder, sousArticle, auteur, maintenant));
+        }
     }
 
     /**
@@ -512,9 +572,9 @@ public class DossierService {
      * Une échéance {@code ComDocument} par ligne ; catégorie cherchée par {@code Code} dans la
      * vocation du dossier, ligne ignorée si elle n'y existe pas (la création n'est jamais bloquée).
      */
-    private void genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
+    private List<ComDocument> genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
         UUID vocationId = folder.getStkVocation().getId();
-        String auteur = utilisateurAffiche.courant().nom();
+        List<ComDocument> lignes = new ArrayList<>();
         for (SchemaFinancementCalculator.Ligne ligne : SchemaFinancementCalculator.calculer(tranche, prix)) {
             settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
                     .ifPresent(categorie -> {
@@ -522,15 +582,15 @@ public class DossierService {
                         document.setId(UUID.randomUUID());
                         document.setComFolder(folder);
                         document.setDocDate(LocalDateTime.now(clock));
-                        document.setUserCreate(auteur);
-                        document.setUserCreateDateTime(LocalDateTime.now(clock));
                         document.setAmount(ligne.montant());
                         document.setComSettlementCategory(categorie);
                         document.setExcludeFromPrice(categorie.getExcludeFromPrice());
                         document.setDescription(categorie.getDescription());
-                        documentRepository.save(document);
+                        ligneEcheancier.completerCreation(document);
+                        lignes.add(documentRepository.save(document));
                     });
         }
+        return lignes;
     }
 
     /**
@@ -579,8 +639,8 @@ public class DossierService {
     }
 
     /**
-     * 409 hors {@link TransitionsValidees}. Un dossier sans statut courant (ou à code inconnu)
-     * accepte n'importe quel {@link StatutDossier} comme premier statut.
+     * 409 hors {@link TransitionsValidees}, et 409 sur un dossier sans statut (reprise par le script
+     * 015). Un statut à code inconnu accepte n'importe quel {@link StatutDossier}.
      */
     @Transactional
     public DossierDetailDto changerStatut(UUID id, ChangerStatutRequest request) {
@@ -593,6 +653,9 @@ public class DossierService {
             cible = StatutDossier.fromCode(request.statut());
         } catch (IllegalArgumentException e) {
             throw new InvalidRequestException("Statut inconnu: " + request.statut());
+        }
+        if (folder.getStrStatus() == null) {
+            throw new ConflictException("Dossier sans statut : reprise nécessaire (script 015)");
         }
 
         Optional<StatutDossier> actuel = statutActuel(folder);
@@ -612,7 +675,8 @@ public class DossierService {
         folder.setStrStatus(strStatus);
         appliquerChampEtape(folder, cible, request);
         marquerModification(folder);
-        enregistrerHistoriqueStatut(folder, strStatus, request.note());
+        enregistrerHistoriqueStatut(folder, strStatus, requireNonNullElse(request.note(), ""),
+                Champs.de(folder.getStkItem(), StkItem::getId), request.note());
         basculerProspectEnClient(folder, strStatus);
 
         List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
@@ -667,23 +731,34 @@ public class DossierService {
     }
 
     /**
-     * Dans les <strong>deux</strong> tables qu'alimente OMRAN, auteur compris ; {@code StrWorkflowId}
+     * Les <strong>deux</strong> tables d'historique qu'alimente OMRAN, auteur compris ; {@code StrWorkflowId}
      * reste nul, cas admis par le légataire. Voir {@code FEATURE-conformite-legataire.md} §3.
      */
-    private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
-        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now(clock);
+    private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String description,
+                                             UUID articleId, String descriptionGenerique) {
+        enregistrerHistoriqueDossier(folder, nouveauStatut, description, articleId);
+        enregistrerHistoriqueGenerique(folder, nouveauStatut, descriptionGenerique);
+    }
 
+    /** {@code StrFolderStatusHistory} seule : c'est tout ce qu'OMRAN écrit pour une ligne {@code AFFECTATION}. */
+    private void enregistrerHistoriqueDossier(ComFolder folder, StrStatus nouveauStatut, String description,
+                                              UUID articleId) {
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
         StrFolderStatusHistory historique = new StrFolderStatusHistory();
         historique.setId(UUID.randomUUID());
-        historique.setDocDate(maintenant);
+        historique.setDocDate(LocalDateTime.now(clock));
         historique.setComFolder(folder);
         historique.setStrFolderStatus(nouveauStatut);
-        historique.setDescription(note);
+        historique.setDescription(description);
         historique.setAdmUserId(auteur.compteId());
         historique.setCfgTier(folder.getCfgCustomer());
+        historique.setStkItemId(articleId);
         statusHistoryRepository.save(historique);
+    }
 
+    private void enregistrerHistoriqueGenerique(ComFolder folder, StrStatus nouveauStatut, String descriptionGenerique) {
+        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
         StrHistory generique = new StrHistory();
         generique.setId(UUID.randomUUID());
         generique.setDocDate(maintenant);
@@ -692,9 +767,10 @@ public class DossierService {
         generique.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
         generique.setAdmUserId(auteur.compteId());
         generique.setAdmUserDescription(auteur.nom());
-        generique.setStrStatusId(nouveauStatut != null ? nouveauStatut.getId() : null);
-        generique.setStrStatusDescription(nouveauStatut != null ? nouveauStatut.getCode() : null);
-        generique.setDescription(note);
+        generique.setStrStatusId(nouveauStatut.getId());
+        // La Description du statut (« Réservation »), pas son Code : c'est ce qu'écrit OMRAN.
+        generique.setStrStatusDescription(requireNonNullElse(nouveauStatut.getDescription(), nouveauStatut.getCode()));
+        generique.setDescription(descriptionGenerique);
         strHistoryRepository.save(generique);
     }
 
@@ -1028,8 +1104,7 @@ public class DossierService {
     }
 
     private static CfgCompany societe(ComFolder f) {
-        CfgProject p = projet(f);
-        return p != null ? p.getCfgCompany() : null;
+        return LigneEcheancierOmran.societe(f);
     }
 
     private static ArticleSummaryDto toArticleSummary(StkItem item) {

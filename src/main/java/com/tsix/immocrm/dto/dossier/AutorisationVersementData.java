@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * « Autorisation d'Encaissement » d'un règlement. Scopée au {@code StlSettlement}, pas à l'échéance comme
  * le SQL du modèle légataire : compte, mode de versement et payeur ne sont renseignés que sur le règlement.
- * {@code payeur} ({@code StlSettlement.TierId}) peut différer des {@code clients} (acquéreur et co-acquéreurs).
+ * {@code payeur} ({@code TierPayerId}, à défaut {@code TierId}) peut différer des {@code clients} (acquéreurs).
  */
 public record AutorisationVersementData(
         String dossierCode,

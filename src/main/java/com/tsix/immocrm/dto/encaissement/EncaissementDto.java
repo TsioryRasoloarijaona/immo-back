@@ -28,7 +28,7 @@ public record EncaissementDto(
         /** Date de règlement effectif (encaissement du chèque…). */
         LocalDateTime dateReglement,
         UUID tierId,
-        /** Tiers qui a réglé, pas forcément l'acquéreur principal. */
+        /** {@code TierId} : pour un encaissement de vente, le client du dossier ; le payeur est {@code tierPayeurNom}. */
         String tierNom,
         /** {@code StlSettlement.Amount}. */
         BigDecimal montantBrut,

@@ -85,6 +85,10 @@ public class ComFolder {
     @JoinColumn(name = "ComPaymentMethodId")
     private ComPaymentMethod comPaymentMethod;
 
+    // ComSaleFolderView fait un INNER JOIN dessus : NULL = dossier absent des listes d'OMRAN.
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "Contact")

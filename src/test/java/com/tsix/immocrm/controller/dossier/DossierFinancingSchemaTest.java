@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.fixtures.FixtureReferentielStk;
+import com.tsix.immocrm.fixtures.FixtureStatutDossier;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -83,6 +84,14 @@ class DossierFinancingSchemaTest {
 
     @Autowired
     private ComSettlementCategoryRepository settlementCategoryRepository;
+
+    @Autowired
+    private FixtureStatutDossier fixtureStatutDossier;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        fixtureStatutDossier.reservation();
+    }
 
     private ComSettlementCategory newCategory(String code, StkVocation vocation, Boolean excludeFromPrice) {
         ComSettlementCategory categorie = new ComSettlementCategory();

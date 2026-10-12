@@ -19,6 +19,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.fixtures.FixtureReferentielStk;
+import com.tsix.immocrm.fixtures.FixtureStatutDossier;
 import com.tsix.immocrm.fixtures.ReferentielSeme;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
@@ -86,6 +87,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PerimetreCommercialTest {
 
     @Autowired private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired private FixtureStatutDossier fixtureStatutDossier;
     @Autowired private MockMvc mockMvc;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
@@ -778,6 +780,7 @@ class PerimetreCommercialTest {
     void creationDeDossierDansLePerimetre_reste201() throws Exception {
         AdmUser commercial = newUser("perim.create.ok." + UUID.randomUUID());
         affecter(commercial, projetA);
+        fixtureStatutDossier.reservation();
 
         CfgTier prospect = new CfgTier();
         prospect.setId(UUID.randomUUID());

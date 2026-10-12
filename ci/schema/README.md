@@ -56,6 +56,12 @@ définition de workflow des dossiers de vente. Les fixtures créent des `StrStat
 renseignant `StrConfigEntityId` avec la constante `StatutDossier.CONFIG_ENTITY_ID` ; sans sa
 ligne parente, la contrainte `StrStatus__StrConfigEntity_FK1` rejette chacun de ces `INSERT`.
 
+S'y ajoutent les références qu'OMRAN écrit sur chaque dossier, échéance et règlement
+(`FEATURE-interop-omran-ecritures.md` §2.4) : `StrEntity` `StlSettlementIn`/`StlSettlementOut`,
+`AdmModule` `COM`, `StlCurrency` `MAD`, et la table `AdmParamsGuid` (hors fermeture des clés
+étrangères, donc créée ici) avec son paramètre `DefaultCurrency`. PKey de production, reprises
+dans `ReferentielSeme`.
+
 Tout le reste du référentiel est construit par les tests eux-mêmes. En particulier la nature
 physique exigée par `StkItemType`/`StkItemCategory` est fournie par
 `FixtureReferentielStk.natureParDefaut()`, qui **crée la ligne si elle est absente** au lieu de
@@ -101,3 +107,16 @@ $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesR
 
 Les variables d'environnement priment sur `src/test/resources/application.properties` dans
 Spring Boot : rediriger la suite ne demande **aucune modification de fichier**.
+
+## Base locale
+
+`yesRemsTest` n'a pas les tables `AdmModule`, `StlCurrency` et `AdmParamsGuid`, que le code lit
+pour résoudre ses références (sans ligne, il se replie sur les PKey de production). Les créer une
+fois, une commande par table (DDL de `010_tables.sql`, et de `040_seed_reference.sql` pour
+`AdmParamsGuid`) :
+
+```powershell
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -b -Q "IF OBJECT_ID('dbo.AdmModule') IS NULL CREATE TABLE dbo.AdmModule (PKey uniqueidentifier NOT NULL CONSTRAINT AdmModule_PK PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, Sorting int NULL, ObjectForm nvarchar(255) NULL, IsActive bit NULL)"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -b -Q "IF OBJECT_ID('dbo.StlCurrency') IS NULL CREATE TABLE dbo.StlCurrency (PKey uniqueidentifier NOT NULL CONSTRAINT StlCurrency_PK PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, CodeIso nvarchar(255) NULL, Notes nvarchar(500) NULL, UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL, DescriptionLong nvarchar(500) NULL, CurrencyFormat nvarchar(255) NULL, CurrencySymbol nvarchar(255) NULL, CurrencyDecimalDigits int NULL)"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -b -Q "IF OBJECT_ID('dbo.AdmParamsGuid') IS NULL CREATE TABLE dbo.AdmParamsGuid (Code nvarchar(255) NOT NULL CONSTRAINT AdmParamsGuid_PK PRIMARY KEY, CodeValue uniqueidentifier NULL, UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL, PKey uniqueidentifier NULL, StrConfigEntityId uniqueidentifier NULL)"
+```

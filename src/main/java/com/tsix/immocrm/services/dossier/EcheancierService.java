@@ -1,5 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.FormatOmran;
+import com.tsix.immocrm.domain.PayeurReglement;
 import com.tsix.immocrm.domain.StatutEcheance;
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CreerEcheanceRequest;
@@ -25,6 +27,7 @@ import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementTypeRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.referentiel.ReferencesOmran;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -47,6 +50,12 @@ import static java.util.Objects.requireNonNullElse;
 @Transactional(readOnly = true)
 public class EcheancierService {
 
+    private static final String DOSSIER_INTROUVABLE = "Dossier introuvable: ";
+    private static final String CATEGORIE_REQUISE = "categorieId est requise : une échéance sans catégorie est invisible d'OMRAN";
+    /** Valeurs constantes d'OMRAN sur tout encaissement de vente ({@code Settlement.cs:146-150}). */
+    private static final String CATEGORIE_REGLEMENT = "None";
+    private static final String NON_DEFINIE = "Non définie";
+
     private final ComFolderRepository folderRepository;
     private final ComDocumentRepository documentRepository;
     private final StlSettlementTypeRepository settlementTypeRepository;
@@ -55,6 +64,8 @@ public class EcheancierService {
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final ReferencesOmran references;
+    private final LigneEcheancierOmran ligneEcheancier;
     private final Clock clock;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
@@ -64,8 +75,12 @@ public class EcheancierService {
                               CfgTierRepository tierRepository,
                               ComSettlementCategoryRepository settlementCategoryRepository,
                               UtilisateurAffiche utilisateurAffiche,
+                              ReferencesOmran references,
+                              LigneEcheancierOmran ligneEcheancier,
                               Clock clock) {
         this.clock = clock;
+        this.references = references;
+        this.ligneEcheancier = ligneEcheancier;
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.settlementTypeRepository = settlementTypeRepository;
@@ -91,7 +106,7 @@ public class EcheancierService {
     public ReglementDto addReglement(UUID dossierId, UUID echeanceId, CreerReglementRequest request,
                                       AuthenticatedUser principal) {
         if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+            throw new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId);
         }
         ComDocument echeance = findEcheanceOf(dossierId, echeanceId);
 
@@ -140,28 +155,27 @@ public class EcheancierService {
                     + "de cette échéance (" + reste + ")");
         }
 
-        StlSettlement settlement = new StlSettlement();
-        settlement.setId(UUID.randomUUID());
-        settlement.setDocDate(LocalDateTime.now(clock));
-        settlement.setEcheanceDate(dateEcheance);
-        settlement.setSettlementDate(null);
-        settlement.setAmount(montant);
-        settlement.setCode(request.reference());
-        settlement.setNotes(request.notes());
-        settlement.setStatus(StatutReglement.INITIAL.name());
-        settlement.setIsCredit(Boolean.TRUE);
-        settlement.setUserCreate(utilisateurAffiche.nom(principal));
-        settlement.setUserCreateDateTime(LocalDateTime.now(clock));
-        settlement.setStlSettlementType(type);
+        CfgTier banque = null;
         if (request.banqueId() != null) {
-            CfgTier banque = tierRepository.findById(request.banqueId())
+            banque = tierRepository.findById(request.banqueId())
                     .orElseThrow(() -> new InvalidRequestException("Banque (CfgTier) introuvable: " + request.banqueId()));
-            settlement.setCfgBank(banque);
         }
-        // TierId (« réglé par ») alimente « Versement effectué par » de l'autorisation d'encaissement.
         CfgTier payeur = tierRepository.findById(payeurId)
                 .orElseThrow(() -> new InvalidRequestException("Payeur (CfgTier) introuvable: " + payeurId));
-        settlement.setTier(payeur);
+
+        StlSettlement settlement = nouveauReglement(echeance.getComFolder(), montant, request.reference(),
+                utilisateurAffiche.nom(principal));
+        settlement.setEcheanceDate(dateEcheance);
+        settlement.setNotes(requireNonNullElse(request.notes(), ""));
+        settlement.setStlSettlementType(type);
+        settlement.setCfgBank(banque);
+        // TierId = client du dossier (OMRAN) ; le payeur saisi va dans TierPayerId, que lisent le reçu
+        // et l'autorisation d'encaissement (PayeurReglement).
+        settlement.setTierPayer(payeur);
+        if (settlement.getTier() == null) {
+            settlement.setTier(payeur);
+        }
+        settlement.setDescription(descriptionReglement(type, banque, settlement.getCode(), settlement.getDocDate()));
         settlement = settlementRepository.save(settlement);
 
         StlSettlementLine line = new StlSettlementLine();
@@ -174,9 +188,67 @@ public class EcheancierService {
         return toReglementDto(line, echeanceId);
     }
 
+    /**
+     * Encaissement IN_WORK avec toutes les colonnes qu'OMRAN écrit à l'insertion
+     * ({@code FEATURE-interop-omran-ecritures.md} §5) : sans module, entité, devise ou société,
+     * {@code StlSettlementView} l'ignore.
+     */
+    private StlSettlement nouveauReglement(ComFolder folder, BigDecimal montant, String reference, String auteur) {
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        UUID devise = references.deviseParDefaut();
+        StlSettlement settlement = new StlSettlement();
+        settlement.setId(UUID.randomUUID());
+        settlement.setDocDate(LigneEcheancierOmran.minuit(maintenant));
+        settlement.setSettlementDate(null);
+        settlement.setAmount(montant);
+        settlement.setAmountBase(montant);
+        settlement.setAmountBaseConverted(montant);
+        settlement.setConvertValue(BigDecimal.ONE);
+        settlement.setConvertUnit(1);
+        settlement.setAmountRS(BigDecimal.ZERO);
+        settlement.setRsRatio(BigDecimal.ZERO);
+        settlement.setAmountStamp(BigDecimal.ZERO);
+        settlement.setRSAmountSettled(Boolean.FALSE);
+        settlement.setIsAccounted(Boolean.FALSE);
+        settlement.setIsDcoumentDeliveredToCenter(Boolean.FALSE);
+        settlement.setCode(requireNonNullElse(reference, ""));
+        settlement.setStatus(StatutReglement.INITIAL.name());
+        settlement.setIsCredit(Boolean.TRUE);
+        settlement.setStrEntityId(references.entiteReglement(true));
+        settlement.setAdmModuleId(references.moduleVente());
+        settlement.setStlCurrencyId(devise);
+        settlement.setStlCurrencyAffectationId(devise);
+        settlement.setCategory(CATEGORIE_REGLEMENT);
+        settlement.setItemNumber(NON_DEFINIE);
+        settlement.setItemDescription(NON_DEFINIE);
+        settlement.setCfgCompany(LigneEcheancierOmran.societe(folder));
+        settlement.setTier(folder.getCfgCustomer());
+        settlement.setSlipCode("");
+        settlement.setRSSheetCode("");
+        settlement.setReceiptCode("");
+        settlement.setPropositionSheetCode("");
+        settlement.setUserCreate(auteur);
+        settlement.setUserCreateDateTime(maintenant);
+        settlement.setUserUpdate(auteur);
+        settlement.setUserUpdateDateTime(maintenant);
+        return settlement;
+    }
+
+    /** {@code "<type> [<code banque>] [N° <référence>] du dd/MM/yyyy"}, getter de {@code Yes.Stl.Commun/Settlement.cs:795}. */
+    static String descriptionReglement(StlSettlementType type, CfgTier banque, String reference, LocalDateTime date) {
+        StringBuilder texte = new StringBuilder(requireNonNullElse(Champs.de(type, StlSettlementType::getDescription), ""));
+        if (banque != null) {
+            texte.append(' ').append(requireNonNullElse(banque.getCode(), ""));
+        }
+        if (reference != null && !reference.isEmpty()) {
+            texte.append(" N° ").append(reference);
+        }
+        return texte.append(" du ").append(FormatOmran.dateCourte(date)).toString();
+    }
+
     public List<ReglementDto> findReglements(UUID dossierId, UUID echeanceId) {
         if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+            throw new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId);
         }
         findEcheanceOf(dossierId, echeanceId);
         return settlementLineRepository.findByComDocumentIdOrderByStlSettlement_DocDateDesc(echeanceId).stream()
@@ -193,7 +265,7 @@ public class EcheancierService {
         StlSettlement s = line.getStlSettlement();
         StlSettlementType type = s.getStlSettlementType();
         CfgTier banque = s.getCfgBank();
-        CfgTier payeur = s.getTier();
+        CfgTier payeur = PayeurReglement.de(s);
         return new ReglementDto(
                 s.getId(),
                 echeanceId,
@@ -216,24 +288,28 @@ public class EcheancierService {
 
     public Page<EcheanceDto> findEcheances(UUID dossierId, Pageable pageable) {
         if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+            throw new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId);
         }
-        return documentRepository.findByComFolderIdOrderByDocDateDesc(dossierId, pageable).map(this::toDto);
+        return documentRepository.findByComFolderIdOrderByDocDateDescIdAsc(dossierId, pageable).map(this::toDto);
     }
 
     @Transactional
     public EcheanceDto addEcheance(UUID dossierId, CreerEcheanceRequest request) {
         ComFolder folder = folderRepository.findById(dossierId)
-                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
+                .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId));
+        Requis.champ(request.categorieId(), CATEGORIE_REQUISE);
 
         ComDocument document = new ComDocument();
         document.setId(UUID.randomUUID());
         document.setComFolder(folder);
-        // UserCreate signe l'événement ECHEANCE de l'historique (FIX-tracabilite-historique-hotline.md §1).
-        document.setUserCreate(utilisateurAffiche.courant().nom());
-        document.setUserCreateDateTime(LocalDateTime.now(clock));
+        document.setDocDate(LocalDateTime.now(clock));
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
+        if (document.getDescription() == null) {
+            document.setDescription(document.getComSettlementCategory().getDescription());
+        }
+        // UserCreate signe l'événement ECHEANCE de l'historique (FIX-tracabilite-historique-hotline.md §1).
+        ligneEcheancier.completerCreation(document);
 
         return toDto(documentRepository.save(document));
     }
@@ -245,12 +321,15 @@ public class EcheancierService {
     @Transactional
     public EcheanceDto updateEcheance(UUID dossierId, UUID echeanceId, ModifierEcheanceRequest request) {
         if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
+            throw new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId);
         }
         ComDocument document = findEcheanceOf(dossierId, echeanceId);
 
         applyFields(document, request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes());
+        // Une ligne ancienne sans catégorie ne reste pas sans : la modification l'exige.
+        Requis.champ(document.getComSettlementCategory(), CATEGORIE_REQUISE);
+        ligneEcheancier.completerModification(document);
 
         return toDto(documentRepository.save(document));
     }

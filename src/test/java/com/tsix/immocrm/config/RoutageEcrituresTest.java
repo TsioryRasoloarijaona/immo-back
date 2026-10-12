@@ -48,7 +48,7 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser)[A-Z].*"
+                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|changer)[A-Z].*"
                     + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add)$");
 
     @Test
