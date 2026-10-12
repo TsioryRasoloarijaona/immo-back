@@ -2,6 +2,7 @@ package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.config.ConnexionSourceSuivie;
 import com.tsix.immocrm.config.SourceDeVeriteProperties;
+import com.tsix.immocrm.exceptions.ConfigurationIncompleteException;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
@@ -103,6 +104,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail handleForbidden(ForbiddenException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(ConfigurationIncompleteException.class)
+    public ProblemDetail handleConfigurationIncomplete(ConfigurationIncompleteException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)

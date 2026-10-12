@@ -11,6 +11,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.fixtures.FixtureReferentielStk;
+import com.tsix.immocrm.fixtures.FixtureStatutDossier;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -48,6 +49,8 @@ class DossierCreateTest {
 
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
+    @Autowired
+    private FixtureStatutDossier fixtureStatutDossier;
     @Autowired
     private MockMvc mockMvc;
 
@@ -105,6 +108,7 @@ class DossierCreateTest {
 
     @BeforeEach
     void setUp() {
+        fixtureStatutDossier.reservation();
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-CREATE-TEST");
@@ -274,14 +278,6 @@ class DossierCreateTest {
      */
     @Test
     void create_historiseLeStatutDansLesDeuxTables() throws Exception {
-        // Sans ce statut, la création n'historise rien du tout : enregistrerHistoriqueStatut est
-        // court-circuité quand RESERVATION est introuvable (garde défensive de genererCodeDossier).
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-HISTO-TEST");
 
@@ -322,12 +318,6 @@ class DossierCreateTest {
 
     @Test
     void create_setsInitialStatusToReservation() throws Exception {
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-STATUT-INIT-TEST");
 
@@ -753,6 +743,296 @@ class DossierCreateTest {
         return """
                 {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REMISE-%s","prix":1000000.00,"remisePercent":%s}
                 """.formatted(prospection.getId(), item.getId(), modePaie.getId(), suffixe, remisePercent);
+    }
+
+    // ============ FEATURE-interop-omran-ecritures.md §3 : ce qu'OMRAN écrit à l'insertion d'un dossier
+
+    @Autowired
+    private com.tsix.immocrm.fixtures.FixturePatrimoine fixturePatrimoine;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository categoryRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComDocumentRepository documentRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComFolderItemRepository folderItemRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository tierTypeRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.adm.AdmUserRepository userRepository;
+    @Autowired
+    private java.time.Clock clock;
+
+    /** Prix de référence TTC du lot chiffré : AVANCE 245 700 + AUTO-FINANCEMENT 573 300. */
+    private static final String PRIX_LOT = "819000";
+
+    /** Colonnes de §3 qu'OMRAN remplit toujours : aucune ne doit rester NULL. */
+    private static final java.util.List<String> COLONNES_OMRAN = java.util.List.of(
+            "StrEntityId", "StrStatusId", "PartPercent", "IsOldCustomer", "Description", "DocDate", "Area",
+            "GlobalArea", "UnitCostHT", "UnitCost", "VATRatio", "ItemPrice", "ItemPriceHT", "UnderItemsPrice",
+            "UnderItemsPriceHT", "PriceBeforeDiscount", "PriceBeforeDiscountHT", "Discount", "DiscountAmount",
+            "PriceAfterDiscount", "PriceAfterDiscountHT", "ItemPriceAfter", "ItemPriceAfterHT", "UnderItemsPriceAfter",
+            "UnderItemsPriceAfterHT", "Price", "PriceHT", "TotalToPay", "AgreementPrice", "AgreementAmount",
+            "ComDocumentDetail", "DeliveryRatio", "DeliveryMaxNumber", "ProbabilityOfFinalisation",
+            "ModificationsAmount", "ModificationsAmountHT", "DeliveryNumber", "DeliveryAmount", "RomInterest",
+            "CommissionRate", "IsAccounted", "IsPenaltyDisabled", "PriceWithModification", "IsConfirmedAgreementDate",
+            "IsWithGiftChoiceLater", "Notes", "CancelDescription", "PenalityDescription", "CreditAgency",
+            "FinalTitleNumber", "UserCreate", "UserCreateDateTime", "UserUpdate", "UserUpdateDateTime");
+
+    /** Lot de 63 m², 10 833,333333 HT/m², TVA 0,20, tranche à 30 % d'avance et 700 × 24 de syndic. */
+    private StkItem lotChiffre(com.tsix.immocrm.fixtures.FixturePatrimoine.Chaine chaine, String code) {
+        chaine.tranche().setAdvancePercent(new java.math.BigDecimal("0.300000"));
+        chaine.tranche().setSyndicAmount(new java.math.BigDecimal("700.000000"));
+        chaine.tranche().setSyndicPeriod(24);
+        trancheRepository.save(chaine.tranche());
+        categorie(chaine, "AVANCE", true, false);
+        categorie(chaine, "AUTO-FINANCEMENT", false, false);
+        categorie(chaine, "FRAIS SYNDIC", false, true);
+        StkItem lot = fixturePatrimoine.article(chaine, code);
+        lot.setArea(new java.math.BigDecimal("63"));
+        lot.setComSaleUnitCostHT(new java.math.BigDecimal("10833.333333"));
+        lot.setVat(new java.math.BigDecimal("0.20"));
+        lot.setComSalePrice(new java.math.BigDecimal(PRIX_LOT));
+        return stkItemRepository.save(lot);
+    }
+
+    private void categorie(com.tsix.immocrm.fixtures.FixturePatrimoine.Chaine chaine, String code,
+                           boolean avance, boolean exclue) {
+        com.tsix.immocrm.entities.com.ComSettlementCategory categorie = new com.tsix.immocrm.entities.com.ComSettlementCategory();
+        categorie.setId(UUID.randomUUID());
+        categorie.setCode(code);
+        categorie.setDescription(code);
+        categorie.setStkVocation(chaine.vocation());
+        categorie.setIsCredit(true);
+        categorie.setIsSaleAdvance(avance);
+        categorie.setExcludeFromPrice(exclue);
+        categorie.setVatRatio(new java.math.BigDecimal("0.2"));
+        categoryRepository.save(categorie);
+    }
+
+    private ComPaymentMethod modePaie(String code) {
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode(code);
+        return paymentMethodRepository.save(modePaie);
+    }
+
+    private UUID creer(ComProspection prospection, StkItem lot, String prix,
+                       org.springframework.test.web.servlet.request.RequestPostProcessor auteur) throws Exception {
+        String champPrix = prix != null ? ",\"prix\":" + prix : "";
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-OMR"%s}
+                """.formatted(prospection.getId(), lot.getId(), modePaie("VIR-" + lot.getCode()).getId(), champPrix);
+        var requete = post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body);
+        if (auteur != null) {
+            requete = requete.with(auteur);
+        }
+        String json = mockMvc.perform(requete)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        entityManager.flush();
+        entityManager.clear();
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
+    }
+
+    /** Compte réel : sous {@code @WithMockUser}, l'auteur affiché est vide. */
+    private com.tsix.immocrm.entities.adm.AdmUser nouvelUtilisateur(String code) {
+        com.tsix.immocrm.entities.adm.AdmUser user = new com.tsix.immocrm.entities.adm.AdmUser();
+        user.setId(UUID.randomUUID());
+        user.setCode(code + "." + UUID.randomUUID());
+        user.setDescription("Auteur OMRAN");
+        user.setDisabled(false);
+        return userRepository.save(user);
+    }
+
+    private org.springframework.test.web.servlet.request.RequestPostProcessor connecte(
+            com.tsix.immocrm.entities.adm.AdmUser user) {
+        var principal = new com.tsix.immocrm.security.AuthenticatedUser(
+                user.getId(), user.getCode(), null, false, true, 0);
+        return org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(principal, null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                "ROLE_Administrateur"))));
+    }
+
+    @Test
+    void create_ecritLesColonnesComFolderCommeOmran_casChiffre() throws Exception {
+        com.tsix.immocrm.entities.str.StrStatus reservation = fixtureStatutDossier.reservation();
+        reservation.setDelay(15);
+        strStatusRepository.save(reservation);
+        var chaine = fixturePatrimoine.chaine("OMR-CHIFFRE");
+        StkItem lot = lotChiffre(chaine, "LOT-OMR-CHIFFRE");
+
+        UUID dossierId = creer(newProspectionWithProspect(), lot, PRIX_LOT, null);
+
+        com.tsix.immocrm.entities.com.ComFolder f = folderRepository.findById(dossierId).orElseThrow();
+        LocalDateTime minuit = java.time.LocalDate.now(clock).atStartOfDay();
+        String aujourdhui = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(minuit);
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(f.getStrEntityId())
+                        .isEqualTo(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getStrStatus().getCode()).isEqualTo("RESERVATION"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getDocDate()).isEqualTo(minuit),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getStatusValidityDate()).isEqualTo(minuit.plusDays(15)),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getDescription()).isEqualTo(f.getCode() + " du " + aujourdhui),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getPartPercent()).isEqualByComparingTo("1"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getIsOldCustomer()).isFalse(),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getArea()).isEqualByComparingTo("63"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getGlobalArea()).isEqualByComparingTo("63"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getUnitCostHT()).isEqualByComparingTo("10833.333333"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getUnitCost()).isEqualByComparingTo("13000"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getPrice()).isEqualByComparingTo(PRIX_LOT),
+                // AVANCE 245 700 + AUTO-FINANCEMENT 573 300 ; FRAIS SYNDIC exclu du prix.
+                () -> org.assertj.core.api.Assertions.assertThat(f.getAgreementPrice()).isEqualByComparingTo(PRIX_LOT),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getAgreementAmount()).isEqualByComparingTo("573300"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getDeliveryRatio()).isEqualByComparingTo("0.001"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getDeliveryMaxNumber()).isEqualTo(180),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getProbabilityOfFinalisation()).isEqualByComparingTo("1"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getUserUpdate()).isEqualTo(f.getUserCreate()),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getUserUpdateDateTime()).isEqualTo(f.getUserCreateDateTime()),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getComDocumentDetail())
+                        .startsWith("Schèma de financement :\r\nDate :" + aujourdhui + "   Montant :")
+                        .contains("   Montant :       245 700.00 DH   Réglé :             0.00 DH"
+                                + "   Reste :       245 700.00 DH   Exclure du prix contractuel:Non   Catégorie : AVANCE\r\n")
+                        .contains("Exclure du prix contractuel:Oui   Catégorie : FRAIS SYNDIC\r\n"));
+
+        var lignes = documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
+        org.assertj.core.api.Assertions.assertThat(lignes).hasSize(3).allSatisfy(ligne -> {
+            org.assertj.core.api.Assertions.assertThat(ligne.getCfgCompany().getId()).isEqualTo(chaine.societe().getId());
+            org.assertj.core.api.Assertions.assertThat(ligne.getAdmModuleId())
+                    .isEqualTo(com.tsix.immocrm.fixtures.ReferentielSeme.ADM_MODULE_COM);
+            org.assertj.core.api.Assertions.assertThat(ligne.getDocDate()).isEqualTo(minuit);
+            org.assertj.core.api.Assertions.assertThat(ligne.getAmountHT())
+                    .isEqualByComparingTo(ligne.getAmount().divide(new java.math.BigDecimal("1.2"), 6,
+                            java.math.RoundingMode.HALF_UP));
+        });
+    }
+
+    @Test
+    void create_colonnesNonNullesCommeOmran() throws Exception {
+        var chaine = fixturePatrimoine.chaine("OMR-NONNULL");
+        UUID dossierId = creer(newProspectionWithProspect(), lotChiffre(chaine, "LOT-OMR-NONNULL"), PRIX_LOT,
+                connecte(nouvelUtilisateur("omr.nonnull")));
+
+        Object[] valeurs = (Object[]) entityManager.createNativeQuery(
+                        "SELECT " + String.join(", ", COLONNES_OMRAN) + " FROM ComFolder WHERE PKey = :id")
+                .setParameter("id", dossierId)
+                .getSingleResult();
+        java.util.List<String> nulles = java.util.stream.IntStream.range(0, COLONNES_OMRAN.size())
+                .filter(i -> valeurs[i] == null)
+                .mapToObj(COLONNES_OMRAN::get)
+                .toList();
+        org.assertj.core.api.Assertions.assertThat(nulles).as("colonnes laissées NULL").isEmpty();
+    }
+
+    @Test
+    void create_sansPrix_montantsDepuisLePrixDeReference() throws Exception {
+        var chaine = fixturePatrimoine.chaine("OMR-SANSPRIX");
+        UUID dossierId = creer(newProspectionWithProspect(), lotChiffre(chaine, "LOT-OMR-SANSPRIX"), null, null);
+
+        com.tsix.immocrm.entities.com.ComFolder f = folderRepository.findById(dossierId).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(f.getPrice()).isEqualByComparingTo(PRIX_LOT),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo(PRIX_LOT),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getDiscountAmount()).isEqualByComparingTo("0"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getTotalToPay()).isEqualByComparingTo("835800"),
+                () -> org.assertj.core.api.Assertions.assertThat(f.getComDocumentDetail())
+                        .isEqualTo("Schèma de financement :\r\n"));
+    }
+
+    @Test
+    void create_clientDejaClient_isOldCustomerVrai() throws Exception {
+        com.tsix.immocrm.entities.cfg.CfgTierType typeClient = tierTypeRepository.findByCode("CLI").orElseGet(() -> {
+            com.tsix.immocrm.entities.cfg.CfgTierType type = new com.tsix.immocrm.entities.cfg.CfgTierType();
+            type.setId(UUID.randomUUID());
+            type.setCode("CLI");
+            type.setDescription("Client");
+            return tierTypeRepository.save(type);
+        });
+        ComProspection prospection = newProspectionWithProspect();
+        prospection.getCfgProspect().setCfgTierType(typeClient);
+        tierRepository.save(prospection.getCfgProspect());
+
+        UUID dossierId = creer(prospection, newAvailableItem("LOT-OMR-ANCIEN"), null, null);
+
+        org.assertj.core.api.Assertions.assertThat(folderRepository.findById(dossierId).orElseThrow().getIsOldCustomer())
+                .isTrue();
+    }
+
+    /** OMRAN refuse un dossier sans statut (RessourceWithWorkFlow.cs:411) : 500 explicite et rien d'écrit. */
+    @Test
+    void create_sansStatutReservation_refuse500EtNEcritRien() throws Exception {
+        strStatusRepository.delete(fixtureStatutDossier.reservation());
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-OMR-SANSSTATUT");
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"CIN-REFUS"}
+                """.formatted(prospection.getId(), item.getId(), modePaie("VIR-OMR-REFUS").getId());
+        // Les fixtures doivent être en base : le clear() qui suit effacerait des insertions en attente.
+        entityManager.flush();
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("RESERVATION")));
+
+        entityManager.clear();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(stkItemRepository.findById(item.getId()).orElseThrow()
+                        .getComFolderId()).isNull(),
+                () -> org.assertj.core.api.Assertions.assertThat(prospectionRepository.findById(prospection.getId())
+                        .orElseThrow().getIsClosed()).isNotEqualTo(Boolean.TRUE),
+                () -> org.assertj.core.api.Assertions.assertThat(tierRepository.findById(prospection.getCfgProspect().getId())
+                        .orElseThrow().getIDNumber()).isNotEqualTo("CIN-REFUS"));
+    }
+
+    @Test
+    void create_avecSousArticle_ecritComFolderItemComFolderIdEtAffectation() throws Exception {
+        com.tsix.immocrm.entities.adm.AdmUser moi = nouvelUtilisateur("omr.sous.article");
+        var chaine = fixturePatrimoine.chaine("OMR-SOUS");
+        StkItem lot = lotChiffre(chaine, "LOT-OMR-SOUS");
+        StkItem terrasse = fixturePatrimoine.article(chaine, "LOT-OMR-SOUS TER");
+        terrasse.setParent(lot);
+        terrasse.setIsUnderItem(true);
+        terrasse.setArea(new java.math.BigDecimal("15"));
+        stkItemRepository.save(terrasse);
+        ComProspection prospection = newProspectionWithProspect();
+
+        UUID dossierId = creer(prospection, lot, PRIX_LOT, connecte(moi));
+
+        UUID auteurId = moi.getId();
+        var items = folderItemRepository.findAll().stream()
+                .filter(i -> i.getComFolder() != null && dossierId.equals(i.getComFolder().getId()))
+                .toList();
+        var historique = statusHistoryRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
+        var generiques = strHistoryRepository.findAll().stream()
+                .filter(h -> dossierId.equals(h.getObjectId()))
+                .toList();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(stkItemRepository.findById(terrasse.getId()).orElseThrow()
+                        .getComFolderId()).isEqualTo(dossierId),
+                () -> org.assertj.core.api.Assertions.assertThat(folderRepository.findById(dossierId).orElseThrow()
+                        .getGlobalArea()).isEqualByComparingTo("78"),
+                () -> org.assertj.core.api.Assertions.assertThat(items).singleElement().satisfies(item -> {
+                    org.assertj.core.api.Assertions.assertThat(item.getStkItem().getId()).isEqualTo(terrasse.getId());
+                    org.assertj.core.api.Assertions.assertThat(item.getCode()).isEqualTo("LOT-OMR-SOUS TER");
+                    org.assertj.core.api.Assertions.assertThat(item.getArea()).isEqualByComparingTo("15");
+                    org.assertj.core.api.Assertions.assertThat(item.getIsUnderItem()).isTrue();
+                    org.assertj.core.api.Assertions.assertThat(item.getParentId()).isEqualTo(lot.getId());
+                }),
+                () -> org.assertj.core.api.Assertions.assertThat(historique)
+                        .extracting(com.tsix.immocrm.entities.str.StrFolderStatusHistory::getDescription,
+                                com.tsix.immocrm.entities.str.StrFolderStatusHistory::getStkItemId)
+                        .containsExactlyInAnyOrder(
+                                org.assertj.core.groups.Tuple.tuple("AFFECTATION", terrasse.getId()),
+                                org.assertj.core.groups.Tuple.tuple("", lot.getId())),
+                () -> org.assertj.core.api.Assertions.assertThat(historique).isNotEmpty().allSatisfy(h -> {
+                    org.assertj.core.api.Assertions.assertThat(h.getAdmUserId()).isEqualTo(auteurId);
+                    org.assertj.core.api.Assertions.assertThat(h.getCfgTier().getId())
+                            .isEqualTo(prospection.getCfgProspect().getId());
+                }),
+                () -> org.assertj.core.api.Assertions.assertThat(generiques).singleElement().satisfies(h -> {
+                    org.assertj.core.api.Assertions.assertThat(h.getDescription()).isEqualTo("Création");
+                    org.assertj.core.api.Assertions.assertThat(h.getStrStatusDescription()).isEqualTo("Réservation");
+                }));
     }
 
     @Test

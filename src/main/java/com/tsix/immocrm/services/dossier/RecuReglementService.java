@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.domain.PayeurReglement;
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
@@ -80,7 +81,8 @@ public class RecuReglementService {
         // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
-        CfgTier beneficiaireTier = settlement.getTier() != null ? settlement.getTier() : folder.getCfgCustomer();
+        CfgTier payeur = PayeurReglement.de(settlement);
+        CfgTier beneficiaireTier = payeur != null ? payeur : folder.getCfgCustomer();
         Beneficiaire beneficiaire = beneficiaireTier != null ? toBeneficiaire(beneficiaireTier) : null;
 
         List<Beneficiaire> coAcquereurs = coAcquereurs(dossierId, beneficiaireTier);

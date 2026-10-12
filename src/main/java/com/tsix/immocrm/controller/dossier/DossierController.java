@@ -95,6 +95,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
+import static java.util.Objects.requireNonNullElse;
 
 @Tag(name = "Dossiers")
 @RestController
@@ -208,7 +209,9 @@ public class DossierController {
             @RequestParam(required = false) String groupeValeur,
             @Parameter(example = "MOIS")
             @RequestParam(required = false) Granularite granularite,
-            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
+            // DocDate est à minuit (comme OMRAN) : le code départage les dossiers d'un même jour.
+            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = {"docDate", "code"}, direction = Sort.Direction.DESC)
+            Pageable pageable) {
         ColonneDossier groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneDossier::resoudreGroupement);
         return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate,
@@ -282,7 +285,8 @@ public class DossierController {
             @ApiResponse(responseCode = "201", description = "Dossier créé."),
             @ApiResponse(responseCode = "400"),
             @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
-                    + "le périmètre commercial de l'appelant.")
+                    + "le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<DossierDetailDto> create(@RequestBody CreerDossierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.create(request));
@@ -318,11 +322,24 @@ public class DossierController {
     }
 
     @PostMapping("/{id}/echeancier")
+    @Operation(summary = "Ajoute une échéance à l'échéancier du dossier")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Échéance créée."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
     public ResponseEntity<EcheanceDto> addEcheance(@PathVariable UUID id, @RequestBody CreerEcheanceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(echeancierService.addEcheance(id, request));
     }
 
     @PatchMapping("/{id}/echeancier/{echeanceId}")
+    @Operation(summary = "Modifie une échéance (seuls les champs fournis changent)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Échéance modifiée."),
+            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable "
+                    + "(ou l'échéance n'appartient pas à ce dossier).")
+    })
     public EcheanceDto updateEcheance(@PathVariable UUID id, @PathVariable UUID echeanceId,
                                        @RequestBody ModifierEcheanceRequest request) {
         return echeancierService.updateEcheance(id, echeanceId, request);
@@ -638,7 +655,8 @@ public class DossierController {
             @Parameter(description = "Identifiant du règlement (StlSettlement.PKey).")
             @PathVariable UUID reglementId) {
         RecuReglementData data = recuReglementService.collect(id, reglementId);
-        String nomFichier = "recu-reglement-" + (data.receiptCode() != null ? data.receiptCode() : reglementId);
+        String nomFichier = "recu-reglement-" + requireNonNullElse(
+                com.tsix.immocrm.utils.Champs.videEnNull(data.receiptCode()), reglementId.toString());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
@@ -660,7 +678,8 @@ public class DossierController {
             @Parameter(description = "Identifiant du règlement (StlSettlement.PKey).")
             @PathVariable UUID reglementId) {
         AutorisationVersementData data = autorisationVersementService.collect(id, reglementId);
-        String nomFichier = "autorisation-versement-" + (data.documentCode() != null ? data.documentCode() : reglementId);
+        String nomFichier = "autorisation-versement-" + requireNonNullElse(
+                com.tsix.immocrm.utils.Champs.videEnNull(data.documentCode()), reglementId.toString());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,

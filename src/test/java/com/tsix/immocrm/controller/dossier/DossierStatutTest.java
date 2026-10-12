@@ -39,6 +39,15 @@ class DossierStatutTest {
     @Autowired
     private StrStatusRepository strStatusRepository;
 
+    @Autowired
+    private com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository;
+
+    @Autowired
+    private com.tsix.immocrm.fixtures.FixturePatrimoine fixturePatrimoine;
+
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     private StkVocation newVocation() {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
@@ -119,5 +128,59 @@ class DossierStatutTest {
         mockMvc.perform(patch("/api/dossiers/{id}/statut", folder.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"NIMPORTEQUOI\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /** Un dossier sans statut échappe au trigger YESERR002 : il ne change plus de statut avant reprise. */
+    @Test
+    void changerStatut_dossierSansStatut_returns409() throws Exception {
+        newDossierStatus("RESERVATION");
+        ComFolder folder = new ComFolder();
+        folder.setId(UUID.randomUUID());
+        folder.setCode("DOS-STATUT-NULL");
+        folder.setStkVocation(newVocation());
+        folderRepository.save(folder);
+
+        mockMvc.perform(patch("/api/dossiers/{id}/statut", folder.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"RESERVATION\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Dossier sans statut : reprise nécessaire (script 015)"));
+
+        entityManager.flush();
+        entityManager.clear();
+        org.assertj.core.api.Assertions.assertThat(folderRepository.findById(folder.getId()).orElseThrow().getStrStatus())
+                .isNull();
+    }
+
+    /** GEN0016 : le changement de statut signe UserUpdate/UserUpdateDateTime ; l'historique porte l'article. */
+    @Test
+    void changerStatut_signeLaMiseAJourEtHistoriseLArticle() throws Exception {
+        newDossierStatus("RESERVATION");
+        newDossierStatus("FORMALISE");
+        com.tsix.immocrm.entities.stk.StkItem article = fixturePatrimoine.article(
+                fixturePatrimoine.chaine("STATUT-MAJ"), "LOT-STATUT-MAJ");
+        ComFolder folder = new ComFolder();
+        folder.setId(UUID.randomUUID());
+        folder.setCode("DOS-STATUT-MAJ");
+        folder.setStkVocation(article.getStkVocation());
+        folder.setStkItem(article);
+        folder.setStrStatus(strStatusRepository.findByStrConfigEntityIdAndCode(
+                com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID, "RESERVATION"));
+        folderRepository.save(folder);
+
+        mockMvc.perform(patch("/api/dossiers/{id}/statut", folder.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"FORMALISE\"}"))
+                .andExpect(status().isOk());
+
+        entityManager.flush();
+        entityManager.clear();
+        ComFolder relu = folderRepository.findById(folder.getId()).orElseThrow();
+        var lignes = statusHistoryRepository.findByComFolderIdOrderByDocDateAsc(folder.getId());
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relu.getUserUpdateDateTime()).isNotNull(),
+                () -> org.assertj.core.api.Assertions.assertThat(lignes).singleElement()
+                        .satisfies(ligne -> {
+                            org.assertj.core.api.Assertions.assertThat(ligne.getStkItemId()).isEqualTo(article.getId());
+                            org.assertj.core.api.Assertions.assertThat(ligne.getDescription()).isEmpty();
+                        }));
     }
 }

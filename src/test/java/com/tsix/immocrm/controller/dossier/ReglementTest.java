@@ -394,6 +394,167 @@ class ReglementTest {
                 .andExpect(status().isOk());
     }
 
+    // ============ FEATURE-interop-omran-ecritures.md §5 : ce qu'OMRAN écrit sur un encaissement
+
+    @Autowired
+    private com.tsix.immocrm.fixtures.FixturePatrimoine fixturePatrimoine;
+    @Autowired
+    private com.tsix.immocrm.services.dossier.RecuReglementService recuReglementService;
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+    @Autowired
+    private java.time.Clock clock;
+
+    /** Dossier vendu à {@code client}, sur un lot dont la tranche porte une société. */
+    private ComFolder dossierAvecClient(String code, CfgTier client, com.tsix.immocrm.fixtures.FixturePatrimoine.Chaine chaine) {
+        ComFolder folder = new ComFolder();
+        folder.setId(UUID.randomUUID());
+        folder.setCode(code);
+        folder.setStkVocation(chaine.vocation());
+        folder.setStkItem(fixturePatrimoine.article(chaine, "LOT-" + code));
+        folder.setCfgCustomer(client);
+        return folderRepository.save(folder);
+    }
+
+    private CfgTier banque(String code) {
+        CfgTier banque = new CfgTier();
+        banque.setId(UUID.randomUUID());
+        banque.setCode(code);
+        banque.setDescription("Banque " + code);
+        return tierRepository.save(banque);
+    }
+
+    private StlSettlement creerEtRelire(ComFolder folder, ComDocument echeance, String corps) throws Exception {
+        String json = mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements",
+                                folder.getId(), echeance.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        entityManager.flush();
+        entityManager.clear();
+        return settlementRepository.findById(UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id")))
+                .orElseThrow();
+    }
+
+    private String aujourdhui() {
+        return java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(java.time.LocalDate.now(clock));
+    }
+
+    @Test
+    void addReglement_ecritLesColonnesOmran_tierClientEtPayeurSaisi() throws Exception {
+        var chaine = fixturePatrimoine.chaine("REG-OMR");
+        CfgTier client = newPayeur("CLIENT-REG-OMR", "Client du dossier");
+        CfgTier payeur = newPayeur("PAYEUR-REG-OMR", "Payeur SAISI");
+        ComFolder folder = dossierAvecClient("DOS-REG-OMR", client, chaine);
+        ComDocument echeance = newEcheance(folder);
+        StlSettlementType type = newType("CHEQUE-OMR");
+        CfgTier bmce = banque("BMCE");
+
+        StlSettlement s = creerEtRelire(folder, echeance, corpsComplet("100000.00", type, payeur,
+                "\"banqueId\":\"" + bmce.getId() + "\",\"reference\":\"CHQ-1\""));
+
+        java.time.LocalDateTime minuit = java.time.LocalDate.now(clock).atStartOfDay();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(s.getTier().getId()).isEqualTo(client.getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getTierPayer().getId()).isEqualTo(payeur.getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getAdmModuleId())
+                        .isEqualTo(com.tsix.immocrm.fixtures.ReferentielSeme.ADM_MODULE_COM),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getStrEntityId())
+                        .isEqualTo(com.tsix.immocrm.fixtures.ReferentielSeme.STR_ENTITY_ENCAISSEMENT),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getStlCurrencyId())
+                        .isEqualTo(com.tsix.immocrm.fixtures.ReferentielSeme.STL_CURRENCY_MAD),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getStlCurrencyAffectationId())
+                        .isEqualTo(com.tsix.immocrm.fixtures.ReferentielSeme.STL_CURRENCY_MAD),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getCfgCompany().getId()).isEqualTo(chaine.societe().getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getConvertValue()).isEqualByComparingTo("1"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getConvertUnit()).isEqualTo(1),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getAmountBase()).isEqualByComparingTo("100000"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getAmountBaseConverted()).isEqualByComparingTo("100000"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getAmountRS()).isEqualByComparingTo("0"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getRsRatio()).isEqualByComparingTo("0"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getAmountStamp()).isEqualByComparingTo("0"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getRSAmountSettled()).isFalse(),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getIsAccounted()).isFalse(),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getIsDcoumentDeliveredToCenter()).isFalse(),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getCategory()).isEqualTo("None"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getItemNumber()).isEqualTo("Non définie"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getItemDescription()).isEqualTo("Non définie"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getIsCredit()).isTrue(),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getStatus()).isEqualTo("IN_WORK"),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getDocDate()).isEqualTo(minuit),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getEcheanceDate())
+                        .isEqualTo(java.time.LocalDateTime.of(2026, 9, 1, 10, 0)),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getDescription())
+                        .isEqualTo("CHEQUE-OMR BMCE N° CHQ-1 du " + aujourdhui()),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getUserCreateDateTime())
+                        .isNotNull().isEqualTo(s.getUserUpdateDateTime()));
+
+        // Le payeur affiché est TierPayerId, pas le client (TierId).
+        mockMvc.perform(get("/api/dossiers/{id}/echeancier/{echeanceId}/reglements", folder.getId(), echeance.getId()))
+                .andExpect(jsonPath("$[0].payeurId").value(payeur.getId().toString()))
+                .andExpect(jsonPath("$[0].payeurNom").value("Payeur SAISI"));
+    }
+
+    @Test
+    void addReglement_sansBanqueNiReference_descriptionCourte() throws Exception {
+        var chaine = fixturePatrimoine.chaine("REG-DESC");
+        CfgTier client = newPayeur("CLIENT-REG-DESC", "Client");
+        ComFolder folder = dossierAvecClient("DOS-REG-DESC", client, chaine);
+        ComDocument echeance = newEcheance(folder);
+
+        StlSettlement s = creerEtRelire(folder, echeance,
+                corpsComplet("50000.00", newType("ESPECES-OMR"), client, null));
+
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(s.getDescription()).isEqualTo("ESPECES-OMR du " + aujourdhui()),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getCode()).isEmpty(),
+                () -> org.assertj.core.api.Assertions.assertThat(s.getTierPayer().getId()).isEqualTo(s.getTier().getId()));
+    }
+
+    @Test
+    void recu_imprimeLePayeurSaisi_pasLeClient() throws Exception {
+        var chaine = fixturePatrimoine.chaine("REG-RECU");
+        CfgTier client = newPayeur("CLIENT-REG-RECU", "Client du dossier");
+        CfgTier payeur = newPayeur("PAYEUR-REG-RECU", "Payeur du recu");
+        ComFolder folder = dossierAvecClient("DOS-REG-RECU", client, chaine);
+        ComDocument echeance = newEcheance(folder);
+
+        StlSettlement s = creerEtRelire(folder, echeance,
+                corpsComplet("100000.00", newType("VIREMENT-RECU"), payeur, null));
+
+        org.assertj.core.api.Assertions.assertThat(recuReglementService.collect(folder.getId(), s.getId()).beneficiaire().nom())
+                .isEqualTo("Payeur du recu");
+    }
+
+    /** GEN0016 : le passage de statut signe la mise à jour du règlement. */
+    @Test
+    void changerStatutReglement_signeUserUpdate() throws Exception {
+        ComFolder folder = newFolder("DOS-REG-MAJ");
+        ComDocument echeance = newEcheance(folder);
+        StlSettlement settlement = new StlSettlement();
+        settlement.setId(UUID.randomUUID());
+        settlement.setDocDate(LocalDateTime.now());
+        settlement.setAmount(new java.math.BigDecimal("1000"));
+        settlement.setStatus("IN_WORK");
+        settlementRepository.save(settlement);
+        StlSettlementLine line = new StlSettlementLine();
+        line.setId(UUID.randomUUID());
+        line.setStlSettlement(settlement);
+        line.setComDocument(echeance);
+        line.setAmount(new java.math.BigDecimal("1000"));
+        settlementLineRepository.save(line);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), settlement.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"CANCELED\"}"))
+                .andExpect(status().isOk());
+
+        entityManager.flush();
+        entityManager.clear();
+        org.assertj.core.api.Assertions.assertThat(settlementRepository.findById(settlement.getId()).orElseThrow()
+                .getUserUpdateDateTime()).isNotNull();
+    }
+
     @Test
     void getReglements_echeanceBelongsToDifferentDossier_returns404() throws Exception {
         ComFolder folder1 = newFolder("DOS-REG-8A");

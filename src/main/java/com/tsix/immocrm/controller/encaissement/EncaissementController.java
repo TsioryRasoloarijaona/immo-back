@@ -88,7 +88,9 @@ public class EncaissementController {
             @RequestParam(required = false) String groupeValeur,
             @Parameter(example = "MOIS")
             @RequestParam(required = false) Granularite granularite,
-            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
+            // DocDate est à minuit (comme OMRAN) : l'heure de saisie départage les règlements d'un même jour.
+            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = {"docDate", "userCreateDateTime"},
+                    direction = Sort.Direction.DESC) Pageable pageable) {
         ColonneEncaissement groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneEncaissement::resoudreGroupement);
         return PageDto.of(encaissementService.findAll(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId,

@@ -14,7 +14,8 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID> 
     // Non paginée : les montants somment toutes les lignes, pas une page.
     List<ComDocument> findByComFolderIdOrderByDocDateAsc(UUID comFolderId);
 
-    Page<ComDocument> findByComFolderIdOrderByDocDateDesc(UUID comFolderId, Pageable pageable);
+    // DocDate à minuit : l'id départage les lignes d'un même jour, sinon la pagination n'est pas stable.
+    Page<ComDocument> findByComFolderIdOrderByDocDateDescIdAsc(UUID comFolderId, Pageable pageable);
 
     /**
      * Tuple : [cfgCustomerId, total des échéances]. Le {@code COALESCE(…, 0)} à littéral entier peut

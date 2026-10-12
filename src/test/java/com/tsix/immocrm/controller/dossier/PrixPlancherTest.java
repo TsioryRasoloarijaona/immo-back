@@ -80,8 +80,12 @@ class PrixPlancherTest {
     private StkVocation vocation;
     private ComPaymentMethod modePaie;
 
+    @Autowired
+    private com.tsix.immocrm.fixtures.FixtureStatutDossier fixtureStatutDossier;
+
     @BeforeEach
     void setUp() {
+        fixtureStatutDossier.reservation();
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-PLANCHER");

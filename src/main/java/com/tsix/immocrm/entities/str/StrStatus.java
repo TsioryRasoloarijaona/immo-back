@@ -42,6 +42,10 @@ public class StrStatus {
     @Column(name = "StrConfigEntityId")
     private UUID strConfigEntityId;
 
+    /** Durée de validité du statut en jours ; NULL ou 0 = sans échéance. */
+    @Column(name = "Delay")
+    private Integer delay;
+
     // OMRAN « Transforme le prospect en client » ; NULL vaut faux.
     @Column(name = "BoolField011")
     private Boolean transformeProspectEnClient;

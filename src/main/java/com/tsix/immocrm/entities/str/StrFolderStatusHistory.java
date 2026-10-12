@@ -48,6 +48,10 @@ public class StrFolderStatusHistory {
     @JoinColumn(name = "StrFolderStatusId")
     private StrStatus strFolderStatus;
 
+    /** Article concerné : le lot principal, ou le sous-article d'une ligne {@code AFFECTATION}. */
+    @Column(name = "StkItemId")
+    private UUID stkItemId;
+
     @Size(max = 1000)
     @Nationalized
     @Column(name = "Description")

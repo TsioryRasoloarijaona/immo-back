@@ -201,6 +201,19 @@ public class StlSettlement {
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
 
+    // Les quatre références que StlSettlementView joint en INNER JOIN (avec CfgCompanyId).
+    @Column(name = "StlCurrencyId")
+    private UUID stlCurrencyId;
+
+    @Column(name = "StlCurrencyAffectationId")
+    private UUID stlCurrencyAffectationId;
+
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
+    @Column(name = "AdmModuleId")
+    private UUID admModuleId;
+
     /** Compte bancaire de destination. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")
