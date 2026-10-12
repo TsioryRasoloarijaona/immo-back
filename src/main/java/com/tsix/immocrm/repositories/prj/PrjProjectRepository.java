@@ -23,4 +23,8 @@ public interface PrjProjectRepository extends JpaRepository<PrjProject, UUID> {
 
     @Query(AVEC_REFERENTIELS + "WHERE p.id = :id")
     Optional<PrjProject> findAvecReferentiels(@Param("id") UUID id);
+
+    /** Sélecteur « Projet de facturation » de la tranche : {@code PrjProjectItemList.GetList}, entité facultative. */
+    @Query("SELECT p FROM PrjProject p WHERE :entiteId IS NULL OR p.cfgCompany.id = :entiteId ORDER BY p.description ASC")
+    List<PrjProject> pourFacturation(@Param("entiteId") UUID entiteId);
 }

@@ -41,6 +41,7 @@ class PatrimoineSecuriteTest {
     private static final String PROJETS = "/api/projets";
     private static final String ARTICLE = "/api/articles/" + ID;
     private static final String SOUS_ARTICLE = ARTICLE + "/sous-articles/" + UUID.randomUUID();
+    private static final String ZONES = PROJETS + "/" + ID + "/zones";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
@@ -57,7 +58,11 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.PATCH, ARTICLE),
                 Arguments.of(HttpMethod.POST, ARTICLE + "/sous-articles"),
                 Arguments.of(HttpMethod.POST, SOUS_ARTICLE + "/affecter"),
-                Arguments.of(HttpMethod.POST, SOUS_ARTICLE + "/desaffecter"));
+                Arguments.of(HttpMethod.POST, SOUS_ARTICLE + "/desaffecter"),
+                Arguments.of(HttpMethod.DELETE, PROJETS + "/" + ID),
+                Arguments.of(HttpMethod.POST, ZONES),
+                Arguments.of(HttpMethod.PATCH, ZONES + "/" + UUID.randomUUID()),
+                Arguments.of(HttpMethod.DELETE, ZONES + "/" + UUID.randomUUID()));
     }
 
     @ParameterizedTest(name = "{0} {1}")

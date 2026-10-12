@@ -1,16 +1,15 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.ColonneTranche;
+import com.tsix.immocrm.domain.TypeTiersPatrimoine;
 import com.tsix.immocrm.dto.patrimoine.TrancheDetailDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
-import com.tsix.immocrm.entities.adm.AdmCountry;
-import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.exceptions.ChampEnConflitException;
 import com.tsix.immocrm.exceptions.ChampInvalideException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
@@ -22,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -35,45 +36,37 @@ public class TrancheService {
 
     private final CfgTrancheRepository trancheRepository;
     private final CfgProjectRepository projectRepository;
-    private final AdmCountryRepository countryRepository;
+    private final ReferencesFiche references;
     private final HabilitationCreateur habilitationCreateur;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
     public TrancheService(CfgTrancheRepository trancheRepository, CfgProjectRepository projectRepository,
-                          AdmCountryRepository countryRepository, HabilitationCreateur habilitationCreateur,
+                          ReferencesFiche references, HabilitationCreateur habilitationCreateur,
                           UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.trancheRepository = trancheRepository;
         this.projectRepository = projectRepository;
-        this.countryRepository = countryRepository;
+        this.references = references;
         this.habilitationCreateur = habilitationCreateur;
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
     }
 
-    public Page<TrancheListItemDto> findAll(UUID projetId, Pageable pageable) {
-        Page<CfgTranche> page = projetId != null
-                ? trancheRepository.findDesEntitesActivesParProjet(projetId, pageable)
-                : trancheRepository.findDesEntitesActives(pageable);
-        return page.map(TrancheService::toListItem);
+    /** Tranches des entités actives ; {@code colonnes} décide des colonnes coûteuses calculées. */
+    public Page<TrancheListItemDto> findAll(UUID projetId, String recherche, Set<ColonneTranche> colonnes,
+                                            Pageable pageable) {
+        return trancheRepository.rechercherDesEntitesActives(projetId, ReglesSaisie.motif(recherche), pageable)
+                .map(t -> VueTranche.ligne(t, colonnes));
     }
 
+    /** Tranches d'un programme ({@code GET /api/projets/{id}/tranches}) : toutes colonnes, la page est petite. */
     static TrancheListItemDto toListItem(CfgTranche tranche) {
-        CfgProject projet = tranche.getCfgProject();
-        return new TrancheListItemDto(
-                tranche.getId(),
-                tranche.getCode(),
-                tranche.getDescription(),
-                tranche.getCity(),
-                tranche.getDeliveryDate(),
-                Champs.de(projet, CfgProject::getId),
-                Champs.de(projet, CfgProject::getCode)
-        );
+        return VueTranche.ligne(tranche, EnumSet.allOf(ColonneTranche.class));
     }
 
     public TrancheDetailDto findById(UUID id) {
         return trancheRepository.findById(id)
-                .map(TrancheService::toDetail)
+                .map(VueTranche::fiche)
                 .orElseThrow(() -> new ResourceNotFoundException(TRANCHE_INTROUVABLE + id));
     }
 
@@ -97,7 +90,7 @@ public class TrancheService {
         tranche.setUserUpdateDateTime(maintenant);
         CfgTranche enregistree = trancheRepository.save(tranche);
         habilitationCreateur.surTranche(auteur.compte(), enregistree);
-        return toDetail(enregistree);
+        return VueTranche.fiche(enregistree);
     }
 
     @Transactional
@@ -118,14 +111,20 @@ public class TrancheService {
 
         tranche.setUserUpdate(utilisateurAffiche.courant().nom());
         tranche.setUserUpdateDateTime(LocalDateTime.now(clock));
-        return toDetail(trancheRepository.save(tranche));
+        return VueTranche.fiche(trancheRepository.save(tranche));
     }
 
-    private void appliquerFacultatifs(CfgTranche tranche, TrancheEcritureDto demande) {
-        SaisieTranche.appliquer(tranche, demande);
-        if (demande.paysId() != null) {
-            tranche.setAdmCountry(ProjetService.pays(countryRepository, demande.paysId()));
-        }
+    private void appliquerFacultatifs(CfgTranche t, TrancheEcritureDto d) {
+        references.pays(d.paysId(), "paysId", t::setAdmCountry);
+        references.standing(d.standingId(), "standingId", t::setCfgTrancheStanding);
+        references.niveau(d.niveauTerrainId(), "niveauTerrainId", t::setLndLevel);
+        references.rubrique(d.rubriqueId(), "rubriqueId", t::setStkTrancheHeading);
+        references.tiers(d.responsableSavId(), "responsableSavId", TypeTiersPatrimoine.PERSONNEL,
+                t::setCfgClaimsManager);
+        references.tiers(d.tiersAutruiId(), "tiersAutruiId", TypeTiersPatrimoine.FOURNISSEUR, t::setCfgTierOther);
+        references.projetChantier(d.projetFacturationId(), "projetFacturationId", t::setPrjProject);
+        references.compte(d.planComptableId(), "planComptableId", t::setActAccount);
+        SaisieTranche.appliquer(t, d);
     }
 
     private String codeLibre(String code, UUID id) {
@@ -134,47 +133,5 @@ public class TrancheService {
                     .formatted(existante.getCode(), existante.getDescription()));
         });
         return code;
-    }
-
-    private static TrancheDetailDto toDetail(CfgTranche t) {
-        CfgProject projet = t.getCfgProject();
-        CfgCompany entite = Champs.de(projet, CfgProject::getCfgCompany);
-        AdmCountry pays = t.getAdmCountry();
-        return new TrancheDetailDto(
-                t.getId(), Champs.de(projet, CfgProject::getId), t.getCode(), t.getDescription(),
-                t.getDescriptionLong(), t.getAddress(), t.getAddress2(), t.getAddress3(), t.getZipCode(), t.getCity(),
-                t.getPhone(), t.getMobile(), t.getFax(), t.getEmail(), t.getWebSite(),
-                t.getWorkStartDate(), t.getWorkEndDate(), t.getMarketingStartDate(), t.getMarketingEndDate(),
-                t.getDeliveryDate(), t.getIsForSale(), t.getIsForRent(),
-
-                t.getCancellationPenalityPercent(), t.getCancellationPenalityPercentDiscount(),
-                t.getArticleTransferPenality(), t.getArticleTransferPenalityDiscount(),
-                t.getSliceTransferPenality(), t.getSliceTransferPenalityDiscount(),
-                t.getCustomerTransferPenality(), t.getCustomerTransferPenalityDiscount(),
-                t.getAgreementFirstPenaltyPercent(), t.getAgreementSecondPenaltyPercent(),
-
-                t.getWarrantyDelay(), t.getWarrantyDelayAdded(), t.getAgreementFirstDelay(), t.getAgreementSecondDelay(),
-                t.getPaymentBalanceDelay(), t.getDelayLawyerMinute(), t.getDelayMinuteAllSettled(),
-                t.getWithdrawalDelay(), t.getInterventionMinimumDelai(), t.getMaxEcheanceDelai(),
-
-                t.getAdvancePercent(), t.getConcretisationPercent(), t.getMaxVisitNumber(), t.getIsWithVerifCredit(),
-                t.getCreditPercent(),
-
-                t.getOccupancyPermitsDate(), t.getReceptionDate(), t.getRevival1Date(), t.getEndDateConcretisation(),
-                t.getStartDateFinalisation(), t.getBeforeReservationAmount(), t.getBeforeReservationAmountDiscount(),
-                t.getAdvanceBasedOnAmount(), t.getAdvanceAmount(), t.getAdvancePercentDiscount(),
-                t.getIsActiveAdvancePercentDiscount(), t.getDefaultExpenseAmount(), t.getDefaultExpenseAmountDiscount(),
-                t.getCancellationPenalityBasedOnItemPrice(), t.getOtherExpenseAmount(),
-                t.getOtherExpenseAmountDiscount(), t.getSyndicAmount(), t.getSyndicAmountDiscount(),
-                t.getSyndicPeriod(), t.getCancellationRightCode(), t.getCommerceTribunal(),
-                t.getIsWithVerifMaxEcheanceDelai(), t.getEcarttypeConcretisation(), t.getEcarttypeFinalisation(),
-
-                Champs.de(projet, CfgProject::getCode),
-                Champs.de(entite, CfgCompany::getId),
-                Champs.de(entite, CfgCompany::getCode),
-                Champs.de(pays, AdmCountry::getId),
-                Champs.de(pays, AdmCountry::getDescription),
-                t.getUserCreate(), t.getUserCreateDateTime(), t.getUserUpdate(), t.getUserUpdateDateTime()
-        );
     }
 }

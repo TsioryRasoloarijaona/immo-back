@@ -1,6 +1,10 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.act.ActAccount;
 import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.lnd.LndLevel;
+import com.tsix.immocrm.entities.prj.PrjProject;
+import com.tsix.immocrm.entities.stk.StkTrancheHeading;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -426,4 +430,26 @@ public class CfgTranche {
     @JoinColumn(name = "AdmCountryId")
     private AdmCountry admCountry;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgTrancheStandingId")
+    private CfgTrancheStanding cfgTrancheStanding;
+
+    /** « Nbr. étage » de la fiche OMRAN. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "LndLevelId")
+    private LndLevel lndLevel;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkTrancheHeadingId")
+    private StkTrancheHeading stkTrancheHeading;
+
+    /** « Projet de facturation pour les dépenses » : projet du module Chantier. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PrjProjectId")
+    private PrjProject prjProject;
+
+    /** « Plan compt. » de la fiche OMRAN. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ActAccountId")
+    private ActAccount actAccount;
 }

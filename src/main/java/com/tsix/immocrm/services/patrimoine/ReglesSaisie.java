@@ -78,6 +78,11 @@ final class ReglesSaisie {
         return valeur;
     }
 
+    /** Motif {@code LIKE} d'une recherche de liste : {@code %texte%} en minuscules, {@code null} si rien à chercher. */
+    static String motif(String recherche) {
+        return recherche == null || recherche.isBlank() ? null : "%" + recherche.trim().toLowerCase() + "%";
+    }
+
     /** Règle à nous (OMRAN n'en a aucune) : fin ≥ début quand les deux sont connues. */
     static void periode(LocalDateTime debut, LocalDateTime fin, String champFin, String libelle) {
         if (debut != null && fin != null && fin.isBefore(debut)) {

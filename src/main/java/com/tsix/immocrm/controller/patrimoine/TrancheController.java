@@ -1,7 +1,9 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.domain.ColonneTranche;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.referentiel.ColonneDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheDetailDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheEcritureDto;
@@ -29,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,12 +56,30 @@ public class TrancheController {
 
     @GetMapping
     @Operation(summary = "Liste paginée des tranches, à plat")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page de tranches, colonnes demandées seulement."),
+            @ApiResponse(responseCode = "400", description = "Colonne inconnue : le corps liste `colonnesValides`.")
+    })
     public PageDto<TrancheListItemDto> findAll(
             @Parameter(description = "Id du projet (Entité, CfgProject.id) pour ne renvoyer que "
                     + "ses tranches. Absent = toutes les tranches.")
             @RequestParam(required = false) UUID projetId,
+            @Parameter(description = "Recherche (casse ignorée) : code, libellé, ville, programme, entité.")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Colonnes à servir, répétable ou séparées par des virgules ; `id` toujours servi.",
+                    example = "code,description,projetCode,standingLibelle")
+            @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(trancheService.findAll(projetId, pageable));
+        return PageDto.of(trancheService.findAll(projetId, search, ColonneTranche.resoudre(colonnes), pageable));
+    }
+
+    @GetMapping("/colonnes")
+    @Operation(summary = "Catalogue des colonnes de la liste des tranches")
+    public List<ColonneDto> getColonnes() {
+        return Arrays.stream(ColonneTranche.values())
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
+                .toList();
     }
 
     @GetMapping("/{id}")

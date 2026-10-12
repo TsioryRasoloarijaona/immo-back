@@ -1,8 +1,12 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -73,6 +77,62 @@ public class CfgCompany {
     @Nationalized
     @Column(name = "SignatureCity")
     private String signatureCity;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "ZipCode")
+    private String zipCode;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Phone")
+    private String phone;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Mobile")
+    private String mobile;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Fax")
+    private String fax;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Email")
+    private String email;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "WebSite")
+    private String webSite;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "DescriptionLong", length = 1000)
+    private String descriptionLong;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
+
+    /** « Représentant légal » de l'entité, repris dans les listes programme et tranche. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgTierId")
+    private CfgTier cfgTier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmSignatoryId")
+    private CfgTier admSignatory;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgTechnicalManagerId")
+    private CfgTier cfgTechnicalManager;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgSalesManagerId")
+    private CfgTier cfgSalesManager;
 
     @Size(max = 255)
     @Nationalized

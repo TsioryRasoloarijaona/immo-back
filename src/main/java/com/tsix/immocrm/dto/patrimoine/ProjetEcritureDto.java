@@ -1,11 +1,15 @@
 package com.tsix.immocrm.dto.patrimoine;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Schema(description = "Création (POST) ou modification partielle (PATCH) d'un programme (CfgProject).")
+@Builder
 public record ProjetEcritureDto(
         @Schema(description = "Entité juridique (CfgCompany.id), active. Obligatoire à la création.")
         UUID entiteId,
@@ -47,6 +51,15 @@ public record ProjetEcritureDto(
         @Schema(description = "Date de début de commercialisation.")
         LocalDateTime dateDebutCommercialisation,
         @Schema(description = "Date de fin de commercialisation, postérieure ou égale au début.")
-        LocalDateTime dateFinCommercialisation
+        LocalDateTime dateFinCommercialisation,
+        @Schema(description = "« Courrier signataire » (AdmSignatoryId) : un personnel, voir /api/referentiels-patrimoine/personnels.")
+        UUID signataireId,
+        @Schema(description = "Responsable technique (CfgTechnicalManagerId) : un personnel.")
+        UUID responsableTechniqueId,
+        @Schema(description = "Responsable commercial (CfgSalesManagerId) : un personnel.")
+        UUID responsableCommercialId,
+        @ArraySchema(arraySchema = @Schema(description = "Noms des champs à vider (PATCH) ; un champ obligatoire ou inconnu → 400."),
+                schema = @Schema(example = "paysId"))
+        List<String> champsAVider
 ) {
 }

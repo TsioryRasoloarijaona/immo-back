@@ -1,11 +1,13 @@
 package com.tsix.immocrm.dto.patrimoine;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Schema(description = "Fiche d'un programme (CfgProject).")
+@Builder
 public record ProjetDetailDto(
         UUID id,
         String code,
@@ -44,6 +46,20 @@ public record ProjetDetailDto(
         @Schema(description = "Auteur de la dernière modification (UserUpdate).")
         String modifiePar,
         @Schema(description = "Date de la dernière modification (UserUpdateDateTime).")
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+        @Schema(description = "« Courrier signataire » (CfgTier.id) ; null si non renseigné.")
+        UUID signataireId,
+        @Schema(description = "Nom du signataire.")
+        String signataireLibelle,
+        @Schema(description = "Responsable technique (CfgTier.id) ; null si non renseigné.")
+        UUID responsableTechniqueId,
+        @Schema(description = "Nom du responsable technique.")
+        String responsableTechniqueLibelle,
+        @Schema(description = "Responsable commercial (CfgTier.id) ; null si non renseigné.")
+        UUID responsableCommercialId,
+        @Schema(description = "Nom du responsable commercial.")
+        String responsableCommercialLibelle,
+        @Schema(description = "« Représentant légal » : représentant de l'entité juridique (CfgCompany.CfgTierId), lecture seule.")
+        String representantLegal
 ) {
 }

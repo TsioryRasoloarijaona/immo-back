@@ -2,7 +2,9 @@ package com.tsix.immocrm.config;
 
 import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.SuppressionProjetService;
 import com.tsix.immocrm.services.patrimoine.TrancheService;
+import com.tsix.immocrm.services.patrimoine.ZoneProjetService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -57,7 +59,8 @@ class RoutageEcrituresTest {
     /** FEATURE-patrimoine-ecriture.md §11 : chacun de ces services doit exposer des écritures reconnues, toutes routées vers la source. */
     @Test
     void ecrituresPatrimoine_reconnuesEtJamaisEnLectureSeule() {
-        List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class);
+        List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class,
+                ZoneProjetService.class, SuppressionProjetService.class);
         for (Class<?> service : patrimoine) {
             List<Method> ecritures = java.util.Arrays.stream(service.getDeclaredMethods())
                     .filter(m -> Modifier.isPublic(m.getModifiers()) && ECRITURE.matcher(m.getName()).matches())

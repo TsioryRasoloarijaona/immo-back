@@ -14,15 +14,14 @@ public record ColonneDto(
                 example = "Jours d'inactivité")
         String libelle,
 
-        @Schema(description = "Regroupement pour présenter le sélecteur par sections.",
-                example = "ACTIVITE",
-                allowableValues = {"IDENTITE", "CONTACT", "CONTEXTE", "FINANCIER", "ACTIVITE", "CONVERSION"})
+        @Schema(description = "Regroupement pour présenter le sélecteur par sections ; valeurs propres à chaque catalogue.",
+                example = "ACTIVITE")
         String groupe,
 
         @Schema(description = "Type d'affichage — permet d'aligner et de formater sans table de "
-                + "correspondance côté front.",
+                + "correspondance côté front. TAUX = fraction (0.2 = 20 %).",
                 example = "NOMBRE",
-                allowableValues = {"TEXTE", "NOMBRE", "MONTANT", "DATE", "BOOLEEN"})
+                allowableValues = {"TEXTE", "NOMBRE", "MONTANT", "TAUX", "DATE", "BOOLEEN"})
         String type,
 
         @Schema(example = "false")
