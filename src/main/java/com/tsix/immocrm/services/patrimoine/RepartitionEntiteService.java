@@ -48,13 +48,17 @@ public class RepartitionEntiteService {
     }
 
     /**
-     * {@code SetRepartitions} : groupe posé sur la fiche, lignes recalculées sur le nombre de parts enregistré, et
-     * nombre d'actionnaires aligné sur le groupe — sinon {@code Verif} refuserait aussitôt la fiche.
+     * {@code SetRepartitions} : groupe posé sur la fiche, lignes recalculées sur le nombre de parts saisi
+     * ({@code nombreParts}, sinon celui enregistré), nombre d'actionnaires aligné sur le groupe — sinon {@code Verif}
+     * refuserait aussitôt la fiche.
      */
     @Transactional
-    public EntiteJuridiqueDto modifierRepartitionDepuisGroupe(UUID id, UUID groupeId) {
+    public EntiteJuridiqueDto modifierRepartitionDepuisGroupe(UUID id, UUID groupeId, Integer nombreParts) {
         CfgCompany entite = visible.trouver(id);
         CfgGroupShareholder groupe = groupes.trouver(groupeId);
+        if (nombreParts != null) {
+            entite.setSharingNumber(ReglesSaisie.positifOuNul(nombreParts, RepartitionEntite.CHAMP_NOMBRE_PARTS));
+        }
         List<RepartitionActionnaires.Parts> parts = RepartitionActionnaires.depuisGroupe(
                 groupes.pourcentages(groupeId), RepartitionEntite.zeroSiNul(entite.getSharingNumber()));
         List<CfgCompanyShareholder> lignes = repartition.depuisParts(parts);

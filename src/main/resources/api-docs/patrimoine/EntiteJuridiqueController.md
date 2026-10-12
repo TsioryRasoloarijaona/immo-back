@@ -77,8 +77,9 @@ création).
 ## modifierRepartitionDepuisGroupe
 
 `CfgCompany.SetRepartitions` d'OMRAN, à appeler après la confirmation « Est ce que vous voulez charger les
-répartitions !! ». Pose le groupe sur la fiche, vide la répartition puis la recalcule sur le `nombreParts`
-**enregistré** : pour chaque ligne du groupe sauf la dernière (ordre : code de l'actionnaire),
+répartitions !! ». Pose le groupe sur la fiche, vide la répartition puis la recalcule sur `nombreParts` — celui
+**saisi sur la fiche** (paramètre, enregistré avec la répartition), sinon celui enregistré : pour chaque ligne du
+groupe sauf la dernière (ordre : code de l'actionnaire),
 `(int)(pourcentage × 100) × nombreParts / 100` en troncatures entières ; la dernière reçoit le reste, si bien que
 la somme vaut toujours `nombreParts`. `nombreActionnaires` est aligné sur le nombre de lignes du groupe (OMRAN le
 laisse à ressaisir, et refuserait l'enregistrement sinon). Calcul : `domain/RepartitionActionnaires`.

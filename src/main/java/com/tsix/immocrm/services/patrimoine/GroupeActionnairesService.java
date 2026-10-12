@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -156,7 +157,9 @@ public class GroupeActionnairesService {
         CfgGroupShareholderLine ligne = new CfgGroupShareholderLine();
         ligne.setId(UUID.randomUUID());
         ligne.setCfgShareholder(actionnaire);
-        ligne.setSharingNumber(ReglesSaisie.fraction(demandee.pourcentage(), CHAMP_LIGNES));
+        // decimal(26,6) en base : contrôler Σ = 100 % sur la valeur telle qu'elle sera stockée, pas sur la saisie.
+        ligne.setSharingNumber(ReglesSaisie.fraction(demandee.pourcentage().setScale(6, RoundingMode.HALF_UP),
+                CHAMP_LIGNES));
         return ligne;
     }
 

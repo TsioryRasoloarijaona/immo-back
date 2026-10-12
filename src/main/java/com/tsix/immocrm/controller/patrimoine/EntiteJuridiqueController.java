@@ -140,13 +140,16 @@ public class EntiteJuridiqueController {
     @PreAuthorize("hasRole('Administrateur')")
     @Operation(summary = "Charge la répartition depuis un groupe d'actionnaires")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Fiche, groupe et répartition recalculée enregistrés."),
+            @ApiResponse(responseCode = "200", description = "Fiche, groupe, nombre de parts et répartition recalculée enregistrés."),
+            @ApiResponse(responseCode = "400", description = "nombreParts négatif (champ = nombreParts)."),
             @ApiResponse(responseCode = "403", description = REFUS_ROLE),
             @ApiResponse(responseCode = "404", description = "Entité introuvable (voir fiche) ou groupe inconnu.")
     })
     public EntiteJuridiqueDto modifierRepartitionDepuisGroupe(
             @Parameter(description = ID) @PathVariable UUID id,
-            @Parameter(description = "Groupe d'actionnaires (CfgGroupShareholder.PKey).") @PathVariable UUID groupeId) {
-        return repartitionService.modifierRepartitionDepuisGroupe(id, groupeId);
+            @Parameter(description = "Groupe d'actionnaires (CfgGroupShareholder.PKey).") @PathVariable UUID groupeId,
+            @Parameter(description = "Nombre de parts saisi sur la fiche ; absent = celui enregistré.", example = "1000")
+            @RequestParam(required = false) Integer nombreParts) {
+        return repartitionService.modifierRepartitionDepuisGroupe(id, groupeId, nombreParts);
     }
 }
