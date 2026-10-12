@@ -55,6 +55,10 @@ Geste du Kanban, **en une seule transaction** : change l'étape (mêmes effets q
 il apparaît dans le calendrier et déclenche la confirmation de visite habituelle. Si une des deux écritures
 échoue, rien n'est écrit. Le type de la prochaine action n'est pas stocké : l'intention passe par le résultat.
 
+**Messages envoyés au prospect** (après validation de la transaction, comme les routes d'origine) : arriver en
+« 4 APRES VISITES » envoie le remerciement de visite (e-mail et WhatsApp) ; un résultat de visite envoie la
+confirmation de visite. Le front en avertit l'utilisateur avant d'enregistrer.
+
 ### reponse 400
 
 `etapeId`, `prochaineAction`, `prochaineAction.typeId` ou `prochaineAction.date` absent, date dans le passé,
