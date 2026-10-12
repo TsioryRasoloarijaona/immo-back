@@ -51,7 +51,7 @@ public final class RegistreAuditOmran {
             // OMRAN libelle une tranche par sa Description (60 lignes sur 84), pas par son Code.
             racine(CfgTranche.class, t -> TRANCHE, t -> premierRenseigne(t.getDescription(), t.getCode())),
             racine(StkItem.class, RegistreAuditOmran::typeArticle, RegistreAuditOmran::libelleArticle),
-            racine(CfgCompany.class, c -> ENTITE_JURIDIQUE, CfgCompany::getCode),
+            racine(CfgCompany.class, c -> ENTITE_JURIDIQUE, c -> premierRenseigne(c.getDescription(), c.getCode())),
             new DescripteurAudit<>(CfgTrancheStkItem.class, l -> TERRAIN_DE_TRANCHE,
                     l -> l.getSorting() == null ? "" : l.getSorting().toString(),
                     l -> l.getCfgTranche() == null ? null
