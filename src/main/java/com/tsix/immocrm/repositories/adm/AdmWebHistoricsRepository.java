@@ -20,7 +20,7 @@ public interface AdmWebHistoricsRepository extends JpaRepository<AdmWebHistorics
     @Query("""
             SELECT h FROM AdmWebHistorics h
             WHERE (h.objectId = :id AND h.objectType IN :types)
-               OR (h.parentObjectId = :id AND h.parentObjectType IN :types)""")
+               OR (h.parentObjectId = :id AND h.parentObjectType IN :types AND h.objectType IN :types)""")
     Page<AdmWebHistorics> duObjet(@Param("id") UUID objetId, @Param("types") Collection<String> types,
                                   Pageable pageable);
 
