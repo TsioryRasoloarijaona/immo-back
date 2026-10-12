@@ -23,7 +23,9 @@ Une relance ouverte est la dernière interaction datée d'une prospection ouvert
 ## boiteDeTri
 
 Pré-prospections du commercial appelant, ouvertes, reçues il y a moins de 6 mois (`toutes=true` lève la
-limite), les plus récentes d'abord. Une ligne marquée « Pas joignable » y reste, avec sa `prochaineRelance`.
+limite), **sans aucune interaction saisie** (même règle que `nouveauxLeads` de « Ma journée »), les plus
+récentes d'abord. Une ligne traitée (« Pas joignable », appel noté) quitte la boîte et revient par sa relance
+dans « Ma journée ». `prochaineRelance` ne porte donc plus qu'une relance écrite par OMRAN seul (`IsSystem`).
 Chaque ligne porte ses `doublons` : fiches prospect et autres prospections au même numéro (9 derniers
 chiffres, sans espaces ni indicatif) ou au même e-mail, limitées au périmètre de l'appelant. Le nombre à
 trier du menu est le `totalElements` de cette liste.
@@ -38,7 +40,8 @@ appel effectué = `POST /api/prospections/{id}/interactions`.
 Écrit une interaction « Téléphone Sortant », résultat « Prospect injoignable ou Boite vocale », message
 « Pas joignable », avec une relance **demain à 10:00 (heure de Casablanca)**. Les relances précédentes de la
 ligne sont soldées comme pour toute nouvelle relance. Rien d'automatique ensuite : pas de nouvel essai
-programmé, pas d'archivage. La ligne reste dans la Boîte de tri et sort de « nouveaux leads ».
+programmé, pas d'archivage. La ligne quitte la Boîte de tri et « nouveaux leads », et revient demain dans
+« relances du jour ».
 
 ### reponse 409
 

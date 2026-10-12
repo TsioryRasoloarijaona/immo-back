@@ -142,11 +142,26 @@ class BoiteDeTriControllerTest {
         em.clear();
         assertThat(messageRepository.findById(precedente.getId()))
                 .get().extracting(ComActionMessage::getWithoutRevival).isEqualTo(true);
+        assertThat(messageRepository.findAll().stream()
+                .filter(m -> m.getComProspection() != null && lead.getId().equals(m.getComProspection().getId()))
+                .map(ComActionMessage::getAlertValidityDate))
+                .contains(aujourdhui.plusDays(1).atTime(10, 0));
         mockMvc.perform(get(BOITE).with(ParcoursOutils.connecte(moi, "Commercial")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].prospectionId").value(lead.getId().toString()))
-                .andExpect(jsonPath("$.content[0].prochaineRelance")
-                        .value(aujourdhui.plusDays(1).atTime(10, 0).toString() + ":00"));
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    /** Une ligne déjà traitée revient par sa relance dans « Ma journée », pas dans la boîte. */
+    @Test
+    void liste_ecarteLesLignesDejaTraitees() throws Exception {
+        ComProspection traitee = outils.preProspection(moi, aujourdhui.atTime(8, 0));
+        outils.relance(traitee, aujourdhui.plusDays(2).atTime(9, 0), null);
+        ComProspection intacte = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+
+        mockMvc.perform(get(BOITE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].prospectionId").value(intacte.getId().toString()));
     }
 
     @Test
