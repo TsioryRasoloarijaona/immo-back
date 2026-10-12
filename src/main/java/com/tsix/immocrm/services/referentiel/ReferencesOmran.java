@@ -12,8 +12,11 @@ import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Identifiants de référence qu'OMRAN écrit sur ses dossiers, échéances et règlements : résolus par
@@ -29,6 +32,8 @@ public class ReferencesOmran {
     public static final String CODE_MODULE_VENTE = "COM";
     public static final String CODE_DEVISE_REPLI = "MAD";
     public static final String PARAMETRE_DEVISE_PAR_DEFAUT = "DefaultCurrency";
+    public static final List<String> PARAMETRES_FRAIS_AUTOMATIQUES = List.of("DefaultCustomerTransfertDocumentType",
+            "DefaultProductTransfertDocumentType", "DefaultCancellationDocumentType");
 
     public static final UUID ID_ENTITE_DOSSIER = StatutDossier.CONFIG_ENTITY_ID;
     public static final UUID ID_ENTITE_ENCAISSEMENT = UUID.fromString("D7061C59-A039-4EF8-A6ED-B0E886F8EDFF");
@@ -73,6 +78,19 @@ public class ReferencesOmran {
                 .map(AdmParamsGuid::getCodeValue)
                 .or(() -> premier(currencyRepository.findByCode(CODE_DEVISE_REPLI)).map(StlCurrency::getId))
                 .orElse(ID_DEVISE_MAD);
+    }
+
+    /**
+     * Catégories de règlement que le dossier de vente pose lui-même (transfert client, transfert produit, désistement) :
+     * exclues des frais de vente d'une tranche, comme chez OMRAN. Paramètre absent = rien à exclure.
+     */
+    public Set<UUID> categoriesFraisAutomatiques() {
+        return PARAMETRES_FRAIS_AUTOMATIQUES.stream()
+                .map(paramsGuidRepository::findById)
+                .flatMap(Optional::stream)
+                .map(AdmParamsGuid::getCodeValue)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private UUID entite(String code, UUID repli) {

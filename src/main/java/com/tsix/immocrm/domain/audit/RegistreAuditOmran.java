@@ -6,6 +6,9 @@ import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgCompanyShareholder;
 import com.tsix.immocrm.entities.cfg.CfgGroupShareholder;
 import com.tsix.immocrm.entities.cfg.CfgGroupShareholderLine;
+import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
+import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
+import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgShareholder;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -36,15 +39,22 @@ public final class RegistreAuditOmran {
     static final TypeObjetAudit TERRAIN = new TypeObjetAudit("Yes.Stk.LandProjectItem", "Terrain");
     static final TypeObjetAudit ENTITE_JURIDIQUE = new TypeObjetAudit("Yes.Cfg.CfgCompany", "Entité juridique");
     static final TypeObjetAudit TERRAIN_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheStkItem", "Tranche");
-    // Lot P5 : Habilitation et Séquence mesurés en production ; les tables d'actionnaires y sont vides, d'où le nom de
+    // Lot P5 : Séquence mesurée en production ; les tables d'actionnaires y sont vides, d'où le nom de
     // classe et le DisplayName OMRAN (Yes.Cfg/CfgShareholder.cs…), libellé = DefaultLabel.
-    static final TypeObjetAudit HABILITATION = new TypeObjetAudit("Yes.Adm.AdmUserHabilitation", "Habilitation");
     static final TypeObjetAudit SEQUENCE = new TypeObjetAudit("Yes.Adm.Sequence", "Séquence");
     static final TypeObjetAudit ACTIONNAIRE = new TypeObjetAudit("Yes.Cfg.CfgShareholder", "Actionnaire");
     static final TypeObjetAudit GROUPE_ACTIONNAIRES =
             new TypeObjetAudit("Yes.Cfg.CfgGroupShareholder", "Groupe d'actionnaire");
     static final TypeObjetAudit LIGNE_GROUPE = new TypeObjetAudit("Yes.Cfg.CfgGroupShareholderLine", "Répartition");
     static final TypeObjetAudit REPARTITION_ENTITE = new TypeObjetAudit("Yes.Cfg.CfgCompanyShareholder", "Répartition");
+    // Libellés OMRAN tels quels (FEATURE-patrimoine-tranche-onglets.md §0), « Prospection de projet » compris.
+    static final TypeObjetAudit ETAGE_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheLevel",
+            "Prospection de projet");
+    static final TypeObjetAudit PLANCHER_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheCoveredFloor",
+            "Prospection de projet");
+    static final TypeObjetAudit FRAIS_DE_TRANCHE = new TypeObjetAudit("Yes.Cfg.CfgTrancheSettlementCategory",
+            "Frais de vente");
+    static final TypeObjetAudit HABILITATION = new TypeObjetAudit("Yes.Adm.AdmUserHabilitation", "Habilitation");
 
     private static final Map<Class<?>, DescripteurAudit<?>> DESCRIPTEURS = Stream.of(
             racine(CfgProject.class, p -> PROGRAMME, CfgProject::getCode),
@@ -52,12 +62,17 @@ public final class RegistreAuditOmran {
             racine(CfgTranche.class, t -> TRANCHE, t -> premierRenseigne(t.getDescription(), t.getCode())),
             racine(StkItem.class, RegistreAuditOmran::typeArticle, RegistreAuditOmran::libelleArticle),
             racine(CfgCompany.class, c -> ENTITE_JURIDIQUE, c -> premierRenseigne(c.getDescription(), c.getCode())),
-            new DescripteurAudit<>(CfgTrancheStkItem.class, l -> TERRAIN_DE_TRANCHE,
-                    l -> l.getSorting() == null ? "" : l.getSorting().toString(),
-                    l -> l.getCfgTranche() == null ? null
-                            : new ParentAudit(TRANCHE.objectType(), l.getCfgTranche().getId())),
+            enfantDeTranche(CfgTrancheStkItem.class, TERRAIN_DE_TRANCHE, l -> texte(l.getSorting()),
+                    CfgTrancheStkItem::getCfgTranche),
+            enfantDeTranche(CfgTrancheLevel.class, ETAGE_DE_TRANCHE, l -> texte(l.getId()),
+                    CfgTrancheLevel::getCfgTranche),
+            enfantDeTranche(CfgTrancheCoveredFloor.class, PLANCHER_DE_TRANCHE, l -> texte(l.getId()),
+                    CfgTrancheCoveredFloor::getCfgTranche),
+            enfantDeTranche(CfgTrancheSettlementCategory.class, FRAIS_DE_TRANCHE, l -> texte(l.getSorting()),
+                    CfgTrancheSettlementCategory::getCfgTranche),
+            // Racine comme en production ; libellé = AdmUserId.
             racine(AdmUserHabilitation.class, h -> HABILITATION,
-                    h -> h.getAdmUser() == null ? "" : h.getAdmUser().getId().toString()),
+                    h -> h.getAdmUser() == null ? "" : texte(h.getAdmUser().getId())),
             racine(AdmSequence.class, s -> SEQUENCE, AdmSequence::getCode),
             racine(CfgShareholder.class, a -> ACTIONNAIRE, CfgShareholder::getDescription),
             racine(CfgGroupShareholder.class, g -> GROUPE_ACTIONNAIRES, CfgGroupShareholder::getDescription),
@@ -72,8 +87,8 @@ public final class RegistreAuditOmran {
             .collect(Collectors.toUnmodifiableMap(DescripteurAudit::classe, d -> d));
 
     private static final Set<String> OBJECT_TYPES = Stream.of(PROGRAMME, TRANCHE, ARTICLE, SOUS_ARTICLE, TERRAIN,
-                    ENTITE_JURIDIQUE, TERRAIN_DE_TRANCHE, HABILITATION, SEQUENCE, ACTIONNAIRE, GROUPE_ACTIONNAIRES,
-                    LIGNE_GROUPE, REPARTITION_ENTITE)
+                    ENTITE_JURIDIQUE, TERRAIN_DE_TRANCHE, ETAGE_DE_TRANCHE, PLANCHER_DE_TRANCHE, FRAIS_DE_TRANCHE,
+                    HABILITATION, SEQUENCE, ACTIONNAIRE, GROUPE_ACTIONNAIRES, LIGNE_GROUPE, REPARTITION_ENTITE)
             .map(TypeObjetAudit::objectType)
             .collect(Collectors.toUnmodifiableSet());
 
@@ -101,6 +116,20 @@ public final class RegistreAuditOmran {
     private static <T> DescripteurAudit<?> racine(Class<T> classe, Function<T, TypeObjetAudit> type,
                                                   Function<T, String> libelle) {
         return new DescripteurAudit<>(classe, type, libelle, e -> null);
+    }
+
+    /** Ligne d'un onglet de tranche : enfant de la tranche ({@code ParentObjectType = Yes.Cfg.CfgTranche}). */
+    private static <T> DescripteurAudit<?> enfantDeTranche(Class<T> classe, TypeObjetAudit type,
+                                                           Function<T, String> libelle,
+                                                           Function<T, CfgTranche> tranche) {
+        return new DescripteurAudit<>(classe, e -> type, libelle, e -> {
+            CfgTranche parent = tranche.apply(e);
+            return parent == null ? null : new ParentAudit(TRANCHE.objectType(), parent.getId());
+        });
+    }
+
+    private static String texte(Object valeur) {
+        return valeur == null ? "" : valeur.toString();
     }
 
     /** Nature « TER » d'abord (un terrain n'est jamais sous-article), puis {@code IsUnderItem}. */

@@ -40,6 +40,11 @@ Une FK dont la cible n'est pas dans le schéma de CI est posée sous condition
 production, `AdmWebHistorics__AdmWebSessions_FK1`, n'est **pas** posée en CI (`AdmWebSessions` absente du
 schéma) ; `AdmMessage` n'a aucune FK en production. `AuditSchemaTest` échoue en premier si une table manque.
 
+**P1b** (`FEATURE-patrimoine-tranche-onglets.md`) : `064_tranche-onglets_tables.sql` crée `CfgTrancheCoveredFloor` et
+`CfgTrancheSettlementCategory` (piège : colonne `CfgtrancheId`, t minuscule) ; `065_tranche-onglets_fk.sql` pose leurs
+quatre FK de production (CASCADE vers la tranche et la catégorie de règlement). `TrancheOngletsSchemaTest` échoue en
+premier si une table manque.
+
 **P5** (`FEATURE-entites-juridiques.md`) : `066_entites_tables.sql` crée `CfgShareholder`, `CfgGroupShareholderLine`
 et `CfgCompanyShareholder` (`CfgCompany` et `CfgGroupShareholder` étaient déjà dans 010). `067_entites_fk.sql` : leurs
 4 FK de production, règles `ON DELETE` comprises. Piège : `CfgCompany_CfgGroupShareholder_FK1` (dans 020) est
@@ -151,7 +156,8 @@ des statuts de lot). `StlCategory` y existait déjà. `ChantierSchemaTest` écho
 manque.
 
 Tables créées ainsi pour le lot P0 (`FEATURE-patrimoine-audit-actions.md`) : `AdmWebHistorics` et `AdmMessage`,
-DDL de `060_audit_tables.sql` passée en ligne par `-Q`, une commande par table.
+DDL de `060_audit_tables.sql` passée en ligne par `-Q`, une commande par table. Lot P1b :
+`CfgTrancheCoveredFloor` et `CfgTrancheSettlementCategory`, DDL de `064_tranche-onglets_tables.sql`, même méthode.
 
 ## Reproduire l'environnement du CI en local
 

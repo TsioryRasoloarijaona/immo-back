@@ -45,6 +45,7 @@ class PatrimoineSecuriteTest {
     private static final String ENTITES = "/api/entites-juridiques";
     private static final String ACTIONNAIRES = "/api/actionnaires";
     private static final String GROUPES = "/api/groupes-actionnaires";
+    private static final String TRANCHE = "/api/tranches/" + ID;
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
@@ -66,6 +67,12 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.POST, ZONES),
                 Arguments.of(HttpMethod.PATCH, ZONES + "/" + UUID.randomUUID()),
                 Arguments.of(HttpMethod.DELETE, ZONES + "/" + UUID.randomUUID()),
+                // FEATURE-patrimoine-tranche-onglets.md : onglets et suppression de tranche.
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/terrains"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/etages"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/plancher-couvert"),
+                Arguments.of(HttpMethod.PUT, TRANCHE + "/frais"),
+                Arguments.of(HttpMethod.DELETE, TRANCHE),
                 // FEATURE-entites-juridiques.md §2 : entités, actionnaires, groupes.
                 Arguments.of(HttpMethod.POST, ENTITES),
                 Arguments.of(HttpMethod.PATCH, ENTITES + "/" + ID),
