@@ -73,16 +73,24 @@ public class RelanceDashboardService {
         UUID moi = principal != null ? principal.employeeId() : null;
 
         Specification<ComActionMessage> spec = perimetreService.filtreInteractions()
-                .and(relanceVivante())
-                .and(echue(echeance, aujourdhui))
-                .and(echeance.limiteeAuxProspectionsDuMois()
-                        ? prospectionDuMois(aujourdhui)
-                        : (root, query, cb) -> cb.conjunction())
+                .and(relancesEchues(echeance, aujourdhui))
                 .and(filtreDePortee(portee, moi))
                 .and(prospectionDeLaTranche(trancheId));
 
         return messageRepository.findAll(spec, trierParEcheance(pageable))
                 .map(message -> toDto(message, aujourdhui));
+    }
+
+    /**
+     * Seule règle « relance vivante échue dans la tranche {@code echeance} », bornage du mois compris pour
+     * {@code RETARD} : partagée avec « Ma journée » (FEATURE-parcours-commercial.md §3).
+     */
+    public static Specification<ComActionMessage> relancesEchues(EcheanceRelance echeance, LocalDate aujourdhui) {
+        return relanceVivante()
+                .and(echue(echeance, aujourdhui))
+                .and(echeance.limiteeAuxProspectionsDuMois()
+                        ? prospectionDuMois(aujourdhui)
+                        : (root, query, cb) -> cb.conjunction());
     }
 
     /**

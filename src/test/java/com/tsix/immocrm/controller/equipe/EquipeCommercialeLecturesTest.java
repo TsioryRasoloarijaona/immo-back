@@ -18,6 +18,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -150,6 +151,31 @@ class EquipeCommercialeLecturesTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value(1))
                 .andExpect(jsonPath("$.agePlusAncienneJours").value(9));
+    }
+
+    /** FEATURE-equipe-commerciale.md §10 : hors des 30 jours par défaut, une pré-prospection n'est plus « à distribuer ». */
+    @Test
+    void aDistribuer_suitLaPeriode_parDefautTrenteJours() throws Exception {
+        outils.preProspection("EQ-LEC-P1", trancheA, LocalDateTime.now().minusDays(5));
+        outils.preProspection("EQ-LEC-P2", trancheA, LocalDateTime.now().minusDays(200));
+        em.flush();
+
+        mockMvc.perform(get("/api/equipe/a-distribuer").with(EquipeOutils.connecte(chef, CHEF)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(1))
+                .andExpect(jsonPath("$.agePlusAncienneJours").value(5));
+        String du = LocalDate.now().minusDays(365).toString();
+        mockMvc.perform(get("/api/equipe/a-distribuer").param("du", du).with(EquipeOutils.connecte(chef, CHEF)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(2))
+                .andExpect(jsonPath("$.agePlusAncienneJours").value(200));
+    }
+
+    @Test
+    void aDistribuer_periodeInversee_400() throws Exception {
+        mockMvc.perform(get("/api/equipe/a-distribuer").param("du", "2026-10-11").param("au", "2026-09-12")
+                        .with(EquipeOutils.connecte(chef, CHEF)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
