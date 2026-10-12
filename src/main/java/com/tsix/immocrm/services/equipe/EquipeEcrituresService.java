@@ -7,7 +7,6 @@ import com.tsix.immocrm.dto.equipe.ModifierAffectationsRequest;
 import com.tsix.immocrm.dto.equipe.ReaffecterRequest;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto.LigneLotDto;
-import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -22,10 +21,10 @@ import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
+import com.tsix.immocrm.services.prospection.HistoriqueProspection;
 import com.tsix.immocrm.services.prospection.ProspectionService;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
@@ -55,26 +54,23 @@ public class EquipeEcrituresService {
     private static final String LIGNE = "Ligne ";
 
     private final EquipeCommercialeService equipeService;
-    private final ProspectionService prospectionService;
+    private final HistoriqueProspection historique;
     private final ComProspectionRepository prospectionRepository;
-    private final CfgTrancheRepository trancheRepository;
     private final CfgTierRepository tierRepository;
     private final CfgProjectRepository projectRepository;
     private final AdmUserRepository userRepository;
     private final AdmUserHabilitationRepository habilitationRepository;
 
     public EquipeEcrituresService(EquipeCommercialeService equipeService,
-                                  ProspectionService prospectionService,
+                                  HistoriqueProspection historique,
                                   ComProspectionRepository prospectionRepository,
-                                  CfgTrancheRepository trancheRepository,
                                   CfgTierRepository tierRepository,
                                   CfgProjectRepository projectRepository,
                                   AdmUserRepository userRepository,
                                   AdmUserHabilitationRepository habilitationRepository) {
         this.equipeService = equipeService;
-        this.prospectionService = prospectionService;
+        this.historique = historique;
         this.prospectionRepository = prospectionRepository;
-        this.trancheRepository = trancheRepository;
         this.tierRepository = tierRepository;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -83,40 +79,22 @@ public class EquipeEcrituresService {
 
     // ---------------------------------------------------------------- distribuer
 
-    /** Chaque ligne suit ensuite {@link ProspectionService#transformer} (prospect requis, unicité, tranche). */
+    /**
+     * Comme OMRAN : le commercial est posé sur la pré-prospection, qui reste une pré-prospection (ni prospect ni
+     * tranche exigés) ; la transformer reste le geste du commercial (FEATURE-equipe-commerciale.md §9 D1).
+     */
     public ResultatLotDto distribuer(DistribuerRequest request) {
         List<ComProspection> lignes = lignesDemandees(request.preProspectionIds());
         exiger(request.commercialId(), "commercialId est requis");
         PerimetreEquipe perimetre = equipeService.perimetre();
 
-        CfgTranche tranche = null;
-        if (request.trancheId() != null) {
-            tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
-            perimetre.verifierProjet(projetDe(tranche), "Tranche " + tranche.getCode());
-        }
-        for (ComProspection ligne : lignes) {
-            UUID projetActuel = projetDe(ligne.getStkHierarchy());
-            // Une ligne sans projet n'est à personne : elle se distribue avec une tranche du chef.
-            if (projetActuel != null || tranche == null) {
-                perimetre.verifierProjet(projetActuel, LIGNE + ligne.getCode());
-            }
-        }
-        UUID projetTranche = projetDe(tranche);
+        verifierPerimetre(lignes, perimetre);
         for (ComProspection ligne : lignes) {
             ProspectionService.verifierEncorePreProspection(ligne);
-            UUID projetCible = projetTranche != null ? projetTranche : projetDe(ligne.getStkHierarchy());
-            perimetre.destinataire(request.commercialId(), projetCible, ligne.getCode());
+            verifierOuverte(ligne);
+            perimetre.destinataire(request.commercialId(), projetDe(ligne.getStkHierarchy()), ligne.getCode());
         }
-
-        List<LigneLotDto> ecrites = new ArrayList<>();
-        for (ComProspection ligne : lignes) {
-            String ancien = TierNomFormatter.nom(ligne.getCfgCommercial());
-            prospectionService.transformer(ligne.getId(),
-                    new TransformerProspectionRequest(request.commercialId(), request.trancheId(), null));
-            ecrites.add(new LigneLotDto(ligne.getId(), ligne.getCode(), ancien));
-        }
-        return resultat(request.commercialId(), ecrites);
+        return ecrire(lignes, request.commercialId(), "");
     }
 
     // ---------------------------------------------------------------- réaffecter
@@ -127,23 +105,40 @@ public class EquipeEcrituresService {
         exiger(request.commercialId(), "commercialId est requis");
         PerimetreEquipe perimetre = equipeService.perimetre();
 
-        for (ComProspection ligne : lignes) {
-            perimetre.verifierProjet(projetDe(ligne.getStkHierarchy()), LIGNE + ligne.getCode());
-        }
+        verifierPerimetre(lignes, perimetre);
         for (ComProspection ligne : lignes) {
             if (DiscriminantPreProspection.estPreProspection(ligne)) {
                 throw new ConflictException(LIGNE + ligne.getCode()
                         + " : une pré-prospection se distribue, elle ne se réaffecte pas.");
             }
-            if (Boolean.TRUE.equals(ligne.getIsClosed())) {
-                throw new ConflictException(LIGNE + ligne.getCode() + " : prospection clôturée.");
-            }
+            verifierOuverte(ligne);
             perimetre.destinataire(request.commercialId(), projetDe(ligne.getStkHierarchy()), ligne.getCode());
         }
-
-        CfgTier nouveau = tierRepository.findById(request.commercialId())
-                .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + request.commercialId()));
         String motif = StringUtils.hasText(request.motif()) ? " — " + request.motif().strip() : "";
+        return ecrire(lignes, request.commercialId(), motif);
+    }
+
+    private static void verifierPerimetre(List<ComProspection> lignes, PerimetreEquipe perimetre) {
+        for (ComProspection ligne : lignes) {
+            perimetre.verifierProjet(projetDe(ligne.getStkHierarchy()), LIGNE + ligne.getCode());
+        }
+    }
+
+    private static void verifierOuverte(ComProspection ligne) {
+        if (Boolean.TRUE.equals(ligne.getIsClosed())) {
+            throw new ConflictException(LIGNE + ligne.getCode() + " : ligne clôturée.");
+        }
+    }
+
+    /**
+     * Seule écriture de distribuer et réaffecter : {@code CfgCommercialId} + une ligne d'historique (« Commercial
+     * assigné : B » ou « Commercial réaffecté : A → B »). Le référent du prospect n'est pas touché ; ligne déjà au
+     * destinataire : ignorée.
+     */
+    private ResultatLotDto ecrire(List<ComProspection> lignes, UUID commercialId, String motif) {
+        CfgTier nouveau = tierRepository.findById(commercialId)
+                .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + commercialId));
+        String nouveauNom = TierNomFormatter.nom(nouveau);
         List<LigneLotDto> ecrites = new ArrayList<>();
         for (ComProspection ligne : lignes) {
             CfgTier ancien = ligne.getCfgCommercial();
@@ -153,11 +148,16 @@ public class EquipeEcrituresService {
             String ancienNom = TierNomFormatter.nom(ancien);
             ligne.setCfgCommercial(nouveau);
             prospectionRepository.save(ligne);
-            prospectionService.enregistrerHistorique(ligne.getId(), TypeActionRecente.COMMERCIAL_REAFFECTE,
-                    (ancienNom != null ? ancienNom : "aucun") + " → " + TierNomFormatter.nom(nouveau) + motif);
+            if (ancien == null) {
+                historique.enregistrerHistorique(ligne.getId(), TypeActionRecente.COMMERCIAL_ASSIGNE,
+                        nouveauNom + motif);
+            } else {
+                historique.enregistrerHistorique(ligne.getId(), TypeActionRecente.COMMERCIAL_REAFFECTE,
+                        ancienNom + " → " + nouveauNom + motif);
+            }
             ecrites.add(new LigneLotDto(ligne.getId(), ligne.getCode(), ancienNom));
         }
-        return resultat(nouveau.getId(), ecrites);
+        return new ResultatLotDto(ecrites.size(), nouveau.getId(), nouveauNom, ecrites);
     }
 
     // ---------------------------------------------------------------- affectations
@@ -196,8 +196,9 @@ public class EquipeEcrituresService {
                     + " : sans projet, il verrait tous les projets.");
         }
 
-        retirerProjets(admUserId, retirer.stream().filter(cible.projetIds()::contains).toList());
-        ajouter.stream()
+        // Écrire exactement la différence avant / après : un projet à la fois ajouté et retiré est retiré.
+        retirerProjets(admUserId, cible.projetIds().stream().filter(id -> !finaux.contains(id)).toList());
+        finaux.stream()
                 .filter(id -> !cible.projetIds().contains(id))
                 .forEach(id -> ajouterProjet(compte, projets.get(id)));
 
@@ -273,10 +274,5 @@ public class EquipeEcrituresService {
 
     private static UUID projetDe(CfgTranche tranche) {
         return tranche != null && tranche.getCfgProject() != null ? tranche.getCfgProject().getId() : null;
-    }
-
-    private ResultatLotDto resultat(UUID commercialId, List<LigneLotDto> lignes) {
-        String nom = tierRepository.findById(commercialId).map(TierNomFormatter::nom).orElse(null);
-        return new ResultatLotDto(lignes.size(), commercialId, nom, lignes);
     }
 }

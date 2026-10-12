@@ -26,20 +26,16 @@ pour Administrateur / Direction Générale sans `projet`, lignes sans tranche co
 
 ## distribuer
 
-Transforme chaque pré-prospection en prospection du commercial choisi, **avec les règles de
-`POST /api/prospections/{id}/transformer`** : prospect lié obligatoire, tranche obligatoire (fournie
-ou déjà portée), une seule prospection ouverte par prospect et projet. Une ligne sans tranche se
-distribue avec `trancheId`. Tout le lot ou rien.
-
-### reponse 400
-
-`preProspectionIds` vide, `commercialId` absent, tranche inconnue, ou une règle de `transformer`
-non respectée (ligne sans prospect, sans tranche…) : rien n'est écrit.
+Pose le commercial choisi (`ComProspection.CfgCommercialId`) sur chaque pré-prospection, **comme le
+champ « Commercial » de la fiche pré-prospection d'OMRAN** : la ligne reste une pré-prospection, aucun
+prospect ni tranche n'est exigé. La transformer reste le geste du commercial
+(`POST /api/prospections/{id}/transformer`). Une ligne qui avait déjà un commercial est redistribuée.
+Historique : « Commercial assigné : B », ou « Commercial réaffecté : A → B ». Tout le lot ou rien.
 
 ### reponse 409
 
-Une ligne n'est plus une pré-prospection, le commercial n'est pas de l'équipe ou n'est pas affecté au
-projet de la ligne, ou le prospect a déjà une prospection ouverte sur ce projet : rien n'est écrit.
+Une ligne n'est plus une pré-prospection ou est clôturée, ou le commercial n'est pas de l'équipe ou
+n'est pas affecté au projet de la ligne : rien n'est écrit.
 
 ## reaffecter
 

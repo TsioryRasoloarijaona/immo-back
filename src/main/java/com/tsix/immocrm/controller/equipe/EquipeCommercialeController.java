@@ -93,8 +93,8 @@ public class EquipeCommercialeController {
     @PostMapping("/distribuer")
     @Operation(summary = "Distribue des pré-prospections à un commercial de l'équipe")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Toutes les lignes ont été transformées."),
-            @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "200", description = "Commercial posé (celles déjà à ce commercial sont ignorées)."),
+            @ApiResponse(responseCode = "400", description = "Liste vide ou `commercialId` absent."),
             @ApiResponse(responseCode = "404", description = "Une ligne demandée n'existe pas : rien n'est écrit."),
             @ApiResponse(responseCode = "409")
     })

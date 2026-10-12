@@ -180,6 +180,7 @@ public class ProspectionService {
     /** Auteur d'une interaction — voir {@code FIX-interaction-note.md} et {@code FEATURE-suivi-actions.md} §6. */
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
+    private final HistoriqueProspection historiqueProspection;
     // Événement plutôt qu'appel direct : le mail ne part que si l'interaction est écrite, et
     // l'envoi ne peut rien annuler (FEATURE-mail-confirmation-visite.md §3).
     private final ApplicationEventPublisher publisher;
@@ -208,8 +209,10 @@ public class ProspectionService {
                                StrEntityRepository strEntityRepository,
                                ApplicationEventPublisher publisher,
                                AlerteRelanceService alerteRelanceService,
+                               HistoriqueProspection historiqueProspection,
                                Clock clock) {
         this.clock = clock;
+        this.historiqueProspection = historiqueProspection;
         this.alerteRelanceService = alerteRelanceService;
         this.prospectionViewRepository = prospectionViewRepository;
         this.strEntityRepository = strEntityRepository;
@@ -585,24 +588,8 @@ public class ProspectionService {
         );
     }
 
-    /**
-     * Sans utilisateur authentifié (formulaire public, import), auteur NULL : pas une erreur. Partagée avec
-     * l'écran « Mon équipe » (réaffectation).
-     */
-    @Transactional
-    public void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
-        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now(clock);
-        String description = type.description(suite);
-        StrHistory historique = new StrHistory();
-        historique.setId(UUID.randomUUID());
-        historique.setDocDate(maintenant);
-        historique.setUserDate(maintenant);
-        historique.setObjectId(prospectionId);
-        historique.setDescription(description.length() > 255 ? description.substring(0, 255) : description);
-        historique.setAdmUserId(auteur.compteId());
-        historique.setAdmUserDescription(auteur.nom());
-        historyRepository.save(historique);
+    private void enregistrerHistorique(UUID prospectionId, TypeActionRecente type, String suite) {
+        historiqueProspection.enregistrerHistorique(prospectionId, type, suite);
     }
 
     /**

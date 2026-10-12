@@ -18,6 +18,7 @@ import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.EnAttente;
+import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.LeadCohorte;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.PortefeuilleCommercial;
 import com.tsix.immocrm.services.kpi.PerformanceCommercialService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -150,14 +151,18 @@ public class EquipeCommercialeService {
     public EntonnoirDto entonnoir(@Nullable LocalDate du, @Nullable LocalDate au, @Nullable UUID projet) {
         PeriodeEquipe periode = PeriodeEquipe.resoudre(du, au, LocalDate.now(clock));
         List<UUID> projets = perimetre().projetsFiltres(projet);
-        EntonnoirCohorte.Resultat resultat = EntonnoirCohorte.calculer(projets != null && projets.isEmpty()
-                ? List.of()
-                : equipeRepository.cohorte(periode.debut(), periode.fin(), InteractionKpi.TYPE_VISITE,
-                        projets == null, projets == null ? AUCUN_PROJET : projets));
+        List<LeadCohorte> leads = List.of();
+        if (projets == null || !projets.isEmpty()) {
+            leads = equipeRepository.cohorte(periode.debut(), periode.fin(), InteractionKpi.TYPE_VISITE,
+                    projets == null, pourRequete(projets));
+        }
+        EntonnoirCohorte.Resultat resultat = EntonnoirCohorte.calculer(leads);
         return new EntonnoirDto(periode.du(), periode.au(), projet, resultat.etapes(), resultat.delaiMedianJours());
     }
 
     public List<CommercialEquipeDto> commerciaux(@Nullable LocalDate du, @Nullable LocalDate au, @Nullable UUID projet) {
+        // 400 avant tout : une équipe vide ne doit pas masquer une période invalide.
+        PeriodeEquipe.resoudre(du, au, LocalDate.now(clock));
         PerimetreEquipe perimetre = perimetre();
         List<UUID> projets = perimetre.projetsFiltres(projet);
         List<MembreEquipe> membres = perimetre.membres().stream()
@@ -195,7 +200,7 @@ public class EquipeCommercialeService {
         LocalDateTime maintenant = LocalDateTime.now(clock);
         Map<UUID, PortefeuilleCommercial> parEmploye = new HashMap<>();
         for (PortefeuilleCommercial pf : equipeRepository.portefeuilles(employes, maintenant.minusDays(JOURS_SANS_ACTION),
-                maintenant.toLocalDate().atStartOfDay(), projets == null, projets == null ? AUCUN_PROJET : projets)) {
+                maintenant.toLocalDate().atStartOfDay(), projets == null, pourRequete(projets))) {
             parEmploye.put(pf.getCommercialId(), pf);
         }
         return parEmploye;
@@ -209,6 +214,11 @@ public class EquipeCommercialeService {
                 .toList();
     }
 
+    /** {@code null} (sans restriction) ⇒ la liste factice : jamais lue, mais {@code IN ()} serait invalide. */
+    private static List<UUID> pourRequete(@Nullable List<UUID> projets) {
+        return projets == null ? AUCUN_PROJET : projets;
+    }
+
     private static long valeur(Integer n) {
         return n != null ? n : 0L;
     }
@@ -218,7 +228,7 @@ public class EquipeCommercialeService {
         if (projets != null && projets.isEmpty()) {
             return new ADistribuerDto(0, null, null);
         }
-        EnAttente enAttente = equipeRepository.aDistribuer(projets == null, projets == null ? AUCUN_PROJET : projets);
+        EnAttente enAttente = equipeRepository.aDistribuer(projets == null, pourRequete(projets));
         LocalDateTime plusAncienne = enAttente.getPlusAncienne();
         Long age = plusAncienne != null
                 ? Math.max(0L, ChronoUnit.DAYS.between(plusAncienne.toLocalDate(), LocalDate.now(clock)))

@@ -82,8 +82,10 @@ class EquipeCommercialeEcrituresTest {
     // ---------------------------------------------------------------- distribuer
 
     @Test
-    void distribuer_transformeLesLignesVersLeCommercial() throws Exception {
+    void distribuer_poseLeCommercialSansTransformerNiExigerDeProspect() throws Exception {
         ComProspection pre = outils.preProspection("EQ-ECR-D1", trancheA, hier);
+        pre.setCfgProspect(null);
+        em.flush();
 
         distribuer(chef, List.of(pre.getId()), commercialA)
                 .andExpect(status().isOk())
@@ -94,7 +96,33 @@ class EquipeCommercialeEcrituresTest {
         em.clear();
         ComProspection apres = prospectionRepository.findById(pre.getId()).orElseThrow();
         assertThat(apres.getCfgCommercial().getId()).isEqualTo(commercialA.getCfgEmployee().getId());
-        assertThat(DiscriminantPreProspection.estPreProspection(apres)).isFalse();
+        assertThat(DiscriminantPreProspection.estPreProspection(apres)).isTrue();
+        assertThat(historyRepository.findByObjectIdInOrderByDocDateDesc(List.of(pre.getId())))
+                .extracting(StrHistory::getDescription)
+                .anyMatch(d -> d.startsWith("Commercial assigné : "));
+    }
+
+    @Test
+    void distribuer_redistributionTraceAncienEtNouveau() throws Exception {
+        ComProspection pre = outils.preProspection("EQ-ECR-D7", trancheA, hier);
+        pre.setCfgCommercial(commercialA.getCfgEmployee());
+        em.flush();
+
+        distribuer(chef, List.of(pre.getId()), commercialA2).andExpect(status().isOk());
+
+        em.flush();
+        assertThat(historyRepository.findByObjectIdInOrderByDocDateDesc(List.of(pre.getId())))
+                .extracting(StrHistory::getDescription)
+                .anyMatch(d -> d.startsWith("Commercial réaffecté : "));
+    }
+
+    @Test
+    void distribuer_ligneCloturee_409() throws Exception {
+        ComProspection pre = outils.preProspection("EQ-ECR-D8", trancheA, hier);
+        pre.setIsClosed(true);
+        em.flush();
+
+        distribuer(chef, List.of(pre.getId()), commercialA).andExpect(status().isConflict());
     }
 
     @Test
