@@ -2,7 +2,6 @@ package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.exceptions.ConflictException;
-import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
@@ -21,16 +20,19 @@ import java.util.UUID;
 public class SuppressionProjetService {
 
     private final CfgProjectRepository projectRepository;
+    private final ProgrammeVisible programmeVisible;
     private final CfgProjectZoneRepository zoneRepository;
     private final AdmUserHabilitationRepository habilitationRepository;
     private final AdmAttachedFileRepository pieceJointeRepository;
     private final ReferencesBloquantes referencesBloquantes;
 
-    public SuppressionProjetService(CfgProjectRepository projectRepository, CfgProjectZoneRepository zoneRepository,
+    public SuppressionProjetService(CfgProjectRepository projectRepository, ProgrammeVisible programmeVisible,
+                                    CfgProjectZoneRepository zoneRepository,
                                     AdmUserHabilitationRepository habilitationRepository,
                                     AdmAttachedFileRepository pieceJointeRepository,
                                     ReferencesBloquantes referencesBloquantes) {
         this.projectRepository = projectRepository;
+        this.programmeVisible = programmeVisible;
         this.zoneRepository = zoneRepository;
         this.habilitationRepository = habilitationRepository;
         this.pieceJointeRepository = pieceJointeRepository;
@@ -39,8 +41,7 @@ public class SuppressionProjetService {
 
     @Transactional
     public void delete(UUID id) {
-        CfgProject projet = projectRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(ProjetService.PROJET_INTROUVABLE + id));
+        CfgProject projet = programmeVisible.trouver(id);
         List<String> bloquantes = referencesBloquantes.compter(ReferencesBloquantes.PROGRAMME, id);
         if (!bloquantes.isEmpty()) {
             throw new ConflictException("Le programme « %s » ne peut pas être supprimé : il est référencé par %s."

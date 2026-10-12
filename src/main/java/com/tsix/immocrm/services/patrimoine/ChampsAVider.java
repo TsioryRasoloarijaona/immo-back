@@ -4,7 +4,6 @@ import com.tsix.immocrm.exceptions.ChampInvalideException;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.RecordComponent;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,10 +56,7 @@ final class ChampsAVider<E> {
         if (noms == null || noms.isEmpty()) {
             return;
         }
-        List<Consumer<E>> aAppliquer = new ArrayList<>();
-        for (String nom : noms) {
-            aAppliquer.add(videurValide(nom, demande));
-        }
+        List<Consumer<E>> aAppliquer = noms.stream().map(nom -> videurValide(nom, demande)).toList();
         aAppliquer.forEach(videur -> videur.accept(entite));
     }
 

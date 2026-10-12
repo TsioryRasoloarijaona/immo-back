@@ -14,6 +14,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.tsix.immocrm.fixtures.FixturePatrimoine.ROLE_ADMIN;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.not;
@@ -30,6 +31,8 @@ class ReferentielPatrimoineControllerTest {
 
     private static final String BASE = "/api/referentiels-patrimoine/";
     private static final String CODES = "$[*].code";
+    private static final String PROJETS_FACTURATION = "projets-facturation";
+    private static final String ENTITE_ID = "entiteId";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureFichePatrimoine fiche;
@@ -92,19 +95,41 @@ class ReferentielPatrimoineControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = ROLE_ADMIN)
     void projetsFacturation_filtresParEntite() throws Exception {
         CfgCompany entite = patrimoine.entite("ENT-REF-FACT", true);
         CfgCompany autre = patrimoine.entite("ENT-REF-FACT2", true);
         PrjProject duMeme = fiche.projetChantier("PRJ-FACT-A", entite);
         PrjProject dUnAutre = fiche.projetChantier("PRJ-FACT-B", autre);
 
-        mockMvc.perform(get(BASE + "projets-facturation").param("entiteId", entite.getId().toString()))
+        mockMvc.perform(get(BASE + PROJETS_FACTURATION).param(ENTITE_ID, entite.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(CODES, hasItem(duMeme.getCode())))
                 .andExpect(jsonPath(CODES, not(hasItem(dUnAutre.getCode()))));
 
-        mockMvc.perform(get(BASE + "projets-facturation"))
+        mockMvc.perform(get(BASE + PROJETS_FACTURATION))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(CODES, hasItems(duMeme.getCode(), dUnAutre.getCode())));
+    }
+
+    @Test
+    @WithMockUser(roles = ROLE_ADMIN)
+    void projetsFacturation_entiteInactive_exclue() throws Exception {
+        CfgCompany inactive = patrimoine.entite("ENT-REF-FACT-OFF", false);
+        PrjProject masque = fiche.projetChantier("PRJ-FACT-OFF", inactive);
+
+        mockMvc.perform(get(BASE + PROJETS_FACTURATION).param(ENTITE_ID, inactive.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mockMvc.perform(get(BASE + PROJETS_FACTURATION))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(CODES, not(hasItem(masque.getCode()))));
+    }
+
+    @Test
+    void projetsFacturation_403_nonAdministrateur() throws Exception {
+        mockMvc.perform(get(BASE + PROJETS_FACTURATION))
+                .andExpect(status().isForbidden());
     }
 }

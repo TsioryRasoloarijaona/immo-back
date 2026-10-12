@@ -37,7 +37,6 @@ import static com.tsix.immocrm.services.patrimoine.ReglesSaisie.texte;
 @Transactional(readOnly = true)
 public class ProjetService {
 
-    static final String PROJET_INTROUVABLE = "Projet introuvable: ";
     private static final String CHAMP_ENTITE = "entiteId";
     private static final String CHAMP_CODE = "code";
     private static final String CHAMP_DESCRIPTION = "description";
@@ -70,6 +69,7 @@ public class ProjetService {
                     .nul("dateFinCommercialisation", CfgProject::setMarketingEndDate);
 
     private final CfgProjectRepository projectRepository;
+    private final ProgrammeVisible programmeVisible;
     private final CfgTrancheRepository trancheRepository;
     private final CfgCompanyRepository companyRepository;
     private final ReferencesFiche references;
@@ -77,11 +77,12 @@ public class ProjetService {
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
-    public ProjetService(CfgProjectRepository projectRepository, CfgTrancheRepository trancheRepository,
-                         CfgCompanyRepository companyRepository, ReferencesFiche references,
-                         HabilitationCreateur habilitationCreateur, UtilisateurAffiche utilisateurAffiche,
-                         Clock clock) {
+    public ProjetService(CfgProjectRepository projectRepository, ProgrammeVisible programmeVisible,
+                         CfgTrancheRepository trancheRepository, CfgCompanyRepository companyRepository,
+                         ReferencesFiche references, HabilitationCreateur habilitationCreateur,
+                         UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.projectRepository = projectRepository;
+        this.programmeVisible = programmeVisible;
         this.trancheRepository = trancheRepository;
         this.companyRepository = companyRepository;
         this.references = references;
@@ -97,21 +98,18 @@ public class ProjetService {
     }
 
     public ProjetDetailDto findById(UUID id) {
-        return projectRepository.findById(id)
-                .map(ProjetService::toDetail)
-                .orElseThrow(() -> new ResourceNotFoundException(PROJET_INTROUVABLE + id));
+        return toDetail(programmeVisible.trouver(id));
     }
 
     public Page<TrancheListItemDto> findTranches(UUID projetId, Pageable pageable) {
-        if (!projectRepository.existsById(projetId)) {
-            throw new ResourceNotFoundException(PROJET_INTROUVABLE + projetId);
-        }
+        programmeVisible.trouver(projetId);
         return trancheRepository.findByCfgProjectId(projetId, pageable).map(TrancheService::toListItem);
     }
 
     /** {@code CfgProject.GetDefaultValuesFromCompany} : Code et Description compris, comme OMRAN. */
     public ProjetEcritureDto defautsEntite(UUID entiteId) {
         CfgCompany entite = companyRepository.findById(entiteId)
+                .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Entité introuvable: " + entiteId));
         return ProjetEcritureDto.builder()
                 .entiteId(entite.getId())
@@ -160,8 +158,7 @@ public class ProjetService {
 
     @Transactional
     public ProjetDetailDto update(UUID id, ProjetEcritureDto demande) {
-        CfgProject projet = projectRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(PROJET_INTROUVABLE + id));
+        CfgProject projet = programmeVisible.trouver(id);
         if (demande.entiteId() != null) {
             projet.setCfgCompany(entiteActive(demande.entiteId()));
         }

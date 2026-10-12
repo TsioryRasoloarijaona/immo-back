@@ -4,7 +4,10 @@ import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.services.referentiel.ReferentielPatrimoineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -57,9 +60,15 @@ public class ReferentielPatrimoineController {
     }
 
     @GetMapping("/projets-facturation")
-    @Operation(summary = "Projets de travaux (PrjProject) proposés comme « Projet de facturation pour les dépenses »")
+    @PreAuthorize("hasRole('Administrateur')")
+    @Operation(summary = "Projets de travaux (PrjProject) proposés comme « Projet de facturation pour les dépenses »",
+            description = "Réservé à l'Administrateur ; seuls les projets des entités actives.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Projets (liste vide si l'entité est inactive ou inconnue)."),
+            @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur.")
+    })
     public List<ReferentielItemDto> projetsFacturation(
-            @Parameter(description = "Entité juridique (CfgCompany.id) de la tranche ; absent = tous les projets.")
+            @Parameter(description = "Entité juridique (CfgCompany.id) de la tranche ; absent = toutes les entités actives.")
             @RequestParam(required = false) UUID entiteId) {
         return service.projetsFacturation(entiteId);
     }

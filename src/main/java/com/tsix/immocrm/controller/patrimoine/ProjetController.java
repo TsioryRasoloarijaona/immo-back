@@ -40,6 +40,7 @@ public class ProjetController {
 
     private static final String ID_PROGRAMME = "Identifiant du programme (CfgProject.PKey).";
     private static final String REFUS_ROLE = "L'appelant n'a pas le rôle Administrateur.";
+    private static final String PROGRAMME_INTROUVABLE = "Aucun programme avec cet id, ou programme d'une entité inactive.";
 
     private final ProjetService projetService;
     private final SuppressionProjetService suppressionProjetService;
@@ -62,7 +63,7 @@ public class ProjetController {
     @Operation(summary = "Valeurs par défaut d'un programme, reprises de l'entité juridique")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Corps de création pré-rempli (à corriger avant POST)."),
-            @ApiResponse(responseCode = "404", description = "Aucune entité avec cet id.")
+            @ApiResponse(responseCode = "404", description = "Aucune entité active avec cet id.")
     })
     public ProjetEcritureDto defautsEntite(
             @Parameter(description = "Entité juridique (CfgCompany.PKey).") @PathVariable UUID entiteId) {
@@ -75,7 +76,7 @@ public class ProjetController {
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Programme supprimé avec ses zones et habilitations."),
             @ApiResponse(responseCode = "403", description = REFUS_ROLE),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id."),
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE),
             @ApiResponse(responseCode = "409", description = "Une tranche, un article ou une autre donnée le référence.")
     })
     public ResponseEntity<Void> delete(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
@@ -87,7 +88,7 @@ public class ProjetController {
     @Operation(summary = "Fiche d'un programme")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Fiche du programme."),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id.")
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE)
     })
     public ProjetDetailDto findById(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
         return projetService.findById(id);
@@ -97,7 +98,7 @@ public class ProjetController {
     @Operation(summary = "Tranches d'un programme")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Tranches du programme (éventuellement aucune)."),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id.")
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE)
     })
     public PageDto<TrancheListItemDto> findTranches(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -124,7 +125,7 @@ public class ProjetController {
             @ApiResponse(responseCode = "200", description = "Programme modifié ; renvoie sa fiche."),
             @ApiResponse(responseCode = "400", description = "Mêmes causes qu'à la création."),
             @ApiResponse(responseCode = "403", description = REFUS_ROLE),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id."),
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE),
             @ApiResponse(responseCode = "409", description = "Code déjà utilisé par un autre programme.")
     })
     public ProjetDetailDto update(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,

@@ -8,7 +8,6 @@ import com.tsix.immocrm.exceptions.ChampEnConflitException;
 import com.tsix.immocrm.exceptions.ChampInvalideException;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectZoneRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import org.springframework.stereotype.Service;
@@ -30,16 +29,16 @@ public class ZoneProjetService {
     private static final String CHAMP_CODE = "code";
     private static final String CHAMP_PARENT = "parentId";
 
-    private final CfgProjectRepository projectRepository;
+    private final ProgrammeVisible programmeVisible;
     private final CfgProjectZoneRepository zoneRepository;
     private final ReferencesBloquantes referencesBloquantes;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
-    public ZoneProjetService(CfgProjectRepository projectRepository, CfgProjectZoneRepository zoneRepository,
+    public ZoneProjetService(ProgrammeVisible programmeVisible, CfgProjectZoneRepository zoneRepository,
                              ReferencesBloquantes referencesBloquantes, UtilisateurAffiche utilisateurAffiche,
                              Clock clock) {
-        this.projectRepository = projectRepository;
+        this.programmeVisible = programmeVisible;
         this.zoneRepository = zoneRepository;
         this.referencesBloquantes = referencesBloquantes;
         this.utilisateurAffiche = utilisateurAffiche;
@@ -114,8 +113,7 @@ public class ZoneProjetService {
     }
 
     private CfgProject programme(UUID projetId) {
-        return projectRepository.findById(projetId)
-                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable: " + projetId));
+        return programmeVisible.trouver(projetId);
     }
 
     private CfgProjectZone zone(UUID projetId, UUID zoneId) {

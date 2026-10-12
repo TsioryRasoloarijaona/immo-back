@@ -13,8 +13,8 @@ Reprend `CfgProject.GetDefaultValuesFromCompany` d'OMRAN : à l'écran, au choix
 données par défaut de l'entité sélectionnée ? ». Copie **le code et le libellé** de l'entité (comme OMRAN : le
 deuxième programme d'une même entité devra changer de code, sinon 409 à l'enregistrement), adresses, ville, code
 postal, pays, téléphones, email, site, « Courrier fait à », signataire, responsables technique et commercial et
-description détaillée (tronquée à 500 caractères). Ne crée rien. Fonctionne aussi pour une entité inactive, que le
-POST refusera ensuite.
+description détaillée (tronquée à 500 caractères). Ne crée rien. Une entité inactive est traitée comme inconnue
+(404, administrateur compris).
 
 ## create
 

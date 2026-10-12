@@ -32,7 +32,8 @@ public class ZoneProjetController {
     private static final String ID_PROGRAMME = "Identifiant du programme (CfgProject.PKey).";
     private static final String ID_ZONE = "Identifiant de la zone (CfgProjectZone.PKey).";
     private static final String REFUS_ROLE = "L'appelant n'a pas le rôle Administrateur.";
-    private static final String INTROUVABLE = "Programme ou zone introuvable.";
+    private static final String INTROUVABLE = "Programme ou zone introuvable (programme d'une entité inactive compris).";
+    private static final String PROGRAMME_INTROUVABLE = "Aucun programme avec cet id, ou programme d'une entité inactive.";
 
     private final ZoneProjetService zoneService;
 
@@ -44,7 +45,7 @@ public class ZoneProjetController {
     @Operation(summary = "Zones du programme, à plat (parentId), triées par niveau puis ordre")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Zones (éventuellement aucune)."),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id.")
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE)
     })
     public List<ZoneProjetDto> findAll(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
         return zoneService.findAll(id);
@@ -57,7 +58,7 @@ public class ZoneProjetController {
             @ApiResponse(responseCode = "201", description = "Zone créée."),
             @ApiResponse(responseCode = "400", description = "Code ou description manquant ; zone parente hors programme."),
             @ApiResponse(responseCode = "403", description = REFUS_ROLE),
-            @ApiResponse(responseCode = "404", description = "Aucun programme avec cet id."),
+            @ApiResponse(responseCode = "404", description = PROGRAMME_INTROUVABLE),
             @ApiResponse(responseCode = "409", description = "Code déjà utilisé par une zone sœur.")
     })
     public ResponseEntity<ZoneProjetDto> create(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,

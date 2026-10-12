@@ -20,6 +20,9 @@ public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
     @Query("SELECT p FROM CfgProject p WHERE p.cfgCompany.isActive = true")
     Page<CfgProject> findDesEntitesActives(Pageable pageable);
 
+    @Query("SELECT p FROM CfgProject p WHERE p.id = :id AND p.cfgCompany.isActive = true")
+    Optional<CfgProject> findDUneEntiteActive(@Param("id") UUID id);
+
     /** {@code motif} = {@code %texte%} en minuscules, ou {@code null} pour tout ; code, libellé, entité, ville. */
     @Query("SELECT p FROM CfgProject p WHERE p.cfgCompany.isActive = true AND (:motif IS NULL "
             + "OR lower(p.code) LIKE :motif OR lower(p.description) LIKE :motif OR lower(p.city) LIKE :motif "
