@@ -17,7 +17,9 @@ public final class HtmlNote {
 
     private static final Pattern BLOCS_DANGEREUX = Pattern.compile(
             "<(script|style)\\b[^>]*>.*?</\\1\\s*>|<!--.*?-->", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern BALISE = Pattern.compile("<\\s*(/?)\\s*([a-zA-Z][a-zA-Z0-9]*)[^<>]*>");
+    // Quantificateurs possessifs : sans eux, nom et attributs se disputent les mêmes caractères (retour arrière
+    // quadratique sur une balise jamais fermée, entrée utilisateur).
+    private static final Pattern BALISE = Pattern.compile("<\\s*+(/?)\\s*+([a-zA-Z][a-zA-Z0-9]*+)[^<>]*+>");
     private static final Pattern TOUTE_BALISE = Pattern.compile("<[^<>]*>");
 
     private HtmlNote() {

@@ -4,7 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** Le JSON {@code Details} d'OMRAN : un tableau de tableaux de chaînes {@code [propriété, ancienne, nouvelle(, code)]}. */
@@ -45,12 +45,9 @@ public final class DetailsAudit {
         if (lignes == null) {
             return List.of();
         }
-        List<ChangementAudit> changements = new ArrayList<>();
-        for (String[] ligne : lignes) {
-            if (ligne != null && ligne.length >= 3) {
-                changements.add(new ChangementAudit(ligne[0], ligne[1], ligne[2]));
-            }
-        }
-        return changements;
+        return Arrays.stream(lignes)
+                .filter(ligne -> ligne != null && ligne.length >= 3)
+                .map(ligne -> new ChangementAudit(ligne[0], ligne[1], ligne[2]))
+                .toList();
     }
 }

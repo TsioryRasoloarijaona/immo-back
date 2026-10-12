@@ -102,8 +102,9 @@ public class NoteService {
         }
     }
 
+    // Assaini aussi à la lecture : OMRAN écrit AdmMessage.Notes sans filtre, et le front injecte ce HTML.
     private static NoteDto versDto(AdmMessage m) {
-        return new NoteDto(m.getId(), m.getDocDate(), m.getUserName(), m.getDescription(), m.getNotes(),
-                m.getReminderDate());
+        return new NoteDto(m.getId(), m.getDocDate(), m.getUserName(), m.getDescription(),
+                HtmlNote.assainir(m.getNotes()), m.getReminderDate());
     }
 }

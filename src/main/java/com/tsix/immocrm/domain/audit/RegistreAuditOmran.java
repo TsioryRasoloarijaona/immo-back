@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,11 +42,21 @@ public final class RegistreAuditOmran {
                             : new ParentAudit(TRANCHE.objectType(), l.getCfgTranche().getId())))
             .collect(Collectors.toUnmodifiableMap(DescripteurAudit::classe, d -> d));
 
+    private static final Set<String> OBJECT_TYPES = Stream.of(PROGRAMME, TRANCHE, ARTICLE, SOUS_ARTICLE, TERRAIN,
+                    ENTITE_JURIDIQUE, TERRAIN_DE_TRANCHE)
+            .map(TypeObjetAudit::objectType)
+            .collect(Collectors.toUnmodifiableSet());
+
     private RegistreAuditOmran() {
     }
 
     public static Optional<DescripteurAudit<?>> pour(Class<?> classe) {
         return Optional.ofNullable(DESCRIPTEURS.get(classe));
+    }
+
+    /** {@code ObjectType} que ce registre écrit : seules lignes que la lecture du journal sert (§10). */
+    public static Set<String> objectTypes() {
+        return OBJECT_TYPES;
     }
 
     private static <T> DescripteurAudit<?> racine(Class<T> classe, Function<T, TypeObjetAudit> type,

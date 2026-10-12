@@ -36,23 +36,32 @@ class AuditControllerTest {
     @Autowired private FixturePatrimoine fixture;
     @Autowired private AdmWebHistoricsRepository repository;
 
+    private static final String TYPE_TRANCHE = "Yes.Cfg.CfgTranche";
+
     private AdmUser lecteur;
-    private final UUID tranche = UUID.randomUUID();
+    private UUID tranche;
 
     @BeforeEach
     void setUp() {
         lecteur = fixture.utilisateur("LECT-AUDIT");
+        tranche = fixture.tranche("TR-AUDIT-CTRL",
+                fixture.projet("PRJ-AUDIT-CTRL", fixture.entite("ENT-AUDIT-CTRL", true))).getId();
     }
 
     private AdmWebHistorics ligne(UUID objetId, UUID parentId, LocalDateTime date, String libelle, String details) {
+        return ligne(objetId, parentId, TYPE_TRANCHE, date, libelle, details);
+    }
+
+    private AdmWebHistorics ligne(UUID objetId, UUID parentId, String type, LocalDateTime date, String libelle,
+                                  String details) {
         AdmWebHistorics h = new AdmWebHistorics();
         h.setId(UUID.randomUUID());
         h.setObjectId(objetId);
         h.setParentObjectId(parentId);
-        h.setParentObjectType(parentId == null ? null : "Yes.Cfg.CfgTranche");
+        h.setParentObjectType(parentId == null ? null : type);
         h.setActionDateTime(date);
         h.setAction("Modified");
-        h.setObjectType("Yes.Cfg.CfgTranche");
+        h.setObjectType(type);
         h.setObjectTypeLabel("Tranche");
         h.setObjectLabel(libelle);
         h.setDescription(libelle);
@@ -104,10 +113,30 @@ class AuditControllerTest {
     }
 
     @Test
-    void objetSansLigne_pageVide() throws Exception {
-        mockMvc.perform(get(URL).param(OBJET_ID, UUID.randomUUID().toString()).with(connecte(lecteur)))
+    void ficheSansLigne_pageVide() throws Exception {
+        mockMvc.perform(get(URL).param(OBJET_ID, tranche.toString()).with(connecte(lecteur)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void idHorsRegistre_404MemeAvecDesLignes() throws Exception {
+        UUID facture = UUID.randomUUID();
+        ligne(facture, null, "Yes.Stl.Invoice", T0, "FAC-1", "[]");
+
+        mockMvc.perform(get(URL).param(OBJET_ID, facture.toString()).with(connecte(lecteur)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void lignesDUnTypeHorsRegistre_jamaisServies() throws Exception {
+        ligne(tranche, null, T0, "tranche", "[]");
+        ligne(tranche, null, "Yes.Com.Prospection.Prospection", T0.plusDays(1), "meme id autre type", "[]");
+        ligne(UUID.randomUUID(), tranche, "Yes.Com.Prospection.Prospection", T0.plusDays(2), "enfant etranger", "[]");
+
+        mockMvc.perform(get(URL).param(OBJET_ID, tranche.toString()).with(connecte(lecteur)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].libelleObjet").value(contains("tranche")));
     }
 
     @Test

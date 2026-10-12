@@ -30,7 +30,9 @@ public class AuditController {
     @Operation(summary = "Journal d'audit OMRAN d'un objet et de ses lignes enfants, du plus récent au plus ancien")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Page de lignes (éventuellement vide)."),
-            @ApiResponse(responseCode = "400", description = "objetId absent ou mal formé ; page ou size hors bornes.")
+            @ApiResponse(responseCode = "400", description = "objetId absent ou mal formé ; page ou size hors bornes."),
+            @ApiResponse(responseCode = "404",
+                    description = "objetId ne désigne ni un programme, ni une tranche, ni un article, ni une entité.")
     })
     public PageDto<LigneAuditDto> lignes(
             @Parameter(description = "PKey de l'objet (programme, tranche, article…).", required = true)

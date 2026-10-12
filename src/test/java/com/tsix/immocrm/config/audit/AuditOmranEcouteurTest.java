@@ -3,6 +3,7 @@ package com.tsix.immocrm.config.audit;
 import com.tsix.immocrm.domain.audit.ActionAudit;
 import com.tsix.immocrm.domain.audit.ChangementAudit;
 import com.tsix.immocrm.domain.audit.DetailsAudit;
+import com.tsix.immocrm.domain.audit.RegistreAuditOmran;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmWebHistorics;
@@ -260,7 +261,7 @@ class AuditOmranEcouteurTest {
             assertThat(l.getParentObjectType()).isEqualTo("Yes.Cfg.CfgTranche");
             assertThat(l.getParentObjectId()).isEqualTo(tranche.getId());
         });
-        assertThat(historiques.duObjet(tranche.getId(), Pageable.unpaged()))
+        assertThat(historiques.duObjet(tranche.getId(), RegistreAuditOmran.objectTypes(), Pageable.unpaged()))
                 .extracting(AdmWebHistorics::getObjectId)
                 .containsExactly(lien.getId());
     }
