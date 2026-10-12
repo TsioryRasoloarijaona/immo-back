@@ -41,12 +41,30 @@ public class AlerteRelanceService {
             throw new IllegalArgumentException("poserAlerte exige une interaction de prospection datée d'une alerte");
         }
         UUID prospectionId = interaction.getComProspection().getId();
+        return remplacerAlerte(interaction,
+                messageRepository.findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(prospectionId),
+                alerteRepository.alertesActivesDeLaProspection(prospectionId));
+    }
 
+    /**
+     * GEN0005 sur une fiche article : la nouvelle alerte désarme celles des autres actions propres de l'article
+     * (FEATURE-patrimoine-audit-actions.md §3). Même séquence que {@link #poserAlerte}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AdmAlertData poserAlerteArticle(ComActionMessage action) {
+        if (action.getAlertValidityDate() == null || action.getStkItem() == null) {
+            throw new IllegalArgumentException("poserAlerteArticle exige une action d'article datée d'une alerte");
+        }
+        UUID articleId = action.getStkItem().getId();
+        return remplacerAlerte(action, messageRepository.relancesDeLArticle(articleId),
+                alerteRepository.alertesActivesDeLArticle(articleId));
+    }
+
+    private AdmAlertData remplacerAlerte(ComActionMessage interaction, List<ComActionMessage> precedentes,
+                                         List<AdmAlertData> actives) {
         // 1. WithoutRevival = 1 sur les autres relances — le prédicat exact du légataire. Entités
         //    une à une, pas de @Modifying JPQL : il échapperait au collecteur Hibernate qui
         //    rapatrie les écritures dans la copie de lecture.
-        List<ComActionMessage> precedentes = messageRepository
-                .findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(prospectionId);
         for (ComActionMessage m : precedentes) {
             if (!m.getId().equals(interaction.getId()) && !Boolean.TRUE.equals(m.getIsUnpaid())) {
                 m.setWithoutRevival(true);
@@ -55,7 +73,7 @@ public class AlerteRelanceService {
         messageRepository.saveAll(precedentes);
 
         // 2. Active = 0 sur leurs alertes. La nouvelle n'a pas encore de ligne : rien à exclure.
-        desactiverAlertes(prospectionId);
+        desactiver(actives);
 
         // 3. La nouvelle alerte, au format constant des lignes OMRAN.
         AdmAlertData alerte = new AdmAlertData();
@@ -79,11 +97,10 @@ public class AlerteRelanceService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void desarmerToutes(UUID prospectionId) {
         messageRepository.desarmerRelancesDeLaProspection(prospectionId);
-        desactiverAlertes(prospectionId);
+        desactiver(alerteRepository.alertesActivesDeLaProspection(prospectionId));
     }
 
-    private void desactiverAlertes(UUID prospectionId) {
-        List<AdmAlertData> actives = alerteRepository.alertesActivesDeLaProspection(prospectionId);
+    private void desactiver(List<AdmAlertData> actives) {
         for (AdmAlertData a : actives) {
             a.setActive(false);
         }

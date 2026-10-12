@@ -26,4 +26,15 @@ public interface AdmAlertDataRepository extends JpaRepository<AdmAlertData, UUID
               AND m.StrFolderStatusId IS NULL
               AND a.Active = 1""", nativeQuery = true)
     List<AdmAlertData> alertesActivesDeLaProspection(@Param("prospectionId") UUID prospectionId);
+
+    /** Alertes actives des actions propres d'un article (voir {@code ComActionMessageRepository#relancesDeLArticle}). */
+    @Query(value = """
+            SELECT a.* FROM AdmAlertData a
+            JOIN ComActionMessage m ON m.PKey = a.RelatedKey
+            WHERE m.StkItemId = :articleId
+              AND m.ComProspectionId IS NULL
+              AND m.ComFolderId IS NULL
+              AND m.ComDocumentId IS NULL
+              AND a.Active = 1""", nativeQuery = true)
+    List<AdmAlertData> alertesActivesDeLArticle(@Param("articleId") UUID articleId);
 }

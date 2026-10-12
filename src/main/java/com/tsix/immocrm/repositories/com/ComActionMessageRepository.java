@@ -21,6 +21,11 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
     /** Ce que le bureau désarme quand une nouvelle alerte est posée — voir {@code AlerteRelanceService}. */
     List<ComActionMessage> findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(UUID prospectionId);
 
+    /** Même règle pour le panneau Actions d'un article : ses actions propres (ni prospection ni dossier) datées. */
+    @Query("SELECT m FROM ComActionMessage m WHERE m.stkItem.id = :articleId AND m.comProspection IS NULL "
+            + "AND m.comFolder IS NULL AND m.comDocument IS NULL AND m.alertValidityDate IS NOT NULL")
+    List<ComActionMessage> relancesDeLArticle(@Param("articleId") UUID articleId);
+
     Page<ComActionMessage> findByComProspectionIdOrderByDocDateDesc(UUID prospectionId, Pageable pageable);
 
     Page<ComActionMessage> findByCfgTierIdOrderByDocDateDesc(UUID tierId, Pageable pageable);

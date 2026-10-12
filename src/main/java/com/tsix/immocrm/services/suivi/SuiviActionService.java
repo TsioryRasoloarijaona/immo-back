@@ -19,6 +19,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -89,7 +90,27 @@ public class SuiviActionService {
             spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
                     root, cb, groupeColonne.chemin(), granularite, groupeValeur));
         }
-        Page<ComActionMessage> page = messageRepository.findAll(spec, pageable);
+        return servir(messageRepository.findAll(spec, pageable), colonnes);
+    }
+
+    /**
+     * Panneau « Actions » d'une fiche article (FEATURE-patrimoine-audit-actions.md §3) : toutes les actions de
+     * l'article ({@code StkItemId}), visibilité par entité appliquée, sans la portée « mes actions » du suivi.
+     */
+    public Page<SuiviActionDto> parArticle(UUID articleId, Pageable pageable) {
+        Specification<ComActionMessage> deLArticle = (root, query, cb) ->
+                cb.equal(root.get("stkItem").get("id"), articleId);
+        return servir(messageRepository.findAll(deLArticle.and(perimetreService.filtreInteractions()), pageable),
+                ColonneSuiviAction.resoudre(null));
+    }
+
+    /** Une action, projetée comme une ligne du suivi (colonnes par défaut). */
+    public SuiviActionDto parId(UUID id) {
+        return servir(new PageImpl<>(List.of(messageRepository.getReferenceById(id))),
+                ColonneSuiviAction.resoudre(null)).getContent().getFirst();
+    }
+
+    private Page<SuiviActionDto> servir(Page<ComActionMessage> page, Set<ColonneSuiviAction> colonnes) {
         if (page.isEmpty()) {
             return page.map(m -> null);
         }

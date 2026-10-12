@@ -68,15 +68,18 @@ jobs:
       # -b fait sortir sqlcmd en erreur des le premier Msg, sinon un DDL casse defilerait sans
       # faire echouer l'etape et la suite echouerait plus loin, sur un symptome sans rapport.
       # -I active QUOTED_IDENTIFIER, requis par une partie du DDL genere.
+      # Tous les ci/schema/*.sql, tries par nom (LC_ALL=C) : chaque lot ajoute ses fichiers
+      # numerotes sans toucher a ce workflow (convention dans ci/schema/README.md).
       - name: Construire le schema
         run: |
           docker cp ci/schema sqlserver:/schema
           docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b \
             -Q "CREATE DATABASE [$DB_TEST]"
-          for f in 010_tables 020_foreign_keys 030_triggers 040_seed_reference 050_views; do
-            echo "--- $f.sql"
+          for f in $(ls ci/schema/*.sql | LC_ALL=C sort); do
+            nom=$(basename "$f")
+            echo "--- $nom"
             docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b -I \
-              -d "$DB_TEST" -i "/schema/$f.sql"
+              -d "$DB_TEST" -i "/schema/$nom"
           done
 
       # mvnw est versionne en 100644 : sans ce chmod, ./mvnw sort en "Permission denied".

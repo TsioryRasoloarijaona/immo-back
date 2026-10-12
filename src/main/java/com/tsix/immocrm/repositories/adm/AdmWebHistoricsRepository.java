@@ -1,0 +1,20 @@
+package com.tsix.immocrm.repositories.adm;
+
+import com.tsix.immocrm.entities.adm.AdmWebHistorics;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.UUID;
+
+public interface AdmWebHistoricsRepository extends JpaRepository<AdmWebHistorics, UUID> {
+
+    /** Comme l'écran Audit d'OMRAN : l'objet lui-même et ses lignes enfants. Tri porté par le {@code Pageable}. */
+    @Query("SELECT h FROM AdmWebHistorics h WHERE h.objectId = :id OR h.parentObjectId = :id")
+    Page<AdmWebHistorics> duObjet(@Param("id") UUID objetId, Pageable pageable);
+
+    List<AdmWebHistorics> findByObjectId(UUID objectId);
+}
