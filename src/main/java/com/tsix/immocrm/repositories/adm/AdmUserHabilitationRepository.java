@@ -16,6 +16,11 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
             + "WHERE h.admUser.id = :admUserId AND h.cfgProject IS NOT NULL")
     List<UUID> findProjetIdsByAdmUserId(@Param("admUserId") UUID admUserId);
 
+    /** Périmètre Chantier : colonne UUID brute {@code PrjProjectId}, NULL exclus (FEATURE-projet-chantier-lecture §2). */
+    @Query("SELECT DISTINCT h.prjProjectId FROM AdmUserHabilitation h "
+            + "WHERE h.admUser.id = :admUserId AND h.prjProjectId IS NOT NULL")
+    List<UUID> findPrjProjetIdsByAdmUserId(@Param("admUserId") UUID admUserId);
+
     /** Le seul sous-ensemble que {@code PUT /api/utilisateurs/{admUserId}/projets} peut supprimer. */
     List<AdmUserHabilitation> findByAdmUserIdAndCfgProjectIsNotNull(UUID admUserId);
 

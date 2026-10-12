@@ -1606,6 +1606,46 @@ REFERENCES [dbo].[StlSettlementType] ([PKey])
 GO
 ALTER TABLE [dbo].[PrjMarket] CHECK CONSTRAINT [StlSettlementType_PrjMarket_FK1]
 GO
+ALTER TABLE [dbo].[PrjMarketLine]  WITH CHECK ADD  CONSTRAINT [BuyItem_PrjMarketLine_FK1] FOREIGN KEY([BuyItemId])
+REFERENCES [dbo].[BuyItem] ([PKey])
+ON DELETE SET NULL
+GO
+ALTER TABLE [dbo].[PrjMarketLine] CHECK CONSTRAINT [BuyItem_PrjMarketLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjMarketLine]  WITH CHECK ADD  CONSTRAINT [PrjMarket_PrjMarketLine_FK1] FOREIGN KEY([PrjMarketId])
+REFERENCES [dbo].[PrjMarket] ([PKey])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[PrjMarketLine] CHECK CONSTRAINT [PrjMarket_PrjMarketLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjMarketLine]  WITH CHECK ADD  CONSTRAINT [PrjMarketLine_StlCategory_FK] FOREIGN KEY([StlCategoryId])
+REFERENCES [dbo].[StlCategory] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjMarketLine] CHECK CONSTRAINT [PrjMarketLine_StlCategory_FK]
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation]  WITH CHECK ADD  CONSTRAINT [PrjMarketLineEstimation_BuyItem_FK1] FOREIGN KEY([BuyItemId])
+REFERENCES [dbo].[BuyItem] ([PKey])
+ON DELETE SET NULL
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation] CHECK CONSTRAINT [PrjMarketLineEstimation_BuyItem_FK1]
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation]  WITH CHECK ADD  CONSTRAINT [PrjMarketLineEstimation_PrjMarket_FK1] FOREIGN KEY([PrjMarketId])
+REFERENCES [dbo].[PrjMarket] ([PKey])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation] CHECK CONSTRAINT [PrjMarketLineEstimation_PrjMarket_FK1]
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation]  WITH CHECK ADD  CONSTRAINT [PrjMarketLineEstimation_StlCategory_FK1] FOREIGN KEY([StlCategoryId])
+REFERENCES [dbo].[StlCategory] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjMarketLineEstimation] CHECK CONSTRAINT [PrjMarketLineEstimation_StlCategory_FK1]
+GO
+ALTER TABLE [dbo].[PrjMarketLineGrouping]  WITH CHECK ADD  CONSTRAINT [PrjMarketLineGrouping_PrjMarket_FK1] FOREIGN KEY([PrjMarketId])
+REFERENCES [dbo].[PrjMarket] ([PKey])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[PrjMarketLineGrouping] CHECK CONSTRAINT [PrjMarketLineGrouping_PrjMarket_FK1]
+GO
 ALTER TABLE [dbo].[PrjProject]  WITH CHECK ADD  CONSTRAINT [PrjProject__CfgTierManager_FK1] FOREIGN KEY([CfgTierManagerId])
 REFERENCES [dbo].[CfgTier] ([PKey])
 GO
@@ -1661,6 +1701,48 @@ REFERENCES [dbo].[BuyDocument] ([PKey])
 ON DELETE SET NULL
 GO
 ALTER TABLE [dbo].[PrjWorkingOut] CHECK CONSTRAINT [PrjWorkingOut_BuyDocument_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine]  WITH CHECK ADD  CONSTRAINT [BuyItem_PrjWorkingOutLine_FK1] FOREIGN KEY([BuyItemId])
+REFERENCES [dbo].[BuyItem] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine] CHECK CONSTRAINT [BuyItem_PrjWorkingOutLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine]  WITH CHECK ADD  CONSTRAINT [PrjMarketLine_PrjWorkingOutLine_FK1] FOREIGN KEY([PrjMarketLineId])
+REFERENCES [dbo].[PrjMarketLine] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine] CHECK CONSTRAINT [PrjMarketLine_PrjWorkingOutLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOut_PrjWorkingOutLine_FK1] FOREIGN KEY([PrjWorkingOutId])
+REFERENCES [dbo].[PrjWorkingOut] ([PKey])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine] CHECK CONSTRAINT [PrjWorkingOut_PrjWorkingOutLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOutLine_StlCategory_FK1] FOREIGN KEY([StlCategoryId])
+REFERENCES [dbo].[StlCategory] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLine] CHECK CONSTRAINT [PrjWorkingOutLine_StlCategory_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOutLineExtra__PrjMarketLine_FK1] FOREIGN KEY([PrjMarketLineId])
+REFERENCES [dbo].[PrjMarketLine] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra] CHECK CONSTRAINT [PrjWorkingOutLineExtra__PrjMarketLine_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOutLineExtra__PrjWorkingOut_FK1] FOREIGN KEY([PrjWorkingOutId])
+REFERENCES [dbo].[PrjWorkingOut] ([PKey])
+ON DELETE CASCADE
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra] CHECK CONSTRAINT [PrjWorkingOutLineExtra__PrjWorkingOut_FK1]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOutLineExtra_StlCategory_FK] FOREIGN KEY([StlCategoryId])
+REFERENCES [dbo].[StlCategory] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutLineExtra] CHECK CONSTRAINT [PrjWorkingOutLineExtra_StlCategory_FK]
+GO
+ALTER TABLE [dbo].[PrjWorkingOutRetainedLine]  WITH CHECK ADD  CONSTRAINT [PrjWorkingOutRetainedLine_PrjWorkingOut_FK1] FOREIGN KEY([PrjWorkingOutId])
+REFERENCES [dbo].[PrjWorkingOut] ([PKey])
+GO
+ALTER TABLE [dbo].[PrjWorkingOutRetainedLine] CHECK CONSTRAINT [PrjWorkingOutRetainedLine_PrjWorkingOut_FK1]
 GO
 ALTER TABLE [dbo].[PrmRequestOffer]  WITH CHECK ADD  CONSTRAINT [PrmRequestOffer__CfgTier_FK1] FOREIGN KEY([CfgTierId])
 REFERENCES [dbo].[CfgTier] ([PKey])

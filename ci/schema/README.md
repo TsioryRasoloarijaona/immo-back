@@ -6,8 +6,8 @@ chaque *pull request*.
 
 | Fichier | Contenu | Origine |
 |---|---|---|
-| `010_tables.sql` | 165 tables : colonnes, clés primaires, contraintes `CHECK`, valeurs par défaut, index | généré |
-| `020_foreign_keys.sql` | 562 clés étrangères, dans une passe séparée pour s'affranchir de l'ordre de création | généré |
+| `010_tables.sql` | 171 tables : colonnes, clés primaires, contraintes `CHECK`, valeurs par défaut, index | généré (+ 6 ajoutées à la main, voir ci-dessous) |
+| `020_foreign_keys.sql` | 577 clés étrangères, dans une passe séparée pour s'affranchir de l'ordre de création | généré (+ 15 ajoutées à la main) |
 | `030_triggers.sql` | 4 triggers (`ComFolder`, `RntFolder`) | généré |
 | `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
 | `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
@@ -30,12 +30,19 @@ Cette dérive est un mode de panne récurrent du projet : un test passe en local
 comportement diffère en production. Reconstituer le schéma de production en CI la supprime,
 au prix d'un CI plus strict que la base locale — c'est l'objectif, pas un effet de bord.
 
-## Périmètre : pourquoi 165 tables et pas 462
+## Périmètre : pourquoi 171 tables et pas 462
 
 La graine est l'ensemble des tables mappées par une entité JPA (78), plus
 `AppFileMigrationFailure` (table d'outillage de migration, sans entité). On y ajoute la
 **fermeture transitive des clés étrangères** : toute table pointée par une table déjà retenue,
 sinon les contraintes ne peuvent pas être créées.
+
+**Ajout manuel « Module Chantier, lot 1 »** (`instructions/FEATURE-projet-chantier-lecture.md` §3) : les
+6 tables de lignes du module Projet — `PrjMarketLine`, `PrjMarketLineEstimation`, `PrjMarketLineGrouping`,
+`PrjWorkingOutLine`, `PrjWorkingOutLineExtra`, `PrjWorkingOutRetainedLine` — avec leurs 15 clés étrangères
+(noms exacts de production, y compris les doubles `__`). Leurs cibles (`PrjMarket`, `PrjWorkingOut`,
+`BuyItem`, `StlCategory`) étaient déjà dans le périmètre : la fermeture transitive n'ajoute rien. À
+conserver lors d'une régénération (elles sont désormais mappées, donc dans la graine).
 
 Sont volontairement exclus :
 
@@ -87,6 +94,23 @@ Points à ne pas perdre en régénérant :
 
 Après régénération, valider **avant de committer** : appliquer les quatre fichiers sur une base
 neuve, puis lancer `./mvnw test` avec `SPRING_DATASOURCE_URL` pointant dessus.
+
+## Base locale
+
+`yesRemsTest` n'a que les tables créées à la main, **sans clé étrangère**. Une table mappée qui
+manque se crée avec sa DDL de `010_tables.sql`, **une commande par table** (`-i <fichier>` a déjà
+échoué en « Access is denied » : passer la DDL en ligne par `-Q`) :
+
+```bash
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -b -Q "IF OBJECT_ID('dbo.X') IS NULL CREATE TABLE dbo.X (…)"
+```
+
+Tables créées ainsi pour le Module Chantier (lot 1, `FEATURE-projet-chantier-lecture.md` §3.2) :
+`PrjProject`, `PrjMarketType`, `PrjMarket`, `PrjMarketLine`, `PrjMarketLineGrouping`,
+`PrjMarketLineEstimation`, `PrjWorkingOut`, `PrjWorkingOutLine`, `PrjWorkingOutLineExtra`,
+`PrjWorkingOutRetainedLine`, `BuyDocument`, `BuyDocumentStatus`, et `StrStatusType` (lue pour le type
+des statuts de lot). `StlCategory` y existait déjà. `ChantierSchemaTest` échoue en premier si l'une
+manque.
 
 ## Reproduire l'environnement du CI en local
 
