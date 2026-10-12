@@ -75,7 +75,10 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
                                                @Param("tous") boolean tous,
                                                @Param("projetIds") List<UUID> projetIds);
 
-    /** Pré-prospections ouvertes sans commercial ; la liste elle-même = {@code GET /api/pre-prospections}. */
+    /**
+     * Pré-prospections ouvertes sans commercial reçues dans la période (DocDate) ; la liste elle-même =
+     * {@code GET /api/pre-prospections} avec les mêmes bornes (FEATURE-equipe-commerciale.md §10).
+     */
     @Query(value = """
             SELECT COUNT(*) AS nombre, MIN(p.DocDate) AS plusAncienne
             FROM ComProspection p
@@ -85,9 +88,11 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
             WHERE p.StrEntityId IN (SELECT e.PKey FROM StrEntity e WHERE e.Code = 'ComPreProspection')
               AND p.CfgCommercialId IS NULL
               AND ISNULL(p.IsClosed, 0) = 0
+              AND p.DocDate BETWEEN :debut AND :fin
               AND (soc.IsActive = 1 OR soc.PKey IS NULL)
               AND (:tous = 1 OR pr.PKey IN (:projetIds))""", nativeQuery = true)
-    EnAttente aDistribuer(@Param("tous") boolean tous, @Param("projetIds") List<UUID> projetIds);
+    EnAttente aDistribuer(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin,
+                          @Param("tous") boolean tous, @Param("projetIds") List<UUID> projetIds);
 
     interface LeadCohorte {
         UUID getId();

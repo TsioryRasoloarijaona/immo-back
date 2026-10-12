@@ -223,12 +223,15 @@ public class EquipeCommercialeService {
         return n != null ? n : 0L;
     }
 
-    public ADistribuerDto aDistribuer(@Nullable UUID projet) {
+    /** Même période que l'entonnoir et le tableau (FEATURE-equipe-commerciale.md §10) : 400 avant tout si inversée. */
+    public ADistribuerDto aDistribuer(@Nullable LocalDate du, @Nullable LocalDate au, @Nullable UUID projet) {
+        PeriodeEquipe periode = PeriodeEquipe.resoudre(du, au, LocalDate.now(clock));
         List<UUID> projets = perimetre().projetsFiltres(projet);
         if (projets != null && projets.isEmpty()) {
             return new ADistribuerDto(0, null, null);
         }
-        EnAttente enAttente = equipeRepository.aDistribuer(projets == null, pourRequete(projets));
+        EnAttente enAttente = equipeRepository.aDistribuer(periode.debut(), periode.fin(), projets == null,
+                pourRequete(projets));
         LocalDateTime plusAncienne = enAttente.getPlusAncienne();
         Long age = plusAncienne != null
                 ? Math.max(0L, ChronoUnit.DAYS.between(plusAncienne.toLocalDate(), LocalDate.now(clock)))

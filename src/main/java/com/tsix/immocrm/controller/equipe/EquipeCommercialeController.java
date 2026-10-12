@@ -84,10 +84,18 @@ public class EquipeCommercialeController {
     }
 
     @GetMapping("/a-distribuer")
-    @Operation(summary = "Pré-prospections en attente de commercial")
-    @ApiResponses({@ApiResponse(responseCode = "200", description = "Compte et âge de la plus ancienne.")})
-    public ADistribuerDto aDistribuer(@Parameter(description = PROJET) @RequestParam(required = false) UUID projet) {
-        return lectures.aDistribuer(projet);
+    @Operation(summary = "Pré-prospections en attente de commercial, reçues dans la période")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Compte et âge de la plus ancienne de la période."),
+            @ApiResponse(responseCode = "400", description = PERIODE_INVALIDE)
+    })
+    public ADistribuerDto aDistribuer(
+            @Parameter(description = DU, example = "2026-09-12")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
+            @Parameter(description = AU, example = "2026-10-11")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
+            @Parameter(description = PROJET) @RequestParam(required = false) UUID projet) {
+        return lectures.aDistribuer(du, au, projet);
     }
 
     @PostMapping("/distribuer")
