@@ -80,7 +80,7 @@ class ChantierRevueTest {
 
         assertAll(
                 () -> assertThat((Integer) JsonPath.read(parLotB, TOTAL)).isZero(),
-                () -> assertThat(parRecherche).doesNotContain(chaine.decompteB().getId().toString()),
+                () -> assertThat(parRecherche).isEmpty(),
                 () -> assertThat((Integer) JsonPath.read(sansFacture, TOTAL)).isZero());
     }
 }
