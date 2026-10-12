@@ -37,7 +37,9 @@ public class CollecteurLignesEcrites
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
-            "AppFileObject");
+            "AppFileObject", "AdmMessage",
+            // Dernière : elle cite (sans contrainte) tous les objets écrits avant elle dans la transaction.
+            "AdmWebHistorics");
 
     /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */
     static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");

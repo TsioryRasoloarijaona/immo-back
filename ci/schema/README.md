@@ -12,7 +12,33 @@ chaque *pull request*.
 | `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
 | `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
 
-Appliquer dans l'ordre numérique.
+Appliquer dans l'ordre numérique. Le CI applique **tous** les `ci/schema/*.sql`, triés par nom
+(`LC_ALL=C sort`) : un nouveau fichier n'exige aucune modification de `ci.yml`.
+
+## Convention des lots « Patrimoine à 100 % »
+
+Chaque lot qui crée des tables livre deux fichiers : `0NN_<lot>_tables.sql` (tables, index, types exacts de
+`yesRemsProd`) puis `0NN+1_<lot>_fk.sql` (clés étrangères, noms exacts de production). Plages réservées :
+
+| Lot | Fichiers | Lot | Fichiers |
+|---|---|---|---|
+| P0 | 060-061 | P6 | 074-075 |
+| P1a | 062-063 | P3 | 076-077 |
+| P1b | 064-065 | P4 | 078-079 |
+| P5 | 066-067 | P7a | 080-081 |
+| P1c | 068-069 | P8a | 082-083 |
+| P2a | 070-071 | P7b | 084-085 |
+| P2b | 072-073 | P8b | 086-087 |
+| | | P9 | 088-089 |
+| | | P10 | 090-091 |
+
+Une FK dont la cible n'est pas dans le schéma de CI est posée sous condition
+(`IF OBJECT_ID('dbo.<cible>') IS NOT NULL EXEC('ALTER TABLE …')`) ou omise, et le fichier le dit.
+
+**P0** (`FEATURE-patrimoine-audit-actions.md`) : `060_audit_tables.sql` crée `AdmWebHistorics` (`Details` en
+`text`, piège : jamais `@Nationalized` côté entité) et `AdmMessage`. `061_audit_fk.sql` : la seule FK de
+production, `AdmWebHistorics__AdmWebSessions_FK1`, n'est **pas** posée en CI (`AdmWebSessions` absente du
+schéma) ; `AdmMessage` n'a aucune FK en production. `AuditSchemaTest` échoue en premier si une table manque.
 
 ## Pourquoi le schéma de production plutôt que `yesRemsTest`
 
@@ -118,12 +144,15 @@ Tables créées ainsi pour le Module Chantier (lot 1, `FEATURE-projet-chantier-l
 des statuts de lot). `StlCategory` y existait déjà. `ChantierSchemaTest` échoue en premier si l'une
 manque.
 
+Tables créées ainsi pour le lot P0 (`FEATURE-patrimoine-audit-actions.md`) : `AdmWebHistorics` et `AdmMessage`,
+DDL de `060_audit_tables.sql` passée en ligne par `-Q`, une commande par table.
+
 ## Reproduire l'environnement du CI en local
 
 ```powershell
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -C -Q "CREATE DATABASE yesRemsCiCheck"
-foreach ($f in @("010_tables","020_foreign_keys","030_triggers","040_seed_reference","050_views")) {
-  sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsCiCheck -C -I -b -i "ci/schema/$f.sql"
+foreach ($f in (Get-ChildItem ci/schema/*.sql | Sort-Object Name)) {
+  sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsCiCheck -C -I -b -i $f.FullName
 }
 $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"
 .\mvnw.cmd test
