@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.prj;
 
+import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.stl.StlCategory;
 import com.tsix.immocrm.entities.str.StrEntity;
@@ -30,21 +31,11 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjMarket")
-public class PrjMarket {
+public class PrjMarket extends CodeLibelleOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
     private UUID id;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Description")
-    private String description;
 
     @Size(max = 500)
     @Nationalized
@@ -186,20 +177,4 @@ public class PrjMarket {
     @Size(max = 500)
     @Column(name = "CancellationCause")
     private String cancellationCause;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserUpdate")
-    private String userUpdate;
-
-    @Column(name = "UserUpdateDateTime")
-    private LocalDateTime userUpdateDateTime;
 }

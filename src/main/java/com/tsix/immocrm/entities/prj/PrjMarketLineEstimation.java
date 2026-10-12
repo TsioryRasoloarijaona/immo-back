@@ -11,7 +11,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 /** Ligne du bordereau estimatif : seule sa somme par lot est lue (« estimation confidentielle »). */
@@ -20,7 +19,7 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjMarketLineEstimation")
-public class PrjMarketLineEstimation {
+public class PrjMarketLineEstimation extends LigneOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
@@ -29,18 +28,6 @@ public class PrjMarketLineEstimation {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PrjMarketId")
     private PrjMarket prjMarket;
-
-    @Column(name = "Quantity", precision = 26, scale = 6)
-    private BigDecimal quantity;
-
-    @Column(name = "UnitPriceHT", precision = 26, scale = 6)
-    private BigDecimal unitPriceHT;
-
-    @Column(name = "VatRatio", precision = 26, scale = 6)
-    private BigDecimal vatRatio;
-
-    @Column(name = "UnitPriceTTC", precision = 26, scale = 6)
-    private BigDecimal unitPriceTTC;
 
     @Column(name = "IsStock")
     private Boolean isStock;

@@ -22,7 +22,7 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjWorkingOutLine")
-public class PrjWorkingOutLine {
+public class PrjWorkingOutLine extends LigneOmran {
 
     // « Pkey » (k minuscule) sur cette table.
     @Id
@@ -36,14 +36,6 @@ public class PrjWorkingOutLine {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PrjMarketLineId")
     private PrjMarketLine prjMarketLine;
-
-    @Column(name = "Sorting")
-    private Integer sorting;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
 
     @Size(max = 255)
     @Nationalized
@@ -61,18 +53,6 @@ public class PrjWorkingOutLine {
     @Column(name = "Coefficient", precision = 26, scale = 6)
     private BigDecimal coefficient;
 
-    @Column(name = "Quantity", precision = 26, scale = 6)
-    private BigDecimal quantity;
-
     @Column(name = "QuantityOld", precision = 26, scale = 6)
     private BigDecimal quantityOld;
-
-    @Column(name = "UnitPriceHT", precision = 26, scale = 6)
-    private BigDecimal unitPriceHT;
-
-    @Column(name = "VatRatio", precision = 26, scale = 6)
-    private BigDecimal vatRatio;
-
-    @Column(name = "UnitPriceTTC", precision = 26, scale = 6)
-    private BigDecimal unitPriceTTC;
 }

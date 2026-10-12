@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.buy;
 
+import com.tsix.immocrm.entities.AuditOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,7 +28,7 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "BuyDocument")
-public class BuyDocument {
+public class BuyDocument extends AuditOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
@@ -85,12 +86,4 @@ public class BuyDocument {
 
     @Column(name = "StrEntityId")
     private UUID strEntityId;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
 }

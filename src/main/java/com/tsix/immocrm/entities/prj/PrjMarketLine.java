@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.prj;
 
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -13,7 +14,6 @@ import lombok.Setter;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.Nationalized;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 /** Ligne du bordereau définitif ; les totaux HT/TTC d'une ligne ne sont pas stockés (colonnes de vue). */
@@ -22,7 +22,9 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjMarketLine")
-public class PrjMarketLine {
+// decimal(26,16) en base, contrairement aux autres prix.
+@AttributeOverride(name = "unitPriceHT", column = @Column(name = "UnitPriceHT", precision = 26, scale = 16))
+public class PrjMarketLine extends LigneOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
@@ -31,14 +33,6 @@ public class PrjMarketLine {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PrjMarketId")
     private PrjMarket prjMarket;
-
-    @Column(name = "Sorting")
-    private Integer sorting;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
 
     @Size(max = 255)
     @Nationalized
@@ -49,19 +43,6 @@ public class PrjMarketLine {
     @Nationalized
     @Column(name = "Unity")
     private String unity;
-
-    @Column(name = "Quantity", precision = 26, scale = 6)
-    private BigDecimal quantity;
-
-    // decimal(26,16) en base, contrairement aux autres prix.
-    @Column(name = "UnitPriceHT", precision = 26, scale = 16)
-    private BigDecimal unitPriceHT;
-
-    @Column(name = "VatRatio", precision = 26, scale = 6)
-    private BigDecimal vatRatio;
-
-    @Column(name = "UnitPriceTTC", precision = 26, scale = 6)
-    private BigDecimal unitPriceTTC;
 
     @Column(name = "IsStock")
     private Boolean isStock;

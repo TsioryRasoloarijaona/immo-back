@@ -1,14 +1,13 @@
 package com.tsix.immocrm.entities.buy;
 
+import com.tsix.immocrm.entities.CodeLibelleOmran;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
-import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
@@ -18,21 +17,11 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "BuyDocumentStatus")
-public class BuyDocumentStatus {
+public class BuyDocumentStatus extends CodeLibelleOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
     private UUID id;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Description")
-    private String description;
 
     @Column(name = "Sorting")
     private Integer sorting;

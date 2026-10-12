@@ -108,7 +108,7 @@ public class ChiffrageLots {
 
         Map<UUID, SoldeFacture> soldes = new HashMap<>();
         for (Object[] row : factures) {
-            SoldeFacture solde = SoldeFacture.de((BigDecimal) row[2], regle.get((UUID) row[1]));
+            SoldeFacture solde = SoldeFacture.de((BigDecimal) row[2], regle.get(row[1]));
             soldes.merge((UUID) row[0], solde, SoldeFacture::plus);
         }
         return soldes;

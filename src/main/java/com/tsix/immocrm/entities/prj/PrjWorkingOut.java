@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.prj;
 
+import com.tsix.immocrm.entities.AuditOmran;
 import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import jakarta.persistence.Column;
@@ -28,7 +29,7 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjWorkingOut")
-public class PrjWorkingOut {
+public class PrjWorkingOut extends AuditOmran {
 
     @Id
     @Column(name = "PKey", nullable = false)
@@ -121,20 +122,4 @@ public class PrjWorkingOut {
 
     @Column(name = "FinalWorkingOut")
     private Boolean finalWorkingOut;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserUpdate")
-    private String userUpdate;
-
-    @Column(name = "UserUpdateDateTime")
-    private LocalDateTime userUpdateDateTime;
 }

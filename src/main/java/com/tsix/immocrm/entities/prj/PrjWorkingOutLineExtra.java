@@ -13,7 +13,6 @@ import lombok.Setter;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.Nationalized;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 /** Travaux supplémentaires d'un décompte ; leur somme TTC est {@code PrjWorkingOut.extraAmount}. */
@@ -22,7 +21,7 @@ import java.util.UUID;
 @Entity
 @Immutable
 @Table(name = "PrjWorkingOutLineExtra")
-public class PrjWorkingOutLineExtra {
+public class PrjWorkingOutLineExtra extends LigneOmran {
 
     // « Pkey » (k minuscule) sur cette table.
     @Id
@@ -33,14 +32,6 @@ public class PrjWorkingOutLineExtra {
     @JoinColumn(name = "PrjWorkingOutId")
     private PrjWorkingOut prjWorkingOut;
 
-    @Column(name = "Sorting")
-    private Integer sorting;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
     @Size(max = 500)
     @Nationalized
     @Column(name = "Description")
@@ -50,16 +41,4 @@ public class PrjWorkingOutLineExtra {
     @Nationalized
     @Column(name = "Unity")
     private String unity;
-
-    @Column(name = "Quantity", precision = 26, scale = 6)
-    private BigDecimal quantity;
-
-    @Column(name = "UnitPriceHT", precision = 26, scale = 6)
-    private BigDecimal unitPriceHT;
-
-    @Column(name = "VatRatio", precision = 26, scale = 6)
-    private BigDecimal vatRatio;
-
-    @Column(name = "UnitPriceTTC", precision = 26, scale = 6)
-    private BigDecimal unitPriceTTC;
 }

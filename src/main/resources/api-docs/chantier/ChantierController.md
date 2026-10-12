@@ -8,7 +8,7 @@ Listes de choix des filtres. `typesLot` : tous les `PrjMarketType`, triés par c
 
 ## projets
 
-Tous les projets du périmètre, sans pagination, triés par code. Les totaux d'un projet sont la somme, lot par lot, des mêmes grandeurs que `LotListItemDto` (même calcul). `estCentreDeCouts` = aucun lot et code « AAAA-… » : en production, 20 des 25 projets sont des centres de coûts annuels (factures dépenses), à présenter à part.
+Tous les projets du périmètre, sans pagination, triés par code. Les totaux d'un projet sont la somme, lot par lot, des mêmes grandeurs que `LotListItemDto` (même calcul). `estCentreDeCouts` = aucun lot et code « AAAA-… » : en production, 18 des 25 projets sont des centres de coûts annuels (factures dépenses), à présenter à part.
 
 ## projet
 

@@ -119,7 +119,7 @@ class DecomptesChantierTest {
     }
 
     @Test
-    void globale_filtrePeriode_bornesIncluses() throws Exception {
+    void globale_filtrePeriode_bornesIncluses() {
         assertAll(
                 () -> assertThat(codesDuLotFiltres("du", "2026-02-10", "au", "2026-02-10"))
                         .containsExactly(chaine.decompte2().getCode()),
@@ -130,7 +130,7 @@ class DecomptesChantierTest {
     }
 
     @Test
-    void globale_filtreSansFactureEtStatutFacture() throws Exception {
+    void globale_filtreSansFactureEtStatutFacture() {
         assertAll(
                 () -> assertThat(codesDuLotFiltres("sansFacture", "true"))
                         .containsExactly(chaine.decompte2().getCode()),
