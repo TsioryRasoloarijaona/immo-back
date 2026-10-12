@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.lnd.LndLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -24,6 +25,11 @@ public class CfgTrancheLevel {
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "CfgTrancheId")
     private CfgTranche cfgTranche;
+
+    /** Sans lien avec {@code StkItem.StkFloorId} : niveau de construction du référentiel foncier. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "LndLevelId")
+    private LndLevel lndLevel;
 
     @Size(max = 255)
     @Nationalized

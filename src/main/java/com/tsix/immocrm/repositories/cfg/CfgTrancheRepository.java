@@ -24,6 +24,9 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
     @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true")
     Page<CfgTranche> findDesEntitesActives(Pageable pageable);
 
+    @Query("SELECT t FROM CfgTranche t WHERE t.id = :id AND t.cfgProject.cfgCompany.isActive = true")
+    Optional<CfgTranche> findDUneEntiteActive(@Param("id") UUID id);
+
     @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.id = :projetId AND t.cfgProject.cfgCompany.isActive = true")
     List<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId);
 
