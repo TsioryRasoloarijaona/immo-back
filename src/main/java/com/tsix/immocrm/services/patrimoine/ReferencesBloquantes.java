@@ -50,6 +50,74 @@ class ReferencesBloquantes {
             new Reference("GrhWorkedDay", "SELECT COUNT(*) FROM GrhWorkedDay WHERE CfgProjectZoneId = :id",
                     "journée(s) travaillée(s)"));
 
+    /**
+     * Les clés étrangères NO_ACTION de la production vers {@code CfgCompany} (FEATURE-entites-juridiques.md §2) ; les
+     * CASCADE (séquences, habilitations, répartition, ActDefault*, Prv*, Grh…) suivent la société.
+     */
+    private static final String TABLE_ARTICLES = "StkItem";
+    private static final String TABLE_VIREMENTS = "StlInternalTransfer";
+    private static final String TABLE_TRANSMISSIONS = "StlTransmissionSheet";
+    private static final String DESTINATAIRE = "CfgCompanyToId";
+
+    static final List<Reference> ENTITE = List.of(
+            societe("CfgProject", "programme(s)"),
+            societe(TABLE_ARTICLES, "article(s)"),
+            societe(TABLE_ARTICLES, "CfgCompanySyndicId", "article(s) dont elle est syndic"),
+            societe("CfgTier", "tiers"),
+            societe("CfgTierKind", "nature(s) de tiers"),
+            societe("ComDocument", "échéance(s)"),
+            societe("ComDocumentPaymentMethod", "mode(s) de paiement d'échéance"),
+            societe("StlSettlement", "règlement(s)"),
+            societe("StlDocument", "document(s) de règlement"),
+            societe("StlAccount", "compte(s) de trésorerie"),
+            societe("StlAccountingEntry", "écriture(s) de trésorerie"),
+            societe("StlDeposit", "remise(s) en banque"),
+            societe("StlEmployerDeclaration", "déclaration(s) employeur"),
+            societe(TABLE_VIREMENTS, "virement(s) interne(s) émis"),
+            societe(TABLE_VIREMENTS, DESTINATAIRE, "virement(s) interne(s) reçus"),
+            societe("StlItemPricing", "tarif(s) d'article"),
+            societe("StlPaymentAuthorization", "autorisation(s) de paiement"),
+            societe("StlQuoteDocument", "devis"),
+            societe("StlRecoveryFolder", "dossier(s) de recouvrement"),
+            societe("StlSlip", "bordereau(x)"),
+            societe("StlTrancheVentilation", "ventilation(s) de tranche"),
+            societe(TABLE_TRANSMISSIONS, "CfgCompanyFromId", "fiche(s) de transmission émises"),
+            societe(TABLE_TRANSMISSIONS, DESTINATAIRE, "fiche(s) de transmission reçues"),
+            societe("ActAccount", "compte(s) comptable(s)"),
+            societe("ActDefaultSettlement", "paramètre(s) comptable(s) de règlement"),
+            societe("ActEntry", "écriture(s) comptable(s)"),
+            societe("ActJournal", "journal(aux) comptable(s)"),
+            societe("ActStockVariationCoef", "coefficient(s) de variation de stock"),
+            societe("ActStockVariationExclusion", "exclusion(s) de variation de stock"),
+            societe("AdmTask", "tâche(s)"),
+            societe("BuyDocument", "document(s) d'achat"),
+            societe("BuyLoan", "emprunt(s)"),
+            societe("BuySelection", "sélection(s) d'achat"),
+            societe("PrjProject", "projet(s) chantier"),
+            societe("RntDocument", "document(s) de location"),
+            societe("SavClaimGroup", "groupe(s) de réclamations SAV"),
+            societe("SavService", "prestation(s) SAV"),
+            societe("SavServiceExpense", "dépense(s) SAV"),
+            societe("StkFeasibilityStudy", "étude(s) de faisabilité"),
+            societe("GrhAdvance", "avance(s) RH"),
+            societe("GrhCredit", "crédit(s) RH"),
+            societe("GrhDepartment", "département(s) RH"),
+            societe("GrhDiscipline", "sanction(s) RH"),
+            societe("GrhEchelon", "échelon(s) RH"),
+            societe("GrhEmployeeCategory", "catégorie(s) d'employé"),
+            societe("GrhEmployeeClass", "classe(s) d'employé"),
+            societe("GrhEmployeeHistory", "historique(s) d'employé"),
+            societe("GrhEmployeeType", "type(s) d'employé"),
+            societe("GrhOverTime", "heure(s) supplémentaire(s)"),
+            societe("GrhPaySlip", "bulletin(s) de paie"),
+            societe("GrhResignation", "démission(s)"),
+            societe("GrhSalaryGrid", "grille(s) de salaire"),
+            societe("GrhSalaryGridType", "type(s) de grille de salaire"),
+            societe("GrhTermination", "licenciement(s)"),
+            societe("GrhVacation", "congé(s)"),
+            societe("GrhVacationGroup", "groupe(s) de congés"),
+            societe("GrhWorkedDay", "journée(s) travaillée(s)"));
+
     private final EntityManager em;
 
     ReferencesBloquantes(EntityManager em) {
@@ -75,6 +143,15 @@ class ReferencesBloquantes {
                     .setParameter("id", categoryId)
                     .executeUpdate();
         }
+    }
+
+    private static Reference societe(String table, String libelle) {
+        return societe(table, "CfgCompanyId", libelle);
+    }
+
+    // Noms de table et de colonne : constantes de cette classe, jamais une saisie ; seul l'id est lié.
+    private static Reference societe(String table, String colonne, String libelle) {
+        return new Reference(table, "SELECT COUNT(*) FROM " + table + " WHERE " + colonne + " = :id", libelle);
     }
 
     private boolean tableExiste(String table) {

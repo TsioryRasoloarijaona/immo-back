@@ -128,7 +128,8 @@ public class PerimetreCommercialService {
      * Un principal d'un autre type ({@code @WithMockUser}, route anonyme) est « non restreint » (§6.3) :
      * c'est {@code SecurityConfig} qui décide qui atteint l'endpoint, pas ce service.
      */
-    private static Optional<UUID> admUserIdCourant() {
+    /** Compte {@code AdmUser} de l'appelant ; vide si non identifiable (clé API, principal de test). */
+    public static Optional<UUID> admUserIdCourant() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user) {
             return Optional.ofNullable(user.admUserId());

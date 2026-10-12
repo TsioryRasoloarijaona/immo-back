@@ -2,8 +2,13 @@ package com.tsix.immocrm.config;
 
 import com.tsix.immocrm.services.note.NoteService;
 import com.tsix.immocrm.services.patrimoine.ActionArticleService;
+import com.tsix.immocrm.services.patrimoine.ActionnaireService;
 import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
+import com.tsix.immocrm.services.patrimoine.EntiteJuridiqueService;
+import com.tsix.immocrm.services.patrimoine.GroupeActionnairesService;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.RepartitionEntiteService;
+import com.tsix.immocrm.services.patrimoine.SuppressionEntiteService;
 import com.tsix.immocrm.services.patrimoine.SuppressionProjetService;
 import com.tsix.immocrm.services.patrimoine.TrancheService;
 import com.tsix.immocrm.services.patrimoine.ZoneProjetService;
@@ -61,9 +66,11 @@ class RoutageEcrituresTest {
     /** FEATURE-patrimoine-ecriture.md §11 : chacun de ces services doit exposer des écritures reconnues, toutes routées vers la source. */
     @Test
     void ecrituresPatrimoine_reconnuesEtJamaisEnLectureSeule() {
-        // + FEATURE-patrimoine-audit-actions.md §8 : actions d'article et notes.
+        // + FEATURE-patrimoine-audit-actions.md §8 : actions d'article et notes ; + FEATURE-entites-juridiques.md §6.
         List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class,
-                ZoneProjetService.class, SuppressionProjetService.class, ActionArticleService.class, NoteService.class);
+                ZoneProjetService.class, SuppressionProjetService.class, ActionArticleService.class, NoteService.class,
+                EntiteJuridiqueService.class, SuppressionEntiteService.class, RepartitionEntiteService.class,
+                ActionnaireService.class, GroupeActionnairesService.class);
         for (Class<?> service : patrimoine) {
             List<Method> ecritures = java.util.Arrays.stream(service.getDeclaredMethods())
                     .filter(m -> Modifier.isPublic(m.getModifiers()) && ECRITURE.matcher(m.getName()).matches())

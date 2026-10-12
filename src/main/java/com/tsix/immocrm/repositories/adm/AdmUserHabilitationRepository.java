@@ -24,6 +24,9 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
     /** Habilitations d'un programme : supprimées avec lui, comme la cascade OMRAN. */
     List<AdmUserHabilitation> findByCfgProjectId(UUID projetId);
 
+    /** Habilitations d'une entité juridique : supprimées avec elle (CASCADE de production). */
+    List<AdmUserHabilitation> findByCfgCompanyId(UUID entiteId);
+
     /** Le seul sous-ensemble que {@code PUT /api/utilisateurs/{admUserId}/projets} peut supprimer. */
     List<AdmUserHabilitation> findByAdmUserIdAndCfgProjectIsNotNull(UUID admUserId);
 
