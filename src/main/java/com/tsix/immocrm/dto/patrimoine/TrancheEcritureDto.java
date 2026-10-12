@@ -1,9 +1,11 @@
 package com.tsix.immocrm.dto.patrimoine;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /** Noms repris de {@link TrancheDetailDto} quand le champ y existe déjà, anglais compris (FEATURE-patrimoine-ecriture.md §4.2). */
@@ -142,13 +144,95 @@ public record TrancheEcritureDto(
         Boolean isWithVerifCredit,
 
         // -- Autres --
-        @Schema(description = "Délai notaire en minutes (DelayLawyerMinute). Défaut 60.")
+        @Schema(description = "Jours entre l'envoi au notaire et la date minute (DelayLawyerMinute). Défaut 60.")
         Integer delaiNotaireMinutes,
-        @Schema(description = "Délai « tout soldé » en minutes (DelayMinuteAllSettled). Défaut 30.")
+        @Schema(description = "Jours entre la date minute et l'encaissement du reste (DelayMinuteAllSettled). Défaut 30.")
         Integer delaiToutSoldeMinutes,
         @Schema(description = "Écart-type des concrétisations (EcarttypeConcretisation), ≥ 0. Défaut 5.")
         BigDecimal ecartTypeConcretisation,
         @Schema(description = "Écart-type des finalisations (EcarttypeFinalisation), ≥ 0. Défaut 3.")
-        BigDecimal ecartTypeFinalisation
+        BigDecimal ecartTypeFinalisation,
+
+        // -- Général (FEATURE-patrimoine-tranche-fiche.md §4.1) --
+        @Schema(description = "Standing (CfgTrancheStanding.id), voir /api/referentiels-patrimoine/standings.")
+        UUID standingId,
+        @Schema(description = "« Nbr. étage » (LndLevel.id), voir /api/referentiels-patrimoine/niveaux-terrain.")
+        UUID niveauTerrainId,
+        @Schema(description = "Rubrique (StkTrancheHeading.id), voir /api/referentiels-patrimoine/rubriques-tranche.")
+        UUID rubriqueId,
+        @Schema(description = "Responsable SAV (CfgClaimsManagerId) : un personnel.")
+        UUID responsableSavId,
+        @Schema(description = "Adresse du service après-vente (SavAddress).")
+        String adresseSav,
+
+        // -- Visibilité par module (défaut false) --
+        @Schema(description = "Visible dans le module Projet (IsForProject).")
+        Boolean visibleProjet,
+        @Schema(description = "Visible dans le module Achat (IsForBuy).")
+        Boolean visibleAchat,
+        @Schema(description = "Visible dans le module service après-vente (IsForSav).")
+        Boolean visibleSav,
+        @Schema(description = "Visible dans le module gestion immobilière (IsForPrm).")
+        Boolean visiblePrm,
+        @Schema(description = "Visible dans le module location-vente (IsForRom).")
+        Boolean visibleRom,
+
+        // -- Règles de gestion 2 : cadeaux --
+        @Schema(description = "Avec octroi d'un cadeau pour le parrain (IsWithGiftForProposer).")
+        Boolean cadeauParrain,
+        @Schema(description = "Avec octroi d'un cadeau pour un ancien client (IsWithGiftForOldCustomer).")
+        Boolean cadeauAncienClient,
+        @Schema(description = "Avec octroi d'un cadeau pour une source de contact (IsWithGiftForProspectionOrigin).")
+        Boolean cadeauOrigineProspection,
+        @Schema(description = "Avec possibilité de cumul des cadeaux (AccumulatedGifts).")
+        Boolean cadeauxCumules,
+
+        // -- Autres --
+        @Schema(description = "Tiers autrui (CfgTierOtherId) : un fournisseur, voir /api/referentiels-patrimoine/tiers-autrui.")
+        UUID tiersAutruiId,
+        @Schema(description = "Projet de facturation pour les dépenses (PrjProject.id).")
+        UUID projetFacturationId,
+        @Schema(description = "Plan comptable (ActAccount.id).")
+        UUID planComptableId,
+
+        // -- Identification foncière (dates facultatives) --
+        @Schema(description = "Date main levée AFH (RaisedHandDateAFH).")
+        LocalDateTime dateMainLeveeAfh,
+        @Schema(description = "Date certificat définitif 1 (TitleDate1).")
+        LocalDateTime dateCertificatDefinitif1,
+        @Schema(description = "Date main levée bancaire (RaisedHandDateBank).")
+        LocalDateTime dateMainLeveeBancaire,
+        @Schema(description = "Date certificat définitif 2 (TitleDate2).")
+        LocalDateTime dateCertificatDefinitif2,
+        @Schema(description = "Dépôt du dossier de lotissement à la municipalité (MunicipalityDateDeposit).")
+        LocalDateTime dateDepotLotissementMunicipalite,
+        @Schema(description = "Retrait du dossier de lotissement de la municipalité (MunicipalityDateWithdrawal).")
+        LocalDateTime dateRetraitLotissementMunicipalite,
+        @Schema(description = "Dépôt du dossier de lotissement non approuvé à l'OTC (OTCDateNonApprovedDeposit).")
+        LocalDateTime dateDepotLotissementNonApprouveOtc,
+        @Schema(description = "Règlement des frais de l'OTC (OTCDateSettlement).")
+        LocalDateTime dateReglementFraisOtc,
+        @Schema(description = "Dépôt du dossier de lotissement approuvé à l'OTC (OTCDateApprovedDeposit).")
+        LocalDateTime dateDepotLotissementApprouveOtc,
+        @Schema(description = "Retrait des plans de mutation de l'OTC (OTCDateMutationWithdrawal).")
+        LocalDateTime dateRetraitPlansMutationOtc,
+        @Schema(description = "Achèvement des partages (SharingDate).")
+        LocalDateTime dateAchevementPartages,
+        @Schema(description = "Dépôt du dossier de partage à la CPF (SharingDateDeposit).")
+        LocalDateTime dateDepotPartageCpf,
+        @Schema(description = "Paiement des frais de partage CPF (CPFSharingSettlementDate).")
+        LocalDateTime datePaiementFraisPartageCpf,
+        @Schema(description = "Retrait du dossier de partage à la CPF (CPFSharingWithdrawalDate).")
+        LocalDateTime dateRetraitPartageCpf,
+        @Schema(description = "Retrait des certificats de propriété individuels (TitleDate).")
+        LocalDateTime dateRetraitCertificatsIndividuels,
+        @Schema(description = "Vérification des certificats (TitleDateVerification).")
+        LocalDateTime dateVerificationCertificats,
+        @Schema(description = "Répartition des charges (RepartitionDate).")
+        LocalDateTime dateRepartitionCharges,
+
+        @ArraySchema(arraySchema = @Schema(description = "Noms des champs à vider (PATCH) ; un champ obligatoire ou inconnu → 400."),
+                schema = @Schema(example = "dateMainLeveeAfh"))
+        List<String> champsAVider
 ) {
 }

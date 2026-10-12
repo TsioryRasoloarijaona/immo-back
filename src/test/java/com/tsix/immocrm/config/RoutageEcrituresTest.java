@@ -4,7 +4,9 @@ import com.tsix.immocrm.services.note.NoteService;
 import com.tsix.immocrm.services.patrimoine.ActionArticleService;
 import com.tsix.immocrm.services.patrimoine.ArticleEcritureService;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.SuppressionProjetService;
 import com.tsix.immocrm.services.patrimoine.TrancheService;
+import com.tsix.immocrm.services.patrimoine.ZoneProjetService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -61,7 +63,7 @@ class RoutageEcrituresTest {
     void ecrituresPatrimoine_reconnuesEtJamaisEnLectureSeule() {
         // + FEATURE-patrimoine-audit-actions.md §8 : actions d'article et notes.
         List<Class<?>> patrimoine = List.of(ProjetService.class, TrancheService.class, ArticleEcritureService.class,
-                ActionArticleService.class, NoteService.class);
+                ZoneProjetService.class, SuppressionProjetService.class, ActionArticleService.class, NoteService.class);
         for (Class<?> service : patrimoine) {
             List<Method> ecritures = java.util.Arrays.stream(service.getDeclaredMethods())
                     .filter(m -> Modifier.isPublic(m.getModifiers()) && ECRITURE.matcher(m.getName()).matches())

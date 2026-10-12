@@ -31,6 +31,18 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
     Page<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId, Pageable pageable);
 
     /**
+     * Liste {@code GET /api/tranches} : programme facultatif ; {@code motif} = {@code %texte%} en minuscules ou
+     * {@code null}, sur code, libellé, ville, programme et entité.
+     */
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true "
+            + "AND (:projetId IS NULL OR t.cfgProject.id = :projetId) AND (:motif IS NULL "
+            + "OR lower(t.code) LIKE :motif OR lower(t.description) LIKE :motif OR lower(t.city) LIKE :motif "
+            + "OR lower(t.cfgProject.code) LIKE :motif OR lower(t.cfgProject.description) LIKE :motif "
+            + "OR lower(t.cfgProject.cfgCompany.description) LIKE :motif)")
+    Page<CfgTranche> rechercherDesEntitesActives(@Param("projetId") UUID projetId, @Param("motif") String motif,
+                                                 Pageable pageable);
+
+    /**
      * Union distincte des tranches principales et secondaires ({@code ComProspectionProject}) du prospect,
      * comme {@code ComSaleProspectView.CfgTranches}. Deux {@code IN} : JPQL ne porte pas {@code UNION} de
      * façon portable ; résultat minuscule (FEATURE-audit-tranches-prospect.md).

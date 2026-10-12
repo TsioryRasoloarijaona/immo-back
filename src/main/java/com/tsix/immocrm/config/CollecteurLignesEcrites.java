@@ -33,7 +33,7 @@ public class CollecteurLignesEcrites
 
     /** Parent avant enfant. Une table absente passe en dernier sans être écartée : tenter et journaliser plutôt que taire. */
     static final List<String> ORDRE_CLES_ETRANGERES = List.of(
-            "CfgProject", "CfgTranche", "AdmUserHabilitation", "StkItem", "CfgTier", "ComAction",
+            "CfgProject", "CfgProjectZone", "CfgTranche", "AdmUserHabilitation", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",

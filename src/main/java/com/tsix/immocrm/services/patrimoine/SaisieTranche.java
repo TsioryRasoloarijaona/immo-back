@@ -127,22 +127,64 @@ final class SaisieTranche {
         t.setUnitTurnoverHT(BigDecimal.ZERO);
     }
 
-    /** Champs facultatifs : absent ou {@code null} = inchangé (PATCH), chaîne vide = vider. */
+    /**
+     * Champs facultatifs : absent ou {@code null} = inchangé (PATCH), chaîne vide = vider, {@code champsAVider} pour
+     * le reste. Les clés étrangères sont résolues par {@link ReferencesFiche} avant cet appel.
+     */
     static void appliquer(CfgTranche t, TrancheEcritureDto d) {
         appliquerCoordonnees(t, d);
+        appliquerVisibilite(t, d);
         appliquerDates(t, d);
+        appliquerFoncier(t, d);
         appliquerReglesGestion1(t, d);
         appliquerPenalites(t, d);
         appliquerReglesGestion2(t, d);
         appliquerAutres(t, d);
+        VidagesTranche.CATALOGUE.appliquer(d.champsAVider(), d, t);
+        verifierPeriodes(t);
         // ConcretisationPercent est un accesseur d'OMRAN sur AdvancePercent, écrit tel quel en base.
         t.setConcretisationPercent(t.getAdvancePercent());
     }
 
-    private static void appliquerCoordonnees(CfgTranche t, TrancheEcritureDto d) {
-        texte(d.descriptionLongue(), LONGUEUR_MOYENNE, "descriptionLongue", t::setDescriptionLong);
+    private static void appliquerVisibilite(CfgTranche t, TrancheEcritureDto d) {
         si(d.estEnVente(), t::setIsForSale);
         si(d.estEnLocation(), t::setIsForRent);
+        si(d.visibleProjet(), t::setIsForProject);
+        si(d.visibleAchat(), t::setIsForBuy);
+        si(d.visibleSav(), t::setIsForSav);
+        si(d.visiblePrm(), t::setIsForPrm);
+        si(d.visibleRom(), t::setIsForRom);
+    }
+
+    private static void appliquerFoncier(CfgTranche t, TrancheEcritureDto d) {
+        si(d.dateMainLeveeAfh(), t::setRaisedHandDateAFH);
+        si(d.dateCertificatDefinitif1(), t::setTitleDate1);
+        si(d.dateMainLeveeBancaire(), t::setRaisedHandDateBank);
+        si(d.dateCertificatDefinitif2(), t::setTitleDate2);
+        si(d.dateDepotLotissementMunicipalite(), t::setMunicipalityDateDeposit);
+        si(d.dateRetraitLotissementMunicipalite(), t::setMunicipalityDateWithdrawal);
+        si(d.dateDepotLotissementNonApprouveOtc(), t::setOTCDateNonApprovedDeposit);
+        si(d.dateReglementFraisOtc(), t::setOTCDateSettlement);
+        si(d.dateDepotLotissementApprouveOtc(), t::setOTCDateApprovedDeposit);
+        si(d.dateRetraitPlansMutationOtc(), t::setOTCDateMutationWithdrawal);
+        si(d.dateAchevementPartages(), t::setSharingDate);
+        si(d.dateDepotPartageCpf(), t::setSharingDateDeposit);
+        si(d.datePaiementFraisPartageCpf(), t::setCPFSharingSettlementDate);
+        si(d.dateRetraitPartageCpf(), t::setCPFSharingWithdrawalDate);
+        si(d.dateRetraitCertificatsIndividuels(), t::setTitleDate);
+        si(d.dateVerificationCertificats(), t::setTitleDateVerification);
+        si(d.dateRepartitionCharges(), t::setRepartitionDate);
+    }
+
+    private static void verifierPeriodes(CfgTranche t) {
+        ReglesSaisie.periode(t.getWorkStartDate(), t.getWorkEndDate(), "dateFinTravaux", "des travaux");
+        ReglesSaisie.periode(t.getMarketingStartDate(), t.getMarketingEndDate(),
+                "dateFinCommercialisation", "de commercialisation");
+    }
+
+    private static void appliquerCoordonnees(CfgTranche t, TrancheEcritureDto d) {
+        texte(d.descriptionLongue(), LONGUEUR_MOYENNE, "descriptionLongue", t::setDescriptionLong);
+        texte(d.adresseSav(), LONGUEUR_COURTE, "adresseSav", t::setSavAddress);
         texte(d.adresse(), LONGUEUR_COURTE, "adresse", t::setAddress);
         texte(d.adresse2(), LONGUEUR_COURTE, "adresse2", t::setAddress2);
         texte(d.adresse3(), LONGUEUR_COURTE, "adresse3", t::setAddress3);
@@ -166,9 +208,6 @@ final class SaisieTranche {
         si(d.datePremiereRelance(), t::setRevival1Date);
         si(d.dateFinConcretisation(), t::setEndDateConcretisation);
         si(d.dateDebutFinalisation(), t::setStartDateFinalisation);
-        ReglesSaisie.periode(t.getWorkStartDate(), t.getWorkEndDate(), "dateFinTravaux", "des travaux");
-        ReglesSaisie.periode(t.getMarketingStartDate(), t.getMarketingEndDate(),
-                "dateFinCommercialisation", "de commercialisation");
     }
 
     private static void appliquerReglesGestion1(CfgTranche t, TrancheEcritureDto d) {
@@ -228,6 +267,10 @@ final class SaisieTranche {
         }
         si(fraction(d.creditPercent(), "creditPercent"), t::setCreditPercent);
         si(d.isWithVerifCredit(), t::setIsWithVerifCredit);
+        si(d.cadeauParrain(), t::setIsWithGiftForProposer);
+        si(d.cadeauAncienClient(), t::setIsWithGiftForOldCustomer);
+        si(d.cadeauOrigineProspection(), t::setIsWithGiftForProspectionOrigin);
+        si(d.cadeauxCumules(), t::setAccumulatedGifts);
     }
 
     private static void appliquerAutres(CfgTranche t, TrancheEcritureDto d) {

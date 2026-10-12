@@ -1,13 +1,18 @@
 package com.tsix.immocrm.dto.patrimoine;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Mêmes noms que {@link TrancheEcritureDto} : une fiche relue se renvoie telle quelle en PATCH. */
+/**
+ * Mêmes noms que {@link TrancheEcritureDto} : une fiche relue se renvoie telle quelle en PATCH. Construite par le
+ * builder seulement : un constructeur positionnel de cette taille compile avec deux montants inversés.
+ */
 @Schema(description = "Fiche d'une tranche (CfgTranche). Taux en fraction : 0.2 = 20 %.")
+@Builder
 public record TrancheDetailDto(
         UUID id,
         UUID projetId,
@@ -109,6 +114,57 @@ public record TrancheDetailDto(
         @Schema(description = "Auteur de la dernière modification (UserUpdate).")
         String modifiePar,
         @Schema(description = "Date de la dernière modification (UserUpdateDateTime).")
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+
+        // -- Ajouts FEATURE-patrimoine-tranche-fiche.md §4.1 (mêmes noms que TrancheEcritureDto) --
+        @Schema(description = "Libellé du programme de la tranche.")
+        String projetLibelle,
+        @Schema(description = "Libellé de l'entité juridique du programme.")
+        String entiteLibelle,
+        UUID standingId,
+        String standingLibelle,
+        UUID niveauTerrainId,
+        @Schema(description = "Libellé du « Nbr. étage » (LndLevel).")
+        String niveauTerrainLibelle,
+        UUID rubriqueId,
+        String rubriqueLibelle,
+        UUID responsableSavId,
+        String responsableSavLibelle,
+        String adresseSav,
+        @Schema(description = "Plancher couvert en m² (CoveredFloorArea), lecture seule : Σ des planchers couverts saisis.")
+        BigDecimal plancherCouvert,
+        Boolean visibleProjet,
+        Boolean visibleAchat,
+        Boolean visibleSav,
+        Boolean visiblePrm,
+        Boolean visibleRom,
+        Boolean cadeauParrain,
+        Boolean cadeauAncienClient,
+        Boolean cadeauOrigineProspection,
+        Boolean cadeauxCumules,
+        UUID tiersAutruiId,
+        String tiersAutruiLibelle,
+        UUID projetFacturationId,
+        String projetFacturationLibelle,
+        UUID planComptableId,
+        @Schema(description = "Code et libellé du compte (« 4111 — Clients »).")
+        String planComptableLibelle,
+        LocalDateTime dateMainLeveeAfh,
+        LocalDateTime dateCertificatDefinitif1,
+        LocalDateTime dateMainLeveeBancaire,
+        LocalDateTime dateCertificatDefinitif2,
+        LocalDateTime dateDepotLotissementMunicipalite,
+        LocalDateTime dateRetraitLotissementMunicipalite,
+        LocalDateTime dateDepotLotissementNonApprouveOtc,
+        LocalDateTime dateReglementFraisOtc,
+        LocalDateTime dateDepotLotissementApprouveOtc,
+        LocalDateTime dateRetraitPlansMutationOtc,
+        LocalDateTime dateAchevementPartages,
+        LocalDateTime dateDepotPartageCpf,
+        LocalDateTime datePaiementFraisPartageCpf,
+        LocalDateTime dateRetraitPartageCpf,
+        LocalDateTime dateRetraitCertificatsIndividuels,
+        LocalDateTime dateVerificationCertificats,
+        LocalDateTime dateRepartitionCharges
 ) {
 }

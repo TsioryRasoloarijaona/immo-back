@@ -5,10 +5,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.jdbc.core.ColumnMapRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -44,6 +49,18 @@ public class RemonteeLecture {
      */
     static final Map<String, List<String>> COLONNES_HORS_PERIMETRE =
             Map.of("StlSettlementLine", List.of("BuyDocumentId", "RntDocumentId", "StlDocumentId"));
+
+    /**
+     * NULL typé par la colonne source : un NULL non typé part en nvarchar, que SQL Server refuse dans une colonne
+     * {@code image} ({@code CfgProjectZone.ImageData}).
+     */
+    private static final RowMapper<Map<String, Object>> LIGNE_TYPEE = new ColumnMapRowMapper() {
+        @Override
+        protected Object getColumnValue(ResultSet rs, int index) throws SQLException {
+            Object valeur = super.getColumnValue(rs, index);
+            return valeur == null ? new SqlParameterValue(rs.getMetaData().getColumnType(index), null) : valeur;
+        }
+    };
 
     private final JdbcTemplate versLecture;
     private final JdbcTemplate depuisEcriture;
@@ -106,8 +123,8 @@ public class RemonteeLecture {
     /** Vrai si la ligne existe sur la source. Réutilisé par {@link SynchronisationDescendante} : un seul MERGE. */
     boolean fusionner(LigneEcrite ligne) {
         String cle = CLES_PRIMAIRES.getOrDefault(ligne.table(), "PKey");
-        List<Map<String, Object>> trouvees = depuisEcriture.queryForList(
-                selections.computeIfAbsent(ligne.table(), t -> selection(t, cle)), ligne.pkey());
+        List<Map<String, Object>> trouvees = depuisEcriture.query(
+                selections.computeIfAbsent(ligne.table(), t -> selection(t, cle)), LIGNE_TYPEE, ligne.pkey());
 
         if (trouvees.isEmpty()) {
             return false;
@@ -137,8 +154,8 @@ public class RemonteeLecture {
      */
     int fusionnerTout(String table) {
         String cle = CLES_PRIMAIRES.getOrDefault(table, "PKey");
-        List<Map<String, Object>> lignes = depuisEcriture.queryForList(
-                selectionsTout.computeIfAbsent(table, this::selectionTout));
+        List<Map<String, Object>> lignes = depuisEcriture.query(
+                selectionsTout.computeIfAbsent(table, this::selectionTout), LIGNE_TYPEE);
         if (lignes.isEmpty()) {
             return 0;
         }

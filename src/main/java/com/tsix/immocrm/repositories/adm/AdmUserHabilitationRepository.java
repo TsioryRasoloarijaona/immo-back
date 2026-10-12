@@ -21,6 +21,9 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
             + "WHERE h.admUser.id = :admUserId AND h.prjProjectId IS NOT NULL")
     List<UUID> findPrjProjetIdsByAdmUserId(@Param("admUserId") UUID admUserId);
 
+    /** Habilitations d'un programme : supprimées avec lui, comme la cascade OMRAN. */
+    List<AdmUserHabilitation> findByCfgProjectId(UUID projetId);
+
     /** Le seul sous-ensemble que {@code PUT /api/utilisateurs/{admUserId}/projets} peut supprimer. */
     List<AdmUserHabilitation> findByAdmUserIdAndCfgProjectIsNotNull(UUID admUserId);
 
