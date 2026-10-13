@@ -80,6 +80,8 @@ class LiberationLotTest {
     @Autowired private StrStatusRepository strStatusRepository;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
+    @Autowired private com.tsix.immocrm.repositories.com.ComFolderItemRepository folderItemRepository;
+    @Autowired private com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository statusHistoryRepository;
 
     private StkItemType itemType;
     private StkItemCategory itemCategory;
@@ -280,12 +282,19 @@ class LiberationLotTest {
 
     // ------------------------------------------------------------------ R4
 
+    /** B4 (FEATURE-vente-socle.md) : tous les sous-articles du dossier (ComFolderItem) reviennent, comme OMRAN. */
     @Test
-    void reactivation_lotLibre_lotEtSousArticlesToujoursAffectesReoccupes() throws Exception {
+    void reactivation_lotLibre_lotEtTousLesSousArticlesDuDossierReoccupes() throws Exception {
         StkItem principal = newItem("LIB-PRINC-5", tranche);
         StkItem toujours = newSousArticle("LIB-SOUS-AA-5", principal, true);
         StkItem jamais = newSousArticle("LIB-SOUS-NA-5", principal, false);
+        jamais.setParent(null);
+        jamais.setIsUnderItem(false);
+        stkItemRepository.save(jamais);
+        StkItem horsDossier = newSousArticle("LIB-SOUS-HORS-5", principal, true);
         ComFolder folder = newDossier("DOS-LIB-5", ANNULATION, principal);
+        sousArticleDuDossier(folder, toujours);
+        sousArticleDuDossier(folder, jamais);
 
         changerStatut(folder, corps(RESERVATION, null))
                 .andExpect(status().isOk())
@@ -293,7 +302,75 @@ class LiberationLotTest {
 
         assertThat(relu(principal).getComFolderId()).isEqualTo(folder.getId());
         assertThat(relu(toujours).getComFolderId()).isEqualTo(folder.getId());
-        assertThat(relu(jamais).getComFolderId()).isNull();
+        StkItem jamaisApres = relu(jamais);
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertThat(jamaisApres.getComFolderId()).isEqualTo(folder.getId()),
+                () -> assertThat(jamaisApres.getParent().getId()).isEqualTo(principal.getId()),
+                () -> assertThat(jamaisApres.getIsUnderItem()).isTrue(),
+                () -> assertThat(relu(horsDossier).getComFolderId()).isNull());
+    }
+
+    @Test
+    void reactivation_videDateEtCauseDAnnulation() throws Exception {
+        StkItem principal = newItem("LIB-PRINC-5B", tranche);
+        ComFolder folder = newDossier("DOS-LIB-5B", ANNULATION, principal);
+        folder.setCancelDate(LocalDateTime.of(2026, 9, 1, 0, 0));
+        folder.setCancelDescription("Client parti");
+        folderRepository.save(folder);
+
+        changerStatut(folder, corps(RESERVATION, null)).andExpect(status().isOk());
+
+        ComFolder apres = relu(folder);
+        assertThat(apres.getCancelDate()).isNull();
+        assertThat(apres.getCancelDescription()).isEmpty();
+    }
+
+    @Test
+    void reactivation_sousArticlePrisParUnAutreDossier_409_rienNEstReoccupe() throws Exception {
+        StkItem principal = newItem("LIB-PRINC-5C", tranche);
+        StkItem sous = newSousArticle("LIB-SOUS-5C", principal, true);
+        ComFolder annule = newDossier("DOS-LIB-5C", ANNULATION, principal);
+        sousArticleDuDossier(annule, sous);
+        ComFolder autre = newDossier("DOS-LIB-5D", RESERVATION, newItem("LIB-AUTRE-5D", tranche), sous);
+
+        changerStatut(annule, corps(RESERVATION, null))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(containsString("Le sous article LIB-SOUS-5C n'est pas libre")));
+
+        assertThat(relu(principal).getComFolderId()).isNull();
+        assertThat(relu(sous).getComFolderId()).isEqualTo(autre.getId());
+        assertThat(relu(annule).getStrStatus().getCode()).isEqualTo(ANNULATION);
+    }
+
+    @Test
+    void annulation_historiseAnnulationAffectationParSousArticle() throws Exception {
+        StkItem principal = newItem("LIB-PRINC-5E", tranche);
+        StkItem annexe = newSousArticle("LIB-SOUS-5E", principal, false);
+        ComFolder folder = newDossier("DOS-LIB-5E", RESERVATION, principal, principal, annexe);
+
+        changerStatut(folder, corps(ANNULATION, "Annulé")).andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        List<com.tsix.immocrm.entities.str.StrFolderStatusHistory> lignes = statusHistoryRepository
+                .findByComFolderIdOrderByDocDateAsc(folder.getId());
+        assertThat(lignes)
+                .filteredOn(l -> "ANNULATION AFFECTATION".equals(l.getDescription()))
+                .singleElement()
+                .satisfies(l -> {
+                    assertThat(l.getStkItem().getId()).isEqualTo(annexe.getId());
+                    assertThat(l.getStrFolderStatus().getCode()).isEqualTo(ANNULATION);
+                });
+    }
+
+    private void sousArticleDuDossier(ComFolder folder, StkItem sous) {
+        com.tsix.immocrm.entities.com.ComFolderItem ligne = new com.tsix.immocrm.entities.com.ComFolderItem();
+        ligne.setId(UUID.randomUUID());
+        ligne.setComFolder(folder);
+        ligne.setStkItem(sous);
+        ligne.setCode(sous.getCode());
+        ligne.setIsUnderItem(true);
+        folderItemRepository.save(ligne);
     }
 
     @Test

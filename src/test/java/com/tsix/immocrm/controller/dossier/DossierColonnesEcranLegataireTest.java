@@ -230,11 +230,28 @@ class DossierColonnesEcranLegataireTest {
 
         mockMvc.perform(get("/api/dossiers")
                         .param("search", "ECR-DEL-2")
-                        .param("colonnes", "code,delaiNotaire,delaiLivraison,dateCompromis"))
+                        .param("colonnes", "code,delaiNotaire,delaiLivraison,dateEnvoiNotaire"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].delaiNotaire").value(60))
                 .andExpect(jsonPath("$.content[0].delaiLivraison").value(30))
-                .andExpect(jsonPath("$.content[0].dateCompromis").exists());
+                .andExpect(jsonPath("$.content[0].dateEnvoiNotaire").value("2025-03-02T09:00:00"));
+    }
+
+    /** B1 (FEATURE-vente-socle.md) : chez OMRAN le compromis est CreditApprovalDate, AgreementDate l'envoi au notaire. */
+    @Test
+    void dateCompromis_litCreditApprovalDate_etDateEnvoiNotaire_AgreementDate() throws Exception {
+        ComFolder f = newFolder("ECR-DEL-B1");
+        f.setCreditApprovalDate(LocalDateTime.of(2025, 2, 10, 0, 0));
+        f.setAgreementDate(LocalDateTime.of(2025, 3, 2, 0, 0));
+        folderRepository.save(f);
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/dossiers")
+                        .param("search", "ECR-DEL-B1")
+                        .param("colonnes", "code,dateCompromis,dateEnvoiNotaire"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].dateCompromis").value("2025-02-10T00:00:00"))
+                .andExpect(jsonPath("$.content[0].dateEnvoiNotaire").value("2025-03-02T00:00:00"));
     }
 
     /** Sans jalon, le délai est nul — pas zéro. Un zéro dirait « concrétisé le jour même ». */

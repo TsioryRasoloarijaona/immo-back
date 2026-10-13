@@ -25,7 +25,7 @@ public record ReglementDto(
         /** N'a de sens que si le type l'exige ({@code banqueObligatoire} des types de règlement). */
         UUID banqueId,
         String banqueNom,
-        /** {@code StlSettlement.TierId} : qui a réglé, pas forcément l'acquéreur principal. */
+        /** Qui a réglé ({@code StlSettlement.TierPayerId}, sinon {@code TierId}), pas forcément l'acquéreur principal. */
         UUID payeurId,
         String payeurNom,
         String notes,

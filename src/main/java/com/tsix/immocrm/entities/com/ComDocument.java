@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
@@ -113,5 +114,11 @@ public class ComDocument {
     @Column(name = "Code")
     private String code;
 
+    // ComImpayedView fait INNER JOIN CfgCompany : une échéance sans société n'est jamais un impayé.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
 
+    @Column(name = "AdmModuleId")
+    private UUID admModuleId;
 }

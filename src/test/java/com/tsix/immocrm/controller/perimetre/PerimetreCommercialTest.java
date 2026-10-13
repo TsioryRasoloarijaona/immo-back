@@ -87,6 +87,7 @@ class PerimetreCommercialTest {
 
     @Autowired private FixtureReferentielStk fixtureReferentielStk;
     @Autowired private MockMvc mockMvc;
+    @Autowired private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
     @Autowired private AdmRoleRepository roleRepository;
@@ -778,6 +779,7 @@ class PerimetreCommercialTest {
     void creationDeDossierDansLePerimetre_reste201() throws Exception {
         AdmUser commercial = newUser("perim.create.ok." + UUID.randomUUID());
         affecter(commercial, projetA);
+        fixtureStatuts.reservation();
 
         CfgTier prospect = new CfgTier();
         prospect.setId(UUID.randomUUID());

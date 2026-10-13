@@ -14,7 +14,7 @@ public record FicheTropPercuData(
         String villeSignature,
         /** Acquéreur principal puis co-acquéreurs ({@code ComFolderCustomer}). */
         List<Acquereur> acquereurs,
-        /** Valeur absolue de {@code Sum(versements) - PriceAfterDiscount} : le signe est dans {@code resteAPayer}. */
+        /** {@code MontantsDossierDto.tropPercu} (formule de {@code ComSaleFolderView}) : 0 pour un dossier débiteur. */
         BigDecimal montantTropPercu,
         String articleCategorieLibelle,
         String articleCode,

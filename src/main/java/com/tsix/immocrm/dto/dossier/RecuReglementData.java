@@ -17,7 +17,7 @@ public record RecuReglementData(
         BigDecimal montantRegleDossier,
         /** {@code StlSettlement.description} : c'est là que le légataire met le libellé du mode de paiement. */
         String modePaiement,
-        /** {@code StlSettlement.tier}, à défaut {@code ComFolder.cfgCustomer}. */
+        /** Le payeur ({@code TierPayerId}, sinon {@code TierId}), à défaut {@code ComFolder.cfgCustomer}. */
         Beneficiaire beneficiaire,
         /** {@code ComFolderCustomer}, cités après {@code beneficiaire} (« et de … »). */
         List<Beneficiaire> coAcquereurs,

@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderCustomer;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
@@ -44,6 +45,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -89,8 +91,12 @@ class FicheTropPercuTest {
     private StlSettlementRepository settlementRepository;
     @Autowired
     private StlSettlementLineRepository settlementLineRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository categoryRepository;
+    @Autowired
+    private com.tsix.immocrm.services.dossier.FicheTropPercuService ficheTropPercuService;
 
-    private UUID setUpDossier(String suffix) {
+    private UUID setUpDossier(String suffix, String montantRegle) {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
         vocation.setCode("VOC-TP-" + suffix);
@@ -158,35 +164,103 @@ class FicheTropPercuTest {
         folder.setCfgCustomer(client);
         folder.setDocDate(LocalDateTime.now());
         folder.setPriceAfterDiscount(new BigDecimal("1000000.00"));
+        folder.setPrice(new BigDecimal("1000000.00"));
         folder.setUnitCost(new BigDecimal("16666.67"));
         folderRepository.save(folder);
 
-        ComDocument echeance = new ComDocument();
+        ComSettlementCategory avance = new ComSettlementCategory();
+        avance.setId(UUID.randomUUID());
+        avance.setCode("AVANCE-TP-" + suffix);
+        avance.setIsCredit(true);
+        avance.setIsSaleAdvance(true);
+        avance.setExcludeFromPrice(false);
+        categoryRepository.save(avance);
+
+        echeance = new ComDocument();
         echeance.setId(UUID.randomUUID());
         echeance.setComFolder(folder);
         echeance.setAmount(new BigDecimal("1000000.00"));
+        echeance.setComSettlementCategory(avance);
         documentRepository.save(echeance);
 
+        reglement(echeance, true, montantRegle);
+        return folder.getId();
+    }
+
+    private ComDocument echeance;
+
+    private void reglement(ComDocument document, boolean encaissement, String montant) {
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setDocDate(LocalDateTime.now());
-        settlement.setDescription("Virement bancaire");
-        settlement.setIsCredit(true);
+        settlement.setDescription(encaissement ? "Virement bancaire" : "Remboursement");
+        settlement.setIsCredit(encaissement);
         settlementRepository.save(settlement);
 
         StlSettlementLine ligne = new StlSettlementLine();
         ligne.setId(UUID.randomUUID());
         ligne.setStlSettlement(settlement);
-        ligne.setComDocument(echeance);
-        ligne.setAmount(new BigDecimal("1050000.00")); // trop perçu de 50 000,00 DH
+        ligne.setComDocument(document);
+        ligne.setAmount(new BigDecimal(montant));
         settlementLineRepository.save(ligne);
+    }
 
-        return folder.getId();
+    /** B8 (FEATURE-vente-socle.md) : même calcul que GET .../montants ; un dossier débiteur n'a pas de trop-perçu. */
+    @Test
+    void dossierDebiteur_aucunTropPercu_niDansLesMontantsNiSurLaFiche() throws Exception {
+        UUID dossierId = setUpDossier("3", "600000.00");
+
+        mockMvc.perform(get("/api/dossiers/{id}/montants", dossierId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tropPercu").value(0))
+                .andExpect(jsonPath("$.tropPercuReste").value(0));
+        assertThat(ficheTropPercuService.collect(dossierId).montantTropPercu()).isEqualByComparingTo("0");
+    }
+
+    /** B7/B8 : un décaissement se retranche du réglé : 1 050 000 encaissés − 20 000 rendus = 30 000 de trop. */
+    @Test
+    void decaissement_seRetrancheDuRegle() throws Exception {
+        UUID dossierId = setUpDossier("4", "1050000.00");
+        reglement(echeance, false, "20000.00");
+
+        mockMvc.perform(get("/api/dossiers/{id}/montants", dossierId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tropPercu").value(30000.0))
+                .andExpect(jsonPath("$.parCategorie[0].regle").value(1030000.0));
+        assertThat(ficheTropPercuService.collect(dossierId))
+                .satisfies(fiche -> {
+                    assertThat(fiche.montantTropPercu()).isEqualByComparingTo("30000");
+                    assertThat(fiche.totalRegle()).isEqualByComparingTo("1030000");
+                });
+    }
+
+    /** B7 : une échéance de catégorie au débit (remboursement) se retranche des totaux au lieu de s'y ajouter. */
+    @Test
+    void echeanceAuDebit_seRetrancheDuTotal() throws Exception {
+        UUID dossierId = setUpDossier("5", "0.00");
+        ComSettlementCategory remboursement = new ComSettlementCategory();
+        remboursement.setId(UUID.randomUUID());
+        remboursement.setCode("REMB-TP-5");
+        remboursement.setIsCredit(false);
+        remboursement.setExcludeFromPrice(false);
+        categoryRepository.save(remboursement);
+        ComDocument ligne = new ComDocument();
+        ligne.setId(UUID.randomUUID());
+        ligne.setComFolder(echeance.getComFolder());
+        ligne.setAmount(new BigDecimal("50000.00"));
+        ligne.setComSettlementCategory(remboursement);
+        documentRepository.save(ligne);
+
+        mockMvc.perform(get("/api/dossiers/{id}/montants", dossierId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalGeneral").value(950000.0))
+                .andExpect(jsonPath("$.totalSoumisReglePrixTTC").value(950000.0))
+                .andExpect(jsonPath("$.parCategorie[?(@.categorie=='REMB-TP-5')].montant").value(-50000.0));
     }
 
     @Test
     void getFicheTropPercu_pdf_showsMontantAndVersement() throws Exception {
-        UUID dossierId = setUpDossier("1");
+        UUID dossierId = setUpDossier("1", "1050000.00"); // trop perçu de 50 000,00 DH
 
         byte[] pdf = mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-trop-percu", dossierId))
                 .andExpect(status().isOk())

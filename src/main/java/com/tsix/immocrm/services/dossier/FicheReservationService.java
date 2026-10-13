@@ -15,12 +15,14 @@ import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,19 +33,33 @@ public class FicheReservationService {
 
     private final ComFolderRepository folderRepository;
     private final StlSettlementLineRepository settlementLineRepository;
+    private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
     public FicheReservationService(ComFolderRepository folderRepository,
                                     StlSettlementLineRepository settlementLineRepository,
-                                    Clock clock) {
+                                    UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.folderRepository = folderRepository;
         this.settlementLineRepository = settlementLineRepository;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
     }
 
+    /**
+     * Écrit : la première impression pose {@code ContractPrintDate}, comme {@code BeforeRunReport} d'OMRAN
+     * ({@code Yes.Com.Front.Sales/Sale.cs:1006-1017}) ; une réimpression ne la change pas.
+     */
+    @Transactional
     public FicheReservationData collect(UUID dossierId) {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
+        if (folder.getContractPrintDate() == null) {
+            LocalDateTime maintenant = LocalDateTime.now(clock);
+            folder.setContractPrintDate(maintenant);
+            folder.setUserUpdate(utilisateurAffiche.courant().nom());
+            folder.setUserUpdateDateTime(maintenant);
+            folderRepository.save(folder);
+        }
 
         CfgTier client = folder.getCfgCustomer();
         StkItem article = folder.getStkItem();

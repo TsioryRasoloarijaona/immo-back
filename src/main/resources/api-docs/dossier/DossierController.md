@@ -192,8 +192,18 @@ plancher) s'il est > 0 ; il sert de base pour l'article principal, les annexes, 
 les offres. Sans prix de référence, la base avant remise est le prix négocié (remise nulle). C'est
 la valeur exposée par `prixSuggere` sur les articles.
 
-**Prospect → client** : si le statut initial porte l'indicateur OMRAN « Transforme le prospect en
-client », le tiers passe au type client (voir `PATCH /api/dossiers/{id}/statut`).
+**Sans `prix`** : les montants sont quand même écrits, depuis le prix de référence des articles (0
+s'ils n'en ont pas), sans frais de syndic ; aucun schéma de financement n'est généré.
+
+**Écritures compatibles OMRAN** (le dossier apparaît dans les écrans du logiciel de bureau) : statut
+initial RESERVATION (obligatoire), type de document `ComFolder`, `DocDate` à minuit, description
+« <code> du jj/mm/aaaa », répartition du client principal à 100 %, superficies, prix au m², prix
+contractuel, schéma texte, constantes et signatures de création. Les articles suivants de
+`articleIds` deviennent les sous-articles du lot principal (ligne `ComFolderItem`, historique
+« AFFECTATION »). Voir `FEATURE-interop-omran-ecritures.md` §3.
+
+**Type du tiers** : le client (et chaque acquéreur) est client tant qu'il a un dossier actif dont le
+statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/dossiers/{id}/statut`).
 
 ### reponse 400
 
@@ -201,18 +211,25 @@ Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), pros
 de paiement introuvable, prospection sans prospect lié, article déjà occupé, `remisePercent` hors
 de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
 
+### reponse 500
+
+Statut RESERVATION introuvable dans la configuration des dossiers de vente : aucun dossier n'est
+créé, le `detail` le dit.
+
 ## changerStatut
 
 Change le statut du dossier. La transition doit figurer dans la table des transitions validées
-(sinon **409**, avec `transitionsAutorisees`) ; un dossier sans statut courant accepte tout statut.
+(sinon **409**, avec `transitionsAutorisees`) — copie des transitions `StrWorkFlow` du logiciel de
+bureau. Un dossier **sans statut** est refusé (**409**, reprise de données nécessaire).
 
-**Prospect → client, comme OMRAN** : si le statut cible porte l'indicateur « Transforme le prospect
-en client » (`StrStatus.BoolField011` : CONCRETISATION, COMPROMIS, FORMALISE…), et que le client du
-dossier est de type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`), son type devient le type client
-correspondant (`CLI`, `CLIRNT`, `CLIPRM`, `CLIROM`), dans la même transaction. Une ligne
-d'historique distincte « Prospect transformé en client » (type `STATUT`) s'ajoute alors à celle du
-changement de statut, dont la note reste intacte.
-Déjà client, type absent ou inconnu : rien ne change. Jamais de retour client → prospect.
+**Type client / prospect, comme OMRAN** (`Sale.cs:ManageTier`), après chaque changement : le client
+principal et chaque acquéreur (`ComFolderCustomer`) qui a au moins un dossier actif (statut ni
+annulation ni résiliation) dont le statut porte l'indicateur « Transforme le prospect en client »
+(`StrStatus.BoolField011`) passe du type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`) au type client
+correspondant (`CLI`, …) ; un client qui n'en a plus aucun redevient prospect. `CfgTierKindId` est
+remis à vide dans les deux cas. Une ligne d'historique distincte (type `STATUT`) le dit : « Prospect
+transformé en client » ou « Retour prospect » (suivie du nom pour un acquéreur) ; la note du
+changement de statut reste intacte.
 
 **Sortie (ANNULATION ou DESISTEMENT) : le lot est libéré**, comme OMRAN, dans la même transaction.
 Chaque article lié au dossier (lot principal et annexes TER / PARKING) perd son `ComFolderId` et
@@ -220,10 +237,14 @@ redevient `DISPONIBLE` ; un sous-article sans « Toujours affecté » (`AlwaysAf
 article parent. `ComFolder.StkItemId` est conservé : le détail d'un dossier sorti montre toujours son
 lot principal dans `articles`, même revendu depuis. `note` est **obligatoire** (la cause, écrite dans
 `CancelDescription`) ; `date` va dans `CancelDate` (maintenant si absente), pour les deux sorties.
+Chaque sous-article libéré reçoit une ligne d'historique « ANNULATION AFFECTATION ». La sortie est
+refusée (**409**) si un dossier de syndic en cours est rattaché, ou si une facture de chiffre
+d'affaires du dossier n'est pas annulée par un avoir.
 
-**Réactivation ANNULATION → RESERVATION** : le lot principal doit être encore libre (sinon **409**) ;
-il reprend le dossier, avec ses sous-articles « Toujours affecté » encore libres. Les annexes libérées
-sans cet indicateur ne reviennent pas. `CancelDate` et `CancelDescription` restent en historique.
+**Réactivation ANNULATION → RESERVATION**, comme OMRAN : le lot principal et **tous** les
+sous-articles du dossier (`ComFolderItem`) doivent être libres (sinon **409**) ; tous reprennent le
+dossier (sous-articles rattachés au lot, ligne « AFFECTATION »). `CancelDate` est vidée et
+`CancelDescription` remise à vide.
 
 ### reponse 400
 
@@ -240,9 +261,11 @@ Dossier introuvable.
 
 ### reponse 409
 
-Transition non autorisée depuis le statut courant (le corps liste `transitionsAutorisees`), ou
-réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code> a été revendu
-entre-temps : créer un nouveau dossier ») ; le statut ne change pas.
+Transition non autorisée depuis le statut courant (le corps liste `transitionsAutorisees`), dossier
+sans statut, réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code>
+a été revendu entre-temps : créer un nouveau dossier ») ou dont un sous-article est pris (« Le sous
+article <code> n'est pas libre… »), sortie avec un dossier de syndic en cours ou une facture sans
+avoir ; le statut ne change pas.
 
 ## addReglement
 
@@ -250,15 +273,19 @@ Crée un `StlSettlement` + sa `StlSettlementLine` de rattachement à l'échéanc
 règlement naît toujours au statut `IN_WORK`.
 
 **Saisie complète obligatoire** (400 sur chaque manquement) : `montant` (strictement positif et au
-plus égal au reste à payer de l'échéance), `dateEcheance`, `typeId` et `payeurId`. `reference` (n°
-de chèque...) est requise dès que le type choisi a `TypeReglementDto.referenceObligatoire=true`
-(CHÈQUE, EFFET...) ; `banqueId` est requise dès que `TypeReglementDto.banqueObligatoire=true` — ce
-flag était annoncé mais pas appliqué jusqu'ici.
+plus égal au reste à payer de l'échéance), `dateEcheance` et `typeId`. `reference` (n° de chèque...)
+est requise dès que le type choisi a `TypeReglementDto.referenceObligatoire=true` (CHÈQUE, EFFET...) ;
+`banqueId` est requise dès que `TypeReglementDto.banqueObligatoire=true`.
 
-`typeId` et `payeurId` sont exigés parce qu'ils alimentent le « Mode de versement » et le «
-Versement effectué par » de l'**autorisation d'encaissement**, à ouvrir juste après création via
-`GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement` (le `reglementId`
-est l'`id` renvoyé ici).
+`typeId` alimente le « Mode de versement » de l'**autorisation d'encaissement**, à ouvrir juste
+après création via `GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement`
+(le `reglementId` est l'`id` renvoyé ici). `payeurId` (« Versement effectué par ») est facultatif :
+absent, c'est le client du dossier.
+
+**Écritures compatibles OMRAN** : le tiers du règlement (`TierId`) est toujours le client du dossier,
+le payeur saisi va dans `TierPayerId` ; `DocDate` = aujourd'hui à minuit ; société du projet, module
+COM, type de document « encaissement », devise par défaut, description « <type> <banque> N° <réf> du
+jj/mm/aaaa ». Voir `FEATURE-interop-omran-ecritures.md` §5.
 
 `dateReglement` et `statut=POINTED` sont **refusés** (400) : pointer un règlement exige une preuve
 de paiement, impossible à fournir avant que le règlement existe. Pour saisir un règlement déjà
@@ -267,7 +294,8 @@ encaissé, enchaîner : ce `POST`, puis `POST .../reglements/{reglementId}/piece
 
 ### reponse 400
 
-Champ obligatoire absent (`montant`, `dateEcheance`, `typeId`, `payeurId`), montant négatif/nul ou
+Champ obligatoire absent (`montant`, `dateEcheance`, `typeId` ; `payeurId` si le dossier n'a pas de
+client), montant négatif/nul ou
 dépassant le reste à payer, `reference`/`banqueId` absente alors que le type la requiert, ou
 `dateReglement`/`statut=POINTED` fournis.
 
@@ -303,6 +331,13 @@ cela dans le schéma, et non sur le libellé de la catégorie, qui est du texte 
 ⚠️ **Sur un dossier sorti** (`ANNULATION` / `DESISTEMENT`, signalé par `dossierSorti`), `netAPayer`
 se réduit à ce qui a été encaissé et son reste vaut zéro : un dossier annulé ne reste rien devoir.
 Règle vérifiée sans exception sur les 30 dossiers sortis réels.
+
+**Signes** : le réglé d'une échéance est la somme de ses lignes de règlement, un décaissement
+(`StlSettlement.IsCredit = 0`) comptant en négatif, les règlements annulés exclus ; une échéance de
+catégorie au débit (remboursement, `IsCredit = 0`) se **retranche** des montants et totaux.
+
+`tropPercu` / `tropPercuReste` : formule de la vue `ComSaleFolderView` du logiciel de bureau (total
+dû − total réglé, quand il est négatif), rendue en positif ; 0 pour un dossier débiteur.
 
 ### reponse 200
 

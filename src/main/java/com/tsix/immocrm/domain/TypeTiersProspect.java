@@ -18,9 +18,19 @@ public final class TypeTiersProspect {
 
     /** Code client du type prospect donné ; vide pour un type client, inconnu ou absent. */
     public static Optional<String> codeClientCorrespondant(String codeType) {
-        if (codeType == null) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(CLIENT_DU_PROSPECT.get(codeType.trim().toUpperCase(Locale.ROOT)));
+        return Optional.ofNullable(normaliser(codeType)).map(CLIENT_DU_PROSPECT::get);
+    }
+
+    /** Code prospect du type client donné (retour client → prospect) ; vide pour un type prospect, inconnu ou absent. */
+    public static Optional<String> codeProspectCorrespondant(String codeType) {
+        String code = normaliser(codeType);
+        return CLIENT_DU_PROSPECT.entrySet().stream()
+                .filter(e -> e.getValue().equals(code))
+                .map(Map.Entry::getKey)
+                .findFirst();
+    }
+
+    private static String normaliser(String codeType) {
+        return codeType == null ? null : codeType.trim().toUpperCase(Locale.ROOT);
     }
 }

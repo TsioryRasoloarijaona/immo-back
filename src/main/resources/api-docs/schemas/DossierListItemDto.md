@@ -31,7 +31,8 @@ que le logiciel de bureau. `null` tant que la concrétisation n'a pas eu lieu : 
 
 ## delaiLivraison
 
-Jours entre le compromis et la livraison réelle. Calculé côté serveur. Calculable sur 63 / 358.
+Jours entre l'envoi au notaire (`AgreementDate`) et la livraison réelle. Calculé côté serveur.
+Calculable sur 63 / 358.
 
 Le délai de crédit du logiciel de bureau n'est pas exposé : il dépend de `CreditPossessionDate`,
 mesurée à **0 ligne sur 358**, donc il vaudrait `null` partout.

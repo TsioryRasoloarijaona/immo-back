@@ -20,12 +20,43 @@ class TransitionsValideesTest {
     @Test
     void envoiAuNotaire_aPlusieursTransitionsAutorisees() {
         assertThat(TransitionsValidees.transitionsAutorisees(ENVOI_AU_NOTAIRE))
-                .containsExactlyInAnyOrder(MINUTE, COMPROMIS, DESISTEMENT, CREDIT_EN_COURS, CONCRETISATION, ANNULATION);
+                .containsExactlyInAnyOrder(MINUTE, COMPROMIS, DESISTEMENT, CONCRETISATION, ANNULATION,
+                        LIVRAISON_PROVISOIRE);
     }
 
     @Test
     void desistement_estTerminal() {
         assertThat(TransitionsValidees.transitionsAutorisees(DESISTEMENT)).isEmpty();
+    }
+
+    /** B2 : la table est la copie de StrWorkFlow (yesRemsProd), 34 transitions. */
+    @Test
+    void table_copieExacteDeStrWorkFlow() {
+        int total = java.util.Arrays.stream(StatutDossier.values())
+                .mapToInt(s -> TransitionsValidees.transitionsAutorisees(s).size())
+                .sum();
+        assertThat(total).isEqualTo(34);
+    }
+
+    @Test
+    void desistementPossibleDepuisMeilleurtauxCompromisEtCredits() {
+        assertThat(java.util.List.of(MEILLEURTAUX, COMPROMIS, CREDIT_EN_COURS, CREDIT_DEBLOQUE))
+                .allMatch(depuis -> TransitionsValidees.estValide(depuis, DESISTEMENT));
+    }
+
+    @Test
+    void transitionsAjouteesDepuisStrWorkFlow() {
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertThat(TransitionsValidees.estValide(CREDIT_EN_COURS, CONCRETISATION)).isTrue(),
+                () -> assertThat(TransitionsValidees.estValide(ENVOI_AU_NOTAIRE, LIVRAISON_PROVISOIRE)).isTrue(),
+                () -> assertThat(TransitionsValidees.estValide(LIVRAISON_PROVISOIRE, MINUTE)).isTrue());
+    }
+
+    @Test
+    void transitionsAbsentesDeStrWorkFlow_refusees() {
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> assertThat(TransitionsValidees.estValide(ENVOI_AU_NOTAIRE, CREDIT_EN_COURS)).isFalse(),
+                () -> assertThat(TransitionsValidees.estValide(FORMALISE, LIVRAISON_PROVISOIRE)).isFalse());
     }
 
     @Test
