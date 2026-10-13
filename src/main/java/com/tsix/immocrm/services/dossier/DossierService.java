@@ -410,20 +410,33 @@ public class DossierService {
      * Montants toujours écrits, comme OMRAN : sans {@code prix} saisi, le prix de référence des articles
      * (0 s'ils n'en ont pas), sans frais de syndic puisqu'aucun schéma n'est généré.
      */
-    private static void appliquerMontantsCreation(ComFolder folder, StkItem principal, List<StkItem> annexes,
-                                                  CfgTranche tranche, CreerDossierRequest request) {
+    private void appliquerMontantsCreation(ComFolder folder, StkItem principal, List<StkItem> annexes,
+                                           CfgTranche tranche, CreerDossierRequest request) {
+        PrixArticle.PrixDeReference prixLot = prixDuLotSeul(principal);
         if (request.prix() == null) {
             BigDecimal prixReference = annexes.stream()
                     .map(PrixArticle::ttcOuZero)
-                    .reduce(PrixArticle.ttcOuZero(principal), BigDecimal::add);
-            appliquerMontants(folder, principal, annexes, prixReference, request.remisePercent(), BigDecimal.ZERO);
+                    .reduce(prixLot != null ? prixLot.ttc() : BigDecimal.ZERO, BigDecimal::add);
+            appliquerMontants(folder, principal, prixLot, annexes, prixReference, request.remisePercent(), BigDecimal.ZERO);
             return;
         }
         BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
                 .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
                 .map(SchemaFinancementCalculator.Ligne::montant)
                 .findFirst().orElse(BigDecimal.ZERO);
-        appliquerMontants(folder, principal, annexes, request.prix(), request.remisePercent(), fraisSyndic);
+        appliquerMontants(folder, principal, prixLot, annexes, request.prix(), request.remisePercent(), fraisSyndic);
+    }
+
+    /** Prix de référence du lot hors sous-articles, qui sont comptés comme annexes ; null sans prix. */
+    private PrixArticle.PrixDeReference prixDuLotSeul(StkItem principal) {
+        return PrixArticle.prixDuLotSeul(principal, stkItemRepository.findByParentId(principal.getId())).orElse(null);
+    }
+
+    /** Lot sans sous-article connu : son prix de référence tel quel. */
+    static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
+                                  BigDecimal prixNegocie, BigDecimal remisePercent, BigDecimal fraisSyndic) {
+        appliquerMontants(folder, principal, PrixArticle.prixDeReference(principal).orElse(null), annexes,
+                prixNegocie, remisePercent, fraisSyndic);
     }
 
     /**
@@ -431,9 +444,9 @@ public class DossierService {
      * Remise explicite : {@code prixNegocie} est le total (principal + annexes) <b>avant</b> remise ;
      * sinon c'est le prix <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
      */
-    static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
-                                           BigDecimal prixNegocie, BigDecimal remisePercent,
-                                           BigDecimal fraisSyndic) {
+    static void appliquerMontants(ComFolder folder, StkItem principal, PrixArticle.PrixDeReference prixLot,
+                                  List<StkItem> annexes, BigDecimal prixNegocie, BigDecimal remisePercent,
+                                  BigDecimal fraisSyndic) {
         boolean remiseExplicite = remisePercent != null;
         BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
 
@@ -441,12 +454,13 @@ public class DossierService {
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
         for (StkItem annexe : annexes) {
             BigDecimal prixAnnexe = PrixArticle.ttcOuZero(annexe);
-            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, vatRatio);
+            // HT du sous-article à son propre taux (un jardin est souvent à 0 %), comme son SalePriceHT chez OMRAN.
+            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, annexe.getVat() != null ? annexe.getVat() : vatRatio);
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
 
-        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(principal, prixNegocie, remiseExplicite,
+        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(prixLot, prixNegocie, remiseExplicite,
                 vatRatio, underItemsPrice);
         BigDecimal itemPrice = prixPrincipal.ttc();
         BigDecimal itemPriceHT = prixPrincipal.ht();
@@ -454,33 +468,19 @@ public class DossierService {
         BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
         BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
 
-        BigDecimal discountAmount;
-        BigDecimal discountAmountHT;
-        BigDecimal priceAfterDiscount;
-        BigDecimal priceAfterDiscountHT;
-        if (remiseExplicite) {
-            discountAmount = priceBeforeDiscount.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-            discountAmountHT = priceBeforeDiscountHT.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-            priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
-            priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
-        } else {
-            priceAfterDiscount = prixNegocie;
-            priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
-            discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
-            discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
-        }
-
-        // Remise répartie au prorata HT entre principal et annexes, comme DevisService#calculerMontants.
-        BigDecimal partPrincipal = priceBeforeDiscountHT.signum() != 0
-                ? itemPriceHT.divide(priceBeforeDiscountHT, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
-        BigDecimal itemPriceAfterHT = itemPriceHT.subtract(discountAmountHT.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal itemPriceAfter = itemPrice.subtract(discountAmount.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal underItemsPriceAfterHT = underItemsPriceHT
-                .subtract(discountAmountHT.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal underItemsPriceAfter = underItemsPrice
-                .subtract(discountAmount.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
+        // Sale.cs:RecalcDiscount : un seul taux, appliqué au HT du lot et de chaque sous-article ; sans taux
+        // saisi, il se déduit des TTC (prix négocié / prix avant remise), jamais d'un HT à TVA unique.
+        BigDecimal taux = tauxDeRemise(remisePercent, prixNegocie, priceBeforeDiscount);
+        BigDecimal resteATaux = BigDecimal.ONE.subtract(taux);
+        BigDecimal discountAmountHT = priceBeforeDiscountHT.multiply(taux).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
+        BigDecimal itemPriceAfterHT = itemPriceHT.multiply(resteATaux).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal underItemsPriceAfterHT = priceAfterDiscountHT.subtract(itemPriceAfterHT);
+        BigDecimal itemPriceAfter = itemPriceAfterHT.multiply(BigDecimal.ONE.add(vatRatio)).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal priceAfterDiscount = remiseExplicite
+                ? priceBeforeDiscount.subtract(priceBeforeDiscount.multiply(taux).setScale(6, RoundingMode.HALF_UP))
+                : prixNegocie;
+        BigDecimal underItemsPriceAfter = priceAfterDiscount.subtract(itemPriceAfter);
 
         folder.setVATRatio(vatRatio);
         folder.setItemPrice(itemPrice);
@@ -508,7 +508,25 @@ public class DossierService {
     private record PrixTtcHt(BigDecimal ttc, BigDecimal ht) {
     }
 
-    private static PrixTtcHt prixPrincipalAvantRemise(StkItem principal, BigDecimal prixNegocie,
+    private static final BigDecimal DEMI_CENTIME = new BigDecimal("0.005");
+
+    /** Taux 0–1 : celui saisi, sinon l'écart du prix négocié au prix avant remise, en TTC ; 0 sans base. */
+    static BigDecimal tauxDeRemise(BigDecimal remisePercent, BigDecimal prixNegocie, BigDecimal prixAvantRemise) {
+        if (remisePercent != null) {
+            return remisePercent.divide(BigDecimal.valueOf(100), 20, RoundingMode.HALF_UP);
+        }
+        if (prixNegocie == null || prixAvantRemise.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal ecart = prixAvantRemise.subtract(prixNegocie);
+        // Un écart sous le demi-centime vient de l'arrondi du prix saisi (prix de base à 6 décimales) : pas une remise.
+        if (ecart.abs().compareTo(DEMI_CENTIME) < 0) {
+            return BigDecimal.ZERO;
+        }
+        return ecart.divide(prixAvantRemise, 20, RoundingMode.HALF_UP);
+    }
+
+    private static PrixTtcHt prixPrincipalAvantRemise(PrixArticle.PrixDeReference reference, BigDecimal prixNegocie,
                                                       boolean remiseExplicite, BigDecimal vatRatio,
                                                       BigDecimal prixAnnexes) {
         if (remiseExplicite && prixNegocie != null) {
@@ -521,9 +539,8 @@ public class DossierService {
             BigDecimal itemPrice = prixNegocie.subtract(prixAnnexes);
             return new PrixTtcHt(itemPrice, diviserParTaux(itemPrice, vatRatio));
         }
-        Optional<PrixArticle.PrixDeReference> reference = PrixArticle.prixDeReference(principal);
-        if (reference.isPresent()) {
-            return new PrixTtcHt(reference.get().ttc(), reference.get().ht(vatRatio));
+        if (reference != null) {
+            return new PrixTtcHt(reference.ttc(), reference.ht(vatRatio));
         }
         // Sans prix de référence, la base avant remise est le prix négocié : remise nulle.
         BigDecimal itemPrice = prixNegocie != null ? prixNegocie : BigDecimal.ZERO;
@@ -596,7 +613,8 @@ public class DossierService {
         // appliquerMontants sur un ComFolder jetable, jamais persisté, plutôt qu'une copie de la
         // formule : la simulation ne peut pas diverger de POST /api/dossiers.
         ComFolder apercu = new ComFolder();
-        appliquerMontants(apercu, premierArticle, annexes, request.prix(), request.remisePercent(), BigDecimal.ZERO);
+        appliquerMontants(apercu, premierArticle, prixDuLotSeul(premierArticle), annexes, request.prix(),
+                request.remisePercent(), BigDecimal.ZERO);
         BigDecimal prixApresRemise = apercu.getPriceAfterDiscount();
 
         List<LigneSchemaFinancementDto> lignes = SchemaFinancementCalculator.calculer(tranche, prixApresRemise).stream()
@@ -612,7 +630,7 @@ public class DossierService {
 
         // DiscountAmount est HT (convention OMRAN) : le montant TTC de la réponse est l'écart des prix TTC.
         return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
-                apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
+                apercu.getDiscount().signum() == 0 ? BigDecimal.ZERO : apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
                 ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise,
                 annexes.subList(saisies.size(), annexes.size()).stream()
                         .map(a -> new SchemaFinancementDto.AnnexeAutomatique(a.getId(), a.getCode(), a.getDescription(),

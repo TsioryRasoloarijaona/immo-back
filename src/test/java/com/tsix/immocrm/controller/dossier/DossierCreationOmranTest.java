@@ -379,24 +379,50 @@ class DossierCreationOmranTest {
     @Test
     void creation_sousArticleEnfantDuLot_entreDansLePrixDesSousArticles() throws Exception {
         fixtureStatuts.reservation();
-        terrasse.setParent(lot);
-        terrasse.setIsUnderItem(true);
-        itemRepository.save(terrasse);
+        terrasseEnfantDuLot();
 
         ComFolder f = creer(prospection(null), null, lot);
 
         assertAll(
+                () -> assertThat(f.getItemPrice()).isEqualByComparingTo("819000"),
                 () -> assertThat(f.getUnderItemsPrice()).isEqualByComparingTo("50000"),
-                () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("869000"));
+                () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("869000"),
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("0"));
+    }
+
+    /**
+     * Revue navigateur (ARS0604 + JRD) : le prix du lot d'OMRAN inclut déjà ses sous-articles ; l'aperçu au prix
+     * de référence (lot + enfant) ne doit ni doubler l'enfant ni inventer de remise.
+     */
+    @Test
+    void simulation_lotAvecEnfant_prixDeReference_sansDoubleCompteNiRemise() throws Exception {
+        terrasseEnfantDuLot();
+
+        mockMvc.perform(post(DOSSIERS + "/simulation-financement").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleIds\":[\"%s\"],\"prix\":869000}".formatted(lot.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prixAvantRemise").value(869000.0))
+                .andExpect(jsonPath("$.montantRemise").value(0.0))
+                .andExpect(jsonPath("$.prixApresRemise").value(869000.0))
+                .andExpect(jsonPath("$.annexesAutomatiques[0].prix").value(50000.0));
+    }
+
+    /** Forme réelle d'OMRAN : ComSalePrice du lot = son prix seul + celui de ses sous-articles. */
+    private void terrasseEnfantDuLot() {
+        terrasse.setParent(lot);
+        terrasse.setIsUnderItem(true);
+        terrasse.setComSalePriceHT(new BigDecimal("41666.666667"));
+        itemRepository.save(terrasse);
+        lot.setComSalePrice(new BigDecimal("869000"));
+        lot.setComSalePriceHT(new BigDecimal("724166.666667"));
+        itemRepository.save(lot);
     }
 
     /** L'aperçu compte le sous-article libre du lot comme la création : mêmes montants. */
     @Test
     void simulation_sousArticleEnfantDuLot_egaleLeDossierCree() throws Exception {
         fixtureStatuts.reservation();
-        terrasse.setParent(lot);
-        terrasse.setIsUnderItem(true);
-        itemRepository.save(terrasse);
+        terrasseEnfantDuLot();
         String corps = "{\"articleIds\":[\"%s\"],\"prix\":869000,\"remisePercent\":5}".formatted(lot.getId());
 
         String apercu = mockMvc.perform(post(DOSSIERS + "/simulation-financement")

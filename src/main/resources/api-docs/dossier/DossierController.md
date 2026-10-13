@@ -209,7 +209,9 @@ contractuel, schéma texte, constantes et signatures de création. Les articles 
 **Sous-articles du lot** : comme le logiciel de bureau, tout sous-article libre du lot principal
 (`StkItem.ParentId` = le lot, sans dossier) est rattaché même s'il n'est pas dans `articleIds` ; son
 prix de référence entre dans le prix des sous-articles, donc dans le prix avant remise et la superficie
-globale. `prix` doit en tenir compte (avec `remisePercent`, il est le total annexes comprises).
+globale. `prix` doit en tenir compte (avec `remisePercent`, il est le total annexes comprises). Le prix de
+référence d'un lot (`comSalePrice`) inclut déjà ses sous-articles chez OMRAN : le prix du lot seul en est
+déduit, pour ne pas les compter deux fois — un lot et ses enfants valent donc son `prixSuggere`.
 
 **Type du tiers** : le client (et chaque acquéreur) est client tant qu'il a un dossier actif dont le
 statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/dossiers/{id}/statut`).
