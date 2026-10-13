@@ -105,6 +105,7 @@ public class DossierService {
 
     private static final String DOSSIER_INTROUVABLE = "Dossier introuvable: ";
     private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
+    private static final String CAUSE_OBLIGATOIRE = "La cause est obligatoire pour une annulation ou un désistement";
 
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
@@ -125,6 +126,7 @@ public class DossierService {
     private final AlerteRelanceService alerteRelanceService;
     private final TransformationProspectClient transformationProspectClient;
     private final Clock clock;
+    private final LiberationLot liberationLot;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -140,8 +142,9 @@ public class DossierService {
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
                            TransformationProspectClient transformationProspectClient,
-                           Clock clock) {
+                           Clock clock, LiberationLot liberationLot) {
         this.clock = clock;
+        this.liberationLot = liberationLot;
         this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
@@ -285,10 +288,20 @@ public class DossierService {
     public DossierDetailDto findById(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
-        List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
+        return toDetail(folder, articlesDuDossier(folder));
+    }
+
+    /**
+     * Dossier actif : ses articles liés ({@code StkItem.ComFolderId}). Dossier sorti : ses articles
+     * ont été libérés, il montre son lot principal ({@code ComFolder.StkItemId}). FEATURE-liberer-lot.md R8.
+     */
+    private List<ArticleSummaryDto> articlesDuDossier(ComFolder folder) {
+        if (estSorti(folder) && folder.getStkItem() != null) {
+            return List.of(toArticleSummary(folder.getStkItem()));
+        }
+        return stkItemRepository.findByComFolderId(folder.getId()).stream()
                 .map(DossierService::toArticleSummary)
                 .toList();
-        return toDetail(folder, articles);
     }
 
     /**
@@ -604,10 +617,23 @@ public class DossierService {
             throw new InvalidStatutTransitionException(
                     "Transition invalide: " + depuis.getCode() + " -> " + cible.getCode(), autorisees);
         }
+        if (cible.isSortie() && !StringUtils.hasText(request.note())) {
+            throw new InvalidRequestException(CAUSE_OBLIGATOIRE);
+        }
+        boolean reactivation = actuel.map(StatutDossier::isSortie).orElse(false) && !cible.isSortie();
+        if (reactivation) {
+            liberationLot.verifierReoccupable(folder);
+        }
 
         StrStatus strStatus = strStatusRepository.findByStrConfigEntityIdAndCode(StatutDossier.CONFIG_ENTITY_ID, cible.getCode());
         if (strStatus == null) {
             throw new InvalidRequestException("StrStatus introuvable pour le code: " + cible.getCode());
+        }
+        // Avant toute écriture sur le dossier : un 403 de périmètre sur un article le laisse intact.
+        if (cible.isSortie()) {
+            liberationLot.liberer(folder);
+        } else if (reactivation) {
+            liberationLot.reoccuper(folder);
         }
         folder.setStrStatus(strStatus);
         appliquerChampEtape(folder, cible, request);
@@ -615,10 +641,8 @@ public class DossierService {
         enregistrerHistoriqueStatut(folder, strStatus, request.note());
         basculerProspectEnClient(folder, strStatus);
 
-        List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
-                .map(DossierService::toArticleSummary)
-                .toList();
-        return toDetail(folderRepository.save(folder), articles);
+        ComFolder enregistre = folderRepository.save(folder);
+        return toDetail(enregistre, articlesDuDossier(enregistre));
     }
 
     /**
@@ -699,9 +723,9 @@ public class DossierService {
     }
 
     // La date va sur la colonne jalon de l'étape (EtapeMilestone) ; la note va sur CancelDescription
-    // pour ANNULATION (la cause d'annulation), sur Notes sinon.
+    // pour les deux sorties ANNULATION et DESISTEMENT (la cause), sur Notes sinon.
     private void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
-        if (cible == StatutDossier.ANNULATION) {
+        if (cible.isSortie()) {
             folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now(clock));
             if (request.note() != null) {
                 folder.setCancelDescription(request.note());
@@ -724,7 +748,7 @@ public class DossierService {
             case REMISE_DES_CLEFS -> folder.setDeliveryDateReal(request.date());
             case FORMALISE -> folder.setAgreementRegistryDate(request.date());
             default -> {
-                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE, DESISTEMENT : pas de colonne
+                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE : pas de colonne
                 // jalon confirmée — voir EtapeMilestone.
             }
         }

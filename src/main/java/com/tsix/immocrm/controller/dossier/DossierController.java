@@ -293,6 +293,7 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Statut changé."),
             @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403"),
             @ApiResponse(responseCode = "404"),
             @ApiResponse(responseCode = "409")
     })

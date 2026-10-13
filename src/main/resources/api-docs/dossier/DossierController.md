@@ -214,9 +214,25 @@ d'historique distincte « Prospect transformé en client » (type `STATUT`) s'aj
 changement de statut, dont la note reste intacte.
 Déjà client, type absent ou inconnu : rien ne change. Jamais de retour client → prospect.
 
+**Sortie (ANNULATION ou DESISTEMENT) : le lot est libéré**, comme OMRAN, dans la même transaction.
+Chaque article lié au dossier (lot principal et annexes TER / PARKING) perd son `ComFolderId` et
+redevient `DISPONIBLE` ; un sous-article sans « Toujours affecté » (`AlwaysAffected`) perd aussi son
+article parent. `ComFolder.StkItemId` est conservé : le détail d'un dossier sorti montre toujours son
+lot principal dans `articles`, même revendu depuis. `note` est **obligatoire** (la cause, écrite dans
+`CancelDescription`) ; `date` va dans `CancelDate` (maintenant si absente), pour les deux sorties.
+
+**Réactivation ANNULATION → RESERVATION** : le lot principal doit être encore libre (sinon **409**) ;
+il reprend le dossier, avec ses sous-articles « Toujours affecté » encore libres. Les annexes libérées
+sans cet indicateur ne reviennent pas. `CancelDate` et `CancelDescription` restent en historique.
+
 ### reponse 400
 
-`statut` absent ou inconnu.
+`statut` absent ou inconnu, ou `note` absente ou vide vers ANNULATION / DESISTEMENT (« La cause est
+obligatoire pour une annulation ou un désistement ») ; rien n'est écrit.
+
+### reponse 403
+
+Un article à libérer ou à réoccuper est sur un projet hors du périmètre commercial de l'appelant.
 
 ### reponse 404
 
@@ -224,7 +240,9 @@ Dossier introuvable.
 
 ### reponse 409
 
-Transition non autorisée depuis le statut courant ; le corps liste `transitionsAutorisees`.
+Transition non autorisée depuis le statut courant (le corps liste `transitionsAutorisees`), ou
+réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code> a été revendu
+entre-temps : créer un nouveau dossier ») ; le statut ne change pas.
 
 ## addReglement
 
