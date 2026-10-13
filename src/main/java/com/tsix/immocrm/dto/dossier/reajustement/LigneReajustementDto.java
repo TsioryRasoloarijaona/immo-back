@@ -37,7 +37,9 @@ public record LigneReajustementDto(
         @Schema(description = "Date de l'échéance modifiée, null si une ligne est créée.")
         LocalDateTime ligneCibleDate,
         @Schema(description = "Détail des superficies modifiées (article et sous-articles), une par ligne.")
-        String notes
+        String notes,
+        @Schema(description = "Raison pour laquelle le dossier ne peut pas être réajusté (POST = 409) ; null sinon.")
+        String motifExclusion
 ) {
 
     /** Où va la différence : « auto financement, sinon … crédit », sinon une nouvelle ligne d'autofinancement. */

@@ -7,11 +7,13 @@ import com.tsix.immocrm.entities.app.AppApiClient;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.repositories.app.AppApiClientRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
+import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.security.ApiKeyAuthenticationFilter;
@@ -55,6 +57,7 @@ class ReajustementSuperficiesTest {
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private ComDocumentRepository documentRepository;
     @Autowired private StkItemRepository stkItemRepository;
+    @Autowired private ComFolderItemRepository folderItemRepository;
     @Autowired private AppApiClientRepository clientRepository;
     @Autowired private CleApiService cleApiService;
     @Autowired private EntityManager em;
@@ -170,6 +173,81 @@ class ReajustementSuperficiesTest {
         mockMvc.perform(get(REAJUSTEMENT, tranche.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+        valider(dossier.getId()).andExpect(status().isConflict());
+    }
+
+    /** Dossier saisi au forfait comme ARS 2024/00286 : 1 m², prix du m² nul, 1 290 000 TTC ; le stock dit 88 m². */
+    private ComFolder dossierAuForfait(String code, BigDecimal prixM2HT, BigDecimal superficie) {
+        ComFolder dossier = dossier(code, "88");
+        dossier.setArea(superficie);
+        dossier.setUnitCostHT(prixM2HT);
+        dossier.setUnitCost(prixM2HT);
+        dossier.setItemPriceHT(BigDecimal.ZERO);
+        dossier.setPriceBeforeDiscountHT(BigDecimal.ZERO);
+        dossier.setPriceAfterDiscountHT(BigDecimal.ZERO);
+        dossier.setPrice(new BigDecimal("1290000"));
+        dossier.setPriceAfterDiscount(new BigDecimal("1290000"));
+        return folderRepository.save(dossier);
+    }
+
+    @Test
+    void dossierAuForfait_prixDuM2NulOuAbsent_exclusAvecMotif_etPostRefuseSansRienEcrire() throws Exception {
+        ComFolder nul = dossierAuForfait("DOS-REAJ8", BigDecimal.ZERO, BigDecimal.ONE);
+        ComDocument ligneNul = fixture.echeance(nul, autofinancement, new BigDecimal("1290000"),
+                LocalDateTime.of(2026, 1, 1, 0, 0));
+        ComFolder absent = dossierAuForfait("DOS-REAJ9", null, null);
+        fixture.echeance(absent, autofinancement, new BigDecimal("1290000"), LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        mockMvc.perform(get(REAJUSTEMENT, tranche.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].dossierId").value(nul.getId().toString()))
+                .andExpect(jsonPath("$[0].motifExclusion").value("Prix du m² absent sur le dossier : réajustement impossible"))
+                .andExpect(jsonPath("$[0].nouveauPrix").doesNotExist())
+                .andExpect(jsonPath("$[0].differenceSchema").doesNotExist())
+                .andExpect(jsonPath("$[1].motifExclusion").value("Prix du m² absent sur le dossier : réajustement impossible"));
+
+        valider(nul.getId()).andExpect(status().isConflict());
+
+        em.flush();
+        em.clear();
+        ComFolder relu = folderRepository.findById(nul.getId()).orElseThrow();
+        assertAll(
+                () -> assertThat(documentRepository.findById(ligneNul.getId()).orElseThrow().getAmount())
+                        .isEqualByComparingTo("1290000"),
+                () -> assertThat(relu.getArea()).isEqualByComparingTo("1"),
+                () -> assertThat(relu.getPriceAfterDiscount()).isEqualByComparingTo("1290000"));
+    }
+
+    @Test
+    void sousArticleSansPrixDeStock_superficieChangee_exclusAvecMotif() throws Exception {
+        ComFolder dossier = dossier("DOS-REAJ10", "100");
+        fixture.echeance(dossier, autofinancement, new BigDecimal("1200000"), LocalDateTime.of(2026, 1, 1, 0, 0));
+        StkItem cave = new StkItem();
+        cave.setId(UUID.randomUUID());
+        cave.setCode("CAVE-REAJ10");
+        cave.setStkItemType(dossier.getStkItem().getStkItemType());
+        cave.setStkItemCategory(dossier.getStkItem().getStkItemCategory());
+        cave.setStkVocation(dossier.getStkVocation());
+        cave.setStkKind(dossier.getStkItem().getStkKind());
+        cave.setArea(new BigDecimal("12"));
+        cave.setSalePrice(BigDecimal.ZERO);
+        stkItemRepository.save(cave);
+        ComFolderItem ligne = new ComFolderItem();
+        ligne.setId(UUID.randomUUID());
+        ligne.setComFolder(dossier);
+        ligne.setStkItem(cave);
+        ligne.setCode("CAVE-REAJ10");
+        ligne.setIsUnderItem(true);
+        ligne.setArea(new BigDecimal("10"));
+        ligne.setVATRatio(new BigDecimal("0.2"));
+        ligne.setPriceBeforeDiscountHT(new BigDecimal("50000"));
+        folderItemRepository.save(ligne);
+
+        mockMvc.perform(get(REAJUSTEMENT, tranche.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].motifExclusion")
+                        .value("Prix de stock absent pour le sous-article CAVE-REAJ10 : réajustement impossible"));
         valider(dossier.getId()).andExpect(status().isConflict());
     }
 

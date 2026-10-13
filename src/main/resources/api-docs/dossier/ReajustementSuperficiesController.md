@@ -9,6 +9,11 @@ autofinancement de son schéma de financement (écart arrondi à 2 décimales) :
 la ligne. `ligneCible` dit où ira l'écart : la dernière ligne d'autofinancement, sinon la dernière ligne de
 crédit, sinon une nouvelle ligne d'autofinancement datée du jour.
 
+Un dossier dont le nouveau prix ne peut pas être calculé est listé avec `motifExclusion` et sans prix, écart
+ni ligne cible : prix du m² HT du dossier absent ou nul (dossier saisi au forfait, le prix tomberait à 0),
+prix de stock absent pour un sous-article dont la superficie change, ou nouveau prix nul ou négatif. Il ne
+peut pas être coché.
+
 ## valider
 
 Applique, pour chaque dossier coché, ce que `GET` annonçait : nouvelles superficies et prix, écart ajouté (ou
@@ -19,5 +24,5 @@ mêmes colonnes qu'une échéance ajoutée à la main.
 
 ### reponse 409
 
-Un dossier coché n'a aucun écart de superficie à réajuster (ou plus d'écart dans son schéma), ou aucune
-catégorie d'autofinancement n'existe pour sa vocation alors qu'une ligne doit être créée.
+Un dossier coché n'a aucun écart de superficie à réajuster (ou plus d'écart dans son schéma), porte un
+`motifExclusion` (rien n'est écrit), ou aucune catégorie d'autofinancement n'existe pour sa vocation alors qu'une ligne doit être créée.

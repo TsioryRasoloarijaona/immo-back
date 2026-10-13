@@ -81,6 +81,7 @@ public class ReinitialisationService {
         if (article == null) {
             throw new ConflictException("Ce dossier n'a pas d'article principal : rien à recharger du stock.");
         }
+        exigerPrixDeStock(article);
         List<ComFolderItem> lignes = folderItemRepository.findByComFolderId(dossier.getId());
         List<ComFolderItem> existants = RecalculPrixDossier.sousArticlesDe(lignes);
         List<StkItem> manquants = sousArticlesManquants(dossier, article, lignes);
@@ -95,8 +96,38 @@ public class ReinitialisationService {
                 actuelle.remiseMontantHT(), actuelle.avecModifications(), actuelle.modificationsHT(),
                 actuelle.modificationsTTC(),
                 sousArticles.stream().map(ReinitialisationService::sousArticleDuStock).toList());
-        return new Plan(RecalculPrixDossier.calculer(rechargee), sousArticles, manquants,
-                !manquants.isEmpty() || differe(actuelle, rechargee));
+        exigerPrixDesSousArticles(existants);
+        RecalculPrixDossier.Resultat resultat = RecalculPrixDossier.calculer(rechargee);
+        if (resultat.prixVenteTTC().signum() <= 0) {
+            throw new ConflictException("Nouveau prix nul ou négatif : réinitialisation impossible.");
+        }
+        return new Plan(resultat, sousArticles, manquants, !manquants.isEmpty() || differe(actuelle, rechargee));
+    }
+
+    /** Un prix du m² absent ou nul au stock mettrait le prix du dossier à 0. Voir FEATURE-vente-fiche.md §B5. */
+    private static void exigerPrixDeStock(StkItem article) {
+        BigDecimal prix = article.getComSaleUnitCostHT();
+        if (prix == null || prix.signum() <= 0) {
+            throw new ConflictException("Prix du m² absent dans le stock pour l'article " + article.getCode()
+                    + " : réinitialisation impossible.");
+        }
+    }
+
+    /** Un sous-article déjà payé ne doit pas retomber à 0 parce que son prix manque au stock. */
+    private static void exigerPrixDesSousArticles(List<ComFolderItem> existants) {
+        List<String> sansPrix = existants.stream()
+                .filter(l -> l.getStkItem() != null && positif(l.getPriceBeforeDiscountHT())
+                        && !positif(l.getStkItem().getSalePriceHT()))
+                .map(l -> Objects.requireNonNullElse(l.getCode(), l.getStkItem().getCode()))
+                .toList();
+        if (!sansPrix.isEmpty()) {
+            throw new ConflictException("Prix de stock absent pour le sous-article " + String.join(", ", sansPrix)
+                    + " : réinitialisation impossible.");
+        }
+    }
+
+    private static boolean positif(BigDecimal v) {
+        return v != null && v.signum() > 0;
     }
 
     /**

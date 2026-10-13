@@ -181,6 +181,40 @@ class DossierReinitialisationTest {
     }
 
     @Test
+    @WithMockUser(roles = ADMIN)
+    void reinitialiser_prixDuM2NulAuStock_409_etPrixDuDossierIntact() throws Exception {
+        ComFolder dossier = dossierAvecStockModifie("DOS-REI6");
+        StkItem article = dossier.getStkItem();
+        article.setComSaleUnitCostHT(BigDecimal.ZERO);
+        stkItemRepository.save(article);
+
+        mockMvc.perform(get(APERCU, dossier.getId()))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post(REINITIALISER, dossier.getId()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Prix du m² absent")));
+
+        em.flush();
+        em.clear();
+        ComFolder relu = folderRepository.findById(dossier.getId()).orElseThrow();
+        assertAll(
+                () -> assertThat(relu.getPriceAfterDiscount()).isEqualByComparingTo("1140000"),
+                () -> assertThat(relu.getArea()).isEqualByComparingTo("100"));
+    }
+
+    @Test
+    @WithMockUser(roles = ADMIN)
+    void reinitialiser_prixDuM2AbsentAuStock_409() throws Exception {
+        ComFolder dossier = dossierAvecStockModifie("DOS-REI7");
+        StkItem article = dossier.getStkItem();
+        article.setComSaleUnitCostHT(null);
+        stkItemRepository.save(article);
+
+        mockMvc.perform(post(REINITIALISER, dossier.getId()))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     @WithMockUser
     void reinitialiser_sansRoleAdministrateur_403() throws Exception {
         ComFolder dossier = dossierAvecStockModifie("DOS-REI3");

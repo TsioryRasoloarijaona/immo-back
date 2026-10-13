@@ -52,6 +52,7 @@ public class ReajustementSuperficiesService {
 
     private static final int DECIMALES = 2;
     private static final int LONGUEUR_NOTES = 1000;
+    static final String MOTIF_SANS_PRIX_M2 = "Prix du m² absent sur le dossier : réajustement impossible";
     private static final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final EcritureDossier ecriture;
@@ -101,8 +102,12 @@ public class ReajustementSuperficiesService {
             if (dossier == null) {
                 throw new ResourceNotFoundException("Dossier introuvable dans cette tranche: " + id);
             }
-            plans.add(planifier(dossier).orElseThrow(() -> new ConflictException(
-                    "Le dossier " + dossier.getCode() + " n'a aucun écart de superficie à réajuster.")));
+            Plan plan = planifier(dossier).orElseThrow(() -> new ConflictException(
+                    "Le dossier " + dossier.getCode() + " n'a aucun écart de superficie à réajuster."));
+            if (plan.ligne().motifExclusion() != null) {
+                throw new ConflictException("Le dossier " + dossier.getCode() + " : " + plan.ligne().motifExclusion());
+            }
+            plans.add(plan);
         }
         String auteur = ecriture.auteur().nom();
         LocalDateTime maintenant = ecriture.maintenant();
@@ -147,10 +152,13 @@ public class ReajustementSuperficiesService {
                         BigDecimal difference, Optional<ComDocument> cible, LigneReajustementDto ligne) {
     }
 
-    /** Vide si la superficie n'a pas changé ou si le schéma n'a aucun écart (le légataire écarte alors la ligne). */
+    /**
+     * Vide si la superficie n'a pas changé ou si le schéma n'a aucun écart (le légataire écarte alors la ligne).
+     * Un dossier dont le nouveau prix ne peut pas être calculé revient avec son motif, sans écart ni ligne cible.
+     */
     private Optional<Plan> planifier(ComFolder dossier) {
         StkItem article = dossier.getStkItem();
-        if (article == null) {
+        if (article == null || dossier.getStrStatus() == null) {
             return Optional.empty();
         }
         BigDecimal ancienne = arrondi(dossier.getArea());
@@ -162,8 +170,9 @@ public class ReajustementSuperficiesService {
         }
         List<ComFolderItem> sousArticles = RecalculPrixDossier.sousArticlesDe(
                 folderItemRepository.findByComFolderId(dossier.getId()));
+        List<String> sansPrix = new ArrayList<>();
         List<RecalculPrixDossier.SousArticle> sousSaisis = sousArticles.stream()
-                .map(i -> sousArticleReajuste(i, notes)).toList();
+                .map(i -> sousArticleReajuste(i, notes, sansPrix)).toList();
         if (notes.isEmpty()) {
             return Optional.empty();
         }
@@ -171,9 +180,17 @@ public class ReajustementSuperficiesService {
         RecalculPrixDossier.Resultat resultat = RecalculPrixDossier.calculer(new RecalculPrixDossier.Saisie(
                 nouvelle, actuelle.tva(), actuelle.prixM2HT(), actuelle.remiseMontantHT(),
                 actuelle.avecModifications(), actuelle.modificationsHT(), actuelle.modificationsTTC(), sousSaisis));
+        String motif = motifExclusion(actuelle, sansPrix, resultat);
+        if (motif != null) {
+            LigneReajustementDto exclue = new LigneReajustementDto(dossier.getId(), dossier.getCode(),
+                    article.getCode(), TierNomFormatter.nom(dossier.getCfgCustomer()), ancienne, nouvelle,
+                    nouvelle.subtract(ancienne), dossier.getPrice(), null, null, null, null, null, null,
+                    String.join("\n", notes), motif);
+            return Optional.of(new Plan(dossier, resultat, sousArticles, BigDecimal.ZERO, Optional.empty(), exclue));
+        }
 
         List<ComDocument> echeances = documentRepository.findByComFolderIdOrderByDocDateAsc(dossier.getId());
-        BigDecimal difference = differenceSchema(dossier, resultat, echeances);
+        BigDecimal difference = arrondi(resultat.prixVenteTTC().subtract(totalSchema(echeances)));
         if (difference.signum() == 0) {
             return Optional.empty();
         }
@@ -186,21 +203,32 @@ public class ReajustementSuperficiesService {
                 TierNomFormatter.nom(dossier.getCfgCustomer()), ancienne, nouvelle, nouvelle.subtract(ancienne),
                 ancienPrix, resultat.prix(), resultat.prix().subtract(ancienPrix), difference, type,
                 cible.map(ComDocument::getId).orElse(null), cible.map(ComDocument::getDocDate).orElse(null),
-                String.join("\n", notes));
+                String.join("\n", notes), null);
         return Optional.of(new Plan(dossier, resultat, sousArticles, difference, cible, ligne));
     }
 
-    /** {@code Sale.cs:GetSchemaDifference} : un dossier sans statut a un écart nul, il n'est donc jamais réajusté. */
-    private static BigDecimal differenceSchema(ComFolder dossier, RecalculPrixDossier.Resultat resultat,
-                                               List<ComDocument> echeances) {
-        if (dossier.getStrStatus() == null) {
-            return BigDecimal.ZERO;
+    /**
+     * Le nouveau prix vaut superficie × prix du m² HT du dossier : sans ce prix (dossier saisi au forfait) ou sans
+     * prix de stock pour un sous-article, il tomberait à 0 et le schéma serait vidé. Voir FEATURE-vente-fiche.md §B6.
+     */
+    private static String motifExclusion(RecalculPrixDossier.Saisie actuelle, List<String> sansPrix,
+                                         RecalculPrixDossier.Resultat resultat) {
+        if (actuelle.prixM2HT() == null || actuelle.prixM2HT().signum() <= 0) {
+            return MOTIF_SANS_PRIX_M2;
         }
-        return arrondi(resultat.prixVenteTTC().subtract(totalSchema(echeances)));
+        if (!sansPrix.isEmpty()) {
+            return "Prix de stock absent pour le sous-article " + String.join(", ", sansPrix)
+                    + " : réajustement impossible";
+        }
+        if (resultat.prixVenteTTC().signum() <= 0) {
+            return "Nouveau prix nul ou négatif : réajustement impossible";
+        }
+        return null;
     }
 
     /** Comme le légataire : superficie du stock si elle diffère, et alors prix HT = prix TTC du stock / (1 + TVA). */
-    private static RecalculPrixDossier.SousArticle sousArticleReajuste(ComFolderItem i, List<String> notes) {
+    private static RecalculPrixDossier.SousArticle sousArticleReajuste(ComFolderItem i, List<String> notes,
+                                                                      List<String> sansPrix) {
         StkItem stock = i.getStkItem();
         BigDecimal ancienne = arrondi(i.getArea());
         if (stock == null || stock.getArea() == null || arrondi(stock.getArea()).compareTo(ancienne) == 0) {
@@ -210,8 +238,12 @@ public class ReajustementSuperficiesService {
         BigDecimal nouvelle = arrondi(stock.getArea());
         notes.add("Sous article %s : ancienne superficie %s => nouvelle superficie %s"
                 .formatted(i.getCode(), ancienne, nouvelle));
-        BigDecimal prixHT = stock.getSalePrice() == null ? i.getPriceBeforeDiscountHT()
-                : stock.getSalePrice().divide(BigDecimal.ONE.add(Objects.requireNonNullElse(i.getVATRatio(),
+        if (stock.getSalePrice() == null || stock.getSalePrice().signum() <= 0) {
+            sansPrix.add(Objects.requireNonNullElse(i.getCode(), stock.getCode()));
+            return new RecalculPrixDossier.SousArticle(i.getId(), nouvelle, i.getVATRatio(),
+                    i.getPriceBeforeDiscountHT());
+        }
+        BigDecimal prixHT = stock.getSalePrice().divide(BigDecimal.ONE.add(Objects.requireNonNullElse(i.getVATRatio(),
                 BigDecimal.ZERO)), DECIMALES, RoundingMode.HALF_UP);
         return new RecalculPrixDossier.SousArticle(i.getId(), nouvelle, i.getVATRatio(), prixHT);
     }
