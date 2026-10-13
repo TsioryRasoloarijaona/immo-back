@@ -329,7 +329,7 @@ posée là où l'écran du légataire la lit. Elle disparaît donc de `derniereA
 du tableau de bord des relances, et la nouvelle prend sa place. **Une interaction sans `dateAlerte`
 (note comprise) clôt les relances en cours** sans en poser de nouvelle : elles sont désarmées comme à
 l'archivage et disparaissent de « Ma journée ». C'est un écart voulu au légataire, qui les laissait
-vivantes. Les relances rattachées à une échéance de dossier ne sont pas touchées.
+vivantes. Les relances rattachées à une échéance de dossier et les rappels d'impayé ne sont pas touchés.
 
 ### reponse 400
 

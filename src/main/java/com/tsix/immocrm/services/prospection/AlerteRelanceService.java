@@ -4,6 +4,7 @@ import com.tsix.immocrm.entities.adm.AdmAlertData;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.repositories.adm.AdmAlertDataRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,17 +43,8 @@ public class AlerteRelanceService {
         }
         UUID prospectionId = interaction.getComProspection().getId();
 
-        // 1. WithoutRevival = 1 sur les autres relances — le prédicat exact du légataire. Entités
-        //    une à une, pas de @Modifying JPQL : il échapperait au collecteur Hibernate qui
-        //    rapatrie les écritures dans la copie de lecture.
-        List<ComActionMessage> precedentes = messageRepository
-                .findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(prospectionId);
-        for (ComActionMessage m : precedentes) {
-            if (!m.getId().equals(interaction.getId()) && !Boolean.TRUE.equals(m.getIsUnpaid())) {
-                m.setWithoutRevival(true);
-            }
-        }
-        messageRepository.saveAll(precedentes);
+        // 1. WithoutRevival = 1 sur les autres relances — le prédicat exact du légataire.
+        desarmerRelances(prospectionId, interaction.getId());
 
         // 2. Active = 0 sur leurs alertes. La nouvelle n'a pas encore de ligne : rien à exclure.
         desactiverAlertes(prospectionId);
@@ -73,13 +65,26 @@ public class AlerteRelanceService {
     }
 
     /**
-     * Vente et archivage : les deux premiers ordres du légataire sans le troisième. L'UPDATE de
-     * masse suffit pour les messages, que personne ne relit dans la transaction.
+     * Vente, archivage, transformation, interaction sans date : les deux premiers ordres du légataire
+     * sans le troisième ; rappels d'impayé et d'échéance épargnés, comme {@link #poserAlerte}.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void desarmerToutes(UUID prospectionId) {
-        messageRepository.desarmerRelancesDeLaProspection(prospectionId);
+        desarmerRelances(prospectionId, null);
         desactiverAlertes(prospectionId);
+    }
+
+    // Entités une à une, pas de @Modifying JPQL : il échapperait au collecteur Hibernate qui
+    // rapatrie les écritures dans la copie de lecture (« Ma journée » y lit).
+    private void desarmerRelances(UUID prospectionId, @Nullable UUID garder) {
+        List<ComActionMessage> relances = messageRepository
+                .findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(prospectionId);
+        for (ComActionMessage m : relances) {
+            if (!m.getId().equals(garder) && !Boolean.TRUE.equals(m.getIsUnpaid())) {
+                m.setWithoutRevival(true);
+            }
+        }
+        messageRepository.saveAll(relances);
     }
 
     private void desactiverAlertes(UUID prospectionId) {

@@ -171,11 +171,39 @@ class ProspectionInteractionAlerteTest {
 
         UUID note = poster(p, """
                 {"description":"simple note, l'alerte est echue"}""");
-        em.clear();
 
         assertThat(actionMessageRepository.findById(ancienne.getId()).orElseThrow().getWithoutRevival()).isTrue();
         assertThat(alerteRepository.findByRelatedKey(ancienne.getId()).orElseThrow().getActive()).isFalse();
         assertThat(alerteRepository.findByRelatedKey(note)).isEmpty();
+    }
+
+    /**
+     * Revue tri-a-jour : le désarmement doit passer par les entités (comme poserAlerte), sinon le collecteur
+     * Hibernate ne rapatrie pas WithoutRevival dans la copie de lecture et « Ma journée » garde la relance.
+     * Sans em.clear() : l'entité gérée est ce que voient les écouteurs post-update.
+     */
+    @Test
+    void interactionSansAlerte_desarmeParLesEntites() throws Exception {
+        ComProspection p = newProspection("ALERTE-NOTE-ENTITE");
+        ComActionMessage ancienne = relanceExistante(p, LocalDateTime.now().minusDays(1), false);
+
+        poster(p, """
+                {"description":"simple note"}""");
+
+        assertThat(actionMessageRepository.findById(ancienne.getId()).orElseThrow().getWithoutRevival()).isTrue();
+    }
+
+    /** Revue tri-a-jour : même prédicat que poserAlerte, un rappel d'impayé reste armé. */
+    @Test
+    void interactionSansAlerte_epargneLesRappelsDImpaye() throws Exception {
+        ComProspection p = newProspection("ALERTE-NOTE-IMPAYE");
+        ComActionMessage impaye = relanceExistante(p, LocalDateTime.now().plusDays(10), true);
+
+        poster(p, """
+                {"description":"simple note"}""");
+        em.clear();
+
+        assertThat(actionMessageRepository.findById(impaye.getId()).orElseThrow().getWithoutRevival()).isFalse();
     }
 
     // --- Ce que la liste en montre ---

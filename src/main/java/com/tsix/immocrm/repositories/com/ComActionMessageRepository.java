@@ -5,7 +5,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -96,18 +95,6 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
             + ") a WHERE a.rn = 1",
             nativeQuery = true)
     List<DerniereAlerteProjection> dernieresAlertes(@Param("prospectionIds") List<UUID> prospectionIds);
-
-    /**
-     * Désarme les relances d'une prospection transformée en vente, prédicat recopié de la trace du bureau :
-     * {@code ComDocumentId IS NULL} épargne les rappels de paiement du nouveau dossier. Surtout pas
-     * {@code clearAutomatically} : il détacherait le dossier que l'appelant sérialise ensuite.
-     */
-    @Modifying(flushAutomatically = true)
-    @Query("UPDATE ComActionMessage m SET m.withoutRevival = true "
-            + "WHERE m.comProspection.id = :prospectionId "
-            + "AND m.alertValidityDate IS NOT NULL "
-            + "AND m.comDocument IS NULL")
-    int desarmerRelancesDeLaProspection(@Param("prospectionId") UUID prospectionId);
 
     /** Les noms doivent suivre les alias de {@link #dernieresAlertes}. */
     interface DerniereAlerteProjection {

@@ -281,7 +281,6 @@ class JourneeControllerTest {
                                 .formatted(moi.getCfgEmployee().getId(), tranche.getId())))
                 .andExpect(status().isOk());
         em.flush();
-        em.clear();
 
         assertThat(messageRepository.findById(relance.getId()))
                 .get().extracting(ComActionMessage::getWithoutRevival).isEqualTo(true);
