@@ -583,11 +583,12 @@ public class DossierService {
 
         StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
                 .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + request.articleIds().get(0)));
-        // Les articles suivants sont les annexes du calcul de remise, comme à la création.
-        List<StkItem> annexes = request.articleIds().subList(1, request.articleIds().size()).stream()
+        // Les articles suivants, puis les sous-articles libres du lot : mêmes annexes qu'à la création.
+        List<StkItem> saisies = request.articleIds().subList(1, request.articleIds().size()).stream()
                 .map(articleId -> stkItemRepository.findById(articleId)
                         .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId)))
                 .toList();
+        List<StkItem> annexes = annexesDuDossier(premierArticle, saisies);
 
         UUID vocationId = premierArticle.getStkVocation().getId();
         CfgTranche tranche = premierArticle.getStkHierarchy();
@@ -612,7 +613,11 @@ public class DossierService {
         // DiscountAmount est HT (convention OMRAN) : le montant TTC de la réponse est l'écart des prix TTC.
         return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
                 apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
-                ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise);
+                ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise,
+                annexes.subList(saisies.size(), annexes.size()).stream()
+                        .map(a -> new SchemaFinancementDto.AnnexeAutomatique(a.getId(), a.getCode(), a.getDescription(),
+                                a.getArea(), PrixArticle.ttcOuZero(a)))
+                        .toList());
     }
 
     /**

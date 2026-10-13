@@ -390,6 +390,39 @@ class DossierCreationOmranTest {
                 () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("869000"));
     }
 
+    /** L'aperçu compte le sous-article libre du lot comme la création : mêmes montants. */
+    @Test
+    void simulation_sousArticleEnfantDuLot_egaleLeDossierCree() throws Exception {
+        fixtureStatuts.reservation();
+        terrasse.setParent(lot);
+        terrasse.setIsUnderItem(true);
+        itemRepository.save(terrasse);
+        String corps = "{\"articleIds\":[\"%s\"],\"prix\":869000,\"remisePercent\":5}".formatted(lot.getId());
+
+        String apercu = mockMvc.perform(post(DOSSIERS + "/simulation-financement")
+                        .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.annexesAutomatiques[0].code").value("TER-CRE-OMRAN"))
+                .andExpect(jsonPath("$.annexesAutomatiques[0].prix").value(50000))
+                .andReturn().getResponse().getContentAsString();
+        String json = mockMvc.perform(post(DOSSIERS).with(connecte(agent)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prospectionId\":\"%s\",\"articleIds\":[\"%s\"],\"modePaieId\":\"%s\",\"cin\":\"CIN-SIM\","
+                                .formatted(prospection(null).getId(), lot.getId(), modePaie.getId())
+                                + "\"prix\":869000,\"remisePercent\":5}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        entityManager.flush();
+        entityManager.clear();
+        ComFolder f = folderRepository.findById(UUID.fromString(JsonPath.read(json, "$.id"))).orElseThrow();
+
+        assertAll(
+                () -> assertThat(new BigDecimal(JsonPath.read(apercu, "$.prixAvantRemise").toString()))
+                        .isEqualByComparingTo(f.getPriceBeforeDiscount()),
+                () -> assertThat(new BigDecimal(JsonPath.read(apercu, "$.prixApresRemise").toString()))
+                        .isEqualByComparingTo(f.getPriceAfterDiscount()),
+                () -> assertThat(f.getUnderItemsPrice()).isEqualByComparingTo("50000"));
+    }
+
     @Test
     void creation_historiqueAvecAuteurClientArticleEtAffectation() throws Exception {
         StrStatus reservation = fixtureStatuts.reservation();

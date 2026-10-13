@@ -148,6 +148,10 @@ avant remise, annexes comprises — articles suivants de `articleIds`) — même
 /api/dossiers` persistera pour les mêmes paramètres. FRAIS SYNDIC ne dépend pas du prix (barème de
 la tranche) et n'est donc jamais remisé.
 
+Les sous-articles libres du lot (`StkItem.ParentId`) absents de `articleIds` sont comptés comme à la
+création, qui les rattache d'office : ils sont listés dans `annexesAutomatiques` (prix de référence
+compris dans `prixAvantRemise`), pour que l'aperçu égale le dossier créé.
+
 ### reponse 200
 
 Schéma calculé. `lignes` peut être vide si aucune catégorie AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC
