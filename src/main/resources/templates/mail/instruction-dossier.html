@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!--
+  Instruction adressée au commercial d'un dossier de vente. Voir instructions/FEATURE-vente-fiche.md §B2.
+  Mise en page par <table> et styles en ligne, comme les autres modèles : les webmails ignorent les feuilles de style.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instruction sur un dossier de vente</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 12px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px; background-color:#ffffff; border-radius:8px; border:1px solid #e4e7eb;">
+                <tr>
+                    <td style="padding:28px 32px 8px 32px;">
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;">
+                            Instruction sur le dossier <span th:text="${codeDossier}">AYD 2026/00001</span>
+                        </h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 32px 0 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 14px 0;">
+                            Bonjour <span th:if="${nomCommercial}" th:text="${nomCommercial}" style="font-weight:600;">Prénom Nom</span>,
+                        </p>
+                        <p style="margin:0 0 14px 0;">
+                            <span th:if="${auteur}" th:text="${auteur}">Utilisateur</span><span th:unless="${auteur}">Un utilisateur</span>
+                            vous a adressé une instruction<span th:if="${client}"> sur le dossier de
+                            <span th:text="${client}" style="font-weight:600;">Client</span></span>.
+                        </p>
+                        <p style="margin:0 0 20px 0; padding:14px 18px; background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px; white-space:pre-line;"
+                           th:text="${instruction}">Texte de l'instruction</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:20px 32px 28px 32px; border-top:1px solid #e4e7eb;">
+                        <p style="margin:16px 0 0 0; font-size:13px; color:#7b8794; line-height:1.5;">
+                            Ce message est automatique. L'instruction reste visible dans l'onglet « Actions » du dossier.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
