@@ -24,8 +24,17 @@ périmètre. Pour lister les prospections d'un commercial : `GET /api/prospectio
 Pré-prospections ouvertes, sans commercial, dont la tranche est sur un projet de l'appelant (toutes
 pour Administrateur / Direction Générale sans `projet`, lignes sans tranche comprises), **reçues dans la
 période** (`ComProspection.DocDate` entre `du` et `au`, 30 derniers jours par défaut, même règle que
-`entonnoir` et `commerciaux`). La plus ancienne est celle de la période. Pour lister ces lignes :
-`GET /api/pre-prospections?ouvertes=true&dateDebut=…&dateFin=…` puis garder celles sans commercial.
+`entonnoir` et `commerciaux`) et, par défaut, **jamais traitées** : aucune action (`ComActionMessage`)
+autre que système (`IsSystem`), même règle que la Boîte de tri. `toutes=true` lève cette dernière
+condition. La plus ancienne est celle de la période. La liste elle-même :
+`GET /api/equipe/a-distribuer/lignes` avec les mêmes paramètres — son `totalElements` est toujours ce
+`nombre`.
+
+## lignesADistribuer
+
+Les lignes que compte `GET /api/equipe/a-distribuer` pour les mêmes paramètres (même règle, même
+périmètre, même 403 pour un projet hors périmètre), paginées et triées par `DocDate` croissante.
+Avec `toutes=true`, `dejaTraitee` signale celles qui ont au moins une action non système.
 
 ## distribuer
 
@@ -63,6 +72,11 @@ tri), puis la dernière pré-prospection reçue la plus ancienne, puis le nom ; 
 au fil du lot. Une ligne déjà attribuée n'est jamais reprise (`DEJA_ATTRIBUEE`). Avec `simulation`
 (défaut `true`) rien n'est écrit ; sinon historique « Commercial assigné : B — répartition
 automatique » et notification à chaque commercial. 403 si une ligne est hors des projets d'un chef.
+
+Le lot est soit `preProspectionIds` (les lignes cochées), soit `filtre` : alors **toutes** les lignes que
+`GET /api/equipe/a-distribuer/lignes` renverrait pour ce filtre, toutes pages confondues — c'est-à-dire
+le `nombre` du compteur. Exactement un des deux, sinon 400 ; au-delà de 5 000 lignes au filtre, 400
+(découper la période).
 
 ## modifierAffectations
 

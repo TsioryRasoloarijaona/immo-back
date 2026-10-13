@@ -1,6 +1,9 @@
 package com.tsix.immocrm.controller.equipe;
 
+import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.equipe.ADistribuerDto;
+import com.tsix.immocrm.dto.equipe.FiltreADistribuer;
+import com.tsix.immocrm.dto.equipe.LigneADistribuerDto;
 import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto;
 import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto.MembreAffectationDto;
 import com.tsix.immocrm.dto.equipe.CommercialEquipeDto;
@@ -11,6 +14,7 @@ import com.tsix.immocrm.dto.equipe.ReaffecterRequest;
 import com.tsix.immocrm.dto.equipe.RepartirRequest;
 import com.tsix.immocrm.dto.equipe.ResultatRepartitionDto;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto;
+import com.tsix.immocrm.services.equipe.ADistribuerService;
 import com.tsix.immocrm.services.equipe.EquipeCommercialeService;
 import com.tsix.immocrm.services.equipe.EquipeEcrituresService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,12 +50,16 @@ public class EquipeCommercialeController {
     private static final String AU = "Dernier jour pris en compte, inclus jusqu'à 23:59:59. Défaut : aujourd'hui.";
     private static final String PROJET = "Projet à isoler ; doit être dans le périmètre de l'appelant (sinon 403).";
     private static final String PERIODE_INVALIDE = "`du` postérieure à `au`, ou date non parsable.";
+    private static final String TOUTES = "`true` : aussi les pré-prospections déjà traitées. Défaut : jamais traitées seulement.";
 
     private final EquipeCommercialeService lectures;
+    private final ADistribuerService aDistribuer;
     private final EquipeEcrituresService ecritures;
 
-    public EquipeCommercialeController(EquipeCommercialeService lectures, EquipeEcrituresService ecritures) {
+    public EquipeCommercialeController(EquipeCommercialeService lectures, ADistribuerService aDistribuer,
+                                       EquipeEcrituresService ecritures) {
         this.lectures = lectures;
+        this.aDistribuer = aDistribuer;
         this.ecritures = ecritures;
     }
 
@@ -96,8 +104,28 @@ public class EquipeCommercialeController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
             @Parameter(description = AU, example = "2026-10-11")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
-            @Parameter(description = PROJET) @RequestParam(required = false) UUID projet) {
-        return lectures.aDistribuer(du, au, projet);
+            @Parameter(description = PROJET) @RequestParam(required = false) UUID projet,
+            @Parameter(description = TOUTES) @RequestParam(defaultValue = "false") boolean toutes) {
+        return aDistribuer.compter(new FiltreADistribuer(du, au, projet, toutes));
+    }
+
+    @GetMapping("/a-distribuer/lignes")
+    @Operation(summary = "Liste des pré-prospections à distribuer (mêmes règles que le compteur)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page triée par date de document croissante."),
+            @ApiResponse(responseCode = "400", description = PERIODE_INVALIDE + " Ou `page` < 0, `size` < 1.")
+    })
+    public PageDto<LigneADistribuerDto> lignesADistribuer(
+            @Parameter(description = DU, example = "2026-09-12")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
+            @Parameter(description = AU, example = "2026-10-11")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
+            @Parameter(description = PROJET) @RequestParam(required = false) UUID projet,
+            @Parameter(description = TOUTES) @RequestParam(defaultValue = "false") boolean toutes,
+            @Parameter(description = "Numéro de page, à partir de 0.") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Taille de page ; ramenée à 500 au-delà.")
+            @RequestParam(defaultValue = "100") int size) {
+        return aDistribuer.lignes(new FiltreADistribuer(du, au, projet, toutes), page, size);
     }
 
     @PostMapping("/distribuer")
@@ -128,7 +156,7 @@ public class EquipeCommercialeController {
     @Operation(summary = "Répartit automatiquement des pré-prospections entre les commerciaux de leur projet")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Attributions (ou aperçu si `simulation`), lignes laissées et totaux."),
-            @ApiResponse(responseCode = "400", description = "Liste vide."),
+            @ApiResponse(responseCode = "400", description = "Ni ids ni `filtre`, les deux à la fois, ou plus de 5 000 lignes au filtre."),
             @ApiResponse(responseCode = "404", description = "Une ligne demandée n'existe pas : rien n'est écrit."),
             @ApiResponse(responseCode = "409", description = "Une ligne n'est plus une pré-prospection ou est clôturée : rien n'est écrit.")
     })

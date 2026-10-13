@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 
 @Schema(description = "Pré-prospections ouvertes et sans commercial des projets de l'appelant. "
-        + "La liste elle-même : `GET /api/pre-prospections`.")
+        + "La liste elle-même : `GET /api/equipe/a-distribuer/lignes`, mêmes paramètres.")
 public record ADistribuerDto(
 
         @Schema(description = "Nombre de pré-prospections en attente de commercial.", example = "152")
