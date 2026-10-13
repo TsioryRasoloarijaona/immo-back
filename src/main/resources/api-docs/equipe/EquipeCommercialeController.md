@@ -56,6 +56,9 @@ affectées**, ouvertes, et trace « Commercial réaffecté : A → B — motif �
 pré-prospection réaffectée reste une pré-prospection (aucune transformation). Le commercial référent
 de la fiche prospect n'est pas modifié. Un lot peut mêler les deux. Tout le lot ou rien.
 
+Une ligne **sans tranche** (donc sans projet) se réaffecte par un chef seulement si son commercial actuel
+est de son équipe (403 sinon), vers n'importe quel membre de l'équipe.
+
 ### reponse 409
 
 Une ligne est clôturée, ou c'est une pré-prospection sans commercial (elle se distribue :

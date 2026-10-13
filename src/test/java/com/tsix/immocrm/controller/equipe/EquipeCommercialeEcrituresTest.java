@@ -229,6 +229,22 @@ class EquipeCommercialeEcrituresTest {
     }
 
     @Test
+    void reaffecter_ligneSansTrancheDUnCommercialHorsEquipe_403() throws Exception {
+        ComProspection pre = outils.preProspection("EQ-ECR-R11", null, hier);
+        pre.setCfgCommercial(commercialB.getCfgEmployee());
+        em.flush();
+
+        reaffecter(chef, List.of(pre.getId()), commercialA2).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reaffecter_ligneSansTrancheVersUnCommercialHorsEquipe_409() throws Exception {
+        ComProspection pre = preProspectionAffectee("EQ-ECR-R12", null);
+
+        reaffecter(chef, List.of(pre.getId()), commercialB).andExpect(status().isConflict());
+    }
+
+    @Test
     void reaffecter_lotMixteProspectionEtPreProspection_200() throws Exception {
         ComProspection p = outils.prospection("EQ-ECR-R9", trancheA, commercialA.getCfgEmployee(), hier);
         ComProspection pre = preProspectionAffectee("EQ-ECR-R10", trancheA);
