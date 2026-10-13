@@ -162,6 +162,17 @@ class LeadsActiviteTest {
     }
 
     @Test
+    void chefSansProjet_listeVideSansErreur() throws Exception {
+        AdmUser chefSansProjet = outils.compte("eq.act.chef0", CHEF);
+        ComProspection lead = lead("EQ-ACT-V5", trancheA, commercialA, 2);
+        em.flush();
+
+        demander(chefSansProjet, CHEF, lead.getId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     void roleCommercial_403() throws Exception {
         demander(commercialA, COMMERCIAL, UUID.randomUUID()).andExpect(status().isForbidden());
     }
