@@ -27,6 +27,6 @@ public class ChargeCommerciale {
     public long leadsATrier(UUID commercialId) {
         LocalDate depuis = LocalDate.now(clock).minusMonths(LignesParcours.MOIS_RECENTS);
         return prospectionRepository.count(LignesParcours.aTrier(commercialId, depuis)
-                .and(LignesParcours.sansInteraction()));
+                .and(LignesParcours.nonTraitee()));
     }
 }

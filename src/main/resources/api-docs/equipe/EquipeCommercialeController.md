@@ -25,8 +25,9 @@ Pré-prospections ouvertes, sans commercial, dont la tranche est sur un projet d
 pour Administrateur / Direction Générale sans `projet`, lignes sans tranche comprises), **reçues dans la
 période** (`ComProspection.DocDate` entre `du` et `au`, 30 derniers jours par défaut, même règle que
 `entonnoir` et `commerciaux`) et, par défaut, **jamais traitées** : aucune action (`ComActionMessage`)
-autre que système (`IsSystem`), même règle que la Boîte de tri. `toutes=true` lève cette dernière
-condition. La plus ancienne est celle de la période. La liste elle-même :
+autre que système (`IsSystem`) **et** étape de départ (`1 A TRAITER` ou aucune), même règle que la Boîte
+de tri. `toutes=true` lève cette dernière condition. La plus ancienne est celle de la période. La liste
+elle-même :
 `GET /api/equipe/a-distribuer/lignes` avec les mêmes paramètres — son `totalElements` est toujours ce
 `nombre`.
 
@@ -34,14 +35,16 @@ condition. La plus ancienne est celle de la période. La liste elle-même :
 
 Les lignes que compte `GET /api/equipe/a-distribuer` pour les mêmes paramètres (même règle, même
 périmètre, même 403 pour un projet hors périmètre), paginées et triées par `DocDate` croissante.
-Avec `toutes=true`, `dejaTraitee` signale celles qui ont au moins une action non système.
+Avec `toutes=true`, `dejaTraitee` signale celles qui ont au moins une action non système ou dont l'étape
+n'est plus l'étape de départ.
 
 ## activiteLeads
 
 État des leads affichés dans la fenêtre « Leads de … » (pré-prospections et prospections,
 `ComProspection.PKey`), en une requête pour une page de la liste. **Action** = ligne `ComActionMessage`
-non système (`IsSystem` faux ou absent), même règle que la Boîte de tri et « À distribuer » ; `endormi`
-suit exactement la colonne `sansActionDepuis7Jours` de `GET /api/equipe/commerciaux`.
+non système (`IsSystem` faux ou absent) ; `endormi` suit exactement la colonne `sansActionDepuis7Jours`
+de `GET /api/equipe/commerciaux`. `jamaisTraite` = la règle « non traitée » de la Boîte de tri et de
+« À distribuer » (0 action **et** étape de départ).
 
 Seuls les leads du périmètre de l'appelant sont renvoyés : Administrateur / Direction Générale = projets
 des sociétés actives et leads sans projet ; chef = ses projets, plus les leads sans projet tenus par un

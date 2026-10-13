@@ -233,6 +233,8 @@ poser/remplacer ici (avec périmètre commercial et cohérence `articleId`, comm
 .../tranche-principale`) ; si `trancheId` est omis, la prospection doit **déjà** en porter une,
 faute de quoi la transformation est refusée (400).
 
+Les relances en cours de la ligne sont désarmées (comme à l'archivage) : elles quittent « Ma journée ».
+
 ### reponse 400
 
 `commercialId` manquant ; aucun prospect lié ; commercial/tranche/article introuvable ; l'article ne
@@ -325,8 +327,9 @@ prospection, exactement comme dans le logiciel de bureau : les relances précéd
 prospection sont désarmées (`WithoutRevival`, alerte éteinte dans `AdmAlertData`) et la nouvelle est
 posée là où l'écran du légataire la lit. Elle disparaît donc de `derniereAlerteDate` de la liste et
 du tableau de bord des relances, et la nouvelle prend sa place. **Une interaction sans `dateAlerte`
-ne touche à aucune relance existante** — c'est la règle du légataire, vérifiée sur sa trace d'audit
-: ni la date de l'alerte ni une simple note ne l'éteignent.
+(note comprise) clôt les relances en cours** sans en poser de nouvelle : elles sont désarmées comme à
+l'archivage et disparaissent de « Ma journée ». C'est un écart voulu au légataire, qui les laissait
+vivantes. Les relances rattachées à une échéance de dossier et les rappels d'impayé ne sont pas touchés.
 
 ### reponse 400
 

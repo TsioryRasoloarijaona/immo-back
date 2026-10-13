@@ -87,7 +87,7 @@ public class JourneeService {
     private BlocLeadsDto nouveauxLeads(@Nullable UUID commercial, LocalDate aujourdhui) {
         Specification<ComProspection> spec = perimetreService.filtreProspections()
                 .and(LignesParcours.aTrier(commercial, aujourdhui.minusMonths(LignesParcours.MOIS_RECENTS)))
-                .and(LignesParcours.sansInteraction());
+                .and(LignesParcours.nonTraitee());
         Page<ComProspection> page = prospectionRepository.findAll(spec, PageRequest.of(0, LIGNES_PAR_BLOC,
                 Sort.by(Sort.Order.desc(LignesParcours.DOC_DATE), Sort.Order.asc("id"))));
         return new BlocLeadsDto(page.getTotalElements(),

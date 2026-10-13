@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.parcours;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.fixtures.FixtureInteraction;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -162,6 +165,41 @@ class BoiteDeTriControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].prospectionId").value(intacte.getId().toString()));
+    }
+
+    /** FEATURE-tri-a-jour.md §Règle 1 : l'étape changée suffit, aucune interaction n'est écrite. */
+    @Test
+    void liste_etapeChangee_sortDeLaBoiteSansInteraction() throws Exception {
+        ComProspection lead = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+        ComProspectionKind qualifie = outils.etape("3 QUALIFIE", false);
+
+        mockMvc.perform(patch("/api/prospections/{id}/etape", lead.getId())
+                        .with(ParcoursOutils.connecte(moi, "Commercial"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"etapeId\":\"%s\"}".formatted(qualifie.getId())))
+                .andExpect(status().isOk());
+        em.flush();
+
+        mockMvc.perform(get(BOITE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+        assertThat(messageRepository.findAll().stream()
+                .filter(m -> m.getComProspection() != null && lead.getId().equals(m.getComProspection().getId())))
+                .isEmpty();
+    }
+
+    @Test
+    void liste_etapeDeDepartOuNulle_resteATrier() throws Exception {
+        ComProspection aTraiter = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+        aTraiter.setComProspectionKind(outils.etape("1 A TRAITER", false));
+        prospectionRepository.saveAndFlush(aTraiter);
+        ComProspection sansEtape = outils.preProspection(moi, aujourdhui.atTime(8, 0));
+
+        mockMvc.perform(get(BOITE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].prospectionId").value(aTraiter.getId().toString()))
+                .andExpect(jsonPath("$.content[1].prospectionId").value(sansEtape.getId().toString()));
     }
 
     @Test

@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Schema(description = "Nouveau lead de « Ma journée » : pré-prospection du commercial, ouverte, sans aucune interaction.")
+@Schema(description = "Nouveau lead de « Ma journée » : pré-prospection du commercial, ouverte, non traitée (0 action, étape de départ).")
 public record LeadJourneeDto(
         @Schema(description = "Identifiant de la pré-prospection (ComProspection.PKey).")
         UUID prospectionId,

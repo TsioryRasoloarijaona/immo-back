@@ -5,7 +5,9 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.services.equipe.ActiviteLead;
 import com.tsix.immocrm.services.equipe.RolesEquipe;
 import jakarta.persistence.EntityManager;
@@ -55,6 +57,7 @@ class LeadsActiviteTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private EquipeOutils outils;
     @Autowired private ComActionMessageRepository messageRepository;
+    @Autowired private ComProspectionKindRepository kindRepository;
     @Autowired private EntityManager em;
     @Autowired private Clock clock;
 
@@ -199,6 +202,39 @@ class LeadsActiviteTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.code == 'eq.act.coma')].portefeuilleOuvert").value(1))
                 .andExpect(jsonPath("$[?(@.code == 'eq.act.coma')].sansActionDepuis7Jours").value(1));
+    }
+
+    /** FEATURE-tri-a-jour.md §Règle 1 : 0 action <b>et</b> étape de départ (ou nulle), même règle que la Boîte de tri. */
+    @Test
+    void jamaisTraite_zeroActionEtEtapeDeDepart() throws Exception {
+        ComProspection sansEtape = lead("EQ-ACT-J1", trancheA, commercialA, 2);
+        ComProspection aTraiter = avecEtape(lead("EQ-ACT-J2", trancheA, commercialA, 2), "1 A TRAITER");
+        ComProspection etapeChangee = avecEtape(lead("EQ-ACT-J3", trancheA, commercialA, 2), "2 EN COURS DE TRAITEMENT");
+        ComProspection avecAction = lead("EQ-ACT-J4", trancheA, commercialA, 2);
+        action(avecAction, 1, false);
+        em.flush();
+
+        demander(chef, CHEF, sansEtape.getId(), aTraiter.getId(), etapeChangee.getId(), avecAction.getId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(4)))
+                .andExpect(jsonPath(jamaisTraite(sansEtape)).value(true))
+                .andExpect(jsonPath(jamaisTraite(aTraiter)).value(true))
+                .andExpect(jsonPath(jamaisTraite(etapeChangee)).value(false))
+                .andExpect(jsonPath("$[?(@.id == '%s')].nombreActions".formatted(etapeChangee.getId())).value(0))
+                .andExpect(jsonPath(jamaisTraite(avecAction)).value(false));
+    }
+
+    private static String jamaisTraite(ComProspection lead) {
+        return "$[?(@.id == '%s')].jamaisTraite".formatted(lead.getId());
+    }
+
+    private ComProspection avecEtape(ComProspection lead, String code) {
+        ComProspectionKind etape = new ComProspectionKind();
+        etape.setId(UUID.randomUUID());
+        etape.setCode(code);
+        etape.setDescription(code);
+        lead.setComProspectionKind(kindRepository.save(etape));
+        return lead;
     }
 
     private ResultActions demander(AdmUser user, String role, UUID... ids) throws Exception {

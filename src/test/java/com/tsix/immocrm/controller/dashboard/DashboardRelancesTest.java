@@ -168,7 +168,7 @@ class DashboardRelancesTest {
 
     /**
      * Le filtre qui porte le plus de volume : 33 941 des 39 335 alertes réelles sont désarmées,
-     * posées par {@code desarmerRelancesDeLaProspection} à la transformation en vente. L'oublier
+     * posées par {@code AlerteRelanceService.desarmerToutes} à la transformation en vente. L'oublier
      * ressortirait des prospections déjà conclues.
      */
     @Test
