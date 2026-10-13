@@ -9,8 +9,8 @@ compte appelant, dans son périmètre projet. Administrateur et Direction Géné
 
 Quatre blocs, chacun avec son total et ses 20 premières lignes :
 
-- `nouveauxLeads` : pré-prospections du commercial, ouvertes, reçues il y a moins de 6 mois, **sans aucune
-  interaction saisie**, les plus récentes d'abord ;
+- `nouveauxLeads` : pré-prospections du commercial, ouvertes, reçues il y a moins de 6 mois, **non traitées**
+  (aucune interaction saisie **et** étape de départ : `1 A TRAITER` ou aucune), les plus récentes d'abord ;
 - `relancesDuJour` : relances ouvertes échéant aujourd'hui dont le résultat n'est pas une visite ;
 - `visitesDuJour` : relances ouvertes du jour dont le résultat est « Rendez vous pris », « RDV reporté » ou
   « Le prospect veut faire une visite du projet » ;
@@ -23,9 +23,10 @@ Une relance ouverte est la dernière interaction datée d'une prospection ouvert
 ## boiteDeTri
 
 Pré-prospections du commercial appelant, ouvertes, reçues il y a moins de 6 mois (`toutes=true` lève la
-limite), **sans aucune interaction saisie** (même règle que `nouveauxLeads` de « Ma journée »), les plus
-récentes d'abord. Une ligne traitée (« Pas joignable », appel noté) quitte la boîte et revient par sa relance
-dans « Ma journée ». `prochaineRelance` ne porte donc plus qu'une relance écrite par OMRAN seul (`IsSystem`).
+limite), **non traitées** (même règle que `nouveauxLeads` de « Ma journée »), les plus récentes d'abord.
+Une ligne traitée (« Pas joignable », appel noté) quitte la boîte et revient par sa relance dans « Ma
+journée ». Changer son étape (`PATCH /api/prospections/{id}/etape`) la sort aussi de la boîte, sans rien
+écrire d'autre. `prochaineRelance` ne porte donc plus qu'une relance écrite par OMRAN seul (`IsSystem`).
 Chaque ligne porte ses `doublons` : fiches prospect et autres prospections au même numéro (9 derniers
 chiffres, sans espaces ni indicatif) ou au même e-mail, limitées au périmètre de l'appelant. Le nombre à
 trier du menu est le `totalElements` de cette liste.

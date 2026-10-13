@@ -6,7 +6,9 @@ import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.services.equipe.RolesEquipe;
 import jakarta.persistence.EntityManager;
@@ -50,6 +52,7 @@ class ADistribuerTest {
     @Autowired private EquipeOutils outils;
     @Autowired private ComActionMessageRepository messageRepository;
     @Autowired private ComProspectionRepository prospectionRepository;
+    @Autowired private ComProspectionKindRepository kindRepository;
     @Autowired private EntityManager em;
 
     private CfgProject projetA;
@@ -109,6 +112,32 @@ class ADistribuerTest {
                 .andExpect(jsonPath("$.content[1].dejaTraitee").value(false))
                 .andExpect(jsonPath("$.content[2].code").value("ADI-T1"))
                 .andExpect(jsonPath("$.content[2].dejaTraitee").value(true));
+    }
+
+    /** FEATURE-tri-a-jour.md §Règle 1 : 0 action mais étape changée = déjà traitée ; « 1 A TRAITER » ne compte pas. */
+    @Test
+    void etapeChangee_dejaTraitee_etapeDeDepart_resteJamaisTraitee() throws Exception {
+        jamais.setComProspectionKind(etape("2 EN COURS DE TRAITEMENT"));
+        systemeSeule.setComProspectionKind(etape("1 A TRAITER"));
+        em.flush();
+
+        mockMvc.perform(get(LIGNES).with(EquipeOutils.connecte(chef, CHEF)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("ADI-S1"));
+        mockMvc.perform(get(LIGNES).param(TOUTES, "true").with(EquipeOutils.connecte(chef, CHEF)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].code").value("ADI-J1"))
+                .andExpect(jsonPath("$.content[0].dejaTraitee").value(true))
+                .andExpect(jsonPath("$.content[1].dejaTraitee").value(false));
+    }
+
+    private ComProspectionKind etape(String code) {
+        ComProspectionKind etape = new ComProspectionKind();
+        etape.setId(UUID.randomUUID());
+        etape.setCode(code);
+        etape.setDescription(code);
+        return kindRepository.save(etape);
     }
 
     @Test

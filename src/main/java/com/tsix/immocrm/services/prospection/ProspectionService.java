@@ -1014,6 +1014,7 @@ public class ProspectionService {
             prospection.setIsClosed(false);
         }
         prospection = prospectionRepository.save(prospection);
+        alerteRelanceService.desarmerToutes(id);
         enregistrerHistorique(id, TypeActionRecente.TRANSFORMEE_EN_PROSPECTION,
                 "commercial assigné, " + TierNomFormatter.nom(commercial));
         return detailEnrichi(prospection);
@@ -1316,9 +1317,11 @@ public class ProspectionService {
 
         ComActionMessage enregistree = actionMessageRepository.save(message);
 
-        // Sans date d'alerte, rien n'est touché : règle du légataire (voir AlerteRelanceService).
+        // Sans date, les relances vivantes sont closes : écart voulu au légataire (FEATURE-tri-a-jour.md §Règle 2).
         if (enregistree.getAlertValidityDate() != null) {
             alerteRelanceService.poserAlerte(enregistree);
+        } else {
+            alerteRelanceService.desarmerToutes(prospectionId);
         }
 
         // Seulement si un rendez-vous a été créé ; livraison après commit (voir VisitePlanifiee).

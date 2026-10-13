@@ -21,6 +21,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.Activite
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.LeadCohorte;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.PortefeuilleCommercial;
 import com.tsix.immocrm.services.kpi.PerformanceCommercialService;
+import com.tsix.immocrm.services.parcours.LignesParcours;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -247,8 +248,10 @@ public class EquipeCommercialeService {
 
     private static LeadActiviteDto versActivite(ActiviteLeadLigne l, LocalDateTime maintenant) {
         LocalDateTime reference = ActiviteLead.reference(l.getDerniereAction(), l.getDateLead());
-        return new LeadActiviteDto(l.getId(), (int) valeur(l.getNombreActions()), l.getDerniereAction(),
-                ActiviteLead.joursSansAction(reference, maintenant), ActiviteLead.endormi(reference, maintenant));
+        long nombreActions = valeur(l.getNombreActions());
+        return new LeadActiviteDto(l.getId(), (int) nombreActions, l.getDerniereAction(),
+                ActiviteLead.joursSansAction(reference, maintenant), ActiviteLead.endormi(reference, maintenant),
+                LignesParcours.nonTraitee(nombreActions, l.getEtapeCode()));
     }
 
     private static List<ProjetPerimetreDto> projetsVisibles(MembreEquipe m, Map<UUID, ProjetPerimetreDto> projetsParId) {

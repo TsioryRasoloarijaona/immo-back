@@ -120,7 +120,7 @@ public class ADistribuerService {
         Specification<ComProspection> spec = DiscriminantPreProspection.estPreProspection()
                 .and(ouvertesSansCommercial(periode))
                 .and(projetsActifs(projets));
-        return Boolean.TRUE.equals(filtre.toutes()) ? spec : spec.and(LignesParcours.sansInteraction());
+        return Boolean.TRUE.equals(filtre.toutes()) ? spec : spec.and(LignesParcours.nonTraitee());
     }
 
     private static Specification<ComProspection> ouvertesSansCommercial(PeriodeEquipe periode) {
@@ -141,14 +141,14 @@ public class ADistribuerService {
         };
     }
 
-    /** Lignes de la page qui ont au moins une action non système : complément de {@code sansInteraction}. */
+    /** Lignes de la page déjà traitées (action non système ou étape changée) : complément de {@code nonTraitee}. */
     private Set<UUID> dejaTraitees(List<ComProspection> page) {
         if (page.isEmpty()) {
             return Set.of();
         }
         Set<UUID> ids = page.stream().map(ComProspection::getId).collect(Collectors.toSet());
         Specification<ComProspection> parmiLaPage = (root, query, cb) -> root.get("id").in(ids);
-        Set<UUID> jamais = prospectionRepository.findAll(parmiLaPage.and(LignesParcours.sansInteraction())).stream()
+        Set<UUID> jamais = prospectionRepository.findAll(parmiLaPage.and(LignesParcours.nonTraitee())).stream()
                 .map(ComProspection::getId)
                 .collect(Collectors.toSet());
         return ids.stream().filter(id -> !jamais.contains(id)).collect(Collectors.toSet());

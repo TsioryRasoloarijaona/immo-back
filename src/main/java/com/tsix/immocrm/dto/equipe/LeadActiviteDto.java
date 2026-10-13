@@ -20,6 +20,8 @@ public record LeadActiviteDto(
         @Schema(description = "Jours entiers depuis la dernière action, à défaut depuis la date du lead.", example = "11")
         int joursSansAction,
 
-        boolean endormi
+        boolean endormi,
+
+        boolean jamaisTraite
 ) {
 }

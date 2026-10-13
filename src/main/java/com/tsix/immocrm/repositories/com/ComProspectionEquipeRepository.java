@@ -15,7 +15,7 @@ import java.util.UUID;
  */
 public interface ComProspectionEquipeRepository extends Repository<ComProspection, UUID> {
 
-    /** Action saisie (alias {@code m}) : même règle que {@code LignesParcours.sansInteraction()}, IsSystem NULL compris. */
+    /** Action saisie (alias {@code m}) : même règle que {@code LignesParcours.nonTraitee()}, IsSystem NULL compris. */
     String ACTION_SAISIE = "ISNULL(m.IsSystem, 0) = 0";
 
     /** Une ligne par lead de la cohorte : le service en tire le niveau atteint (§4.2). */
@@ -84,9 +84,11 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
      * ou, sans projet, tenus par un employé de {@code membres}. Les autres ids sont omis (FEATURE-leads-a-relancer.md).
      */
     @Query(value = """
-            SELECT p.PKey AS id, p.DocDate AS dateLead, a.nombre AS nombreActions, a.derniere AS derniereAction
+            SELECT p.PKey AS id, p.DocDate AS dateLead, a.nombre AS nombreActions, a.derniere AS derniereAction,
+                   k.Code AS etapeCode
             FROM ComProspection p
             LEFT JOIN StrEntity e ON e.PKey = p.StrEntityId
+            LEFT JOIN ComProspectionKind k ON k.PKey = p.ComProspectionKindId
             LEFT JOIN CfgTranche t ON t.PKey = p.StkHierarchyId
             LEFT JOIN CfgProject pr ON pr.PKey = t.CfgProjectId
             LEFT JOIN CfgCompany soc ON soc.PKey = pr.CfgCompanyId
@@ -109,6 +111,8 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
         Integer getNombreActions();
 
         LocalDateTime getDerniereAction();
+
+        String getEtapeCode();
     }
 
     interface LeadCohorte {
