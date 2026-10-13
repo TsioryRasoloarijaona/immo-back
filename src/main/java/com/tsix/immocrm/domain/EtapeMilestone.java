@@ -38,7 +38,7 @@ public final class EtapeMilestone {
         MILESTONES.put(FORMALISE, new Info("agreementRegistryDate", "Date d'enregistrement du contrat", Confiance.CONFIRME));
         MILESTONES.put(LIVRAISON_PROVISOIRE, new Info(null, "Jamais observé en pratique (0 occurrence)", Confiance.AUCUN));
         MILESTONES.put(ANNULATION, new Info("cancelDate", "Date d'annulation (+ cause en note)", Confiance.CONFIRME));
-        MILESTONES.put(DESISTEMENT, new Info(null, "Nécessite ComSaleWithdrawalCancellation (hors scope)", Confiance.AUCUN));
+        MILESTONES.put(DESISTEMENT, new Info("cancelDate", "Date de désistement (+ cause en note)", Confiance.CONFIRME));
     }
 
     private EtapeMilestone() {
