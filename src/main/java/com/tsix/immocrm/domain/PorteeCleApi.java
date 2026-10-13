@@ -17,23 +17,27 @@ import java.util.stream.Collectors;
 public enum PorteeCleApi {
 
     /** Ce que fait n8n : créer des pré-prospections, à l'unité ou par import CSV. */
-    PRE_PROSPECTIONS_ECRIRE(
+    PRE_PROSPECTIONS_ECRIRE(List.of(
             route(HttpMethod.POST, "/api/pre-prospections"),
             route(HttpMethod.POST, "/api/pre-prospections/import"),
-            route(HttpMethod.POST, "/api/pre-prospections/import/apercu")),
+            route(HttpMethod.POST, "/api/pre-prospections/import/apercu")), List.of()),
 
     /** Relire ce qu'on a créé, ou retrouver un lead avant d'en créer un second. */
-    PRE_PROSPECTIONS_LIRE(
+    PRE_PROSPECTIONS_LIRE(List.of(
             route(HttpMethod.GET, "/api/pre-prospections"),
             route(HttpMethod.GET, "/api/pre-prospections/groupes"),
-            route(HttpMethod.GET, "/api/prospections/*")),
+            route(HttpMethod.GET, "/api/prospections/*")), List.of()),
 
-    /** Résoudre les identifiants (tranche, origine, nature, commercial) par leur code. */
-    REFERENTIELS_LIRE(
+    /**
+     * Résoudre les identifiants (tranche, origine, nature, commercial) par leur code. Le réajustement des
+     * superficies expose clients et prix : exclu, même pour un compte de service Administrateur.
+     */
+    REFERENTIELS_LIRE(List.of(
             route(HttpMethod.GET, "/api/referentiels/**"),
             route(HttpMethod.GET, "/api/projets/**"),
             route(HttpMethod.GET, "/api/tranches/**"),
-            route(HttpMethod.GET, "/api/commerciaux"));
+            route(HttpMethod.GET, "/api/commerciaux")),
+            List.of(route(HttpMethod.GET, "/api/tranches/*/reajustement-superficies")));
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 
@@ -49,17 +53,21 @@ public enum PorteeCleApi {
     }
 
     private final List<Route> routes;
+    private final List<Route> exclues;
 
-    PorteeCleApi(Route... routes) {
-        this.routes = List.of(routes);
+    PorteeCleApi(List<Route> routes, List<Route> exclues) {
+        this.routes = routes;
+        this.exclues = exclues;
     }
 
     public List<Route> routes() {
         return routes;
     }
 
+    /** Une route exclue l'emporte sur un motif large ({@code /api/tranches/**}). */
     public boolean couvre(String methode, String chemin) {
-        return routes.stream().anyMatch(r -> r.couvre(methode, chemin));
+        return routes.stream().anyMatch(r -> r.couvre(methode, chemin))
+                && exclues.stream().noneMatch(r -> r.couvre(methode, chemin));
     }
 
     /** Vrai si l'une des portées couvre la requête. */

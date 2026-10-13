@@ -1,15 +1,21 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.domain.PorteeCleApi;
 import com.tsix.immocrm.domain.StatutDossier;
+import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.app.AppApiClient;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
+import com.tsix.immocrm.repositories.app.AppApiClientRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.security.ApiKeyAuthenticationFilter;
+import com.tsix.immocrm.security.CleApiService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,6 +55,8 @@ class ReajustementSuperficiesTest {
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private ComDocumentRepository documentRepository;
     @Autowired private StkItemRepository stkItemRepository;
+    @Autowired private AppApiClientRepository clientRepository;
+    @Autowired private CleApiService cleApiService;
     @Autowired private EntityManager em;
 
     private CfgTranche tranche;
@@ -165,11 +174,46 @@ class ReajustementSuperficiesTest {
     }
 
     @Test
+    void dossierSansStatut_ecartNul_nonReajuste() throws Exception {
+        ComFolder dossier = dossier("DOS-REAJ6", "105");
+        dossier.setStrStatus(null);
+        folderRepository.save(dossier);
+        fixture.echeance(dossier, autofinancement, new BigDecimal("1200000"), LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        mockMvc.perform(get(REAJUSTEMENT, tranche.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        valider(dossier.getId()).andExpect(status().isConflict());
+    }
+
+    @Test
     void valider_dossierHorsDeLaTranche_404() throws Exception {
         ComFolder ailleurs = fixture.dossier("DOS-REAJ5", fixture.tranche("REAJ-AUTRE", true),
                 StatutDossier.CONCRETISATION);
 
         valider(ailleurs.getId()).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void cleApiReferentiels_surUnCompteAdministrateur_horsPortee_403() throws Exception {
+        dossier("DOS-REAJ7", "105");
+        AdmUser compte = fixture.compte("N8N-REAJ", "Administrateur");
+        String cle = cleApiService.genererCle();
+        AppApiClient client = new AppApiClient();
+        client.setId(UUID.randomUUID());
+        client.setNom("n8n-reaj-" + UUID.randomUUID().toString().substring(0, 8));
+        client.setCleHash(CleApiService.hacher(cle));
+        client.setClePrefixe(CleApiService.prefixeAffiche(cle));
+        client.setAdmUser(compte);
+        client.setPortees(PorteeCleApi.versColonne(EnumSet.of(PorteeCleApi.REFERENTIELS_LIRE)));
+        client.setActif(true);
+        client.setUserCreateDateTime(LocalDateTime.now());
+        clientRepository.save(client);
+
+        mockMvc.perform(get(REAJUSTEMENT, tranche.getId()).header(ApiKeyAuthenticationFilter.EN_TETE, cle))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+        assertThat(PorteeCleApi.REFERENTIELS_LIRE.couvre("GET", "/api/tranches/" + tranche.getId())).isTrue();
     }
 
     @Test

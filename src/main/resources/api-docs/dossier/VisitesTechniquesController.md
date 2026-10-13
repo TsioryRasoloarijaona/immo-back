@@ -8,8 +8,9 @@ Calendrier des visites techniques (bouton à gauche du champ « Visite technique
 nombre maximum de visite par jour, si le saisi est validé le système enregistre la visite, il envoie un mail
 au responsable de service après vente paramétré dans la tranche » (aide OMRAN). La date de début devient la
 date « Visite technique / réception » du dossier (`ComFolder.ReceptionDate`) et le dossier est signé
-(`UserUpdate*`). Le mail part après l'enregistrement et n'annule jamais la visite ; la copie au directeur
-technique du programme n'est pas reprise.
+(`UserUpdate*`). Le mail part après l'enregistrement et n'annule jamais la visite ; il « met en copie le
+directeur technique du programme » (`CfgProject.CfgTechnicalManagerId`), copie omise si ce directeur n'a pas
+d'email.
 
 ### reponse 201
 

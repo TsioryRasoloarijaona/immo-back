@@ -124,6 +124,62 @@ class DossierReinitialisationTest {
                 () -> assertThat(ligneRelue.getCode()).isEqualTo("CAVE-REI2"));
     }
 
+    private StkItem sousArticleDuStock(String code, ComFolder dossier, UUID affecteA) {
+        StkItem sous = new StkItem();
+        sous.setId(UUID.randomUUID());
+        sous.setCode(code);
+        sous.setParent(dossier.getStkItem());
+        sous.setStkItemType(dossier.getStkItem().getStkItemType());
+        sous.setStkItemCategory(dossier.getStkItem().getStkItemCategory());
+        sous.setStkVocation(dossier.getStkVocation());
+        sous.setStkKind(dossier.getStkItem().getStkKind());
+        sous.setArea(new BigDecimal("12"));
+        sous.setSalePriceHT(new BigDecimal("60000"));
+        sous.setVat(new BigDecimal("0.2"));
+        sous.setComFolderId(affecteA);
+        return stkItemRepository.save(sous);
+    }
+
+    @Test
+    @WithMockUser(roles = ADMIN)
+    void reinitialiser_ajouteLeSousArticleLibreDuStock_maisPasCeluiDUnAutreDossier() throws Exception {
+        ComFolder dossier = dossierAvecStockModifie("DOS-REI5");
+        ComFolder autre = fixture.dossier("DOS-REI5B", fixture.tranche("REI5B-TR", true), StatutDossier.RESERVATION);
+        StkItem parking = sousArticleDuStock("PARK-REI5", dossier, null);
+        sousArticleDuStock("BOX-REI5", dossier, autre.getId());
+
+        mockMvc.perform(get(APERCU, dossier.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sousArticlesAjoutes.length()").value(1))
+                .andExpect(jsonPath("$.sousArticlesAjoutes[0]").value("PARK-REI5"))
+                .andExpect(jsonPath("$.apres.prixSousArticlesHT").value(60000))
+                .andExpect(jsonPath("$.apres.totalHT").value(1160000));
+        em.flush();
+        assertThat(folderItemRepository.findByComFolderId(dossier.getId())).isEmpty();
+
+        mockMvc.perform(post(REINITIALISER, dossier.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sousArticlesAjoutes[0]").value("PARK-REI5"));
+
+        em.flush();
+        em.clear();
+        assertThat(folderItemRepository.findByComFolderId(dossier.getId())).singleElement()
+                .satisfies(l -> assertAll(
+                        () -> assertThat(l.getStkItem().getId()).isEqualTo(parking.getId()),
+                        () -> assertThat(l.getIsUnderItem()).isTrue(),
+                        () -> assertThat(l.getParentId()).isEqualTo(dossier.getStkItem().getId()),
+                        () -> assertThat(l.getCode()).isEqualTo("PARK-REI5"),
+                        () -> assertThat(l.getArea()).isEqualByComparingTo("12"),
+                        () -> assertThat(l.getPriceBeforeDiscountHT()).isEqualByComparingTo("60000"),
+                        () -> assertThat(l.getPriceHT()).isNotNull(),
+                        () -> assertThat(l.getUserCreateDateTime()).isNotNull()));
+        assertAll(
+                () -> assertThat(stkItemRepository.findById(parking.getId()).orElseThrow().getComFolderId())
+                        .isEqualTo(dossier.getId()),
+                () -> assertThat(folderRepository.findById(dossier.getId()).orElseThrow().getUnderItemsPriceHT())
+                        .isEqualByComparingTo("60000"));
+    }
+
     @Test
     @WithMockUser
     void reinitialiser_sansRoleAdministrateur_403() throws Exception {

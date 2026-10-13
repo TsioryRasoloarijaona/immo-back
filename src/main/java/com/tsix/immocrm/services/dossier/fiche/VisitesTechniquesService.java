@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.dossier.visites.ProgrammerVisiteRequest;
 import com.tsix.immocrm.dto.dossier.visites.VisiteProgrammeeDto;
 import com.tsix.immocrm.dto.dossier.visites.VisiteTechniqueDto;
 import com.tsix.immocrm.entities.adm.AdmEvent;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -129,7 +130,15 @@ public class VisitesTechniquesService {
         dossier.setReceptionDate(request.debut());
         ecriture.signer(dossier);
         return new PreparationMail(versDto(enregistree, id -> dossier.getCode()), adresse(sav),
-                TierNomFormatter.nom(sav), TierNomFormatter.nom(dossier.getCfgCustomer()), libelle(tranche));
+                copieDirecteurTechnique(tranche), TierNomFormatter.nom(sav),
+                TierNomFormatter.nom(dossier.getCfgCustomer()), libelle(tranche));
+    }
+
+    /** « met en copie le directeur technique du programme » ({@code CfgProject.CfgTechnicalManagerId}). */
+    private static List<String> copieDirecteurTechnique(CfgTranche tranche) {
+        CfgTier directeur = Champs.de(tranche.getCfgProject(), CfgProject::getCfgTechnicalManager);
+        String email = directeur != null ? adresse(directeur) : null;
+        return email != null ? List.of(email) : List.of();
     }
 
     /** « Vous devez programmer la visite technique XX heures à l'avance » ; délai nul ou absent = libre. */
@@ -190,7 +199,7 @@ public class VisitesTechniquesService {
         String texte = "Bonjour,\n\nUne visite technique est programmée sur le dossier %s (%s) : %s.\n"
                 .formatted(p.visite().dossierCode(), p.tranche(), quand);
         envoiEmail.envoyer(new MessageEmail(p.email(), "Visite technique — " + p.visite().dossierCode(),
-                TEMPLATE, variables, texte));
+                TEMPLATE, variables, texte, List.of(), p.copies()));
         return true;
     }
 
@@ -199,7 +208,7 @@ public class VisitesTechniquesService {
                 v.getSubject(), v.getStartHour(), v.getEndHour(), v.getNotes());
     }
 
-    private record PreparationMail(VisiteTechniqueDto visite, String email, String nomSav, String client,
-                                   String tranche) {
+    private record PreparationMail(VisiteTechniqueDto visite, String email, List<String> copies, String nomSav,
+                                   String client, String tranche) {
     }
 }

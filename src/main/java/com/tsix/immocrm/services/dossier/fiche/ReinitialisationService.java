@@ -10,37 +10,45 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
+import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * « Réinitialiser » ({@code Sale.cs:Reinitialise}) : recharge depuis le stock la superficie, la TVA et le prix du
- * m² HT de l'article, la superficie, la TVA et le prix HT des sous-articles, puis recalcule la remise (le montant
- * reste, le taux change). Le schéma de financement n'est pas touché. Voir FEATURE-vente-fiche.md §B5.
+ * « Réinitialiser » ({@code Sale.cs:Reinitialise}) : ajoute les sous-articles du stock absents, recharge l'article et
+ * les sous-articles depuis le stock, puis recalcule la remise (le montant reste, le taux change). Le schéma de
+ * financement n'est pas touché. Voir FEATURE-vente-fiche.md §B5.
  */
 @Service
 public class ReinitialisationService {
 
     private final EcritureDossier ecriture;
     private final ComFolderItemRepository folderItemRepository;
+    private final StkItemRepository stkItemRepository;
 
-    public ReinitialisationService(EcritureDossier ecriture, ComFolderItemRepository folderItemRepository) {
+    public ReinitialisationService(EcritureDossier ecriture, ComFolderItemRepository folderItemRepository,
+                                   StkItemRepository stkItemRepository) {
         this.ecriture = ecriture;
         this.folderItemRepository = folderItemRepository;
+        this.stkItemRepository = stkItemRepository;
     }
 
     @Transactional(readOnly = true)
     public ReinitialisationDto apercu(UUID dossierId) {
         ComFolder dossier = ecriture.charger(dossierId);
         Plan plan = planifier(dossier);
-        return new ReinitialisationDto(etat(dossier), etat(plan.resultat()), plan.modifie());
+        return new ReinitialisationDto(etat(dossier), etat(plan.resultat()), plan.modifie(), plan.codesAjoutes());
     }
 
     @Transactional
@@ -52,11 +60,19 @@ public class ReinitialisationService {
         RecalculPrixDossier.appliquer(plan.resultat(), dossier, plan.sousArticles().stream()
                 .collect(Collectors.toMap(ComFolderItem::getId, Function.identity())));
         folderItemRepository.saveAll(plan.sousArticles());
+        for (StkItem stock : plan.stocksAjoutes()) {
+            stock.setComFolderId(dossier.getId());
+        }
+        stkItemRepository.saveAll(plan.stocksAjoutes());
         ecriture.signer(dossier);
-        return new ReinitialisationDto(avant, etat(plan.resultat()), plan.modifie());
+        return new ReinitialisationDto(avant, etat(plan.resultat()), plan.modifie(), plan.codesAjoutes());
     }
 
-    private record Plan(RecalculPrixDossier.Resultat resultat, List<ComFolderItem> sousArticles, boolean modifie) {
+    private record Plan(RecalculPrixDossier.Resultat resultat, List<ComFolderItem> sousArticles,
+                        List<StkItem> stocksAjoutes, boolean modifie) {
+        List<String> codesAjoutes() {
+            return stocksAjoutes.stream().map(StkItem::getCode).toList();
+        }
     }
 
     private Plan planifier(ComFolder dossier) {
@@ -65,9 +81,13 @@ public class ReinitialisationService {
         if (article == null) {
             throw new ConflictException("Ce dossier n'a pas d'article principal : rien à recharger du stock.");
         }
-        List<ComFolderItem> sousArticles = RecalculPrixDossier.sousArticlesDe(
-                folderItemRepository.findByComFolderId(dossier.getId()));
-        RecalculPrixDossier.Saisie actuelle = RecalculPrixDossier.depuisDossier(dossier, sousArticles);
+        List<ComFolderItem> lignes = folderItemRepository.findByComFolderId(dossier.getId());
+        List<ComFolderItem> existants = RecalculPrixDossier.sousArticlesDe(lignes);
+        List<StkItem> manquants = sousArticlesManquants(dossier, article, lignes);
+        List<ComFolderItem> sousArticles = new ArrayList<>(existants);
+        manquants.forEach(stock -> sousArticles.add(nouvelleLigne(dossier, article, stock)));
+
+        RecalculPrixDossier.Saisie actuelle = RecalculPrixDossier.depuisDossier(dossier, existants);
         RecalculPrixDossier.Saisie rechargee = new RecalculPrixDossier.Saisie(
                 stockOuActuel(article.getArea(), dossier.getArea()),
                 stockOuActuel(article.getVat(), dossier.getVATRatio()),
@@ -75,7 +95,39 @@ public class ReinitialisationService {
                 actuelle.remiseMontantHT(), actuelle.avecModifications(), actuelle.modificationsHT(),
                 actuelle.modificationsTTC(),
                 sousArticles.stream().map(ReinitialisationService::sousArticleDuStock).toList());
-        return new Plan(RecalculPrixDossier.calculer(rechargee), sousArticles, differe(actuelle, rechargee));
+        return new Plan(RecalculPrixDossier.calculer(rechargee), sousArticles, manquants,
+                !manquants.isEmpty() || differe(actuelle, rechargee));
+    }
+
+    /**
+     * Sous-articles du stock ({@code ParentId} = article) absents du dossier, ajoutés comme OMRAN. Celui déjà
+     * affecté à un autre dossier n'est pas pris : l'ajouter le retirerait à ce dossier. Voir FEATURE-vente-fiche.md §B5.
+     */
+    private List<StkItem> sousArticlesManquants(ComFolder dossier, StkItem article, List<ComFolderItem> lignes) {
+        Set<UUID> presents = lignes.stream().map(ComFolderItem::getStkItem).filter(Objects::nonNull)
+                .map(StkItem::getId).collect(Collectors.toSet());
+        return stkItemRepository.findByParentId(article.getId()).stream()
+                .filter(stock -> !presents.contains(stock.getId()))
+                .filter(stock -> stock.getComFolderId() == null || stock.getComFolderId().equals(dossier.getId()))
+                .sorted(Comparator.comparing(StkItem::getCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    /** Ligne créée comme {@code UnderItem(Yes.Stk.Building.UnderItem, Sale)} ; les prix viennent du recalcul. */
+    private ComFolderItem nouvelleLigne(ComFolder dossier, StkItem article, StkItem stock) {
+        ComFolderItem ligne = new ComFolderItem();
+        ligne.setId(UUID.randomUUID());
+        ligne.setComFolder(dossier);
+        ligne.setStkItem(stock);
+        ligne.setParentId(article.getId());
+        ligne.setIsUnderItem(true);
+        ligne.setArea(stock.getArea());
+        ligne.setAreaNet(stock.getArea());
+        ligne.setVATRatio(stock.getVat());
+        ligne.setPriceBeforeDiscountHT(stock.getSalePriceHT());
+        ligne.setUserCreate(ecriture.auteur().nom());
+        ligne.setUserCreateDateTime(ecriture.maintenant());
+        return ligne;
     }
 
     /** Un dossier sorti a libéré ses articles : le stock ne le décrit plus. */
@@ -127,6 +179,10 @@ public class ReinitialisationService {
             ligne.setIsTitled(stock.getIsTitled());
             ligne.setStkItemCategory(stock.getStkItemCategory());
             ligne.setStkItemType(stock.getStkItemType());
+            ligne.setNotes(stock.getNotes());
+            ligne.setAreaFloor(stock.getAreaFloor());
+            ligne.setStkBuildingId(stock.getStkBuilding() != null ? stock.getStkBuilding().getId() : null);
+            ligne.setStkFloorId(stock.getStkFloor() != null ? stock.getStkFloor().getId() : null);
         }
     }
 
@@ -138,7 +194,7 @@ public class ReinitialisationService {
                 .collect(Collectors.toMap(RecalculPrixDossier.SousArticle::id, Function.identity()));
         return b.sousArticles().stream().anyMatch(s -> {
             RecalculPrixDossier.SousArticle avant = parId.get(s.id());
-            return !egal(avant.superficie(), s.superficie()) || !egal(avant.tva(), s.tva())
+            return avant == null || !egal(avant.superficie(), s.superficie()) || !egal(avant.tva(), s.tva())
                     || !egal(avant.prixAvantRemiseHT(), s.prixAvantRemiseHT());
         });
     }

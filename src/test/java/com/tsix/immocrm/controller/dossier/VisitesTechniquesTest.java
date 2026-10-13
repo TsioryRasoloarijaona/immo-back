@@ -1,11 +1,13 @@
 package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.domain.StatutDossier;
+import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.mail.EnvoiEmailMemoire;
+import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -43,6 +45,7 @@ class VisitesTechniquesTest {
     @Autowired private FixtureDossierVente fixture;
     @Autowired private CfgTrancheRepository trancheRepository;
     @Autowired private CfgTierRepository tierRepository;
+    @Autowired private CfgProjectRepository projetRepository;
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private EnvoiEmailMemoire envoiEmail;
 
@@ -78,12 +81,31 @@ class VisitesTechniquesTest {
                 .andExpect(jsonPath("$.visite.dossierId").value(dossier.getId().toString()));
 
         assertThat(folderRepository.findById(dossier.getId()).orElseThrow().getReceptionDate()).isEqualTo(dansTroisJours);
-        assertThat(envoiEmail.nombreMessages()).isEqualTo(1);
+        assertThat(envoiEmail.messages()).singleElement()
+                .satisfies(m -> assertThat(m.destinataire()).isEqualTo("sav.test@ayad.test"))
+                .satisfies(m -> assertThat(m.copies()).isEmpty());
 
         mockMvc.perform(get(VISITES, dossier.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.maxVisitesParJour").value(1))
                 .andExpect(jsonPath("$.creneaux.length()").value(1));
+    }
+
+    @Test
+    void programmer_metEnCopieLeDirecteurTechniqueDuProgramme() throws Exception {
+        CfgTier directeur = fixture.tier("DIRTECH");
+        directeur.setEMail("directeur.technique@ayad.test");
+        tierRepository.save(directeur);
+        CfgProject projet = tranche.getCfgProject();
+        projet.setCfgTechnicalManager(directeur);
+        projetRepository.save(projet);
+        ComFolder dossier = fixture.dossier("DOS-VIS6", tranche, StatutDossier.REMISE_DES_CLEFS);
+
+        programmer(dossier, dansTroisJours).andExpect(status().isCreated());
+
+        assertThat(envoiEmail.messages()).singleElement()
+                .satisfies(m -> assertThat(m.destinataire()).isEqualTo("sav.test@ayad.test"))
+                .satisfies(m -> assertThat(m.copies()).containsExactly("directeur.technique@ayad.test"));
     }
 
     @Test

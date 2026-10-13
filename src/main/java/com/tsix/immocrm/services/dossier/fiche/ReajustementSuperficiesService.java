@@ -173,7 +173,7 @@ public class ReajustementSuperficiesService {
                 actuelle.avecModifications(), actuelle.modificationsHT(), actuelle.modificationsTTC(), sousSaisis));
 
         List<ComDocument> echeances = documentRepository.findByComFolderIdOrderByDocDateAsc(dossier.getId());
-        BigDecimal difference = arrondi(resultat.prixVenteTTC().subtract(totalSchema(echeances)));
+        BigDecimal difference = differenceSchema(dossier, resultat, echeances);
         if (difference.signum() == 0) {
             return Optional.empty();
         }
@@ -188,6 +188,15 @@ public class ReajustementSuperficiesService {
                 cible.map(ComDocument::getId).orElse(null), cible.map(ComDocument::getDocDate).orElse(null),
                 String.join("\n", notes));
         return Optional.of(new Plan(dossier, resultat, sousArticles, difference, cible, ligne));
+    }
+
+    /** {@code Sale.cs:GetSchemaDifference} : un dossier sans statut a un écart nul, il n'est donc jamais réajusté. */
+    private static BigDecimal differenceSchema(ComFolder dossier, RecalculPrixDossier.Resultat resultat,
+                                               List<ComDocument> echeances) {
+        if (dossier.getStrStatus() == null) {
+            return BigDecimal.ZERO;
+        }
+        return arrondi(resultat.prixVenteTTC().subtract(totalSchema(echeances)));
     }
 
     /** Comme le légataire : superficie du stock si elle diffère, et alors prix HT = prix TTC du stock / (1 + TVA). */
