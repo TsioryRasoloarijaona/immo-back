@@ -51,14 +51,19 @@ n'est pas affecté au projet de la ligne : rien n'est écrit.
 
 ## reaffecter
 
-Change le commercial (`ComProspection.CfgCommercialId`) de prospections ouvertes et trace « Commercial
-réaffecté : A → B » dans leur historique. Le commercial référent de la fiche prospect n'est pas
-modifié. Tout le lot ou rien.
+Change le commercial (`ComProspection.CfgCommercialId`) de prospections **et de pré-prospections déjà
+affectées**, ouvertes, et trace « Commercial réaffecté : A → B — motif » dans leur historique. Une
+pré-prospection réaffectée reste une pré-prospection (aucune transformation). Le commercial référent
+de la fiche prospect n'est pas modifié. Un lot peut mêler les deux. Tout le lot ou rien.
+
+Une ligne **sans tranche** (donc sans projet) se réaffecte par un chef seulement si son commercial actuel
+est de son équipe (403 sinon), vers n'importe quel membre de l'équipe.
 
 ### reponse 409
 
-Une ligne est une pré-prospection (elle se distribue) ou une prospection clôturée, ou le commercial
-n'est pas de l'équipe ou pas affecté au projet de la ligne : rien n'est écrit.
+Une ligne est clôturée, ou c'est une pré-prospection sans commercial (elle se distribue :
+`POST /api/equipe/distribuer`), ou le commercial n'est pas de l'équipe ou pas affecté au projet de la
+ligne : rien n'est écrit.
 
 ## repartir
 

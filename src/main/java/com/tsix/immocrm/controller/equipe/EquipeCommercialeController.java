@@ -141,7 +141,7 @@ public class EquipeCommercialeController {
     }
 
     @PostMapping("/reaffecter")
-    @Operation(summary = "Réaffecte des prospections à un autre commercial de l'équipe")
+    @Operation(summary = "Réaffecte des prospections ou pré-prospections affectées à un autre commercial de l'équipe")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Lignes réaffectées (celles déjà à ce commercial sont ignorées)."),
             @ApiResponse(responseCode = "400", description = "Liste vide ou `commercialId` absent."),

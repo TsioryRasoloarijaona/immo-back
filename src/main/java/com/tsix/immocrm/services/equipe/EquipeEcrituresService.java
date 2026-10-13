@@ -109,20 +109,28 @@ public class EquipeEcrituresService {
 
     // ---------------------------------------------------------------- réaffecter
 
-    /** Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. */
+    /**
+     * Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. Une pré-prospection
+     * déjà affectée se réaffecte et reste une pré-prospection ; sans commercial, elle se distribue (409).
+     */
     public ResultatLotDto reaffecter(ReaffecterRequest request) {
         List<ComProspection> lignes = lignesDemandees(request.prospectionIds());
         exiger(request.commercialId(), "commercialId est requis");
         PerimetreEquipe perimetre = equipeService.perimetre();
 
-        verifierPerimetre(lignes, perimetre);
+        lignes.stream().filter(l -> projetDe(l.getStkHierarchy()) == null).forEach(l -> perimetre
+                .verifierReaffectationSansProjet(idDe(l.getCfgCommercial()), request.commercialId(), LIGNE + l.getCode()));
+        verifierPerimetre(lignes.stream().filter(l -> projetDe(l.getStkHierarchy()) != null).toList(), perimetre);
         for (ComProspection ligne : lignes) {
-            if (DiscriminantPreProspection.estPreProspection(ligne)) {
+            if (ligne.getCfgCommercial() == null && DiscriminantPreProspection.estPreProspection(ligne)) {
                 throw new ConflictException(LIGNE + ligne.getCode()
-                        + " : une pré-prospection se distribue, elle ne se réaffecte pas.");
+                        + " : pré-prospection sans commercial, à distribuer, pas à réaffecter.");
             }
             verifierOuverte(ligne);
-            perimetre.destinataire(request.commercialId(), projetDe(ligne.getStkHierarchy()), ligne.getCode());
+            UUID projet = projetDe(ligne.getStkHierarchy());
+            if (projet != null) {
+                perimetre.destinataire(request.commercialId(), projet, ligne.getCode());
+            }
         }
         String motif = StringUtils.hasText(request.motif()) ? " — " + request.motif().strip() : "";
         return ecrire(lignes, request.commercialId(), motif);
@@ -335,6 +343,10 @@ public class EquipeEcrituresService {
         if (valeur == null) {
             throw new InvalidRequestException(message);
         }
+    }
+
+    private static UUID idDe(CfgTier tier) {
+        return tier != null ? tier.getId() : null;
     }
 
     private static UUID projetDe(CfgTranche tranche) {

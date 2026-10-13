@@ -272,12 +272,14 @@ public class ProspectionService {
                 .and(perimetreService.filtreProspections()));
     }
 
+    /** {@code projetIds} : projet de la tranche, comme le filtre avancé {@code projetId} des prospections. */
     public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes, ColonneProspection groupeColonne, String groupeValeur,
-            Granularite granularite, Pageable pageable) {
+            List<UUID> commerciaux, List<UUID> trancheIds, List<UUID> projetIds, LocalDateTime dateDebut,
+            LocalDateTime dateFin, String search, Boolean ouvertes, ColonneProspection groupeColonne,
+            String groupeValeur, Granularite granularite, Pageable pageable) {
         Specification<ComProspection> spec = specPreProspections(new CriteresListe(etapes, origines, commerciaux,
                 trancheIds, dateDebut, dateFin, search, ouvertes))
+                .and(dansLesProjets(projetIds))
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut forcée : ComSaleProspectionView exclut les pré-prospections, la
@@ -309,6 +311,14 @@ public class ProspectionService {
         return groupementService.grouper(ComProspection.class,
                 spec.and(perimetreService.filtreProspections()),
                 groupeBy.chemin(), granularite, agregats, tri, inclureSansValeur, pageable);
+    }
+
+    private static Specification<ComProspection> dansLesProjets(List<UUID> projetIds) {
+        return (root, query, cb) -> estRenseignee(projetIds) ? predicatProjets(root, projetIds) : cb.conjunction();
+    }
+
+    private static Predicate predicatProjets(Root<ComProspection> root, List<UUID> projetIds) {
+        return root.get("stkHierarchy").get("cfgProject").get("id").in(projetIds);
     }
 
     private static Specification<ComProspection> filtreDeGroupe(ColonneProspection groupeColonne,
@@ -430,7 +440,7 @@ public class ProspectionService {
     private static List<Predicate> predicatsDeLEntite(FiltresAvancesProspection f, Root<ComProspection> root) {
         List<Predicate> predicates = new ArrayList<>();
         if (estRenseignee(f.projetId())) {
-            predicates.add(root.get("stkHierarchy").get("cfgProject").get("id").in(f.projetId()));
+            predicates.add(predicatProjets(root, f.projetId()));
         }
         if (estRenseignee(f.societeId())) {
             predicates.add(root.get("stkHierarchy").get("cfgProject").get("cfgCompany").get("id")
