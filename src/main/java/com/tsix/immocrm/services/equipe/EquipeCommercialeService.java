@@ -2,7 +2,6 @@ package com.tsix.immocrm.services.equipe;
 
 import com.tsix.immocrm.domain.InteractionKpi;
 import com.tsix.immocrm.domain.RolesExemptesPerimetre;
-import com.tsix.immocrm.dto.equipe.ADistribuerDto;
 import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto;
 import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto.MembreAffectationDto;
 import com.tsix.immocrm.dto.equipe.CommercialEquipeDto;
@@ -17,7 +16,6 @@ import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository;
-import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.EnAttente;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.LeadCohorte;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.PortefeuilleCommercial;
 import com.tsix.immocrm.services.kpi.PerformanceCommercialService;
@@ -30,7 +28,6 @@ import org.springframework.util.StringUtils;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -246,22 +243,6 @@ public class EquipeCommercialeService {
 
     private static long valeur(Integer n) {
         return n != null ? n : 0L;
-    }
-
-    /** Même période que l'entonnoir et le tableau (FEATURE-equipe-commerciale.md §10) : 400 avant tout si inversée. */
-    public ADistribuerDto aDistribuer(@Nullable LocalDate du, @Nullable LocalDate au, @Nullable UUID projet) {
-        PeriodeEquipe periode = PeriodeEquipe.resoudre(du, au, LocalDate.now(clock));
-        List<UUID> projets = perimetre().projetsFiltres(projet);
-        if (projets != null && projets.isEmpty()) {
-            return new ADistribuerDto(0, null, null);
-        }
-        EnAttente enAttente = equipeRepository.aDistribuer(periode.debut(), periode.fin(), projets == null,
-                pourRequete(projets));
-        LocalDateTime plusAncienne = enAttente.getPlusAncienne();
-        Long age = plusAncienne != null
-                ? Math.max(0L, ChronoUnit.DAYS.between(plusAncienne.toLocalDate(), LocalDate.now(clock)))
-                : null;
-        return new ADistribuerDto(valeur(enAttente.getNombre()), plusAncienne, age);
     }
 
     public AffectationsEquipeDto affectations() {

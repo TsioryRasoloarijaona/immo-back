@@ -65,8 +65,10 @@ public class EquipeEcrituresService {
     private final AdmUserRepository userRepository;
     private final AdmUserHabilitationRepository habilitationRepository;
     private final RepartitionLeadsService repartition;
+    private final ADistribuerService aDistribuer;
 
     public EquipeEcrituresService(EquipeCommercialeService equipeService,
+                                  ADistribuerService aDistribuer,
                                   HistoriqueProspection historique,
                                   ComProspectionRepository prospectionRepository,
                                   CfgTierRepository tierRepository,
@@ -75,6 +77,7 @@ public class EquipeEcrituresService {
                                   AdmUserHabilitationRepository habilitationRepository,
                                   RepartitionLeadsService repartition) {
         this.equipeService = equipeService;
+        this.aDistribuer = aDistribuer;
         this.repartition = repartition;
         this.historique = historique;
         this.prospectionRepository = prospectionRepository;
@@ -133,7 +136,7 @@ public class EquipeEcrituresService {
      * attribuée n'est jamais reprise. {@code simulation} (défaut vrai) n'écrit rien.
      */
     public ResultatRepartitionDto repartir(RepartirRequest request) {
-        List<ComProspection> lignes = lignesDemandees(request.preProspectionIds());
+        List<ComProspection> lignes = lotARepartir(request);
         boolean simulation = !Boolean.FALSE.equals(request.simulation());
         PerimetreEquipe perimetre = equipeService.perimetre();
 
@@ -166,6 +169,15 @@ public class EquipeEcrituresService {
         }
         return new ResultatRepartitionDto(simulation, attributions, nonAttribuees,
                 RepartitionLeadsService.parCommercial(decisions));
+    }
+
+    /** Exactement un des deux : les ids cochés, ou toutes les lignes du filtre de la carte (§3.3). */
+    private List<ComProspection> lotARepartir(RepartirRequest request) {
+        boolean parIds = !demandes(request.preProspectionIds()).isEmpty();
+        if (parIds == (request.filtre() != null)) {
+            throw new InvalidRequestException("Donner soit preProspectionIds (non vide), soit filtre — pas les deux.");
+        }
+        return parIds ? lignesDemandees(request.preProspectionIds()) : aDistribuer.toutesLesLignes(request.filtre());
     }
 
     private static void verifierPerimetre(List<ComProspection> lignes, PerimetreEquipe perimetre) {

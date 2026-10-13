@@ -22,7 +22,7 @@ import java.util.UUID;
  * Prédicats et libellés communs à « Ma journée » et à la Boîte de tri : une pré-prospection « à trier » n'a qu'une
  * définition (FEATURE-parcours-commercial.md §3).
  */
-final class LignesParcours {
+public final class LignesParcours {
 
     static final String COM_PROSPECTION = "comProspection";
     static final String CFG_COMMERCIAL = "cfgCommercial";
@@ -47,8 +47,11 @@ final class LignesParcours {
         return spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get(DOC_DATE), depuis.atStartOfDay()));
     }
 
-    /** Aucune interaction saisie ; celles qu'OMRAN écrit seul ({@code IsSystem = 1}) ne comptent pas. */
-    static Specification<ComProspection> sansInteraction() {
+    /**
+     * Aucune interaction saisie ; celles qu'OMRAN écrit seul ({@code IsSystem = 1}) ne comptent pas. Aussi la
+     * règle « jamais traitée » de « À distribuer » (FEATURE-a-distribuer-jamais-traitees.md §2).
+     */
+    public static Specification<ComProspection> sansInteraction() {
         return (root, query, cb) -> {
             Subquery<UUID> messages = query.subquery(UUID.class);
             var m = messages.from(ComActionMessage.class);
