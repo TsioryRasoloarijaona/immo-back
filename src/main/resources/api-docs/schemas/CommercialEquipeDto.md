@@ -8,8 +8,9 @@ la période.
 
 ## sansActionDepuis7Jours
 
-Parmi le portefeuille ouvert, les prospections dont la dernière action (tous auteurs) — à défaut la
-date de la prospection — date de plus de 7 jours. À afficher en alerte quand il est non nul.
+Parmi le portefeuille ouvert, les prospections dont la dernière action non système (`IsSystem` faux ou
+absent) — à défaut la date de la prospection — date de plus de 7 jours. Même règle que `endormi` de
+`POST /api/equipe/leads/activite`. À afficher en alerte quand il est non nul.
 
 ## relancesEnRetard
 

@@ -9,6 +9,8 @@ import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto.MembreAffectationDto;
 import com.tsix.immocrm.dto.equipe.CommercialEquipeDto;
 import com.tsix.immocrm.dto.equipe.DistribuerRequest;
 import com.tsix.immocrm.dto.equipe.EntonnoirDto;
+import com.tsix.immocrm.dto.equipe.LeadActiviteDto;
+import com.tsix.immocrm.dto.equipe.LeadsActiviteRequest;
 import com.tsix.immocrm.dto.equipe.ModifierAffectationsRequest;
 import com.tsix.immocrm.dto.equipe.ReaffecterRequest;
 import com.tsix.immocrm.dto.equipe.RepartirRequest;
@@ -22,6 +24,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -126,6 +129,16 @@ public class EquipeCommercialeController {
             @Parameter(description = "Taille de page ; ramenée à 500 au-delà.")
             @RequestParam(defaultValue = "100") int size) {
         return aDistribuer.lignes(new FiltreADistribuer(du, au, projet, toutes), page, size);
+    }
+
+    @PostMapping("/leads/activite")
+    @Operation(summary = "Nombre d'actions et sommeil des leads demandés (fenêtre « Leads de … »)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Une entrée par lead visible, ordre libre ; les autres ids sont omis."),
+            @ApiResponse(responseCode = "400", description = "`ids` absent, vide, contenant null ou de plus de 200 éléments.")
+    })
+    public List<LeadActiviteDto> activiteLeads(@Valid @RequestBody LeadsActiviteRequest request) {
+        return lectures.activiteLeads(request.ids());
     }
 
     @PostMapping("/distribuer")

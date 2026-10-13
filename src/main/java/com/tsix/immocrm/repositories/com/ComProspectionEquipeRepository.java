@@ -15,6 +15,9 @@ import java.util.UUID;
  */
 public interface ComProspectionEquipeRepository extends Repository<ComProspection, UUID> {
 
+    /** Action saisie (alias {@code m}) : même règle que {@code LignesParcours.sansInteraction()}, IsSystem NULL compris. */
+    String ACTION_SAISIE = "ISNULL(m.IsSystem, 0) = 0";
+
     /** Une ligne par lead de la cohorte : le service en tire le niveau atteint (§4.2). */
     @Query(value = """
             SELECT p.PKey AS id, p.DocDate AS dateArrivee,
@@ -50,7 +53,8 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
             FROM (
                 SELECT p.CfgCommercialId AS commercialId,
                        CASE WHEN COALESCE((SELECT MAX(m.DocDate) FROM ComActionMessage m
-                                           WHERE m.ComProspectionId = p.PKey), p.DocDate) < :seuilInactivite
+                                           WHERE m.ComProspectionId = p.PKey AND\s""" + ACTION_SAISIE + """
+                                           ), p.DocDate) < :seuilInactivite
                             THEN 1 ELSE 0 END AS inactive,
                        CASE WHEN (SELECT TOP 1 r.AlertValidityDate FROM ComActionMessage r
                                   WHERE r.ComProspectionId = p.PKey AND r.AlertValidityDate IS NOT NULL
@@ -74,6 +78,38 @@ public interface ComProspectionEquipeRepository extends Repository<ComProspectio
                                                @Param("debutJour") LocalDateTime debutJour,
                                                @Param("tous") boolean tous,
                                                @Param("projetIds") List<UUID> projetIds);
+
+    /**
+     * Activité des leads demandés, limités au périmètre : {@code tous = 1} (exempté) ou un projet de {@code projetIds},
+     * ou, sans projet, tenus par un employé de {@code membres}. Les autres ids sont omis (FEATURE-leads-a-relancer.md).
+     */
+    @Query(value = """
+            SELECT p.PKey AS id, p.DocDate AS dateLead, a.nombre AS nombreActions, a.derniere AS derniereAction
+            FROM ComProspection p
+            LEFT JOIN StrEntity e ON e.PKey = p.StrEntityId
+            LEFT JOIN CfgTranche t ON t.PKey = p.StkHierarchyId
+            LEFT JOIN CfgProject pr ON pr.PKey = t.CfgProjectId
+            LEFT JOIN CfgCompany soc ON soc.PKey = pr.CfgCompanyId
+            OUTER APPLY (SELECT COUNT(*) AS nombre, MAX(m.DocDate) AS derniere FROM ComActionMessage m
+                         WHERE m.ComProspectionId = p.PKey AND\s""" + ACTION_SAISIE + """
+                        ) a
+            WHERE p.PKey IN (:ids)
+              AND (e.PKey IS NULL OR e.Code IN ('ComPreProspection', 'ComProspection'))
+              AND (soc.IsActive = 1 OR soc.PKey IS NULL)
+              AND (:tous = 1 OR pr.PKey IN (:projetIds)
+                   OR (pr.PKey IS NULL AND p.CfgCommercialId IN (:membres)))""", nativeQuery = true)
+    List<ActiviteLeadLigne> activite(@Param("ids") List<UUID> ids, @Param("tous") boolean tous,
+                                     @Param("projetIds") List<UUID> projetIds, @Param("membres") List<UUID> membres);
+
+    interface ActiviteLeadLigne {
+        UUID getId();
+
+        LocalDateTime getDateLead();
+
+        Integer getNombreActions();
+
+        LocalDateTime getDerniereAction();
+    }
 
     interface LeadCohorte {
         UUID getId();

@@ -36,6 +36,18 @@ Les lignes que compte `GET /api/equipe/a-distribuer` pour les mêmes paramètres
 périmètre, même 403 pour un projet hors périmètre), paginées et triées par `DocDate` croissante.
 Avec `toutes=true`, `dejaTraitee` signale celles qui ont au moins une action non système.
 
+## activiteLeads
+
+État des leads affichés dans la fenêtre « Leads de … » (pré-prospections et prospections,
+`ComProspection.PKey`), en une requête pour une page de la liste. **Action** = ligne `ComActionMessage`
+non système (`IsSystem` faux ou absent), même règle que la Boîte de tri et « À distribuer » ; `endormi`
+suit exactement la colonne `sansActionDepuis7Jours` de `GET /api/equipe/commerciaux`.
+
+Seuls les leads du périmètre de l'appelant sont renvoyés : Administrateur / Direction Générale = projets
+des sociétés actives et leads sans projet ; chef = ses projets, plus les leads sans projet tenus par un
+membre de son équipe. Un id hors périmètre, inconnu ou qui n'est pas un lead est **omis** sans erreur.
+Lecture seule.
+
 ## distribuer
 
 Pose le commercial choisi (`ComProspection.CfgCommercialId`) sur chaque pré-prospection, **comme le

@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto;
 import com.tsix.immocrm.dto.equipe.AffectationsEquipeDto.MembreAffectationDto;
 import com.tsix.immocrm.dto.equipe.CommercialEquipeDto;
 import com.tsix.immocrm.dto.equipe.EntonnoirDto;
+import com.tsix.immocrm.dto.equipe.LeadActiviteDto;
 import com.tsix.immocrm.dto.kpi.PerformanceCommercialDto;
 import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
@@ -16,6 +17,7 @@ import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository;
+import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.ActiviteLeadLigne;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.LeadCohorte;
 import com.tsix.immocrm.repositories.com.ComProspectionEquipeRepository.PortefeuilleCommercial;
 import com.tsix.immocrm.services.kpi.PerformanceCommercialService;
@@ -50,7 +52,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class EquipeCommercialeService {
 
-    private static final int JOURS_SANS_ACTION = 7;
     // IN () est invalide : liste jamais lue quand tous = true, mais jamais vide.
     private static final List<UUID> AUCUN_PROJET = List.of(new UUID(0L, 0L));
 
@@ -221,11 +222,33 @@ public class EquipeCommercialeService {
         }
         LocalDateTime maintenant = LocalDateTime.now(clock);
         Map<UUID, PortefeuilleCommercial> parEmploye = new HashMap<>();
-        for (PortefeuilleCommercial pf : equipeRepository.portefeuilles(employes, maintenant.minusDays(JOURS_SANS_ACTION),
+        for (PortefeuilleCommercial pf : equipeRepository.portefeuilles(employes, ActiviteLead.seuil(maintenant),
                 maintenant.toLocalDate().atStartOfDay(), projets == null, pourRequete(projets))) {
             parEmploye.put(pf.getCommercialId(), pf);
         }
         return parEmploye;
+    }
+
+    /** Activité des leads demandés ; un id hors du périmètre d'équipe ou inconnu est omis, sans erreur. */
+    public List<LeadActiviteDto> activiteLeads(List<UUID> ids) {
+        PerimetreEquipe perimetre = perimetre();
+        List<UUID> projets = perimetre.projetsFiltres(null);
+        List<UUID> membres = perimetre.membres().stream()
+                .map(MembreEquipe::employeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        return equipeRepository.activite(List.copyOf(new LinkedHashSet<>(ids)), projets == null, pourRequete(projets),
+                        membres.isEmpty() ? AUCUN_PROJET : membres).stream()
+                .map(l -> versActivite(l, maintenant))
+                .toList();
+    }
+
+    private static LeadActiviteDto versActivite(ActiviteLeadLigne l, LocalDateTime maintenant) {
+        LocalDateTime reference = ActiviteLead.reference(l.getDerniereAction(), l.getDateLead());
+        return new LeadActiviteDto(l.getId(), (int) valeur(l.getNombreActions()), l.getDerniereAction(),
+                ActiviteLead.joursSansAction(reference, maintenant), ActiviteLead.endormi(reference, maintenant));
     }
 
     private static List<ProjetPerimetreDto> projetsVisibles(MembreEquipe m, Map<UUID, ProjetPerimetreDto> projetsParId) {
