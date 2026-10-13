@@ -109,7 +109,10 @@ public class EquipeEcrituresService {
 
     // ---------------------------------------------------------------- réaffecter
 
-    /** Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. */
+    /**
+     * Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. Une pré-prospection
+     * déjà affectée se réaffecte et reste une pré-prospection ; sans commercial, elle se distribue (409).
+     */
     public ResultatLotDto reaffecter(ReaffecterRequest request) {
         List<ComProspection> lignes = lignesDemandees(request.prospectionIds());
         exiger(request.commercialId(), "commercialId est requis");
@@ -117,9 +120,9 @@ public class EquipeEcrituresService {
 
         verifierPerimetre(lignes, perimetre);
         for (ComProspection ligne : lignes) {
-            if (DiscriminantPreProspection.estPreProspection(ligne)) {
+            if (ligne.getCfgCommercial() == null && DiscriminantPreProspection.estPreProspection(ligne)) {
                 throw new ConflictException(LIGNE + ligne.getCode()
-                        + " : une pré-prospection se distribue, elle ne se réaffecte pas.");
+                        + " : pré-prospection sans commercial, à distribuer, pas à réaffecter.");
             }
             verifierOuverte(ligne);
             perimetre.destinataire(request.commercialId(), projetDe(ligne.getStkHierarchy()), ligne.getCode());

@@ -77,6 +77,9 @@ public class PreProspectionController {
             @Parameter(description = "Id(s) de tranche visée (CfgTranche.id, "
                     + "ComProspection.stkHierarchy). Répéter le paramètre pour plusieurs tranches.")
             @RequestParam(required = false) List<UUID> trancheId,
+            @Parameter(description = "Id(s) de projet (CfgProject.id) de la tranche ; une ligne sans tranche est "
+                    + "écartée. Répétable.")
+            @RequestParam(required = false) List<UUID> projetId,
             @Parameter(description = "Borne inférieure (incluse) sur la date du document, "
                     + "format ISO-8601.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
@@ -96,7 +99,7 @@ public class PreProspectionController {
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         ColonneProspection groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneProspection::resoudreGroupement);
-        return PageDto.of(prospectionService.findPreProspections(etape, origine, commercial, trancheId, dateDebut,
+        return PageDto.of(prospectionService.findPreProspections(etape, origine, commercial, trancheId, projetId, dateDebut,
                 dateFin, search, ouvertes, groupe, groupeValeur,
                 Groupements.granularite(groupe, granularite), pageable));
     }

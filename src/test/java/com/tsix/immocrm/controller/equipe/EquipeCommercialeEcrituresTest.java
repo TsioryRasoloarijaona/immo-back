@@ -186,10 +186,62 @@ class EquipeCommercialeEcrituresTest {
     }
 
     @Test
-    void reaffecter_unePreProspection_409() throws Exception {
+    void reaffecter_preProspectionAffectee_changeLeCommercialEtResteUnePreProspection() throws Exception {
+        ComProspection pre = preProspectionAffectee("EQ-ECR-R6", trancheA);
+
+        reaffecter(chef, List.of(pre.getId()), commercialA2)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(1));
+
+        em.flush();
+        em.clear();
+        ComProspection apres = prospectionRepository.findById(pre.getId()).orElseThrow();
+        assertThat(apres.getCfgCommercial().getId()).isEqualTo(commercialA2.getCfgEmployee().getId());
+        assertThat(DiscriminantPreProspection.estPreProspection(apres)).isTrue();
+        assertThat(historyRepository.findByObjectIdInOrderByDocDateDesc(List.of(pre.getId())))
+                .extracting(StrHistory::getDescription)
+                .anyMatch(d -> d.startsWith("Commercial réaffecté : ") && d.endsWith(" — test"));
+    }
+
+    @Test
+    void reaffecter_preProspectionSansCommercial_409() throws Exception {
         ComProspection pre = outils.preProspection("EQ-ECR-R2", trancheA, hier);
 
         reaffecter(chef, List.of(pre.getId()), commercialA2).andExpect(status().isConflict());
+    }
+
+    @Test
+    void reaffecter_preProspectionCloturee_409() throws Exception {
+        ComProspection pre = preProspectionAffectee("EQ-ECR-R7", trancheA);
+        pre.setIsClosed(true);
+        em.flush();
+
+        reaffecter(chef, List.of(pre.getId()), commercialA2).andExpect(status().isConflict());
+    }
+
+    @Test
+    void reaffecter_preProspectionHorsPerimetre_403() throws Exception {
+        ComProspection pre = outils.preProspection("EQ-ECR-R8", trancheB, hier);
+        pre.setCfgCommercial(commercialB.getCfgEmployee());
+        em.flush();
+
+        reaffecter(chef, List.of(pre.getId()), commercialA2).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reaffecter_lotMixteProspectionEtPreProspection_200() throws Exception {
+        ComProspection p = outils.prospection("EQ-ECR-R9", trancheA, commercialA.getCfgEmployee(), hier);
+        ComProspection pre = preProspectionAffectee("EQ-ECR-R10", trancheA);
+
+        reaffecter(chef, List.of(p.getId(), pre.getId()), commercialA2)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(2));
+
+        em.flush();
+        em.clear();
+        assertThat(prospectionRepository.findAllById(List.of(p.getId(), pre.getId())))
+                .hasSize(2)
+                .allMatch(l -> l.getCfgCommercial().getId().equals(commercialA2.getCfgEmployee().getId()));
     }
 
     @Test
@@ -276,6 +328,13 @@ class EquipeCommercialeEcrituresTest {
     }
 
     // ---------------------------------------------------------------- outils
+
+    private ComProspection preProspectionAffectee(String code, CfgTranche tranche) {
+        ComProspection pre = outils.preProspection(code, tranche, hier);
+        pre.setCfgCommercial(commercialA.getCfgEmployee());
+        em.flush();
+        return pre;
+    }
 
     private ResultActions distribuer(AdmUser appelant, List<UUID> ids, AdmUser destinataire) throws Exception {
         return mockMvc.perform(post("/api/equipe/distribuer")
