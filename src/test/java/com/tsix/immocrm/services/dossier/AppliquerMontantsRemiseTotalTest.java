@@ -107,7 +107,8 @@ class AppliquerMontantsRemiseTotalTest {
         DossierService.appliquerMontants(f, appartement(), List.of(), new BigDecimal("1100000"), null, BigDecimal.ZERO);
 
         assertAll(
-                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("-83333.333334"),
+                // Sale.cs:RecalcDiscount : taux (tiré des TTC) × HT avant remise.
+                () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("-83333.333333"),
                 () -> assertThat(f.getDiscount()).isEqualByComparingTo("-0.1"),
                 () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1100000"));
     }

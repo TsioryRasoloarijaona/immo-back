@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.dossier;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -20,6 +22,14 @@ public record MontantsDossierDto(
 
         SyntheseMontantDto netAPayer,
 
-        Boolean dossierSorti
+        Boolean dossierSorti,
+
+        @Schema(description = "Trop-perçu (≥ 0) : réglé au-delà du total dû, formule de ComSaleFolderView. "
+                + "0 pour un dossier débiteur.", example = "0")
+        BigDecimal tropPercu,
+
+        @Schema(description = "Trop-perçu restant à rembourser (≥ 0), formule de ComSaleFolderView. "
+                + "0 pour un dossier débiteur.", example = "0")
+        BigDecimal tropPercuReste
 ) {
 }

@@ -282,7 +282,8 @@ public class DossierController {
             @ApiResponse(responseCode = "201", description = "Dossier créé."),
             @ApiResponse(responseCode = "400"),
             @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
-                    + "le périmètre commercial de l'appelant.")
+                    + "le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<DossierDetailDto> create(@RequestBody CreerDossierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.create(request));
@@ -319,11 +320,25 @@ public class DossierController {
     }
 
     @PostMapping("/{id}/echeancier")
+    @Operation(summary = "Ajoute une ligne d'échéancier au dossier",
+            description = "Société, module, TVA, HT et date à minuit sont écrits comme le logiciel de bureau.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Échéance créée."),
+            @ApiResponse(responseCode = "400", description = "Catégorie (`categorieId`) absente ou introuvable."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
     public ResponseEntity<EcheanceDto> addEcheance(@PathVariable UUID id, @RequestBody CreerEcheanceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(echeancierService.addEcheance(id, request));
     }
 
     @PatchMapping("/{id}/echeancier/{echeanceId}")
+    @Operation(summary = "Modifie une ligne d'échéancier",
+            description = "Champs absents inchangés ; HT, TVA et société recalculés, la ligne garde une catégorie.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Échéance modifiée."),
+            @ApiResponse(responseCode = "400", description = "Catégorie introuvable, ou ligne laissée sans catégorie."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable.")
+    })
     public EcheanceDto updateEcheance(@PathVariable UUID id, @PathVariable UUID echeanceId,
                                        @RequestBody ModifierEcheanceRequest request) {
         return echeancierService.updateEcheance(id, echeanceId, request);
@@ -534,6 +549,8 @@ public class DossierController {
     // -- Génération de documents (modèles légataires : instructions/templates) --
 
     @GetMapping("/{id}/documents/fiche-reservation")
+    @Operation(summary = "Fiche de réservation (PDF ou DOCX)",
+            description = "La première génération pose la date d'impression du contrat (`ContractPrintDate`).")
     public ResponseEntity<byte[]> getFicheReservation(@PathVariable UUID id,
             @RequestParam(defaultValue = "pdf") String format) {
         FicheReservationData data = ficheReservationService.collect(id);

@@ -134,7 +134,10 @@ public enum ColonneDossier implements Colonne {
 
     // -- Jalons et délais. Les délais sont des @Formula (FEATURE-colonnes-dossier-ecran-legataire.md §3) ;
     //    les deux dates en sont les entrées, sans elles un nombre de jours est invérifiable à l'écran.
+    // OMRAN : le compromis est CreditApprovalDate ; AgreementDate = « Date Envoi Notaire / Avocat ».
     DATE_COMPROMIS("dateCompromis", "Compromis", Groupe.IDENTITE, TypeColonne.DATE, false,
+            Chemin.date("creditApprovalDate")),
+    DATE_ENVOI_NOTAIRE("dateEnvoiNotaire", "Envoi notaire / avocat", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("agreementDate")),
     DATE_LIVRAISON_REELLE("dateLivraisonReelle", "Livraison réelle", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("deliveryDateReal")),

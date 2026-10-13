@@ -11,6 +11,7 @@ chaque *pull request*.
 | `030_triggers.sql` | 4 triggers (`ComFolder`, `RntFolder`) | généré |
 | `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
 | `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
+| `060_interop_vente.sql` | `AdmParamsGuid`, `StlDocumentLine` (lues par la vente hors entités JPA) et la devise par défaut ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 
 Appliquer dans l'ordre numérique.
 
@@ -87,6 +88,16 @@ Points à ne pas perdre en régénérant :
 
 Après régénération, valider **avant de committer** : appliquer les quatre fichiers sur une base
 neuve, puis lancer `./mvnw test` avec `SPRING_DATASOURCE_URL` pointant dessus.
+
+## Base locale `yesRemsTest`
+
+Tables lues en SQL natif par la vente et absentes de `yesRemsTest` (une commande par table, idempotentes) :
+
+```powershell
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJECT_ID('dbo.SynFolder', 'U') IS NULL CREATE TABLE dbo.SynFolder (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, ComFolderId uniqueidentifier NULL, StrStatusId uniqueidentifier NULL)"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJECT_ID('dbo.StlDocument', 'U') IS NULL CREATE TABLE dbo.StlDocument (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, DocType nvarchar(255) NULL, DocDate datetime NULL)"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/060_interop_vente.sql"
+```
 
 ## Reproduire l'environnement du CI en local
 

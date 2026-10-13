@@ -81,6 +81,10 @@ public class ComFolder {
     @JoinColumn(name = "StrStatusId")
     private StrStatus strStatus;
 
+    // Les vues d'OMRAN font INNER JOIN StrEntity : un dossier sans cette colonne n'apparaît dans aucune.
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComPaymentMethodId")
     private ComPaymentMethod comPaymentMethod;

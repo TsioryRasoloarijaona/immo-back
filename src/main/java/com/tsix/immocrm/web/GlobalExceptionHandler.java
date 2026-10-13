@@ -2,6 +2,7 @@ package com.tsix.immocrm.web;
 
 import com.tsix.immocrm.config.ConnexionSourceSuivie;
 import com.tsix.immocrm.config.SourceDeVeriteProperties;
+import com.tsix.immocrm.exceptions.ConfigurationManquanteException;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
@@ -108,6 +109,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /** Référentiel du légataire incomplet (ex. statut RESERVATION absent) : défaut d'installation, pas de saisie. */
+    @ExceptionHandler(ConfigurationManquanteException.class)
+    public ProblemDetail handleConfigurationManquante(ConfigurationManquanteException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
     }
 
     /** FEATURE-doublons-prospect-projet.md §2. */

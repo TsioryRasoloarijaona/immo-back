@@ -45,4 +45,20 @@ public class StrStatus {
     // OMRAN « Transforme le prospect en client » ; NULL vaut faux.
     @Column(name = "BoolField011")
     private Boolean transformeProspectEnClient;
+
+    // OMRAN « Annulation » / « Résiliation » : un dossier à ce statut n'est plus actif ; NULL vaut faux.
+    @Column(name = "BoolField002")
+    private Boolean annulation;
+
+    @Column(name = "BoolField003")
+    private Boolean resiliation;
+
+    /** Jours de validité du statut ; {@code StatusValidityDate} n'est posée que si positif. */
+    @Column(name = "Delay")
+    private Integer delai;
+
+    /** Ni annulation ni résiliation : le statut d'un dossier encore en cours chez OMRAN. */
+    public boolean estActif() {
+        return !Boolean.TRUE.equals(annulation) && !Boolean.TRUE.equals(resiliation);
+    }
 }

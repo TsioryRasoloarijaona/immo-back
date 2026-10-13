@@ -263,14 +263,14 @@ class TracabiliteHistoriqueHotlineTest {
         return actionMessageRepository.save(message);
     }
 
-    private void newCategorie(String code, Boolean excludeFromPrice) {
+    private UUID newCategorie(String code, Boolean excludeFromPrice) {
         ComSettlementCategory categorie = new ComSettlementCategory();
         categorie.setId(UUID.randomUUID());
         categorie.setCode(code);
         categorie.setDescription(code);
         categorie.setStkVocation(vocation);
         categorie.setExcludeFromPrice(excludeFromPrice);
-        settlementCategoryRepository.save(categorie);
+        return settlementCategoryRepository.save(categorie).getId();
     }
 
     // ================================================================= §1 et §2 : auteurs du dossier
@@ -349,9 +349,12 @@ class TracabiliteHistoriqueHotlineTest {
     void echeanceAjoutee_porteSonAuteurDansLHistorique() throws Exception {
         ComFolder dossier = newDossier("DOS-TRACE-ECH", newTranche(newProjet("PRJ-TRACE-ECH")),
                 newTier("CLI-TRACE-ECH", null), null);
+        // Une échéance exige sa catégorie (FEATURE-vente-socle.md A, interop §3.2).
+        UUID categorie = newCategorie("AVANCE-TRACE-ECH", false);
 
         mockMvc.perform(post("/api/dossiers/{id}/echeancier", dossier.getId()).with(connecte(moi))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"montant\":1000}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"montant\":1000,\"categorieId\":\"%s\"}".formatted(categorie)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/dossiers/{id}/historique", dossier.getId()).with(connecte(moi)))

@@ -35,12 +35,21 @@ class StatutEcheanceTest {
         assertThat(calculer(MILLE, new BigDecimal("1500.00"), HIER, MAINTENANT)).isEqualTo(PAYE);
     }
 
+    /** B6 (FEATURE-vente-socle.md) : comme l'impayé d'OMRAN, une échéance entamée mais échue est en retard. */
     @Test
-    void partiellementReglee_estPartielMemeEnRetard() {
-        // « payé » puis « partiel » l'emportent sur le retard : une échéance entamée n'est jamais
-        // affichée EN_RETARD, quel que soit sa date.
-        assertThat(calculer(MILLE, new BigDecimal("400.00"), HIER, MAINTENANT)).isEqualTo(PARTIEL);
+    void partiellementRegleeEtEchue_estEnRetard() {
+        assertThat(calculer(MILLE, new BigDecimal("400.00"), HIER, MAINTENANT)).isEqualTo(EN_RETARD);
+    }
+
+    @Test
+    void partiellementRegleeEtPasEncoreDue_estPartielle() {
         assertThat(calculer(MILLE, new BigDecimal("400.00"), DEMAIN, MAINTENANT)).isEqualTo(PARTIEL);
+    }
+
+    /** « Échéance ≤ aujourd'hui » : due dans la journée, même plus tard que l'heure courante. */
+    @Test
+    void echeanceDuJour_estEnRetard() {
+        assertThat(calculer(MILLE, BigDecimal.ZERO, MAINTENANT.plusHours(3), MAINTENANT)).isEqualTo(EN_RETARD);
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,6 +33,26 @@ public final class PrixArticle {
             return Optional.of(new PrixDeReference(article.getComSalePriceFloor(), article.getComSalePriceFloorHT(), true));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Prix de référence du lot <b>sans</b> ses sous-articles : chez OMRAN {@code ComSalePrice} d'un lot =
+     * {@code SalePrice} + Σ sous-articles ({@code Yes.Stk.Building/Item.cs}), vérifié sur toute la base.
+     * Un dossier compte ses sous-articles à part ({@code UnderItemsPrice}) : sans ce retrait, deux fois.
+     */
+    public static Optional<PrixDeReference> prixDuLotSeul(StkItem lot, List<StkItem> enfants) {
+        return prixDeReference(lot).map(prix -> {
+            BigDecimal ttcEnfants = BigDecimal.ZERO;
+            BigDecimal htEnfants = BigDecimal.ZERO;
+            for (StkItem enfant : enfants) {
+                BigDecimal ttc = prix.estPlancher() ? enfant.getComSalePriceFloor() : enfant.getComSalePrice();
+                BigDecimal ht = prix.estPlancher() ? enfant.getComSalePriceFloorHT() : enfant.getComSalePriceHT();
+                ttcEnfants = ttcEnfants.add(ttc != null ? ttc : BigDecimal.ZERO);
+                htEnfants = htEnfants.add(ht != null ? ht : BigDecimal.ZERO);
+            }
+            BigDecimal ht = prix.htRenseigne() != null ? prix.htRenseigne().subtract(htEnfants) : null;
+            return new PrixDeReference(prix.ttc().subtract(ttcEnfants), ht, prix.estPlancher());
+        });
     }
 
     /** Prix de référence TTC, ou 0 s'il n'y en a pas (sous-articles, devis sans prix imposé). */

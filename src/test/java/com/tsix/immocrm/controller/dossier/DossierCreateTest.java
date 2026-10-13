@@ -49,6 +49,8 @@ class DossierCreateTest {
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
+    private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -96,8 +98,6 @@ class DossierCreateTest {
     @Autowired
     private ComFolderRepository folderRepository;
 
-    @Autowired
-    private com.tsix.immocrm.repositories.str.StrStatusRepository strStatusRepository;
 
     private StkItemType itemType;
     private StkItemCategory itemCategory;
@@ -105,6 +105,8 @@ class DossierCreateTest {
 
     @BeforeEach
     void setUp() {
+        // Sans RESERVATION la création est refusée (500), comme chez OMRAN.
+        fixtureStatuts.reservation();
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-CREATE-TEST");
@@ -274,14 +276,6 @@ class DossierCreateTest {
      */
     @Test
     void create_historiseLeStatutDansLesDeuxTables() throws Exception {
-        // Sans ce statut, la création n'historise rien du tout : enregistrerHistoriqueStatut est
-        // court-circuité quand RESERVATION est introuvable (garde défensive de genererCodeDossier).
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-HISTO-TEST");
 
@@ -322,12 +316,6 @@ class DossierCreateTest {
 
     @Test
     void create_setsInitialStatusToReservation() throws Exception {
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-STATUT-INIT-TEST");
 
