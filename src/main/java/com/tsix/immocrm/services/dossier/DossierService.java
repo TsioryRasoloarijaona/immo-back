@@ -81,11 +81,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -346,7 +349,7 @@ public class DossierService {
         tierRepository.save(client);
 
         StkItem principal = articles.get(0);
-        List<StkItem> annexes = articles.size() > 1 ? List.copyOf(articles.subList(1, articles.size())) : List.of();
+        List<StkItem> annexes = annexesDuDossier(principal, articles.subList(1, articles.size()));
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
         folder.setDocDate(LocalDate.now(clock).atStartOfDay());
@@ -382,8 +385,25 @@ public class DossierService {
 
         cloturerLaProspection(prospection);
 
-        List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
+        List<ArticleSummaryDto> articleDtos = Stream.concat(Stream.of(principal), annexes.stream())
+                .map(DossierService::toArticleSummary).toList();
         return toDetail(folder, articleDtos);
+    }
+
+    /**
+     * Annexes saisies, puis tous les sous-articles libres du lot ({@code ParentId}) même non saisis : OMRAN
+     * les prend tous ({@code Sale.cs:SetStkItemId}) ; ils entrent dans les prix des sous-articles.
+     */
+    private List<StkItem> annexesDuDossier(StkItem principal, List<StkItem> saisies) {
+        List<StkItem> annexes = new ArrayList<>(saisies);
+        Set<UUID> deja = new HashSet<>();
+        deja.add(principal.getId());
+        saisies.forEach(a -> deja.add(a.getId()));
+        stkItemRepository.findByParentId(principal.getId()).stream()
+                .filter(enfant -> enfant.getComFolderId() == null && deja.add(enfant.getId()))
+                .sorted(Comparator.comparing(StkItem::getCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .forEach(annexes::add);
+        return List.copyOf(annexes);
     }
 
     /**

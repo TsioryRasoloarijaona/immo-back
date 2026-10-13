@@ -98,12 +98,12 @@ public class FicheTropPercuService {
         }
 
         BigDecimal prixApresRemise = folder.getPriceAfterDiscount() != null ? folder.getPriceAfterDiscount() : BigDecimal.ZERO;
-        BigDecimal resteAPayer = prixApresRemise.subtract(totalRegle);
 
-        // Trop-perçu : le calcul unique de GET .../montants (ComSaleFolderView) ; 0 pour un dossier débiteur.
+        // Trop-perçu et reste : le calcul unique de GET .../montants (frais compris) ; l'excédent est le trop-perçu.
         MontantsDossierDto montants = dossierService.montants(dossierId);
         BigDecimal montantTropPercu = montants.tropPercu();
         BigDecimal fraisTotal = montants.totalGeneral().subtract(montants.totalSoumisReglePrixTTC());
+        BigDecimal resteAPayer = montants.netAPayer().reste().max(BigDecimal.ZERO);
 
         return new FicheTropPercuData(
                 folder.getCode(),

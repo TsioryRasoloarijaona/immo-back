@@ -43,6 +43,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -256,6 +257,32 @@ class FicheTropPercuTest {
                 .andExpect(jsonPath("$.totalGeneral").value(950000.0))
                 .andExpect(jsonPath("$.totalSoumisReglePrixTTC").value(950000.0))
                 .andExpect(jsonPath("$.parCategorie[?(@.categorie=='REMB-TP-5')].montant").value(-50000.0));
+    }
+
+    /** Revue : frais payés en plus du prix = ni trop-perçu ni reste négatif ; même source que GET .../montants. */
+    @Test
+    void fraisPayes_resteNulEtAucunTropPercu() {
+        UUID dossierId = setUpDossier("6", "1000000.00");
+        ComSettlementCategory frais = new ComSettlementCategory();
+        frais.setId(UUID.randomUUID());
+        frais.setCode("FRAIS-TP-6");
+        frais.setIsCredit(true);
+        frais.setIsSaleExpense(true);
+        frais.setExcludeFromPrice(true);
+        categoryRepository.save(frais);
+        ComDocument ligneFrais = new ComDocument();
+        ligneFrais.setId(UUID.randomUUID());
+        ligneFrais.setComFolder(echeance.getComFolder());
+        ligneFrais.setAmount(new BigDecimal("20000.00"));
+        ligneFrais.setExcludeFromPrice(true);
+        ligneFrais.setComSettlementCategory(frais);
+        documentRepository.save(ligneFrais);
+        reglement(ligneFrais, true, "20000.00");
+
+        assertThat(ficheTropPercuService.collect(dossierId)).satisfies(fiche -> assertAll(
+                () -> assertThat(fiche.montantTropPercu()).isEqualByComparingTo("0"),
+                () -> assertThat(fiche.resteAPayer()).isEqualByComparingTo("0"),
+                () -> assertThat(fiche.totalRegle()).isEqualByComparingTo("1020000")));
     }
 
     @Test

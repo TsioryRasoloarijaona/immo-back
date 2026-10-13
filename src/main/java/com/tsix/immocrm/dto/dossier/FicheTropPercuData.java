@@ -31,7 +31,7 @@ public record FicheTropPercuData(
         List<LigneReglement> lignesReglement,
         /** Somme brute, non signée, des lignes de règlement : le « Total » du tableau des versements. */
         BigDecimal totalRegle,
-        /** {@code PriceAfterDiscount - totalRegle} : négatif quand il y a trop perçu. */
+        /** Reste du net à payer de {@code GET .../montants} (frais compris), ramené à 0 : l'excédent est le trop-perçu. */
         BigDecimal resteAPayer
 ) {
     public record Acquereur(String titre, String nom, String pieceIdentite) {

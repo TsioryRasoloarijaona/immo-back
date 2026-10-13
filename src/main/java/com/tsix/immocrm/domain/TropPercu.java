@@ -59,6 +59,8 @@ public final class TropPercu {
             return Resultat.AUCUN;
         }
         // TropPercuRest = TropPercu − TropPercuSettled, TropPercuSettled = −Σ réglé des échéances au débit.
+        // Écart voulu à la vue : elle ne compte que les remboursements passés par BuyDocument ; ici un
+        // remboursement réglé par décaissement compte aussi (voir RAPPORT-vente-socle.md).
         BigDecimal tropPercu = reste.negate();
         BigDecimal tropPercuRegleVue = regle(lignes, Ligne::auDebit).negate();
         return new Resultat(tropPercu, tropPercu.add(tropPercuRegleVue));

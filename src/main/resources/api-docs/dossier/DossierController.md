@@ -202,6 +202,11 @@ contractuel, schéma texte, constantes et signatures de création. Les articles 
 `articleIds` deviennent les sous-articles du lot principal (ligne `ComFolderItem`, historique
 « AFFECTATION »). Voir `FEATURE-interop-omran-ecritures.md` §3.
 
+**Sous-articles du lot** : comme le logiciel de bureau, tout sous-article libre du lot principal
+(`StkItem.ParentId` = le lot, sans dossier) est rattaché même s'il n'est pas dans `articleIds` ; son
+prix de référence entre dans le prix des sous-articles, donc dans le prix avant remise et la superficie
+globale. `prix` doit en tenir compte (avec `remisePercent`, il est le total annexes comprises).
+
 **Type du tiers** : le client (et chaque acquéreur) est client tant qu'il a un dossier actif dont le
 statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/dossiers/{id}/statut`).
 
@@ -225,8 +230,8 @@ bureau. Un dossier **sans statut** est refusé (**409**, reprise de données né
 **Type client / prospect, comme OMRAN** (`Sale.cs:ManageTier`), après chaque changement : le client
 principal et chaque acquéreur (`ComFolderCustomer`) qui a au moins un dossier actif (statut ni
 annulation ni résiliation) dont le statut porte l'indicateur « Transforme le prospect en client »
-(`StrStatus.BoolField011`) passe du type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`) au type client
-correspondant (`CLI`, …) ; un client qui n'en a plus aucun redevient prospect. `CfgTierKindId` est
+(`StrStatus.BoolField011`) passe d'un type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`) au type
+`CLI` ; un `CLI` qui n'en a plus aucun redevient `PRO` (`CLIRNT`, `CLIPRM`, `CLIROM` restent). `CfgTierKindId` est
 remis à vide dans les deux cas. Une ligne d'historique distincte (type `STATUT`) le dit : « Prospect
 transformé en client » ou « Retour prospect » (suivie du nom pour un acquéreur) ; la note du
 changement de statut reste intacte.
@@ -509,9 +514,10 @@ Modélisé bande par bande sur le template legacy Stimulsoft `ComSaleFicheTropPe
 attestant que les versements du client dépassent le prix du dossier : état civil de l'acquéreur et
 de ses éventuels co-acquéreurs, désignation complète du bien (avec sous-articles), prix et total des
 frais (réutilise `GET /api/dossiers/{id}/montants` pour le total des frais, jamais re-dérivé), puis
-le détail chronologique de chaque versement et le "Reste à payer" (négatif quand il y a
-effectivement un trop perçu — c'est cette valeur, en valeur absolue, qui est reprise dans le montant
-du trop perçu, y compris en toutes lettres). PDF uniquement — pas de variante Word pour ce document.
+le détail chronologique de chaque versement et le "Reste à payer". Le montant du trop perçu (en
+chiffres et en lettres) est le `tropPercu` de `GET .../montants` — formule de la vue `ComSaleFolderView`
+du logiciel de bureau, 0 pour un dossier débiteur ; le "Reste à payer" est le reste du net à payer de
+ce même calcul (frais compris), jamais négatif. PDF uniquement — pas de variante Word pour ce document.
 
 ## getRecuReglement
 

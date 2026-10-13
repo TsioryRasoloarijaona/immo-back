@@ -353,6 +353,43 @@ class DossierCreationOmranTest {
                 () -> assertThat(itemRepository.findById(lot.getId()).orElseThrow().getComFolderId()).isEqualTo(f.getId()));
     }
 
+    /**
+     * Revue : OMRAN {@code SetStkItemId} (Sale.cs:4298) prend tous les sous-articles du lot ({@code ParentId}),
+     * même non cochés dans la requête ; spec interop §3 « StkItem.ParentId = l'article ».
+     */
+    @Test
+    void creation_sousArticleEnfantDuLot_rattacheSansEtreDansLaRequete() throws Exception {
+        fixtureStatuts.reservation();
+        terrasse.setParent(lot);
+        terrasse.setIsUnderItem(true);
+        terrasse.setAlwaysAffected(true);
+        itemRepository.save(terrasse);
+
+        ComFolder f = creer(prospection(null), "869000", lot);
+
+        assertAll(
+                () -> assertThat(itemRepository.findById(terrasse.getId()).orElseThrow().getComFolderId())
+                        .isEqualTo(f.getId()),
+                () -> assertThat(folderItemRepository.findByComFolderId(f.getId())).singleElement()
+                        .satisfies(l -> assertThat(l.getStkItem().getId()).isEqualTo(terrasse.getId())),
+                () -> assertThat(f.getGlobalArea()).isEqualByComparingTo("75"));
+    }
+
+    /** Sale.cs : UnderItemsPrice = somme des sous-articles du lot, saisis ou non. */
+    @Test
+    void creation_sousArticleEnfantDuLot_entreDansLePrixDesSousArticles() throws Exception {
+        fixtureStatuts.reservation();
+        terrasse.setParent(lot);
+        terrasse.setIsUnderItem(true);
+        itemRepository.save(terrasse);
+
+        ComFolder f = creer(prospection(null), null, lot);
+
+        assertAll(
+                () -> assertThat(f.getUnderItemsPrice()).isEqualByComparingTo("50000"),
+                () -> assertThat(f.getPriceBeforeDiscount()).isEqualByComparingTo("869000"));
+    }
+
     @Test
     void creation_historiqueAvecAuteurClientArticleEtAffectation() throws Exception {
         StrStatus reservation = fixtureStatuts.reservation();

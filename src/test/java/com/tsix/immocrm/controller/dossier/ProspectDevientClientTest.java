@@ -162,13 +162,30 @@ class ProspectDevientClientTest {
     }
 
     @Test
-    void prospectLocation_devientClientLocation() throws Exception {
+    void prospectLocation_devientClient_commeManageTier() throws Exception {
         statut(CONCRETISATION, true);
-        type("CLIRNT");
+        type(CLIENT);
         CfgTier client = tiers("PRORNT");
         ComFolder folder = dossier(statut(RESERVATION, false), client);
 
         changerStatut(folder, CONCRETISATION);
+
+        assertThat(codeTypeDe(client)).isEqualTo(CLIENT);
+    }
+
+    /** ManageTier ne rétrograde que CLI : un client location sans dossier actif reste CLIRNT. */
+    @Test
+    void desistement_clientLocation_resteClientLocation() throws Exception {
+        StrStatus desistement = statut("DESISTEMENT", false);
+        desistement.setResiliation(true);
+        strStatusRepository.save(desistement);
+        type(PROSPECT);
+        CfgTier client = tiers("CLIRNT");
+        ComFolder folder = dossier(statut(CONCRETISATION, true), client);
+
+        mockMvc.perform(patch(STATUT, folder.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"DESISTEMENT\",\"note\":\"Financement refusé\"}"))
+                .andExpect(status().isOk());
 
         assertThat(codeTypeDe(client)).isEqualTo("CLIRNT");
     }

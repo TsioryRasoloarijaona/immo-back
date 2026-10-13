@@ -41,6 +41,7 @@ class TransitionsValideesTest {
     @Test
     void desistementPossibleDepuisMeilleurtauxCompromisEtCredits() {
         assertThat(java.util.List.of(MEILLEURTAUX, COMPROMIS, CREDIT_EN_COURS, CREDIT_DEBLOQUE))
+                .isNotEmpty()
                 .allMatch(depuis -> TransitionsValidees.estValide(depuis, DESISTEMENT));
     }
 
