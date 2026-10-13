@@ -48,8 +48,8 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer)[A-Z].*"
-                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|avancer)$");
+                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer|attribuer|notifier)[A-Z].*"
+                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|avancer|repartir|appliquer)$");
 
     @Test
     void aucuneMethodeDEcritureNEstMarqueeEnLectureSeule() {

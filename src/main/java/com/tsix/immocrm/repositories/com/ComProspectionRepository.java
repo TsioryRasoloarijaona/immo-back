@@ -157,6 +157,25 @@ public interface ComProspectionRepository extends JpaRepository<ComProspection, 
                                                      @Param("telephone") String telephone,
                                                      @Param("email") String email, Pageable pageable);
 
+    /**
+     * Répartition, « lead déjà connu » : commerciaux des <b>autres</b> lignes ouvertes au même numéro ou au même
+     * e-mail, les plus récentes d'abord. Critères normalisés comme {@link #trouverMemeTelephoneOuEmail}.
+     */
+    @Query("SELECT c.id FROM ComProspection p JOIN p.cfgCommercial c WHERE p.id <> :exclu "
+            + "AND (p.isClosed IS NULL OR p.isClosed = false) AND ("
+            + "(:telephone <> '' AND right(replace(replace(replace(replace(replace(replace(coalesce(p.tempTel, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :telephone) "
+            + "OR (:email <> '' AND lower(trim(coalesce(p.tempEMail, ''))) = :email)) "
+            + "ORDER BY p.docDate DESC")
+    List<UUID> commerciauxDuMemeContact(@Param("exclu") UUID exclu, @Param("telephone") String telephone,
+                                        @Param("email") String email, Pageable pageable);
+
+    /** Date de la pré-prospection la plus récente de chaque commercial (départage de la répartition). */
+    @Query("SELECT p.cfgCommercial.id, MAX(p.docDate) FROM ComProspection p "
+            + "WHERE p.cfgCommercial.id IN :commerciaux "
+            + "AND p.strEntityId IN (SELECT s.id FROM StrEntity s WHERE s.code = 'ComPreProspection') "
+            + "GROUP BY p.cfgCommercial.id")
+    List<Object[]> dernierePreProspectionParCommercial(@Param("commerciaux") List<UUID> commerciaux);
+
     /** Même contact que {@link #trouverDoublonsContact}, DocDate dans [debut, fin[ — sans plafond (réimport idempotent). */
     @Query("SELECT p FROM ComProspection p WHERE p.docDate >= :debut AND p.docDate < :fin "
             + "AND lower(trim(coalesce(p.tempDescription, ''))) = :nom "

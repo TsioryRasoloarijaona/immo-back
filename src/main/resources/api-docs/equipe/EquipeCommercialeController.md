@@ -51,6 +51,19 @@ modifié. Tout le lot ou rien.
 Une ligne est une pré-prospection (elle se distribue) ou une prospection clôturée, ou le commercial
 n'est pas de l'équipe ou pas affecté au projet de la ligne : rien n'est écrit.
 
+## repartir
+
+Répartition automatique : pour chaque pré-prospection demandée, le commercial est choisi par la même
+fonction que la création et l'import. Projet = projet de la tranche ; éligibles = comptes actifs
+« Commercial » / « Commercial Aide » avec un employé et une **affectation explicite** à ce projet (un
+commercial sans restriction n'est pas éligible). Lead déjà connu (même téléphone, 9 derniers chiffres,
+ou même e-mail qu'une autre prospection ouverte ou qu'un prospect suivis par un éligible) → ce
+commercial (`CONNU`) ; sinon le moins de leads à trier (`MOINS_CHARGE`, même définition que la Boîte de
+tri), puis la dernière pré-prospection reçue la plus ancienne, puis le nom ; la charge est mise à jour
+au fil du lot. Une ligne déjà attribuée n'est jamais reprise (`DEJA_ATTRIBUEE`). Avec `simulation`
+(défaut `true`) rien n'est écrit ; sinon historique « Commercial assigné : B — répartition
+automatique » et notification à chaque commercial. 403 si une ligne est hors des projets d'un chef.
+
 ## modifierAffectations
 
 Ajoute ou retire des projets à un commercial, **jamais un remplacement total**. Un chef ne touche que

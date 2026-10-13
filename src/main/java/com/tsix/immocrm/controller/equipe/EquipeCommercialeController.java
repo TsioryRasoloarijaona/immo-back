@@ -8,6 +8,8 @@ import com.tsix.immocrm.dto.equipe.DistribuerRequest;
 import com.tsix.immocrm.dto.equipe.EntonnoirDto;
 import com.tsix.immocrm.dto.equipe.ModifierAffectationsRequest;
 import com.tsix.immocrm.dto.equipe.ReaffecterRequest;
+import com.tsix.immocrm.dto.equipe.RepartirRequest;
+import com.tsix.immocrm.dto.equipe.ResultatRepartitionDto;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto;
 import com.tsix.immocrm.services.equipe.EquipeCommercialeService;
 import com.tsix.immocrm.services.equipe.EquipeEcrituresService;
@@ -120,6 +122,18 @@ public class EquipeCommercialeController {
     })
     public ResultatLotDto reaffecter(@RequestBody ReaffecterRequest request) {
         return ecritures.reaffecter(request);
+    }
+
+    @PostMapping("/repartir")
+    @Operation(summary = "Répartit automatiquement des pré-prospections entre les commerciaux de leur projet")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Attributions (ou aperçu si `simulation`), lignes laissées et totaux."),
+            @ApiResponse(responseCode = "400", description = "Liste vide."),
+            @ApiResponse(responseCode = "404", description = "Une ligne demandée n'existe pas : rien n'est écrit."),
+            @ApiResponse(responseCode = "409", description = "Une ligne n'est plus une pré-prospection ou est clôturée : rien n'est écrit.")
+    })
+    public ResultatRepartitionDto repartir(@RequestBody RepartirRequest request) {
+        return ecritures.repartir(request);
     }
 
     @GetMapping("/affectations")

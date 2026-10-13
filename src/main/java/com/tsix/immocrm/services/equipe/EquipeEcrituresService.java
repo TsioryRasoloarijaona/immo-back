@@ -7,6 +7,10 @@ import com.tsix.immocrm.dto.equipe.ModifierAffectationsRequest;
 import com.tsix.immocrm.dto.equipe.ReaffecterRequest;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto;
 import com.tsix.immocrm.dto.equipe.ResultatLotDto.LigneLotDto;
+import com.tsix.immocrm.dto.equipe.RepartirRequest;
+import com.tsix.immocrm.dto.equipe.ResultatRepartitionDto;
+import com.tsix.immocrm.dto.equipe.ResultatRepartitionDto.AttributionDto;
+import com.tsix.immocrm.dto.equipe.ResultatRepartitionDto.NonAttribueeDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -60,6 +64,7 @@ public class EquipeEcrituresService {
     private final CfgProjectRepository projectRepository;
     private final AdmUserRepository userRepository;
     private final AdmUserHabilitationRepository habilitationRepository;
+    private final RepartitionLeadsService repartition;
 
     public EquipeEcrituresService(EquipeCommercialeService equipeService,
                                   HistoriqueProspection historique,
@@ -67,8 +72,10 @@ public class EquipeEcrituresService {
                                   CfgTierRepository tierRepository,
                                   CfgProjectRepository projectRepository,
                                   AdmUserRepository userRepository,
-                                  AdmUserHabilitationRepository habilitationRepository) {
+                                  AdmUserHabilitationRepository habilitationRepository,
+                                  RepartitionLeadsService repartition) {
         this.equipeService = equipeService;
+        this.repartition = repartition;
         this.historique = historique;
         this.prospectionRepository = prospectionRepository;
         this.tierRepository = tierRepository;
@@ -118,6 +125,49 @@ public class EquipeEcrituresService {
         return ecrire(lignes, request.commercialId(), motif);
     }
 
+    // ---------------------------------------------------------------- répartir
+
+    /**
+     * Répartition automatique d'un lot (FEATURE-repartition-notifications.md §3.2) : même contrôle de périmètre que
+     * distribuer (403 puis 409), puis {@link RepartitionLeadsService#decider} ligne par ligne ; une ligne déjà
+     * attribuée n'est jamais reprise. {@code simulation} (défaut vrai) n'écrit rien.
+     */
+    public ResultatRepartitionDto repartir(RepartirRequest request) {
+        List<ComProspection> lignes = lignesDemandees(request.preProspectionIds());
+        boolean simulation = !Boolean.FALSE.equals(request.simulation());
+        PerimetreEquipe perimetre = equipeService.perimetre();
+
+        verifierPerimetre(lignes, perimetre);
+        for (ComProspection ligne : lignes) {
+            ProspectionService.verifierEncorePreProspection(ligne);
+            verifierOuverte(ligne);
+        }
+        RepartitionLeadsService.Lot lot = repartition.nouveauLot();
+        List<RepartitionLeadsService.Decision> decisions = new ArrayList<>();
+        List<AttributionDto> attributions = new ArrayList<>();
+        List<NonAttribueeDto> nonAttribuees = new ArrayList<>();
+        List<ComProspection> ecrites = new ArrayList<>();
+        for (ComProspection ligne : lignes) {
+            RepartitionLeadsService.Decision d = repartition.decider(ligne, lot);
+            decisions.add(d);
+            if (!d.estAttribuee()) {
+                nonAttribuees.add(new NonAttribueeDto(ligne.getId(), ligne.getCode(), d.raison()));
+                continue;
+            }
+            attributions.add(new AttributionDto(ligne.getId(), ligne.getCode(), d.commercialId(), d.commercialNom(),
+                    d.motif()));
+            if (!simulation) {
+                repartition.appliquer(ligne, d);
+                ecrites.add(ligne);
+            }
+        }
+        if (!simulation) {
+            repartition.publier(perimetre.appelantId(), ecrites, List.of());
+        }
+        return new ResultatRepartitionDto(simulation, attributions, nonAttribuees,
+                RepartitionLeadsService.parCommercial(decisions));
+    }
+
     private static void verifierPerimetre(List<ComProspection> lignes, PerimetreEquipe perimetre) {
         for (ComProspection ligne : lignes) {
             perimetre.verifierProjet(projetDe(ligne.getStkHierarchy()), LIGNE + ligne.getCode());
@@ -140,6 +190,7 @@ public class EquipeEcrituresService {
                 .orElseThrow(() -> new InvalidRequestException("Commercial (CfgTier) introuvable: " + commercialId));
         String nouveauNom = TierNomFormatter.nom(nouveau);
         List<LigneLotDto> ecrites = new ArrayList<>();
+        List<ComProspection> modifiees = new ArrayList<>();
         for (ComProspection ligne : lignes) {
             CfgTier ancien = ligne.getCfgCommercial();
             if (ancien != null && ancien.getId().equals(nouveau.getId())) {
@@ -156,7 +207,9 @@ public class EquipeEcrituresService {
                         ancienNom + " → " + nouveauNom + motif);
             }
             ecrites.add(new LigneLotDto(ligne.getId(), ligne.getCode(), ancienNom));
+            modifiees.add(ligne);
         }
+        repartition.publier(PerimetreCommercialService.admUserIdCourant().orElse(null), modifiees, List.of());
         return new ResultatLotDto(ecrites.size(), nouveau.getId(), nouveauNom, ecrites);
     }
 

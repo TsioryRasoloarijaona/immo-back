@@ -3,6 +3,7 @@ package com.tsix.immocrm.security;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -67,6 +68,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Un préflight CORS ne porte jamais le cookie : sans cette règle, tout appel cross-origin casse.
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
+                        // Fin d'un flux SSE (/api/notifications/flux) : redispatch ASYNC d'une requête déjà autorisée,
+                        // sans cookie relu ; sans cette règle il finirait en 401 sur une réponse déjà envoyée.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé. health reste muet tant que

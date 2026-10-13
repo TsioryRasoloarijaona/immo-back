@@ -871,6 +871,33 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+CREATE TABLE [dbo].[AppNotification](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[AdmUserId] [uniqueidentifier] NOT NULL,
+	[Type] [nvarchar](40) COLLATE French_CI_AS NOT NULL,
+	[Titre] [nvarchar](200) COLLATE French_CI_AS NOT NULL,
+	[Message] [nvarchar](1000) COLLATE French_CI_AS NOT NULL,
+	[Lien] [nvarchar](300) COLLATE French_CI_AS NULL,
+	[CreeLe] [datetime2](7) NOT NULL,
+	[LueLe] [datetime2](7) NULL,
+ CONSTRAINT [PK_AppNotification] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+CREATE NONCLUSTERED INDEX [IX_AppNotification_AdmUserId_LueLe_CreeLe] ON [dbo].[AppNotification]
+(
+	[AdmUserId] ASC,
+	[LueLe] ASC,
+	[CreeLe] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE TABLE [dbo].[BuyDocument](
 	[PKey] [uniqueidentifier] NOT NULL,
 	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,

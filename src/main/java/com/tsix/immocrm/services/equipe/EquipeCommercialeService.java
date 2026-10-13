@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -87,14 +88,8 @@ public class EquipeCommercialeService {
         UUID appelant = PerimetreCommercialService.admUserIdCourant()
                 .orElseThrow(() -> new ForbiddenException("Compte applicatif non identifiable."));
 
-        Map<UUID, AdmUser> comptes = new HashMap<>();
-        Map<UUID, Set<String>> roles = new HashMap<>();
-        for (AdmUserRole ur : userRoleRepository.findAllAvecCompteEtRole()) {
-            comptes.put(ur.getAdmUser().getId(), ur.getAdmUser());
-            if (ur.getAdmRole().getCode() != null) {
-                roles.computeIfAbsent(ur.getAdmUser().getId(), k -> new HashSet<>()).add(ur.getAdmRole().getCode());
-            }
-        }
+        ComptesEtRoles lus = comptesEtRoles();
+        Map<UUID, Set<String>> roles = lus.roles();
         boolean exempte = RolesExemptesPerimetre.exempte(roles.getOrDefault(appelant, Set.of()));
 
         List<CfgProject> actifs = projectRepository.findDesEntitesActives();
@@ -109,7 +104,7 @@ public class EquipeCommercialeService {
                 .sorted(Comparator.comparing(p -> Objects.toString(p.code(), "")))
                 .toList();
 
-        List<MembreEquipe> candidats = candidats(comptes, roles);
+        List<MembreEquipe> candidats = candidats(lus.comptes(), roles, RolesEquipe::estMembrePossible);
         List<MembreEquipe> membres = candidats.stream()
                 .filter(m -> exempte || m.projetIds().stream().anyMatch(projetIds::contains))
                 .toList();
@@ -120,11 +115,41 @@ public class EquipeCommercialeService {
         return new PerimetreEquipe(appelant, exempte, projets, projetIds, membres, horsEquipe);
     }
 
-    /** Comptes actifs portant un rôle de membre, triés par nom. */
-    private List<MembreEquipe> candidats(Map<UUID, AdmUser> comptes, Map<UUID, Set<String>> roles) {
+    /**
+     * Comptes actifs Commercial / Commercial Aide avec leurs projets, sans égard à l'appelant : même liste que
+     * les membres possibles de {@link #perimetre()} (répartition automatique, FEATURE-repartition-notifications.md §3.1).
+     */
+    public List<MembreEquipe> membresActifs() {
+        return comptesActifs(RolesEquipe::estMembrePossible);
+    }
+
+    /** Comptes actifs dont les rôles ({@code AdmUserRole}) satisfont {@code roles}, avec leurs projets, triés par nom. */
+    public List<MembreEquipe> comptesActifs(Predicate<Set<String>> roles) {
+        ComptesEtRoles lus = comptesEtRoles();
+        return candidats(lus.comptes(), lus.roles(), roles);
+    }
+
+    private record ComptesEtRoles(Map<UUID, AdmUser> comptes, Map<UUID, Set<String>> roles) {
+    }
+
+    private ComptesEtRoles comptesEtRoles() {
+        Map<UUID, AdmUser> comptes = new HashMap<>();
+        Map<UUID, Set<String>> roles = new HashMap<>();
+        for (AdmUserRole ur : userRoleRepository.findAllAvecCompteEtRole()) {
+            comptes.put(ur.getAdmUser().getId(), ur.getAdmUser());
+            if (ur.getAdmRole().getCode() != null) {
+                roles.computeIfAbsent(ur.getAdmUser().getId(), k -> new HashSet<>()).add(ur.getAdmRole().getCode());
+            }
+        }
+        return new ComptesEtRoles(comptes, roles);
+    }
+
+    /** Comptes actifs portant un rôle retenu par {@code retenus}, triés par nom. */
+    private List<MembreEquipe> candidats(Map<UUID, AdmUser> comptes, Map<UUID, Set<String>> roles,
+                                         Predicate<Set<String>> retenus) {
         List<AdmUser> actifs = comptes.values().stream()
                 .filter(u -> !Boolean.TRUE.equals(u.getDisabled()))
-                .filter(u -> RolesEquipe.estMembrePossible(roles.getOrDefault(u.getId(), Set.of())))
+                .filter(u -> retenus.test(roles.getOrDefault(u.getId(), Set.of())))
                 .toList();
         if (actifs.isEmpty()) {
             return List.of();
@@ -136,7 +161,7 @@ public class EquipeCommercialeService {
         return actifs.stream()
                 .map(u -> new MembreEquipe(u.getId(), u.getCode(), nom(u),
                         u.getCfgEmployee() != null ? u.getCfgEmployee().getId() : null,
-                        Set.copyOf(roles.get(u.getId())),
+                        Set.copyOf(roles.getOrDefault(u.getId(), Set.of())),
                         Set.copyOf(projetsParCompte.getOrDefault(u.getId(), Set.of()))))
                 .sorted(Comparator.comparing(m -> Objects.toString(m.nom(), "")))
                 .toList();
