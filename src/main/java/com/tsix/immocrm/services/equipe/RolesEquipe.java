@@ -22,6 +22,11 @@ public final class RolesEquipe {
         return roles.stream().anyMatch(MEMBRES::contains);
     }
 
+    /** Créateur à qui revient la pré-prospection qu'il saisit sur un de ses projets (FEATURE-repartition-notifications.md §3.2). */
+    public static boolean estCommercialOuChef(Collection<String> roles) {
+        return estMembrePossible(roles) || roles.contains(CHEF);
+    }
+
     /** Un chef ne modifie ni un autre chef (ni lui-même), ni un administrateur, ni la direction générale. */
     static boolean estProtege(Collection<String> roles) {
         return roles.contains(CHEF) || RolesExemptesPerimetre.exempte(roles);

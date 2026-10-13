@@ -69,7 +69,7 @@ public class EquipeOutils {
         this.prospectionRepository = prospectionRepository;
     }
 
-    CfgProject projet(String code) {
+    public CfgProject projet(String code) {
         CfgCompany societe = new CfgCompany();
         societe.setId(UUID.randomUUID());
         societe.setCode("SOC-" + code);
@@ -85,7 +85,7 @@ public class EquipeOutils {
         return projectRepository.save(projet);
     }
 
-    CfgTranche tranche(String code, CfgProject projet) {
+    public CfgTranche tranche(String code, CfgProject projet) {
         CfgTranche tranche = new CfgTranche();
         tranche.setId(UUID.randomUUID());
         tranche.setCode(code);
@@ -102,7 +102,7 @@ public class EquipeOutils {
     }
 
     /** Compte actif, rattaché à un employé (CfgTier) du même code, avec ses rôles. */
-    AdmUser compte(String code, String... roles) {
+    public AdmUser compte(String code, String... roles) {
         return compte(code, tier("EMP-" + code), false, roles);
     }
 
@@ -128,7 +128,7 @@ public class EquipeOutils {
         return user;
     }
 
-    void affecter(AdmUser user, CfgProject... projets) {
+    public void affecter(AdmUser user, CfgProject... projets) {
         for (CfgProject projet : projets) {
             AdmUserHabilitation habilitation = new AdmUserHabilitation();
             habilitation.setId(UUID.randomUUID());
@@ -143,7 +143,7 @@ public class EquipeOutils {
     }
 
     /** Pré-prospection avec un prospect lié (transformable). */
-    ComProspection preProspection(String code, CfgTranche tranche, LocalDateTime docDate) {
+    public ComProspection preProspection(String code, CfgTranche tranche, LocalDateTime docDate) {
         ComProspection p = ligne(code, tranche, docDate);
         p.setStrEntityId(DiscriminantPreProspection.ID_PRE_PROSPECTION);
         p.setCfgProspect(tier("PROS-" + code));
@@ -168,7 +168,7 @@ public class EquipeOutils {
         return p;
     }
 
-    static RequestPostProcessor connecte(AdmUser user, String... roles) {
+    public static RequestPostProcessor connecte(AdmUser user, String... roles) {
         AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getCode(),
                 user.getCfgEmployee() != null ? user.getCfgEmployee().getId() : null, false, true, 0);
         List<GrantedAuthority> autorites = Arrays.stream(roles)

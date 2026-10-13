@@ -11,6 +11,8 @@ import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
+import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.LecteurCsvLeads.LigneLead;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
 import com.tsix.immocrm.utils.Requis;
@@ -62,13 +64,16 @@ public class ImportPreProspectionService {
     private final ComProspectionKindRepository kindRepository;
     private final ComProspectionOriginRepository originRepository;
     private final ComActionMessageTypeRepository typeRepository;
+    private final RepartitionLeadsService repartition;
 
     public ImportPreProspectionService(ProspectionService prospectionService,
                                        CfgTrancheRepository trancheRepository,
                                        ComProspectionKindRepository kindRepository,
                                        ComProspectionOriginRepository originRepository,
-                                       ComActionMessageTypeRepository typeRepository) {
+                                       ComActionMessageTypeRepository typeRepository,
+                                       RepartitionLeadsService repartition) {
         this.prospectionService = prospectionService;
+        this.repartition = repartition;
         this.trancheRepository = trancheRepository;
         this.kindRepository = kindRepository;
         this.originRepository = originRepository;
@@ -138,18 +143,41 @@ public class ImportPreProspectionService {
         // Les lignes écrites par cet import ne comptent pas pour classer les suivantes : sinon le
         // statut dépendrait de la sélection et divergerait de l'aperçu.
         EtatImport etat = new EtatImport(tranche, rattachement, selection,
-                new HashMap<>(), new HashMap<>(), new HashSet<>());
+                new HashMap<>(), new HashMap<>(), new HashSet<>(),
+                tranche != null ? repartition.nouveauLot() : null, new ArrayList<>(), new ArrayList<>(),
+                new ArrayList<>());
         List<LigneImportDto> resultat = new ArrayList<>();
         for (LigneLead l : lignes) {
             resultat.add(traiterLigne(l, etat));
         }
-        return rapport(lignes, tranche, resultat, selection);
+        if (tranche != null) {
+            repartition.publier(PerimetreCommercialService.admUserIdCourant().orElse(null),
+                    etat.attribuees(), etat.nonAttribuees());
+        }
+        return rapport(lignes, tranche, resultat, selection, etat);
     }
 
-    /** État partagé entre les lignes d'un même import (doublons internes au fichier, lignes créées). */
+    /**
+     * État partagé entre les lignes d'un même import (doublons internes au fichier, lignes créées, répartition).
+     * {@code lot} nul = aperçu.
+     */
     private record EtatImport(CfgTranche tranche, Rattachement rattachement, List<StatutLigneImport> selection,
                               Map<String, Integer> contactsVus, Map<String, Integer> soumissionsVues,
-                              Set<UUID> creeesIci) {
+                              Set<UUID> creeesIci, RepartitionLeadsService.Lot lot,
+                              List<RepartitionLeadsService.Decision> decisions,
+                              List<ComProspection> attribuees, List<ComProspection> nonAttribuees) {
+    }
+
+    /** Répartition obligatoire de chaque ligne créée (FEATURE-repartition-notifications.md §3.2). */
+    private void repartir(ComProspection creee, EtatImport etat) {
+        RepartitionLeadsService.Decision decision = repartition.decider(creee, etat.lot());
+        repartition.appliquer(creee, decision);
+        etat.decisions().add(decision);
+        if (decision.estAttribuee()) {
+            etat.attribuees().add(creee);
+        } else {
+            etat.nonAttribuees().add(creee);
+        }
     }
 
     private LigneImportDto traiterLigne(LigneLead l, EtatImport etat) {
@@ -200,6 +228,7 @@ public class ImportPreProspectionService {
         } else if (etat.tranche() != null) {
             creee = creerPreProspection(l, telephone, etat);
             creeesIci.add(creee.getId());
+            repartir(creee, etat);
         }
         return ligne(l, telephone, statut, message, creee, ids(existants));
     }
@@ -225,7 +254,8 @@ public class ImportPreProspectionService {
     }
 
     private RapportImportPreProspectionsDto rapport(List<LigneLead> lignes, CfgTranche tranche,
-                                                    List<LigneImportDto> resultat, List<StatutLigneImport> selection) {
+                                                    List<LigneImportDto> resultat, List<StatutLigneImport> selection,
+                                                    EtatImport etat) {
         Set<String> formulaires = new LinkedHashSet<>();
         lignes.stream().map(LigneLead::formulaire).filter(f -> f != null).forEach(formulaires::add);
 
@@ -268,7 +298,9 @@ public class ImportPreProspectionService {
                 compter(resultat, StatutLigneImport.ERREUR),
                 resultat,
                 tranche != null ? selection : null,
-                (int) resultat.stream().filter(l -> l.preProspectionId() != null).count());
+                (int) resultat.stream().filter(l -> l.preProspectionId() != null).count(),
+                RepartitionLeadsService.parCommercial(etat.decisions()),
+                etat.nonAttribuees().size());
     }
 
     /** {@code "APF FORM 02*2026 - GISK"} → la tranche de code {@code APF}, si elle existe. */

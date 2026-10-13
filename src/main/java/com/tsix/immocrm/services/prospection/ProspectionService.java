@@ -78,6 +78,7 @@ import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -184,6 +185,8 @@ public class ProspectionService {
     // Événement plutôt qu'appel direct : le mail ne part que si l'interaction est écrite, et
     // l'envoi ne peut rien annuler (FEATURE-mail-confirmation-visite.md §3).
     private final ApplicationEventPublisher publisher;
+    // Créateur commercial habilité, sinon répartition automatique (FEATURE-repartition-notifications.md §3.2).
+    private final RepartitionLeadsService repartition;
     private final Clock clock;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
@@ -210,8 +213,10 @@ public class ProspectionService {
                                ApplicationEventPublisher publisher,
                                AlerteRelanceService alerteRelanceService,
                                HistoriqueProspection historiqueProspection,
+                               RepartitionLeadsService repartition,
                                Clock clock) {
         this.clock = clock;
+        this.repartition = repartition;
         this.historiqueProspection = historiqueProspection;
         this.alerteRelanceService = alerteRelanceService;
         this.prospectionViewRepository = prospectionViewRepository;
@@ -747,6 +752,7 @@ public class ProspectionService {
     @Transactional
     public PreProspectionCreeeDto creerPreProspection(CreerPreProspectionRequest request) {
         ComProspection p = nouvellePreProspection(request, LocalDateTime.now(clock));
+        repartition.attribuerALaCreation(p);
         List<DoublonPreProspectionDto> doublons = visibles(doublonsContact(p)).stream()
                 .map(d -> new DoublonPreProspectionDto(d.getId(), d.getCode(), d.getUserCreateDateTime()))
                 .toList();

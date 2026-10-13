@@ -1,6 +1,7 @@
 package com.tsix.immocrm.dto.prospection;
 
 import com.tsix.immocrm.domain.StatutLigneImport;
+import com.tsix.immocrm.dto.equipe.RepartitionCommercialDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -38,6 +39,11 @@ public record RapportImportPreProspectionsDto(
         List<StatutLigneImport> statutsImportes,
         @Schema(description = "Lignes réellement écrites (`preProspectionId` non null). 0 dans l'aperçu.",
                 example = "18")
-        int creees
+        int creees,
+        @Schema(description = "Leads créés attribués par la répartition automatique, par commercial. Vide dans l'aperçu.")
+        List<RepartitionCommercialDto> repartition,
+        @Schema(description = "Leads créés restés sans commercial (sans projet ou aucun éligible). 0 dans l'aperçu.",
+                example = "2")
+        int nonAttribuees
 ) {
 }
