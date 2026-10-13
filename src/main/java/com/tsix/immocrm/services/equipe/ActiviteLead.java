@@ -29,8 +29,8 @@ public final class ActiviteLead {
         return reference.isBefore(seuil(maintenant));
     }
 
-    /** Jours entiers écoulés ; jamais négatif (une date future compte pour 0). */
+    /** Jours calendaires écoulés (comme ADistribuerService) ; jamais négatif (une date future compte pour 0). */
     public static int joursSansAction(LocalDateTime reference, LocalDateTime maintenant) {
-        return (int) Math.max(0L, ChronoUnit.DAYS.between(reference, maintenant));
+        return (int) Math.max(0L, ChronoUnit.DAYS.between(reference.toLocalDate(), maintenant.toLocalDate()));
     }
 }
