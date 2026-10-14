@@ -155,9 +155,9 @@ public final class MappingListeDossier {
                 .met(PRIX_ARTICLE_AVANT_REMISE, f.getItemPrice())
                 .met(PRIX_SOUS_ARTICLES_AVANT_REMISE, f.getUnderItemsPrice())
                 .met(TVA, f.getVATRatio())
-                .met(PRIX_M2_HT, PrixAuMetreCarre.article(f.getItemPriceAfterHT(), f.getArea()))
-                .met(PRIX_ARTICLE_HT, f.getItemPriceAfterHT())
-                .met(PRIX_SOUS_ARTICLES_HT, f.getUnderItemsPriceAfterHT())
+                .met(PRIX_M2_HT, f.getUnitCostHT())
+                .met(PRIX_ARTICLE_HT, f.getItemPriceHT())
+                .met(PRIX_SOUS_ARTICLES_HT, f.getUnderItemsPriceHT())
                 .met(PRIX_HT, f.getPriceHT())
                 .met(PRIX_M2_TTC, PrixAuMetreCarre.article(f.getItemPriceAfter(), f.getArea()))
                 .met(PRIX_ARTICLE_TTC, f.getItemPriceAfter())
@@ -312,12 +312,12 @@ public final class MappingListeDossier {
         private PrixAuMetreCarre() {
         }
 
-        /** {@code prix / IIF(Area = 0, 1, Area)} ; superficie absente traitée comme nulle. */
+        /** {@code prix / IIF(Area = 0, 1, Area)} : Area NULL rend NULL en SQL, seul 0 devient 1. */
         static BigDecimal article(BigDecimal prix, BigDecimal superficie) {
-            if (prix == null) {
+            if (prix == null || superficie == null) {
                 return null;
             }
-            BigDecimal diviseur = superficie == null || superficie.signum() == 0 ? BigDecimal.ONE : superficie;
+            BigDecimal diviseur = superficie.signum() == 0 ? BigDecimal.ONE : superficie;
             return prix.divide(diviseur, ECHELLE, RoundingMode.HALF_UP);
         }
 

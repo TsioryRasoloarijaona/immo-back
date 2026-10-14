@@ -8,7 +8,7 @@ Filtre optionnellement par statut (codes `StrStatus`, multi-sélection), commerc
 
 **Dossiers sortis exclus par défaut** : sans filtre `statut`, les dossiers dont le statut est une annulation ou une résiliation (`StrStatus.BoolField002` / `BoolField003`) n'apparaissent pas, comme dans OMRAN. `inclureSortis=true` les réintègre ; un `statut` explicite (par exemple `ANNULATION`) est toujours servi tel quel.
 
-**Lots libres** : `lignes=DOSSIERS_ET_LIBRES` ajoute, après les dossiers, une ligne par article racine sans dossier (`StkItem.ComFolderId` vide, hors annexes) ; `lignes=LIBRES` ne sert qu'eux. Sur ces lignes `libre = true` et `id` est l'id de l'article (à ouvrir sur la fiche article, pas sur la fiche dossier). Un filtre qui ne peut viser qu'un dossier (commercial, période) les écarte. La pagination court sur la concaténation dossiers puis lots libres.
+**Lots libres** : `lignes=DOSSIERS_ET_LIBRES` ajoute, après les dossiers, une ligne par article racine sans dossier (`StkItem.ComFolderId` vide, hors annexes) ; `lignes=LIBRES` ne sert qu'eux. Sur ces lignes `libre = true` et `id` est l'id de l'article (à ouvrir sur la fiche article, pas sur la fiche dossier). Un article principal d'un dossier non sorti n'est jamais libre, même sans `StkItem.ComFolderId`. Le filtre commercial les écarte ; la période (`champDate`, `dateDebut`, `dateFin`, `dateVide`) ne les filtre pas, faute de date de dossier. La pagination court sur la concaténation dossiers puis lots libres.
 
 **Périmètre commercial** : si l'appelant est restreint (`UtilisateurCourantDto.perimetreRestreint = true`), seuls les dossiers et lots de ses projets affectés sont servis. Les dossiers dont le projet ne se résout pas restent visibles de tous.
 

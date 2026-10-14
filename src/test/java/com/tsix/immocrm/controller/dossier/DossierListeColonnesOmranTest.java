@@ -164,6 +164,25 @@ class DossierListeColonnesOmranTest {
                 .andExpect(jsonPath(PREMIER + "prixM2HtAvantRemise").value(10000.0));
     }
 
+    /** Cas réel MBR 2022/00205 dans ComFolderView : « prix de vente HT » = UnitCostHT 12 000, ItemPriceHT 876 000. */
+    @Test
+    void famillePrix_prixDeVenteHtCommeLaVueOmran() throws Exception {
+        ComFolder f = dossier();
+        f.setArea(new BigDecimal("73"));
+        f.setUnitCostHT(new BigDecimal("12000"));
+        f.setItemPriceHT(new BigDecimal("876000"));
+        f.setUnderItemsPriceHT(BigDecimal.ZERO);
+        f.setItemPriceAfterHT(new BigDecimal("750000"));
+        relire();
+
+        mockMvc.perform(get("/api/dossiers").param("search", prefixe)
+                        .param("colonnes", "prixM2Ht,prixArticleHt,prixSousArticlesHt"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(PREMIER + "prixM2Ht").value(12000.0))
+                .andExpect(jsonPath(PREMIER + "prixArticleHt").value(876000.0))
+                .andExpect(jsonPath(PREMIER + "prixSousArticlesHt").value(0.0));
+    }
+
     /** La superficie des annexes (ComFolderItem sous-article) entre au dénominateur : 700 000 / (39 + 11). */
     @Test
     void famillePrix_annexesAjouteesALaSuperficie() throws Exception {

@@ -35,6 +35,9 @@ public class ColonnesCalculeesDossier {
     /** Aucun compte n'a cet id : sans utilisateur connecté, aucune instruction ne le vise. */
     private static final UUID AUCUN_UTILISATEUR = new UUID(0L, 0L);
 
+    /** Ids par requête, sous la limite de 2 100 paramètres de SQL Server (les deux autres paramètres compris). */
+    static final int TAILLE_TRANCHE = 2_000;
+
     // Catégories « communication » d'OMRAN : 1111 communication, 2222 réservation, 3333 livraison, 9999 annulation.
     private static final String REQUETE = """
             SELECT f.PKey,
@@ -100,15 +103,23 @@ public class ColonnesCalculeesDossier {
     }
 
     public Map<UUID, ValeursCalculees> pour(Collection<UUID> ids, UUID admUserId) {
-        if (ids.isEmpty()) {
-            return Map.of();
+        List<UUID> tous = List.copyOf(ids);
+        Map<UUID, ValeursCalculees> parDossier = new HashMap<>();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        // SQL Server refuse plus de 2 100 paramètres liés par requête : l'export (20 000 lignes) passe par tranches.
+        for (int debut = 0; debut < tous.size(); debut += TAILLE_TRANCHE) {
+            List<UUID> tranche = tous.subList(debut, Math.min(debut + TAILLE_TRANCHE, tous.size()));
+            lire(tranche, admUserId, maintenant, parDossier);
         }
+        return parDossier;
+    }
+
+    private void lire(List<UUID> ids, UUID admUserId, LocalDateTime maintenant, Map<UUID, ValeursCalculees> parDossier) {
         List<?> lignes = em.createNativeQuery(REQUETE)
-                .setParameter("ids", List.copyOf(ids))
-                .setParameter("maintenant", LocalDateTime.now(clock))
+                .setParameter("ids", ids)
+                .setParameter("maintenant", maintenant)
                 .setParameter("utilisateur", admUserId != null ? admUserId : AUCUN_UTILISATEUR)
                 .getResultList();
-        Map<UUID, ValeursCalculees> parDossier = new HashMap<>();
         for (Object ligne : lignes) {
             Object[] l = (Object[]) ligne;
             parDossier.put(uuid(l[0]), new ValeursCalculees(
@@ -116,7 +127,6 @@ public class ColonnesCalculeesDossier {
                     date(l[7]), (String) l[8], (String) l[9], entier(l[10]) == 1,
                     vide(l[11]), vide(l[12]), vide(l[13])));
         }
-        return parDossier;
     }
 
     private static UUID uuid(Object brut) {

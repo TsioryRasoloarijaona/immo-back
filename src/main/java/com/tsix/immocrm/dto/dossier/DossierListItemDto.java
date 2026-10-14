@@ -372,19 +372,19 @@ public record DossierListItemDto(
         @Schema(description = "Taux de TVA en fraction (0.2 = 20 %) (ComFolder.VATRatio).", example = "0.2")
         BigDecimal tva,
 
-        @Schema(description = "Prix de vente du m² HT après remise : prix article HT ÷ superficie, calculé.")
+        @Schema(description = "« Prix de vente du m² HT » d'OMRAN : ComFolder.UnitCostHT, avant remise comme la vue.")
         BigDecimal prixM2Ht,
 
-        @Schema(description = "Prix de vente de l'article HT après remise (ComFolder.ItemPriceAfterHT).")
+        @Schema(description = "« Prix de vente article HT » d'OMRAN : ComFolder.ItemPriceHT, avant remise comme la vue.")
         BigDecimal prixArticleHt,
 
-        @Schema(description = "Prix de vente des sous-articles HT après remise (ComFolder.UnderItemsPriceAfterHT).")
+        @Schema(description = "« Prix de vente sous-articles HT » d'OMRAN : ComFolder.UnderItemsPriceHT, comme la vue.")
         BigDecimal prixSousArticlesHt,
 
         @Schema(description = "Prix de vente HT (ComFolder.PriceHT).")
         BigDecimal prixHt,
 
-        @Schema(description = "Prix de vente du m² TTC : prix article TTC ÷ superficie (1 si nulle), comme OMRAN.")
+        @Schema(description = "Prix article TTC après remise ÷ superficie (÷ 1 si 0, null si absente), comme la vue.")
         BigDecimal prixM2Ttc,
 
         @Schema(description = "Prix de vente de l'article TTC après remise (ComFolder.ItemPriceAfter).")

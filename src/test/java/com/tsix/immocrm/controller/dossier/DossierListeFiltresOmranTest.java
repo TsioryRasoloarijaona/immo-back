@@ -134,6 +134,34 @@ class DossierListeFiltresOmranTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
+    /** Un lot libre n'a aucune date de dossier : la période par défaut (mois courant) ne doit pas le masquer. */
+    @Test
+    void lotLibre_resteListeQuelleQueSoitLaPeriode() throws Exception {
+        ComFolder f = dossier("A", StatutDossier.CONCRETISATION);
+        StkItem libre = article(prefixe + "-LIBRE", f.getStkItem());
+        relire();
+
+        mockMvc.perform(get(LISTE).param(SEARCH, prefixe).param("lignes", "LIBRES")
+                        .param("champDate", "RESERVATION")
+                        .param("dateDebut", "2001-01-01T00:00:00").param("dateFin", "2001-01-31T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(libre.getId().toString()));
+    }
+
+    /** Lot d'un dossier sorti : redevenu libre. */
+    @Test
+    void articlePrincipalDUnDossierSorti_estUnLotLibre() throws Exception {
+        ComFolder sorti = dossier("A", StatutDossier.ANNULATION);
+        sorti.getStkItem().setComFolderId(null);
+        relire();
+
+        mockMvc.perform(get(LISTE).param(SEARCH, prefixe).param("lignes", "LIBRES"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(sorti.getStkItem().getId().toString()));
+    }
+
     /** Pagination sur la concaténation : la page 1 de taille 1 est le lot libre. */
     @Test
     void lotLibre_paginationSurLaConcatenation() throws Exception {
