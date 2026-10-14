@@ -5,6 +5,8 @@
 --
 -- ComModification, ComGiftReason, ComGift, ComGiftQuantity, ComFolderGift :
 --   onglets Modifications et Cadeaux de la fiche dossier.
+-- CfgTrancheSettlementCategory : lignes de schema par defaut de la tranche,
+--   lues a la generation initiale du schema de financement.
 -- StlPaymentAuthorizationLine : lue en SQL natif pour refuser la suppression
 --   d'une echeance en decompte ; colonnes reduites, cles etrangeres vers
 --   StlPaymentAuthorization, RntDocument et StlDocument omises.
@@ -95,6 +97,27 @@ IF OBJECT_ID('dbo.ComFolderGift', 'U') IS NULL
      CONSTRAINT [ComFolderGift_ComFolder_FK1] FOREIGN KEY ([ComFolderId]) REFERENCES [dbo].[ComFolder] ([PKey]),
      CONSTRAINT [ComFolderGift__ComGiftReason_FK1] FOREIGN KEY ([ComGiftReasonId]) REFERENCES [dbo].[ComGiftReason] ([PKey]),
      CONSTRAINT [ComFolderGift__ComProspection_FK1] FOREIGN KEY ([ComProspectionId]) REFERENCES [dbo].[ComProspection] ([PKey])
+    );
+GO
+
+IF OBJECT_ID('dbo.CfgTrancheSettlementCategory', 'U') IS NULL
+    CREATE TABLE [dbo].[CfgTrancheSettlementCategory](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [Sorting] [int] NULL,
+        [ComSettlementCategoryId] [uniqueidentifier] NULL,
+        [CfgtrancheId] [uniqueidentifier] NULL,
+        [AmountHT] [decimal](26, 6) NULL,
+        [VatRatio] [decimal](26, 6) NULL,
+        [AmountTTC] [decimal](26, 6) NULL,
+        [Notes] [nvarchar](500) COLLATE French_CI_AS NULL,
+        [UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserCreateDateTime] [datetime] NULL,
+        [UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserUpdateDateTime] [datetime] NULL,
+        [PercentOf] [decimal](26, 6) NULL,
+     CONSTRAINT [CfgTrancheSettlementCategory_PK] PRIMARY KEY CLUSTERED ([PKey] ASC),
+     CONSTRAINT [CfgTrancheSettlementCategory__ComSettlementCategory_FK1] FOREIGN KEY ([ComSettlementCategoryId]) REFERENCES [dbo].[ComSettlementCategory] ([PKey]),
+     CONSTRAINT [CfgTrancheSettlementCategory__Cfgtranche_FK1] FOREIGN KEY ([CfgtrancheId]) REFERENCES [dbo].[CfgTranche] ([PKey])
     );
 GO
 
