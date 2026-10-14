@@ -17,7 +17,7 @@ import java.util.UUID;
 
 /**
  * Écritures d'historique d'un dossier, dans les deux tables qu'alimente OMRAN ({@code StrFolderStatusHistory}
- * via {@code FolderStatusHistory.Historize}, {@code StrHistory}) ; {@code StrWorkflowId} reste nul.
+ * via {@code FolderStatusHistory.Historize}, {@code StrHistory}) ; {@code StrWorkflowId} = la transition paramétrée.
  */
 @Component
 public class HistoriqueDossier {
@@ -59,9 +59,17 @@ public class HistoriqueDossier {
 
     /** {@code StrHistory} d'un statut : {@code StrStatusDescription} = la Description du statut, pas son Code. */
     public void statutGenerique(ComFolder folder, StrStatus statut, String description) {
+        statutGenerique(folder, statut, description, null, null);
+    }
+
+    /** Idem, avec la transition {@code StrWorkFlow} exécutée ({@code RessourceWithWorkFlow.ExecuteWorkflow}). */
+    public void statutGenerique(ComFolder folder, StrStatus statut, String description, UUID workflowId,
+                                String workflowDescription) {
         StrHistory generique = nouvelleLigne(folder, description);
         generique.setStrStatusId(statut.getId());
         generique.setStrStatusDescription(statut.getDescription());
+        generique.setStrWorkflowId(workflowId);
+        generique.setStrWorkflowDescription(workflowDescription);
         strHistoryRepository.save(generique);
     }
 
