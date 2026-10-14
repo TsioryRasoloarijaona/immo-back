@@ -1,0 +1,3 @@
+# DossierCadeauxController
+
+Onglet « Cadeaux » de la fiche dossier (`ComFolderGift`) : cadeau du catalogue, prix, livré, disponibilité, raison, date du bon d'achat, date de livraison, note. Aide OMRAN : « Si la case livré est coché, le champ date livraison devient obligatoire » (400 sinon). Choisir un cadeau reprend son prix et sa disponibilité (quantités reçues − cadeaux livrés > 0, `FolderGift.cs:SetPrice`). Ajouter et supprimer demandent le droit OMRAN « toolAddDeleteGifts », ouvert ici aux rôles Administrateur et Commercial Chef ; la modification est ouverte au périmètre, mais seul ce droit change la raison. Chaque écriture signe le dossier.

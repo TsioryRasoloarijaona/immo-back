@@ -121,4 +121,12 @@ public class ComDocument {
 
     @Column(name = "AdmModuleId")
     private UUID admModuleId;
+
+    // Ligne versée dans un dossier de recouvrement : elle ne se supprime plus (ComDocument.cs:VerifyLinksForDeletion).
+    @Column(name = "StlRecoveryFolderId")
+    private UUID stlRecoveryFolderId;
+
+    // Posé par LigneEcheancierOmran.signerCreation : les numéros de quittance ne se donnent qu'à l'insertion.
+    @Transient
+    private boolean nouvelleLigne;
 }

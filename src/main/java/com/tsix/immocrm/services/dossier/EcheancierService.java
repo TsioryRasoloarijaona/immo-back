@@ -62,6 +62,9 @@ public class EcheancierService {
     private final LigneEcheancierOmran ligneOmran;
     private final ReglementOmran reglementOmran;
     private final Clock clock;
+    private final DefautsEcheance defauts;
+    private final ReequilibrageSchema reequilibrage;
+    private final TotauxDossierEcheancier totaux;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
@@ -71,7 +74,11 @@ public class EcheancierService {
                               ComSettlementCategoryRepository settlementCategoryRepository,
                               UtilisateurAffiche utilisateurAffiche,
                               LigneEcheancierOmran ligneOmran, ReglementOmran reglementOmran,
-                              Clock clock) {
+                              Clock clock,
+                              EcrituresSchema ecrituresSchema) {
+        this.defauts = ecrituresSchema.defauts();
+        this.reequilibrage = ecrituresSchema.reequilibrage();
+        this.totaux = ecrituresSchema.totaux();
         this.clock = clock;
         this.ligneOmran = ligneOmran;
         this.reglementOmran = reglementOmran;
@@ -250,7 +257,10 @@ public class EcheancierService {
         return documentRepository.findByComFolderIdOrderByDocDateDesc(dossierId, pageable).map(this::toDto);
     }
 
-    /** Catégorie obligatoire : OMRAN n'écrit jamais d'échéance sans elle (société, TVA, exclusion du prix). */
+    /**
+     * Catégorie obligatoire : OMRAN n'écrit jamais d'échéance sans elle (société, TVA, exclusion du prix). Montant et
+     * date absents prennent les défauts de la catégorie ; l'écart du schéma est ensuite reporté (FEATURE-vente-echeancier.md §1).
+     */
     @Transactional
     public EcheanceDto addEcheance(UUID dossierId, CreerEcheanceRequest request) {
         ComFolder folder = folderRepository.findById(dossierId)
@@ -264,12 +274,24 @@ public class EcheancierService {
         ligneOmran.signerCreation(document);
         applyFields(document, new ChampsEcheance(request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes()));
+        ComSettlementCategory categorie = document.getComSettlementCategory();
         if (document.getDescription() == null) {
-            document.setDescription(document.getComSettlementCategory().getDescription());
+            document.setDescription(categorie.getDescription());
         }
+        if (document.getAmount() == null) {
+            document.setAmount(defauts.montant(categorie, folder).orElseThrow(
+                    () -> new InvalidRequestException("montant est requis : la catégorie n'a pas de montant par défaut")));
+        }
+        if (document.getDocDate() == null) {
+            document.setDocDate(defauts.date(categorie, folder));
+        }
+        defauts.verifierDate(document, folder, document.getAmount());
         ligneOmran.completer(document, folder);
 
-        return toDto(documentRepository.save(document));
+        ComDocument enregistree = documentRepository.save(document);
+        reequilibrage.reporter(folder, enregistree);
+        totaux.rafraichir(folder);
+        return toDto(enregistree);
     }
 
     private EcheanceDto toDto(ComDocument d) {
@@ -281,16 +303,27 @@ public class EcheancierService {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId));
         ComDocument document = findEcheanceOf(dossierId, echeanceId);
+        UUID categorieAvant = Champs.de(document.getComSettlementCategory(), ComSettlementCategory::getId);
 
         applyFields(document, new ChampsEcheance(request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes()));
         if (document.getComSettlementCategory() == null) {
             throw new InvalidRequestException(CATEGORIE_REQUISE);
         }
+        if (!document.getComSettlementCategory().getId().equals(categorieAvant)) {
+            // SetDefaluts : la remise ancien client suit la nouvelle catégorie.
+            document.setDiscountRatio(null);
+        }
+        BigDecimal regle = requireNonNullElse(settlementLineRepository.sumAmountByComDocumentId(echeanceId),
+                BigDecimal.ZERO);
+        defauts.verifierDate(document, folder, requireNonNullElse(document.getAmount(), BigDecimal.ZERO).subtract(regle));
         ligneOmran.completer(document, folder);
         ligneOmran.signerModification(document);
 
-        return toDto(documentRepository.save(document));
+        ComDocument enregistree = documentRepository.save(document);
+        reequilibrage.reporter(folder, enregistree);
+        totaux.rafraichir(folder);
+        return toDto(enregistree);
     }
 
     private record ChampsEcheance(LocalDateTime dateEcheance, BigDecimal montant, String description,

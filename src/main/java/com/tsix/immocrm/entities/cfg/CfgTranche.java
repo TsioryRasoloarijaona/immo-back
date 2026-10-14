@@ -8,6 +8,8 @@ import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -421,5 +423,9 @@ public class CfgTranche {
     @Column(name = "CreditPercent", precision = 26, scale = 6)
     private BigDecimal creditPercent;
 
+    // Lecture seule : lignes de schéma propres à la tranche, ajoutées à la création (Sale.cs:GenerateInitialDocuments).
+    @OneToMany(mappedBy = "cfgTranche", fetch = FetchType.LAZY)
+    @OrderBy("sorting ASC")
+    private List<CfgTrancheSettlementCategory> categoriesReglement = new ArrayList<>();
 
 }
