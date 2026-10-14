@@ -205,6 +205,30 @@ class DossierEditionTest {
     }
 
     @Test
+    void decisionsMeilleurTaux_listeLesLignesReelles_etSeChoisitSurLeDossier() throws Exception {
+        UUID decision = UUID.randomUUID();
+        em.createNativeQuery("INSERT INTO ComLoanCompanyDecision (PKey, sorting, Code, Description) "
+                        + "VALUES (:id, 1, 'ACC-EDI', 'ACCEPTEE EDI')")
+                .setParameter("id", decision)
+                .executeUpdate();
+
+        mockMvc.perform(get("/api/dossiers/decisions-meilleurtaux").with(user("com").roles(COMMERCIAL)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", hasItem(decision.toString())))
+                .andExpect(jsonPath("$[*].code", hasItem("ACC-EDI")));
+
+        modifier(dossier, CHEF, "{\"meilleurTauxDecisionId\":\"%s\"}".formatted(decision))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fiche.autres.meilleurTauxDecision").value("ACCEPTEE EDI"));
+    }
+
+    @Test
+    void decisionMeilleurTauxInconnue_400() throws Exception {
+        modifier(dossier, CHEF, "{\"meilleurTauxDecisionId\":\"%s\"}".formatted(UUID.randomUUID()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void tiersInconnu_400() throws Exception {
         modifier(dossier, CHEF, "{\"notaireId\":\"%s\"}".formatted(UUID.randomUUID()))
                 .andExpect(status().isBadRequest());

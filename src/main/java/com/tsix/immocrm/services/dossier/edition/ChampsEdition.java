@@ -204,7 +204,8 @@ class ChampsEdition {
                 .getResultList();
         return lignes.stream()
                 .map(Object[].class::cast)
-                .map(l -> new ReferentielItemDto((UUID) l[0], (String) l[1], (String) l[2],
+                // Le pilote mssql rend un uniqueidentifier natif en String, pas en UUID.
+                .map(l -> new ReferentielItemDto(UUID.fromString(String.valueOf(l[0])), (String) l[1], (String) l[2],
                         l[3] != null ? ((Number) l[3]).intValue() : null))
                 .toList();
     }
