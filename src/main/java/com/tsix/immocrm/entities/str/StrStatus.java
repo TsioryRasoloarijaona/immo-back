@@ -46,6 +46,10 @@ public class StrStatus {
     @Column(name = "BoolField011")
     private Boolean transformeProspectEnClient;
 
+    // OMRAN « Vente effective » : faux pour la réservation, l'annulation et le désistement.
+    @Column(name = "BoolField001")
+    private Boolean venteEffective;
+
     // OMRAN « Annulation » / « Résiliation » : un dossier à ce statut n'est plus actif ; NULL vaut faux.
     @Column(name = "BoolField002")
     private Boolean annulation;

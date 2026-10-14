@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
+import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -29,6 +30,7 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -149,6 +151,22 @@ public class PerimetreCommercialService {
             Join<StkItem, CfgTranche> tranche = article.join(STK_HIERARCHY, JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
             return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
+        };
+    }
+
+    /**
+     * Échéances ({@code ComDocument}) : visible ssi son dossier l'est par {@link #filtreDossiers()}, appliqué
+     * tel quel dans une sous-requête. Une échéance sans dossier n'est jamais visible.
+     */
+    public Specification<ComDocument> filtreEcheances() {
+        Specification<ComFolder> dossiers = filtreDossiers();
+        return (root, query, cb) -> {
+            Subquery<UUID> visibles = query.subquery(UUID.class);
+            Root<ComFolder> dossier = visibles.from(ComFolder.class);
+            visibles.select(dossier.get("id")).where(
+                    cb.equal(dossier.get("id"), root.get(COM_FOLDER).get("id")),
+                    dossiers.toPredicate(dossier, query, cb));
+            return cb.exists(visibles);
         };
     }
 

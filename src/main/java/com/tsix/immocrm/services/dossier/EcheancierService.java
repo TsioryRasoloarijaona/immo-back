@@ -65,6 +65,7 @@ public class EcheancierService {
     private final DefautsEcheance defauts;
     private final ReequilibrageSchema reequilibrage;
     private final TotauxDossierEcheancier totaux;
+    private final PenaliteRetardService penalites;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementTypeRepository settlementTypeRepository,
@@ -79,6 +80,7 @@ public class EcheancierService {
         this.defauts = ecrituresSchema.defauts();
         this.reequilibrage = ecrituresSchema.reequilibrage();
         this.totaux = ecrituresSchema.totaux();
+        this.penalites = ecrituresSchema.penalites();
         this.clock = clock;
         this.ligneOmran = ligneOmran;
         this.reglementOmran = reglementOmran;
@@ -125,6 +127,8 @@ public class EcheancierService {
                 .orElseThrow(() -> new InvalidRequestException("StlSettlementType introuvable: " + typeId));
         validerSaisieDuType(type, request);
         validerReste(echeance, montant);
+        // Avant l'enregistrement : la pénalité se calcule sur le reste d'avant ce règlement (FEATURE-impayes.md P3).
+        penalites.genererPenalite(echeance);
 
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());

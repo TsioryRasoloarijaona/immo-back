@@ -5,7 +5,7 @@ package com.tsix.immocrm.domain;
  * une seule fois. Groupe et type restent typés par catalogue (pas dégradés en {@code String}).
  */
 public sealed interface Colonne
-        permits ColonneDossier, ColonneEncaissement, ColonneProspect, ColonneProspection,
+        permits ColonneDossier, ColonneEncaissement, ColonneImpaye, ColonneProspect, ColonneProspection,
                 ColonneSuiviAction {
 
     /** Nom technique, tel qu'il est passé dans {@code ?colonnes=} et sérialisé en JSON. */
