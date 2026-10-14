@@ -14,23 +14,35 @@ import com.tsix.immocrm.exceptions.UnauthorizedException;
 import jakarta.persistence.PersistenceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import com.tsix.immocrm.domain.ColonneInconnueException;
 import com.tsix.immocrm.domain.FonctionAgregatInconnueException;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.transaction.TransactionException;
+import org.springframework.validation.BindException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 /** Exceptions métier → {@link ProblemDetail} RFC 7807. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    static final String TITRE_ERREUR_INTERNE = "Erreur interne";
+    static final String DETAIL_ERREUR_INTERNE = "Une erreur inattendue est survenue.";
 
     private final ObjectProvider<SourceDeVeriteProperties> source;
 
@@ -40,19 +52,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Deux-bases, liaison avec la source perdue → 503 avec {@code code} ; sinon l'erreur est relancée telle quelle, ce que
-     * Spring traite comme « non gérée ici » : comportement inchangé (FEATURE-stabilite-connexion-source.md §2, R8).
+     * Deux-bases, liaison avec la source perdue → 503 avec {@code code} ; sinon 500 générique comme toute erreur
+     * imprévue (FEATURE-stabilite-connexion-source.md §2 R8, FEATURE-erreur-500-401.md).
      */
     @ExceptionHandler({DataAccessException.class, TransactionException.class, PersistenceException.class})
     public ProblemDetail handleAccesBase(RuntimeException ex) {
         SourceDeVeriteProperties proprietes = source.getIfAvailable();
         // Mono-base (R6) : pas de suivi des connexions, donc R7 invérifiable : aucune 503.
         if (proprietes == null || !proprietes.estConfiguree()) {
-            throw ex;
+            return erreurInterne(ex);
         }
         LiaisonSource cas = LiaisonSource.classer(ex, ConnexionSourceSuivie.obtenueDansLaRequete());
         if (cas == null) {
-            throw ex;
+            return erreurInterne(ex);
         }
         // En chaîne, pas en Throwable : SLF4J imprimerait la pile (R9).
         if (log.isWarnEnabled()) {
@@ -152,5 +164,37 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleInvalidSortProperty(PropertyReferenceException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
                 "Propriété de tri invalide: '" + ex.getPropertyName() + "' — vérifiez le paramètre 'sort'.");
+    }
+
+    /**
+     * Filet : toute exception sans handler dédié → 500 générique, jamais le message ni la trace. Sans lui, Spring
+     * forwardait vers /error et la chaîne de sécurité récrivait la réponse en 401 (FEATURE-erreur-500-401.md).
+     */
+    @ExceptionHandler(Exception.class)
+    public ProblemDetail handleErreurImprevue(Exception ex) throws Exception {
+        // Relancer = « non gérée ici » : Spring Security (401/403) et Spring MVC (400, 404, 405…) gardent leur statut.
+        if (laisseeAuxResolveursSpring(ex)) {
+            throw ex;
+        }
+        return erreurInterne(ex);
+    }
+
+    private static ProblemDetail erreurInterne(Exception ex) {
+        log.error("Erreur interne non gérée", ex);
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, DETAIL_ERREUR_INTERNE);
+        probleme.setTitle(TITRE_ERREUR_INTERNE);
+        return probleme;
+    }
+
+    private static boolean laisseeAuxResolveursSpring(Exception ex) {
+        return ex instanceof AccessDeniedException
+                || ex instanceof AuthenticationException
+                || ex instanceof ErrorResponse
+                || ex instanceof HttpMessageNotReadableException
+                || ex instanceof TypeMismatchException
+                || ex instanceof BindException
+                || ex instanceof MaxUploadSizeExceededException
+                || DisconnectedClientHelper.isClientDisconnectedException(ex)
+                || AnnotatedElementUtils.hasAnnotation(ex.getClass(), ResponseStatus.class);
     }
 }

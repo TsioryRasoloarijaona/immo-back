@@ -71,6 +71,9 @@ public class SecurityConfig {
                         // Fin d'un flux SSE (/api/notifications/flux) : redispatch ASYNC d'une requête déjà autorisée,
                         // sans cookie relu ; sans cette règle il finirait en 401 sur une réponse déjà envoyée.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        // Le dispatch ERROR (sendError → /error) relit la chaîne avec un contexte vide : sans cette règle, un 500
+                        // devenait 401 et déconnectait le front. /error n'est pas ouvert en accès direct (FEATURE-erreur-500-401.md).
+                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api-docs/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé. health reste muet tant que

@@ -24,7 +24,6 @@ import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -155,11 +154,13 @@ class LiaisonSourceHandlerTest {
         attendre503("/a/apres-connexion", "LIAISON_COUPEE", DETAIL_B);
     }
 
-    /** R8 : relancée telle quelle, donc traitée comme avant (500 du conteneur), jamais 503. */
+    /** R8 : erreur SQL ordinaire → 500 générique (FEATURE-erreur-500-401.md), jamais 503 ni le message SQL. */
     @Test
-    void r8_erreurSqlOrdinaire_pasDe503() {
-        assertThatThrownBy(() -> mockMvc.perform(post("/ordinaire")))
-                .hasCauseInstanceOf(DataIntegrityViolationException.class);
+    void r8_erreurSqlOrdinaire_500GeneriquePasDe503() throws Exception {
+        mockMvc.perform(post("/ordinaire"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").doesNotExist())
+                .andExpect(jsonPath("$.detail").value(GlobalExceptionHandler.DETAIL_ERREUR_INTERNE));
     }
 
     @Test
