@@ -21,6 +21,7 @@ import com.tsix.immocrm.fixtures.FixtureStatutsDossier;
 import com.tsix.immocrm.fixtures.FixtureWorkflow;
 import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.com.ComDocumentPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
@@ -29,6 +30,8 @@ import com.tsix.immocrm.services.dossier.workflow.StatutsVisibles;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -86,6 +89,7 @@ class DossierWorkflowTest {
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private StrStatusRepository statusRepository;
     @Autowired private CfgTierRepository tierRepository;
+    @Autowired private ComDocumentPaymentMethodRepository modaliteRepository;
     @Autowired private AdmUserRoleRepository userRoleRepository;
     @Autowired private StatutsVisibles statutsVisibles;
     @Autowired private IntervenantCourant intervenantCourant;
@@ -358,6 +362,23 @@ class DossierWorkflowTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath(DETAIL, containsString("vous devez ajouter dans le schéma de financement "
                         + "un montant de 10 000,00 !")));
+    }
+
+    // ------------------------------------------------------------ modalité de paiement (FEATURE-vente-echeancier.md §2)
+
+    @ParameterizedTest(name = "BoolField001 = {0} -> {1} ligne(s)")
+    @CsvSource({"1, 2", "0, 0"})
+    void statutEffectif_instantaneDeLaModalite_seulementSiDrapeau001(int effectif, int lignesAttendues) throws Exception {
+        ComFolder dossier = dossierAvecSchema(new BigDecimal("250000"));
+        StrStatus concretisation = statut(StatutDossier.CONCRETISATION);
+        workflow.transition(statut(StatutDossier.RESERVATION), concretisation, false);
+        em.flush();
+        em.createNativeQuery("UPDATE StrStatus SET BoolField001 = :effectif WHERE PKey = :id")
+                .setParameter("effectif", effectif).setParameter("id", concretisation.getId()).executeUpdate();
+
+        changer(dossier, VERS_CONCRETISATION, admin, ADMIN).andExpect(status().isOk());
+
+        assertThat(modaliteRepository.findByComFolderIdOrderByDocDateDesc(dossier.getId())).hasSize(lignesAttendues);
     }
 
     // ------------------------------------------------------------ date associée, validité, gestionnaire

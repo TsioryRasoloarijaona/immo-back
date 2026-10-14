@@ -81,7 +81,7 @@ public final class SpecificationsListeDossiers {
             Join<ComFolder, StrStatus> statut = root.join(STR_STATUS, JoinType.LEFT);
             predicats.add(cb.and(pasVrai(cb, statut.get("annulation")), pasVrai(cb, statut.get("resiliation"))));
         }
-        // Contrat de StatutsVisibles (lot A) : ensemble vide = aucun dossier.
+        // Contrat de StatutsVisibles : ensemble vide = aucun dossier.
         statutsVisibles.ifPresent(ids -> predicats.add(ids.isEmpty()
                 ? cb.disjunction()
                 : root.get(STR_STATUS).get("id").in(ids)));
