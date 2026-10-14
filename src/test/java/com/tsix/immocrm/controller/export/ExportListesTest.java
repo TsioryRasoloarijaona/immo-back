@@ -217,6 +217,62 @@ class ExportListesTest {
                 List.of(trancheA.getCode(), retenue.getId().toString()));
     }
 
+    @Test
+    void suiviActions_nonAdministrateur_nExportePasLesActionsDUnAutre() throws Exception {
+        ComActionMessageCategory categorie = categorieRepository.findById(ID_CATEGORIE_PROSPECTION).orElseGet(() -> {
+            ComActionMessageCategory c = new ComActionMessageCategory();
+            c.setId(ID_CATEGORIE_PROSPECTION);
+            c.setCode("Prospection");
+            c.setDescription("Prospection");
+            return categorieRepository.save(c);
+        });
+        ComActionMessageType appel = typeAction("Appel " + s);
+        ComActionMessage mienne = action(categorie, appel, prospection("PSN-SM-" + s, trancheA, false));
+        ComActionMessage autre = new ComActionMessage();
+        autre.setId(UUID.randomUUID());
+        autre.setDocDate(LocalDateTime.of(2026, 9, 21, 11, 0));
+        autre.setUserName("Autre " + s);
+        autre.setAdmUser(fixture.compte("export.autre", COMMERCIAL));
+        autre.setComActionMessageCategory(categorie);
+        autre.setComActionMessageType(appel);
+        autre.setComProspection(prospection("PSN-SX-" + s, trancheA, false));
+        autre.setIsSystem(false);
+        autre.setIsUnpaid(false);
+        messageRepository.save(autre);
+        relire();
+
+        List<List<Object>> lignes = exporter(get("/api/suivi-actions/export")
+                .param(COLONNES, "id")
+                .param("typeId", appel.getId().toString())
+                .with(connecte(commercialA, COMMERCIAL)), "suivi-actions");
+
+        assertThat(lignes).containsExactly(
+                List.of(ColonneSuiviAction.ID.libelle()),
+                List.of(mienne.getId().toString()));
+    }
+
+    @Test
+    void prospections_filtreAvanceProjetApplique() throws Exception {
+        AdmUserHabilitation habilitationB = new AdmUserHabilitation();
+        habilitationB.setId(UUID.randomUUID());
+        habilitationB.setAdmUser(commercialA);
+        habilitationB.setCfgProject(trancheB.getCfgProject());
+        habilitationRepository.save(habilitationB);
+        ComProspection dansA = prospection("PSN-PA-" + s, trancheA, false);
+        prospection("PSN-PB-" + s, trancheB, false);
+        relire();
+
+        List<List<Object>> lignes = exporter(get(EXPORT_PROSPECTIONS)
+                .param(COLONNES, "code")
+                .param(TRANCHE_ID, trancheA.getId().toString(), trancheB.getId().toString())
+                .param("projetId", trancheA.getCfgProject().getId().toString())
+                .with(connecte(commercialA, COMMERCIAL)), "prospections");
+
+        assertThat(lignes).containsExactly(
+                List.of(ColonneProspection.CODE.libelle()),
+                List.of(dansA.getCode()));
+    }
+
     // ------------------------------------------------------------------ format
 
     @Test
