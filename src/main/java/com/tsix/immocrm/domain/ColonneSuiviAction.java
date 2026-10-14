@@ -153,6 +153,11 @@ public enum ColonneSuiviAction implements Colonne {
     }
 
     @Override
+    public TypeExport typeExport() {
+        return TypeExport.valueOf(type.name());
+    }
+
+    @Override
     public boolean parDefaut() {
         return parDefaut;
     }

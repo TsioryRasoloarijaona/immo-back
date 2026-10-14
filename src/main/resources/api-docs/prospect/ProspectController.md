@@ -8,6 +8,22 @@ Colonnes a serialiser, repetable ou separees par des virgules. Absent : les 10 c
 Catalogue et liste blanche : `GET /api/referentiels/colonnes/prospects`. Un nom hors catalogue rend
 400 avec la liste des noms valides. `id` est toujours servi.
 
+## exporter
+
+Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/prospects` (`search`, `type`), sans pagination. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, nombres et booléens en cellules typées. Auteur du classeur = utilisateur connecté, titre « Prospects », fichier `prospects_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes. Les filtres de colonne de la grille (appliqués côté navigateur à la page chargée) ne sont pas transmis.
+
+### param format
+
+Seule valeur acceptée : `xlsx`.
+
+### param colonnes
+
+Colonnes exportées, dans l'ordre voulu (celui de la grille). Absent : les colonnes par défaut de la liste.
+
+### reponse 400
+
+`format` autre que `xlsx`, ou colonne inconnue.
+
 ## doublons
 
 Le contrôle d'identité à faire **avant** de créer un prospect — depuis une pré-prospection ou

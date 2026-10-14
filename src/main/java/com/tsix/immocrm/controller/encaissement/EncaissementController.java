@@ -11,25 +11,34 @@ import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.services.encaissement.EncaissementService;
 import com.tsix.immocrm.web.Groupements;
+import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.SortDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -40,9 +49,11 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 public class EncaissementController {
 
     private final EncaissementService encaissementService;
+    private final ExportTableur exportTableur;
 
-    public EncaissementController(EncaissementService encaissementService) {
+    public EncaissementController(EncaissementService encaissementService, ExportTableur exportTableur) {
         this.encaissementService = encaissementService;
+        this.exportTableur = exportTableur;
     }
 
     @GetMapping
@@ -141,6 +152,48 @@ public class EncaissementController {
                 Groupements.granularite(groupe, granularite),
                 ColonneEncaissement.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export Excel de la liste des encaissements, filtres et colonnes appliqués")
+    @Parameter(name = "sort", in = ParameterIn.QUERY, example = "docDate,desc",
+            description = "Tri `propriete,asc|desc`, répétable, comme la liste. Défaut : docDate,desc.",
+            array = @ArraySchema(schema = @Schema(type = "string")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
+                    content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "400", content = @Content)
+    })
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @Parameter(example = ExportTableur.FORMAT_XLSX)
+            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
+            @RequestParam(required = false) List<UUID> entiteId,
+            @RequestParam(required = false) List<UUID> typeId,
+            @RequestParam(required = false) List<String> etat,
+            @RequestParam(required = false) UUID compteId,
+            @RequestParam(required = false) UUID depotId,
+            @RequestParam(required = false) UUID dossierId,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) UUID tierId,
+            @RequestParam(required = false) String reference,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean comptabilise,
+            @RequestParam(required = false) BigDecimal montantDe,
+            @RequestParam(required = false) BigDecimal montantA,
+            @RequestParam(required = false) ChampDateEncaissement champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @Parameter(example = "reference,dateDocument,tierNom,montantBrut")
+            @RequestParam(required = false) List<String> colonnes,
+            @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
+        ExportTableur.exigerXlsx(format);
+        Set<ColonneEncaissement> selection = ColonneEncaissement.resoudre(colonnes);
+        List<EncaissementDto> lignes = LignesExport.toutes(sort, page -> encaissementService.findAll(entiteId,
+                typeId, etat, compteId, depotId, dossierId, trancheId, tierId, reference, search, comptabilise,
+                montantDe, montantA, champDate, dateDebut, dateFin, null, null, null, page, selection));
+        return exportTableur.reponse("encaissements", "Encaissements", LignesExport.ordre(colonnes, selection),
+                lignes);
     }
 
     @GetMapping("/{id}")
