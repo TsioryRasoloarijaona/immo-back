@@ -383,7 +383,7 @@ public class ProspectionService {
         if (estRenseignee(c.commerciaux())) {
             predicates.add(root.get("cfgCommercial").get("id").in(c.commerciaux()));
         }
-        if (estRenseignee(c.trancheIds())) {
+        if (estRenseignee(c.trancheIds()) || c.inclureSansTranche()) {
             predicates.add(predicatTranches(root, cb, c));
         }
         predicates.addAll(c.periode().predicats(root, cb));
@@ -393,10 +393,15 @@ public class ProspectionService {
         return cb.and(predicates.toArray(new Predicate[0]));
     }
 
-    // « Non affectés » d'OMRAN : n'élargit que des tranches cochées, sans elles le périmètre décide.
+    // « Non affectés » d'OMRAN (PreProspectionList.cs:427) : tranches cochées OU sans tranche ; sans
+    // tranche cochée, seulement les lignes sans tranche.
     private static Predicate predicatTranches(Root<ComProspection> root, CriteriaBuilder cb, CriteresListe c) {
+        Predicate sansTranche = cb.isNull(root.get("stkHierarchy"));
+        if (!estRenseignee(c.trancheIds())) {
+            return sansTranche;
+        }
         Predicate tranches = AppartenanceTranche.prospection(root, c.trancheIds());
-        return c.inclureSansTranche() ? cb.or(tranches, cb.isNull(root.get("stkHierarchy"))) : tranches;
+        return c.inclureSansTranche() ? cb.or(tranches, sansTranche) : tranches;
     }
 
     // Ternaire : absent = tout, true = ouvertes, false = archivées. NULL compte comme

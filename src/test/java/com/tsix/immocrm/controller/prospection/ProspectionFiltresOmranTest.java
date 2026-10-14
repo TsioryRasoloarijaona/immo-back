@@ -319,6 +319,23 @@ class ProspectionFiltresOmranTest {
     }
 
     @Test
+    void preProspections_nonAffectes_sansTrancheCochee_neRendQueLesLignesSansTranche() throws Exception {
+        CfgTranche tranche = fixture.tranche(prefixe + "T3", true);
+        enregistrer(preProspection("L1", tranche));
+        ComProspection sans = enregistrer(preProspection("L2", null));
+
+        mockMvc.perform(get(PRE_PROSPECTIONS).param(SEARCH, prefixe).param("inclureSansTranche", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(TOTAL).value(1))
+                .andExpect(jsonPath("$.content[0].id").value(sans.getId().toString()));
+        mockMvc.perform(get(PRE_PROSPECTIONS + "/groupes").param("groupBy", "etape").param(SEARCH, prefixe)
+                        .param("inclureSansTranche", "true").param("inclureSansValeur", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(TOTAL).value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value(1));
+    }
+
+    @Test
     void preProspections_projetIdSurGroupes_memeTotalQueLaListe() throws Exception {
         ComProspectionKind etape = new ComProspectionKind();
         etape.setId(UUID.randomUUID());
@@ -357,6 +374,14 @@ class ProspectionFiltresOmranTest {
     void communicationDepuis_formatDate_200() throws Exception {
         mockMvc.perform(get(PROSPECTIONS).param(SEARCH, prefixe).param("communicationDepuis", "2026-01-01")
                         .param("communicationJusqua", "2026-01-31"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void communicationDepuis_dateHeureAvecDecalage_200() throws Exception {
+        mockMvc.perform(get(PROSPECTIONS).param(SEARCH, prefixe)
+                        .param("communicationDepuis", "2026-01-01T00:00:00.000Z")
+                        .param("communicationJusqua", "2026-01-31T23:59:59+01:00"))
                 .andExpect(status().isOk());
     }
 }

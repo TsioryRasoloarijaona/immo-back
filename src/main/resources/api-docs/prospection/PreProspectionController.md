@@ -32,8 +32,9 @@ la nature, du type, de l'action, de la source et du support.
 
 ### param inclureSansTranche
 
-« Non affectés » : avec `trancheId`, ajoute les pré-prospections **sans tranche** à celles des
-tranches cochées. Sans `trancheId`, sans effet (le périmètre s'applique comme avant).
+« Non affectés », comme le logiciel de bureau : avec `trancheId`, ajoute les pré-prospections **sans
+tranche** à celles des tranches cochées ; sans `trancheId`, ne renvoie **que** les pré-prospections
+sans tranche.
 
 ### param dateDebut
 
@@ -95,7 +96,8 @@ ouvertes, `false` = archivées.
 ### param inclureSansTranche
 
 « Non affectés », **identique à la liste** : avec `trancheId`, ajoute les pré-prospections sans
-tranche. Les effectifs retombent sur le `totalElements` de la liste appelée avec les mêmes filtres.
+tranche ; sans `trancheId`, seulement celles sans tranche. Les effectifs retombent sur le
+`totalElements` de la liste appelée avec les mêmes filtres.
 
 ## creer
 

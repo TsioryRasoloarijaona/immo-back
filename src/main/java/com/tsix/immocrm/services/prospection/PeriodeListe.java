@@ -12,6 +12,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,7 +61,8 @@ record PeriodeListe(LocalDateTime debut, LocalDateTime fin, boolean finExclue, P
 
     private static LocalDateTime lireDateHeure(String valeur, String parametre) {
         try {
-            return LocalDateTime.parse(valeur);
+            // ISO_DATE_TIME : millisecondes et décalage (« Z », « +01:00 ») acceptés, heure locale gardée.
+            return LocalDateTime.parse(valeur, DateTimeFormatter.ISO_DATE_TIME);
         } catch (DateTimeParseException e) {
             throw new InvalidRequestException(formatInvalide(parametre, valeur));
         }

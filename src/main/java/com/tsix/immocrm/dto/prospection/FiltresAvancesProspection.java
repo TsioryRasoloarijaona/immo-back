@@ -58,15 +58,16 @@ public record FiltresAvancesProspection(
         @Schema(example = "1")
         Integer nbVisitesMin,
 
-        // Repli date-heure : l'ancien format reste accepté, son heure est ignorée.
+        // Repli date-heure (millisecondes, « Z » ou « +01:00 » compris) : l'ancien format reste accepté,
+        // son heure et son décalage sont ignorés.
         @Schema(description = "Dernier échange à partir de ce jour (inclus), AAAA-MM-JJ. 90,4 %.",
                 example = "2026-01-01")
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm:ss")
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm[:ss][.SSS][XXX]")
         LocalDate communicationDepuis,
 
         @Schema(description = "Dernier échange jusqu'à ce jour inclus (jour entier), AAAA-MM-JJ.",
                 example = "2026-12-31")
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm:ss")
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm[:ss][.SSS][XXX]")
         LocalDate communicationJusqua,
 
         Boolean avecAlerteActive,
