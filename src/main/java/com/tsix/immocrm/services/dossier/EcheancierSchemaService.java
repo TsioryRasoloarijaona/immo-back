@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,11 +113,10 @@ public class EcheancierSchemaService {
             throw new InvalidRequestException("Le montant à défalquer doit être <= " + initial.setScale(2, RoundingMode.HALF_UP));
         }
 
-        List<ComDocument> creees = new ArrayList<>();
-        for (Periodicite.Echeance e : periodicite.repartir(total, nombre,
-                Requis.champ(request.premiereDate(), "premiereDate est requise"))) {
-            creees.add(nouvelleLigne(folder, categorie, e, request.notes()));
-        }
+        List<ComDocument> creees = periodicite.repartir(total, nombre,
+                        Requis.champ(request.premiereDate(), "premiereDate est requise")).stream()
+                .map(e -> nouvelleLigne(folder, categorie, e, request.notes()))
+                .toList();
         ecritures.reequilibrage().reporter(folder, creees.get(creees.size() - 1));
         Set<UUID> retirees = retirerLignesNulles(dossierId);
         ecritures.totaux().rafraichir(folder);

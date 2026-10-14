@@ -41,6 +41,10 @@ public class DefautsEcheance {
      * l'écart positif du schéma. Vide : pas de montant par défaut.
      */
     public Optional<BigDecimal> montant(ComSettlementCategory categorie, ComFolder folder) {
+        // SetDefaluts ne part que d'une catégorie : sans elle, aucun montant par défaut.
+        if (categorie == null) {
+            return Optional.empty();
+        }
         CfgTranche tranche = LigneEcheancierOmran.trancheDe(folder);
         Optional<BigDecimal> fraisTranche = categoriesParDefaut.role(categorie).flatMap(role -> switch (role) {
             case FRAIS_DOSSIER -> Optional.ofNullable(tranche != null ? tranche.getDefaultExpenseAmount() : null);
