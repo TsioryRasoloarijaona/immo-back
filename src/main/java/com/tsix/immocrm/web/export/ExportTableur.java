@@ -1,6 +1,7 @@
 package com.tsix.immocrm.web.export;
 
 import com.tsix.immocrm.domain.Colonne;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -44,6 +45,7 @@ public class ExportTableur {
     public static final MediaType XLSX =
             MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     public static final String FEUILLE = "DONNEES";
+    public static final String FORMAT_XLSX = "xlsx";
 
     private static final int LIGNES_EN_MEMOIRE = 200;
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -55,6 +57,13 @@ public class ExportTableur {
     public ExportTableur(Clock clock, UtilisateurAffiche utilisateurAffiche) {
         this.clock = clock;
         this.utilisateurAffiche = utilisateurAffiche;
+    }
+
+    /** @throws InvalidRequestException (400) si {@code format} n'est pas {@code xlsx}. */
+    public static void exigerXlsx(String format) {
+        if (!FORMAT_XLSX.equalsIgnoreCase(format)) {
+            throw new InvalidRequestException("format doit être 'xlsx' (reçu : " + format + ")");
+        }
     }
 
     /**

@@ -118,6 +118,22 @@ somme des effectifs retombe alors sur le `totalElements` de la liste non groupé
 `groupBy` absent, inconnu, ou désignant une colonne non groupable ; ou `agregats` contenant une
 colonne non agrégeable. Le corps (RFC 7807) porte la liste des noms acceptés.
 
+## exporter
+
+Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/encaissements`, sans pagination, périmètre commercial appliqué. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, montants, nombres et booléens en cellules typées. Auteur du classeur = utilisateur connecté, titre « Encaissements », fichier `encaissements_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes. Les filtres de colonne de la grille (appliqués côté navigateur à la page chargée) ne sont pas transmis.
+
+### param format
+
+Seule valeur acceptée : `xlsx`.
+
+### param colonnes
+
+Colonnes exportées, dans l'ordre voulu (celui de la grille). Absent : les colonnes par défaut de la liste.
+
+### reponse 400
+
+`format` autre que `xlsx`, ou colonne inconnue.
+
 ## findById
 
 Alimente le panneau détail "Pièce de règlement" côté front (`EncaissementDetail.tsx`).

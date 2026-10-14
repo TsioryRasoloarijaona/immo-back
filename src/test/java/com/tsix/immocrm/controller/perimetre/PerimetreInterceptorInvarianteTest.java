@@ -93,7 +93,13 @@ class PerimetreInterceptorInvarianteTest {
             // des référentiels, aucune ressource scopée.
             "/api/dossiers/export",
             "/api/dossiers/statuts",
-            "/api/dossiers/champs-date");
+            "/api/dossiers/champs-date",
+            // Exports des listes (FEATURE-export-listes.md) : chacun relit la liste par sa propre méthode
+            // paginée (ProspectionService#findAll / #findPreProspections, EncaissementService#findAll),
+            // périmètre commercial compris. Vérifié par ExportListesTest (ligne hors périmètre absente).
+            "/api/prospections/export",
+            "/api/pre-prospections/export",
+            "/api/encaissements/export");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

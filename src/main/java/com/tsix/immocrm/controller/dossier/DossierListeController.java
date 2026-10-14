@@ -10,11 +10,11 @@ import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.liste.ChampDateListeDto;
 import com.tsix.immocrm.dto.dossier.liste.StatutListeDossierDto;
-import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.services.dossier.liste.FiltresListeDossiers;
 import com.tsix.immocrm.services.dossier.liste.ListeDossiersService;
 import com.tsix.immocrm.web.Groupements;
 import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -37,11 +37,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -50,8 +48,6 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RestController
 @RequestMapping("/api/dossiers")
 public class DossierListeController {
-
-    private static final String FORMAT_XLSX = "xlsx";
 
     private final ListeDossiersService listeService;
     private final ExportTableur exportTableur;
@@ -155,8 +151,8 @@ public class DossierListeController {
             @ApiResponse(responseCode = "400", content = @Content)
     })
     public ResponseEntity<StreamingResponseBody> exporter(
-            @Parameter(example = FORMAT_XLSX)
-            @RequestParam(defaultValue = FORMAT_XLSX) String format,
+            @Parameter(example = ExportTableur.FORMAT_XLSX)
+            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
             @RequestParam(required = false) List<String> statut,
             @RequestParam(required = false) UUID commercial,
             @RequestParam(required = false) UUID projet,
@@ -172,12 +168,10 @@ public class DossierListeController {
             @Parameter(example = "code,statut,clientNom,prix")
             @RequestParam(required = false) List<String> colonnes,
             @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
-        if (!FORMAT_XLSX.equalsIgnoreCase(format)) {
-            throw new InvalidRequestException("format doit être 'xlsx' (reçu : " + format + ")");
-        }
+        ExportTableur.exigerXlsx(format);
         FiltresListeDossiers filtres = new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
                 dateDebut, dateFin, dateVide, search, inclureSortis, lignes);
-        List<ColonneDossier> ordre = colonnesExportees(colonnes);
+        List<ColonneDossier> ordre = LignesExport.ordre(colonnes, ColonneDossier.resoudre(colonnes));
         List<DossierListItemDto> lignesExport = listeService.toutes(filtres, ordreOmran, sort,
                 new LinkedHashSet<>(ordre));
         return exportTableur.reponse("dossiers", "Dossiers de vente", ordre, lignesExport);
@@ -195,23 +189,5 @@ public class DossierListeController {
         return Arrays.stream(ChampDateDossier.values())
                 .map(c -> new ChampDateListeDto(c.name(), c.getLibelle()))
                 .toList();
-    }
-
-    /** Ordre reçu (le serveur ne réordonne pas) ; sans {@code colonnes}, la sélection par défaut. */
-    private static List<ColonneDossier> colonnesExportees(List<String> colonnes) {
-        Set<ColonneDossier> resolues = ColonneDossier.resoudre(colonnes);
-        if (colonnes == null || colonnes.isEmpty()) {
-            return List.copyOf(resolues);
-        }
-        List<ColonneDossier> ordre = new ArrayList<>();
-        for (String nom : colonnes) {
-            for (String morceau : nom.split(",")) {
-                resolues.stream()
-                        .filter(c -> c.nom().equalsIgnoreCase(morceau.trim()) && !ordre.contains(c))
-                        .findFirst()
-                        .ifPresent(ordre::add);
-            }
-        }
-        return ordre;
     }
 }

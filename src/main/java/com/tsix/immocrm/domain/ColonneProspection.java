@@ -191,6 +191,11 @@ public enum ColonneProspection implements Colonne {
         return type;
     }
 
+    @Override
+    public TypeExport typeExport() {
+        return TypeExport.valueOf(type.name());
+    }
+
     public boolean parDefaut() {
         return parDefaut;
     }
