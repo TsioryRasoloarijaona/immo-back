@@ -364,6 +364,22 @@ class EcheancierSchemaTest {
         schemaEquilibre();
     }
 
+    /** {@code Sale.cs:GeneratePeriodicity} ne reporte que via {@code ManageDocument}, sans effet hors « mise à jour du schéma ». */
+    @Test
+    void periodique_categorieAutofinancement_commeOmran_aucunReport_ecartRenvoye() throws Exception {
+        mockMvc.perform(post(PERIODIQUE, dossier.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categorieId":"%s","montantTotal":30000.01,"nombre":3,"periodicite":"MENSUELLE",
+                                 "premiereDate":"2026-12-01T00:00:00"}""".formatted(autofinancement.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].ecartSchema").value(-30000.01));
+
+        assertAll(
+                () -> assertThat(montant(autofinancementRecent)).isEqualByComparingTo("300000"),
+                () -> assertThat(montant(autofinancementAncien)).isEqualByComparingTo("400000"));
+    }
+
     @Test
     void periodique_montantAuDelaDuMontantInitial_400() throws Exception {
         mockMvc.perform(post(PERIODIQUE, dossier.getId()).contentType(MediaType.APPLICATION_JSON)
