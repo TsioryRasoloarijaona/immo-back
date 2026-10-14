@@ -256,6 +256,15 @@ public class ReferentielService {
                 .map(s -> new ReferentielItemDto(s.getId(), s.getCode(), s.getDescription(), null)).toList();
     }
 
+    /** Tous les supports, toutes origines confondues (filtre des listes de prospections). */
+    public List<ReferentielItemDto> supportsOrigine() {
+        return prospectionOriginSupportRepository.findAll().stream()
+                .map(s -> new ReferentielItemDto(s.getId(), s.getCode(), s.getDescription(), null))
+                .sorted(Comparator.comparing(ReferentielItemDto::description,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
+    }
+
     public List<ReferentielItemDto> raisonsCloture() {
         return closingReasonRepository.findAll().stream().map(r -> new ReferentielItemDto(
                 r.getId(), r.getCode(), r.getDescription(), null)).toList();

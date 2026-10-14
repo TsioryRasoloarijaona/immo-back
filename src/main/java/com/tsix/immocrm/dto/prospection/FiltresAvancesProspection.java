@@ -1,8 +1,11 @@
 package com.tsix.immocrm.dto.prospection;
 
+import com.tsix.immocrm.domain.DateRenseignee;
+import com.tsix.immocrm.domain.PeriodeSur;
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.format.annotation.DateTimeFormat;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,15 +58,27 @@ public record FiltresAvancesProspection(
         @Schema(example = "1")
         Integer nbVisitesMin,
 
-        @Schema(description = "Dernier échange à partir de cette date (incluse), ISO-8601. 90,4 %.",
-                example = "2026-01-01T00:00:00")
-        LocalDateTime communicationDepuis,
+        // Repli date-heure : l'ancien format reste accepté, son heure est ignorée.
+        @Schema(description = "Dernier échange à partir de ce jour (inclus), AAAA-MM-JJ. 90,4 %.",
+                example = "2026-01-01")
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDate communicationDepuis,
 
-        @Schema(description = "Dernier échange jusqu'à cette date (incluse), ISO-8601.",
-                example = "2026-12-31T23:59:59")
-        LocalDateTime communicationJusqua,
+        @Schema(description = "Dernier échange jusqu'à ce jour inclus (jour entier), AAAA-MM-JJ.",
+                example = "2026-12-31")
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = "yyyy-MM-dd'T'HH:mm:ss")
+        LocalDate communicationJusqua,
 
-        Boolean avecAlerteActive
+        Boolean avecAlerteActive,
+
+        // ---------------- Barre de filtres d'OMRAN ----------------
+
+        Boolean aboutie,
+
+        @Schema(description = "Date portant la période `dateDebut` / `dateFin`. Défaut : DATE.")
+        PeriodeSur periodeSur,
+
+        DateRenseignee dateRenseignee
 ) {
 
     /** Vrai si au moins un filtre exige la sous-requête sur la vue. */

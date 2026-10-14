@@ -23,6 +23,28 @@ Filtre d'archivage, **à trois états**. Absent : toutes les pré-prospections. 
 ouvertes (`fermee` à `false` ou `null`). `false` : seulement les archivées (`fermee` à `true`).
 Avant le 28/09/2026, `false` était ignoré et renvoyait toute la liste.
 
+### param search
+
+Recherche multi-critère du logiciel de bureau, **espaces et casse ignorés des deux côtés**. Champs :
+code, nom / téléphone / email saisis, champs libres `TempField1`, `TempField2` et `TempField10` (les
+autres sont vides en production), notes ; libellés du prospect lié, de la tranche, de l'article, de
+la nature, du type, de l'action, de la source et du support.
+
+### param inclureSansTranche
+
+« Non affectés » : avec `trancheId`, ajoute les pré-prospections **sans tranche** à celles des
+tranches cochées. Sans `trancheId`, sans effet (le périmètre s'applique comme avant).
+
+### param dateDebut
+
+Borne basse (incluse) sur la date du document. `AAAA-MM-JJ` = depuis le début du jour ; une
+date-heure ISO-8601 reste acceptée. 400 si illisible.
+
+### param dateFin
+
+Borne haute sur la date du document. `AAAA-MM-JJ` = **jour entier inclus** ; une date-heure
+ISO-8601 reste acceptée et vaut borne incluse. 400 si illisible.
+
 ### param groupeValeur
 
 Valeur du groupe à déplier — la `cle` renvoyée telle quelle par `/groupes`. Omise avec
@@ -69,6 +91,11 @@ autres. Passer `true` pour le récupérer — la somme des effectifs retombe alo
 
 Filtre d'archivage à trois états, **identique à celui de la liste** : absent = tout, `true` =
 ouvertes, `false` = archivées.
+
+### param inclureSansTranche
+
+« Non affectés », **identique à la liste** : avec `trancheId`, ajoute les pré-prospections sans
+tranche. Les effectifs retombent sur le `totalElements` de la liste appelée avec les mêmes filtres.
 
 ## creer
 
