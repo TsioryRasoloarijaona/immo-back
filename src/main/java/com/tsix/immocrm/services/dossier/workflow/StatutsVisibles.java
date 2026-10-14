@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.dossier.workflow;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.entities.str.StrIntervener;
 import com.tsix.immocrm.repositories.str.StrIntervenerRepository;
+import com.tsix.immocrm.services.dossier.liste.StatutsVisiblesListe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +20,7 @@ import java.util.UUID;
  */
 @Service
 @Transactional(readOnly = true)
-public class StatutsVisibles {
+public class StatutsVisibles implements StatutsVisiblesListe {
 
     private final StrIntervenerRepository intervenerRepository;
     private final IntervenantCourant intervenantCourant;
@@ -29,6 +30,7 @@ public class StatutsVisibles {
         this.intervenantCourant = intervenantCourant;
     }
 
+    @Override
     public Optional<Set<UUID>> pourUtilisateurCourant() {
         return pour(intervenantCourant.courant());
     }

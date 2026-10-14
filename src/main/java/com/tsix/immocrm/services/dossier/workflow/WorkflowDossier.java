@@ -13,6 +13,7 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.repositories.stl.VersementsDossierRepository;
+import com.tsix.immocrm.services.dossier.modalite.ModalitePaiementService;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -52,7 +53,7 @@ public class WorkflowDossier {
     /** Dépendances des effets, regroupées. */
     @Component
     public record EffetsWorkflow(StrStatusRepository statusRepository, VersementsDossierRepository versements,
-                                 Clock clock) {
+                                 Clock clock, ModalitePaiementService modalites) {
     }
 
     /**
@@ -107,7 +108,8 @@ public class WorkflowDossier {
 
     /**
      * Après le changement ({@code Sale.cs:AfterExecuteWorkflow} et {@code BeforeUpdate}) : validité du statut,
-     * gestionnaire auto, extinction des relances, alerte d'expiration si la validité a changé.
+     * gestionnaire auto, extinction des relances, alerte d'expiration si la validité a changé, instantané de la
+     * modalité de paiement au premier statut effectif (FEATURE-vente-echeancier.md §2).
      */
     public void apresChangement(ComFolder dossier, StrStatus nouveau, StatutDossier connu, Supplier<CfgTier> employe) {
         LocalDateTime ancienneValidite = dossier.getStatusValidityDate();
@@ -120,6 +122,7 @@ public class WorkflowDossier {
                 && !dossier.getStatusValidityDate().equals(ancienneValidite)) {
             alertes.alerteExpiration(dossier, nouveau, connu);
         }
+        effets.modalites().instantaneSiEffectif(dossier);
     }
 
     /** {@code Sale.cs:SetStatusValidityDate} : aujourd'hui + durée de vie, nulle sans durée. */

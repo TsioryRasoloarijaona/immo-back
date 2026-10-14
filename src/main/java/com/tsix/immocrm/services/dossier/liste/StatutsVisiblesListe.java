@@ -5,9 +5,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Statuts de dossier que l'utilisateur courant peut voir dans la liste. Même contrat que
- * {@code services/dossier/workflow/StatutsVisibles.pourUtilisateurCourant()} (lot A), qui le remplacera.
- * Voir FEATURE-vente-liste.md §9.
+ * Statuts de dossier que l'utilisateur courant peut voir dans la liste, implémenté par
+ * {@code services/dossier/workflow/StatutsVisibles}. Voir FEATURE-vente-liste.md §9.
  */
 public interface StatutsVisiblesListe {
 
