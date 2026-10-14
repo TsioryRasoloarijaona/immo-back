@@ -254,6 +254,10 @@ public class ComFolder {
     @Column(name = "loanCompanyDecisionDate")
     private LocalDateTime loanCompanyDecisionDate;
 
+    // FK vers ComLoanCompanyDecision, table absente de yesRemsTest : identifiant nu, pas d'association.
+    @Column(name = "ComLoanCompanyDecisionId")
+    private UUID comLoanCompanyDecisionId;
+
     // Colonne "text" (ANSI), pas "ntext" : en @Nationalized le driver la lie en NVARCHAR et toute
     // requête sur ComFolder échoue (« La conversion de text en NCHAR n'est pas prise en charge »).
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)

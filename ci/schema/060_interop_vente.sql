@@ -41,6 +41,30 @@ IF OBJECT_ID('dbo.StlDocumentLine', 'U') IS NULL
     );
 GO
 
+-- ComFolderGift et ComModification (lues par la liste des dossiers) : tables completes creees par
+-- 070_vente_sous_listes.sql ; pas de version reduite ici, elle empecherait leur creation.
+
+-- ComLoanCompanyDecision : decisions MEILLEURTAUX lues en SQL natif (FEATURE-vente-edition.md) ;
+-- deja creee par 010 en CI, absente de yesRemsTest.
+IF OBJECT_ID('dbo.ComLoanCompanyDecision', 'U') IS NULL
+    CREATE TABLE [dbo].[ComLoanCompanyDecision](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [sorting] [int] NULL,
+        [Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserCreateDateTime] [datetime] NULL,
+        [UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserUpdateDateTime] [datetime] NULL,
+     CONSTRAINT [ComLoanCompanyDecision_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
+    );
+GO
+
+-- Une copie reduite (PKey, Code, Description) existe sur certaines bases locales : la liste trie sur sorting.
+IF COL_LENGTH('dbo.ComLoanCompanyDecision', 'sorting') IS NULL
+    ALTER TABLE [dbo].[ComLoanCompanyDecision] ADD [sorting] [int] NULL;
+GO
+
 -- Devise par defaut = MAD, comme en production (PKey semee par 040).
 IF NOT EXISTS (SELECT 1 FROM dbo.AdmParamsGuid WHERE Code = 'DefaultCurrency')
     INSERT INTO dbo.AdmParamsGuid (Code, CodeValue, PKey)

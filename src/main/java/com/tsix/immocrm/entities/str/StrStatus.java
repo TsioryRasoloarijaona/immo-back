@@ -57,6 +57,28 @@ public class StrStatus {
     @Column(name = "Delay")
     private Integer delai;
 
+    @Column(name = "StrStatusTypeId")
+    private UUID strStatusTypeId;
+
+    // OMRAN « Vente au comptant » / « Vente à crédit » (contrôle du crédit dans Sale.cs:VerifThreshold).
+    @Column(name = "BoolField004")
+    private Boolean venteAuComptant;
+
+    @Column(name = "BoolField005")
+    private Boolean venteACredit;
+
+    // OMRAN « Avec vérification du schéma de financement » (Sale.cs:VerifSchema).
+    @Column(name = "BoolField012")
+    private Boolean verificationSchema;
+
+    // OMRAN « Avec affectation de gestionnaire » (Sale.cs:ManageSaleManager).
+    @Column(name = "BoolField015")
+    private Boolean affectationGestionnaire;
+
+    /** « Date associée » : {@code StrField} dont le {@code Code} nomme la colonne date du dossier. */
+    @Column(name = "StrFieldDateId")
+    private UUID strFieldDateId;
+
     /** Ni annulation ni résiliation : le statut d'un dossier encore en cours chez OMRAN. */
     public boolean estActif() {
         return !Boolean.TRUE.equals(annulation) && !Boolean.TRUE.equals(resiliation);

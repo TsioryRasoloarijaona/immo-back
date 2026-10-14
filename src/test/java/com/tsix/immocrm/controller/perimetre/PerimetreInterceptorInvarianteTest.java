@@ -51,6 +51,8 @@ class PerimetreInterceptorInvarianteTest {
     private static final Set<String> ROUTES_SANS_ID_AUTORISEES = Set.of(
             "/api/dossiers",
             "/api/dossiers/simulation-financement",
+            // Référentiel ComLoanCompanyDecision (FEATURE-vente-edition.md) : ne charge aucun dossier.
+            "/api/dossiers/decisions-meilleurtaux",
             "/api/dossiers/documents/fiche-reservation",
             "/api/dossiers/documents/acte-reservation",
             "/api/dossiers/documents/fiche-bancaire",
@@ -85,7 +87,13 @@ class PerimetreInterceptorInvarianteTest {
             // liste : un contact hors périmètre n'est jamais nommé. Vérifié par
             // PreProspectionImportTest#doublonHorsPerimetre_nEstJamaisNomme.
             "/api/pre-prospections/import",
-            "/api/pre-prospections/import/apercu");
+            "/api/pre-prospections/import/apercu",
+            // Liste des dossiers (FEATURE-vente-liste.md) : l'export rejoue la Specification de la liste,
+            // périmètre compris (ListeDossiersService#specification) ; statuts et dates de période sont
+            // des référentiels, aucune ressource scopée.
+            "/api/dossiers/export",
+            "/api/dossiers/statuts",
+            "/api/dossiers/champs-date");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

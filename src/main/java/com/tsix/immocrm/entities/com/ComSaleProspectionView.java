@@ -110,4 +110,12 @@ public class ComSaleProspectionView {
     @Nationalized
     @Column(name = "Status")
     private String status;
+
+    /** {@code StrStatus.BoolField002} du dossier : le filtre « Aboutie » d'OMRAN exige 0. */
+    @Column(name = "StatusIsCancellation")
+    private Boolean statusIsCancellation;
+
+    /** {@code StrStatus.BoolField003} du dossier : le filtre « Aboutie » d'OMRAN exige 0. */
+    @Column(name = "StatusIsClosing")
+    private Boolean statusIsClosing;
 }

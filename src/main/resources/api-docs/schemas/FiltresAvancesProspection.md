@@ -36,3 +36,16 @@ Au moins N visites. Attention : seules 20,8 % des prospections ont atteint l'ét
 
 `true` : uniquement celles portant une relance active. `false` : uniquement celles sans. Absent :
 pas de filtre. 25,2 % en portent une.
+
+## aboutie
+
+Filtre « Aboutie » du logiciel de bureau. `true` : la prospection a donné un dossier de vente ni
+annulé ni résilié (`ComFolderId` renseigné, `StatusIsCancellation = 0` et `StatusIsClosing = 0` dans
+la vue `ComSaleProspectionView`). `false` : exactement le complément — pas de dossier, ou un dossier
+annulé ou résilié ; les pré-prospections et les lignes sans type y tombent. Absent : pas de filtre.
+
+## dateRenseignee
+
+`OUI` : la date choisie par `periodeSur` est renseignée ; `NON` : elle est vide (`IS NULL`). Quand
+ce paramètre est présent, `dateDebut` et `dateFin` sont **ignorés**, comme dans le logiciel de
+bureau. Utile surtout avec `periodeSur=ARCHIVAGE` (« archivées sans date d'archivage »).

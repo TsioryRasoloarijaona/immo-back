@@ -29,6 +29,27 @@ celles sans tranche restent visibles de tous.
 Code(s) ComProspectionKind ("Nature"/étape) à filtrer. Répéter le paramètre pour plusieurs étapes.
 Absent = toutes les étapes.
 
+### param search
+
+Recherche multi-critère du logiciel de bureau, **espaces et casse ignorés des deux côtés** (« 06 12 34
+» trouve « 061234 »). Champs : code, nom / téléphone / email saisis (`Temp*`), notes ; prospect lié
+(nom affiché, prénom + nom dans les deux ordres, mobile, mobile précédé de l'indicatif, de `+` ou de
+`00`, téléphone, email, CIN, ville) ; article (code, libellé, catégorie, type, présentation) ; client
+et statut du dossier issu de la prospection ; source et type (code), support et nature (libellé) ;
+autres tranches, catégories et types du profil. Voir `FEATURE-prospection-filtres.md` §1.
+
+### param dateDebut
+
+Borne basse (incluse) de la période, sur la date choisie par `periodeSur` (défaut : date du
+document). `AAAA-MM-JJ` = depuis le début du jour ; une date-heure ISO-8601 reste acceptée. 400 si
+illisible.
+
+### param dateFin
+
+Borne haute de la période. `AAAA-MM-JJ` = **jour entier inclus** (`< fin + 1 jour`, comme le
+logiciel de bureau) ; une date-heure ISO-8601 reste acceptée et vaut borne incluse. 400 si illisible.
+Ignorée, comme `dateDebut`, quand `dateRenseignee` est fourni.
+
 ### param ouvertes
 
 Filtre d'archivage, **à trois états**. Absent : toutes les prospections. `true` : seulement les

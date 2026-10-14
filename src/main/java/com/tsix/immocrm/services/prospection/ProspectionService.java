@@ -131,6 +131,7 @@ public class ProspectionService {
 
     private static final String IS_CLOSED = "isClosed";
     private static final String IS_OLD_CUSTOMER = "isOldCustomer";
+    private static final String LAST_COMMUNICATION_DATE = "lastCommunicationDate";
 
     private static final String PROSPECTION_INTROUVABLE = "Prospection introuvable: ";
     private static final String ORIGINE_INTROUVABLE = "ComProspectionOrigin introuvable: ";
@@ -250,13 +251,10 @@ public class ProspectionService {
      *
      * @param ouvertes {@code null} = pas de filtre ; ouvertes = {@code IsClosed} à 0 <b>ou NULL</b>
      */
-    public Page<ProspectionListItemDto> findAll(List<String> etapes, List<String> origines, List<UUID> commerciaux,
-            List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin, String search,
-            Boolean ouvertes, FiltresAvancesProspection filtres, Set<ColonneProspection> colonnes,
-            ColonneProspection groupeColonne, String groupeValeur, Granularite granularite,
-            Pageable pageable) {
-        Specification<ComProspection> spec = specProspections(new CriteresListe(etapes, origines, commerciaux,
-                trancheIds, dateDebut, dateFin, search, ouvertes), filtres)
+    public Page<ProspectionListItemDto> findAll(FiltresListeProspection liste, FiltresAvancesProspection filtres,
+            Set<ColonneProspection> colonnes, ColonneProspection groupeColonne, String groupeValeur,
+            Granularite granularite, Pageable pageable) {
+        Specification<ComProspection> spec = specProspections(criteres(liste, filtres), filtres)
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
@@ -268,18 +266,14 @@ public class ProspectionService {
      */
     public long compterProspections(UUID trancheId, Boolean ouvertes) {
         return prospectionRepository.count(specProspections(new CriteresListe(null, null, null,
-                List.of(trancheId), null, null, null, ouvertes), null)
+                List.of(trancheId), false, PeriodeListe.AUCUNE, null, ouvertes), null)
                 .and(perimetreService.filtreProspections()));
     }
 
     /** {@code projetIds} : projet de la tranche, comme le filtre avancé {@code projetId} des prospections. */
-    public Page<ProspectionListItemDto> findPreProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, List<UUID> projetIds, LocalDateTime dateDebut,
-            LocalDateTime dateFin, String search, Boolean ouvertes, ColonneProspection groupeColonne,
-            String groupeValeur, Granularite granularite, Pageable pageable) {
-        Specification<ComProspection> spec = specPreProspections(new CriteresListe(etapes, origines, commerciaux,
-                trancheIds, dateDebut, dateFin, search, ouvertes))
-                .and(dansLesProjets(projetIds))
+    public Page<ProspectionListItemDto> findPreProspections(FiltresListeProspection liste, List<UUID> projetIds,
+            ColonneProspection groupeColonne, String groupeValeur, Granularite granularite, Pageable pageable) {
+        Specification<ComProspection> spec = specPreProspections(criteres(liste, null), projetIds)
                 .and(perimetreService.filtreProspections())
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut forcée : ComSaleProspectionView exclut les pré-prospections, la
@@ -288,21 +282,27 @@ public class ProspectionService {
     }
 
     /** Voir {@code instructions/FEATURE-groupement-listes.md}. */
-    public ResultatGroupement grouperProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes, FiltresAvancesProspection filtres,
+    public ResultatGroupement grouperProspections(FiltresListeProspection liste, FiltresAvancesProspection filtres,
             ColonneProspection groupeBy, Granularite granularite, List<AgregatDemande> agregats,
             TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return grouper(specProspections(new CriteresListe(etapes, origines, commerciaux, trancheIds, dateDebut,
-                dateFin, search, ouvertes), filtres), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
+        return grouper(specProspections(criteres(liste, filtres), filtres), groupeBy, granularite, agregats, tri,
+                inclureSansValeur, pageable);
     }
 
-    public ResultatGroupement grouperPreProspections(List<String> etapes, List<String> origines,
-            List<UUID> commerciaux, List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, Boolean ouvertes, ColonneProspection groupeBy, Granularite granularite,
-            List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return grouper(specPreProspections(new CriteresListe(etapes, origines, commerciaux, trancheIds, dateDebut,
-                dateFin, search, ouvertes)), groupeBy, granularite, agregats, tri, inclureSansValeur, pageable);
+    /** Même prédicat que {@link #findPreProspections}, {@code projetIds} compris. */
+    public ResultatGroupement grouperPreProspections(FiltresListeProspection liste, List<UUID> projetIds,
+            ColonneProspection groupeBy, Granularite granularite, List<AgregatDemande> agregats, TriGroupe tri,
+            boolean inclureSansValeur, Pageable pageable) {
+        return grouper(specPreProspections(criteres(liste, null), projetIds), groupeBy, granularite, agregats, tri,
+                inclureSansValeur, pageable);
+    }
+
+    private static CriteresListe criteres(FiltresListeProspection l, FiltresAvancesProspection filtres) {
+        PeriodeListe periode = PeriodeListe.de(l.dateDebut(), l.dateFin(),
+                filtres != null ? filtres.periodeSur() : null,
+                filtres != null ? filtres.dateRenseignee() : null);
+        return new CriteresListe(l.etapes(), l.origines(), l.commerciaux(), l.trancheIds(),
+                l.inclureSansTranche(), periode, l.search(), l.ouvertes());
     }
 
     private ResultatGroupement grouper(Specification<ComProspection> spec, ColonneProspection groupeBy,
@@ -337,19 +337,33 @@ public class ProspectionService {
     private static Specification<ComProspection> specProspections(CriteresListe criteres,
                                                                   FiltresAvancesProspection filtres) {
         return buildSpec(criteres)
+                .and(recherche(criteres.search(), RechercheProspection::prospections))
                 .and(filtresAvances(filtres))
                 .and(DiscriminantPreProspection.nEstPasPreProspection());
     }
 
-    private static Specification<ComProspection> specPreProspections(CriteresListe criteres) {
+    private static Specification<ComProspection> specPreProspections(CriteresListe criteres, List<UUID> projetIds) {
         return buildSpec(criteres)
+                .and(recherche(criteres.search(), RechercheProspection::preProspections))
+                .and(dansLesProjets(projetIds))
                 .and(DiscriminantPreProspection.estPreProspection());
     }
 
     /** Filtres simples communs aux listes de prospections et de pré-prospections. */
     private record CriteresListe(List<String> etapes, List<String> origines, List<UUID> commerciaux,
-                                 List<UUID> trancheIds, LocalDateTime dateDebut, LocalDateTime dateFin,
+                                 List<UUID> trancheIds, boolean inclureSansTranche, PeriodeListe periode,
                                  String search, Boolean ouvertes) {
+    }
+
+    @FunctionalInterface
+    private interface Recherche {
+        Predicate predicat(Root<ComProspection> root, CriteriaQuery<?> query, CriteriaBuilder cb, String texte);
+    }
+
+    private static Specification<ComProspection> recherche(String texte, Recherche recherche) {
+        return (root, query, cb) -> StringUtils.hasText(texte)
+                ? recherche.predicat(root, query, cb, texte)
+                : cb.conjunction();
     }
 
     private static Specification<ComProspection> buildSpec(CriteresListe c) {
@@ -369,32 +383,25 @@ public class ProspectionService {
         if (estRenseignee(c.commerciaux())) {
             predicates.add(root.get("cfgCommercial").get("id").in(c.commerciaux()));
         }
-        if (estRenseignee(c.trancheIds())) {
-            predicates.add(AppartenanceTranche.prospection(root, c.trancheIds()));
+        if (estRenseignee(c.trancheIds()) || c.inclureSansTranche()) {
+            predicates.add(predicatTranches(root, cb, c));
         }
-        if (c.dateDebut() != null) {
-            predicates.add(cb.greaterThanOrEqualTo(root.get("docDate"), c.dateDebut()));
-        }
-        if (c.dateFin() != null) {
-            predicates.add(cb.lessThanOrEqualTo(root.get("docDate"), c.dateFin()));
-        }
-        if (StringUtils.hasText(c.search())) {
-            predicates.add(predicatRecherche(root, cb, c.search()));
-        }
+        predicates.addAll(c.periode().predicats(root, cb));
         if (c.ouvertes() != null) {
             predicates.add(predicatOuvertes(root, cb, c.ouvertes()));
         }
         return cb.and(predicates.toArray(new Predicate[0]));
     }
 
-    private static Predicate predicatRecherche(Root<ComProspection> root, CriteriaBuilder cb, String search) {
-        String pattern = "%" + search.toLowerCase() + "%";
-        return cb.or(
-                cb.like(cb.lower(root.get("code")), pattern),
-                cb.like(cb.lower(root.get("tempDescription")), pattern),
-                cb.like(cb.lower(root.get("tempTel")), pattern),
-                cb.like(cb.lower(root.get("tempEMail")), pattern)
-        );
+    // « Non affectés » d'OMRAN (PreProspectionList.cs:427) : tranches cochées OU sans tranche ; sans
+    // tranche cochée, seulement les lignes sans tranche.
+    private static Predicate predicatTranches(Root<ComProspection> root, CriteriaBuilder cb, CriteresListe c) {
+        Predicate sansTranche = cb.isNull(root.get("stkHierarchy"));
+        if (!estRenseignee(c.trancheIds())) {
+            return sansTranche;
+        }
+        Predicate tranches = AppartenanceTranche.prospection(root, c.trancheIds());
+        return c.inclureSansTranche() ? cb.or(tranches, sansTranche) : tranches;
     }
 
     // Ternaire : absent = tout, true = ouvertes, false = archivées. NULL compte comme
@@ -429,8 +436,27 @@ public class ProspectionService {
             if (f.exigeLaVue()) {
                 predicates.add(root.get("id").in(sousRequeteVue(f, query, cb)));
             }
+            if (f.aboutie() != null) {
+                predicates.add(predicatAboutie(root, query, cb, f.aboutie()));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Aboutie d'OMRAN : un dossier ni annulé ni résilié, lu dans la vue. « Non » est le complément
+     * exact (NOT IN), pré-prospections et lignes sans type comprises. Voir FEATURE-prospection-filtres.md §2.
+     */
+    private static Predicate predicatAboutie(Root<ComProspection> root, CriteriaQuery<?> query, CriteriaBuilder cb,
+                                             boolean aboutie) {
+        Subquery<UUID> abouties = query.subquery(UUID.class);
+        Root<ComSaleProspectionView> vue = abouties.from(ComSaleProspectionView.class);
+        abouties.select(vue.get("id")).where(
+                cb.isNotNull(vue.get("comFolderId")),
+                cb.isFalse(vue.get("statusIsCancellation")),
+                cb.isFalse(vue.get("statusIsClosing")));
+        Predicate dans = root.get("id").in(abouties);
+        return aboutie ? dans : cb.not(dans);
     }
 
     /**
@@ -489,10 +515,12 @@ public class ProspectionService {
             criteres.add(cb.greaterThanOrEqualTo(vue.get("nbrVisit"), f.nbVisitesMin()));
         }
         if (f.communicationDepuis() != null) {
-            criteres.add(cb.greaterThanOrEqualTo(vue.get("lastCommunicationDate"), f.communicationDepuis()));
+            criteres.add(cb.greaterThanOrEqualTo(vue.get(LAST_COMMUNICATION_DATE),
+                    f.communicationDepuis().atStartOfDay()));
         }
         if (f.communicationJusqua() != null) {
-            criteres.add(cb.lessThanOrEqualTo(vue.get("lastCommunicationDate"), f.communicationJusqua()));
+            criteres.add(cb.lessThan(vue.get(LAST_COMMUNICATION_DATE),
+                    f.communicationJusqua().plusDays(1).atStartOfDay()));
         }
         if (f.avecAlerteActive() != null) {
             criteres.add(Boolean.TRUE.equals(f.avecAlerteActive())
