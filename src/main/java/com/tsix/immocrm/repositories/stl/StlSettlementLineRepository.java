@@ -35,6 +35,14 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
             "WHERE l.comDocument.comFolder.id = :dossierId" + COMPTE + " GROUP BY l.comDocument.id")
     List<Object[]> sumAmountByComFolderIdGroupedByComDocument(UUID dossierId);
 
+    /**
+     * Même réglé que {@link #sumAmountByComDocumentId}, pour un lot d'échéances (≤ 2 000 ids). Tuple :
+     * [comDocumentId, sommeReglee] ; une échéance sans règlement n'apparaît pas.
+     */
+    @Query("SELECT l.comDocument.id, SUM(" + MONTANT_SIGNE + ") FROM StlSettlementLine l JOIN l.stlSettlement st "
+            + "WHERE l.comDocument.id IN :echeanceIds" + COMPTE + " GROUP BY l.comDocument.id")
+    List<Object[]> sumAmountByComDocumentIdIn(List<UUID> echeanceIds);
+
     /** Dossier d'un règlement par ses lignes d'échéance. Tuple : [comFolderId, comFolderCode]. */
     @Query("SELECT d.comFolder.id, d.comFolder.code FROM StlSettlementLine l JOIN l.comDocument d " +
             "WHERE l.stlSettlement.id = :settlementId AND d.comFolder IS NOT NULL")

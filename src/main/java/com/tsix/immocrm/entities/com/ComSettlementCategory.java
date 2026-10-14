@@ -62,6 +62,10 @@ public class ComSettlementCategory {
     @Column(name = "IsSalePenality")
     private Boolean isSalePenality;
 
+    // Pénalité de retard possible sur cette catégorie (ComDocument.cs:ManagePenalty) ; pas IsSalePenality.
+    @Column(name = "IsWithPenalty")
+    private Boolean isWithPenalty;
+
     @Column(name = "IsSaleResiliation")
     private Boolean isSaleResiliation;
 

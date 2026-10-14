@@ -114,7 +114,7 @@ public class ComDocument {
     @Column(name = "Code")
     private String code;
 
-    // ComImpayedView fait INNER JOIN CfgCompany : une échéance sans société n'est jamais un impayé.
+    // ComImpayedView d'OMRAN fait INNER JOIN CfgCompany ; GET /api/impayes passe par le projet (FEATURE-impayes R5).
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;

@@ -26,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ColonneEncaissement;
+import com.tsix.immocrm.domain.ColonneImpaye;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.dto.referentiel.ColonneDto;
@@ -326,6 +327,15 @@ public class ReferentielController {
     @Operation(summary = "Catalogue des colonnes de la liste des encaissements")
     public List<ColonneDto> getColonnesEncaissements() {
         return Arrays.stream(ColonneEncaissement.values())
+                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                        c.parDefaut(), c.chemin()))
+                .toList();
+    }
+
+    @GetMapping("/colonnes/impayes")
+    @Operation(summary = "Catalogue des colonnes de la liste des impayés (aucune n'est groupable)")
+    public List<ColonneDto> getColonnesImpayes() {
+        return Arrays.stream(ColonneImpaye.values())
                 .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
                         c.parDefaut(), c.chemin()))
                 .toList();
