@@ -248,6 +248,11 @@ public class CfgTier {
     @Column(name = "City")
     private String city;
 
+    // Lecture seule : la ville saisie par référentiel prime sur City (vue ComSaleProspectionView,
+    // CfgTierCity). Sert à la recherche des listes de prospection ; jamais écrite par l'API.
+    @Column(name = "AdmCityId", insertable = false, updatable = false)
+    private UUID admCityId;
+
     @Column(name = "Antiquity")
     private Integer antiquity;
 

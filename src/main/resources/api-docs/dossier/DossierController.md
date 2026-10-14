@@ -118,9 +118,37 @@ créé, le `detail` le dit.
 
 ## changerStatut
 
-Change le statut du dossier. La transition doit figurer dans la table des transitions validées
-(sinon **409**, avec `transitionsAutorisees`) — copie des transitions `StrWorkFlow` du logiciel de
-bureau. Un dossier **sans statut** est refusé (**409**, reprise de données nécessaire).
+Change le statut du dossier selon le **workflow paramétré d'OMRAN** (CONFIGURATION › VENTE › Statuts /
+Transitions), dans cet ordre :
+
+1. **Transition** lue dans `StrWorkFlow` depuis le statut courant (sinon **409**, avec
+   `transitionsAutorisees` = les cibles que l'appelant peut exécuter). Base sans paramétrage : table de repli
+   des 34 transitions. Un dossier **sans statut** est refusé (**409**, reprise de données nécessaire).
+2. **Intervenant** : un des rôles de l'appelant (ou l'appelant lui-même) doit être intervenant de la
+   transition (`StrWorkFlowIntervener`), sinon **403**. L'Administrateur passe toujours.
+3. `date` et `note` sont posées, puis les **champs obligatoires** de la transition et du statut cible sont
+   contrôlés, sur le dossier **et** sur le client et les acquéreurs personnes physiques ; puis les **pièces à
+   joindre** (une pièce « juste à cocher » peut n'être que cochée). Manque → **400**, `detail` = texte
+   d'OMRAN : « Pour exécuter la transition : … Le champ '…' est obligatoire ! … Le document de type : … est
+   obligatoire ! ».
+4. Hors annulation / désistement : **seuil de versement** du statut cible (`CfgTrancheStatus`, ligne de la
+   tranche sinon globale ; versements = réglé des échéances avance, auto-financement et crédit) — refus
+   **409** « Il faut que la sommes des versements soit au moins égal à 12,50 %. Soit un montant de … ».
+   `ignorerSeuil=true` le saute (Administrateur seulement, sinon **403**) et laisse une ligne d'historique.
+   Puis, si le statut le demande, **schéma de financement** : prix après remise = avance + crédit +
+   auto-financement au centime près (sinon **409** « Votre schéma de financement ne correspond pas… »).
+5. La `date` va sur la **date associée** au statut cible (`StrStatus.StrFieldDateId` : CONCRETISATION →
+   `advanceDate`, MEILLEURTAUX → `loanCompanySendDate`, CREDIT DEBLOQUE → `creditApprovalDate`, FORMALISE →
+   `ownershipCertificateDate`…), ignorée s'il n'en a pas. Sans `date`, rien n'est écrit : une date déjà
+   renseignée n'est jamais écrasée d'office (un retour à RESERVATION garde `docDate`) ; `dateActuelle` de
+   `etapes-suivantes` dit si la colonne est déjà remplie.
+   Le seuil de versement n'est contrôlé que pour un utilisateur dont un rôle porte le droit OMRAN
+   `toolVerifyThreshold` (tout le monde si ce droit n'est pas paramétré).
+6. `StatusValidityDate` = aujourd'hui + durée de vie du statut (vide sans durée) ; si elle change, une action
+   système « l'état … du dossier de vente N° … est expiré » est posée avec son alerte à cette date. Les
+   relances de la prospection sont désarmées et leurs alertes éteintes (impayés épargnés). Un statut « avec
+   affectation de gestionnaire » donne au dossier sans gestionnaire le personnel de l'appelant.
+7. L'historique (`StrHistory`) porte la transition exécutée (`StrWorkflowId`).
 
 **Type client / prospect, comme OMRAN** (`Sale.cs:ManageTier`), après chaque changement : le client
 principal et chaque acquéreur (`ComFolderCustomer`) qui a au moins un dossier actif (statut ni
@@ -148,12 +176,14 @@ dossier (sous-articles rattachés au lot, ligne « AFFECTATION »). `CancelDate`
 
 ### reponse 400
 
-`statut` absent ou inconnu, ou `note` absente ou vide vers ANNULATION / DESISTEMENT (« La cause est
-obligatoire pour une annulation ou un désistement ») ; rien n'est écrit.
+`statut` absent ou inconnu, `note` absente ou vide vers ANNULATION / DESISTEMENT (« La cause est
+obligatoire pour une annulation ou un désistement »), ou champs obligatoires / pièces à joindre manquants
+(texte d'OMRAN dans `detail`) ; rien n'est écrit.
 
 ### reponse 403
 
-Un article à libérer ou à réoccuper est sur un projet hors du périmètre commercial de l'appelant.
+L'appelant n'est pas intervenant de la transition, `ignorerSeuil` demandé sans être Administrateur, ou un
+article à libérer ou à réoccuper est sur un projet hors du périmètre commercial de l'appelant.
 
 ### reponse 404
 
@@ -161,11 +191,27 @@ Dossier introuvable.
 
 ### reponse 409
 
-Transition non autorisée depuis le statut courant (le corps liste `transitionsAutorisees`), dossier
-sans statut, réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code>
+Transition non paramétrée depuis le statut courant (le corps liste `transitionsAutorisees`), dossier
+sans statut, seuil de versement non atteint, schéma de financement différent du prix, réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code>
 a été revendu entre-temps : créer un nouveau dossier ») ou dont un sous-article est pris (« Le sous
 article <code> n'est pas libre… »), sortie avec un dossier de syndic en cours ou une facture sans
 avoir ; le statut ne change pas.
+
+## getEtapesSuivantes
+
+Transitions que l'utilisateur connecté peut exécuter depuis le statut courant (`StrWorkFlow` filtré par
+ses rôles ; toutes pour l'Administrateur), avec pour chacune la **date associée** au statut cible
+(`champDate` en camelCase, nul si le statut n'en a pas), le libellé de la transition et le drapeau
+« avec proposition du passage automatique ». Liste vide pour un dossier sans statut.
+
+## getTransitionSuggeree
+
+Passage automatique à proposer après un règlement ou un enregistrement (OMRAN le propose à la fermeture
+du dossier) : l'**unique** transition « avec proposition du passage automatique » que l'appelant peut
+exécuter depuis le statut courant, si le **seuil de versement de son statut cible** est atteint (même
+calcul que le refus de `PATCH …/statut`). `date` = date du dernier règlement d'une échéance avance,
+auto-financement ou crédit. Aucune proposition (tous les champs nuls) sans transition automatique, avec
+deux ou plus, sans seuil paramétré pour la cible, ou seuil non atteint.
 
 ## addReglement
 

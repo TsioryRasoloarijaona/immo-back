@@ -41,7 +41,7 @@ IF OBJECT_ID('dbo.StlDocumentLine', 'U') IS NULL
     );
 GO
 
--- ComFolderGift, ComModification, ComLoanCompanyDecision : comptes et libelle lus
+-- ComFolderGift, ComModification : comptes et libelle lus
 --   en SQL natif par la liste des dossiers (instructions/FEATURE-vente-liste.md,
 --   colonnes de ComFolderView). Colonnes reduites a celles lues, sans cle etrangere.
 IF OBJECT_ID('dbo.ComFolderGift', 'U') IS NULL
@@ -64,13 +64,25 @@ IF OBJECT_ID('dbo.ComModification', 'U') IS NULL
     );
 GO
 
+-- ComLoanCompanyDecision : decisions MEILLEURTAUX lues en SQL natif (FEATURE-vente-edition.md) ;
+-- deja creee par 010 en CI, absente de yesRemsTest.
 IF OBJECT_ID('dbo.ComLoanCompanyDecision', 'U') IS NULL
     CREATE TABLE [dbo].[ComLoanCompanyDecision](
         [PKey] [uniqueidentifier] NOT NULL,
+        [sorting] [int] NULL,
         [Code] [nvarchar](255) COLLATE French_CI_AS NULL,
         [Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserCreate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserCreateDateTime] [datetime] NULL,
+        [UserUpdate] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [UserUpdateDateTime] [datetime] NULL,
      CONSTRAINT [ComLoanCompanyDecision_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
     );
+GO
+
+-- Une copie reduite (PKey, Code, Description) existe sur certaines bases locales : la liste trie sur sorting.
+IF COL_LENGTH('dbo.ComLoanCompanyDecision', 'sorting') IS NULL
+    ALTER TABLE [dbo].[ComLoanCompanyDecision] ADD [sorting] [int] NULL;
 GO
 
 -- Devise par defaut = MAD, comme en production (PKey semee par 040).
