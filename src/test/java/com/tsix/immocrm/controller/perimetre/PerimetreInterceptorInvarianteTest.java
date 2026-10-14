@@ -51,6 +51,8 @@ class PerimetreInterceptorInvarianteTest {
     private static final Set<String> ROUTES_SANS_ID_AUTORISEES = Set.of(
             "/api/dossiers",
             "/api/dossiers/simulation-financement",
+            // Référentiel ComLoanCompanyDecision (FEATURE-vente-edition.md) : ne charge aucun dossier.
+            "/api/dossiers/decisions-meilleurtaux",
             "/api/dossiers/documents/fiche-reservation",
             "/api/dossiers/documents/acte-reservation",
             "/api/dossiers/documents/fiche-bancaire",
