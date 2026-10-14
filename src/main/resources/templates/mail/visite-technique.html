@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+  Visite technique programmée, adressée au responsable S.A.V. de la tranche. Voir
+  instructions/FEATURE-vente-fiche.md §B4. Mise en page par <table> et styles en ligne.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visite technique programmée</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1f2933;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 12px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px; background-color:#ffffff; border-radius:8px; border:1px solid #e4e7eb;">
+                <tr>
+                    <td style="padding:28px 32px 8px 32px;">
+                        <h1 style="margin:0; font-size:19px; font-weight:600; color:#1f2933;">Visite technique programmée</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 32px 20px 32px; font-size:15px; line-height:1.6;">
+                        <p style="margin:0 0 14px 0;">
+                            Bonjour <span th:if="${nomSav}" th:text="${nomSav}" style="font-weight:600;">Prénom Nom</span>,
+                        </p>
+                        <p style="margin:0 0 14px 0;">
+                            Une visite technique est programmée sur le dossier
+                            <span th:text="${codeDossier}" style="font-weight:600;">AYD 2026/00001</span><span
+                                th:if="${client}"> (<span th:text="${client}">Client</span>)</span>,
+                            tranche <span th:text="${tranche}">Tranche</span>.
+                        </p>
+                        <p style="margin:0 0 14px 0;">Créneau : <span th:text="${quand}" style="font-weight:600;">01/01/2026 10:00 – 01/01/2026 11:00</span></p>
+                        <p th:if="${note}" style="margin:0; padding:14px 18px; background-color:#f7f8fa; border:1px solid #e4e7eb; border-radius:6px;"
+                           th:text="${note}">Note</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
