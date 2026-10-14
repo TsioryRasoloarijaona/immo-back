@@ -41,6 +41,38 @@ IF OBJECT_ID('dbo.StlDocumentLine', 'U') IS NULL
     );
 GO
 
+-- ComFolderGift, ComModification, ComLoanCompanyDecision : comptes et libelle lus
+--   en SQL natif par la liste des dossiers (instructions/FEATURE-vente-liste.md,
+--   colonnes de ComFolderView). Colonnes reduites a celles lues, sans cle etrangere.
+IF OBJECT_ID('dbo.ComFolderGift', 'U') IS NULL
+    CREATE TABLE [dbo].[ComFolderGift](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [ComGiftId] [uniqueidentifier] NULL,
+        [ComFolderId] [uniqueidentifier] NOT NULL,
+        [Delivered] [bit] NULL,
+     CONSTRAINT [ComFolderGift_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
+    );
+GO
+
+IF OBJECT_ID('dbo.ComModification', 'U') IS NULL
+    CREATE TABLE [dbo].[ComModification](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [Status] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [ComFolderId] [uniqueidentifier] NULL,
+     CONSTRAINT [ComModification_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
+    );
+GO
+
+IF OBJECT_ID('dbo.ComLoanCompanyDecision', 'U') IS NULL
+    CREATE TABLE [dbo].[ComLoanCompanyDecision](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [Code] [nvarchar](255) COLLATE French_CI_AS NULL,
+        [Description] [nvarchar](255) COLLATE French_CI_AS NULL,
+     CONSTRAINT [ComLoanCompanyDecision_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
+    );
+GO
+
 -- Devise par defaut = MAD, comme en production (PKey semee par 040).
 IF NOT EXISTS (SELECT 1 FROM dbo.AdmParamsGuid WHERE Code = 'DefaultCurrency')
     INSERT INTO dbo.AdmParamsGuid (Code, CodeValue, PKey)
