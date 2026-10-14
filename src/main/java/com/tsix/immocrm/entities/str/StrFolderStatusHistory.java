@@ -2,6 +2,7 @@ package com.tsix.immocrm.entities.str;
 
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -47,6 +48,11 @@ public class StrFolderStatusHistory {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StrFolderStatusId")
     private StrStatus strFolderStatus;
+
+    /** Lot principal, ou le sous-article d'une ligne « AFFECTATION » / « ANNULATION AFFECTATION ». */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkItemId")
+    private StkItem stkItem;
 
     @Size(max = 1000)
     @Nationalized

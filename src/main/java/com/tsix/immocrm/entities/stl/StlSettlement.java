@@ -201,6 +201,19 @@ public class StlSettlement {
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
 
+    // StlSettlementView fait INNER JOIN sur ces quatre référentiels : NULL = règlement invisible chez OMRAN.
+    @Column(name = "AdmModuleId")
+    private UUID admModuleId;
+
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
+    @Column(name = "StlCurrencyId")
+    private UUID stlCurrencyId;
+
+    @Column(name = "StlCurrencyAffectationId")
+    private UUID stlCurrencyAffectationId;
+
     /** Compte bancaire de destination. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")

@@ -80,7 +80,8 @@ public class RecuReglementService {
         // Projet via la tranche : StkItem.CfgProjectId n'est jamais peuplé.
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
 
-        CfgTier beneficiaireTier = settlement.getTier() != null ? settlement.getTier() : folder.getCfgCustomer();
+        CfgTier payeur = PayeurReglement.de(settlement);
+        CfgTier beneficiaireTier = payeur != null ? payeur : folder.getCfgCustomer();
         Beneficiaire beneficiaire = beneficiaireTier != null ? toBeneficiaire(beneficiaireTier) : null;
 
         List<Beneficiaire> coAcquereurs = coAcquereurs(dossierId, beneficiaireTier);
@@ -145,7 +146,8 @@ public class RecuReglementService {
     private static LigneReglement toLigneReglement(StlSettlementLine ligne) {
         BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
         StlSettlement reglement = ligne.getStlSettlement();
-        boolean credit = reglement != null && Boolean.TRUE.equals(reglement.getIsCredit());
+        // Même règle que StlSettlementLineRepository.MONTANT_SIGNE : seul IsCredit = 0 est un décaissement.
+        boolean credit = reglement == null || !Boolean.FALSE.equals(reglement.getIsCredit());
         return new LigneReglement(
                 reglement != null && reglement.getDocDate() != null ? reglement.getDocDate().toLocalDate() : null,
                 credit ? montant : montant.negate(),

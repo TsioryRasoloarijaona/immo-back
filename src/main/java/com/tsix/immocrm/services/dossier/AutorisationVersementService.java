@@ -81,7 +81,7 @@ public class AutorisationVersementService {
         String banqueNom = Champs.de(compte, StlAccount::getCfgBank, TierNomFormatter::nom);
 
         CfgTier commercial = folder.getCfgCommercial();
-        CfgTier payeurTier = settlement.getTier();
+        CfgTier payeurTier = PayeurReglement.de(settlement);
 
         return new AutorisationVersementData(
                 folder.getCode(),

@@ -15,7 +15,13 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     /** Toutes les sommes de lignes excluent les règlements annulés (FEATURE-lot4 §2). */
     String COMPTE = " AND " + StatutReglement.JPQL_COMPTE_DANS_LES_TOTAUX;
 
-    @Query("SELECT COALESCE(SUM(l.amount), 0) FROM StlSettlementLine l JOIN l.stlSettlement st "
+    /**
+     * Seule règle de signe du réglé d'une échéance, comme {@code ComSaleFolderView} : un décaissement
+     * ({@code IsCredit = 0}) se retranche ; {@code IsCredit} NULL compte en encaissement.
+     */
+    String MONTANT_SIGNE = "CASE WHEN st.isCredit = false THEN -l.amount ELSE l.amount END";
+
+    @Query("SELECT COALESCE(SUM(" + MONTANT_SIGNE + "), 0) FROM StlSettlementLine l JOIN l.stlSettlement st "
             + "WHERE l.comDocument.id = :echeanceId" + COMPTE)
     BigDecimal sumAmountByComDocumentId(UUID echeanceId);
 
@@ -25,7 +31,7 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     BigDecimal sumAmountByStlSettlementId(UUID settlementId);
 
     /** Tuple : [comDocumentId, sommeReglee] ; seules les échéances avec un règlement apparaissent. */
-    @Query("SELECT l.comDocument.id, COALESCE(SUM(l.amount), 0) FROM StlSettlementLine l JOIN l.stlSettlement st " +
+    @Query("SELECT l.comDocument.id, COALESCE(SUM(" + MONTANT_SIGNE + "), 0) FROM StlSettlementLine l JOIN l.stlSettlement st " +
             "WHERE l.comDocument.comFolder.id = :dossierId" + COMPTE + " GROUP BY l.comDocument.id")
     List<Object[]> sumAmountByComFolderIdGroupedByComDocument(UUID dossierId);
 

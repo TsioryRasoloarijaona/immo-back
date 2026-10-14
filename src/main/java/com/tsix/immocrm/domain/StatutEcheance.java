@@ -11,15 +11,16 @@ public enum StatutEcheance {
 
     /** Reste à payer nul ou négatif — l'échéance est soldée (un sur-paiement compte comme payé). */
     PAYE,
-    /** Partiellement réglée : au moins un règlement affecté, mais il reste à payer. */
+    /** Partiellement réglée et pas encore due. */
     PARTIEL,
-    /** Rien de réglé et la date d'échéance est dépassée. */
+    /** Reste à payer et l'échéance est due (aujourd'hui ou avant), réglée en partie ou non : impayé OMRAN. */
     EN_RETARD,
     /** Rien de réglé et l'échéance n'est pas encore due. */
     A_VENIR;
 
     /**
-     * Payé l'emporte, puis partiel ; le retard ne se juge que si rien n'a été réglé.
+     * Payé l'emporte, puis le retard (comme l'impayé d'OMRAN : reste > 0 et échéance ≤ aujourd'hui),
+     * puis partiel.
      *
      * @param montant       {@code null} traité comme zéro
      * @param regle         somme des règlements affectés, {@code null} traité comme zéro
@@ -34,11 +35,11 @@ public enum StatutEcheance {
         if (reste.compareTo(BigDecimal.ZERO) <= 0) {
             return PAYE;
         }
+        if (dateEcheance != null && !dateEcheance.toLocalDate().isAfter(maintenant.toLocalDate())) {
+            return EN_RETARD;
+        }
         if (dejaRegle.compareTo(BigDecimal.ZERO) > 0) {
             return PARTIEL;
-        }
-        if (dateEcheance != null && dateEcheance.isBefore(maintenant)) {
-            return EN_RETARD;
         }
         return A_VENIR;
     }

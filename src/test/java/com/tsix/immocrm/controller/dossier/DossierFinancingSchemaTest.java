@@ -52,7 +52,14 @@ class DossierFinancingSchemaTest {
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
+    private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
+    @Autowired
     private MockMvc mockMvc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void statutInitial() {
+        fixtureStatuts.reservation();
+    }
 
     @Autowired
     private ComProspectionRepository prospectionRepository;

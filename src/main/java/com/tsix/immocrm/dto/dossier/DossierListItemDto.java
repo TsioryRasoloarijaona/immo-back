@@ -149,7 +149,7 @@ public record DossierListItemDto(
         @Schema(example = "Hamza ATCHANY")
         String responsableVenteNom,
 
-        @Schema(description = "Date du compromis (ComFolder.AgreementDate). 73 / 358.")
+        @Schema(description = "Date du compromis / approbation crédit (ComFolder.CreditApprovalDate).")
         LocalDateTime dateCompromis,
 
         @Schema(description = "Date de livraison réelle (ComFolder.DeliveryDateReal). 63 / 358.")
@@ -158,11 +158,14 @@ public record DossierListItemDto(
         @Schema(example = "47")
         Integer delaiConcretisation,
 
-        @Schema(description = "Jours entre la concrétisation et le compromis. Calculé côté "
-                + "serveur. Calculable sur 73 / 358.", example = "112")
+        @Schema(description = "Jours entre la concrétisation et l'envoi au notaire. Calculé côté serveur.",
+                example = "112")
         Integer delaiNotaire,
 
         @Schema(example = "365")
-        Integer delaiLivraison
+        Integer delaiLivraison,
+
+        @Schema(description = "Date d'envoi au notaire / avocat (ComFolder.AgreementDate).")
+        LocalDateTime dateEnvoiNotaire
 ) {
 }

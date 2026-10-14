@@ -91,16 +91,19 @@ public class FicheTropPercuService {
         BigDecimal totalRegle = BigDecimal.ZERO;
         for (StlSettlementLine ligne : lignes) {
             BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
-            totalRegle = totalRegle.add(montant);
-            lignesReglement.add(toLigneReglement(ligne, montant));
+            LigneReglement ligneReglement = toLigneReglement(ligne, montant);
+            // Signé comme le montant affiché : un décaissement se retranche.
+            totalRegle = totalRegle.add(ligneReglement.montant());
+            lignesReglement.add(ligneReglement);
         }
 
         BigDecimal prixApresRemise = folder.getPriceAfterDiscount() != null ? folder.getPriceAfterDiscount() : BigDecimal.ZERO;
-        BigDecimal resteAPayer = prixApresRemise.subtract(totalRegle);
-        BigDecimal montantTropPercu = resteAPayer.abs();
 
+        // Trop-perçu et reste : le calcul unique de GET .../montants (frais compris) ; l'excédent est le trop-perçu.
         MontantsDossierDto montants = dossierService.montants(dossierId);
+        BigDecimal montantTropPercu = montants.tropPercu();
         BigDecimal fraisTotal = montants.totalGeneral().subtract(montants.totalSoumisReglePrixTTC());
+        BigDecimal resteAPayer = montants.netAPayer().reste().max(BigDecimal.ZERO);
 
         return new FicheTropPercuData(
                 folder.getCode(),
@@ -128,7 +131,8 @@ public class FicheTropPercuService {
 
     private static LigneReglement toLigneReglement(StlSettlementLine ligne, BigDecimal montant) {
         StlSettlement reglement = ligne.getStlSettlement();
-        boolean credit = reglement != null && Boolean.TRUE.equals(reglement.getIsCredit());
+        // Même règle que StlSettlementLineRepository.MONTANT_SIGNE : seul IsCredit = 0 est un décaissement.
+        boolean credit = reglement == null || !Boolean.FALSE.equals(reglement.getIsCredit());
         return new LigneReglement(
                 reglement != null && reglement.getDocDate() != null ? reglement.getDocDate().toLocalDate() : null,
                 credit ? montant : montant.negate(),
