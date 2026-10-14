@@ -79,6 +79,10 @@ public class FixtureWorkflow {
     }
 
     public StrField champ(UUID entite, String code, String libelle) {
+        // La CI porte la FK StrField → StrEntity : la ligne « Tier » doit exister avant le champ.
+        if (ENTITE_TIERS.equals(entite)) {
+            entiteTiers();
+        }
         StrField f = new StrField();
         f.setId(UUID.randomUUID());
         f.setCode(code);
