@@ -7,11 +7,9 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
-import com.tsix.immocrm.domain.EtapeMilestone;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
-import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
@@ -23,6 +21,7 @@ import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
+import com.tsix.immocrm.dto.dossier.TransitionSuggereeDto;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -46,7 +45,6 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
@@ -57,6 +55,8 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
+import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -102,6 +102,7 @@ public class DossierService {
     private static final String CAUSE_OBLIGATOIRE = "La cause est obligatoire pour une annulation ou un désistement";
     static final String DOSSIER_SANS_STATUT =
             "Dossier sans statut : reprise nécessaire (script instructions/sql/VENTE-reprise-interop.sql)";
+    static final String SEUIL_IGNORE = "Seuil de versement non vérifié (Administrateur) pour le statut ";
 
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
@@ -124,6 +125,7 @@ public class DossierService {
     private final LigneEcheancierOmran ligneOmran;
     private final ControleSortieDossier controleSortie;
     private final MontantsDossier montantsDossier;
+    private final WorkflowDossier workflow;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -158,6 +160,7 @@ public class DossierService {
         this.ligneOmran = ecrituresOmran.ligneEcheancier();
         this.controleSortie = ecrituresOmran.controleSortie();
         this.montantsDossier = ecrituresOmran.montants();
+        this.workflow = ecrituresOmran.workflow();
     }
 
     /**
@@ -639,8 +642,9 @@ public class DossierService {
     }
 
     /**
-     * 409 hors {@link TransitionsValidees}, et pour un dossier sans statut (reprise nécessaire). Un statut
-     * à code inconnu accepte n'importe quel {@link StatutDossier}.
+     * Moteur {@link WorkflowDossier} : 409 hors transition paramétrée ({@code StrWorkFlow}, repli
+     * {@code TransitionsValidees}) ou dossier sans statut, 403 si l'appelant n'est pas intervenant, 400 champs ou
+     * pièces manquants, 409 seuil de versement / schéma. Voir FEATURE-vente-workflow.md.
      */
     @Transactional
     public DossierDetailDto changerStatut(UUID id, ChangerStatutRequest request) {
@@ -658,8 +662,8 @@ public class DossierService {
             throw new ConflictException(DOSSIER_SANS_STATUT);
         }
 
+        TransitionDossier transition = workflow.transitionAutorisee(folder, cible);
         Optional<StatutDossier> actuel = statutActuel(folder);
-        verifierTransition(actuel.orElse(null), cible);
         if (cible.isSortie() && !StringUtils.hasText(request.note())) {
             throw new InvalidRequestException(CAUSE_OBLIGATOIRE);
         }
@@ -676,6 +680,10 @@ public class DossierService {
         if (strStatus == null) {
             throw new InvalidRequestException("StrStatus introuvable pour le code: " + cible.getCode());
         }
+        // Date et note posées avant les contrôles, comme la saisie d'OMRAN ; un refus annule la transaction.
+        appliquerChampEtape(folder, strStatus, cible, request);
+        boolean seuilIgnore = workflow.verifier(folder, transition, strStatus, Boolean.TRUE.equals(request.ignorerSeuil()));
+
         // Avant toute écriture sur le dossier : un 403 de périmètre sur un article le laisse intact.
         if (cible.isSortie()) {
             liberationLot.liberer(folder, strStatus);
@@ -683,30 +691,29 @@ public class DossierService {
             liberationLot.reoccuper(folder, strStatus);
         }
         folder.setStrStatus(strStatus);
-        appliquerChampEtape(folder, cible, request);
         if (reactivation) {
             // Sale.cs:BeforeUpdate : un dossier réactivé perd sa date et sa cause d'annulation.
             folder.setCancelDate(null);
             folder.setCancelDescription("");
         }
+        workflow.apresChangement(folder, strStatus, cible, this::employeCourant);
         marquerModification(folder);
         historique.ligneStatut(folder, strStatus, folder.getStkItem(), request.note());
-        historique.statutGenerique(folder, strStatus, request.note());
+        historique.statutGenerique(folder, strStatus, request.note(), transition.workflowId(),
+                transition.parametree() ? transition.description() : null);
+        if (seuilIgnore) {
+            historique.evenement(folder, SEUIL_IGNORE + strStatus.getDescription());
+        }
 
         ComFolder enregistre = folderRepository.save(folder);
         synchroniserTypeTiers(enregistre);
         return toDetail(enregistre, articlesDuDossier(enregistre));
     }
 
-    /** {@code depuis} nul : statut à code inconnu, toute cible acceptée. */
-    private static void verifierTransition(StatutDossier depuis, StatutDossier cible) {
-        if (depuis != null && !TransitionsValidees.estValide(depuis, cible)) {
-            List<String> autorisees = TransitionsValidees.transitionsAutorisees(depuis).stream()
-                    .map(StatutDossier::getCode)
-                    .toList();
-            throw new InvalidStatutTransitionException(
-                    "Transition invalide: " + depuis.getCode() + " -> " + cible.getCode(), autorisees);
-        }
+    /** Personnel de l'utilisateur connecté ({@code ConnectedUser.CfgEmployeeId}), pour le gestionnaire auto. */
+    private CfgTier employeCourant() {
+        AdmUser compte = utilisateurAffiche.courant().compte();
+        return compte != null ? compte.getCfgEmployee() : null;
     }
 
     /**
@@ -737,9 +744,10 @@ public class DossierService {
         alerteRelanceService.desarmerToutes(prospection.getId());
     }
 
-    // La date va sur la colonne jalon de l'étape (EtapeMilestone) ; la note va sur CancelDescription
+    // La date va sur la date associée du statut cible (WorkflowDossier) ; la note va sur CancelDescription
     // pour les deux sorties ANNULATION et DESISTEMENT (la cause), sur Notes sinon.
-    private void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
+    private void appliquerChampEtape(ComFolder folder, StrStatus strStatus, StatutDossier cible,
+                                     ChangerStatutRequest request) {
         if (cible.isSortie()) {
             folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now(clock));
             if (request.note() != null) {
@@ -750,23 +758,7 @@ public class DossierService {
         if (request.note() != null) {
             folder.setNotes(request.note());
         }
-        if (request.date() == null) {
-            return;
-        }
-        switch (cible) {
-            case CONCRETISATION -> folder.setAdvanceDate(request.date());
-            case MEILLEURTAUX -> folder.setLoanCompanyDecisionDate(request.date());
-            case COMPROMIS -> folder.setCreditApprovalDate(request.date());
-            case ENVOI_AU_NOTAIRE -> folder.setAgreementDate(request.date());
-            case CREDIT_DEBLOQUE -> folder.setCreditPossessionDate(request.date());
-            case MINUTE -> folder.setAgreementSavingDate(request.date());
-            case REMISE_DES_CLEFS -> folder.setDeliveryDateReal(request.date());
-            case FORMALISE -> folder.setAgreementRegistryDate(request.date());
-            default -> {
-                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE : pas de colonne
-                // jalon confirmée — voir EtapeMilestone.
-            }
-        }
+        workflow.ecrireDateAssociee(folder, strStatus, cible, request.date());
     }
 
     /**
@@ -808,35 +800,23 @@ public class DossierService {
         }
     }
 
-    /** Pour chaque statut atteignable, la colonne jalon où {@code PATCH .../statut} écrirait sa date. */
+    /** Statuts atteignables par l'appelant, et la date associée où {@code PATCH .../statut} écrirait sa date. */
     public List<EtapeSuivanteDto> etapesSuivantes(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
-
-        return statutActuel(folder)
-                .map(actuel -> TransitionsValidees.transitionsAutorisees(actuel).stream()
-                        .map(statut -> {
-                            EtapeMilestone.Info info = EtapeMilestone.of(statut);
-                            return new EtapeSuivanteDto(
-                                    statut.getCode(), info.champ(), info.libelle(), info.confiance().name());
-                        })
-                        .toList())
-                .orElseGet(List::of);
+        return workflow.etapesSuivantes(folder);
     }
 
-    private static List<String> etapesAtteignables(ComFolder folder) {
-        if (folder.getStrStatus() == null || folder.getStrStatus().getCode() == null) {
-            return List.of();
-        }
-        StatutDossier statut;
-        try {
-            statut = StatutDossier.fromCode(folder.getStrStatus().getCode());
-        } catch (IllegalArgumentException e) {
-            return List.of();
-        }
-        return TransitionsValidees.transitionsAutorisees(statut).stream()
-                .map(StatutDossier::getCode)
-                .toList();
+    /** Passage automatique proposé (statut et date), ou une proposition vide. */
+    public TransitionSuggereeDto transitionSuggeree(UUID id) {
+        ComFolder folder = folderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
+        return workflow.suggestion(folder);
+    }
+
+    /** Codes des statuts atteignables par l'appelant (même source que {@link #etapesSuivantes}). */
+    private List<String> etapesAtteignables(ComFolder folder) {
+        return workflow.statutsAtteignables(folder);
     }
 
     /**
@@ -921,7 +901,7 @@ public class DossierService {
         return colonnes.contains(colonne) ? Champs.de(source, lecteur) : null;
     }
 
-    private static DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
+    private DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
         CfgProject projet = projet(f);
         CfgTranche tranche = tranche(f);
         CfgCompany societe = societe(f);
