@@ -1,10 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
-import com.tsix.immocrm.domain.AgregatDemande;
-import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.domain.Chemin;
-import com.tsix.immocrm.domain.Granularite;
-import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
 import com.tsix.immocrm.domain.PrixArticle;
@@ -34,11 +30,7 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.entities.com.ComProspectionOrigin;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
-import com.tsix.immocrm.entities.stk.StkBuilding;
-import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
-import com.tsix.immocrm.entities.stk.StkItemCategory;
-import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.adm.AdmUser;
@@ -55,20 +47,17 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.dossier.liste.FiltresListeDossiers;
+import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
+import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
 import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
 import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
-import com.tsix.immocrm.services.groupement.GroupementService;
-import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
-import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
-import jakarta.persistence.criteria.Predicate;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +76,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 @Service
@@ -114,7 +102,6 @@ public class DossierService {
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
-    private final GroupementService groupementService;
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
     private final TransformationProspectClient transformationProspectClient;
@@ -134,7 +121,6 @@ public class DossierService {
                            ComSettlementCategoryRepository settlementCategoryRepository,
                            GenerateurCodeSequence generateurCode,
                            PerimetreCommercialService perimetreService,
-                           GroupementService groupementService,
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
                            TransformationProspectClient transformationProspectClient,
@@ -144,7 +130,6 @@ public class DossierService {
         this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
-        this.groupementService = groupementService;
         this.utilisateurAffiche = utilisateurAffiche;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
@@ -177,110 +162,17 @@ public class DossierService {
         return prefixe + " " + generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_DOSSIER, 4, 5);
     }
 
-    public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
-            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, ColonneDossier groupeColonne, String groupeValeur,
-            Granularite granularite, Pageable pageable, Set<ColonneDossier> colonnes) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(statuts, commercial, projet, trancheIds,
-                champDate, dateDebut, dateFin, search));
-        if (groupeColonne != null) {
-            // Dépliage d'un groupe : la même expression de clé que /groupes, donc une valeur
-            // réémise telle quelle par le front retombe exactement sur les lignes comptées.
-            spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
-                    root, cb, groupeColonne.chemin(), granularite, groupeValeur));
-        }
-        return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
-                .map(f -> toListItem(f, colonnes));
-    }
-
-    /** Même {@link #specDossiers} et même périmètre que la liste : la somme des groupes retombe sur son total. */
-    public ResultatGroupement grouper(List<String> statuts, UUID commercial, UUID projet,
-            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, ColonneDossier groupeBy, Granularite granularite,
-            List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(statuts, commercial, projet, trancheIds,
-                champDate, dateDebut, dateFin, search))
-                .and(perimetreService.filtreDossiers());
-        return groupementService.grouper(ComFolder.class, spec, groupeBy.chemin(), granularite,
-                agregats, tri, inclureSansValeur, pageable);
-    }
-
     /**
-     * Assiette du tableau de bord par tranche : même spec et même périmètre que {@link #findAll},
+     * Assiette du tableau de bord par tranche : même spec et même périmètre que la liste, sortis compris,
      * pour retomber sur son total ({@code FEATURE-dashboard-filtre-tranche.md} R2/R3).
      */
     public Set<UUID> idsDossiersDeTranche(UUID trancheId) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(null, null, null, List.of(trancheId),
-                null, null, null, null))
+        Specification<ComFolder> spec = SpecificationsListeDossiers.de(FiltresListeDossiers.deTranche(trancheId),
+                        Optional.empty())
                 .and(perimetreService.filtreDossiers());
         return folderRepository.findAll(spec).stream()
                 .map(ComFolder::getId)
                 .collect(java.util.stream.Collectors.toSet());
-    }
-
-    /** Filtres de la liste des dossiers, tels que reçus du contrôleur. */
-    private record FiltresDossiers(List<String> statuts, UUID commercial, UUID projet, List<UUID> trancheIds,
-                                   ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-                                   String search) {
-    }
-
-    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement. */
-    private static Specification<ComFolder> specDossiers(FiltresDossiers filtres) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (filtres.statuts() != null && !filtres.statuts().isEmpty()) {
-                List<String> statutsLower = filtres.statuts().stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("strStatus").get("code")).in(statutsLower));
-            }
-            if (filtres.commercial() != null) {
-                predicates.add(cb.equal(root.get("cfgCommercial").get("id"), filtres.commercial()));
-            }
-            if (filtres.projet() != null) {
-                // Par la tranche de l'article principal, jamais StkItem.CfgProjectId, colonne morte
-                // (FEATURE-perimetre-commercial.md, piège 1).
-                predicates.add(cb.equal(
-                        root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), filtres.projet()));
-            }
-            if (filtres.trancheIds() != null && !filtres.trancheIds().isEmpty()) {
-                // Partagé avec le tableau de bord et GET /api/clients (FEATURE-dashboard-filtre-tranche.md R2).
-                predicates.add(AppartenanceTranche.dossier(root, query, cb, filtres.trancheIds()));
-            }
-            ajouterFiltreDates(predicates, root, cb, filtres);
-            if (StringUtils.hasText(filtres.search())) {
-                predicates.add(predicatRecherche(root, cb, filtres.search()));
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
-    }
-
-    private static void ajouterFiltreDates(List<Predicate> predicates, jakarta.persistence.criteria.Root<ComFolder> root,
-                                           jakarta.persistence.criteria.CriteriaBuilder cb, FiltresDossiers filtres) {
-        LocalDateTime dateDebut = filtres.dateDebut();
-        LocalDateTime dateFin = filtres.dateFin();
-        if (dateDebut == null && dateFin == null) {
-            return;
-        }
-        ChampDateDossier champDate = filtres.champDate() != null ? filtres.champDate() : ChampDateDossier.RESERVATION;
-        jakarta.persistence.criteria.Path<LocalDateTime> colonne = root.get(champDate.getChampEntite());
-        if (dateDebut != null) {
-            predicates.add(cb.greaterThanOrEqualTo(colonne, dateDebut));
-        }
-        if (dateFin != null) {
-            predicates.add(cb.lessThanOrEqualTo(colonne, dateFin));
-        }
-    }
-
-    private static Predicate predicatRecherche(jakarta.persistence.criteria.Root<ComFolder> root,
-                                               jakarta.persistence.criteria.CriteriaBuilder cb, String search) {
-        String pattern = "%" + search.toLowerCase() + "%";
-        jakarta.persistence.criteria.Join<ComFolder, CfgTier> client = root.join("cfgCustomer",
-                jakarta.persistence.criteria.JoinType.LEFT);
-        return cb.or(
-                cb.like(cb.lower(root.get("code")), pattern),
-                cb.like(cb.lower(client.get("lastName")), pattern),
-                cb.like(cb.lower(client.get("firstName")), pattern),
-                cb.like(cb.lower(client.get("socialReason")), pattern)
-        );
     }
 
     public DossierDetailDto findById(UUID id) {
@@ -824,81 +716,7 @@ public class DossierService {
      * que si leurs colonnes sont demandées. {@code colonnes} : {@code Set.of()} hors liste.
      */
     public static DossierListItemDto toListItem(ComFolder f, Set<ColonneDossier> colonnes) {
-        boolean patrimoine = ColonneDossier.exigeLePatrimoine(colonnes);
-        CfgTranche tranche = patrimoine ? tranche(f) : null;
-        CfgProject projet = patrimoine ? projet(f) : null;
-        CfgCompany societe = patrimoine ? societe(f) : null;
-        ComProspection prospection = ColonneDossier.exigeLaProspection(colonnes)
-                ? f.getComProspection() : null;
-        StkItem article = ColonneDossier.exigeLArticle(colonnes) ? f.getStkItem() : null;
-        StkVocation vocation = patrimoine ? f.getStkVocation() : null;
-        return new DossierListItemDto(
-                f.getId(),
-                f.getCode(),
-                f.getDocDate(),
-                Champs.de(f.getStrStatus(), StrStatus::getCode),
-                Champs.de(f.getCfgCustomer(), CfgTier::getId),
-                TierNomFormatter.nom(f.getCfgCustomer()),
-                Champs.de(f.getCfgCommercial(), CfgTier::getId),
-                TierNomFormatter.nom(f.getCfgCommercial()),
-                f.getPrice(),
-                f.getTotalToPay(),
-                f.getAdvanceDate(),
-                Champs.de(f.getComProspection(), ComProspection::getId),
-                Champs.de(f.getComProspection(), ComProspection::getCode),
-                f.getPriceBeforeDiscount(),
-                ConventionRemise.pourcentage(f.getDiscount()),
-                f.getDiscountAmount(),
-                f.getPriceAfterDiscount(),
-                // Le « montant d'avance » vient d'AgreementAmount : ComFolder n'a pas d'AdvanceAmount.
-                f.getAgreementAmount(),
-                f.getProbabilityOfFinalisation(),
-                Champs.de(projet, CfgProject::getId),
-                Champs.de(projet, CfgProject::getCode),
-                Champs.de(projet, CfgProject::getDescription),
-                Champs.de(tranche, CfgTranche::getId),
-                Champs.de(tranche, CfgTranche::getCode),
-                Champs.de(tranche, CfgTranche::getDescription),
-                Champs.de(societe, CfgCompany::getId),
-                Champs.de(societe, CfgCompany::getCode),
-                Champs.de(societe, CfgCompany::getDescription),
-                Champs.de(vocation, StkVocation::getCode),
-                Champs.de(vocation, StkVocation::getDescription),
-                siDemande(colonnes, ColonneDossier.AVOCAT_ID, f.getCfgLawyer(), CfgTier::getId),
-                siDemande(colonnes, ColonneDossier.AVOCAT_NOM, f.getCfgLawyer(), TierNomFormatter::nom),
-                siDemande(colonnes, ColonneDossier.MODE_PAIE, f.getComPaymentMethod(), ComPaymentMethod::getCode),
-                Champs.de(prospection, ComProspection::getComProspectionKind, ComProspectionKind::getDescription),
-                Champs.de(prospection, ComProspection::getComProspectionOrigin, ComProspectionOrigin::getDescription),
-                Champs.de(prospection, ComProspection::getDocDate),
-                f.getUserCreate(),
-                f.getUserCreateDateTime(),
-                f.getUserUpdate(),
-                f.getUserUpdateDateTime(),
-                Champs.de(article, StkItem::getId),
-                Champs.de(article, StkItem::getCode),
-                Champs.de(article, StkItem::getDescription),
-                Champs.de(article, StkItem::getTitleNumber),
-                Champs.de(article, StkItem::getStkBuilding, StkBuilding::getDescription),
-                Champs.de(article, StkItem::getStkFloor, StkFloor::getDescription),
-                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getCode),
-                Champs.de(article, StkItem::getStkItemType, StkItemType::getCode),
-                Champs.de(article, StkItem::getStkPresentationType, StkPresentationType::getCode),
-                siDemande(colonnes, ColonneDossier.RESPONSABLE_VENTE_ID, f.getCfgSaleManager(), CfgTier::getId),
-                siDemande(colonnes, ColonneDossier.RESPONSABLE_VENTE_NOM, f.getCfgSaleManager(), TierNomFormatter::nom),
-                f.getCreditApprovalDate(),
-                f.getDeliveryDateReal(),
-                // Scalaires @Formula : lus avec l'entité, aucun coût conditionnel à gérer.
-                f.getDelaiConcretisation(),
-                f.getDelaiNotaire(),
-                f.getDelaiLivraison(),
-                f.getAgreementDate()
-        );
-    }
-
-    /** Lu seulement si la colonne est demandée : une colonne absente vaut {@code null}. */
-    private static <T, R> R siDemande(Set<ColonneDossier> colonnes, ColonneDossier colonne,
-                                      T source, Function<T, R> lecteur) {
-        return colonnes.contains(colonne) ? Champs.de(source, lecteur) : null;
+        return MappingListeDossier.depuisDossier(f, colonnes, null).versDto();
     }
 
     private DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
