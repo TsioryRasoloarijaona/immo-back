@@ -25,6 +25,7 @@ import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.GESTIONNAI
 import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.NOTAIRE;
 import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.OPTIONS;
 import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.PENALITES;
+import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.PRIX;
 
 /**
  * Table des champs simples de {@code PATCH /api/dossiers/{id}} (dates, textes, cases, tiers référencés) ;
@@ -68,7 +69,8 @@ class ChampsEdition {
                 ComFolder::setIsOldCustomer);
         caseACocher("cadeauPlusTard", OPTIONS, ModifierDossierRequest::cadeauPlusTard,
                 ComFolder::getIsWithGiftChoiceLater, ComFolder::setIsWithGiftChoiceLater);
-        caseACocher("integrerModificationsAuPrix", OPTIONS, ModifierDossierRequest::integrerModificationsAuPrix,
+        // Change le prix de vente : groupe PRIX (Administrateur), pas OPTIONS.
+        caseACocher("integrerModificationsAuPrix", PRIX, ModifierDossierRequest::integrerModificationsAuPrix,
                 ComFolder::getPriceWithModification, ComFolder::setPriceWithModification);
         caseACocher("penalitesDesactivees", PENALITES, ModifierDossierRequest::penalitesDesactivees,
                 ComFolder::getIsPenaltyDisabled, ComFolder::setIsPenaltyDisabled);

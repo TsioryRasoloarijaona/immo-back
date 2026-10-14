@@ -158,7 +158,8 @@ class DossierEditionTest {
             "Commercial|{\"ancienClient\":true}",
             "Commercial Chef|{\"penalitesDesactivees\":true}",
             "Commercial Chef|{\"remisePourcentage\":5}",
-            "Commercial Chef|{\"tva\":0.1}"
+            "Commercial Chef|{\"tva\":0.1}",
+            "Commercial Chef|{\"integrerModificationsAuPrix\":true}"
     })
     void groupeInterditAuRole_403_rienNEstEcrit(String role, String corps) throws Exception {
         modifier(dossier, role, corps).andExpect(status().isForbidden());
@@ -289,6 +290,25 @@ class DossierEditionTest {
                 () -> assertThat(f.getDiscountAmount()).isEqualByComparingTo("50000"),
                 () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1045000"),
                 () -> assertThat(f.getDiscountChangeDate()).isNull());
+    }
+
+    @Test
+    void remise_dossierAuPrixStockeSansSurface_partDuPrixArticleHT_surfaceConservee() throws Exception {
+        dossier.setArea(null);
+        dossier.setUnitCostHT(null);
+        dossier.setItemPriceHT(new BigDecimal("1000000"));
+        folderRepository.save(dossier);
+
+        modifier(dossier, ADMIN, "{\"remiseMontantHT\":50000,\"forcerRemise\":true}")
+                .andExpect(status().isOk());
+
+        ComFolder f = relu(dossier);
+        assertAll(
+                () -> assertThat(f.getPriceAfterDiscountHT()).isEqualByComparingTo("950000"),
+                () -> assertThat(f.getPriceAfterDiscount()).isEqualByComparingTo("1140000"),
+                () -> assertThat(f.getDiscount()).isEqualByComparingTo("0.05"),
+                () -> assertThat(f.getArea()).isNull(),
+                () -> assertThat(f.getUnitCostHT()).isNull());
     }
 
     @Test

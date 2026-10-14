@@ -70,7 +70,7 @@ class PrixEdition {
      */
     boolean recalculer(ComFolder f, ModifierDossierRequest r, PlafondRemise.Niveau niveau, boolean forcer) {
         List<ComFolderItem> sousArticles = sousArticles(f);
-        RecalculPrixDossier.Saisie actuelle = RecalculPrixDossier.depuisDossier(f, sousArticles);
+        RecalculPrixDossier.Saisie actuelle = depuisPrixStocke(f, sousArticles);
         BigDecimal tva = r.tva() != null ? r.tva() : actuelle.tva();
         BigDecimal ancienMontant = zero(f.getDiscountAmount());
         BigDecimal montant = montantRemise(r, actuelle, ancienMontant);
@@ -94,16 +94,39 @@ class PrixEdition {
     /** Recalcul à remise et TVA inchangées, après un changement de « modifications intégrées au prix ». */
     void recalculerSansRemise(ComFolder f) {
         List<ComFolderItem> sousArticles = sousArticles(f);
-        appliquer(RecalculPrixDossier.calculer(RecalculPrixDossier.depuisDossier(f, sousArticles)), f, sousArticles);
+        appliquer(RecalculPrixDossier.calculer(depuisPrixStocke(f, sousArticles)), f, sousArticles);
     }
 
     private List<ComFolderItem> sousArticles(ComFolder f) {
         return RecalculPrixDossier.sousArticlesDe(folderItemRepository.findByComFolderId(f.getId()));
     }
 
+    /**
+     * Comme {@code Sale.cs:RecalcDiscount} et le setter {@code VATRatio}, la base est le prix article HT stocké, pas
+     * superficie × prix du m² (nuls sur des dossiers réels au prix renseigné) : on le passe comme « 1 × prix ».
+     * Prix jamais calculé (null) : superficie × prix du m², comme à la création.
+     */
+    private static RecalculPrixDossier.Saisie depuisPrixStocke(ComFolder f, List<ComFolderItem> sousArticles) {
+        RecalculPrixDossier.Saisie a = RecalculPrixDossier.depuisDossier(f, sousArticles);
+        BigDecimal base = f.getItemPriceHT() != null ? f.getItemPriceHT()
+                : zero(a.superficie()).multiply(zero(a.prixM2HT()));
+        return new RecalculPrixDossier.Saisie(BigDecimal.ONE, a.tva(), base, a.remiseMontantHT(),
+                a.avecModifications(), a.modificationsHT(), a.modificationsTTC(), a.sousArticles());
+    }
+
+    /** {@link RecalculPrixDossier#appliquer} écrit aussi superficie et prix du m² : on garde ceux du dossier. */
     private void appliquer(RecalculPrixDossier.Resultat resultat, ComFolder f, List<ComFolderItem> sousArticles) {
+        BigDecimal superficie = f.getArea();
+        BigDecimal superficieGlobale = f.getGlobalArea();
+        BigDecimal prixM2HT = f.getUnitCostHT();
+        BigDecimal prixM2TTC = f.getUnitCost();
         RecalculPrixDossier.appliquer(resultat, f, sousArticles.stream()
                 .collect(Collectors.toMap(ComFolderItem::getId, Function.identity())));
+        f.setArea(superficie);
+        f.setGlobalArea(superficieGlobale);
+        f.setUnitCostHT(prixM2HT);
+        f.setUnitCost(prixM2HT == null ? prixM2TTC
+                : prixM2HT.multiply(BigDecimal.ONE.add(resultat.tva())).setScale(ECHELLE, RoundingMode.HALF_UP));
         folderItemRepository.saveAll(sousArticles);
     }
 
