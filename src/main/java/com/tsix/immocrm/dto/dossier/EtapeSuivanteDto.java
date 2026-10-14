@@ -2,6 +2,8 @@ package com.tsix.immocrm.dto.dossier;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.LocalDateTime;
+
 /** Un statut atteignable par l'appelant, et la colonne jalon où {@code PATCH .../statut} écrira sa {@code date}. */
 @Schema(description = "Transition que l'utilisateur connecté peut exécuter depuis le statut courant du dossier.")
 public record EtapeSuivanteDto(
@@ -19,6 +21,9 @@ public record EtapeSuivanteDto(
                 example = "CONCRETISATION")
         String transition,
         @Schema(description = "Transition « avec proposition du passage automatique » (StrWorkFlow.WithAutomaticTransition).")
-        boolean passageAutomatique
+        boolean passageAutomatique,
+        @Schema(description = "Valeur actuelle de la date associée sur ce dossier ; renseignée, elle n'est remplacée "
+                + "que par une date saisie.")
+        LocalDateTime dateActuelle
 ) {
 }

@@ -25,6 +25,10 @@ public interface StrIntervenerRepository extends JpaRepository<StrIntervener, UU
     @Query("SELECT r.id FROM AdmRole r WHERE r.code IN :codes")
     List<UUID> rolesParCode(Collection<String> codes);
 
+    /** Rôles qui portent le droit {@code code} ({@code AdmRight}) ; liste vide = droit non paramétré. */
+    @Query("SELECT r.admRoleId FROM AdmRight r WHERE r.code = :code")
+    List<UUID> rolesAvecDroit(String code);
+
     /** {@code AdmRole} de l'utilisateur ; tuple [PKey, Code]. */
     @Query("SELECT ur.admRole.id, ur.admRole.code FROM AdmUserRole ur WHERE ur.admUser.id = :admUserId")
     List<Object[]> rolesDe(UUID admUserId);

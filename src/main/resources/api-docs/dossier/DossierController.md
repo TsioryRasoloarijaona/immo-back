@@ -250,7 +250,11 @@ Transitions), dans cet ordre :
    auto-financement au centime près (sinon **409** « Votre schéma de financement ne correspond pas… »).
 5. La `date` va sur la **date associée** au statut cible (`StrStatus.StrFieldDateId` : CONCRETISATION →
    `advanceDate`, MEILLEURTAUX → `loanCompanySendDate`, CREDIT DEBLOQUE → `creditApprovalDate`, FORMALISE →
-   `ownershipCertificateDate`…), ignorée s'il n'en a pas.
+   `ownershipCertificateDate`…), ignorée s'il n'en a pas. Sans `date`, rien n'est écrit : une date déjà
+   renseignée n'est jamais écrasée d'office (un retour à RESERVATION garde `docDate`) ; `dateActuelle` de
+   `etapes-suivantes` dit si la colonne est déjà remplie.
+   Le seuil de versement n'est contrôlé que pour un utilisateur dont un rôle porte le droit OMRAN
+   `toolVerifyThreshold` (tout le monde si ce droit n'est pas paramétré).
 6. `StatusValidityDate` = aujourd'hui + durée de vie du statut (vide sans durée) ; si elle change, une action
    système « l'état … du dossier de vente N° … est expiré » est posée avec son alerte à cette date. Les
    relances de la prospection sont désarmées et leurs alertes éteintes (impayés épargnés). Un statut « avec

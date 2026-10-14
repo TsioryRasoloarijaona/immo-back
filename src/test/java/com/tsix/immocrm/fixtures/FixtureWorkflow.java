@@ -3,6 +3,7 @@ package com.tsix.immocrm.fixtures;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
+import com.tsix.immocrm.entities.adm.AdmRight;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStatus;
 import com.tsix.immocrm.entities.com.ComFolderStatusPaymentType;
 import com.tsix.immocrm.entities.str.StrAttachment;
@@ -66,6 +67,15 @@ public class FixtureWorkflow {
         wi.setStrWorkFlowId(transition.getId());
         wi.setWithPassword(false);
         em.persist(wi);
+    }
+
+    /** Droit OMRAN accordé à un rôle ({@code AdmRight}). */
+    public void droit(UUID admRoleId, String code) {
+        AdmRight droit = new AdmRight();
+        droit.setId(UUID.randomUUID());
+        droit.setCode(code);
+        droit.setAdmRoleId(admRoleId);
+        em.persist(droit);
     }
 
     public StrField champ(UUID entite, String code, String libelle) {

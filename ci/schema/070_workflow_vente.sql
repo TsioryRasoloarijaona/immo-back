@@ -24,6 +24,18 @@ IF OBJECT_ID('dbo.AdmSocialForm', 'U') IS NULL
     );
 GO
 
+-- Droits par role (Yes.Adm) : le seuil de versement n'est verifie que pour les roles qui
+-- portent le droit Yes.Com.Front.Sales.Monitoring.toolVerifyThreshold (Sale.cs:VerifThreshold).
+IF OBJECT_ID('dbo.AdmRight', 'U') IS NULL
+    CREATE TABLE [dbo].[AdmRight](
+        [PKey] [uniqueidentifier] NOT NULL,
+        [Code] [nvarchar](255) NULL,
+        [Description] [nvarchar](255) NULL,
+        [AdmRoleId] [uniqueidentifier] NULL,
+     CONSTRAINT [AdmRight_PK] PRIMARY KEY CLUSTERED ([PKey] ASC)
+    );
+GO
+
 IF OBJECT_ID('dbo.StrField', 'U') IS NULL
     CREATE TABLE [dbo].[StrField](
         [PKey] [uniqueidentifier] NOT NULL,

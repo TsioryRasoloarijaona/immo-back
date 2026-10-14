@@ -40,15 +40,27 @@ public class DateAssociee {
         return repli != null ? repli : SANS_DATE;
     }
 
-    /** Écrit {@code date} sur la date associée ; sans date associée (ou colonne inconnue), rien n'est écrit. */
+    /**
+     * Seule une date saisie est écrite : OMRAN n'en pose aucune à la transition, et une date déjà renseignée n'est
+     * jamais écrasée d'office (retour à RESERVATION : {@code DocDate} gardée). Une date vide reste à saisir, ce que
+     * contrôlent les champs obligatoires.
+     */
     public void ecrire(ComFolder dossier, StrStatus cible, StatutDossier code, LocalDateTime date) {
-        String champ = de(cible, code).champ();
-        if (champ == null || date == null) {
+        if (date == null) {
             return;
         }
-        ChampsDossier.champ(pascal(champ))
+        ChampsDossier.champ(pascal(de(cible, code).champ()))
                 .map(ChampsDossier.Champ::ecriture)
                 .ifPresent(ecriture -> ecriture.accept(dossier, date));
+    }
+
+    /** Valeur actuelle de la date associée sur ce dossier, nulle si vide ou sans date associée. */
+    public LocalDateTime valeurActuelle(ComFolder dossier, String champ) {
+        return ChampsDossier.champ(pascal(champ))
+                .map(c -> c.lecture().apply(dossier))
+                .filter(LocalDateTime.class::isInstance)
+                .map(LocalDateTime.class::cast)
+                .orElse(null);
     }
 
     private static String camel(String code) {
@@ -56,6 +68,9 @@ public class DateAssociee {
     }
 
     private static String pascal(String champ) {
-        return champ.isEmpty() ? champ : champ.substring(0, 1).toUpperCase(Locale.ROOT) + champ.substring(1);
+        if (champ == null || champ.isEmpty()) {
+            return champ;
+        }
+        return champ.substring(0, 1).toUpperCase(Locale.ROOT) + champ.substring(1);
     }
 }

@@ -87,13 +87,14 @@ public class WorkflowDossier {
         if (!cible.estActif()) {
             return false;
         }
+        Intervenant intervenant = intervenantCourant.courant();
         boolean seuilIgnore = false;
         if (ignorerSeuil) {
-            if (!intervenantCourant.courant().administrateur()) {
+            if (!intervenant.administrateur()) {
                 throw new ForbiddenException("Seul un Administrateur peut ignorer le seuil de versement.");
             }
             seuilIgnore = true;
-        } else {
+        } else if (intervenantCourant.verifieLeSeuil(intervenant)) {
             controles.seuil(dossier, cible).ifPresent(WorkflowDossier::conflit);
         }
         controles.schema(dossier, cible).ifPresent(WorkflowDossier::conflit);
@@ -149,7 +150,7 @@ public class WorkflowDossier {
                     EtapeMilestone.Info info = dateAssociee.de(cible, TransitionsDossier.statutConnu(cible)
                             .orElseGet(() -> TransitionsDossier.statutDeCode(t.codeCible()).orElse(null)));
                     return new EtapeSuivanteDto(t.codeCible(), info.champ(), info.libelle(), info.confiance().name(),
-                            t.description(), t.automatique());
+                            t.description(), t.automatique(), dateAssociee.valeurActuelle(dossier, info.champ()));
                 })
                 .toList();
     }

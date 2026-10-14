@@ -73,6 +73,7 @@ class DossierWorkflowTest {
     private static final String VERS_MEILLEURTAUX = "{\"statut\":\"MEILLEURTAUX\"}";
     private static final String VERS_MEILLEURTAUX_SANS_SEUIL = "{\"statut\":\"MEILLEURTAUX\",\"ignorerSeuil\":true}";
     private static final String DETAIL = "$.detail";
+    private static final String DROIT_SEUIL = "Yes.Com.Front.Sales.Monitoring.toolVerifyThreshold";
     private static final BigDecimal DOUZE_POURCENT = new BigDecimal("108000");
     private static final BigDecimal SEUIL_MEILLEURTAUX = new BigDecimal("0.125");
     /** Prix après remise du dossier ARS 2025/00321 (yesRemsProd), passé par MEILLEURTAUX. */
@@ -293,6 +294,50 @@ class DossierWorkflowTest {
 
         changer(dossier, VERS_MEILLEURTAUX_SANS_SEUIL, chef, CHEF)
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void seuil_commercialSansLeDroit_nEstPasControle_200() throws Exception {
+        ComFolder dossier = dossierAvecVersement(StatutDossier.CONCRETISATION, DOUZE_POURCENT);
+        AdmUser chef = fixture.compte("TST-CHEF", CHEF);
+        AdmUser commercial = fixture.compte("TST-COM", COMMERCIAL);
+        workflow.droit(roleDe(chef), DROIT_SEUIL);
+        StrStatus meilleurtaux = statut(StatutDossier.MEILLEURTAUX);
+        StrWorkFlow t = workflow.transition(statut(StatutDossier.CONCRETISATION), meilleurtaux, false);
+        workflow.intervenantRole(t, roleDe(commercial));
+        workflow.seuilGlobal(meilleurtaux, 1, SEUIL_MEILLEURTAUX);
+
+        changer(dossier, VERS_MEILLEURTAUX, commercial, COMMERCIAL).andExpect(status().isOk());
+    }
+
+    @Test
+    void seuil_chefAvecLeDroit_douzePourcent_409() throws Exception {
+        ComFolder dossier = dossierAvecVersement(StatutDossier.CONCRETISATION, DOUZE_POURCENT);
+        AdmUser chef = fixture.compte("TST-CHEF", CHEF);
+        workflow.droit(roleDe(chef), DROIT_SEUIL);
+        StrStatus meilleurtaux = statut(StatutDossier.MEILLEURTAUX);
+        StrWorkFlow t = workflow.transition(statut(StatutDossier.CONCRETISATION), meilleurtaux, false);
+        workflow.intervenantRole(t, roleDe(chef));
+        workflow.seuilGlobal(meilleurtaux, 1, SEUIL_MEILLEURTAUX);
+
+        changer(dossier, VERS_MEILLEURTAUX, chef, CHEF)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath(DETAIL, containsString("au moins égal à 12,50 %")));
+    }
+
+    @Test
+    void retourAReservation_sansDate_garderDocDate() throws Exception {
+        ComFolder dossier = dossierAuStatut(StatutDossier.CONCRETISATION);
+        LocalDateTime reservation = LocalDateTime.of(2025, 1, 5, 0, 0);
+        dossier.setDocDate(reservation);
+        folderRepository.save(dossier);
+        statut(StatutDossier.RESERVATION);
+
+        mockMvc.perform(get(ETAPES, dossier.getId()).with(FixtureDossierVente.connecte(admin, ADMIN)))
+                .andExpect(jsonPath("$[?(@.statut=='RESERVATION')].dateActuelle").value("2025-01-05T00:00:00"));
+        changer(dossier, "{\"statut\":\"RESERVATION\"}", admin, ADMIN).andExpect(status().isOk());
+
+        assertThat(folderRepository.findById(dossier.getId()).orElseThrow().getDocDate()).isEqualTo(reservation);
     }
 
     @Test
