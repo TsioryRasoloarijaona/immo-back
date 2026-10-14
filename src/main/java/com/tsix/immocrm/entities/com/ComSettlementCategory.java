@@ -71,6 +71,17 @@ public class ComSettlementCategory {
     @Column(name = "ExcludeFromPrice")
     private Boolean excludeFromPrice;
 
+    // « Mettre à jour le schéma de financement » : l'écart est reporté sur le dernier autofinancement, sinon crédit.
+    @Column(name = "CanUpdateDocuments")
+    private Boolean canUpdateDocuments;
+
+    @Column(name = "IsSaleBeforeReservation")
+    private Boolean isSaleBeforeReservation;
+
+    // Ligne datée au plus tôt du début des finalisations de la tranche.
+    @Column(name = "IsConfermentBasedDate")
+    private Boolean isConfermentBasedDate;
+
     @Column(name = "VatRatio", precision = 26, scale = 16)
     private BigDecimal vatRatio;
 

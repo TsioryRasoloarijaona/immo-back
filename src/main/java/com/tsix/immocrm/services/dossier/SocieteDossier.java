@@ -11,12 +11,12 @@ import com.tsix.immocrm.utils.Champs;
  * Société d'un dossier, écrite sur ses échéances et règlements : article principal → tranche → projet
  * → société, jamais {@code StkItem.CfgProjectId} (colonne morte). {@code null} si un maillon manque.
  */
-final class SocieteDossier {
+public final class SocieteDossier {
 
     private SocieteDossier() {
     }
 
-    static CfgCompany de(ComFolder folder) {
+    public static CfgCompany de(ComFolder folder) {
         CfgTranche tranche = Champs.de(folder, ComFolder::getStkItem, StkItem::getStkHierarchy);
         return Champs.de(tranche, CfgTranche::getCfgProject, CfgProject::getCfgCompany);
     }

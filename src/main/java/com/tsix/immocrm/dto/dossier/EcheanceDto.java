@@ -32,6 +32,10 @@ public record EcheanceDto(
         @Schema(example = "25/00167")
         String decompte,
 
-        LocalDateTime creeLe
+        LocalDateTime creeLe,
+
+        @Schema(description = "Écart du schéma (prix après remise − avance − crédit − autofinancement) après l'écriture ; "
+                + "null en lecture.")
+        BigDecimal ecartSchema
 ) {
 }
