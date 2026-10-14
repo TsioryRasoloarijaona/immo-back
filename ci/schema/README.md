@@ -12,6 +12,7 @@ chaque *pull request*.
 | `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
 | `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
 | `060_interop_vente.sql` | `AdmParamsGuid`, `StlDocumentLine`, `ComLoanCompanyDecision` (lues par la vente hors entités JPA) et la devise par défaut ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
+| `070_workflow_vente.sql` | tables de paramétrage du workflow (`StrWorkFlow`, intervenants, champs et pièces obligatoires), **vides** ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 
 Appliquer dans l'ordre numérique.
 

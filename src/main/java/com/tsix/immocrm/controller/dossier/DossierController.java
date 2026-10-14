@@ -33,6 +33,7 @@ import com.tsix.immocrm.dto.dossier.RecuReglementData;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
+import com.tsix.immocrm.dto.dossier.TransitionSuggereeDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.AuthenticatedUser;
@@ -303,8 +304,25 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/statut/etapes-suivantes")
-    public List<EtapeSuivanteDto> getEtapesSuivantes(@PathVariable UUID id) {
+    @Operation(summary = "Statuts que l'utilisateur connecté peut donner au dossier")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Transitions exécutables, vide si aucune."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
+    public List<EtapeSuivanteDto> getEtapesSuivantes(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).") @PathVariable UUID id) {
         return dossierService.etapesSuivantes(id);
+    }
+
+    @GetMapping("/{id}/statut/transition-suggeree")
+    @Operation(summary = "Passage automatique de statut proposé")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Proposition, champs nuls s'il n'y en a pas."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
+    public TransitionSuggereeDto getTransitionSuggeree(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).") @PathVariable UUID id) {
+        return dossierService.transitionSuggeree(id);
     }
 
     @GetMapping("/{id}/historique")
