@@ -78,7 +78,7 @@ public class EcheancierSchemaService {
 
     /** 409 si l'échéance est réglée, facturée, en décompte ou en recouvrement ; sinon ses alertes partent avec elle. */
     @Transactional
-    public void supprimer(UUID dossierId, UUID echeanceId) {
+    public EtatSchemaDto supprimer(UUID dossierId, UUID echeanceId) {
         ComFolder folder = dossier(dossierId);
         ComDocument echeance = documentRepository.findById(echeanceId)
                 .filter(d -> d.getComFolder() != null && dossierId.equals(d.getComFolder().getId()))
@@ -89,6 +89,8 @@ public class EcheancierSchemaService {
         effacer(echeance);
         ecritures.reequilibrage().reporter(folder, echeance);
         ecritures.totaux().rafraichir(folder);
+        documentRepository.flush();
+        return etat(dossierId);
     }
 
     /**
@@ -120,9 +122,10 @@ public class EcheancierSchemaService {
         ecritures.reequilibrage().reporter(folder, creees.get(creees.size() - 1));
         Set<UUID> retirees = retirerLignesNulles(dossierId);
         ecritures.totaux().rafraichir(folder);
+        BigDecimal ecart = echeancierService.ecartSchema(folder);
         return creees.stream()
                 .filter(d -> !retirees.contains(d.getId()))
-                .map(d -> echeancierService.buildDto(d, BigDecimal.ZERO))
+                .map(d -> EcheancierService.avecEcart(echeancierService.buildDto(d, BigDecimal.ZERO), ecart))
                 .toList();
     }
 

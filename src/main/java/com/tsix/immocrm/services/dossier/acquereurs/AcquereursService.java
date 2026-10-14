@@ -56,6 +56,8 @@ public class AcquereursService {
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
     /** Échelle de {@code PartPercent} decimal(26,6) : Σ = 1 se vérifie sur les valeurs écrites. */
     private static final int ECHELLE_RATIO = 6;
+    /** Chaque part est arrondie à 6 décimales : Σ peut s'écarter de 1 de quelques millionièmes (4 décimales en %). */
+    private static final BigDecimal TOLERANCE_TOTAL = new BigDecimal("0.000005");
     private static final String NON_AFFECTE = "Non affecté";
 
     private final EcritureDossier ecriture;
@@ -117,7 +119,8 @@ public class AcquereursService {
             ligne.setPartPercent(parts.get(tiersId));
             signer(ligne, true);
         }
-        dossier.setPartPercent(partPrincipal);
+        // Le principal prend le complément : les ratios rangés somment exactement à 1.
+        dossier.setPartPercent(parts.values().stream().reduce(BigDecimal.ONE, BigDecimal::subtract));
         ecriture.signer(dossier);
         acquereurRepository.flush();
         transformation.synchroniser(dossier).forEach(mention -> historique.evenement(dossier, mention));
@@ -165,7 +168,7 @@ public class AcquereursService {
             }
             total = total.add(part);
         }
-        if (total.compareTo(BigDecimal.ONE) != 0) {
+        if (total.subtract(BigDecimal.ONE).abs().compareTo(TOLERANCE_TOTAL) > 0) {
             throw new InvalidRequestException(TOTAL_CENT);
         }
         return parts;

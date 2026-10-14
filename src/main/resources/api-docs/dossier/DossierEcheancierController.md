@@ -1,6 +1,6 @@
 # DossierEcheancierController
 
-Opérations du schéma de financement de la fiche dossier, comme OMRAN (aide « DOSSIERS DE VENTE », liste du schéma de financement) : « Si on ajoute (ou on augmente son montant) un document paramétré "Mettre à jour le schéma de financement" --> Le système soustrait son montant de la ligne "Autofinancement" sinon de la linge "Crédit". Si on supprime (on diminue son montant) un document paramétré " Mettre à jour le schéma de financement" --> Le système ajoute son montant à la ligne "Autofinancement" sinon à la ligne "Crédit". » Ce report s'applique aussi à `POST` et `PATCH /api/dossiers/{id}/echeancier`. Après chaque écriture, le prix contractuel, le montant d'accord et le net à payer du dossier sont recalculés et le dossier est signé.
+Opérations du schéma de financement de la fiche dossier, comme OMRAN (aide « DOSSIERS DE VENTE », liste du schéma de financement) : « Si on ajoute (ou on augmente son montant) un document paramétré "Mettre à jour le schéma de financement" --> Le système soustrait son montant de la ligne "Autofinancement" sinon de la linge "Crédit". Si on supprime (on diminue son montant) un document paramétré " Mettre à jour le schéma de financement" --> Le système ajoute son montant à la ligne "Autofinancement" sinon à la ligne "Crédit". » Ce report s'applique aussi à `POST` et `PATCH /api/dossiers/{id}/echeancier`. Après chaque écriture, le prix contractuel, le montant d'accord et le net à payer du dossier sont recalculés et le dossier est signé. Comme OMRAN, l'équilibre n'est pas forcé hors de ces reports (ligne sans « mise à jour du schéma », pas de ligne d'autofinancement ni de crédit) : chaque écriture renvoie l'écart restant (`ecartSchema` sur la ligne, `ecart` après suppression), à afficher tant qu'il est non nul.
 
 ## etat
 
@@ -8,7 +8,7 @@ Sommes signées par nature (une catégorie au débit se retranche), écart = pri
 
 ## supprimer
 
-Refusée (409) si l'échéance a une ligne de règlement (même annulée), une ligne d'autorisation de versement, une ligne de facture, ou si elle est versée dans un dossier de recouvrement (`ComDocument.cs:VerifyLinksForDeletion`). Sinon ses actions et alertes sont supprimées, les lignes qui la désignaient comme pénalité sont détachées, puis l'écart est reporté si sa catégorie « met à jour le schéma ».
+Refusée (409) si l'échéance a une ligne de règlement (même annulée), une ligne d'autorisation de versement, une ligne de facture, ou si elle est versée dans un dossier de recouvrement (`ComDocument.cs:VerifyLinksForDeletion`). Sinon ses actions et alertes sont supprimées, les lignes qui la désignaient comme pénalité sont détachées, puis l'écart est reporté si sa catégorie « met à jour le schéma ». Réservée à l'Administrateur (403 sinon) ; la réponse est l'état du schéma après suppression.
 
 ## genererPeriodique
 

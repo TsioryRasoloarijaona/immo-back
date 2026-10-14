@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,17 +48,18 @@ public class DossierEcheancierController {
     }
 
     @DeleteMapping("/{echeanceId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Supprime une ligne d'échéancier")
+    @PreAuthorize("hasRole('Administrateur')")
+    @Operation(summary = "Supprime une ligne d'échéancier (Administrateur)")
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Ligne supprimée, écart reporté si sa catégorie met à jour le schéma."),
+            @ApiResponse(responseCode = "200", description = "Ligne supprimée ; état du schéma après report, écart compris."),
+            @ApiResponse(responseCode = "403", description = "Réservé à l'Administrateur."),
             @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable (ou d'un autre dossier)."),
             @ApiResponse(responseCode = "409", description = "Échéance réglée, facturée, en décompte ou en recouvrement.")
     })
-    public void supprimer(@Parameter(description = DOSSIER) @PathVariable UUID id,
-                          @Parameter(description = "Identifiant de l'échéance (ComDocument.PKey).")
-                          @PathVariable UUID echeanceId) {
-        schemaService.supprimer(id, echeanceId);
+    public EtatSchemaDto supprimer(@Parameter(description = DOSSIER) @PathVariable UUID id,
+                                   @Parameter(description = "Identifiant de l'échéance (ComDocument.PKey).")
+                                   @PathVariable UUID echeanceId) {
+        return schemaService.supprimer(id, echeanceId);
     }
 
     @PostMapping("/periodique")

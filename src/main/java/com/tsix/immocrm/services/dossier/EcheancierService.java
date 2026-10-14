@@ -291,7 +291,7 @@ public class EcheancierService {
         ComDocument enregistree = documentRepository.save(document);
         reequilibrage.reporter(folder, enregistree);
         totaux.rafraichir(folder);
-        return toDto(enregistree);
+        return toDtoApresEcriture(enregistree, folder);
     }
 
     private EcheanceDto toDto(ComDocument d) {
@@ -323,7 +323,7 @@ public class EcheancierService {
         ComDocument enregistree = documentRepository.save(document);
         reequilibrage.reporter(folder, enregistree);
         totaux.rafraichir(folder);
-        return toDto(enregistree);
+        return toDtoApresEcriture(enregistree, folder);
     }
 
     private record ChampsEcheance(LocalDateTime dateEcheance, BigDecimal montant, String description,
@@ -346,6 +346,25 @@ public class EcheancierService {
 
     private static String videEnNull(String s) {
         return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    /** Après une écriture : la ligne et l'écart du schéma qu'elle laisse (OMRAN ne force pas l'équilibre). */
+    private EcheanceDto toDtoApresEcriture(ComDocument d, ComFolder folder) {
+        BigDecimal ecart = ecartSchema(folder);
+        EcheanceDto dto = buildDto(d, settlementLineRepository.sumAmountByComDocumentId(d.getId()));
+        return avecEcart(dto, ecart);
+    }
+
+    BigDecimal ecartSchema(ComFolder folder) {
+        documentRepository.flush();
+        return SchemaEcheancier.ecart(folder.getPriceAfterDiscount(),
+                documentRepository.findByComFolderIdOrderByDocDateAsc(folder.getId()));
+    }
+
+    static EcheanceDto avecEcart(EcheanceDto d, BigDecimal ecart) {
+        return new EcheanceDto(d.id(), d.code(), d.dateEcheance(), d.montant(), d.montantHT(), d.montantTTC(),
+                d.tauxTVA(), d.description(), d.categorieId(), d.categorie(), d.exclureDuPrix(), d.notes(),
+                d.montantRegle(), d.reste(), d.statutCalcule(), d.decompte(), d.creeLe(), ecart);
     }
 
     /** Total réglé fourni par l'appelant, pour ne pas payer une requête par échéance. */
@@ -374,7 +393,8 @@ public class EcheancierService {
                 statutCalcule.name(),
                 // QuittanceCode n'est jamais NULL mais souvent "" : null pour que le client masque.
                 videEnNull(d.getQuittanceCode()),
-                d.getUserCreateDateTime()
+                d.getUserCreateDateTime(),
+                null
         );
     }
 }

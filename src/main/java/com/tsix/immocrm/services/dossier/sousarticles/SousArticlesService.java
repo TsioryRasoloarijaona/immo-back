@@ -17,6 +17,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
+import com.tsix.immocrm.services.dossier.TotauxDossierEcheancier;
 import com.tsix.immocrm.services.dossier.fiche.EcritureDossier;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -53,15 +54,17 @@ public class SousArticlesService {
     private final StkItemRepository stkItemRepository;
     private final HistoriqueDossier historique;
     private final EntityManager entityManager;
+    private final TotauxDossierEcheancier totaux;
 
     public SousArticlesService(EcritureDossier ecriture, ComFolderItemRepository folderItemRepository,
                                StkItemRepository stkItemRepository, HistoriqueDossier historique,
-                               EntityManager entityManager) {
+                               EntityManager entityManager, TotauxDossierEcheancier totaux) {
         this.ecriture = ecriture;
         this.folderItemRepository = folderItemRepository;
         this.stkItemRepository = stkItemRepository;
         this.historique = historique;
         this.entityManager = entityManager;
+        this.totaux = totaux;
     }
 
     public SousArticlesDto lister(UUID dossierId) {
@@ -125,6 +128,8 @@ public class SousArticlesService {
         RecalculRemise.appliquer(dossier, sousArticles);
         folderItemRepository.saveAll(sousArticles);
         ecriture.signer(dossier);
+        // Le net à payer suit le nouveau prix ; le schéma n'est pas rééquilibré, comme OMRAN.
+        totaux.rafraichir(dossier);
         return dto(dossier);
     }
 

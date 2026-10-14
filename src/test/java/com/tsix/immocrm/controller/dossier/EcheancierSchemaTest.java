@@ -57,6 +57,7 @@ class EcheancierSchemaTest {
     private static final String SCHEMA = "/api/dossiers/{id}/echeancier/schema";
     private static final String PERIODIQUE = "/api/dossiers/{id}/echeancier/periodique";
     private static final BigDecimal PRIX = new BigDecimal("1000000");
+    private static final String ADMINISTRATEUR = "Administrateur";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private java.time.Clock clock;
@@ -110,7 +111,8 @@ class EcheancierSchemaTest {
     void ajoutDUneLigneQuiMetAJourLeSchema_retrancheDuDernierAutofinancement() throws Exception {
         mockMvc.perform(post(ECHEANCIER, dossier.getId()).contentType(MediaType.APPLICATION_JSON)
                         .content(corps(versement, "50000", "2026-11-15T00:00:00")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ecartSchema").value(0));
 
         assertAll(
                 () -> assertThat(montant(autofinancementRecent)).isEqualByComparingTo("250000"),
@@ -156,6 +158,7 @@ class EcheancierSchemaTest {
     // ---- Suppression ---------------------------------------------------------------------------------
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_rendLeMontantALAutofinancement_etSupprimeLesAlertes() throws Exception {
         ComDocument versementLigne = fixture.echeance(dossier, versement, new BigDecimal("50000"), date(2026, 11, 1));
         autofinancementRecent.setAmount(new BigDecimal("250000"));
@@ -170,7 +173,8 @@ class EcheancierSchemaTest {
         entityManager.flush();
 
         mockMvc.perform(delete(ECHEANCE, dossier.getId(), versementLigne.getId()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ecart").value(0));
 
         entityManager.flush();
         assertAll(
@@ -182,6 +186,7 @@ class EcheancierSchemaTest {
     }
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_echeanceReglee_409EtRienNEstSupprime() throws Exception {
         StlSettlement reglement = new StlSettlement();
         reglement.setId(UUID.randomUUID());
@@ -198,6 +203,7 @@ class EcheancierSchemaTest {
     }
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_echeanceFacturee_409() throws Exception {
         entityManager.flush();
         entityManager.createNativeQuery("INSERT INTO StlDocumentLine (Pkey, ComDocumentId) VALUES (:id, :doc)")
@@ -207,6 +213,7 @@ class EcheancierSchemaTest {
     }
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_echeanceEnDecompte_409() throws Exception {
         entityManager.flush();
         entityManager.createNativeQuery("INSERT INTO StlPaymentAuthorizationLine (PKey, ComDocumentId) VALUES (:id, :doc)")
@@ -216,14 +223,20 @@ class EcheancierSchemaTest {
     }
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_echeanceEnRecouvrement_409() throws Exception {
-        ligneAvance.setStlRecoveryFolderId(UUID.randomUUID());
+        UUID recouvrement = UUID.randomUUID();
+        entityManager.flush();
+        entityManager.createNativeQuery("INSERT INTO StlRecoveryFolder (PKey, Code) VALUES (:id, 'TST-REC')")
+                .setParameter("id", recouvrement).executeUpdate();
+        ligneAvance.setStlRecoveryFolderId(recouvrement);
         documentRepository.save(ligneAvance);
 
         refusee(ligneAvance);
     }
 
     @Test
+    @WithMockUser(roles = ADMINISTRATEUR)
     void suppression_echeanceInconnueOuDUnAutreDossier_404() throws Exception {
         ComFolder autre = fixture.dossier("DOS-ECH-AUTRE", tranche, StatutDossier.RESERVATION);
 
@@ -282,7 +295,9 @@ class EcheancierSchemaTest {
         mockMvc.perform(post(ECHEANCIER, dossier.getId()).contentType(MediaType.APPLICATION_JSON)
                         .content(corps(autofinancement, "1000", "2026-11-15T00:00:00")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.decompte").doesNotExist());
+                .andExpect(jsonPath("$.decompte").doesNotExist())
+                // Catégorie sans « mise à jour du schéma » : OMRAN laisse l'écart, la réponse le montre.
+                .andExpect(jsonPath("$.ecartSchema").value(-1000));
     }
 
     @Test
