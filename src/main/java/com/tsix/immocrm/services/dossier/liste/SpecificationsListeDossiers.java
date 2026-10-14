@@ -156,7 +156,25 @@ public final class SpecificationsListeDossiers {
             ou.add(cb.like(cb.lower(compact(cb, champ)), motif));
         }
         ou.add(cb.exists(coAcquereur(root, query, cb, motif)));
+        // Numéro saisi au format national (06…) ou international (+212 / 00212) : le mobile est stocké sans 0 ni indicatif.
+        String national = numeroNational(search.replace(" ", ""));
+        if (!national.isEmpty()) {
+            ou.add(cb.like(compact(cb, client.get(MOBILE)), "%" + national + "%"));
+        }
         return cb.or(ou.toArray(new Predicate[0]));
+    }
+
+    /** Partie nationale d'un numéro marocain : sans « +212 », « 00212 » ni « 0 » de tête ; vide si ce n'est pas un numéro. */
+    static String numeroNational(String saisie) {
+        String n = saisie;
+        if (n.startsWith("+212")) {
+            n = n.substring(4);
+        } else if (n.startsWith("00212")) {
+            n = n.substring(5);
+        } else if (n.startsWith("0")) {
+            n = n.substring(1);
+        }
+        return n.length() >= 6 && n.chars().allMatch(Character::isDigit) ? n : "";
     }
 
     private static Subquery<UUID> coAcquereur(Root<ComFolder> root, CriteriaQuery<?> query, CriteriaBuilder cb,

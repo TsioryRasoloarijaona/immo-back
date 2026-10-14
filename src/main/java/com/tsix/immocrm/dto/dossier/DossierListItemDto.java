@@ -170,8 +170,7 @@ public record DossierListItemDto(
 
         // Parité grille OMRAN (FEATURE-vente-liste.md §1).
 
-        @Schema(description = "Vrai sur une ligne de lot libre (`lignes=DOSSIERS_ET_LIBRES` ou `LIBRES`) : "
-                + "`id` est alors l'article.")
+        @Schema(description = "Lot libre : `id` = article, `code` = code article, `statut` = LIBRE, `prix` = prix TTC du lot.")
         Boolean libre,
 
         @Schema(description = "Client marqué ancien client (ComFolder.IsOldCustomer).")

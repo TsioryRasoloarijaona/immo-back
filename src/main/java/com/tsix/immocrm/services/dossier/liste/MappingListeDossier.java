@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.dossier.liste;
 
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
+import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -42,6 +43,9 @@ public final class MappingListeDossier {
 
     private static final int ECHELLE = 6;
 
+    /** Statut affiché d'un lot libre, comme le « Libre » d'OMRAN ; ce n'est pas un code StrStatus. */
+    public static final String STATUT_LIBRE = "LIBRE";
+
     private MappingListeDossier() {
     }
 
@@ -79,11 +83,17 @@ public final class MappingListeDossier {
         return l;
     }
 
-    /** Ligne « Libre » : l'article sans dossier ; {@code id} est celui de l'article. */
+    /**
+     * Ligne « Libre » : l'article sans dossier ; {@code id} est celui de l'article. Les colonnes par défaut d'un dossier
+     * reprennent l'article pour rester lisibles : code = code article, statut LIBRE, prix = prix de vente TTC du lot.
+     */
     public static LigneDossier depuisLotLibre(StkItem article) {
         LigneDossier l = new LigneDossier()
                 .met(ID, article.getId())
                 .met(LIBRE, true)
+                .met(CODE, article.getCode())
+                .met(STATUT, STATUT_LIBRE)
+                .met(PRIX, PrixArticle.prixDeReference(article).map(PrixArticle.PrixDeReference::ttc).orElse(null))
                 .met(SUPERFICIE, article.getArea());
         patrimoine(l, article, article.getStkVocation());
         article(l, article);

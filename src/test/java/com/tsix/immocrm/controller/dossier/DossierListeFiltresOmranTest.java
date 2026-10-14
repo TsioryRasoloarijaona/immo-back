@@ -149,6 +149,40 @@ class DossierListeFiltresOmranTest {
                 .andExpect(jsonPath("$.content[0].id").value(libre.getId().toString()));
     }
 
+    /** Colonnes par défaut d'un dossier : un lot libre y montre son code, le statut LIBRE et son prix TTC. */
+    @Test
+    void lotLibre_colonnesParDefautLisibles() throws Exception {
+        ComFolder f = dossier("A", StatutDossier.CONCRETISATION);
+        StkItem libre = article(prefixe + "-LIBRE", f.getStkItem());
+        libre.setComSalePrice(new BigDecimal("950000"));
+        relire();
+
+        mockMvc.perform(get(LISTE).param(SEARCH, prefixe).param("lignes", "LIBRES")
+                        .param("colonnes", "code,statut,prix,libre,trancheCode"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].code").value(prefixe + "-LIBRE"))
+                .andExpect(jsonPath("$.content[0].statut").value("LIBRE"))
+                .andExpect(jsonPath("$.content[0].prix").value(950000.0))
+                .andExpect(jsonPath("$.content[0].trancheCode").value(tranche.getCode()));
+    }
+
+    /** Mobile saisi au format national ou international, stocké sans 0 ni indicatif. */
+    @Test
+    void recherche_mobileAuFormatNationalOuInternational() throws Exception {
+        ComFolder f = dossier("A", StatutDossier.CONCRETISATION);
+        String mobile = "6" + UUID.randomUUID().toString().replaceAll("\\D", "").substring(0, 8);
+        f.getCfgCustomer().setMobile(mobile);
+        f.getCfgCustomer().setMobileIndicatif("212");
+        relire();
+
+        for (String saisie : new String[] {"0" + mobile, "+212 " + mobile, "00212" + mobile}) {
+            mockMvc.perform(get(LISTE).param(SEARCH, saisie))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(f.getId().toString()));
+        }
+    }
+
     /** Lot d'un dossier sorti : redevenu libre. */
     @Test
     void articlePrincipalDUnDossierSorti_estUnLotLibre() throws Exception {
