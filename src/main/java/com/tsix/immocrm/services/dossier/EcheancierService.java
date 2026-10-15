@@ -199,8 +199,7 @@ public class EcheancierService {
             throw new InvalidRequestException(CATEGORIE_REQUISE);
         }
         if (!document.getComSettlementCategory().getId().equals(categorieAvant)) {
-            // SetDefaluts : la remise ancien client suit la nouvelle catégorie.
-            document.setDiscountRatio(null);
+            reprendreDefautsCategorie(document, request.exclureDuPrix());
         }
         BigDecimal regle = requireNonNullElse(settlementLineRepository.sumAmountByComDocumentId(echeanceId),
                 BigDecimal.ZERO);
@@ -212,6 +211,17 @@ public class EcheancierService {
         reequilibrage.reporter(folder, enregistree);
         totaux.rafraichir(folder);
         return toDtoApresEcriture(enregistree, folder);
+    }
+
+    /**
+     * {@code SetDefaluts} au changement de catégorie : remise et exclusion du prix suivent la nouvelle catégorie (la TVA
+     * est reprise par {@code completer}). Montant et date ne sont jamais recalculés (FEATURE-echeancier-modification.md B1).
+     */
+    private static void reprendreDefautsCategorie(ComDocument document, Boolean exclureDuPrixDemande) {
+        document.setDiscountRatio(null);
+        if (exclureDuPrixDemande == null) {
+            document.setExcludeFromPrice(Boolean.TRUE.equals(document.getComSettlementCategory().getExcludeFromPrice()));
+        }
     }
 
     private record ChampsEcheance(LocalDateTime dateEcheance, BigDecimal montant, String description,
