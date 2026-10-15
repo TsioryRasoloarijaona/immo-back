@@ -152,11 +152,14 @@ class DossierCreateTest {
         return prospectionRepository.save(prospection);
     }
 
-    private com.tsix.immocrm.entities.stl.StlQuote nouvelleOffre(ComProspection prospection, String code) {
+    /** Offre sur l'article, de même vocation : les contrôles de GenerateComFolderFromQuote passent. */
+    private com.tsix.immocrm.entities.stl.StlQuote nouvelleOffre(ComProspection prospection, String code, StkItem article) {
         com.tsix.immocrm.entities.stl.StlQuote offre = new com.tsix.immocrm.entities.stl.StlQuote();
         offre.setId(UUID.randomUUID());
         offre.setCode(code);
         offre.setComProspection(prospection);
+        offre.setStkItem(article);
+        offre.setStkVocation(article.getStkVocation());
         return quoteRepository.save(offre);
     }
 
@@ -171,7 +174,7 @@ class DossierCreateTest {
     void create_avecOffreDeLaProspection_renseigneStlQuoteId() throws Exception {
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-CREATE-OFFRE");
-        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(prospection, "OFF-CREATE-A4");
+        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(prospection, "OFF-CREATE-A4", item);
         String body = """
                 {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"A4-CIN","offreId":"%s"}
                 """.formatted(prospection.getId(), item.getId(), nouveauModePaie("VIR-A4").getId(), offre.getId());
@@ -195,7 +198,7 @@ class DossierCreateTest {
         autre.setCode("PSN-CREATE-A4-AUTRE");
         autre = prospectionRepository.save(autre);
         StkItem item = newAvailableItem("LOT-CREATE-OFFRE-AUTRE");
-        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(autre, "OFF-CREATE-A4-AUTRE");
+        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(autre, "OFF-CREATE-A4-AUTRE", item);
         String body = """
                 {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"A4-CIN","offreId":"%s"}
                 """.formatted(prospection.getId(), item.getId(), nouveauModePaie("VIR-A4-AUTRE").getId(), offre.getId());
