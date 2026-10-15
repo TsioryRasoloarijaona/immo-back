@@ -65,7 +65,7 @@ public class OffreDevisDocumentService {
                 quote.getComPaymentMethod() != null ? quote.getComPaymentMethod().getDescription() : null,
                 DevisService.toMontantsDto(quote),
                 lignes.stream().map(OffreDevisDocumentService::toLigne).toList(),
-                devisService.calculerSchemaFinancement(quote)
+                devisService.schemaFinancement(quote)
         );
     }
 

@@ -73,7 +73,7 @@ jobs:
           docker cp ci/schema sqlserver:/schema
           docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b \
             -Q "CREATE DATABASE [$DB_TEST]"
-          for f in 010_tables 020_foreign_keys 030_triggers 040_seed_reference 050_views 060_interop_vente 070_workflow_vente 070_vente_sous_listes; do
+          for f in 010_tables 020_foreign_keys 030_triggers 040_seed_reference 050_views 060_interop_vente 070_workflow_vente 070_vente_sous_listes 080_offres_schema_financement; do
             echo "--- $f.sql"
             docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b -I \
               -d "$DB_TEST" -i "/schema/$f.sql"

@@ -154,22 +154,47 @@ public class GroupementService {
     private <E> ResultatGroupement totalGeneral(Class<E> racine, Specification<E> spec, Chemin cle,
                                                 Granularite granularite, List<AgregatDemande> agregats,
                                                 boolean inclureSansValeur, Page<GroupeDto> page) {
+        Totaux totaux = agregerTout(racine, agregats, (cb, jointures, filtres) -> predicats(cb, filtres,
+                expressionCle(cb, jointures, cle, granularite), inclureSansValeur), spec);
+        return new ResultatGroupement(page, totaux.valeurs(), totaux.nombre());
+    }
+
+    /** Agrégats et effectif de toutes les lignes filtrées, sans groupe : le même calcul que la bande des groupes. */
+    public record Totaux(Map<String, Object> valeurs, long nombre) {
+    }
+
+    /**
+     * Totaux d'une liste plate : exactement les agrégats de {@link #grouper} sur tout le filtre (exclusions de
+     * {@link Chemin#sauf} comprises). La {@code spec} est celle de la liste, périmètre inclus.
+     */
+    @Transactional(readOnly = true)
+    public <E> Totaux totaux(Class<E> racine, Specification<E> spec, List<AgregatDemande> agregats) {
+        return agregerTout(racine, agregats, (cb, jointures, filtres) -> filtres != null ? filtres : cb.conjunction(),
+                spec);
+    }
+
+    private interface Restriction {
+        Predicate appliquer(CriteriaBuilder cb, Jointures jointures, Predicate filtres);
+    }
+
+    private <E> Totaux agregerTout(Class<E> racine, List<AgregatDemande> agregats, Restriction restriction,
+                                   Specification<E> spec) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<E> root = cq.from(racine);
         Jointures jointures = new Jointures(root);
-        Expression<?> exprCle = expressionCle(cb, jointures, cle, granularite);
+        Predicate filtres = spec.toPredicate(root, cq, cb);
+        Predicate where = restriction.appliquer(cb, jointures, filtres);
 
         List<Selection<?>> selections = new ArrayList<>();
         selections.add(cb.count(root));
         List<Agregation> plans = planifier(cb, jointures, agregats, selections);
 
         cq.multiselect(selections);
-        cq.where(predicats(cb, spec.toPredicate(root, cq, cb), exprCle, inclureSansValeur));
+        cq.where(where);
 
         Tuple t = em.createQuery(cq).getSingleResult();
-        long nombreTotal = ((Number) t.get(0)).longValue();
-        return new ResultatGroupement(page, valeurs(t, plans), nombreTotal);
+        return new Totaux(valeurs(t, plans), ((Number) t.get(0)).longValue());
     }
 
     // ------------------------------------------------------------------

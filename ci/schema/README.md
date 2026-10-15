@@ -14,6 +14,7 @@ chaque *pull request*.
 | `060_interop_vente.sql` | `AdmParamsGuid`, `StlDocumentLine`, `ComLoanCompanyDecision` (lues par la vente hors entités JPA) et la devise par défaut ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 | `070_workflow_vente.sql` | tables de paramétrage du workflow (`StrWorkFlow`, intervenants, champs et pièces obligatoires), **vides** ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 | `070_vente_sous_listes.sql` | `ComModification`, `ComGift`, `ComGiftReason`, `ComGiftQuantity`, `ComFolderGift`, `StlPaymentAuthorizationLine`, `CfgTrancheSettlementCategory` (fiche dossier, FEATURE-vente-echeancier.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
+| `080_offres_schema_financement.sql` | `StlQuoteDocument` (schéma de financement saisi sur une offre, FEATURE-encaissements-offres-lot2.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 
 Appliquer dans l'ordre numérique.
 

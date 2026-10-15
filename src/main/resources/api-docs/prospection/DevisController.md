@@ -22,3 +22,38 @@ demander explicitement une `trancheId` hors périmètre renvoie une page vide, p
 
 Id(s) de tranche (CfgTranche.id). Répéter le paramètre pour plusieurs tranches
 (?trancheId=a&trancheId=b). Absent = toutes les tranches.
+
+## findById
+
+Même visibilité que la liste (`GET /api/devis`) : une offre que l'appelant ne verrait pas dans la liste
+répond 404, comme une offre inconnue. `offre.schemaFinancement` est le schéma saisi dans OMRAN s'il
+existe (`schemaFinancementSaisi = true`), sinon le schéma calculé depuis la tranche.
+
+## modifier
+
+Mêmes champs que la création, tous optionnels : seul ce qui est fourni change (null = inchangé).
+Mêmes contrôles qu'à la création (article de la tranche et non vendu, sous-articles enfants de
+l'article, prix requis sans article) ; l'article déjà porté par l'offre n'est pas recontrôlé comme
+vendu. Les montants sont recalculés par le calcul de la création quand l'article, les sous-articles,
+le prix ou la remise sont fournis ; les sous-articles sont alors réécrits. `UserUpdate` /
+`UserUpdateDateTime` = l'utilisateur courant. Une offre qui a donné un dossier reste modifiable,
+comme dans OMRAN, mais ne peut plus changer d'article.
+
+Même périmètre que la liste : quiconque voit l'offre peut la modifier.
+
+### reponse 400
+
+Tranche, article, sous-article ou mode de paiement introuvable ou incohérent ; changement d'article
+d'une offre qui a donné un dossier ; schéma de financement saisi dans OMRAN qui ne correspond plus au
+prix de vente TTC après remise (`VerifSchema` d'OMRAN : AVANCE + CRÉDIT + AUTO-FINANCEMENT = prix,
+au centime). Rien n'est écrit. Le message est dans `detail`.
+
+## supprimer
+
+Supprime l'offre avec ses sous-articles (`StlQuoteItem`) et son schéma (`StlQuoteDocument`), comme
+la cascade de la base. Le numéro d'offre (`AdmSequence`) n'est pas rendu. Même périmètre que la liste.
+
+### reponse 409
+
+L'offre a donné un dossier (vente : `ComFolder.StlQuoteId`, ou location : `RntFolder.StlQuoteId`) :
+elle ne peut pas être supprimée. Vérifié avant toute écriture ; le message nomme le dossier.

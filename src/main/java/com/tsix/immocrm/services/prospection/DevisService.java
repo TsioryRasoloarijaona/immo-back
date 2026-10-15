@@ -7,26 +7,35 @@ import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
+import com.tsix.immocrm.dto.prospection.DossierLieDto;
+import com.tsix.immocrm.dto.prospection.FicheDevisDto;
+import com.tsix.immocrm.dto.prospection.ModifierDevisRequest;
 import com.tsix.immocrm.dto.prospection.MontantsOffreDto;
+import com.tsix.immocrm.dto.prospection.SousArticleOffreDto;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stl.StlQuote;
+import com.tsix.immocrm.entities.stl.StlQuoteDocument;
 import com.tsix.immocrm.entities.stl.StlQuoteItem;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.repositories.stl.StlQuoteDocumentRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
@@ -55,6 +64,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Offres d'une prospection ({@code StlQuote}) : le formulaire Offre legacy, entête et onglet « Montants ». */
@@ -64,6 +75,11 @@ public class DevisService {
 
     private static final String CODE = "code";
     private static final String DESCRIPTION = "description";
+    private static final String OFFRE_INTROUVABLE = "Offre introuvable: ";
+    private static final String TRANCHE_INTROUVABLE = "CfgTranche introuvable: ";
+    private static final String FRAIS_SYNDIC = "FRAIS SYNDIC";
+    /** Précision monétaire de {@code VerifSchema} (OMRAN arrondit à {@code CurrencyDecimalDigits}, 2 pour le dirham). */
+    private static final int DECIMALES_DEVISE = 2;
 
     private final ComProspectionRepository prospectionRepository;
     private final StlQuoteRepository quoteRepository;
@@ -74,6 +90,8 @@ public class DevisService {
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final AdmSequenceRepository sequenceRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
+    private final StlQuoteDocumentRepository schemaRepository;
+    private final ComFolderRepository folderRepository;
     private final PerimetreCommercialService perimetreService;
     private final ReferencesOmran referencesOmran;
     private final UtilisateurAffiche utilisateurAffiche;
@@ -95,6 +113,8 @@ public class DevisService {
         this.paymentMethodRepository = depots.modesPaiement();
         this.sequenceRepository = depots.sequences();
         this.settlementCategoryRepository = depots.categories();
+        this.schemaRepository = depots.schemas();
+        this.folderRepository = depots.dossiers();
     }
 
     /**
@@ -206,7 +226,7 @@ public class DevisService {
 
         Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+                .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
 
         StkItem article = articleValide(request.articleId(), tranche);
         if (article == null && request.prix() == null) {
@@ -224,11 +244,7 @@ public class DevisService {
             commercial = tierRepository.findById(request.commercialId())
                     .orElseThrow(() -> new InvalidRequestException("Commercial introuvable: " + request.commercialId()));
         }
-        ComPaymentMethod modePaiement = null;
-        if (request.modePaiementId() != null) {
-            modePaiement = paymentMethodRepository.findById(request.modePaiementId())
-                    .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaiementId()));
-        }
+        ComPaymentMethod modePaiement = modePaiement(request.modePaiementId());
 
         BigDecimal remisePercent = request.remisePercent() != null ? request.remisePercent() : BigDecimal.ZERO;
         MontantsCalcules montants = calculerMontants(article, sousArticles, request.prix(), remisePercent);
@@ -253,6 +269,226 @@ public class DevisService {
         return toDto(quote);
     }
 
+    private ComPaymentMethod modePaiement(UUID modePaiementId) {
+        if (modePaiementId == null) {
+            return null;
+        }
+        return paymentMethodRepository.findById(modePaiementId)
+                .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + modePaiementId));
+    }
+
+    // ---------------------------------------------------------------- fiche, modification, suppression
+
+    /** Seule lecture par id des routes {@code /api/devis/{id}} : inconnue ou hors périmètre (règle de la liste) → 404. */
+    private StlQuote offreVisible(UUID id) {
+        Specification<StlQuote> parId = (root, query, cb) -> cb.equal(root.get("id"), id);
+        return quoteRepository.findOne(parId.and(perimetreService.filtreDevis()))
+                .orElseThrow(() -> new ResourceNotFoundException(OFFRE_INTROUVABLE + id));
+    }
+
+    public FicheDevisDto findFiche(UUID id) {
+        return toFiche(offreVisible(id));
+    }
+
+    /**
+     * Modification partielle : null = inchangé. Les montants ne sont recalculés (et les sous-articles réécrits)
+     * que si l'article, les sous-articles, le prix ou la remise sont fournis. Tout se vérifie avant l'écriture.
+     */
+    @Transactional
+    public FicheDevisDto modifierDevis(UUID id, ModifierDevisRequest request) {
+        StlQuote quote = offreVisible(id);
+        CfgTranche tranche = quote.getCfgTranche();
+        if (request.trancheId() != null) {
+            tranche = trancheRepository.findById(request.trancheId())
+                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+        }
+        boolean changeArticle = changeDArticle(quote, request.articleId());
+        StkItem article = changeArticle ? nouvelArticle(quote, request.articleId(), tranche) : quote.getStkItem();
+        if (!changeArticle && article != null && tranche != null) {
+            verifierTranche(article, tranche);
+        }
+        ComPaymentMethod modePaiement = request.modePaiementId() != null
+                ? modePaiement(request.modePaiementId()) : quote.getComPaymentMethod();
+        Recalcul recalcul = recalculer(quote, article, changeArticle, request);
+
+        quote.setCfgTranche(tranche);
+        quote.setComPaymentMethod(modePaiement);
+        if (request.notes() != null) {
+            quote.setNotes(StringUtils.hasText(request.notes()) ? request.notes() : null);
+        }
+        if (changeArticle) {
+            quote.setStkItem(article);
+            quote.setStkVocation(article.getStkVocation());
+        }
+        if (recalcul != null) {
+            appliquerMontants(quote, recalcul.montants());
+        }
+        quote.setUserUpdate(utilisateurAffiche.courant().nom());
+        quote.setUserUpdateDateTime(LocalDateTime.now(clock));
+        quote = quoteRepository.save(quote);
+        if (recalcul != null) {
+            quoteItemRepository.deleteAll(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId()));
+            persisterLignesSousArticles(quote, recalcul.sousArticles(), recalcul.remisePercent());
+        }
+        return toFiche(quote);
+    }
+
+    private record Recalcul(MontantsCalcules montants, List<StkItem> sousArticles, BigDecimal remisePercent) {
+    }
+
+    private static boolean changeDArticle(StlQuote quote, UUID articleId) {
+        return articleId != null && (quote.getStkItem() == null || !quote.getStkItem().getId().equals(articleId));
+    }
+
+    /** Montants recalculés et schéma saisi vérifié ; null si rien de ce qui fait le prix ne change (schéma vérifié aussi). */
+    private Recalcul recalculer(StlQuote quote, StkItem article, boolean changeArticle, ModifierDevisRequest request) {
+        boolean recalcul = changeArticle || request.sousArticleIds() != null
+                || request.prix() != null || request.remisePercent() != null;
+        if (!recalcul) {
+            verifierSchemaSaisi(quote.getId(), quote.getPriceAfterDiscount());
+            return null;
+        }
+        List<StkItem> sousArticles = sousArticlesModifies(quote, article, changeArticle, request.sousArticleIds());
+        BigDecimal remisePercent = remiseModifiee(quote, request.remisePercent());
+        BigDecimal prix = request.prix();
+        if (prix == null && !changeArticle) {
+            prix = prixActuel(quote);
+        }
+        if (article == null && prix == null) {
+            throw new InvalidRequestException("prix est requis quand l'offre n'a pas d'article");
+        }
+        MontantsCalcules montants = calculerMontants(article, sousArticles, prix, remisePercent);
+        verifierSchemaSaisi(quote.getId(), montants.priceAfterDiscountTTC());
+        return new Recalcul(montants, sousArticles, remisePercent);
+    }
+
+    /**
+     * Comme la création, sauf que l'offre ne peut plus changer d'article une fois un dossier créé depuis elle :
+     * l'article est occupé par ce dossier (FEATURE-encaissements-offres-lot2.md A2).
+     */
+    private StkItem nouvelArticle(StlQuote quote, UUID articleId, CfgTranche tranche) {
+        dossierLie(quote.getId()).ifPresent(dossier -> {
+            throw new InvalidRequestException("L'offre a donné le dossier " + dossier.code()
+                    + " : son article ne peut plus changer");
+        });
+        Requis.champ(tranche, "trancheId est requis pour choisir un article");
+        return articleValide(articleId, tranche);
+    }
+
+    private List<StkItem> sousArticlesModifies(StlQuote quote, StkItem article, boolean changeArticle,
+                                               List<UUID> sousArticleIds) {
+        if (sousArticleIds != null) {
+            return sousArticlesValides(article, sousArticleIds);
+        }
+        if (changeArticle || article == null) {
+            return List.of();
+        }
+        return quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId()).stream()
+                .map(StlQuoteItem::getStkItem)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private static BigDecimal remiseModifiee(StlQuote quote, BigDecimal demandee) {
+        if (demandee != null) {
+            return demandee;
+        }
+        BigDecimal actuelle = ConventionRemise.pourcentage(quote.getDiscount());
+        return actuelle != null ? actuelle : BigDecimal.ZERO;
+    }
+
+    /** Prix TTC de base déjà retenu par l'offre : prix article (avec article), sinon prix de vente avant remise. */
+    private static BigDecimal prixActuel(StlQuote quote) {
+        if (quote.getStkItem() != null || quote.getItemPrice() != null) {
+            return quote.getItemPrice();
+        }
+        return quote.getPriceBeforeDiscount();
+    }
+
+    /**
+     * {@code VerifSchema} d'OMRAN ({@code Yes.Stl.Credit/Quote.cs}) : un schéma saisi sur l'offre doit égaler le prix
+     * après remise, sur ses seules catégories d'encaissement AVANCE, CRÉDIT et AUTO-FINANCEMENT.
+     */
+    private void verifierSchemaSaisi(UUID offreId, BigDecimal prixApresRemise) {
+        List<StlQuoteDocument> lignes = schemaRepository.findByStlQuoteIdOrderByCodeAsc(offreId);
+        if (lignes.isEmpty()) {
+            return;
+        }
+        BigDecimal finance = lignes.stream()
+                .filter(ligne -> financeLePrix(ligne.getComSettlementCategory()))
+                .map(StlQuoteDocument::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal ecart = (prixApresRemise != null ? prixApresRemise : BigDecimal.ZERO).subtract(finance)
+                .setScale(DECIMALES_DEVISE, RoundingMode.HALF_EVEN);
+        if (ecart.signum() > 0) {
+            throw new InvalidRequestException("Votre schéma de financement ne correspond pas au montant contractuel : "
+                    + "vous devez ajouter dans le schéma de financement un montant de " + ecart.toPlainString() + " DH");
+        }
+        if (ecart.signum() < 0) {
+            throw new InvalidRequestException("Votre schéma de financement ne correspond pas au montant contractuel : "
+                    + "vous devez soustraire du schéma de financement un montant de " + ecart.negate().toPlainString()
+                    + " DH");
+        }
+    }
+
+    private static boolean financeLePrix(ComSettlementCategory categorie) {
+        if (categorie == null || !Boolean.TRUE.equals(categorie.getIsCredit())) {
+            return false;
+        }
+        return Boolean.TRUE.equals(categorie.getIsSaleAdvance()) || Boolean.TRUE.equals(categorie.getIsSaleCredit())
+                || Boolean.TRUE.equals(categorie.getIsSaleAutoFinancment());
+    }
+
+    /**
+     * Comme OMRAN, une offre qui a donné un dossier (vente ou location) ne se supprime pas : les deux FK sont sans
+     * cascade. Sous-articles et schéma partent avec l'offre ; le compteur {@code AdmSequence} n'est pas rendu.
+     */
+    @Transactional
+    public void supprimerDevis(UUID id) {
+        StlQuote quote = offreVisible(id);
+        dossierLie(id).ifPresent(dossier -> {
+            throw new ConflictException("Cette offre a donné le dossier " + dossier.code()
+                    + " : elle ne peut pas être supprimée");
+        });
+        schemaRepository.deleteAll(schemaRepository.findByStlQuoteIdOrderByCodeAsc(id));
+        quoteItemRepository.deleteAll(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(id));
+        quoteRepository.delete(quote);
+    }
+
+    /** Dossier de vente d'abord, sinon de location ; vide si l'offre n'a donné aucun dossier. */
+    private Optional<DossierLieDto> dossierLie(UUID offreId) {
+        List<Object[]> ventes = folderRepository.dossiersDeLOffre(offreId);
+        if (!ventes.isEmpty()) {
+            return Optional.of(new DossierLieDto((UUID) ventes.get(0)[0], (String) ventes.get(0)[1], false));
+        }
+        return folderRepository.locationsDeLOffre(offreId).stream().findFirst()
+                .map(code -> new DossierLieDto(null, code, true));
+    }
+
+    private FicheDevisDto toFiche(StlQuote quote) {
+        List<SousArticleOffreDto> sousArticles = quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId())
+                .stream()
+                .map(DevisService::toSousArticle)
+                .toList();
+        boolean schemaSaisi = !schemaRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId()).isEmpty();
+        return new FicheDevisDto(toDto(quote), sousArticles, dossierLie(quote.getId()).orElse(null), schemaSaisi);
+    }
+
+    private static SousArticleOffreDto toSousArticle(StlQuoteItem ligne) {
+        return new SousArticleOffreDto(
+                ligne.getId(),
+                Champs.de(ligne.getStkItem(), StkItem::getId),
+                ligne.getCode(),
+                ligne.getDescription(),
+                Champs.de(ligne.getStkItemCategory(), StkItemCategory::getDescription),
+                ligne.getArea(),
+                ligne.getPriceBeforeDiscount(),
+                ligne.getDiscountAmount(),
+                ligne.getPriceAfterDiscountHT(),
+                ligne.getPriceAfterDiscount());
+    }
+
     /** Colonnes qu'OMRAN écrit sur toute offre : entité « ComQuote », vocation de l'article, auteur. */
     private void completerCommeOmran(StlQuote quote, StkItem article) {
         quote.setStrEntityId(referencesOmran.entiteOffreVente());
@@ -272,14 +508,18 @@ public class DevisService {
         }
         StkItem article = stkItemRepository.findById(articleId)
                 .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + articleId));
-        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-            throw new InvalidRequestException("L'article " + article.getCode() + " n'appartient pas à la tranche "
-                    + tranche.getCode());
-        }
+        verifierTranche(article, tranche);
         if (DisponibiliteArticle.estOccupe(article)) {
             throw new InvalidRequestException("L'article " + article.getCode() + " est déjà vendu (lié à un dossier)");
         }
         return article;
+    }
+
+    private static void verifierTranche(StkItem article, CfgTranche tranche) {
+        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+            throw new InvalidRequestException("L'article " + article.getCode() + " n'appartient pas à la tranche "
+                    + tranche.getCode());
+        }
     }
 
     /** Sous-articles demandés, tous enfants de l'article ({@code StkItem.ParentId}). */
@@ -531,9 +771,30 @@ public class DevisService {
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getId() : null,
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getDescription() : null,
                 toMontantsDto(q),
-                calculerSchemaFinancement(q),
-                q.getNotes()
+                schemaFinancement(q),
+                q.getNotes(),
+                q.getUserCreate(),
+                q.getUserCreateDateTime(),
+                q.getUserUpdate(),
+                q.getUserUpdateDateTime()
         );
+    }
+
+    /** Le schéma saisi dans OMRAN ({@code StlQuoteDocument}) s'il existe, sinon le schéma calculé depuis la tranche. */
+    List<LigneSchemaFinancementDto> schemaFinancement(StlQuote q) {
+        List<StlQuoteDocument> saisi = schemaRepository.findByStlQuoteIdOrderByCodeAsc(q.getId());
+        if (saisi.isEmpty()) {
+            return calculerSchemaFinancement(q);
+        }
+        return saisi.stream()
+                .map(ligne -> {
+                    ComSettlementCategory categorie = ligne.getComSettlementCategory();
+                    return new LigneSchemaFinancementDto(
+                            Champs.de(categorie, ComSettlementCategory::getCode),
+                            ligne.getAmount(),
+                            categorie != null && Boolean.TRUE.equals(categorie.getExcludeFromPrice()));
+                })
+                .toList();
     }
 
     /**
@@ -541,7 +802,7 @@ public class DevisService {
      * Sans vocation d'article, {@code exclureDuPrix} retombe sur la convention de la base :
      * seule FRAIS SYNDIC est exclue.
      */
-    List<LigneSchemaFinancementDto> calculerSchemaFinancement(StlQuote q) {
+    private List<LigneSchemaFinancementDto> calculerSchemaFinancement(StlQuote q) {
         BigDecimal prix = q.getPriceAfterDiscount();
         if (prix == null) {
             return List.of();
@@ -555,8 +816,8 @@ public class DevisService {
                     Boolean exclureDuPrix = vocationId != null
                             ? settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
                                     .map(categorie -> categorie.getExcludeFromPrice())
-                                    .orElse("FRAIS SYNDIC".equals(ligne.categorieCode()))
-                            : "FRAIS SYNDIC".equals(ligne.categorieCode());
+                                    .orElse(FRAIS_SYNDIC.equals(ligne.categorieCode()))
+                            : FRAIS_SYNDIC.equals(ligne.categorieCode());
                     return new LigneSchemaFinancementDto(ligne.categorieCode(), ligne.montant(), exclureDuPrix);
                 })
                 .toList();

@@ -10,6 +10,7 @@ import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement
 import com.tsix.immocrm.dto.encaissement.AffectationDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
+import com.tsix.immocrm.dto.encaissement.TotauxEncaissementsDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -115,6 +116,28 @@ public class EncaissementService {
                 .and(perimetreService.filtreEncaissements());
         return groupementService.grouper(StlSettlement.class, spec, groupeBy.chemin(), granularite,
                 agregats, tri, inclureSansValeur, pageable);
+    }
+
+    /**
+     * Bande « Total : » de la liste plate : la spec et le périmètre de {@link #findAll}, et les agrégats de
+     * {@code /groupes} ({@link GroupementService#totaux}), donc les mêmes exclusions des CANCELED.
+     */
+    public TotauxEncaissementsDto totaux(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
+                                         UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
+                                         UUID tierId, String reference, String search,
+                                         Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
+                                         ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
+                montantA, champDate, dateDebut, dateFin))
+                .and(perimetreService.filtreEncaissements());
+        List<ColonneEncaissement> sommees = List.of(ColonneEncaissement.MONTANT_BRUT,
+                ColonneEncaissement.MONTANT_BRUT_RESTANT, ColonneEncaissement.MONTANT_NET, ColonneEncaissement.MONTANT_BASE);
+        List<AgregatDemande> agregats = ColonneEncaissement.resoudreAgregats(
+                sommees.stream().map(ColonneEncaissement::nom).toList());
+        GroupementService.Totaux totaux = groupementService.totaux(StlSettlement.class, spec, agregats);
+        List<BigDecimal> sommes = agregats.stream().map(a -> (BigDecimal) totaux.valeurs().get(a.jeton())).toList();
+        return new TotauxEncaissementsDto(totaux.nombre(), sommes.get(0), sommes.get(1), sommes.get(2), sommes.get(3));
     }
 
     /** Filtres de la liste des encaissements, tels que reçus du contrôleur. */
@@ -333,6 +356,7 @@ public class EncaissementService {
                 s.getDocDate(),
                 s.getEcheanceDate(),
                 s.getSettlementDate(),
+                s.getPointagePrevu(),
                 Champs.de(tier, CfgTier::getId),
                 tier != null ? TierNomFormatter.nom(tier) : null,
                 montantBrut,

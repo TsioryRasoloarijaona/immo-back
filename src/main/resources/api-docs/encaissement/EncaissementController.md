@@ -38,7 +38,8 @@ remonte dès qu'une de ses échéances porte sur un lot de l'une des tranches ci
 
 ### param colonnes
 
-Colonnes à sérialiser, répétable ou séparées par des virgules. Absent : les 27 colonnes historiques.
+Colonnes à sérialiser, répétable ou séparées par des virgules. Absent : les 27 colonnes `parDefaut` du
+catalogue (`pointagePrevu` y remplace `dateReglement`, toujours servie si demandée).
 Catalogue et liste blanche : `GET /api/referentiels/colonnes/encaissements`. Un nom hors catalogue
 rend 400 avec la liste des noms valides. `id` est toujours servi.
 
@@ -121,6 +122,14 @@ somme des effectifs retombe alors sur le `totalElements` de la liste non groupé
 
 `groupBy` absent, inconnu, ou désignant une colonne non groupable ; ou `agregats` contenant une
 colonne non agrégeable. Le corps (RFC 7807) porte la liste des noms acceptés.
+
+## totaux
+
+Bande « Total : » de la liste plate (écran OMRAN `SettlementList`) : effectif et sommes sur **tout**
+le filtre, pas sur la page chargée. Mêmes paramètres et même sémantique que `GET /api/encaissements`
+(sans pagination, sans dépliage de groupe), périmètre commercial compris : `nombre` est égal au
+`totalElements` de la liste. Les sommes sont calculées par le même code que `totaux` de
+`/groupes` : les règlements `CANCELED` comptent dans `nombre` mais sortent de toutes les sommes.
 
 ## exporter
 
