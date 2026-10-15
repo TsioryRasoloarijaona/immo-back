@@ -50,6 +50,11 @@ d'une offre qui a donné un dossier ; schéma de financement saisi dans OMRAN qu
 prix de vente TTC après remise (`VerifSchema` d'OMRAN : AVANCE + CRÉDIT + AUTO-FINANCEMENT = prix,
 au centime). Rien n'est écrit. Le message est dans `detail`.
 
+### reponse 403
+
+`trancheId` désigne une tranche dont le projet est hors du périmètre commercial de l'appelant (même
+contrôle que la création d'offre ou de dossier). Rien n'est écrit.
+
 ## supprimer
 
 Supprime l'offre avec ses sous-articles (`StlQuoteItem`) et son schéma (`StlQuoteDocument`), comme

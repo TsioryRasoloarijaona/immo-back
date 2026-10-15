@@ -227,6 +227,7 @@ public class DevisService {
         Requis.champ(request.trancheId(), "trancheId est requis");
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+        perimetreService.verifierEcritureSurTranche(tranche, "Création d'offre sur la tranche " + tranche.getCode());
 
         StkItem article = articleValide(request.articleId(), tranche);
         if (article == null && request.prix() == null) {
@@ -301,6 +302,7 @@ public class DevisService {
         if (request.trancheId() != null) {
             tranche = trancheRepository.findById(request.trancheId())
                     .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            perimetreService.verifierEcritureSurTranche(tranche, "Déplacement de l'offre vers la tranche " + tranche.getCode());
         }
         boolean changeArticle = changeDArticle(quote, request.articleId());
         StkItem article = changeArticle ? nouvelArticle(quote, request.articleId(), tranche) : quote.getStkItem();

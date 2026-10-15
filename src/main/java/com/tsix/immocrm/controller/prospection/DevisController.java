@@ -82,6 +82,7 @@ public class DevisController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Offre modifiée, fiche relue."),
             @ApiResponse(responseCode = "400", content = @Content),
+            @ApiResponse(responseCode = "403", content = @Content),
             @ApiResponse(responseCode = "404", description = OFFRE_INVISIBLE,
                     content = @Content)
     })

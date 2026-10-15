@@ -889,8 +889,10 @@ class EncaissementColonnesEtGroupementTest {
      */
     @Test
     void pointagePrevu_reporteAAujourdhuiUnReglementEchuNonPointe() throws Exception {
+        // Dates dans la plage smalldatetime de la base de CI (1900-01-01 .. 2079-06-06).
+        java.time.LocalDate jour = java.time.LocalDate.now();
         StlSettlement echu = newEncaissement("CGE-PTG-1", new BigDecimal("100.00"));
-        echu.setEcheanceDate(LocalDateTime.of(2024, 3, 10, 0, 0));
+        echu.setEcheanceDate(jour.minusDays(10).atStartOfDay());
         settlementRepository.save(echu);
         StlSettlement pointe = newEncaissement("CGE-PTG-2", new BigDecimal("200.00"));
         pointe.setStatus("POINTED");
@@ -898,11 +900,12 @@ class EncaissementColonnesEtGroupementTest {
         pointe.setSettlementDate(LocalDateTime.of(2024, 3, 5, 0, 0));
         settlementRepository.save(pointe);
         StlSettlement aVenir = newEncaissement("CGE-PTG-3", new BigDecimal("300.00"));
-        aVenir.setEcheanceDate(LocalDateTime.of(2099, 1, 15, 0, 0));
+        java.time.LocalDate futur = jour.plusYears(5);
+        aVenir.setEcheanceDate(futur.atStartOfDay());
         settlementRepository.save(aVenir);
         relireDepuisLaBase();
         // Horloge de SQL Server, comme la vue OMRAN (même machine que la JVM en local comme en CI).
-        String aujourdhui = java.time.LocalDate.now().toString();
+        String aujourdhui = jour.toString();
 
         mockMvc.perform(get("/api/encaissements").param("reference", "CGE-PTG-")
                         .param("colonnes", "reference,pointagePrevu").param("sort", "pointagePrevu,asc"))
@@ -911,11 +914,11 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(jsonPath("$.content[0].pointagePrevu").value(Matchers.startsWith("2024-03-05")))
                 .andExpect(jsonPath("$.content[1].reference").value("CGE-PTG-1"))
                 .andExpect(jsonPath("$.content[1].pointagePrevu").value(Matchers.startsWith(aujourdhui)))
-                .andExpect(jsonPath("$.content[2].pointagePrevu").value(Matchers.startsWith("2099-01-15")));
+                .andExpect(jsonPath("$.content[2].pointagePrevu").value(Matchers.startsWith(futur.toString())));
 
         mockMvc.perform(get("/api/encaissements").param("reference", "CGE-PTG-")
                         .param("champDate", "POINTAGE_PREVU")
-                        .param("dateDebut", "2099-01-01T00:00:00").param("dateFin", "2099-12-31T23:59:59"))
+                        .param("dateDebut", futur + "T00:00:00").param("dateFin", futur + "T23:59:59"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].reference").value("CGE-PTG-3"));

@@ -947,6 +947,45 @@ class DevisTest {
     }
 
     @Test
+    void modifierOffre_versUneTrancheHorsPerimetre_returns403SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-DEPL");
+        CfgTranche tranche = creerTranche("TR-DEVIS-DEPL");
+        UUID offreId = creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":200000}");
+        CfgTranche horsPerimetre = creerTranche("TR-DEVIS-DEPL-HORS");
+        AdmUser restreint = compteRestreintA(tranche.getCfgProject());
+
+        mockMvc.perform(patch("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + horsPerimetre.getId() + "\",\"notes\":\"déplacée\"}"))
+                .andExpect(status().isForbidden());
+
+        entityManager.flush();
+        entityManager.clear();
+        StlQuote relue = quoteRepository.findById(offreId).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getCfgTranche().getId()).isEqualTo(tranche.getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getNotes()).isNull());
+    }
+
+    @Test
+    void creerDevis_surUneTrancheHorsPerimetre_returns403SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-CREA-HORS");
+        CfgTranche permise = creerTranche("TR-DEVIS-CREA-OK");
+        CfgTranche horsPerimetre = creerTranche("TR-DEVIS-CREA-HORS");
+        AdmUser restreint = compteRestreintA(permise.getCfgProject());
+        long avant = quoteRepository.count();
+
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + horsPerimetre.getId() + "\",\"prix\":200000}"))
+                .andExpect(status().isForbidden());
+
+        entityManager.flush();
+        org.assertj.core.api.Assertions.assertThat(quoteRepository.count()).as("aucune offre écrite").isEqualTo(avant);
+    }
+
+    @Test
     void modifierOffre_remise_recalculeLesMontantsEtLesSousArticles() throws Exception {
         StkItem[] articles = new StkItem[2];
         UUID offreId = offreAvecArticle("DEVIS-REMISE", articles);
