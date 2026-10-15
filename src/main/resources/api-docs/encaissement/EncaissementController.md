@@ -149,8 +149,8 @@ légataire. C'est la réponse à « ce règlement, il a payé quoi ? », que la 
 elle n'expose qu'un `dossierCode`, celui de la *première* ligne, et masque donc les autres sur les 8
 règlements réels qui couvrent plusieurs dossiers. La somme des `montantAffecte` vaut `montantBrut -
 montantBrutRestant`, sauf pour un règlement `CANCELED` : ses affectations restent listées (historique)
-mais il n'en compte aucune — `montantBrutRestant` = `montantBrut`, comme dans l'échéancier. Tableau
-vide = règlement encaissé mais pas encore imputé.
+mais il n'en compte aucune — `montantBrutRestant` = `montantBrut`, comme dans l'échéancier. Jamais
+vide : un règlement sans aucune ligne de vente n'est pas servi (404, voir ci-dessous).
 
 **Même filtre que la liste** : un décaissement (`IsCredit` ≠ 1) ou un règlement sans ligne de vente
 renvoie **404**, comme un id inconnu.
