@@ -17,4 +17,5 @@ Liste vide = aucun sous-article.
 
 Prix TTC qui remplace le prix commercial de l'article (ou prix de vente TTC d'une offre libre).
 Absent : le prix actuel de l'offre est conservé, sauf si l'article change (prix commercial du
-nouvel article).
+nouvel article). Tant que l'article et les sous-articles ne changent pas, leurs prix HT/TTC figés
+dans l'offre restent la base de calcul, même si le catalogue a changé depuis.

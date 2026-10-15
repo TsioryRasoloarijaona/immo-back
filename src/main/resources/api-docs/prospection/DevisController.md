@@ -35,7 +35,9 @@ Mêmes champs que la création, tous optionnels : seul ce qui est fourni change 
 Mêmes contrôles qu'à la création (article de la tranche et non vendu, sous-articles enfants de
 l'article, prix requis sans article) ; l'article déjà porté par l'offre n'est pas recontrôlé comme
 vendu. Les montants sont recalculés par le calcul de la création quand l'article, les sous-articles,
-le prix ou la remise sont fournis ; les sous-articles sont alors réécrits. `UserUpdate` /
+le prix ou la remise sont fournis. Si l'article et les sous-articles ne changent pas, la base est
+celle figée dans l'offre (prix catalogue ignorés) et seule la remise des sous-articles est réappliquée ;
+sinon les sous-articles sont réécrits aux prix du catalogue, comme à la création. `UserUpdate` /
 `UserUpdateDateTime` = l'utilisateur courant. Une offre qui a donné un dossier reste modifiable,
 comme dans OMRAN, mais ne peut plus changer d'article.
 

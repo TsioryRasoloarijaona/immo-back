@@ -327,13 +327,26 @@ public class DevisService {
         quote.setUserUpdateDateTime(LocalDateTime.now(clock));
         quote = quoteRepository.save(quote);
         if (recalcul != null) {
-            quoteItemRepository.deleteAll(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId()));
-            persisterLignesSousArticles(quote, recalcul.sousArticles(), recalcul.remisePercent());
+            ecrireLignes(quote, recalcul);
         }
         return toFiche(quote);
     }
 
-    private record Recalcul(MontantsCalcules montants, List<StkItem> sousArticles, BigDecimal remisePercent) {
+    /** {@code lignesFigees} non null : les sous-articles restent, seule leur remise est réappliquée. */
+    private record Recalcul(MontantsCalcules montants, List<StkItem> sousArticles, BigDecimal remisePercent,
+                            List<StlQuoteItem> lignesFigees) {
+    }
+
+    private void ecrireLignes(StlQuote quote, Recalcul recalcul) {
+        if (recalcul.lignesFigees() != null) {
+            for (StlQuoteItem ligne : recalcul.lignesFigees()) {
+                appliquerRemiseLigne(ligne, recalcul.remisePercent());
+                quoteItemRepository.save(ligne);
+            }
+            return;
+        }
+        quoteItemRepository.deleteAll(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId()));
+        persisterLignesSousArticles(quote, recalcul.sousArticles(), recalcul.remisePercent());
     }
 
     private static boolean changeDArticle(StlQuote quote, UUID articleId) {
@@ -348,8 +361,15 @@ public class DevisService {
             verifierSchemaSaisi(quote.getId(), quote.getPriceAfterDiscount());
             return null;
         }
-        List<StkItem> sousArticles = sousArticlesModifies(quote, article, changeArticle, request.sousArticleIds());
         BigDecimal remisePercent = remiseModifiee(quote, request.remisePercent());
+        if (article != null && !changeArticle && request.sousArticleIds() == null) {
+            // Ni l'article ni les sous-articles ne changent : leurs prix figés dans l'offre restent la base.
+            List<StlQuoteItem> lignes = quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(quote.getId());
+            MontantsCalcules montants = appliquerRemise(baseFigee(quote, article, lignes, request.prix()), remisePercent);
+            verifierSchemaSaisi(quote.getId(), montants.priceAfterDiscountTTC());
+            return new Recalcul(montants, List.of(), remisePercent, lignes);
+        }
+        List<StkItem> sousArticles = sousArticlesModifies(quote, article, changeArticle, request.sousArticleIds());
         BigDecimal prix = request.prix();
         if (prix == null && !changeArticle) {
             prix = prixActuel(quote);
@@ -359,7 +379,27 @@ public class DevisService {
         }
         MontantsCalcules montants = calculerMontants(article, sousArticles, prix, remisePercent);
         verifierSchemaSaisi(quote.getId(), montants.priceAfterDiscountTTC());
-        return new Recalcul(montants, sousArticles, remisePercent);
+        return new Recalcul(montants, sousArticles, remisePercent, null);
+    }
+
+    /** Base de prix déjà retenue par l'offre ; {@code prix} fourni remplace seulement le prix TTC de l'article. */
+    private static BasePrix baseFigee(StlQuote quote, StkItem article, List<StlQuoteItem> lignes, BigDecimal prix) {
+        BigDecimal vatRatio = quote.getVatRatio() != null ? quote.getVatRatio()
+                : Objects.requireNonNullElse(article.getVat(), BigDecimal.ZERO);
+        BigDecimal itemPrice = prix != null ? prix : quote.getItemPrice();
+        BigDecimal itemPriceHT = prix != null ? null : quote.getItemPriceHT();
+        if (itemPrice == null) {
+            itemPrice = prixTtcOuZero(article);
+            itemPriceHT = prixHtOuDeduit(article, vatRatio);
+        } else if (itemPriceHT == null) {
+            itemPriceHT = diviserParTaux(itemPrice, vatRatio);
+        }
+        BigDecimal underItemsPrice = lignes.stream().map(StlQuoteItem::getPriceBeforeDiscount)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal underItemsPriceHT = lignes.stream().map(StlQuoteItem::getPriceBeforeDiscountHT)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal area = quote.getArea() != null ? quote.getArea() : article.getArea();
+        return new BasePrix(area, vatRatio, itemPriceHT, itemPrice, underItemsPriceHT, underItemsPrice);
     }
 
     /**
@@ -547,18 +587,6 @@ public class DevisService {
     private void persisterLignesSousArticles(StlQuote quote, List<StkItem> sousArticles, BigDecimal remisePercent) {
         for (StkItem sousArticle : sousArticles) {
             BigDecimal vatRatio = tauxTvaSousArticle(sousArticle, quote);
-            BigDecimal priceBeforeDiscount = prixTtcOuZero(sousArticle);
-            BigDecimal priceBeforeDiscountHT = prixHtOuDeduit(sousArticle, vatRatio);
-            BigDecimal discountAmount = pourcentage(priceBeforeDiscount, remisePercent);
-            BigDecimal discountAmountHT = pourcentage(priceBeforeDiscountHT, remisePercent);
-            BigDecimal priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
-            BigDecimal priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
-            BigDecimal area = sousArticle.getArea();
-            BigDecimal unitCost = parSurface(priceBeforeDiscount, area);
-            BigDecimal unitCostHT = parSurface(priceBeforeDiscountHT, area);
-            BigDecimal unitCostAfterDiscount = parSurface(priceAfterDiscount, area);
-            BigDecimal unitCostAfterDiscountHT = parSurface(priceAfterDiscountHT, area);
-
             StlQuoteItem item = new StlQuoteItem();
             item.setId(UUID.randomUUID());
             item.setStlQuote(quote);
@@ -567,23 +595,35 @@ public class DevisService {
             item.setStkItemCategory(sousArticle.getStkItemCategory());
             item.setCode(sousArticle.getCode());
             item.setDescription(sousArticle.getDescription());
-            item.setArea(area);
+            item.setArea(sousArticle.getArea());
             item.setVatRatio(vatRatio);
-            item.setUnitCost(unitCost);
-            item.setUnitCostHT(unitCostHT);
-            item.setPriceBeforeDiscount(priceBeforeDiscount);
-            item.setPriceBeforeDiscountHT(priceBeforeDiscountHT);
-            item.setDiscount(ConventionRemise.ratioDepuisPourcentage(remisePercent));
-            item.setDiscountAmount(discountAmount);
-            item.setDiscountAmountHT(discountAmountHT);
-            item.setUnitCostAfterDiscount(unitCostAfterDiscount);
-            item.setUnitCostAfterDiscountHT(unitCostAfterDiscountHT);
-            item.setPriceAfterDiscount(priceAfterDiscount);
-            item.setPriceAfterDiscountHT(priceAfterDiscountHT);
+            item.setPriceBeforeDiscount(prixTtcOuZero(sousArticle));
+            item.setPriceBeforeDiscountHT(prixHtOuDeduit(sousArticle, vatRatio));
             item.setAlwaysAffected(sousArticle.getAlwaysAffected());
             item.setIsUnderItem(Boolean.TRUE);
+            appliquerRemiseLigne(item, remisePercent);
             quoteItemRepository.save(item);
         }
+    }
+
+    /** Remise de l'offre sur une ligne, à partir de ses prix avant remise (figés dans la ligne). */
+    private static void appliquerRemiseLigne(StlQuoteItem item, BigDecimal remisePercent) {
+        BigDecimal priceBeforeDiscount = Objects.requireNonNullElse(item.getPriceBeforeDiscount(), BigDecimal.ZERO);
+        BigDecimal priceBeforeDiscountHT = Objects.requireNonNullElse(item.getPriceBeforeDiscountHT(), BigDecimal.ZERO);
+        BigDecimal discountAmount = pourcentage(priceBeforeDiscount, remisePercent);
+        BigDecimal discountAmountHT = pourcentage(priceBeforeDiscountHT, remisePercent);
+        BigDecimal priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
+        BigDecimal priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
+        BigDecimal area = item.getArea();
+        item.setUnitCost(parSurface(priceBeforeDiscount, area));
+        item.setUnitCostHT(parSurface(priceBeforeDiscountHT, area));
+        item.setDiscount(ConventionRemise.ratioDepuisPourcentage(remisePercent));
+        item.setDiscountAmount(discountAmount);
+        item.setDiscountAmountHT(discountAmountHT);
+        item.setUnitCostAfterDiscount(parSurface(priceAfterDiscount, area));
+        item.setUnitCostAfterDiscountHT(parSurface(priceAfterDiscountHT, area));
+        item.setPriceAfterDiscount(priceAfterDiscount);
+        item.setPriceAfterDiscountHT(priceAfterDiscountHT);
     }
 
     /** TVA du sous-article, à défaut celle de l'offre, à défaut zéro. */
@@ -642,8 +682,6 @@ public class DevisService {
         }
 
         BigDecimal vatRatio = article.getVat() != null ? article.getVat() : BigDecimal.ZERO;
-        BigDecimal area = article.getArea();
-
         BigDecimal itemPrice;
         BigDecimal itemPriceHT;
         if (prixOverride != null) {
@@ -654,17 +692,31 @@ public class DevisService {
             itemPriceHT = prixHtOuDeduit(article, vatRatio);
         }
 
-        BigDecimal unitCostHT = parSurface(itemPriceHT, area);
-        BigDecimal unitCost = parSurface(itemPrice, area);
-
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         for (StkItem sousArticle : sousArticles) {
-            BigDecimal prixSousArticle = prixTtcOuZero(sousArticle);
-            BigDecimal prixSousArticleHT = prixHtOuDeduit(sousArticle, vatRatio);
-            underItemsPrice = underItemsPrice.add(prixSousArticle);
-            underItemsPriceHT = underItemsPriceHT.add(prixSousArticleHT);
+            underItemsPrice = underItemsPrice.add(prixTtcOuZero(sousArticle));
+            underItemsPriceHT = underItemsPriceHT.add(prixHtOuDeduit(sousArticle, vatRatio));
         }
+        return appliquerRemise(new BasePrix(article.getArea(), vatRatio, itemPriceHT, itemPrice,
+                underItemsPriceHT, underItemsPrice), remisePercent);
+    }
+
+    /** Prix avant remise d'une offre avec article : article et sous-articles, HT et TTC. */
+    private record BasePrix(BigDecimal area, BigDecimal vatRatio, BigDecimal itemPriceHT, BigDecimal itemPrice,
+                            BigDecimal underItemsPriceHT, BigDecimal underItemsPrice) {
+    }
+
+    /** Seul calcul de la remise d'une offre avec article : création et modification passent ici. */
+    private static MontantsCalcules appliquerRemise(BasePrix base, BigDecimal remisePercent) {
+        BigDecimal area = base.area();
+        BigDecimal vatRatio = base.vatRatio();
+        BigDecimal itemPrice = base.itemPrice();
+        BigDecimal itemPriceHT = base.itemPriceHT();
+        BigDecimal underItemsPrice = base.underItemsPrice();
+        BigDecimal underItemsPriceHT = base.underItemsPriceHT();
+        BigDecimal unitCostHT = parSurface(itemPriceHT, area);
+        BigDecimal unitCost = parSurface(itemPrice, area);
 
         BigDecimal totalHT = itemPriceHT.add(underItemsPriceHT);
         BigDecimal totalTTC = itemPrice.add(underItemsPrice);

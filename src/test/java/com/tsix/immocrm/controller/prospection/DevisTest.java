@@ -1070,4 +1070,25 @@ class DevisTest {
         mockMvc.perform(delete("/api/devis/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
     }
+
+    /**
+     * Revue lot 2 : une remise seule ne doit pas re-tarifer les sous-articles au prix catalogue du jour. Le prix
+     * de l'article est conservé ({@code prixActuel}) ; celui des sous-articles doit l'être aussi (3 offres OMRAN
+     * en prod ont UnderItemsPrice = 0 avec un sous-article à 216 745,84 au catalogue).
+     */
+    @Test
+    void modifierOffre_remiseSeule_conserveLePrixFigeDesSousArticles() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-FIGE", articles);
+        StkItem sousArticle = quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId).get(0).getStkItem();
+        sousArticle.setComSalePrice(new BigDecimal("15000"));
+        stkItemRepository.saveAndFlush(sousArticle);
+
+        // Prix figé : (120 000 + 12 000) x 0,9 = 118 800, et non (120 000 + 15 000) x 0,9.
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.prixSousArticlesTTC").value(12000))
+                .andExpect(jsonPath("$.offre.montants.prixVenteTTC").value(118800));
+    }
 }
