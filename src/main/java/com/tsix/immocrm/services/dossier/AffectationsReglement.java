@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -29,6 +30,8 @@ public class AffectationsReglement {
     /** Une échéance du dossier et le montant qui lui est imputé, déjà contrôlés. */
     public record LigneAffectee(ComDocument echeance, BigDecimal montant) {
     }
+
+    private static final int ECHELLE_MONTANT = 6;
 
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
@@ -65,7 +68,8 @@ public class AffectationsReglement {
                     + " figure déjà dans ce règlement : une échéance ne peut être affectée qu'une fois");
         }
         BigDecimal montant = affectation.montant();
-        if (montant == null || montant.signum() <= 0) {
+        // À l'échelle de la colonne decimal(26,6) : 0,0000001 s'écrirait 0, la ligne à 0 qu'OMRAN refuse.
+        if (montant == null || montant.setScale(ECHELLE_MONTANT, RoundingMode.HALF_UP).signum() <= 0) {
             throw new InvalidRequestException("Le montant affecté à l'échéance " + echeanceId
                     + " doit être strictement positif");
         }
