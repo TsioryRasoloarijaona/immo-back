@@ -64,6 +64,9 @@ d'une Offre (prix commercial de l'article, taux de TVA) — sauf que le total du
 l'appelant renvoie **403** (et non 404 : ici c'est l'appelant qui a nommé l'article, il n'y a rien à
 cacher). Le projet est déduit du premier article via sa tranche.
 
+**Offre d'origine** : `offreId` (optionnel) est écrit dans `ComFolder.StlQuoteId`, comme OMRAN. Une
+offre introuvable ou d'une autre prospection renvoie **400**, sans écriture.
+
 **Remise commerciale** — deux modes, selon `remisePercent` :
 - `remisePercent` **fourni** (écran de création où le commercial saisit la remise) : `prix` est le
   total TTC **avant** remise, annexes comprises (articles suivants de `articleIds`, comptés à leur

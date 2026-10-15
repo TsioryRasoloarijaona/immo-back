@@ -5,6 +5,7 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComPaymentMethod;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkVocation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -67,6 +68,14 @@ public class StlQuote {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComPaymentMethodId")
     private ComPaymentMethod comPaymentMethod;
+
+    /** {@code StrEntity} « ComQuote » : OMRAN ne liste que les offres qui la portent. */
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkVocationId")
+    private StkVocation stkVocation;
 
     // Onglet « Montants » du formulaire Offre du légataire.
 

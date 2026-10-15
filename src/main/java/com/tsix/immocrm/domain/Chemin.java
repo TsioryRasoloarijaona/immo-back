@@ -14,7 +14,23 @@ public record Chemin(
         boolean groupable,
         boolean agregeable,
         boolean temporel,
-        String cheminSoustrait) {
+        String cheminSoustrait,
+        Exclusion exclusion) {
+
+    /** Lignes laissées hors des SUM/AVG de la colonne (pas du comptage) : {@code chemin = valeur}. */
+    public record Exclusion(String chemin, String valeur) {
+    }
+
+    public Chemin(String cheminCle, List<String> cheminsLibelle, TypeLibelle typeLibelle, boolean groupable,
+                  boolean agregeable, boolean temporel, String cheminSoustrait) {
+        this(cheminCle, cheminsLibelle, typeLibelle, groupable, agregeable, temporel, cheminSoustrait, null);
+    }
+
+    /** Même chemin, dont les sommes ignorent les lignes où {@code chemin} vaut {@code valeur}. */
+    public Chemin sauf(String chemin, String valeur) {
+        return new Chemin(cheminCle, cheminsLibelle, typeLibelle, groupable, agregeable, temporel, cheminSoustrait,
+                new Exclusion(chemin, valeur));
+    }
 
     public enum TypeLibelle {
         DIRECT,

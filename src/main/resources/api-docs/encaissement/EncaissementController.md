@@ -101,6 +101,10 @@ centime — jamais en virgule flottante.
 
 Absent : seul l'effectif de chaque groupe est renvoyé.
 
+Les règlements `CANCELED` restent comptés dans l'effectif de leur groupe et de `totaux`, mais sortent
+de toutes les sommes et moyennes de montants (`montantBrut`, `montantBrutRestant`, `montantNet`,
+`montantBase`).
+
 ### param granularite
 
 Granularité de regroupement d'une colonne date. Ignorée si `groupBy` n'est pas une date. Défaut :
@@ -144,7 +148,12 @@ liste.
 légataire. C'est la réponse à « ce règlement, il a payé quoi ? », que la liste ne sait pas donner :
 elle n'expose qu'un `dossierCode`, celui de la *première* ligne, et masque donc les autres sur les 8
 règlements réels qui couvrent plusieurs dossiers. La somme des `montantAffecte` vaut `montantBrut -
-montantBrutRestant`. Tableau vide = règlement encaissé mais pas encore imputé.
+montantBrutRestant`, sauf pour un règlement `CANCELED` : ses affectations restent listées (historique)
+mais il n'en compte aucune — `montantBrutRestant` = `montantBrut`, comme dans l'échéancier. Jamais
+vide : un règlement sans aucune ligne de vente n'est pas servi (404, voir ci-dessous).
+
+**Même filtre que la liste** : un décaissement (`IsCredit` ≠ 1) ou un règlement sans ligne de vente
+renvoie **404**, comme un id inconnu.
 
 **Cette réponse n'est pas filtrée par `?colonnes=`** — une fiche dit tout, là où une grille laisse
 choisir ses colonnes. Elle porte donc plus de clés que les lignes de la liste : celles hors
@@ -155,6 +164,6 @@ sélection par défaut, plus `affectations`. Aucune clé ne disparaît et aucune
 
 ### reponse 404
 
-Aucun StlSettlement pour cet id, ou encaissement hors du périmètre commercial de l'appelant — les
-deux cas sont volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque
+Aucun StlSettlement pour cet id, décaissement, règlement hors Vente, ou encaissement hors du
+périmètre commercial de l'appelant — ces cas sont volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque
 l'identifiant fourni n'est pas un UUID valide.

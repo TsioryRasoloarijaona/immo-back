@@ -30,6 +30,12 @@ IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = '8287D7A9-2D51-4F2E-8F47
     INSERT INTO dbo.StrEntity (PKey, Code, Description)
     VALUES ('8287D7A9-2D51-4F2E-8F47-0F1B738F1A11', N'StlSettlementOut', N'Decaissement');
 GO
+-- StrEntity « ComQuote » : ecrite sur chaque offre de vente (StlQuote__StrEntity_FK1), repli de
+-- ReferencesOmran.ENTITE_OFFRE_VENTE.
+IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = 'E7C73F70-1111-40D9-AA78-A2825C42B602')
+    INSERT INTO dbo.StrEntity (PKey, Code, Description)
+    VALUES ('E7C73F70-1111-40D9-AA78-A2825C42B602', N'ComQuote', N'Offre vente');
+GO
 IF NOT EXISTS (SELECT 1 FROM dbo.AdmModule WHERE PKey = '00002C2D-BDFA-4541-94F7-C708A0E00001')
     INSERT INTO dbo.AdmModule (PKey, Code, Description)
     VALUES ('00002C2D-BDFA-4541-94F7-C708A0E00001', N'COM', N'Vente');

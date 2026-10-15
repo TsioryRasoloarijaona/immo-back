@@ -37,7 +37,7 @@ public class DevisController {
             summary = "Liste paginée de toutes les offres (devis), tous prospections confondues"
     )
     public DevisPageDto findAll(
-            @Parameter(description = "Recherche libre sur le code de l'offre.")
+            @Parameter(description = "Recherche (casse ignorée) : code de l'offre, code/désignation de l'article, prospect, code de la prospection.")
             @RequestParam(required = false) String search,
             @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")

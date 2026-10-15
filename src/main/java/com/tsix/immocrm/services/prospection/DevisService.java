@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.prospection;
 
 import com.tsix.immocrm.domain.ConventionRemise;
+import com.tsix.immocrm.domain.DisponibiliteArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
@@ -28,11 +29,18 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.dossier.ReferencesOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -46,12 +54,16 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /** Offres d'une prospection ({@code StlQuote}) : le formulaire Offre legacy, entête et onglet « Montants ». */
 @Service
 @Transactional(readOnly = true)
 public class DevisService {
+
+    private static final String CODE = "code";
+    private static final String DESCRIPTION = "description";
 
     private final ComProspectionRepository prospectionRepository;
     private final StlQuoteRepository quoteRepository;
@@ -63,25 +75,26 @@ public class DevisService {
     private final AdmSequenceRepository sequenceRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final PerimetreCommercialService perimetreService;
+    private final ReferencesOmran referencesOmran;
+    private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
-    public DevisService(ComProspectionRepository prospectionRepository, StlQuoteRepository quoteRepository,
-                         StlQuoteItemRepository quoteItemRepository, CfgTrancheRepository trancheRepository,
-                         StkItemRepository stkItemRepository, CfgTierRepository tierRepository,
-                         ComPaymentMethodRepository paymentMethodRepository, AdmSequenceRepository sequenceRepository,
-                         ComSettlementCategoryRepository settlementCategoryRepository,
-                         PerimetreCommercialService perimetreService, Clock clock) {
+    public DevisService(ComProspectionRepository prospectionRepository, DepotsDevis depots,
+                         PerimetreCommercialService perimetreService, ReferencesOmran referencesOmran,
+                         UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.clock = clock;
         this.perimetreService = perimetreService;
+        this.referencesOmran = referencesOmran;
+        this.utilisateurAffiche = utilisateurAffiche;
         this.prospectionRepository = prospectionRepository;
-        this.quoteRepository = quoteRepository;
-        this.quoteItemRepository = quoteItemRepository;
-        this.trancheRepository = trancheRepository;
-        this.stkItemRepository = stkItemRepository;
-        this.tierRepository = tierRepository;
-        this.paymentMethodRepository = paymentMethodRepository;
-        this.sequenceRepository = sequenceRepository;
-        this.settlementCategoryRepository = settlementCategoryRepository;
+        this.quoteRepository = depots.offres();
+        this.quoteItemRepository = depots.lignes();
+        this.trancheRepository = depots.tranches();
+        this.stkItemRepository = depots.articles();
+        this.tierRepository = depots.tiers();
+        this.paymentMethodRepository = depots.modesPaiement();
+        this.sequenceRepository = depots.sequences();
+        this.settlementCategoryRepository = depots.categories();
     }
 
     /**
@@ -126,7 +139,7 @@ public class DevisService {
         Specification<StlQuote> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (StringUtils.hasText(search)) {
-                predicates.add(cb.like(cb.lower(root.get("code")), "%" + search.toLowerCase() + "%"));
+                predicates.add(recherche(root, cb, search));
             }
             if (trancheIds != null && !trancheIds.isEmpty()) {
                 predicates.add(root.get("cfgTranche").get("id").in(trancheIds));
@@ -145,6 +158,28 @@ public class DevisService {
         // Périmètre filtré ici : PerimetreInterceptor ne couvre pas ce préfixe d'URL
         // (FEATURE-perimetre-commercial.md §9bis.2).
         return quoteRepository.findAll(spec.and(perimetreService.filtreDevis()), pageable).map(this::toDto);
+    }
+
+    /**
+     * Code de l'offre, code et désignation de l'article, nom du prospect (mêmes colonnes que
+     * {@link TierNomFormatter}), code de la prospection. Jointures externes : l'offre sans article reste trouvable.
+     */
+    private static Predicate recherche(Root<StlQuote> root, CriteriaBuilder cb, String search) {
+        String motif = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
+        Join<StlQuote, StkItem> article = root.join("stkItem", JoinType.LEFT);
+        Join<StlQuote, CfgTier> prospect = root.join("cfgProspect", JoinType.LEFT);
+        Join<StlQuote, ComProspection> prospection = root.join("comProspection", JoinType.LEFT);
+        Expression<String> prenomNom = cb.concat(cb.concat(cb.coalesce(prospect.<String>get("firstName"), ""), " "),
+                cb.coalesce(prospect.<String>get("lastName"), ""));
+        List<Expression<String>> champs = List.of(
+                root.get(CODE),
+                article.get(CODE),
+                article.get(DESCRIPTION),
+                prospect.get("socialReason"),
+                prospect.get(DESCRIPTION),
+                prenomNom,
+                prospection.get(CODE));
+        return cb.or(champs.stream().map(champ -> cb.like(cb.lower(champ), motif)).toArray(Predicate[]::new));
     }
 
     public Page<DevisDto> findByProspection(UUID prospectionId, Pageable pageable) {
@@ -173,22 +208,11 @@ public class DevisService {
         CfgTranche tranche = trancheRepository.findById(request.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
 
-        StkItem article = null;
-        if (request.articleId() != null) {
-            article = stkItemRepository.findById(request.articleId())
-                    .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
-        }
+        StkItem article = articleValide(request.articleId(), tranche);
         if (article == null && request.prix() == null) {
             throw new InvalidRequestException("prix est requis quand articleId n'est pas renseigné");
         }
-
-        List<StkItem> sousArticles = List.of();
-        if (article != null && request.sousArticleIds() != null && !request.sousArticleIds().isEmpty()) {
-            sousArticles = stkItemRepository.findAllById(request.sousArticleIds());
-            if (sousArticles.size() != request.sousArticleIds().size()) {
-                throw new InvalidRequestException("Un ou plusieurs sous-articles sont introuvables");
-            }
-        }
+        List<StkItem> sousArticles = sousArticlesValides(article, request.sousArticleIds());
 
         CfgTier prospect = prospection.getCfgProspect();
         if (request.prospectId() != null) {
@@ -220,12 +244,60 @@ public class DevisService {
         quote.setCfgCommercial(commercial);
         quote.setComPaymentMethod(modePaiement);
         quote.setNotes(request.notes());
+        completerCommeOmran(quote, article);
         appliquerMontants(quote, montants);
 
         quote = quoteRepository.save(quote);
         persisterLignesSousArticles(quote, sousArticles, remisePercent);
 
         return toDto(quote);
+    }
+
+    /** Colonnes qu'OMRAN écrit sur toute offre : entité « ComQuote », vocation de l'article, auteur. */
+    private void completerCommeOmran(StlQuote quote, StkItem article) {
+        quote.setStrEntityId(referencesOmran.entiteOffreVente());
+        quote.setStkVocation(article != null ? article.getStkVocation() : null);
+        String auteur = utilisateurAffiche.courant().nom();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        quote.setUserCreate(auteur);
+        quote.setUserCreateDateTime(maintenant);
+        quote.setUserUpdate(auteur);
+        quote.setUserUpdateDateTime(maintenant);
+    }
+
+    /** Article de la tranche choisie et encore disponible ; null pour une offre à prix saisi. */
+    private StkItem articleValide(UUID articleId, CfgTranche tranche) {
+        if (articleId == null) {
+            return null;
+        }
+        StkItem article = stkItemRepository.findById(articleId)
+                .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + articleId));
+        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
+            throw new InvalidRequestException("L'article " + article.getCode() + " n'appartient pas à la tranche "
+                    + tranche.getCode());
+        }
+        if (DisponibiliteArticle.estOccupe(article)) {
+            throw new InvalidRequestException("L'article " + article.getCode() + " est déjà vendu (lié à un dossier)");
+        }
+        return article;
+    }
+
+    /** Sous-articles demandés, tous enfants de l'article ({@code StkItem.ParentId}). */
+    private List<StkItem> sousArticlesValides(StkItem article, List<UUID> sousArticleIds) {
+        if (article == null || sousArticleIds == null || sousArticleIds.isEmpty()) {
+            return List.of();
+        }
+        List<StkItem> sousArticles = stkItemRepository.findAllById(sousArticleIds);
+        if (sousArticles.size() != sousArticleIds.size()) {
+            throw new InvalidRequestException("Un ou plusieurs sous-articles sont introuvables");
+        }
+        for (StkItem sousArticle : sousArticles) {
+            if (sousArticle.getParent() == null || !article.getId().equals(sousArticle.getParent().getId())) {
+                throw new InvalidRequestException("Le sous-article " + sousArticle.getCode()
+                        + " n'est pas un sous-article de " + article.getCode());
+            }
+        }
+        return sousArticles;
     }
 
     /**

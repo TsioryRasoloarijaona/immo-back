@@ -1,6 +1,12 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.fixtures.ConnexionDeTest;
+import com.tsix.immocrm.repositories.adm.AdmUserRepository;
+import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.services.dossier.ReferencesOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComProspection;
@@ -85,6 +91,12 @@ class DevisTest {
     @Autowired
     private jakarta.persistence.EntityManager entityManager;
 
+    @Autowired
+    private AdmUserRepository admUserRepository;
+
+    @Autowired
+    private ComFolderRepository folderRepository;
+
     private CfgTranche creerTranche(String code) {
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
@@ -96,6 +108,160 @@ class DevisTest {
         tranche.setCode(code);
         tranche.setCfgProject(project);
         return trancheRepository.save(tranche);
+    }
+
+    private ComProspection nouvelleProspection(String code) {
+        ComProspection prospection = new ComProspection();
+        prospection.setId(UUID.randomUUID());
+        prospection.setCode(code);
+        return prospectionRepository.save(prospection);
+    }
+
+    private StkItem nouvelArticle(String code, CfgTranche tranche, StkItem parent, StkVocation vocation) {
+        StkItemType type = new StkItemType();
+        type.setId(UUID.randomUUID());
+        type.setCode("TYPE-" + code);
+        type.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemTypeRepository.save(type);
+        StkItemCategory categorie = new StkItemCategory();
+        categorie.setId(UUID.randomUUID());
+        categorie.setCode("CAT-" + code);
+        categorie.setStkKind(fixtureReferentielStk.natureParDefaut());
+        stkItemCategoryRepository.save(categorie);
+        StkItem article = new StkItem();
+        article.setId(UUID.randomUUID());
+        article.setCode(code);
+        article.setDescription("Désignation " + code);
+        article.setStkItemType(type);
+        article.setStkItemCategory(categorie);
+        article.setStkVocation(vocation);
+        article.setStkHierarchy(tranche);
+        article.setParent(parent);
+        article.setComSalePrice(new BigDecimal("500000"));
+        article.setVat(new BigDecimal("0.2"));
+        article.setStkKind(fixtureReferentielStk.natureParDefaut());
+        return stkItemRepository.save(article);
+    }
+
+    private StkVocation nouvelleVocation(String code) {
+        StkVocation vocation = new StkVocation();
+        vocation.setId(UUID.randomUUID());
+        vocation.setCode(code);
+        return stkVocationRepository.save(vocation);
+    }
+
+    private void creerEnEchec(ComProspection prospection, String body, String messageAttendu) throws Exception {
+        long avant = quoteRepository.count();
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(messageAttendu)));
+        entityManager.flush();
+        org.assertj.core.api.Assertions.assertThat(quoteRepository.count()).as("aucune offre écrite").isEqualTo(avant);
+    }
+
+    @Test
+    void creerDevis_renseigneEntiteVocationEtAuteurCommeOmran() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-OMRAN-COL");
+        CfgTranche tranche = creerTranche("TR-DEVIS-OMRAN-COL");
+        StkVocation vocation = nouvelleVocation("VOC-DEVIS-OMRAN-COL");
+        StkItem article = nouvelArticle("LOT-DEVIS-OMRAN-COL", tranche, null, vocation);
+        AdmUser agent = new AdmUser();
+        agent.setId(UUID.randomUUID());
+        agent.setCode("agent.devis." + UUID.randomUUID());
+        agent.setDescription("Agent Offre");
+        agent.setDisabled(false);
+        agent = admUserRepository.save(agent);
+
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .with(ConnexionDeTest.connecte(agent))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId() + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        entityManager.flush();
+        entityManager.clear();
+        StlQuote relue = quoteRepository.findById(
+                UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id").toString())).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getStrEntityId())
+                        .isEqualTo(ReferencesOmran.ENTITE_OFFRE_VENTE),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getStkVocation().getId()).isEqualTo(vocation.getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getUserCreate()).isEqualTo("Agent Offre"),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getUserCreateDateTime()).isNotNull(),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getUserUpdate()).isEqualTo("Agent Offre"));
+    }
+
+    @Test
+    void creerDevis_articleDUneAutreTranche_returns400SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-A3-TR");
+        CfgTranche choisie = creerTranche("TR-DEVIS-A3-TR-A");
+        CfgTranche autre = creerTranche("TR-DEVIS-A3-TR-B");
+        StkItem article = nouvelArticle("LOT-DEVIS-A3-TR", autre, null, nouvelleVocation("VOC-DEVIS-A3-TR"));
+
+        creerEnEchec(prospection, "{\"trancheId\":\"" + choisie.getId() + "\",\"articleId\":\"" + article.getId() + "\"}",
+                "n'appartient pas à la tranche");
+    }
+
+    @Test
+    void creerDevis_sousArticleQuiNEstPasUnEnfant_returns400SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-A3-SA");
+        CfgTranche tranche = creerTranche("TR-DEVIS-A3-SA");
+        StkVocation vocation = nouvelleVocation("VOC-DEVIS-A3-SA");
+        StkItem article = nouvelArticle("LOT-DEVIS-A3-SA", tranche, null, vocation);
+        StkItem etranger = nouvelArticle("LOT-DEVIS-A3-SA-AUTRE", tranche, null, vocation);
+
+        creerEnEchec(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId()
+                        + "\",\"sousArticleIds\":[\"" + etranger.getId() + "\"]}",
+                "n'est pas un sous-article");
+    }
+
+    @Test
+    void creerDevis_articleDejaVendu_returns400SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-A3-VND");
+        CfgTranche tranche = creerTranche("TR-DEVIS-A3-VND");
+        StkItem article = nouvelArticle("LOT-DEVIS-A3-VND", tranche, null, nouvelleVocation("VOC-DEVIS-A3-VND"));
+        ComFolder dossier = new ComFolder();
+        dossier.setId(UUID.randomUUID());
+        dossier.setCode("DOS-DEVIS-A3-VND");
+        dossier.setStkVocation(article.getStkVocation());
+        folderRepository.save(dossier);
+        article.setComFolderId(dossier.getId());
+        stkItemRepository.save(article);
+
+        creerEnEchec(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId() + "\"}",
+                "déjà vendu");
+    }
+
+    @Test
+    void findAllDevis_rechercheParNomDuProspectEtCodeArticle_trouveLOffre() throws Exception {
+        CfgTier prospect = new CfgTier();
+        prospect.setId(UUID.randomUUID());
+        prospect.setCode("PRO-DEVIS-A2");
+        prospect.setFirstName("Yasmine");
+        prospect.setLastName("Zouhairi-A2");
+        prospect = tierRepository.save(prospect);
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-A2");
+        prospection.setCfgProspect(prospect);
+        prospectionRepository.save(prospection);
+        CfgTranche tranche = creerTranche("TR-DEVIS-A2");
+        StkItem article = nouvelArticle("LOT-RECH-A2", tranche, null, nouvelleVocation("VOC-DEVIS-A2"));
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId() + "\"}"))
+                .andExpect(status().isOk());
+        String filtre = "$.content[?(@.prospectionId=='" + prospection.getId() + "')]";
+
+        mockMvc.perform(get("/api/devis").param("search", "yasmine zouhairi-a2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre).isNotEmpty());
+        mockMvc.perform(get("/api/devis").param("search", "lot-rech-a2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre).isNotEmpty());
+        mockMvc.perform(get("/api/devis").param("search", "PSN-DEVIS-A2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(filtre).isNotEmpty());
     }
 
     @Test

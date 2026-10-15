@@ -123,6 +123,9 @@ public class EncaissementService {
             UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
             String search, Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
             ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+
+        static final FiltresEncaissements AUCUN = new FiltresEncaissements(null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     /** Sans le périmètre commercial, que chaque appelant ajoute explicitement (comme {@code specDossiers}). */
@@ -241,9 +244,12 @@ public class EncaissementService {
         }
     }
 
-    /** Pas de restriction « Vente » : un id direct désigne un règlement précis, quelle que soit son origine. */
+    /** Le filtre de la liste (encaissement de vente, périmètre) : un décaissement ou un achat donne 404. */
     public EncaissementDetailDto findById(UUID id) {
-        StlSettlement settlement = settlementRepository.findById(id)
+        Specification<StlSettlement> memeQueLaListe = specEncaissements(FiltresEncaissements.AUCUN)
+                .and(perimetreService.filtreEncaissements())
+                .and((root, query, cb) -> cb.equal(root.get("id"), id));
+        StlSettlement settlement = settlementRepository.findOne(memeQueLaListe)
                 .orElseThrow(() -> new ResourceNotFoundException("Encaissement introuvable: " + id));
         // Toutes les colonnes : la fiche n'est pas filtrable par ?colonnes=.
         return EncaissementDetailDto.de(
