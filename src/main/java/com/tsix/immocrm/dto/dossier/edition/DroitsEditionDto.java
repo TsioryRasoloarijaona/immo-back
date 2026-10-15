@@ -12,6 +12,9 @@ public record DroitsEditionDto(
                 arraySchema = @Schema(description = "Groupes de champs que l'appelant peut modifier."))
         List<String> groupes,
         @Schema(description = "Vrai si le dossier est annulé ou désisté : seul le groupe ANNULATION reste modifiable.")
-        boolean sorti
+        boolean sorti,
+        @ArraySchema(schema = @Schema(allowableValues = {"concretisation", "impressionContrat", "remise"}),
+                arraySchema = @Schema(description = "Champs en lecture seule pour l'appelant malgré son groupe (403 si envoyés)."))
+        List<String> champsVerrouilles
 ) {
 }

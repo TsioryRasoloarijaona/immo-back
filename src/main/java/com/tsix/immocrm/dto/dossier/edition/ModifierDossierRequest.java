@@ -9,7 +9,8 @@ import java.util.UUID;
 
 @Schema(description = "Modification partielle de la fiche : seuls les champs présents et non nuls changent ; vider = champsAVider.")
 public record ModifierDossierRequest(
-        @Schema(description = "Onglet Dates — concrétisation (ComFolder.AdvanceDate).")
+        @Schema(description = "En-tête — date du dossier (ComFolder.DocDate), entre la prospection et la concrétisation.")
+        LocalDateTime dateDossier,
         LocalDateTime concretisation,
         @Schema(description = "Onglet Dates — promesse de vente (ComFolder.ReservationDate).")
         LocalDateTime promesseVente,
@@ -54,7 +55,7 @@ public record ModifierDossierRequest(
         LocalDateTime promesseClient,
         @Schema(description = "Dates autres — enregistrement de la réservation (ComFolder.ReservationRegistryDate).")
         LocalDateTime promesseEnregistrement,
-        @Schema(description = "Dates autres — impression du contrat (ComFolder.ContractPrintDate).")
+        @Schema(description = "Dates autres — impression du contrat (ComFolder.ContractPrintDate) ; Administrateur seulement.")
         LocalDateTime impressionContrat,
         @Schema(description = "Dates autres — minute client (ComFolder.AgreementSavingDateCustomer).")
         LocalDateTime minuteClient,
@@ -98,7 +99,7 @@ public record ModifierDossierRequest(
 
         @Schema(description = "Client principal (CfgTier) : devient l'acquéreur principal du dossier.")
         UUID clientId,
-        @Schema(description = "Commercial du dossier (CfgTier employé, ComFolder.CfgCommercialId).")
+        @Schema(description = "Commercial du dossier (ComFolder.CfgCommercialId) : un tiers de GET /api/commerciaux, sinon 400.")
         UUID commercialId,
         @Schema(description = "Gestionnaire 1 (CfgTier, ComFolder.CfgSaleManagerId).")
         UUID gestionnaire1Id,
@@ -131,6 +132,8 @@ public record ModifierDossierRequest(
         BigDecimal remiseMontantHT,
         @Schema(description = "Remise en pourcentage 0–100 du total HT avant remise ; exclusif de remiseMontantHT.")
         BigDecimal remisePourcentage,
+        BigDecimal prixVenteHT,
+        BigDecimal prixVenteTTC,
         @Schema(description = "Taux de TVA de l'article en ratio 0–1 (0,2 = 20 %) ; les prix TTC sont recalculés.")
         BigDecimal tva,
         @Schema(description = "Vrai pour dépasser les plafonds de remise de l'article (droit toolOverDiscount).")

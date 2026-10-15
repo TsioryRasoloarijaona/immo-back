@@ -44,8 +44,20 @@ public class DossierEditionService {
     private static final int LONGUEUR_TEXTE = 255;
     private static final int LONGUEUR_LONGUE = 1000;
     /** Jalons contrôlés par {@link OrdreDatesDossier}. */
-    private static final Set<String> DATES_ORDONNEES = Set.of("concretisation", "envoiNotairePrevisionnel",
-            "envoiNotaire", "minute", "remiseClesEffective");
+    private static final Set<String> DATES_ORDONNEES = Set.of("dateDossier", "concretisation",
+            "envoiNotairePrevisionnel", "envoiNotaire", "minute", "remiseClesEffective");
+    /** Volet résiliation obligatoire d'un dossier sorti ({@code Sale.cs:BeforeUpdate}). */
+    private static final Set<String> ANNULATION_OBLIGATOIRE = Set.of("annulationDate", "annulationCauses");
+    private static final String MESSAGE_ANNULATION = """
+            Dans le cas de la résilation / annulation d'un dossier, il faut s'assurer des points suivant dans le \
+            volet de résiliation :
+                - Il faut saisir la date de résiliation.
+                - Il faut saisir le montant de résiliation à restituer.
+                - Il faut saisir les causes de la résiliation.
+                - Il faut reparamtrer les sous articles.
+
+            Attention : La résiliation / Annulation du dossier va automatiquement engendrer la libération de \
+            l’article concerné pour sa remise en vente !!!""";
 
     private final EcritureDossier ecriture;
     private final ChampsEdition champs;
@@ -77,7 +89,7 @@ public class DossierEditionService {
                 .filter(g -> !sorti || g == GroupeEdition.ANNULATION)
                 .map(Enum::name)
                 .toList();
-        return new DroitsEditionDto(groupes, sorti);
+        return new DroitsEditionDto(groupes, sorti, VerrousEdition.verrouilles(dossier, roles));
     }
 
     @Transactional(readOnly = true)
@@ -94,9 +106,16 @@ public class DossierEditionService {
         Set<String> aVider = aVider(r);
         Set<GroupeEdition> groupes = groupesTouches(r, aVider);
         valider(r);
-        autoriser(groupes, rolesAppelant());
-        if (estSorti(dossier) && !EnumSet.of(GroupeEdition.ANNULATION).containsAll(groupes)) {
+        Set<String> roles = rolesAppelant();
+        autoriser(groupes, roles);
+        VerrousEdition.verifier(dossier, r, aVider, roles);
+        prix.verifierVerrou(dossier, r, PlafondRemise.niveauDe(roles));
+        boolean sorti = estSorti(dossier);
+        if (sorti && !EnumSet.of(GroupeEdition.ANNULATION).containsAll(groupes)) {
             throw new ConflictException("Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.");
+        }
+        if (sorti && aVider.stream().anyMatch(ANNULATION_OBLIGATOIRE::contains)) {
+            throw new InvalidRequestException(MESSAGE_ANNULATION);
         }
 
         List<String> modifies = new ArrayList<>();

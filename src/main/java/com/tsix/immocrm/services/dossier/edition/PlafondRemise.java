@@ -48,10 +48,17 @@ public final class PlafondRemise {
                     ? Optional.of("Vous ne pouvez pas dépasser le premier niveau de remise pour cet article ("
                     + pourcent(max1) + ") !")
                     : Optional.empty();
-            case AUCUN -> t.signum() > 0
-                    ? Optional.of("Vous ne pouvez pas appliquer une remise pour cet article (" + pourcent(max2) + ") !")
-                    : Optional.empty();
+            case AUCUN -> t.signum() > 0 ? Optional.of(messageSansRemise(max2)) : Optional.empty();
         };
+    }
+
+    static String messageSansRemise(BigDecimal max2) {
+        return "Vous ne pouvez pas appliquer une remise pour cet article (" + pourcent(max2) + ") !";
+    }
+
+    /** Remise verrouillée ({@code Sale.cs:Sale_Load}) : article sans premier plafond et appelant sous le niveau 2. */
+    public static boolean verrouillee(BigDecimal max1, Niveau niveau) {
+        return niveau != Niveau.DEUXIEME && (max1 == null || max1.signum() == 0);
     }
 
     private static BigDecimal arrondi(BigDecimal v) {

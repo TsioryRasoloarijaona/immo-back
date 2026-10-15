@@ -47,6 +47,15 @@ class PlafondRemiseTest {
     }
 
     @Test
+    void verrouillee_articleSansPremierPlafond_saufAuDeuxiemeNiveau() {
+        assertAll(
+                () -> assertThat(PlafondRemise.verrouillee(BigDecimal.ZERO, PlafondRemise.Niveau.PREMIER)).isTrue(),
+                () -> assertThat(PlafondRemise.verrouillee(null, PlafondRemise.Niveau.AUCUN)).isTrue(),
+                () -> assertThat(PlafondRemise.verrouillee(BigDecimal.ZERO, PlafondRemise.Niveau.DEUXIEME)).isFalse(),
+                () -> assertThat(PlafondRemise.verrouillee(MAX1, PlafondRemise.Niveau.PREMIER)).isFalse());
+    }
+
+    @Test
     void niveauDuRole_selonLesDroitsOmranMesures() {
         assertAll(
                 () -> assertThat(PlafondRemise.niveauDe(List.of("Administrateur"))).isEqualTo(PlafondRemise.Niveau.DEUXIEME),

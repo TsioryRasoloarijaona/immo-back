@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
@@ -16,10 +17,12 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Remise, TVA et « modifications intégrées au prix » : un seul recalcul ({@link RecalculPrixDossier}, montant de
@@ -31,6 +34,7 @@ class PrixEdition {
 
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
     private static final int ECHELLE = 6;
+    private static final int ECHELLE_TAUX = 16;
 
     private final ComFolderItemRepository folderItemRepository;
     private final ComDocumentRepository documentRepository;
@@ -44,16 +48,28 @@ class PrixEdition {
     }
 
     static boolean touchePrix(ModifierDossierRequest r) {
-        return r.remiseMontantHT() != null || r.remisePourcentage() != null || r.tva() != null;
+        return toucheRemise(r) || r.tva() != null;
+    }
+
+    /** Une des quatre saisies de la remise (montant, pourcentage, prix de vente HT ou TTC). */
+    static boolean toucheRemise(ModifierDossierRequest r) {
+        return Stream.of(r.remiseMontantHT(), r.remisePourcentage(), r.prixVenteHT(), r.prixVenteTTC())
+                .anyMatch(Objects::nonNull);
     }
 
     /** 400 avant toute écriture. */
     static void valider(ModifierDossierRequest r) {
-        if (r.remiseMontantHT() != null && r.remisePourcentage() != null) {
-            throw new InvalidRequestException("remiseMontantHT et remisePourcentage sont exclusifs.");
+        long saisies = Stream.of(r.remiseMontantHT(), r.remisePourcentage(), r.prixVenteHT(), r.prixVenteTTC())
+                .filter(Objects::nonNull).count();
+        if (saisies > 1) {
+            throw new InvalidRequestException(
+                    "remiseMontantHT, remisePourcentage, prixVenteHT et prixVenteTTC sont exclusifs.");
         }
         if (r.remiseMontantHT() != null && r.remiseMontantHT().signum() < 0) {
             throw new InvalidRequestException("La remise ne peut pas être négative.");
+        }
+        if (Stream.of(r.prixVenteHT(), r.prixVenteTTC()).anyMatch(p -> p != null && p.signum() < 0)) {
+            throw new InvalidRequestException("Le prix de vente ne peut pas être négatif.");
         }
         if (r.remisePourcentage() != null
                 && (r.remisePourcentage().signum() < 0 || r.remisePourcentage().compareTo(CENT) > 0)) {
@@ -73,7 +89,7 @@ class PrixEdition {
         RecalculPrixDossier.Saisie actuelle = depuisPrixStocke(f, sousArticles);
         BigDecimal tva = r.tva() != null ? r.tva() : actuelle.tva();
         BigDecimal ancienMontant = zero(f.getDiscountAmount());
-        BigDecimal montant = montantRemise(r, actuelle, ancienMontant);
+        BigDecimal montant = montantRemise(r, actuelle, tva, ancienMontant);
 
         RecalculPrixDossier.Resultat resultat = RecalculPrixDossier.calculer(saisie(actuelle, tva, montant));
         if (montant.compareTo(resultat.totalHT()) > 0) {
@@ -139,8 +155,27 @@ class PrixEdition {
         }
     }
 
+    /**
+     * B5 (FEATURE-dossier-modification.md) : article sans premier plafond ({@code Sale.cs:Sale_Load}), une nouvelle
+     * remise non nulle exige le deuxième niveau ; 403 avant toute écriture.
+     */
+    void verifierVerrou(ComFolder f, ModifierDossierRequest r, PlafondRemise.Niveau niveau) {
+        if (!toucheRemise(r) || !PlafondRemise.verrouillee(VerrousEdition.premierPlafond(f), niveau)) {
+            return;
+        }
+        StkItem article = f.getStkItem();
+        BigDecimal max2 = article != null ? article.getDiscountMax2() : null;
+        RecalculPrixDossier.Saisie actuelle = depuisPrixStocke(f, sousArticles(f));
+        BigDecimal tva = r.tva() != null ? r.tva() : actuelle.tva();
+        BigDecimal ancienMontant = zero(f.getDiscountAmount());
+        BigDecimal montant = montantRemise(r, actuelle, tva, ancienMontant);
+        if (montant.signum() > 0 && montant.compareTo(ancienMontant) != 0) {
+            throw new ForbiddenException(PlafondRemise.messageSansRemise(max2));
+        }
+    }
+
     private static BigDecimal montantRemise(ModifierDossierRequest r, RecalculPrixDossier.Saisie actuelle,
-                                            BigDecimal ancienMontant) {
+                                            BigDecimal tva, BigDecimal ancienMontant) {
         if (r.remiseMontantHT() != null) {
             return r.remiseMontantHT();
         }
@@ -148,7 +183,33 @@ class PrixEdition {
             BigDecimal totalHT = RecalculPrixDossier.calculer(actuelle).totalHT();
             return totalHT.multiply(r.remisePourcentage()).divide(CENT, ECHELLE, RoundingMode.HALF_UP);
         }
+        if (r.prixVenteHT() != null) {
+            BigDecimal totalHT = RecalculPrixDossier.calculer(actuelle).totalHT();
+            depassePrixAvantRemise(r.prixVenteHT(), totalHT, "HT");
+            return totalHT.subtract(r.prixVenteHT());
+        }
+        if (r.prixVenteTTC() != null) {
+            return remiseDepuisPrixTTC(r.prixVenteTTC(),
+                    RecalculPrixDossier.calculer(saisie(actuelle, tva, BigDecimal.ZERO)));
+        }
         return ancienMontant;
+    }
+
+    /** {@code Sale.cs}, setter {@code PriceAfterDiscount} : taux = 1 − saisie / TTC avant remise, appliqué au HT. */
+    private static BigDecimal remiseDepuisPrixTTC(BigDecimal prixTTC, RecalculPrixDossier.Resultat avantRemise) {
+        BigDecimal totalTTC = avantRemise.totalTTC();
+        depassePrixAvantRemise(prixTTC, totalTTC, "TTC");
+        if (totalTTC.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal taux = BigDecimal.ONE.subtract(prixTTC.divide(totalTTC, ECHELLE_TAUX, RoundingMode.HALF_UP));
+        return avantRemise.totalHT().multiply(taux).setScale(ECHELLE, RoundingMode.HALF_UP);
+    }
+
+    private static void depassePrixAvantRemise(BigDecimal prix, BigDecimal avantRemise, String base) {
+        if (prix.compareTo(avantRemise) > 0) {
+            throw new InvalidRequestException("Le prix de vente %s dépasse le prix %s avant remise.".formatted(base, base));
+        }
     }
 
     private static RecalculPrixDossier.Saisie saisie(RecalculPrixDossier.Saisie a, BigDecimal tva, BigDecimal montant) {
