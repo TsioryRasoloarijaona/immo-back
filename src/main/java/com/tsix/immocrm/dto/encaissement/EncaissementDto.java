@@ -27,6 +27,8 @@ public record EncaissementDto(
         LocalDateTime dateEcheance,
         /** Date de règlement effectif (encaissement du chèque…). */
         LocalDateTime dateReglement,
+        /** {@code MotionDate} d'OMRAN : règlement ou échéance, reportée à aujourd'hui si passée et non pointée. */
+        LocalDateTime pointagePrevu,
         UUID tierId,
         /** Tiers qui a réglé, pas forcément l'acquéreur principal. */
         String tierNom,

@@ -87,6 +87,15 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
             + "AND ISNULL(s.BoolField002, 0) = 0 AND ISNULL(s.BoolField003, 0) = 0", nativeQuery = true)
     long compterLocationsActives(@Param("tierId") UUID tierId);
 
+    /** [id, code] des dossiers de vente créés depuis l'offre ({@code ComFolder.StlQuoteId}). */
+    @Query("SELECT f.id, f.code FROM ComFolder f WHERE f.stlQuoteId = :offreId ORDER BY f.code ASC")
+    List<Object[]> dossiersDeLOffre(@Param("offreId") UUID offreId);
+
+    /** Codes des dossiers de location créés depuis l'offre ({@code RntFolder.StlQuoteId}, FK sans cascade). */
+    @Query(value = "SELECT ISNULL(r.Code, '') FROM RntFolder r WHERE r.StlQuoteId = :offreId ORDER BY r.Code ASC",
+            nativeQuery = true)
+    List<String> locationsDeLOffre(@Param("offreId") UUID offreId);
+
     /** Dossiers de syndic rattachés et en cours (statut ni {@code BoolField001} ni {@code BoolField002}), {@code Sale.cs:BeforeUpdate}. */
     @Query(value = "SELECT COUNT(*) FROM SynFolder sf INNER JOIN StrStatus s ON sf.StrStatusId = s.PKey "
             + "WHERE s.BoolField001 = 0 AND s.BoolField002 = 0 AND sf.ComFolderId = :dossierId", nativeQuery = true)

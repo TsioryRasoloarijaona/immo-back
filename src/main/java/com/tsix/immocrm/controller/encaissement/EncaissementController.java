@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
+import com.tsix.immocrm.dto.encaissement.TotauxEncaissementsDto;
 import com.tsix.immocrm.services.encaissement.EncaissementService;
 import com.tsix.immocrm.web.Groupements;
 import com.tsix.immocrm.web.export.ExportTableur;
@@ -152,6 +153,29 @@ public class EncaissementController {
                 Groupements.granularite(groupe, granularite),
                 ColonneEncaissement.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @GetMapping("/totaux")
+    @Operation(summary = "Totaux de la liste plate sur tout le filtre (bande « Total : »), mêmes filtres que la liste")
+    public TotauxEncaissementsDto totaux(
+            @RequestParam(required = false) List<UUID> entiteId,
+            @RequestParam(required = false) List<UUID> typeId,
+            @RequestParam(required = false) List<String> etat,
+            @RequestParam(required = false) UUID compteId,
+            @RequestParam(required = false) UUID depotId,
+            @RequestParam(required = false) UUID dossierId,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) UUID tierId,
+            @RequestParam(required = false) String reference,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean comptabilise,
+            @RequestParam(required = false) BigDecimal montantDe,
+            @RequestParam(required = false) BigDecimal montantA,
+            @RequestParam(required = false) ChampDateEncaissement champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
+        return encaissementService.totaux(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId, tierId,
+                reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin);
     }
 
     @GetMapping("/export")

@@ -1,11 +1,17 @@
 package com.tsix.immocrm.controller.prospection;
 
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
+import com.tsix.immocrm.entities.stl.StlQuoteDocument;
 import com.tsix.immocrm.fixtures.ConnexionDeTest;
+import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
+import com.tsix.immocrm.repositories.stl.StlQuoteDocumentRepository;
 import com.tsix.immocrm.services.dossier.ReferencesOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -40,7 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -96,6 +104,15 @@ class DevisTest {
 
     @Autowired
     private ComFolderRepository folderRepository;
+
+    @Autowired
+    private AdmUserHabilitationRepository habilitationRepository;
+
+    @Autowired
+    private ComSettlementCategoryRepository settlementCategoryRepository;
+
+    @Autowired
+    private StlQuoteDocumentRepository quoteDocumentRepository;
 
     private CfgTranche creerTranche(String code) {
         CfgProject project = new CfgProject();
@@ -775,5 +792,375 @@ class DevisTest {
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].montants.prixVenteTTC").value(100000))
                 .andExpect(jsonPath("$.sommePrixVenteTTCPage").value(100000));
+    }
+
+    // ---------------------------------------------------------------- lot 2 : fiche, modification, suppression
+
+    private UUID creerOffre(ComProspection prospection, String body) throws Exception {
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(reponse, "$.id").toString());
+    }
+
+    /** Offre sur un article de 120 000 TTC (100 000 HT), avec un sous-article de 12 000 TTC. */
+    private UUID offreAvecArticle(String code, StkItem[] articles) throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-" + code);
+        CfgTranche tranche = creerTranche("TR-" + code);
+        StkVocation vocation = nouvelleVocation("VOC-" + code);
+        StkItem article = nouvelArticle("LOT-" + code, tranche, null, vocation);
+        article.setComSalePrice(new BigDecimal("120000"));
+        stkItemRepository.save(article);
+        StkItem sousArticle = nouvelArticle("LOT-" + code + "-JRD", tranche, article, vocation);
+        sousArticle.setComSalePrice(new BigDecimal("12000"));
+        stkItemRepository.save(sousArticle);
+        StkItem autre = nouvelArticle("LOT-" + code + "-AUTRE", tranche, null, vocation);
+        articles[0] = article;
+        articles[1] = autre;
+        return creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\"" + article.getId()
+                + "\",\"sousArticleIds\":[\"" + sousArticle.getId() + "\"]}");
+    }
+
+    private void dossierDepuisOffre(String code, UUID offreId, StkItem article) {
+        ComFolder dossier = new ComFolder();
+        dossier.setId(UUID.randomUUID());
+        dossier.setCode(code);
+        dossier.setStlQuoteId(offreId);
+        dossier.setStkVocation(article.getStkVocation());
+        folderRepository.save(dossier);
+        article.setComFolderId(dossier.getId());
+        stkItemRepository.save(article);
+    }
+
+    /** Schéma saisi « dans OMRAN » : une ligne AVANCE (encaissement, avance de vente) du montant donné. */
+    private void schemaSaisi(UUID offreId, String code, BigDecimal montant) {
+        ComSettlementCategory avance = new ComSettlementCategory();
+        avance.setId(UUID.randomUUID());
+        avance.setCode("AVANCE-" + code);
+        avance.setIsCredit(true);
+        avance.setIsSaleAdvance(true);
+        settlementCategoryRepository.save(avance);
+        StlQuoteDocument ligne = new StlQuoteDocument();
+        ligne.setId(UUID.randomUUID());
+        ligne.setStlQuote(quoteRepository.findById(offreId).orElseThrow());
+        ligne.setComSettlementCategory(avance);
+        ligne.setCode("SCH-" + code);
+        ligne.setAmount(montant);
+        quoteDocumentRepository.save(ligne);
+        entityManager.flush();
+    }
+
+    /** Compte restreint au seul projet donné (habilitation), sans rôle exempté. */
+    private AdmUser compteRestreintA(CfgProject projet) {
+        AdmUser agent = new AdmUser();
+        agent.setId(UUID.randomUUID());
+        agent.setCode("agent.offre." + UUID.randomUUID());
+        agent.setDescription("Agent Restreint");
+        agent.setDisabled(false);
+        agent = admUserRepository.save(agent);
+        AdmUserHabilitation habilitation = new AdmUserHabilitation();
+        habilitation.setId(UUID.randomUUID());
+        habilitation.setAdmUser(agent);
+        habilitation.setCfgProject(projet);
+        habilitationRepository.save(habilitation);
+        return agent;
+    }
+
+    @Test
+    void ficheOffre_avecDossierLieSousArticleEtSchemaSaisi_renvoieLaFicheComplete() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-FICHE", articles);
+        dossierDepuisOffre("DOS-DEVIS-FICHE", offreId, articles[0]);
+        schemaSaisi(offreId, "DEVIS-FICHE", new BigDecimal("132000"));
+
+        mockMvc.perform(get("/api/devis/{id}", offreId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.id").value(offreId.toString()))
+                .andExpect(jsonPath("$.offre.article").value("LOT-DEVIS-FICHE"))
+                .andExpect(jsonPath("$.offre.montants.prixVenteTTC").value(132000))
+                .andExpect(jsonPath("$.offre.creeLe").isNotEmpty())
+                .andExpect(jsonPath("$.sousArticles[0].code").value("LOT-DEVIS-FICHE-JRD"))
+                .andExpect(jsonPath("$.sousArticles[0].prixApresRemiseTTC").value(12000))
+                .andExpect(jsonPath("$.dossierLie.code").value("DOS-DEVIS-FICHE"))
+                .andExpect(jsonPath("$.dossierLie.location").value(false))
+                .andExpect(jsonPath("$.schemaFinancementSaisi").value(true))
+                .andExpect(jsonPath("$.offre.schemaFinancement[0].categorie").value("AVANCE-DEVIS-FICHE"))
+                .andExpect(jsonPath("$.offre.schemaFinancement[0].montant").value(132000));
+    }
+
+    @Test
+    void listeOffres_exposeLAuteurDeCreationCommeLaColonneOmran() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-A4");
+        CfgTranche tranche = creerTranche("TR-DEVIS-A4");
+        AdmUser agent = compteRestreintA(tranche.getCfgProject());
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .with(ConnexionDeTest.connecte(agent))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":250000}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/devis").param("trancheId", tranche.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].creePar").value("Agent Restreint"))
+                .andExpect(jsonPath("$.content[0].creeLe").isNotEmpty());
+    }
+
+    @Test
+    void ficheOffre_inconnue_returns404() throws Exception {
+        mockMvc.perform(get("/api/devis/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void ficheModificationSuppression_offreHorsPerimetre_returns404SansEcriture() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-PERIM", articles);
+        AdmUser restreint = compteRestreintA(creerTranche("TR-DEVIS-PERIM-AUTRE").getCfgProject());
+
+        mockMvc.perform(get("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(patch("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":50}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint)))
+                .andExpect(status().isNotFound());
+
+        entityManager.flush();
+        entityManager.clear();
+        org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId).orElseThrow().getDiscount())
+                .isEqualByComparingTo("0");
+    }
+
+    @Test
+    void modifierOffre_dansLePerimetre_comptePermis() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-PERIM-OK", articles);
+        CfgProject projet = quoteRepository.findById(offreId).orElseThrow().getCfgTranche().getCfgProject();
+        AdmUser restreint = compteRestreintA(projet);
+
+        mockMvc.perform(patch("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":\"Revue\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.notes").value("Revue"))
+                .andExpect(jsonPath("$.offre.modifiePar").value("Agent Restreint"));
+    }
+
+    /** FEATURE-echelle-remises.md : l'API parle en pourcentage, la base garde le ratio OMRAN (offre et lignes). */
+    @Test
+    void remise_creeeEtModifieeEnPourcentage_estStockeeEnRatio() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-ECH", articles);
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-ECH-CREA");
+        CfgTranche tranche = creerTranche("TR-DEVIS-ECH-CREA");
+        UUID creeeId = creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\""
+                + nouvelArticle("LOT-DEVIS-ECH-CREA", tranche, null, nouvelleVocation("VOC-DEVIS-ECH")).getId()
+                + "\",\"remisePercent\":5}");
+
+        entityManager.flush();
+        entityManager.clear();
+        mockMvc.perform(get("/api/devis/{id}", creeeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        mockMvc.perform(get("/api/devis/{id}", offreId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(creeeId).orElseThrow().getDiscount())
+                        .isEqualByComparingTo("0.05"),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId).orElseThrow().getDiscount())
+                        .isEqualByComparingTo("0.05"),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId))
+                        .isNotEmpty().allSatisfy(l -> org.assertj.core.api.Assertions.assertThat(l.getDiscount())
+                                .isEqualByComparingTo("0.05")));
+    }
+
+    @Test
+    void modifierOffre_versUneTrancheHorsPerimetre_returns403SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-DEPL");
+        CfgTranche tranche = creerTranche("TR-DEVIS-DEPL");
+        UUID offreId = creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":200000}");
+        CfgTranche horsPerimetre = creerTranche("TR-DEVIS-DEPL-HORS");
+        AdmUser restreint = compteRestreintA(tranche.getCfgProject());
+
+        mockMvc.perform(patch("/api/devis/{id}", offreId).with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + horsPerimetre.getId() + "\",\"notes\":\"déplacée\"}"))
+                .andExpect(status().isForbidden());
+
+        entityManager.flush();
+        entityManager.clear();
+        StlQuote relue = quoteRepository.findById(offreId).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getCfgTranche().getId()).isEqualTo(tranche.getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getNotes()).isNull());
+    }
+
+    @Test
+    void creerDevis_surUneTrancheHorsPerimetre_returns403SansEcriture() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-CREA-HORS");
+        CfgTranche permise = creerTranche("TR-DEVIS-CREA-OK");
+        CfgTranche horsPerimetre = creerTranche("TR-DEVIS-CREA-HORS");
+        AdmUser restreint = compteRestreintA(permise.getCfgProject());
+        long avant = quoteRepository.count();
+
+        mockMvc.perform(post("/api/prospections/{id}/devis", prospection.getId())
+                        .with(ConnexionDeTest.connecte(restreint))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trancheId\":\"" + horsPerimetre.getId() + "\",\"prix\":200000}"))
+                .andExpect(status().isForbidden());
+
+        entityManager.flush();
+        org.assertj.core.api.Assertions.assertThat(quoteRepository.count()).as("aucune offre écrite").isEqualTo(avant);
+    }
+
+    @Test
+    void modifierOffre_remise_recalculeLesMontantsEtLesSousArticles() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-REMISE", articles);
+
+        // Total TTC = 120 000 + 12 000 ; remise 10 % = 13 200 -> 118 800.
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(10.0))
+                .andExpect(jsonPath("$.offre.montants.remiseTTC").value(13200))
+                .andExpect(jsonPath("$.offre.montants.prixVenteTTC").value(118800))
+                .andExpect(jsonPath("$.offre.article").value("LOT-DEVIS-REMISE"))
+                .andExpect(jsonPath("$.sousArticles.length()").value(1))
+                .andExpect(jsonPath("$.sousArticles[0].prixApresRemiseTTC").value(10800));
+    }
+
+    @Test
+    void modifierOffre_articleDejaVendu_returns400SansEcriture() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-MOD-VND", articles);
+        dossierDepuisOffre("DOS-DEVIS-MOD-VND-AUTRE", null, articles[1]);
+
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleId\":\"" + articles[1].getId() + "\",\"remisePercent\":5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("déjà vendu")));
+
+        entityManager.flush();
+        entityManager.clear();
+        StlQuote relue = quoteRepository.findById(offreId).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getStkItem().getId()).isEqualTo(articles[0].getId()),
+                () -> org.assertj.core.api.Assertions.assertThat(relue.getDiscount()).isEqualByComparingTo("0"));
+    }
+
+    @Test
+    void modifierOffre_offreTransformeeEnDossier_resteModifiableMaisGardeSonArticle() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-MOD-DOS", articles);
+        dossierDepuisOffre("DOS-DEVIS-MOD-DOS", offreId, articles[0]);
+
+        // L'article de l'offre est occupé par son propre dossier : il ne compte pas comme « vendu ».
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleId\":\"" + articles[0].getId() + "\",\"remisePercent\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"articleId\":\"" + articles[1].getId() + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("DOS-DEVIS-MOD-DOS")));
+    }
+
+    @Test
+    void modifierOffre_schemaSaisiQuiNeCorrespondPlusAuPrix_returns400CommeVerifSchema() throws Exception {
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-SCH");
+        CfgTranche tranche = creerTranche("TR-DEVIS-SCH");
+        UUID offreId = creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"prix\":300000}");
+        schemaSaisi(offreId, "DEVIS-SCH", new BigDecimal("300000"));
+
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"prix\":280000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("schéma de financement")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("20000.00")));
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":\"Schéma cohérent\"}"))
+                .andExpect(status().isOk());
+
+        entityManager.flush();
+        entityManager.clear();
+        org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId).orElseThrow().getPriceAfterDiscount())
+                .isEqualByComparingTo("300000");
+    }
+
+    @Test
+    void modifierOffre_inconnue_returns404() throws Exception {
+        mockMvc.perform(patch("/api/devis/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"notes\":\"x\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void supprimerOffre_emporteSousArticlesEtSchema_returns204() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-SUPPR", articles);
+        schemaSaisi(offreId, "DEVIS-SUPPR", new BigDecimal("132000"));
+
+        mockMvc.perform(delete("/api/devis/{id}", offreId))
+                .andExpect(status().isNoContent());
+
+        entityManager.flush();
+        entityManager.clear();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId)).isEmpty(),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId)).isEmpty(),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteDocumentRepository.findByStlQuoteIdOrderByCodeAsc(offreId)).isEmpty());
+    }
+
+    @Test
+    void supprimerOffre_quiADonneUnDossier_returns409SansEcriture() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-SUPPR-DOS", articles);
+        dossierDepuisOffre("DOS-DEVIS-SUPPR", offreId, articles[0]);
+
+        mockMvc.perform(delete("/api/devis/{id}", offreId))
+                .andExpect(status().isConflict())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("DOS-DEVIS-SUPPR")));
+
+        entityManager.flush();
+        entityManager.clear();
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId)).isPresent(),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId)).hasSize(1));
+    }
+
+    @Test
+    void supprimerOffre_inconnue_returns404() throws Exception {
+        mockMvc.perform(delete("/api/devis/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Revue lot 2 : une remise seule ne doit pas re-tarifer les sous-articles au prix catalogue du jour. Le prix
+     * de l'article est conservé ({@code prixActuel}) ; celui des sous-articles doit l'être aussi (3 offres OMRAN
+     * en prod ont UnderItemsPrice = 0 avec un sous-article à 216 745,84 au catalogue).
+     */
+    @Test
+    void modifierOffre_remiseSeule_conserveLePrixFigeDesSousArticles() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-FIGE", articles);
+        StkItem sousArticle = quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId).get(0).getStkItem();
+        sousArticle.setComSalePrice(new BigDecimal("15000"));
+        stkItemRepository.saveAndFlush(sousArticle);
+
+        // Prix figé : (120 000 + 12 000) x 0,9 = 118 800, et non (120 000 + 15 000) x 0,9.
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.prixSousArticlesTTC").value(12000))
+                .andExpect(jsonPath("$.offre.montants.prixVenteTTC").value(118800));
     }
 }

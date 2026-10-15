@@ -56,6 +56,15 @@ public record DevisDto(
 
         List<LigneSchemaFinancementDto> schemaFinancement,
 
-        String notes
+        String notes,
+
+        @Schema(description = "Auteur de l'offre (StlQuote.UserCreate), nom affiché de l'utilisateur.")
+        String creePar,
+        @Schema(description = "Date de création de l'offre (StlQuote.UserCreateDateTime).")
+        LocalDateTime creeLe,
+        @Schema(description = "Auteur de la dernière modification (StlQuote.UserUpdate).")
+        String modifiePar,
+        @Schema(description = "Date de la dernière modification (StlQuote.UserUpdateDateTime).")
+        LocalDateTime modifieLe
 ) {
 }

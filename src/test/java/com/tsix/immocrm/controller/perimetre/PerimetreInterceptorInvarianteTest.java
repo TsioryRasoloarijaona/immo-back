@@ -80,6 +80,10 @@ class PerimetreInterceptorInvarianteTest {
             // Specification que la liste. Vérifié par
             // EncaissementGroupementTest#sommeDesEffectifs_egaleLeTotalDeLaListe.
             "/api/encaissements/groupes",
+            // Bande « Total : » de la liste plate (FEATURE-encaissements-offres-lot2.md B1) : même justification,
+            // EncaissementService#totaux compose specEncaissements avec filtreEncaissements, la Specification de la
+            // liste. Vérifié par PerimetreCommercialTest#commercialAffecteProjetA_totauxDesEncaissementsExcluentLeProjetB.
+            "/api/encaissements/totaux",
             // Import CSV de leads (FEATURE-creation-pre-prospection.md §5). Aucune ressource
             // chargée par identifiant : un fichier en entrée. Le périmètre est contrôlé dans le
             // service — la tranche cible par verifierEcritureSurTranche (403, rien d'écrit), et les

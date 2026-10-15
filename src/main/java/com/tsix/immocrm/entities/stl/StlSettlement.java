@@ -231,6 +231,16 @@ public class StlSettlement {
     private BigDecimal montantNetCalcule;
 
     /**
+     * « Date pointage reportée » ({@code MotionDate} de {@code StlSettlementView}) : règlement ou échéance, reportée à
+     * aujourd'hui (horloge SQL Server, comme la vue) si elle est passée et le règlement non pointé. Voir
+     * FEATURE-encaissements-offres-lot2.md B2.
+     */
+    @Formula("CASE WHEN ISNULL(SettlementDate, EcheanceDate) < DATEADD(day, DATEDIFF(day, 0, GETDATE()) + 1, 0)"
+            + " AND ISNULL(Status, '') <> 'POINTED' THEN DATEADD(day, DATEDIFF(day, 0, GETDATE()), 0)"
+            + " ELSE ISNULL(SettlementDate, EcheanceDate) END")
+    private LocalDateTime pointagePrevu;
+
+    /**
      * Terme retranché de {@code montantBrutRestant}. {@code @ManyToOne} bien qu'un-à-un : un
      * {@code @OneToOne} optionnel ne se proxifie pas et serait chargé sur chaque ligne (N+1).
      */

@@ -10,7 +10,7 @@ import java.util.Set;
  */
 public enum ColonneEncaissement implements Colonne {
 
-    // -- Colonnes historiques : la sélection par défaut, à ne pas modifier (contrat publié).
+    // -- Sélection par défaut (contrat publié) : seul consommateur sans ?colonnes=, l'écran Encaissements.
     ID("id", "Identifiant", Groupe.IDENTITE, TypeColonne.TEXTE, true,
             Chemin.groupable("id")),
     REFERENCE("reference", "Référence", Groupe.IDENTITE, TypeColonne.TEXTE, true,
@@ -30,8 +30,12 @@ public enum ColonneEncaissement implements Colonne {
             Chemin.date("docDate")),
     DATE_ECHEANCE("dateEcheance", "Date échéance", Groupe.IDENTITE, TypeColonne.DATE, true,
             Chemin.date("echeanceDate")),
-    DATE_REGLEMENT("dateReglement", "Date de règlement", Groupe.IDENTITE, TypeColonne.DATE, true,
+    /** Hors défaut : « Pointage prévu » la remplace, comme dans OMRAN (FEATURE-encaissements-offres-lot2.md B2). */
+    DATE_REGLEMENT("dateReglement", "Date de règlement", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("settlementDate")),
+    /** {@code MotionDate} d'OMRAN, recalculée par une {@code @Formula} : triable, filtrable, groupable par période. */
+    POINTAGE_PREVU("pointagePrevu", "Pointage prévu", Groupe.IDENTITE, TypeColonne.DATE, true,
+            Chemin.date("pointagePrevu")),
 
     TIER_ID("tierId", "Id tiers", Groupe.ACTEURS, TypeColonne.TEXTE, true,
             Chemin.groupable("tier.id")),
