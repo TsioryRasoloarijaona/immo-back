@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.AgregatDemande;
 import com.tsix.immocrm.domain.ChampDateEncaissement;
 import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.MontantRestant;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.dto.encaissement.AffectationDto;
@@ -295,10 +296,8 @@ public class EncaissementService {
 
         // Part affectée pré-agrégée (sommable par /groupes). Le total de groupe fait la même
         // soustraction, SUM(amount) - SUM(affecte) : ligne et bande « Total : » ne divergent pas.
-        BigDecimal affecte = s.getAffectation() != null && s.getAffectation().getMontantAffecte() != null
-                ? s.getAffectation().getMontantAffecte()
-                : BigDecimal.ZERO;
-        BigDecimal montantBrutRestant = montantBrut.subtract(affecte);
+        BigDecimal affecte = s.getAffectation() != null ? s.getAffectation().getMontantAffecte() : null;
+        BigDecimal montantBrutRestant = MontantRestant.reglement(montantBrut, affecte);
 
         // Net = brut − RS − timbre, porté par la @Formula de l'entité ; le repli Java couvre l'entité
         // construite en mémoire, qu'une formule ne peuple jamais.

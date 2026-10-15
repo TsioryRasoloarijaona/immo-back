@@ -216,7 +216,8 @@ deux ou plus, sans seuil paramétré pour la cible, ou seuil non atteint.
 ## addReglement
 
 Crée un `StlSettlement` + sa `StlSettlementLine` de rattachement à l'échéance `echeanceId`. Le
-règlement naît toujours au statut `IN_WORK`.
+règlement naît toujours au statut `IN_WORK`. C'est `POST /api/dossiers/{id}/reglements` avec une seule
+affectation `{echeanceId, montant}` ; pour répartir un règlement sur plusieurs échéances, utiliser celui-ci.
 
 **Saisie complète obligatoire** (400 sur chaque manquement) : `montant` (strictement positif et au
 plus égal au reste à payer de l'échéance), `dateEcheance` et `typeId`. `reference` (n° de chèque...)
