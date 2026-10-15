@@ -946,6 +946,39 @@ class DevisTest {
                 .andExpect(jsonPath("$.offre.modifiePar").value("Agent Restreint"));
     }
 
+    /** FEATURE-echelle-remises.md : l'API parle en pourcentage, la base garde le ratio OMRAN (offre et lignes). */
+    @Test
+    void remise_creeeEtModifieeEnPourcentage_estStockeeEnRatio() throws Exception {
+        StkItem[] articles = new StkItem[2];
+        UUID offreId = offreAvecArticle("DEVIS-ECH", articles);
+        mockMvc.perform(patch("/api/devis/{id}", offreId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"remisePercent\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        ComProspection prospection = nouvelleProspection("PSN-DEVIS-ECH-CREA");
+        CfgTranche tranche = creerTranche("TR-DEVIS-ECH-CREA");
+        UUID creeeId = creerOffre(prospection, "{\"trancheId\":\"" + tranche.getId() + "\",\"articleId\":\""
+                + nouvelArticle("LOT-DEVIS-ECH-CREA", tranche, null, nouvelleVocation("VOC-DEVIS-ECH")).getId()
+                + "\",\"remisePercent\":5}");
+
+        entityManager.flush();
+        entityManager.clear();
+        mockMvc.perform(get("/api/devis/{id}", creeeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        mockMvc.perform(get("/api/devis/{id}", offreId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offre.montants.remisePercent").value(5.0));
+        org.junit.jupiter.api.Assertions.assertAll(
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(creeeId).orElseThrow().getDiscount())
+                        .isEqualByComparingTo("0.05"),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteRepository.findById(offreId).orElseThrow().getDiscount())
+                        .isEqualByComparingTo("0.05"),
+                () -> org.assertj.core.api.Assertions.assertThat(quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offreId))
+                        .isNotEmpty().allSatisfy(l -> org.assertj.core.api.Assertions.assertThat(l.getDiscount())
+                                .isEqualByComparingTo("0.05")));
+    }
+
     @Test
     void modifierOffre_versUneTrancheHorsPerimetre_returns403SansEcriture() throws Exception {
         ComProspection prospection = nouvelleProspection("PSN-DEVIS-DEPL");
