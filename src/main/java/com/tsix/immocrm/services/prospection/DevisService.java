@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.ConventionRemise;
 import com.tsix.immocrm.domain.DisponibiliteArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
+import com.tsix.immocrm.domain.SchemaFinancementSaisi;
 import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.prospection.CreerDevisRequest;
 import com.tsix.immocrm.dto.prospection.DevisDto;
@@ -78,8 +79,6 @@ public class DevisService {
     private static final String OFFRE_INTROUVABLE = "Offre introuvable: ";
     private static final String TRANCHE_INTROUVABLE = "CfgTranche introuvable: ";
     private static final String FRAIS_SYNDIC = "FRAIS SYNDIC";
-    /** Précision monétaire de {@code VerifSchema} (OMRAN arrondit à {@code CurrencyDecimalDigits}, 2 pour le dirham). */
-    private static final int DECIMALES_DEVISE = 2;
 
     private final ComProspectionRepository prospectionRepository;
     private final StlQuoteRepository quoteRepository;
@@ -456,13 +455,7 @@ public class DevisService {
         if (lignes.isEmpty()) {
             return;
         }
-        BigDecimal finance = lignes.stream()
-                .filter(ligne -> financeLePrix(ligne.getComSettlementCategory()))
-                .map(StlQuoteDocument::getAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal ecart = (prixApresRemise != null ? prixApresRemise : BigDecimal.ZERO).subtract(finance)
-                .setScale(DECIMALES_DEVISE, RoundingMode.HALF_EVEN);
+        BigDecimal ecart = SchemaFinancementSaisi.ecart(prixApresRemise, lignes);
         if (ecart.signum() > 0) {
             throw new InvalidRequestException("Votre schéma de financement ne correspond pas au montant contractuel : "
                     + "vous devez ajouter dans le schéma de financement un montant de " + ecart.toPlainString() + " DH");
@@ -472,14 +465,6 @@ public class DevisService {
                     + "vous devez soustraire du schéma de financement un montant de " + ecart.negate().toPlainString()
                     + " DH");
         }
-    }
-
-    private static boolean financeLePrix(ComSettlementCategory categorie) {
-        if (categorie == null || !Boolean.TRUE.equals(categorie.getIsCredit())) {
-            return false;
-        }
-        return Boolean.TRUE.equals(categorie.getIsSaleAdvance()) || Boolean.TRUE.equals(categorie.getIsSaleCredit())
-                || Boolean.TRUE.equals(categorie.getIsSaleAutoFinancment());
     }
 
     /**

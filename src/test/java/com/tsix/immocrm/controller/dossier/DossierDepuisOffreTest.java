@@ -460,6 +460,52 @@ class DossierDepuisOffreTest {
     }
 
     @Test
+    void prixChangeAvecSchemaDeLOffre_400SansEcriture() throws Exception {
+        StlQuote q = offre(lot, vocation);
+        ligneSchema(q, avance, "300000", LocalDateTime.of(2026, 11, 2, 0, 0));
+        ligneSchema(q, autoFinancement, "549000", LocalDateTime.of(2027, 1, 15, 0, 0));
+        entityManager.flush();
+        long dossiers = folderRepository.count();
+        long echeances = documentRepository.count();
+        String body = corps(q).replace("\"prix\":849000", "\"prix\":900000");
+
+        mockMvc.perform(post(DOSSIERS).with(connecte(agent)).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString(
+                        "(849000.00 DH) ne correspond plus au prix du dossier (900000.00 DH)")));
+
+        entityManager.flush();
+        entityManager.clear();
+        assertAll(
+                () -> assertThat(folderRepository.count()).as("dossiers").isEqualTo(dossiers),
+                () -> assertThat(documentRepository.count()).as("échéances").isEqualTo(echeances),
+                () -> assertThat(itemRepository.findById(lot.getId()).orElseThrow().getComFolderId()).isNull(),
+                () -> assertThat(tierRepository.findById(prospection.getCfgProspect().getId()).orElseThrow().getIDNumber())
+                        .as("CIN non écrit").isNull());
+    }
+
+    @Test
+    void prixInchangeAvecLigneHorsPrix_creeLeDossier() throws Exception {
+        StlQuote q = offre(lot, vocation);
+        ComSettlementCategory frais = new ComSettlementCategory();
+        frais.setId(UUID.randomUUID());
+        frais.setCode("FRAIS SYNDIC");
+        frais.setDescription("FRAIS SYNDIC");
+        frais.setStkVocation(vocation);
+        frais.setIsCredit(true);
+        frais.setIsSaleExpense(true);
+        frais.setExcludeFromPrice(true);
+        frais = categoryRepository.save(frais);
+        ligneSchema(q, avance, "300000", LocalDateTime.of(2026, 11, 2, 0, 0));
+        ligneSchema(q, autoFinancement, "549000", LocalDateTime.of(2027, 1, 15, 0, 0));
+        ligneSchema(q, frais, "16800", LocalDateTime.of(2027, 1, 15, 0, 0));
+
+        ComFolder f = creer(q);
+
+        assertThat(documentRepository.findByComFolderIdOrderByDocDateAsc(f.getId())).hasSize(3);
+    }
+
+    @Test
     void offreDejaTransformee_409AvecLeDossierSansEcriture() throws Exception {
         StlQuote q = offre(lot, vocation);
         ComFolder existant = dossierExistant("DOS-OFF-DEJA");

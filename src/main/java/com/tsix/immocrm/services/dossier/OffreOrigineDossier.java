@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.DisponibiliteArticle;
+import com.tsix.immocrm.domain.SchemaFinancementSaisi;
 import com.tsix.immocrm.dto.prospection.DossierLieDto;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -17,6 +18,8 @@ import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -97,6 +100,24 @@ public class OffreOrigineDossier {
         }
         return Optional.of(new OffreRetenue(offre, sousArticles,
                 schemaRepository.findByStlQuoteIdOrderByCodeAsc(offre.getId())));
+    }
+
+    /**
+     * {@code Sale.cs:VerifSchema} : l'échéancier repris de l'offre doit égaler le prix après remise du dossier, calculé
+     * depuis la requête ; sinon 400, avant toute écriture. Sans schéma saisi sur l'offre, rien à vérifier.
+     */
+    public void verifierEcheancier(OffreRetenue offre, BigDecimal prixApresRemise) {
+        if (offre.schema().isEmpty()) {
+            return;
+        }
+        BigDecimal ecart = SchemaFinancementSaisi.ecart(prixApresRemise, offre.schema());
+        if (ecart.signum() != 0) {
+            BigDecimal finance = SchemaFinancementSaisi.montantFinance(offre.schema()).setScale(2, RoundingMode.HALF_EVEN);
+            BigDecimal prix = prixApresRemise.setScale(2, RoundingMode.HALF_EVEN);
+            throw new InvalidRequestException("L'échéancier repris de l'offre " + offre.offre().getCode() + " ("
+                    + finance.toPlainString() + " DH) ne correspond plus au prix du dossier (" + prix.toPlainString()
+                    + " DH) : gardez le prix de l'offre ou créez le dossier sans l'offre");
+        }
     }
 
     private void dejaTransformee(StlQuote offre) {

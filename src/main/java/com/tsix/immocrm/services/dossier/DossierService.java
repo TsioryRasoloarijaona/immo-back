@@ -248,15 +248,11 @@ public class DossierService {
         StrStatus statutInitial = creationOmran.statutInitial();
 
         CfgTier client = prospection.getCfgProspect();
-        client.setIDNumber(request.cin());
-        tierRepository.save(client);
-
         StkItem principal = articles.get(0);
         List<StkItem> annexes = annexesDuDossier(principal, articles.subList(1, articles.size()));
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
         folder.setDocDate(LocalDate.now(clock).atStartOfDay());
-        folder.setCode(genererCodeDossier(principal));
         // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) sont ses sous-articles.
         folder.setStkItem(principal);
         folder.setStkVocation(principal.getStkVocation());
@@ -271,6 +267,13 @@ public class DossierService {
 
         CfgTranche tranche = principal.getStkHierarchy();
         appliquerMontantsCreation(folder, principal, new AnnexesPrix(annexes, prixAnnexes), tranche, request);
+        // Dernier contrôle, sur le prix calculé : les écritures (tiers, compteur du code) ne commencent qu'après.
+        BigDecimal prixApresRemise = folder.getPriceAfterDiscount();
+        offre.ifPresent(o -> offreOrigine.verifierEcheancier(o, prixApresRemise));
+
+        client.setIDNumber(request.cin());
+        tierRepository.save(client);
+        folder.setCode(genererCodeDossier(principal));
         creationOmran.completer(folder, principal, annexes, client);
         // Le formulaire ne saisit pas la commission : celle de l'offre, comme GenerateComFolderFromQuote.
         offre.map(o -> o.offre().getCommissionRate()).ifPresent(folder::setCommissionRate);

@@ -73,8 +73,10 @@ de l'offre hors périmètre → **403** ; offre déjà transformée en dossier, 
 dossier de vente → **409**. Avec une offre, le dossier reprend :
 - son **échéancier** : une échéance par ligne du schéma saisi sur l'offre (`StlQuoteDocument` :
   catégorie, montant, date, société, ratio de remise), à la place du schéma calculé ; sans schéma
-  saisi, le schéma calculé habituel. La requête ne porte pas de schéma : celui de l'offre s'applique
-  tel quel, même si `prix` a changé ;
+  saisi, le schéma calculé habituel. Comme `Sale.cs:VerifSchema`, les lignes AVANCE, CRÉDIT et
+  AUTO-FINANCEMENT de ce schéma doivent égaler, au centime, le prix après remise calculé depuis la
+  requête (lignes hors prix exclues) : sinon **400** sans écriture (« L'échéancier repris de l'offre … ne
+  correspond plus au prix du dossier … ») ;
 - le **prix des sous-articles** figurant dans l'offre (`StlQuoteItem` : avant remise HT/TTC, remise,
   après remise, TVA), au lieu du prix catalogue du jour ;
 - son **taux de commission** (`CommissionRate`), que la requête ne porte pas ;
@@ -131,7 +133,7 @@ de paiement introuvable, prospection sans prospect lié, article déjà occupé,
 de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes. Avec `offreId`, les
 messages du logiciel de bureau : « Vous n'avez pas sélectionné un article ! », « Cet article n'est pas
 disponible en stock ! », « Le sous article <code> n'est pas libre ! », « Cet article n'a pas la
-vocation correspondante ! ».
+vocation correspondante ! », et l'échéancier de l'offre qui ne correspond plus au prix du dossier.
 
 ### reponse 409
 
