@@ -44,6 +44,10 @@ public class ComFolder {
     @JoinColumn(name = "StkItemId")
     private StkItem stkItem;
 
+    /** Offre d'origine : OMRAN s'en sert pour savoir qu'un dossier a déjà été créé depuis l'offre. */
+    @Column(name = "StlQuoteId")
+    private UUID stlQuoteId;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "Code")

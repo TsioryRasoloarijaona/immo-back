@@ -203,12 +203,13 @@ public class GroupementService {
 
             switch (demande.fonction()) {
                 case SUM, AVG -> {
+                    principal = horsExclusion(cb, jointures, chemin, principal.as(BigDecimal.class));
                     plan.indexPrincipal = selections.size();
                     selections.add(cb.sum(principal.as(BigDecimal.class)));
                     if (chemin.cheminSoustrait() != null) {
                         plan.indexSoustrait = selections.size();
-                        selections.add(cb.sum(
-                                jointures.chemin(chemin.cheminSoustrait()).as(BigDecimal.class)));
+                        selections.add(cb.sum(horsExclusion(cb, jointures, chemin,
+                                jointures.chemin(chemin.cheminSoustrait()).as(BigDecimal.class))));
                     }
                     if (demande.fonction() == FonctionAgregat.AVG) {
                         // Effectif des lignes renseignées, pas du groupe : les cases vides
@@ -229,6 +230,21 @@ public class GroupementService {
             plans.add(plan);
         }
         return plans;
+    }
+
+    /**
+     * {@code CASE WHEN <ligne non exclue> THEN valeur END}, sans {@code ELSE} : NULL hors de la somme et de
+     * l'effectif d'une moyenne, sans littéral numérique ({@link Chemin#sauf}).
+     */
+    private static Expression<BigDecimal> horsExclusion(CriteriaBuilder cb, Jointures jointures, Chemin chemin,
+                                                        Expression<BigDecimal> valeur) {
+        Chemin.Exclusion exclusion = chemin.exclusion();
+        if (exclusion == null) {
+            return valeur;
+        }
+        Path<?> discriminant = jointures.chemin(exclusion.chemin());
+        Predicate gardee = cb.or(cb.isNull(discriminant), cb.notEqual(discriminant, exclusion.valeur()));
+        return cb.<BigDecimal>selectCase().when(gardee, valeur);
     }
 
     /**

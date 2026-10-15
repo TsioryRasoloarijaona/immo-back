@@ -38,6 +38,11 @@ public enum StatutReglement {
     public static final String JPQL_COMPTE_DANS_LES_TOTAUX = "(st.status IS NULL OR st.status <> 'CANCELED')";
     public static final String SQL_COMPTE_DANS_LES_TOTAUX = "(s.Status IS NULL OR s.Status <> 'CANCELED')";
 
+    /** Même règle pour les sommes d'une colonne groupée de {@code StlSettlement} (le comptage garde CANCELED). */
+    public static Chemin horsAnnules(Chemin chemin) {
+        return chemin.sauf("status", CANCELED.name());
+    }
+
     /** NULL, IN_WORK, POINTED ou valeur inconnue comptent ; seul CANCELED est exclu. */
     public static boolean compteDansLesTotaux(String status) {
         return lireCode(status).filter(statut -> statut == CANCELED).isEmpty();

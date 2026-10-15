@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.dossier;
 import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
+import com.tsix.immocrm.domain.DisponibiliteArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
@@ -113,6 +114,7 @@ public class DossierService {
     private final ControleSortieDossier controleSortie;
     private final MontantsDossier montantsDossier;
     private final WorkflowDossier workflow;
+    private final OffreOrigineDossier offreOrigine;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -146,6 +148,7 @@ public class DossierService {
         this.controleSortie = ecrituresOmran.controleSortie();
         this.montantsDossier = ecrituresOmran.montants();
         this.workflow = ecrituresOmran.workflow();
+        this.offreOrigine = ecrituresOmran.offreOrigine();
     }
 
     /**
@@ -218,12 +221,13 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
+        UUID offreId = offreOrigine.verifier(request.offreId(), prospection);
 
         List<StkItem> articles = new ArrayList<>();
         for (UUID articleId : request.articleIds()) {
             StkItem item = stkItemRepository.findById(articleId)
                     .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId));
-            if (item.getComFolderId() != null) {
+            if (DisponibiliteArticle.estOccupe(item)) {
                 throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + articleId);
             }
             articles.add(item);
@@ -255,6 +259,7 @@ public class DossierService {
         folder.setCfgCustomer(client);
         folder.setCfgCommercial(prospection.getCfgCommercial());
         folder.setComProspection(prospection);
+        folder.setStlQuoteId(offreId);
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
         folder.setStrStatus(statutInitial);

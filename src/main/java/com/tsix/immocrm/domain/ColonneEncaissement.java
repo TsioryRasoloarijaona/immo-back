@@ -6,6 +6,7 @@ import java.util.Set;
 /**
  * Catalogue des colonnes de {@code GET /api/encaissements} : liste blanche de {@code ?colonnes=}.
  * Colonnes retenues ou écartées sur mesure : FEATURE-colonnes-groupement-encaissements.md §3–§5.
+ * Les sommes de montants excluent les règlements CANCELED (FEATURE-encaissements-offres-lot1.md D1).
  */
 public enum ColonneEncaissement implements Colonne {
 
@@ -38,17 +39,17 @@ public enum ColonneEncaissement implements Colonne {
             Chemin.tier("tier")),
 
     MONTANT_BRUT("montantBrut", "Montant brut", Groupe.FINANCIER, TypeColonne.MONTANT, true,
-            Chemin.groupableEtAgregeable("amount")),
+            StatutReglement.horsAnnules(Chemin.groupableEtAgregeable("amount"))),
     /**
      * Brut moins la part déjà affectée aux échéances, pré-agrégée et retranchée par jointure
      * (voir {@link Chemin#difference}) : sommable, ni groupable ni MIN/MAX.
      */
     MONTANT_BRUT_RESTANT("montantBrutRestant", "Montant brut restant", Groupe.FINANCIER,
             TypeColonne.MONTANT, true,
-            Chemin.difference("amount", "affectation.montantAffecte")),
+            StatutReglement.horsAnnules(Chemin.difference("amount", "affectation.montantAffecte"))),
     /** Brut moins retenue à la source et droit de timbre ; {@code @Formula}, donc une propriété ordinaire. */
     MONTANT_NET("montantNet", "Montant net", Groupe.FINANCIER, TypeColonne.MONTANT, true,
-            Chemin.groupableEtAgregeable("montantNetCalcule")),
+            StatutReglement.horsAnnules(Chemin.groupableEtAgregeable("montantNetCalcule"))),
 
     COMPTABILISE("comptabilise", "Comptabilisé", Groupe.SUIVI, TypeColonne.BOOLEEN, true,
             Chemin.groupable("isAccounted")),
@@ -94,7 +95,7 @@ public enum ColonneEncaissement implements Colonne {
             Chemin.groupable("description")),
 
     MONTANT_BASE("montantBase", "Montant base", Groupe.FINANCIER, TypeColonne.MONTANT, false,
-            Chemin.groupableEtAgregeable("amountBase")),
+            StatutReglement.horsAnnules(Chemin.groupableEtAgregeable("amountBase"))),
 
     /** Tiers <em>payeur</em> : diverge rarement du tiers du règlement, servi parce que le légataire le distingue. */
     TIER_PAYEUR_ID("tierPayeurId", "Id tiers payeur", Groupe.ACTEURS, TypeColonne.TEXTE, false,

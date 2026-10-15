@@ -20,6 +20,8 @@ public record CreerDossierRequest(
         BigDecimal remisePercent,
         String notes,
         UUID modePaieId,
-        String cin
+        String cin,
+        @Schema(description = "Offre d'origine (StlQuote) : optionnelle, doit appartenir à la même prospection, sinon 400.")
+        UUID offreId
 ) {
 }

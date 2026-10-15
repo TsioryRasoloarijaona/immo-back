@@ -478,10 +478,15 @@ voir `CreerDevisRequest` pour le détail du calcul et des remplacements possible
 `remisePercent`). Sans `articleId`, l'offre est "libre": `prix` devient directement le prix de vente
 TTC, sans ventilation HT/m²/sous-articles.
 
+Comme OMRAN, l'offre est écrite avec l'entité « ComQuote » (`StrEntityId`), la vocation de l'article
+(`StkVocationId`) et l'utilisateur connecté (`UserCreate` / `UserUpdate`).
+
 ### reponse 400
 
 `trancheId` manquant/introuvable, `prix` manquant alors qu'aucun `articleId` n'est fourni, ou un id
-(article/sous-article/prospect/commercial/mode de paiement) est introuvable.
+(article/sous-article/prospect/commercial/mode de paiement) est introuvable. Aussi : l'article
+n'appartient pas à la tranche choisie, un sous-article n'est pas un enfant de l'article, ou l'article
+est déjà vendu (porté par un dossier). Rien n'est écrit dans ces cas.
 
 ## getDevisDocument
 

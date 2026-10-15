@@ -356,6 +356,35 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(jsonPath("$.content[?(@.cle=='DECAISS CGE')].agregats.montantBrut").value(500.00));
     }
 
+    /** D1 : un règlement annulé reste compté dans son groupe, mais sort de toutes les sommes de montants. */
+    @Test
+    void reglementAnnule_compteDansLeGroupeMaisHorsDesSommes() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-ANN", "ANNULE CGE");
+        StlSettlement valide = newEncaissement("CGE-ANN-1", new BigDecimal("300.00"));
+        valide.setStlSettlementType(type);
+        settlementRepository.save(valide);
+        StlSettlement annule = newEncaissement("CGE-ANN-2", new BigDecimal("700.00"));
+        annule.setStlSettlementType(type);
+        annule.setStatus("CANCELED");
+        settlementRepository.save(annule);
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut,montantNet,montantBrutRestant,montantBrut:AVG,"
+                                + "montantBrut:COUNT")
+                        .param("reference", "CGE-ANN-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].nombre").value(2))
+                .andExpect(jsonPath("$.content[0].agregats.montantBrut").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats.montantNet").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats.montantBrutRestant").value(0))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:AVG']").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:COUNT']").value(2))
+                .andExpect(jsonPath("$.totaux.montantBrut").value(300.00))
+                .andExpect(jsonPath("$.nombreTotal").value(2));
+    }
+
     @Test
     void depliage_rendExactementLesLignesComptees() throws Exception {
         StlSettlementType vise = newType("TYPE-CGE-VISE", "VISE CGE");

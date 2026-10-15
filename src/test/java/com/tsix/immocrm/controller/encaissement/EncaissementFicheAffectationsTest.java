@@ -232,28 +232,16 @@ class EncaissementFicheAffectationsTest {
     }
 
     /**
-     * Un règlement encaissé mais pas encore imputé rend un tableau <strong>vide</strong>, jamais
-     * {@code null} : le front itère dessus sans garde.
-     *
-     * <p><strong>Ce test est aussi la non-régression d'un 500.</strong> L'association vers la
-     * pré-agrégation des affectations a pour clé étrangère le {@code PKey} du règlement lui-même,
-     * toujours renseigné : Hibernate fabrique donc toujours un proxy. Tant que le sous-select ne
-     * portait que les règlements <em>ayant</em> des lignes, déréférencer ce proxy sur un règlement
-     * sans ligne levait {@code ObjectNotFoundException} — <strong>130 règlements sur 3 243</strong>
-     * (4 %) sont dans ce cas sur les données réelles. Aucun test ne l'avait vu, la liste étant
-     * restreinte aux règlements affectés ; la fiche, elle, ne l'est pas. Ne pas affaiblir ce cas.
+     * Un règlement sans aucune ligne de vente n'est pas dans la liste : sa fiche répond 404, comme un
+     * id inconnu (FEATURE-encaissements-offres-lot1.md D2) — et non un 500 sur le proxy des affectations.
      */
     @Test
-    void reglementNonAffecte_rendUnTableauVide() throws Exception {
+    void reglementSansLigneDeVente_rend404() throws Exception {
         StlSettlement reglement = newReglement("REF-AFF-D", new BigDecimal("2500.00"));
         relireDepuisLaBase();
 
         mockMvc.perform(get("/api/encaissements/" + reglement.getId()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.affectations").isArray())
-                .andExpect(jsonPath("$.affectations.length()").value(0))
-                // Rien n'est affecté, donc tout reste.
-                .andExpect(jsonPath("$.montantBrutRestant").value(2500.00));
+                .andExpect(status().isNotFound());
     }
 
     // ------------------------------------------------------------------
@@ -270,6 +258,8 @@ class EncaissementFicheAffectationsTest {
         reglement.setDescription("Libellé hors sélection par défaut");
         reglement.setUserCreate("s.amrani");
         settlementRepository.save(reglement);
+        affecter(reglement, newEcheance(newDossier("E"), "ECH-AFF-E1", new BigDecimal("100.00"),
+                newCategorie("AVANCE-AFF-E")), new BigDecimal("100.00"));
         relireDepuisLaBase();
 
         // Sans ?colonnes= : les champs hors défaut sortent quand même.
