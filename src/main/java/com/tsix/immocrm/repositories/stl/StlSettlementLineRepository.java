@@ -88,6 +88,27 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     List<StlSettlementLine> findBySettlementIdAndDossierId(UUID settlementId, UUID dossierId);
 
     /**
+     * Lignes du dossier groupables par règlement, déjà dans l'ordre de la liste des règlements du dossier
+     * (saisie la plus récente d'abord), puis échéance la plus ancienne d'abord. Une seule requête, sans N+1.
+     */
+    @Query("SELECT l FROM StlSettlementLine l "
+            + "JOIN FETCH l.stlSettlement st "
+            + "LEFT JOIN FETCH st.stlSettlementType "
+            + "LEFT JOIN FETCH st.cfgBank "
+            + "LEFT JOIN FETCH st.tier "
+            + "LEFT JOIN FETCH st.tierPayer "
+            + "JOIN FETCH l.comDocument d "
+            + "LEFT JOIN FETCH d.comSettlementCategory "
+            + "WHERE d.comFolder.id = :dossierId "
+            + "ORDER BY st.docDate DESC, st.userCreateDateTime DESC, st.id ASC, d.docDate ASC")
+    List<StlSettlementLine> findReglementsDuDossier(UUID dossierId);
+
+    /** Échéances déjà réglées par ce règlement, tous dossiers confondus. */
+    @Query("SELECT l.comDocument.id FROM StlSettlementLine l WHERE l.stlSettlement.id = :settlementId "
+            + "AND l.comDocument IS NOT NULL")
+    List<UUID> findEcheanceIdsBySettlementId(UUID settlementId);
+
+    /**
      * Montant croissant, l'ordre de l'écran légataire (trace d'audit). {@code LEFT JOIN FETCH} : une
      * ligne sans échéance ou sans dossier doit apparaître incomplète, pas disparaître.
      */
