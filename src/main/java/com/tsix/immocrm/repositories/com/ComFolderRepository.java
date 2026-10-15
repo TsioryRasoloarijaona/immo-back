@@ -91,6 +91,9 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
     @Query("SELECT f.id, f.code FROM ComFolder f WHERE f.stlQuoteId = :offreId ORDER BY f.code ASC")
     List<Object[]> dossiersDeLOffre(@Param("offreId") UUID offreId);
 
+    /** {@code Prospection.cs:VerifComFolderIsCreated} : tout dossier de vente, sorti compris. */
+    boolean existsByComProspectionId(UUID prospectionId);
+
     /** Codes des dossiers de location créés depuis l'offre ({@code RntFolder.StlQuoteId}, FK sans cascade). */
     @Query(value = "SELECT ISNULL(r.Code, '') FROM RntFolder r WHERE r.StlQuoteId = :offreId ORDER BY r.Code ASC",
             nativeQuery = true)

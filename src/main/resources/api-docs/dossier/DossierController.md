@@ -64,8 +64,22 @@ d'une Offre (prix commercial de l'article, taux de TVA) — sauf que le total du
 l'appelant renvoie **403** (et non 404 : ici c'est l'appelant qui a nommé l'article, il n'y a rien à
 cacher). Le projet est déduit du premier article via sa tranche.
 
-**Offre d'origine** : `offreId` (optionnel) est écrit dans `ComFolder.StlQuoteId`, comme OMRAN. Une
-offre introuvable ou d'une autre prospection renvoie **400**, sans écriture.
+**Offre d'origine** : `offreId` (optionnel) est écrit dans `ComFolder.StlQuoteId`, comme OMRAN
+(`GenerateComFolderFromQuote`). Avant toute écriture, l'offre est contrôlée comme dans le logiciel de
+bureau : introuvable ou d'une autre prospection, sans article, article ou sous-article de l'offre déjà
+lié à un dossier, vocation de l'article différente de celle de l'offre → **400** ; projet de l'article
+de l'offre hors périmètre → **403** ; offre déjà transformée en dossier, ou prospection qui a déjà un
+dossier de vente → **409**. Avec une offre, le dossier reprend :
+- son **échéancier** : une échéance par ligne du schéma saisi sur l'offre (`StlQuoteDocument` :
+  catégorie, montant, date, société, ratio de remise), à la place du schéma calculé ; sans schéma
+  saisi, le schéma calculé habituel. La requête ne porte pas de schéma : celui de l'offre s'applique
+  tel quel, même si `prix` a changé ;
+- le **prix des sous-articles** figurant dans l'offre (`StlQuoteItem` : avant remise HT/TTC, remise,
+  après remise, TVA), au lieu du prix catalogue du jour ;
+- son **taux de commission** (`CommissionRate`), que la requête ne porte pas.
+
+Le prix, la remise, les notes et le mode de paiement restent ceux de la requête (le formulaire les
+préremplit depuis l'offre).
 
 **Remise commerciale** — deux modes, selon `remisePercent` :
 - `remisePercent` **fourni** (écran de création où le commercial saisit la remise) : `prix` est le
@@ -112,7 +126,16 @@ statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
 de paiement introuvable, prospection sans prospect lié, article déjà occupé, `remisePercent` hors
-de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
+de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes. Avec `offreId`, les
+messages du logiciel de bureau : « Vous n'avez pas sélectionné un article ! », « Cet article n'est pas
+disponible en stock ! », « Le sous article <code> n'est pas libre ! », « Cet article n'a pas la
+vocation correspondante ! ».
+
+### reponse 409
+
+Avec `offreId` seulement. L'offre a déjà donné un dossier de vente : le `detail` nomme son code et
+son id, et la propriété `dossierExistant` (`{id, code, location}`) permet de l'ouvrir. Ou la
+prospection a déjà un dossier de vente : « Un dossier de vente est déjà généré sur cette prospection ! ».
 
 ### reponse 500
 

@@ -21,7 +21,7 @@ public record CreerDossierRequest(
         String notes,
         UUID modePaieId,
         String cin,
-        @Schema(description = "Offre d'origine (StlQuote) : optionnelle, doit appartenir à la même prospection, sinon 400.")
+        @Schema(description = "Offre d'origine (StlQuote), optionnelle : contrôles et reprises décrits sur POST /api/dossiers.")
         UUID offreId
 ) {
 }

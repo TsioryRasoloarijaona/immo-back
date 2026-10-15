@@ -35,6 +35,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.stl.StlQuoteDocument;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -48,6 +49,7 @@ import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
+import com.tsix.immocrm.services.dossier.OffreOrigineDossier.OffreRetenue;
 import com.tsix.immocrm.services.dossier.liste.FiltresListeDossiers;
 import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
 import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
@@ -221,7 +223,8 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
-        UUID offreId = offreOrigine.verifier(request.offreId(), prospection);
+        Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection);
+        PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
 
         List<StkItem> articles = new ArrayList<>();
         for (UUID articleId : request.articleIds()) {
@@ -259,26 +262,25 @@ public class DossierService {
         folder.setCfgCustomer(client);
         folder.setCfgCommercial(prospection.getCfgCommercial());
         folder.setComProspection(prospection);
-        folder.setStlQuoteId(offreId);
+        folder.setStlQuoteId(offre.map(o -> o.offre().getId()).orElse(null));
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
         folder.setStrStatus(statutInitial);
 
         CfgTranche tranche = principal.getStkHierarchy();
-        appliquerMontantsCreation(folder, principal, annexes, tranche, request);
+        appliquerMontantsCreation(folder, principal, new AnnexesPrix(annexes, prixAnnexes), tranche, request);
         creationOmran.completer(folder, principal, annexes, client);
+        // Le formulaire ne saisit pas la commission : celle de l'offre, comme GenerateComFolderFromQuote.
+        offre.map(o -> o.offre().getCommissionRate()).ifPresent(folder::setCommissionRate);
 
         folder = folderRepository.save(folder);
-        creationOmran.rattacherAnnexes(folder, principal, annexes);
+        creationOmran.rattacherAnnexes(folder, principal, annexes, prixAnnexes);
         creationOmran.historiserCreation(folder, principal);
         principal.setComFolderId(folder.getId());
         stkItemRepository.save(principal);
 
-        // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
-        // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû. Sans prix saisi, pas de schéma.
-        List<ComDocument> echeancier = request.prix() != null
-                ? genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount())
-                : List.of();
+        List<ComDocument> echeancier = echeancierInitial(folder, tranche, request.prix(),
+                offre.map(OffreRetenue::schema).orElse(List.of()));
         creationOmran.completerAvecEcheancier(folder, echeancier);
         folder = folderRepository.save(folder);
         synchroniserTypeTiers(folder);
@@ -310,12 +312,12 @@ public class DossierService {
      * Montants toujours écrits, comme OMRAN : sans {@code prix} saisi, le prix de référence des articles
      * (0 s'ils n'en ont pas), sans frais de syndic puisqu'aucun schéma n'est généré.
      */
-    private void appliquerMontantsCreation(ComFolder folder, StkItem principal, List<StkItem> annexes,
+    private void appliquerMontantsCreation(ComFolder folder, StkItem principal, AnnexesPrix annexes,
                                            CfgTranche tranche, CreerDossierRequest request) {
         PrixArticle.PrixDeReference prixLot = prixDuLotSeul(principal);
         if (request.prix() == null) {
-            BigDecimal prixReference = annexes.stream()
-                    .map(PrixArticle::ttcOuZero)
+            BigDecimal prixReference = annexes.articles().stream()
+                    .map(annexes.prix()::ttc)
                     .reduce(prixLot != null ? prixLot.ttc() : BigDecimal.ZERO, BigDecimal::add);
             appliquerMontants(folder, principal, prixLot, annexes, prixReference, request.remisePercent(), BigDecimal.ZERO);
             return;
@@ -347,15 +349,26 @@ public class DossierService {
     static void appliquerMontants(ComFolder folder, StkItem principal, PrixArticle.PrixDeReference prixLot,
                                   List<StkItem> annexes, BigDecimal prixNegocie, BigDecimal remisePercent,
                                   BigDecimal fraisSyndic) {
+        appliquerMontants(folder, principal, prixLot, new AnnexesPrix(annexes, PrixSousArticles.CATALOGUE),
+                prixNegocie, remisePercent, fraisSyndic);
+    }
+
+    /** Sous-articles du dossier et la source de leurs prix (offre d'origine ou catalogue). */
+    record AnnexesPrix(List<StkItem> articles, PrixSousArticles prix) {
+    }
+
+    static void appliquerMontants(ComFolder folder, StkItem principal, PrixArticle.PrixDeReference prixLot,
+                                  AnnexesPrix annexes, BigDecimal prixNegocie, BigDecimal remisePercent,
+                                  BigDecimal fraisSyndic) {
         boolean remiseExplicite = remisePercent != null;
         BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
 
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
-        for (StkItem annexe : annexes) {
-            BigDecimal prixAnnexe = PrixArticle.ttcOuZero(annexe);
+        for (StkItem annexe : annexes.articles()) {
+            BigDecimal prixAnnexe = annexes.prix().ttc(annexe);
             // HT du sous-article à son propre taux (un jardin est souvent à 0 %), comme son SalePriceHT chez OMRAN.
-            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, annexe.getVat() != null ? annexe.getVat() : vatRatio);
+            BigDecimal prixAnnexeHT = annexes.prix().ht(annexe, vatRatio);
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
@@ -462,6 +475,29 @@ public class DossierService {
     }
 
     /**
+     * Le schéma saisi sur l'offre d'origine ({@code StlQuoteDocument}) s'il y en a un, comme
+     * {@code GenerateComFolderFromQuote} ; sinon le schéma par défaut, et rien sans prix saisi.
+     */
+    private List<ComDocument> echeancierInitial(ComFolder folder, CfgTranche tranche, BigDecimal prixSaisi,
+                                                List<StlQuoteDocument> schemaOffre) {
+        if (!schemaOffre.isEmpty()) {
+            return schemaOffre.stream()
+                    .map(ligne -> {
+                        ComDocument document = nouvelleEcheance(folder, ligne.getComSettlementCategory(),
+                                ligne.getAmount(), ligne.getDocDate(), ligne.getDiscountRatio());
+                        if (ligne.getCfgCompany() != null) {
+                            document.setCfgCompany(ligne.getCfgCompany());
+                        }
+                        return documentRepository.save(document);
+                    })
+                    .toList();
+        }
+        // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
+        // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû.
+        return prixSaisi != null ? genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount()) : List.of();
+    }
+
+    /**
      * Une échéance {@code ComDocument} par ligne ; catégorie cherchée par {@code Code} dans la
      * vocation du dossier, ligne ignorée si elle n'y existe pas (la création n'est jamais bloquée).
      */
@@ -470,21 +506,29 @@ public class DossierService {
         List<ComDocument> lignes = new ArrayList<>();
         for (SchemaFinancementCalculator.Ligne ligne : SchemaFinancementCalculator.calculer(tranche, prix)) {
             settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
-                    .ifPresent(categorie -> {
-                        ComDocument document = new ComDocument();
-                        document.setId(UUID.randomUUID());
-                        document.setComFolder(folder);
-                        document.setDocDate(folder.getDocDate());
-                        ligneOmran.signerCreation(document);
-                        document.setAmount(ligne.montant());
-                        document.setComSettlementCategory(categorie);
-                        document.setExcludeFromPrice(categorie.getExcludeFromPrice());
-                        document.setDescription(categorie.getDescription());
-                        ligneOmran.completer(document, folder);
-                        lignes.add(documentRepository.save(document));
-                    });
+                    .ifPresent(categorie -> lignes.add(documentRepository.save(
+                            nouvelleEcheance(folder, categorie, ligne.montant(), null, null))));
         }
         return lignes;
+    }
+
+    /** Seule construction d'une échéance initiale ; date absente = date du dossier, remise absente = défaut OMRAN. */
+    private ComDocument nouvelleEcheance(ComFolder folder, ComSettlementCategory categorie, BigDecimal montant,
+                                         LocalDateTime date, BigDecimal ratioRemise) {
+        ComDocument document = new ComDocument();
+        document.setId(UUID.randomUUID());
+        document.setComFolder(folder);
+        document.setDocDate(date != null ? date : folder.getDocDate());
+        ligneOmran.signerCreation(document);
+        document.setAmount(montant);
+        document.setComSettlementCategory(categorie);
+        document.setDiscountRatio(ratioRemise);
+        if (categorie != null) {
+            document.setExcludeFromPrice(categorie.getExcludeFromPrice());
+            document.setDescription(categorie.getDescription());
+        }
+        ligneOmran.completer(document, folder);
+        return document;
     }
 
     /**

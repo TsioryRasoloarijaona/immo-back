@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.stl;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,9 +15,10 @@ import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Ligne du schéma de financement saisie sur une offre dans OMRAN ; Arpent la lit et la supprime, sans en créer. */
+/** Ligne du schéma de financement saisie sur une offre dans OMRAN ; Arpent la lit, la recopie en échéance du dossier et la supprime, sans en créer. */
 @Getter
 @Setter
 @Entity
@@ -46,4 +48,14 @@ public class StlQuoteDocument {
 
     @Column(name = "Amount", precision = 26, scale = 6)
     private BigDecimal amount;
+
+    @Column(name = "DocDate")
+    private LocalDateTime docDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
+
+    @Column(name = "DiscountRatio", precision = 26, scale = 6)
+    private BigDecimal discountRatio;
 }

@@ -199,6 +199,7 @@ public class DossierController {
             @ApiResponse(responseCode = "400"),
             @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
                     + "le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409"),
             @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<DossierDetailDto> create(@RequestBody CreerDossierRequest request) {

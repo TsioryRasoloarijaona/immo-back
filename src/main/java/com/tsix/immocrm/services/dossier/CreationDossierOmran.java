@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stl.StlQuoteItem;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConfigurationManquanteException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
@@ -133,9 +134,11 @@ public class CreationDossierOmran {
      * Sous-articles du dossier, après son enregistrement : une ligne {@code ComFolderItem} chacun
      * ({@code UnderItem(selectedItem, sale)}), l'article rattaché au lot et une ligne « AFFECTATION ».
      */
-    public void rattacherAnnexes(ComFolder folder, StkItem principal, List<StkItem> annexes) {
+    public void rattacherAnnexes(ComFolder folder, StkItem principal, List<StkItem> annexes, PrixSousArticles prix) {
         for (StkItem annexe : annexes) {
-            folderItemRepository.save(ligneSousArticle(folder, principal, annexe));
+            ComFolderItem ligne = ligneSousArticle(folder, principal, annexe);
+            prix.ligne(annexe).ifPresent(ligneOffre -> prixDeLOffre(ligne, ligneOffre));
+            folderItemRepository.save(ligne);
             annexe.setComFolderId(folder.getId());
             annexe.setParent(principal);
             annexe.setIsUnderItem(true);
@@ -176,6 +179,16 @@ public class CreationDossierOmran {
         ligne.setUserUpdate(folder.getUserCreate());
         ligne.setUserUpdateDateTime(folder.getUserCreateDateTime());
         return ligne;
+    }
+
+    /** Prix figés de l'offre d'origine, colonne pour colonne comme {@code GenerateComFolderFromQuote} ({@code Quote.cs}). */
+    private static void prixDeLOffre(ComFolderItem ligne, StlQuoteItem ligneOffre) {
+        ligne.setVATRatio(requireNonNullElse(ligneOffre.getVatRatio(), ligne.getVATRatio()));
+        ligne.setPriceBeforeDiscountHT(requireNonNullElse(ligneOffre.getPriceBeforeDiscountHT(), ligne.getPriceBeforeDiscountHT()));
+        ligne.setPriceBeforeDiscount(requireNonNullElse(ligneOffre.getPriceBeforeDiscount(), ligne.getPriceBeforeDiscount()));
+        ligne.setDiscount(requireNonNullElse(ligneOffre.getDiscount(), BigDecimal.ZERO));
+        ligne.setPriceHT(requireNonNullElse(ligneOffre.getPriceAfterDiscountHT(), ligne.getPriceBeforeDiscountHT()));
+        ligne.setPrice(requireNonNullElse(ligneOffre.getPriceAfterDiscount(), ligne.getPriceBeforeDiscount()));
     }
 
     /** Ligne de création au lot principal, puis {@code StrHistory} « Création » ({@code Sale.cs:3419}, {@code AfterInsert}). */
