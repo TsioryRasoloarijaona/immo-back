@@ -110,10 +110,12 @@ public class OffreOrigineDossier {
         if (offre.schema().isEmpty()) {
             return;
         }
-        BigDecimal ecart = SchemaFinancementSaisi.ecart(prixApresRemise, offre.schema());
+        // Prix absent = 0, comme SchemaFinancementSaisi.ecart.
+        BigDecimal prixDossier = prixApresRemise != null ? prixApresRemise : BigDecimal.ZERO;
+        BigDecimal ecart = SchemaFinancementSaisi.ecart(prixDossier, offre.schema());
         if (ecart.signum() != 0) {
             BigDecimal finance = SchemaFinancementSaisi.montantFinance(offre.schema()).setScale(2, RoundingMode.HALF_EVEN);
-            BigDecimal prix = prixApresRemise.setScale(2, RoundingMode.HALF_EVEN);
+            BigDecimal prix = prixDossier.setScale(2, RoundingMode.HALF_EVEN);
             throw new InvalidRequestException("L'échéancier repris de l'offre " + offre.offre().getCode() + " ("
                     + finance.toPlainString() + " DH) ne correspond plus au prix du dossier (" + prix.toPlainString()
                     + " DH) : gardez le prix de l'offre ou créez le dossier sans l'offre");
