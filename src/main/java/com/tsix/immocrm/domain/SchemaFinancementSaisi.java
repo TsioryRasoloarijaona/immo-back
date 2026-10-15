@@ -31,8 +31,9 @@ public final class SchemaFinancementSaisi {
 
     /** Prix après remise − montant financé, à 2 décimales : 0 si le schéma concorde. */
     public static BigDecimal ecart(BigDecimal prixApresRemise, List<StlQuoteDocument> lignes) {
-        return (prixApresRemise != null ? prixApresRemise : BigDecimal.ZERO).subtract(montantFinance(lignes))
-                .setScale(DECIMALES_DEVISE, RoundingMode.HALF_EVEN);
+        BigDecimal prix = Objects.requireNonNullElse(prixApresRemise, BigDecimal.ZERO);
+        BigDecimal finance = Objects.requireNonNullElse(montantFinance(lignes), BigDecimal.ZERO);
+        return prix.subtract(finance).setScale(DECIMALES_DEVISE, RoundingMode.HALF_EVEN);
     }
 
     private static boolean financeLePrix(ComSettlementCategory categorie) {

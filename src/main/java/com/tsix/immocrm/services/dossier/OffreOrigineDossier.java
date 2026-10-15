@@ -111,7 +111,7 @@ public class OffreOrigineDossier {
             return;
         }
         // Prix absent = 0, comme SchemaFinancementSaisi.ecart.
-        BigDecimal prixDossier = prixApresRemise != null ? prixApresRemise : BigDecimal.ZERO;
+        BigDecimal prixDossier = Objects.requireNonNullElse(prixApresRemise, BigDecimal.ZERO);
         BigDecimal ecart = SchemaFinancementSaisi.ecart(prixDossier, offre.schema());
         if (ecart.signum() != 0) {
             BigDecimal finance = SchemaFinancementSaisi.montantFinance(offre.schema()).setScale(2, RoundingMode.HALF_EVEN);
