@@ -378,6 +378,56 @@ class DossierDepuisOffreTest {
         refuse(q, status().isConflict(), "Un dossier de vente est déjà généré sur cette prospection !");
     }
 
+    /**
+     * Revue : GenerateComFolderFromQuote pose toujours l'article de l'offre. Un autre article dans articleIds
+     * donnait un dossier sur cet article, avec l'échéancier et la commission de l'offre (calés sur un autre prix),
+     * et les contrôles 2 à 4 portaient sur l'article de l'offre, pas sur celui vendu.
+     */
+    @Test
+    void articleDuFormulaireAutreQueCeluiDeLOffre_400SansEcriture() throws Exception {
+        StlQuote q = offre(lot, vocation);
+        ligneSchema(q, avance, "300000", LocalDateTime.of(2026, 11, 2, 0, 0));
+        StkItem autre = article("LOT-AUTRE-OFF", "500000", null);
+        entityManager.flush();
+        long dossiers = folderRepository.count();
+        long echeances = documentRepository.count();
+        String body = "{\"prospectionId\":\"%s\",\"articleIds\":[\"%s\"],\"modePaieId\":\"%s\",\"cin\":\"CIN-OFF\",\"prix\":500000,\"offreId\":\"%s\"}"
+                .formatted(prospection.getId(), autre.getId(), modePaie.getId(), q.getId());
+
+        mockMvc.perform(post(DOSSIERS).with(connecte(agent)).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+
+        entityManager.flush();
+        entityManager.clear();
+        assertAll(
+                () -> assertThat(folderRepository.count()).as("dossiers").isEqualTo(dossiers),
+                () -> assertThat(documentRepository.count()).as("échéances").isEqualTo(echeances),
+                () -> assertThat(itemRepository.findById(autre.getId()).orElseThrow().getComFolderId())
+                        .as("occupation de l'autre article").isNull());
+    }
+
+    /** Revue : GenerateComFolderFromQuote pose {@code CfgCommercialId} = celui de l'offre (spec, « Reprise »). */
+    @Test
+    void commercialDeLOffre_reprisSurLeDossier() throws Exception {
+        CfgTier commercialProspection = new CfgTier();
+        commercialProspection.setId(UUID.randomUUID());
+        commercialProspection.setCode("COM-PSN-OFF-DOS");
+        commercialProspection = tierRepository.save(commercialProspection);
+        CfgTier commercialOffre = new CfgTier();
+        commercialOffre.setId(UUID.randomUUID());
+        commercialOffre.setCode("COM-OFR-OFF-DOS");
+        commercialOffre = tierRepository.save(commercialOffre);
+        prospection.setCfgCommercial(commercialProspection);
+        prospection = prospectionRepository.save(prospection);
+        StlQuote q = offre(lot, vocation);
+        q.setCfgCommercial(commercialOffre);
+        quoteRepository.save(q);
+
+        ComFolder f = creer(q);
+
+        assertThat(f.getCfgCommercial()).isNotNull().extracting(CfgTier::getId).isEqualTo(commercialOffre.getId());
+    }
+
     @Test
     void offreDejaTransformee_409AvecLeDossierSansEcriture() throws Exception {
         StlQuote q = offre(lot, vocation);

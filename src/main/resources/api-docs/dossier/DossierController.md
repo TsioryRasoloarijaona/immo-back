@@ -66,7 +66,8 @@ cacher). Le projet est déduit du premier article via sa tranche.
 
 **Offre d'origine** : `offreId` (optionnel) est écrit dans `ComFolder.StlQuoteId`, comme OMRAN
 (`GenerateComFolderFromQuote`). Avant toute écriture, l'offre est contrôlée comme dans le logiciel de
-bureau : introuvable ou d'une autre prospection, sans article, article ou sous-article de l'offre déjà
+bureau : introuvable ou d'une autre prospection, sans article, premier article de `articleIds` autre que
+celui de l'offre, article ou sous-article de l'offre déjà
 lié à un dossier, vocation de l'article différente de celle de l'offre → **400** ; projet de l'article
 de l'offre hors périmètre → **403** ; offre déjà transformée en dossier, ou prospection qui a déjà un
 dossier de vente → **409**. Avec une offre, le dossier reprend :
@@ -76,7 +77,8 @@ dossier de vente → **409**. Avec une offre, le dossier reprend :
   tel quel, même si `prix` a changé ;
 - le **prix des sous-articles** figurant dans l'offre (`StlQuoteItem` : avant remise HT/TTC, remise,
   après remise, TVA), au lieu du prix catalogue du jour ;
-- son **taux de commission** (`CommissionRate`), que la requête ne porte pas.
+- son **taux de commission** (`CommissionRate`), que la requête ne porte pas ;
+- son **commercial** (`CfgCommercialId`), à défaut celui de la prospection.
 
 Le prix, la remise, les notes et le mode de paiement restent ceux de la requête (le formulaire les
 préremplit depuis l'offre).

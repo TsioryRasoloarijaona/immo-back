@@ -223,7 +223,8 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
-        Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection);
+        Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
+                request.articleIds().get(0));
         PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
 
         List<StkItem> articles = new ArrayList<>();
@@ -260,7 +261,8 @@ public class DossierService {
         folder.setStkItem(principal);
         folder.setStkVocation(principal.getStkVocation());
         folder.setCfgCustomer(client);
-        folder.setCfgCommercial(prospection.getCfgCommercial());
+        // Depuis une offre, son commercial (Quote.cs:2394), à défaut celui de la prospection.
+        folder.setCfgCommercial(offre.map(o -> o.offre().getCfgCommercial()).orElse(prospection.getCfgCommercial()));
         folder.setComProspection(prospection);
         folder.setStlQuoteId(offre.map(o -> o.offre().getId()).orElse(null));
         folder.setNotes(request.notes());

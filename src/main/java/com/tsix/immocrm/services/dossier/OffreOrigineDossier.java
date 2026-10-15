@@ -59,10 +59,11 @@ public class OffreOrigineDossier {
     }
 
     /**
-     * Vide sans offre. 400 : offre inconnue, d'une autre prospection, ou contrôles 1 à 4 d'OMRAN ; 403 : article hors
+     * Vide sans offre. 400 : offre inconnue, d'une autre prospection, premier article autre que celui de l'offre, ou
+     * contrôles 1 à 4 d'OMRAN ; 403 : article hors
      * périmètre ; 409 : offre déjà transformée (avant les contrôles : son article est forcément occupé) ou contrôle 5.
      */
-    public Optional<OffreRetenue> verifier(UUID offreId, ComProspection prospection) {
+    public Optional<OffreRetenue> verifier(UUID offreId, ComProspection prospection, UUID articlePrincipalId) {
         if (offreId == null) {
             return Optional.empty();
         }
@@ -74,6 +75,11 @@ public class OffreOrigineDossier {
         StkItem article = offre.getStkItem();
         if (article == null) {
             throw new InvalidRequestException(SANS_ARTICLE);
+        }
+        // OMRAN crée toujours le dossier sur l'article de l'offre (val.stkItemId = stkItemId).
+        if (!article.getId().equals(articlePrincipalId)) {
+            throw new InvalidRequestException("Le dossier doit porter l'article de l'offre " + offre.getCode()
+                    + " (" + article.getCode() + ") en premier article");
         }
         // Avant le 409, qui nomme un dossier : hors périmètre, l'appelant n'en apprend rien.
         perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
