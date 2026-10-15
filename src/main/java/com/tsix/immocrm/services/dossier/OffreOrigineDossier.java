@@ -76,14 +76,14 @@ public class OffreOrigineDossier {
         if (article == null) {
             throw new InvalidRequestException(SANS_ARTICLE);
         }
+        // Avant tout message qui nomme l'article ou un dossier : hors périmètre, l'appelant n'en apprend rien.
+        perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
+                "Création de dossier depuis l'offre " + offre.getCode());
         // OMRAN crée toujours le dossier sur l'article de l'offre (val.stkItemId = stkItemId).
         if (!article.getId().equals(articlePrincipalId)) {
             throw new InvalidRequestException("Le dossier doit porter l'article de l'offre " + offre.getCode()
                     + " (" + article.getCode() + ") en premier article");
         }
-        // Avant le 409, qui nomme un dossier : hors périmètre, l'appelant n'en apprend rien.
-        perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
-                "Création de dossier depuis l'offre " + offre.getCode());
         dejaTransformee(offre);
 
         List<StlQuoteItem> sousArticles = quoteItemRepository.findByStlQuoteIdOrderByCodeAsc(offre.getId());

@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -21,6 +22,7 @@ import com.tsix.immocrm.entities.stl.StlQuoteDocument;
 import com.tsix.immocrm.entities.stl.StlQuoteItem;
 import com.tsix.immocrm.fixtures.FixtureReferentielStk;
 import com.tsix.immocrm.fixtures.FixtureStatutsDossier;
+import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
@@ -95,6 +97,7 @@ class DossierDepuisOffreTest {
     @Autowired private CfgTrancheRepository trancheRepository;
     @Autowired private CfgTierRepository tierRepository;
     @Autowired private AdmUserRepository userRepository;
+    @Autowired private AdmUserHabilitationRepository habilitationRepository;
     @Autowired private StlQuoteRepository quoteRepository;
     @Autowired private StlQuoteItemRepository quoteItemRepository;
     @Autowired private StlQuoteDocumentRepository quoteDocumentRepository;
@@ -404,6 +407,34 @@ class DossierDepuisOffreTest {
                 () -> assertThat(documentRepository.count()).as("échéances").isEqualTo(echeances),
                 () -> assertThat(itemRepository.findById(autre.getId()).orElseThrow().getComFolderId())
                         .as("occupation de l'autre article").isNull());
+    }
+
+    /**
+     * Revue 2 : hors périmètre, l'appelant ne doit rien apprendre de l'offre (OffreOrigineDossier, « avant le 409 »).
+     * Le contrôle « premier article » passe avant le périmètre et renvoie 400 avec le code de l'article de l'offre.
+     */
+    @Test
+    void horsPerimetreAvecUnAutreArticle_403SansReveleLArticleDeLOffre() throws Exception {
+        CfgProject projetAutorise = new CfgProject();
+        projetAutorise.setId(UUID.randomUUID());
+        projetAutorise.setCode("POD-AUTORISE");
+        projetAutorise.setCfgCompany(societe);
+        projetAutorise = projectRepository.save(projetAutorise);
+        AdmUserHabilitation habilitation = new AdmUserHabilitation();
+        habilitation.setId(UUID.randomUUID());
+        habilitation.setAdmUser(agent);
+        habilitation.setCfgProject(projetAutorise);
+        habilitationRepository.save(habilitation);
+        StlQuote q = offre(lot, vocation);
+        StkItem autre = article("LOT-AUTRE-PERIM", "500000", null);
+        entityManager.flush();
+        String body = "{\"prospectionId\":\"%s\",\"articleIds\":[\"%s\"],\"modePaieId\":\"%s\",\"cin\":\"CIN-OFF\",\"prix\":500000,\"offreId\":\"%s\"}"
+                .formatted(prospection.getId(), autre.getId(), modePaie.getId(), q.getId());
+
+        mockMvc.perform(post(DOSSIERS).with(connecte(agent)).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("LOT-OFF-DOS"))));
     }
 
     /** Revue : GenerateComFolderFromQuote pose {@code CfgCommercialId} = celui de l'offre (spec, « Reprise »). */
