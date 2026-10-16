@@ -266,11 +266,11 @@ public class DossierController {
     }
 
     @PatchMapping("/{id}/echeancier/{echeanceId}")
-    @Operation(summary = "Modifie une ligne d'échéancier",
-            description = "Champs absents inchangés ; HT, TVA et société recalculés, la ligne garde une catégorie.")
+    @Operation(summary = "Modifie une ligne d'échéancier")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Échéance modifiée."),
-            @ApiResponse(responseCode = "400", description = "Catégorie introuvable, ou ligne laissée sans catégorie."),
+            @ApiResponse(responseCode = "400", description = "Catégorie introuvable, ligne sans catégorie, ou ligne non soldée "
+                    + "datée avant le début des finalisations."),
             @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable.")
     })
     public EcheanceDto updateEcheance(@PathVariable UUID id, @PathVariable UUID echeanceId,

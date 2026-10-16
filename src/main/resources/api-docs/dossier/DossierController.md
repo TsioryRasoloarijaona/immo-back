@@ -243,6 +243,29 @@ calcul que le refus de `PATCH …/statut`). `date` = date du dernier règlement 
 auto-financement ou crédit. Aucune proposition (tous les champs nuls) sans transition automatique, avec
 deux ou plus, sans seuil paramétré pour la cible, ou seuil non atteint.
 
+## updateEcheance
+
+Mise à jour partielle d'une ligne d'échéancier, comme l'écran « Document » d'OMRAN : les champs absents (ou `null`)
+restent inchangés ; HT, TVA, société et date à minuit sont recalculés, la ligne garde toujours une catégorie.
+
+**Changement de catégorie** (`categorieId` différent de l'actuelle, `ComDocument.cs:SetDefaluts`) : le taux de TVA
+et « Exclure du prix » sont repris de la nouvelle catégorie, la remise ancien client est recalculée. Un
+`exclureDuPrix` envoyé dans la même requête prime sur celui de la catégorie. Le montant et la date ne sont **jamais**
+recalculés : ceux envoyés sont appliqués, sinon ceux de la ligne restent.
+
+**Numéro de quittance** (`decompte`) : attribué à l'insertion seulement ; une modification ne le change jamais, même
+quand la ligne passe à une catégorie de frais.
+
+**Report de l'écart** : si la catégorie de la ligne « met à jour le schéma de financement », l'écart prix après
+remise − (avance + crédit + autofinancement) est reporté sur le dernier autofinancement, sinon le dernier crédit
+(voir le tag de l'échéancier). Sinon rien n'est reporté et l'équilibre n'est pas forcé : `ecartSchema` de la réponse
+donne l'écart restant, à afficher tant qu'il est non nul.
+
+**Montant sous le déjà réglé** : accepté, comme OMRAN ; `reste` de la réponse est alors négatif.
+
+**Date** : une ligne d'une catégorie « basée sur la date des finalisations » ne peut pas être datée avant le début des
+finalisations de la tranche tant qu'elle n'est pas soldée (400) ; une ligne soldée peut l'être.
+
 ## addReglement
 
 Crée un `StlSettlement` + sa `StlSettlementLine` de rattachement à l'échéance `echeanceId`. Le
