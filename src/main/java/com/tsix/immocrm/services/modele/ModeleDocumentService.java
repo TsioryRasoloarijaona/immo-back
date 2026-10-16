@@ -19,6 +19,7 @@ import com.tsix.immocrm.repositories.app.AppModeleDocumentRepository;
 import com.tsix.immocrm.repositories.app.AppModeleDocumentVersionRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,18 +45,25 @@ public class ModeleDocumentService {
     private final LectureModeles lecture;
     private final CataloguesModeles catalogues;
     private final MiseEnPageModele miseEnPageModele;
+    private final ImagesModeleService images;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
+    /** Regroupe les composants du module lus par ce service (S107). */
+    @Component
+    public record Composants(LectureModeles lecture, CataloguesModeles catalogues, MiseEnPageModele miseEnPage,
+                             ImagesModeleService images) {
+    }
+
     public ModeleDocumentService(AppModeleDocumentRepository modeleRepository,
-                                 AppModeleDocumentVersionRepository versionRepository, LectureModeles lecture,
-                                 CataloguesModeles catalogues, MiseEnPageModele miseEnPageModele,
+                                 AppModeleDocumentVersionRepository versionRepository, Composants composants,
                                  UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.modeleRepository = modeleRepository;
         this.versionRepository = versionRepository;
-        this.lecture = lecture;
-        this.catalogues = catalogues;
-        this.miseEnPageModele = miseEnPageModele;
+        this.lecture = composants.lecture();
+        this.catalogues = composants.catalogues();
+        this.miseEnPageModele = composants.miseEnPage();
+        this.images = composants.images();
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
     }
@@ -182,7 +190,7 @@ public class ModeleDocumentService {
     /** Valide contenu et mise en page contre le catalogue de la catégorie ; renvoie le JSON à stocker. */
     private String miseEnPageValide(String categorie, String contenu, MiseEnPageDto miseEnPage) {
         MiseEnPageDto normalisee = miseEnPageModele.normaliser(miseEnPage);
-        ModelePrepare.preparer(catalogues.de(categorie).catalogue(), contenu, normalisee);
+        images.verifierConnues(ModelePrepare.preparer(catalogues.de(categorie).catalogue(), contenu, normalisee).images());
         return miseEnPageModele.ecrire(normalisee);
     }
 

@@ -72,3 +72,31 @@ BEGIN
     PRINT '017: table AppModeleDocumentVersion deja presente, rien a faire.';
 END
 GO
+
+-- Images des modeles : octets dans S3, la ligne garde la cle. Immuables, jamais supprimees (FEATURE §13).
+IF OBJECT_ID('dbo.AppModeleImage', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.AppModeleImage
+    (
+        PKey        uniqueidentifier NOT NULL,
+        StorageKey  nvarchar(512)    NOT NULL,
+        ContentType nvarchar(100)    NOT NULL,
+        SizeBytes   bigint           NOT NULL,
+        Sha256      char(64)         NOT NULL,
+        CreeLe      datetime2(7)     NOT NULL,
+        CreePar     nvarchar(255)    NOT NULL,
+
+        CONSTRAINT PK_AppModeleImage
+            PRIMARY KEY CLUSTERED (PKey),
+
+        CONSTRAINT UQ_AppModeleImage_StorageKey
+            UNIQUE (StorageKey)
+    );
+
+    PRINT '017: table AppModeleImage creee.';
+END
+ELSE
+BEGIN
+    PRINT '017: table AppModeleImage deja presente, rien a faire.';
+END
+GO

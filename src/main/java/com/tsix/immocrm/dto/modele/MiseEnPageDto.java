@@ -2,7 +2,7 @@ package com.tsix.immocrm.dto.modele;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Mise en page d'un modèle, en JSON ; images de l'en-tête et du pied comptées avec celles du contenu.")
+@Schema(description = "Mise en page d'un modèle, en JSON ; texte de l'en-tête et du pied compté avec le contenu (1 Mo).")
 public record MiseEnPageDto(
         @Schema(description = "Format du papier ; seul `A4` est accepté. Absent = A4.", example = "A4")
         String format,

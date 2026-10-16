@@ -6,11 +6,12 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Attribute;
 import org.jsoup.nodes.Element;
 
-import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static java.util.Map.entry;
 
@@ -27,9 +28,8 @@ public final class ContenuModele {
     static final String NUMERO = "data-numero";
     static final String SAUT_PAGE = "data-saut-page";
 
-    static final int IMAGE_MAX_OCTETS = 500 * 1024;
-    static final int IMAGES_VERSION_MAX_OCTETS = 2 * 1024 * 1024;
-    private static final int CONTENU_MAX_CARACTERES = 4 * 1024 * 1024;
+    static final String IMAGE = "data-image";
+    static final int TEXTE_VERSION_MAX_CARACTERES = 1024 * 1024;
 
     private static final String STYLE = "style";
     private static final String COLSPAN = "colspan";
@@ -48,35 +48,30 @@ public final class ContenuModele {
             entry("tr", Set.of(REPETER)),
             entry("td", CELLULE),
             entry("th", CELLULE),
-            entry("img", Set.of("src", "alt")),
+            entry("img", Set.of(IMAGE, "alt")),
             entry("ol", Set.of(START)),
             entry("ul", Set.of()), entry("strong", Set.of()), entry("em", Set.of()), entry("u", Set.of()),
             entry("br", Set.of()), entry("hr", Set.of()), entry("table", Set.of()), entry("thead", Set.of()),
             entry("tbody", Set.of()));
     private static final Set<String> CELLULES = Set.of("td", "th");
     private static final Set<String> ALIGNEMENTS = Set.of("left", "center", "right", "justify");
-    private static final Map<String, byte[]> IMAGES = Map.of(
-            "data:image/png;base64,", new byte[]{(byte) 0x89, 'P', 'N', 'G'},
-            "data:image/jpeg;base64,", new byte[]{(byte) 0xFF, (byte) 0xD8});
 
     private final DescriptionChamps catalogue;
-    private long octetsImages;
+    private final Set<UUID> images = new LinkedHashSet<>();
 
     private ContenuModele(DescriptionChamps catalogue) {
         this.catalogue = catalogue;
     }
 
-    /** Résultat : le corps analysé (à cloner avant de le modifier) et le poids de ses images. */
-    public record Analyse(Element corps, long octetsImages) {
+    /** Résultat : le corps analysé (à cloner avant de le modifier) et les images qu'il cite. */
+    public record Analyse(Element corps, Set<UUID> images) {
     }
 
     public static Analyse analyser(String html, DescriptionChamps catalogue) {
         if (html == null) {
             throw new InvalidRequestException("Contenu absent.");
         }
-        if (html.length() > CONTENU_MAX_CARACTERES) {
-            throw new InvalidRequestException("Contenu trop volumineux (4 Mo de texte maximum).");
-        }
+        verifierTailleTexte(html.length());
         Element corps = Jsoup.parseBodyFragment(html).body();
         // Un <body> ou <html> dans le fragment fusionne ses attributs dans ces éléments, jamais parcourus ensuite.
         Element racine = corps.parent();
@@ -85,14 +80,14 @@ public final class ContenuModele {
         }
         ContenuModele verification = new ContenuModele(catalogue);
         corps.children().forEach(enfant -> verification.verifier(enfant, null));
-        return new Analyse(corps, verification.octetsImages);
+        return new Analyse(corps, Set.copyOf(verification.images));
     }
 
-    /** Poids cumulé des images d'une version (contenu, en-tête, pied) : 2 Mo au plus. */
-    public static void verifierPoidsVersion(long octets) {
-        if (octets > IMAGES_VERSION_MAX_OCTETS) {
-            throw new InvalidRequestException("Images trop lourdes pour un modèle : %d Ko (2 Mo maximum)."
-                    .formatted(octets / 1024));
+    /** Texte d'une version (contenu, en-tête et pied ensemble) : 1 Mo au plus ; les images sont dans S3. */
+    public static void verifierTailleTexte(long caracteres) {
+        if (caracteres > TEXTE_VERSION_MAX_CARACTERES) {
+            throw new InvalidRequestException("Modèle trop volumineux : %d Ko de texte (1 Mo maximum)."
+                    .formatted(caracteres / 1024));
         }
     }
 
@@ -108,6 +103,9 @@ public final class ContenuModele {
             }
             verifierValeur(balise, attribut);
         }
+        if ("img".equals(balise)) {
+            verifierImage(element);
+        }
         String listeEnfants = verifierRepetition(element, liste);
         verifierChamp(element, listeEnfants);
         verifierCondition(element, listeEnfants);
@@ -120,12 +118,11 @@ public final class ContenuModele {
             case STYLE -> verifierStyle(balise, valeur);
             case COLSPAN, ROWSPAN, START -> exiger(entierCourt(valeur),
                     "Valeur invalide pour %s sur <%s> : %s".formatted(attribut.getKey(), balise, valeur));
-            case "src" -> octetsImages += verifierImage(valeur);
             case NUMERO, SAUT_PAGE -> exiger(valeur.isEmpty(), "%s ne prend pas de valeur.".formatted(attribut.getKey()));
             case VALEUR -> exiger("true".equals(valeur) || "false".equals(valeur),
                     "data-valeur vaut true ou false (reçu : %s).".formatted(valeur));
             default -> {
-                // alt, data-champ, data-si, data-repeter : vérifiés ailleurs ou texte libre échappé à la sortie.
+                // alt, data-champ, data-si, data-repeter, data-image : vérifiés ailleurs ou texte libre échappé à la sortie.
             }
         }
     }
@@ -155,33 +152,16 @@ public final class ContenuModele {
         }
     }
 
-    private static long verifierImage(String src) {
-        String source = src.trim();
-        for (Map.Entry<String, byte[]> type : IMAGES.entrySet()) {
-            if (source.regionMatches(true, 0, type.getKey(), 0, type.getKey().length())) {
-                return decoder(source.substring(type.getKey().length()), type.getValue());
-            }
+    /** {@code data-image} = id d'une image déposée ; son existence est vérifiée par {@link ImagesModeleService}. */
+    private void verifierImage(Element element) {
+        if (!element.hasAttr(IMAGE)) {
+            throw new InvalidRequestException("Image sans data-image : déposez l'image puis citez son identifiant.");
         }
-        throw new InvalidRequestException(
-                "Image refusée : seules les images intégrées data:image/png ou data:image/jpeg (base64) sont acceptées.");
-    }
-
-    private static long decoder(String base64, byte[] signature) {
-        byte[] octets;
         try {
-            octets = Base64.getMimeDecoder().decode(base64);
+            images.add(UUID.fromString(element.attr(IMAGE)));
         } catch (IllegalArgumentException e) {
-            throw new InvalidRequestException("Image illisible : base64 invalide.");
+            throw new InvalidRequestException("Image invalide : %s".formatted(element.attr(IMAGE)));
         }
-        if (octets.length > IMAGE_MAX_OCTETS) {
-            throw new InvalidRequestException("Image trop lourde : %d Ko (500 Ko maximum).".formatted(octets.length / 1024));
-        }
-        for (int i = 0; i < signature.length; i++) {
-            if (octets.length <= i || octets[i] != signature[i]) {
-                throw new InvalidRequestException("Image illisible : le contenu ne correspond pas à son type.");
-            }
-        }
-        return octets.length;
     }
 
     private String verifierRepetition(Element element, String liste) {

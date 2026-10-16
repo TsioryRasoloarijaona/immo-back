@@ -25,13 +25,15 @@ public class GenerationModeleService {
     private final CataloguesModeles catalogues;
     private final MiseEnPageModele miseEnPageModele;
     private final RenduModele rendu;
+    private final ImagesModeleService images;
 
     public GenerationModeleService(LectureModeles lecture, CataloguesModeles catalogues,
-                                   MiseEnPageModele miseEnPageModele, RenduModele rendu) {
+                                   MiseEnPageModele miseEnPageModele, RenduModele rendu, ImagesModeleService images) {
         this.lecture = lecture;
         this.catalogues = catalogues;
         this.miseEnPageModele = miseEnPageModele;
         this.rendu = rendu;
+        this.images = images;
     }
 
     /** Document produit ; {@code nomFichier} sans extension. */
@@ -81,8 +83,10 @@ public class GenerationModeleService {
         CatalogueFiche catalogue = catalogues.de(modele.getCategorie());
         ModelePrepare prepare = ModelePrepare.preparer(catalogue.catalogue(), request.contenu(),
                 miseEnPageModele.normaliser(request.miseEnPage()));
+        images.verifierConnues(prepare.images());
         CatalogueFiche.FicheLue fiche = catalogue.lire(request.ficheId());
-        ModelePrepare rempli = prepare.remplir(catalogue.catalogue(), fiche.valeurs());
+        ModelePrepare rempli = prepare.remplir(catalogue.catalogue(), fiche.valeurs())
+                .avecImages(images.sourcesEnMemoire(prepare.images()));
         return rendu.pdf(rempli.corps(), rempli.enTete(), rempli.pied(), rempli.miseEnPage());
     }
 
@@ -93,7 +97,8 @@ public class GenerationModeleService {
         ModelePrepare prepare = ModelePrepare.preparer(catalogue.catalogue(), version.getContenu(),
                 miseEnPageModele.lire(version.getMiseEnPage()));
         CatalogueFiche.FicheLue fiche = catalogue.lire(ficheId);
-        ModelePrepare rempli = prepare.remplir(catalogue.catalogue(), fiche.valeurs());
+        ModelePrepare rempli = prepare.remplir(catalogue.catalogue(), fiche.valeurs())
+                .avecImages(images.sourcesEnMemoire(prepare.images()));
         byte[] contenu = format == FormatDocument.DOCX
                 ? rendu.docx(rempli.corps(), rempli.enTete(), rempli.pied(), rempli.miseEnPage())
                 : rendu.pdf(rempli.corps(), rempli.enTete(), rempli.pied(), rempli.miseEnPage());

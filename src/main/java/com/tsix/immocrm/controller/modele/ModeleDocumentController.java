@@ -10,13 +10,16 @@ import com.tsix.immocrm.dto.modele.ModeleDocumentResumeDto;
 import com.tsix.immocrm.dto.modele.ModifierModeleDocumentRequest;
 import com.tsix.immocrm.dto.modele.VersionModeleDto;
 import com.tsix.immocrm.services.modele.FormatDocument;
+import com.tsix.immocrm.dto.modele.ImageModeleDto;
 import com.tsix.immocrm.services.modele.GenerationModeleService;
+import com.tsix.immocrm.services.modele.ImagesModeleService;
 import com.tsix.immocrm.services.modele.ModeleDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,7 +34,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,10 +55,13 @@ public class ModeleDocumentController {
 
     private final ModeleDocumentService service;
     private final GenerationModeleService generation;
+    private final ImagesModeleService images;
 
-    public ModeleDocumentController(ModeleDocumentService service, GenerationModeleService generation) {
+    public ModeleDocumentController(ModeleDocumentService service, GenerationModeleService generation,
+                                    ImagesModeleService images) {
         this.service = service;
         this.generation = generation;
+        this.images = images;
     }
 
     @GetMapping("/categories")
@@ -186,6 +194,35 @@ public class ModeleDocumentController {
             @Parameter(description = ID_MODELE) @PathVariable UUID id,
             @RequestBody ApercuModeleRequest request) {
         return document(generation.apercu(id, request), FormatDocument.PDF, "apercu");
+    }
+
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Dépose une image (PNG ou JPEG) citable par `data-image`")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Image déposée dans le stockage."),
+            @ApiResponse(responseCode = "400", description = "Fichier vide, plus de 500 Ko, ou octets ni PNG ni JPEG."),
+            @ApiResponse(responseCode = "403", description = NON_ADMIN)
+    })
+    public ResponseEntity<ImageModeleDto> deposerImage(
+            @Parameter(description = "Image PNG ou JPEG, 500 Ko au plus.") @RequestParam("fichier") MultipartFile fichier) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(images.deposer(fichier));
+    }
+
+    @GetMapping("/images/{imageId}")
+    @Operation(summary = "Octets d'une image de modèle (pour l'éditeur)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Image, au type enregistré ; cache privé (une image ne change jamais)."),
+            @ApiResponse(responseCode = "404", description = "Aucune image avec cet id."),
+            @ApiResponse(responseCode = "500", description = "Image enregistrée mais absente du stockage.")
+    })
+    public ResponseEntity<byte[]> lireImage(
+            @Parameter(description = "Identifiant de l'image (AppModeleImage.PKey).") @PathVariable UUID imageId) {
+        ImagesModeleService.ImageLue image = images.lire(imageId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePrivate())
+                .body(image.octets());
     }
 
     @GetMapping("/{id}/generer")

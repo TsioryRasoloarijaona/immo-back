@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.util.Base64;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,14 +21,7 @@ class ContenuModeleTest {
                 .hasMessageContaining(message);
     }
 
-    private static String png(int octets) {
-        byte[] image = new byte[octets];
-        image[0] = (byte) 0x89;
-        image[1] = 'P';
-        image[2] = 'N';
-        image[3] = 'G';
-        return "data:image/png;base64," + Base64.getEncoder().encodeToString(image);
-    }
+    private static final UUID IMAGE = UUID.fromString("0b6f3c1e-2d4a-4e8b-9f10-6a7b8c9d0e1f");
 
     @Test
     void acteDeReservationLivre_estConformeALaListeBlanche() {
@@ -45,11 +38,11 @@ class ContenuModeleTest {
                 + "<tr data-repeter=\"echeancesSolde\"><td><span data-champ=\"echeance.montant\">Montant</span></td>"
                 + "<td style=\"text-align: right; width: 25.5%\">x</td></tr></tbody></table>"
                 + "<div data-saut-page></div><div data-si=\"article.estTerrain\" data-valeur=\"false\"><p>Bâti</p></div>"
-                + "<img src=\"" + png(10) + "\" alt=\"logo\">";
+                + "<img data-image=\"" + IMAGE + "\" alt=\"logo\">";
 
         ContenuModele.Analyse analyse = ContenuModele.analyser(html, CATALOGUE);
 
-        assertThat(analyse.octetsImages()).isEqualTo(10);
+        assertThat(analyse.images()).containsExactly(IMAGE);
     }
 
     @ParameterizedTest
@@ -84,33 +77,28 @@ class ContenuModeleTest {
 
     @Test
     void imageExterne_400() {
-        refuse("<img src=\"https://exemple.com/logo.png\">", "Image refusée");
+        refuse("<img src=\"https://exemple.com/logo.png\">", "Attribut interdit : src sur <img>");
     }
 
     @Test
-    void imageSvgEnData_400() {
-        refuse("<img src=\"data:image/svg+xml;base64,PHN2Zz4=\">", "Image refusée");
+    void imageEnData_400() {
+        refuse("<img src=\"data:image/png;base64,iVBORw0KGgo=\" data-image=\"" + IMAGE + "\">",
+                "Attribut interdit : src sur <img>");
     }
 
     @Test
-    void imageDePlusDe500Ko_400() {
-        refuse("<img src=\"" + png(500 * 1024 + 1) + "\">", "Image trop lourde");
+    void imageSansDataImage_400() {
+        refuse("<img alt=\"logo\">", "Image sans data-image");
     }
 
     @Test
-    void imageDontLeContenuNEstPasDuPng_400() {
-        refuse("<img src=\"data:image/png;base64," + Base64.getEncoder().encodeToString(new byte[]{1, 2, 3, 4}) + "\">",
-                "ne correspond pas à son type");
+    void imageDataImageNonUuid_400() {
+        refuse("<img data-image=\"../../etc/passwd\">", "Image invalide");
     }
 
     @Test
-    void imagesDePlusDe2MoParVersion_400() {
-        String image = "<img src=\"" + png(450 * 1024) + "\">";
-        long octets = ContenuModele.analyser(image.repeat(5), CATALOGUE).octetsImages();
-
-        assertThatThrownBy(() -> ContenuModele.verifierPoidsVersion(octets))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("2 Mo maximum");
+    void texteDePlusDe1Mo_400() {
+        refuse("<p>" + "a".repeat(1024 * 1024) + "</p>", "1 Mo maximum");
     }
 
     @Test
