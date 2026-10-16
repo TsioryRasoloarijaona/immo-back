@@ -32,8 +32,22 @@ public final class ControleSchema {
                         + "contractuel : différence de " + FormatsOmran.montant(ecartModifications) + " !");
             }
         }
-        BigDecimal ecart = SituationFinanciere.auCentime(
-                nonNul(dossier.prixApresRemise()).subtract(situation.financement()));
+        Optional<String> desequilibre = messageEcart(SituationFinanciere.auCentime(
+                nonNul(dossier.prixApresRemise()).subtract(situation.financement())));
+        if (desequilibre.isPresent()) {
+            return desequilibre;
+        }
+        if (dossier.envoiNotaire() != null) {
+            return datesEcheances(situation, dossier.envoiNotaire(), "Envoie au notaire / Avocat");
+        }
+        if (dossier.envoiNotairePrevisionnel() != null) {
+            return datesEcheances(situation, dossier.envoiNotairePrevisionnel(), "Envoie au notaire prévisonnelle");
+        }
+        return Optional.empty();
+    }
+
+    /** Message OMRAN d'un écart prix − schéma (montant à ajouter ou à soustraire) ; vide si l'écart est nul. */
+    public static Optional<String> messageEcart(BigDecimal ecart) {
         if (ecart.signum() > 0) {
             return Optional.of(SCHEMA_DIFFERENT + "vous devez ajouter dans le schéma de financement un montant de "
                     + FormatsOmran.montant(ecart) + " !");
@@ -41,12 +55,6 @@ public final class ControleSchema {
         if (ecart.signum() < 0) {
             return Optional.of(SCHEMA_DIFFERENT + "vous devez soustraire dans le schéma de financement un montant de "
                     + FormatsOmran.montant(ecart) + " !");
-        }
-        if (dossier.envoiNotaire() != null) {
-            return datesEcheances(situation, dossier.envoiNotaire(), "Envoie au notaire / Avocat");
-        }
-        if (dossier.envoiNotairePrevisionnel() != null) {
-            return datesEcheances(situation, dossier.envoiNotairePrevisionnel(), "Envoie au notaire prévisonnelle");
         }
         return Optional.empty();
     }

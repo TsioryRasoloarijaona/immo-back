@@ -139,6 +139,10 @@ public record DossierDetailDto(
         Integer delaiNotaire,
 
         @Schema(example = "365")
-        Integer delaiLivraison
+        Integer delaiLivraison,
+
+        @Schema(description = "Création seulement : codes des autres prospections ouvertes du client, archivées par "
+                + "elle (« Création dossier de vente »). Vide en lecture.")
+        List<String> prospectionsArchivees
 ) {
 }

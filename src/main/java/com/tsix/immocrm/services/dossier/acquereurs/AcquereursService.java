@@ -14,15 +14,13 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
-import com.tsix.immocrm.services.dossier.DossierService;
+import com.tsix.immocrm.services.dossier.ArchivageProspectionsVente;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
 import com.tsix.immocrm.services.dossier.TransformationProspectClient;
 import com.tsix.immocrm.services.dossier.fiche.EcritureDossier;
-import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
-import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,20 +64,18 @@ public class AcquereursService {
     private final ComProspectionRepository prospectionRepository;
     private final TransformationProspectClient transformation;
     private final HistoriqueDossier historique;
-    private final AlerteRelanceService alerteRelanceService;
-    private final EntityManager entityManager;
+    private final ArchivageProspectionsVente archivage;
 
     public AcquereursService(EcritureDossier ecriture, DepotsAcquereurs depots,
                              TransformationProspectClient transformation, HistoriqueDossier historique,
-                             AlerteRelanceService alerteRelanceService, EntityManager entityManager) {
-        this.entityManager = entityManager;
+                             ArchivageProspectionsVente archivage) {
         this.ecriture = ecriture;
         this.acquereurRepository = depots.acquereurs();
         this.tierRepository = depots.tiers();
         this.prospectionRepository = depots.prospections();
         this.transformation = transformation;
         this.historique = historique;
-        this.alerteRelanceService = alerteRelanceService;
+        this.archivage = archivage;
     }
 
     public AcquereursDto lister(UUID dossierId) {
@@ -137,13 +133,7 @@ public class AcquereursService {
         if (!permises.containsAll(demandees)) {
             throw new InvalidRequestException("Seules les prospections ouvertes des acquéreurs de ce dossier s'archivent ici.");
         }
-        for (ComProspection prospection : prospectionRepository.findAllById(demandees)) {
-            prospection.setIsClosed(true);
-            prospection.setClosingDate(ecriture.maintenant());
-            prospection.setClosingReasonText(DossierService.TEXTE_CLOTURE_VENTE);
-            prospectionRepository.save(prospection);
-            alerteRelanceService.desarmerToutes(prospection.getId());
-        }
+        prospectionRepository.findAllById(demandees).forEach(archivage::archiver);
     }
 
     private Map<UUID, BigDecimal> verifier(ComFolder dossier, BigDecimal partPrincipal,
@@ -201,16 +191,8 @@ public class AcquereursService {
 
     /** {@code Sale.cs:GetProspectionsToArchive} : ouvertes, des tiers donnés, hors la prospection du dossier. */
     private List<ProspectionAArchiverDto> prospectionsOuvertes(ComFolder dossier, Collection<UUID> tiers) {
-        if (tiers.isEmpty()) {
-            return List.of();
-        }
         UUID propre = Champs.de(dossier.getComProspection(), ComProspection::getId);
-        return entityManager.createQuery(
-                        "SELECT p FROM ComProspection p WHERE p.cfgProspect.id IN :tiers AND p.isClosed = false",
-                        ComProspection.class)
-                .setParameter("tiers", tiers)
-                .getResultList().stream()
-                .filter(p -> !p.getId().equals(propre))
+        return archivage.ouvertes(tiers, propre).stream()
                 .map(AcquereursService::aArchiver)
                 .sorted(Comparator.comparing(ProspectionAArchiverDto::libelle, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();

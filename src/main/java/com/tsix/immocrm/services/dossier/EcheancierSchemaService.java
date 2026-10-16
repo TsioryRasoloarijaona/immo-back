@@ -85,6 +85,7 @@ public class EcheancierSchemaService {
         if (liens.estLiee(echeanceId)) {
             throw new ConflictException(ECHEANCE_LIEE);
         }
+        ecritures.verification().avantSuppression(folder, echeance);
         effacer(echeance);
         ecritures.reequilibrage().reporter(folder, echeance);
         ecritures.totaux().rafraichir(folder);
@@ -113,8 +114,12 @@ public class EcheancierSchemaService {
             throw new InvalidRequestException("Le montant à défalquer doit être <= " + initial.setScale(2, RoundingMode.HALF_UP));
         }
 
-        List<ComDocument> creees = periodicite.repartir(total, nombre,
-                        Requis.champ(request.premiereDate(), "premiereDate est requise")).stream()
+        List<Periodicite.Echeance> echeances = periodicite.repartir(total, nombre,
+                Requis.champ(request.premiereDate(), "premiereDate est requise"));
+        ecritures.verification().avantGeneration(folder, echeances.stream()
+                .map(e -> apercu(categorie, e))
+                .toList());
+        List<ComDocument> creees = echeances.stream()
                 .map(e -> nouvelleLigne(folder, categorie, e, request.notes()))
                 .toList();
         ecritures.reequilibrage().reporter(folder, creees.get(creees.size() - 1));
@@ -125,6 +130,16 @@ public class EcheancierSchemaService {
                 .filter(d -> !retirees.contains(d.getId()))
                 .map(d -> EcheancierService.avecEcart(echeancierService.buildDto(d, BigDecimal.ZERO), ecart))
                 .toList();
+    }
+
+    /** Ligne de périodicité telle qu'elle sera créée, pour le contrôle du schéma ; jamais enregistrée. */
+    private static ComDocument apercu(ComSettlementCategory categorie, Periodicite.Echeance e) {
+        ComDocument ligne = new ComDocument();
+        ligne.setId(UUID.randomUUID());
+        ligne.setDocDate(e.date());
+        ligne.setAmount(e.montant());
+        ligne.setComSettlementCategory(categorie);
+        return ligne;
     }
 
     private ComDocument nouvelleLigne(ComFolder folder, ComSettlementCategory categorie, Periodicite.Echeance e,

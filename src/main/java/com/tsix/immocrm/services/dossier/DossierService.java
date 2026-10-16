@@ -117,6 +117,7 @@ public class DossierService {
     private final MontantsDossier montantsDossier;
     private final WorkflowDossier workflow;
     private final OffreOrigineDossier offreOrigine;
+    private final ArchivageProspectionsVente archivage;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -151,6 +152,7 @@ public class DossierService {
         this.montantsDossier = ecrituresOmran.montants();
         this.workflow = ecrituresOmran.workflow();
         this.offreOrigine = ecrituresOmran.offreOrigine();
+        this.archivage = ecrituresOmran.archivage();
     }
 
     /**
@@ -291,10 +293,12 @@ public class DossierService {
         synchroniserTypeTiers(folder);
 
         cloturerLaProspection(prospection);
+        // Sale.cs:AfterInsert → ManageProspectionToArchive : les autres prospections ouvertes du client.
+        List<String> archivees = archivage.archiverCellesDe(List.of(client.getId()), prospection.getId());
 
         List<ArticleSummaryDto> articleDtos = Stream.concat(Stream.of(principal), annexes.stream())
                 .map(DossierService::toArticleSummary).toList();
-        return toDetail(folder, articleDtos);
+        return toDetail(folder, articleDtos, archivees);
     }
 
     /**
@@ -774,6 +778,10 @@ public class DossierService {
     }
 
     private DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
+        return toDetail(f, articles, List.of());
+    }
+
+    private DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles, List<String> archivees) {
         CfgProject projet = projet(f);
         CfgTranche tranche = tranche(f);
         CfgCompany societe = societe(f);
@@ -836,7 +844,8 @@ public class DossierService {
                 f.getDeliveryDateReal(),
                 f.getDelaiConcretisation(),
                 f.getDelaiNotaire(),
-                f.getDelaiLivraison()
+                f.getDelaiLivraison(),
+                archivees
         );
     }
 

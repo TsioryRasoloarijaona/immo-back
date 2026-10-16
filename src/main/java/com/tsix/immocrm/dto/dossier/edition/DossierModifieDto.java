@@ -13,6 +13,8 @@ public record DossierModifieDto(
         @Schema(description = "Noms des champs réellement changés ; vide si le corps ne changeait rien.")
         List<String> champsModifies,
         @Schema(description = "Prix après remise TTC − (avance + crédit + autofinancement), arrondi à 2 ; null si nul ou prix inchangé.")
-        BigDecimal ecartSchema
+        BigDecimal ecartSchema,
+        @Schema(description = "Client changé : codes de ses prospections ouvertes archivées (« Création dossier de vente »).")
+        List<String> prospectionsArchivees
 ) {
 }

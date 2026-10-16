@@ -120,6 +120,7 @@ public class DossierEditionService {
 
         List<String> modifies = new ArrayList<>();
         appliquerClient(dossier, r, modifies);
+        List<String> archivees = modifies.contains(CLIENT) ? client.archiverProspectionsDuClient(dossier) : List.of();
         for (Champ<?> c : champs.tous()) {
             boolean vider = aVider.contains(c.nom());
             if ((vider || c.present(r)) && c.appliquer(r, dossier, vider)) {
@@ -135,7 +136,7 @@ public class DossierEditionService {
             ecriture.signer(dossier);
             historique.evenement(dossier, tronquer("Modification : " + String.join(", ", modifies)));
         }
-        return new DossierModifieDto(ficheService.fiche(dossierId), List.copyOf(modifies), ecart);
+        return new DossierModifieDto(ficheService.fiche(dossierId), List.copyOf(modifies), ecart, archivees);
     }
 
     private void appliquerClient(ComFolder dossier, ModifierDossierRequest r, List<String> modifies) {

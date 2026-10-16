@@ -54,6 +54,7 @@ public class EcheancierService {
     private final EcritureReglement ecritureReglement;
     private final Clock clock;
     private final DefautsEcheance defauts;
+    private final VerificationSchemaEcriture verification;
     private final ReequilibrageSchema reequilibrage;
     private final TotauxDossierEcheancier totaux;
 
@@ -64,6 +65,7 @@ public class EcheancierService {
                               Clock clock,
                               EcrituresSchema ecrituresSchema) {
         this.defauts = ecrituresSchema.defauts();
+        this.verification = ecrituresSchema.verification();
         this.reequilibrage = ecrituresSchema.reequilibrage();
         this.totaux = ecrituresSchema.totaux();
         this.clock = clock;
@@ -174,6 +176,7 @@ public class EcheancierService {
             document.setDocDate(defauts.date(categorie, folder));
         }
         defauts.verifierDate(document, folder, document.getAmount());
+        verification.avantAjout(folder, document);
         ligneOmran.completer(document, folder);
 
         ComDocument enregistree = documentRepository.save(document);
@@ -192,6 +195,9 @@ public class EcheancierService {
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId));
         ComDocument document = findEcheanceOf(dossierId, echeanceId);
         UUID categorieAvant = Champs.de(document.getComSettlementCategory(), ComSettlementCategory::getId);
+        verification.avantModification(folder, document,
+                request.montant() != null ? request.montant() : document.getAmount(),
+                request.categorieId() != null ? categorie(request.categorieId()) : document.getComSettlementCategory());
 
         applyFields(document, new ChampsEcheance(request.dateEcheance(), request.montant(), request.description(),
                 request.categorieId(), request.exclureDuPrix(), request.notes()));
@@ -235,11 +241,13 @@ public class EcheancierService {
         if (champs.exclureDuPrix() != null) document.setExcludeFromPrice(champs.exclureDuPrix());
         if (champs.notes() != null) document.setNotes(champs.notes());
         if (champs.categorieId() != null) {
-            ComSettlementCategory categorie = settlementCategoryRepository.findById(champs.categorieId())
-                    .orElseThrow(() -> new InvalidRequestException(
-                            "ComSettlementCategory introuvable: " + champs.categorieId()));
-            document.setComSettlementCategory(categorie);
+            document.setComSettlementCategory(categorie(champs.categorieId()));
         }
+    }
+
+    private ComSettlementCategory categorie(UUID id) {
+        return settlementCategoryRepository.findById(id)
+                .orElseThrow(() -> new InvalidRequestException("ComSettlementCategory introuvable: " + id));
     }
 
     private static String videEnNull(String s) {

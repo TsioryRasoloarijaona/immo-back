@@ -29,17 +29,13 @@ public class ReequilibrageSchema {
 
     /** À appeler une fois la ligne écrite (ou supprimée) ; rend la ligne qui a absorbé l'écart. */
     public Optional<ComDocument> reporter(ComFolder folder, ComDocument ligne) {
-        // GetSchemaDifference vaut 0 sur un dossier sans statut.
         if (!SchemaEcheancier.metAJourLeSchema(ligne) || folder.getStrStatus() == null) {
             return Optional.empty();
         }
         documentRepository.flush();
         List<ComDocument> lignes = documentRepository.findByComFolderIdOrderByDocDateAsc(folder.getId());
         BigDecimal ecart = SchemaEcheancier.ecart(folder.getPriceAfterDiscount(), lignes);
-        if (ecart.signum() == 0) {
-            return Optional.empty();
-        }
-        Optional<ComDocument> cible = SchemaEcheancier.ligneDeReport(lignes, ligne.getId());
+        Optional<ComDocument> cible = SchemaEcheancier.cibleDuReport(folder, lignes, ligne);
         cible.ifPresent(c -> {
             c.setAmount(requireNonNullElse(c.getAmount(), BigDecimal.ZERO).add(ecart));
             ligneOmran.completer(c, folder);

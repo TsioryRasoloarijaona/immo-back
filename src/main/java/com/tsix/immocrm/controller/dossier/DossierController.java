@@ -91,6 +91,10 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/dossiers")
 public class DossierController {
 
+    /** Partagé avec {@link DossierEcheancierController} : même règle, même texte. */
+    static final String SCHEMA_CREUSE =
+            "Statut qui vérifie le schéma : l'écriture crée ou creuse l'écart au prix (message OMRAN, montant à ajuster).";
+
     private final DossierService dossierService;
     private final EcheancierService echeancierService;
     private final PieceJointeService pieceJointeService;
@@ -259,7 +263,8 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Échéance créée."),
             @ApiResponse(responseCode = "400", description = "Catégorie (`categorieId`) absente ou introuvable."),
-            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable."),
+            @ApiResponse(responseCode = "409", description = SCHEMA_CREUSE)
     })
     public ResponseEntity<EcheanceDto> addEcheance(@PathVariable UUID id, @RequestBody CreerEcheanceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(echeancierService.addEcheance(id, request));
@@ -271,7 +276,8 @@ public class DossierController {
             @ApiResponse(responseCode = "200", description = "Échéance modifiée."),
             @ApiResponse(responseCode = "400", description = "Catégorie introuvable, ligne sans catégorie, ou ligne non soldée "
                     + "datée avant le début des finalisations."),
-            @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable.")
+            @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable."),
+            @ApiResponse(responseCode = "409", description = SCHEMA_CREUSE)
     })
     public EcheanceDto updateEcheance(@PathVariable UUID id, @PathVariable UUID echeanceId,
                                        @RequestBody ModifierEcheanceRequest request) {
