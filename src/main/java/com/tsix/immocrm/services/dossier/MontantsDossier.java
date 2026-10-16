@@ -75,7 +75,7 @@ public class MontantsDossier {
                 })
                 .toList();
 
-        boolean sorti = DossierService.estSorti(folder);
+        boolean sorti = DossierSorti.estSorti(folder);
         TropPercu.Resultat tropPercu = TropPercu.calculer(lignesTropPercu, folder.getPrice(),
                 folder.getModificationsAmount(), sorti);
         return new MontantsDossierDto(parCategorie, totaux.general, totaux.soumisAuPrix,

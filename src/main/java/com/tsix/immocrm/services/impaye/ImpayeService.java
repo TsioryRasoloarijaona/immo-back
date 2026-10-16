@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.impaye;
 
 import com.tsix.immocrm.domain.ChampDateImpaye;
 import com.tsix.immocrm.domain.EchuA;
+import com.tsix.immocrm.domain.Impaye;
 import com.tsix.immocrm.dto.impaye.ImpayeDto;
 import com.tsix.immocrm.dto.impaye.ImpayesPageDto;
 import com.tsix.immocrm.dto.impaye.TotauxImpayesDto;
@@ -28,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -49,8 +49,6 @@ import static java.util.Objects.requireNonNullElse;
 @Transactional(readOnly = true)
 public class ImpayeService {
 
-    /** {@code AdmParamsInteger.CurrencyDecimalDigits} vaut 2 en production. */
-    private static final int ECHELLE_MONTANT = 2;
     /** SQL Server refuse plus de 2 100 paramètres par requête. */
     private static final int LOT_IDS = 2_000;
 
@@ -100,11 +98,18 @@ public class ImpayeService {
                 .toList();
     }
 
-    /** R2 : arrondi au centime de {@code Amount − réglé} ; un réglé absent vaut zéro. */
-    static BigDecimal reste(BigDecimal montant, BigDecimal regle) {
-        return requireNonNullElse(montant, BigDecimal.ZERO)
-                .subtract(requireNonNullElse(regle, BigDecimal.ZERO))
-                .setScale(ECHELLE_MONTANT, RoundingMode.HALF_UP);
+    /**
+     * Échéances impayées d'un dossier, par la règle de l'écran (bandeau de la fiche, §1 de
+     * FEATURE-dossier-durcissement.md) ; sans périmètre : l'appelant a déjà contrôlé l'accès au dossier.
+     */
+    public List<UUID> echeancesImpayees(UUID dossierId) {
+        LocalDate aujourdhui = LocalDate.now(clock);
+        List<ComDocument> candidats = documentRepository.findAll(SpecImpayes.duDossier(dossierId, aujourdhui));
+        Map<UUID, BigDecimal> regles = reglesParEcheance(candidats.stream().map(ComDocument::getId).toList());
+        return candidats.stream()
+                .filter(d -> Impaye.resteDu(d.getAmount(), regles.get(d.getId())))
+                .map(ComDocument::getId)
+                .toList();
     }
 
     private Map<UUID, BigDecimal> reglesParEcheance(List<UUID> ids) {
@@ -160,7 +165,7 @@ public class ImpayeService {
                 Champs.de(dossier.getCfgCommercial(), TierNomFormatter::nom),
                 montant,
                 regle,
-                reste(montant, regle),
+                Impaye.reste(montant, regle),
                 joursRetard(echeance, aujourdhui),
                 Champs.de(d.getComPenaltyDocument(), ComDocument::getId),
                 d.getNotes());

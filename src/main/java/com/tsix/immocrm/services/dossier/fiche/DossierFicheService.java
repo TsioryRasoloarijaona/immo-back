@@ -12,18 +12,16 @@ import com.tsix.immocrm.dto.dossier.fiche.EnTeteFicheDto;
 import com.tsix.immocrm.dto.dossier.fiche.StatutFicheDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
-import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ActionDossierRepository;
-import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
-import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.impaye.ImpayeService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
@@ -36,9 +34,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -55,23 +51,20 @@ public class DossierFicheService {
 
     private final ComFolderRepository folderRepository;
     private final ComFolderItemRepository folderItemRepository;
-    private final ComDocumentRepository documentRepository;
-    private final StlSettlementLineRepository settlementLineRepository;
+    private final ImpayeService impayeService;
     private final ActionDossierRepository actionRepository;
     private final EntityManager entityManager;
     private final Clock clock;
 
     public DossierFicheService(ComFolderRepository folderRepository,
                                ComFolderItemRepository folderItemRepository,
-                               ComDocumentRepository documentRepository,
-                               StlSettlementLineRepository settlementLineRepository,
+                               ImpayeService impayeService,
                                ActionDossierRepository actionRepository,
                                EntityManager entityManager,
                                Clock clock) {
         this.folderRepository = folderRepository;
         this.folderItemRepository = folderItemRepository;
-        this.documentRepository = documentRepository;
-        this.settlementLineRepository = settlementLineRepository;
+        this.impayeService = impayeService;
         this.actionRepository = actionRepository;
         this.entityManager = entityManager;
         this.clock = clock;
@@ -91,27 +84,8 @@ public class DossierFicheService {
                 datesAutres(f),
                 new AnnulationFicheDto(f.getCancelDate(), f.getCancelDescription()),
                 autres(f, decisionMeilleurTaux(dossierId)),
-                aDesImpayes(dossierId, maintenant),
+                !impayeService.echeancesImpayees(dossierId).isEmpty(),
                 instructionNonLue(dossierId));
-    }
-
-    /**
-     * Une échéance échue (date dépassée) dont le reste dû est positif — même calcul du réglé que
-     * l'échéancier (règlements annulés exclus).
-     */
-    boolean aDesImpayes(UUID dossierId, LocalDateTime maintenant) {
-        Map<UUID, BigDecimal> regleParEcheance = new HashMap<>();
-        for (Object[] ligne : settlementLineRepository.sumAmountByComFolderIdGroupedByComDocument(dossierId)) {
-            regleParEcheance.put((UUID) ligne[0], (BigDecimal) ligne[1]);
-        }
-        return documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId).stream()
-                .filter(d -> d.getDocDate() != null && d.getDocDate().isBefore(maintenant))
-                .anyMatch(d -> reste(d, regleParEcheance).signum() > 0);
-    }
-
-    private static BigDecimal reste(ComDocument d, Map<UUID, BigDecimal> regleParEcheance) {
-        BigDecimal montant = Objects.requireNonNullElse(d.getAmount(), BigDecimal.ZERO);
-        return montant.subtract(regleParEcheance.getOrDefault(d.getId(), BigDecimal.ZERO));
     }
 
     private boolean instructionNonLue(UUID dossierId) {

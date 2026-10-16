@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderItem;
@@ -496,6 +497,24 @@ class DossierCreationOmranTest {
                 .singleElement().satisfies(d -> assertAll(
                         () -> assertThat(d.getAmountHT()).isEqualByComparingTo("14000"),
                         () -> assertThat(d.getExcludeFromPrice()).isTrue()));
+    }
+
+    /** FEATURE-dossier-durcissement.md §3 (GEN0005 §4.3) : une alerte d'impayé système par échéance créée. */
+    @Test
+    void creation_uneAlerteDImpayeParEcheance() throws Exception {
+        fixtureStatuts.reservation();
+
+        ComFolder f = creer(prospection(null), "869000", lot, terrasse);
+
+        List<ComActionMessage> alertes = entityManager.createQuery(
+                        "SELECT m FROM ComActionMessage m WHERE m.comFolder.id = :id AND m.isUnpaid = true",
+                        ComActionMessage.class)
+                .setParameter("id", f.getId()).getResultList();
+        assertThat(alertes).hasSize(3).allSatisfy(m -> assertAll(
+                () -> assertThat(m.getComDocument()).isNotNull(),
+                () -> assertThat(m.getIsSystem()).isTrue(),
+                () -> assertThat(m.getAlertMessage()).endsWith(" DH arrivé(e) à échéance)"),
+                () -> assertThat(m.getAlertValidityDate()).isEqualTo(f.getDocDate())));
     }
 
     @Test

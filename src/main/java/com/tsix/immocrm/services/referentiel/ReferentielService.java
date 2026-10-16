@@ -41,6 +41,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
@@ -450,8 +451,12 @@ public class ReferentielService {
                 .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
-    public List<ReferentielItemDto> comptes() {
-        return accountRepository.findAllByOrderByDescriptionAsc().stream()
+    /** Sans société, tous les comptes ; avec, ceux de cette société (pointage d'un règlement). */
+    public List<ReferentielItemDto> comptes(UUID societeId) {
+        List<StlAccount> comptes = societeId == null
+                ? accountRepository.findAllByOrderByDescriptionAsc()
+                : accountRepository.findByCfgCompanyIdOrderByDescriptionAsc(societeId);
+        return comptes.stream()
                 .map(a -> new ReferentielItemDto(a.getId(), a.getCode(), a.getDescription(), null)).toList();
     }
 

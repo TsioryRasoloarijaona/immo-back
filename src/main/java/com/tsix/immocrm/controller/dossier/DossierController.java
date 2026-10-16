@@ -404,12 +404,12 @@ public class DossierController {
     @Operation(summary = "Change le statut d'un règlement (pointage / annulation)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Statut modifié ; le règlement à jour est renvoyé."),
-            @ApiResponse(responseCode = "400", description = "`statut` absent ou inconnu, ou "
-                    + "`dateReglement` absente alors que la cible est `POINTED`."),
+            @ApiResponse(responseCode = "400", description = "`statut` absent ou inconnu ; pour `POINTED`, "
+                    + "`dateReglement` ou `compteId` absent, compte inconnu ou d'une autre société."),
             @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, ou "
                     + "règlement non rattaché à ce dossier."),
             @ApiResponse(responseCode = "409", description = "Transition interdite (corps : "
-                    + "`transitionsAutorisees`), ou passage à `POINTED` sans aucune pièce jointe.")
+                    + "`transitionsAutorisees`), `POINTED` sans pièce jointe ou au plus tard au dernier rapprochement.")
     })
     public ReglementDto modifierStatutReglement(
             @Parameter(description = "Identifiant du dossier (ComFolder.PKey).")

@@ -149,6 +149,8 @@ class LiberationLotTest {
                     s.setId(UUID.randomUUID());
                     s.setCode(code);
                     s.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+                    s.setAnnulation("ANNULATION".equals(code));
+                    s.setResiliation("DESISTEMENT".equals(code));
                     return strStatusRepository.save(s);
                 });
     }

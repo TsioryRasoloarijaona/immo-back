@@ -88,6 +88,8 @@ class MontantsSyntheseTest {
             statut.setId(UUID.randomUUID());
             statut.setCode(codeStatut);
             statut.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
+            statut.setAnnulation("ANNULATION".equals(codeStatut));
+            statut.setResiliation("DESISTEMENT".equals(codeStatut));
             folder.setStrStatus(strStatusRepository.save(statut));
         }
         return folderRepository.save(folder);

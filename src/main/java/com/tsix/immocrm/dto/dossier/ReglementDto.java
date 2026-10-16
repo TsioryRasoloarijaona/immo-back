@@ -1,5 +1,7 @@
 package com.tsix.immocrm.dto.dossier;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -31,6 +33,9 @@ public record ReglementDto(
         String notes,
         /** IN_WORK (saisi), POINTED (encaissé) ou CANCELED ; {@code null} sur d'anciennes lignes légataires.
          * Un règlement créé par l'API naît IN_WORK. */
-        String statut
+        String statut,
+        @Schema(description = "Société du règlement (StlSettlement.CfgCompanyId) : filtre des comptes au pointage ; "
+                + "null si non renseignée.")
+        UUID societeId
 ) {
 }

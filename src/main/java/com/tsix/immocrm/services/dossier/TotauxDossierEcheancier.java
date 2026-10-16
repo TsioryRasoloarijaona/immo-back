@@ -52,7 +52,7 @@ public class TotauxDossierEcheancier {
         BigDecimal prix = requireNonNullElse(folder.getPrice(), BigDecimal.ZERO);
         folder.setAgreementPrice(prixContractuel);
         folder.setAgreementAmount(prix.subtract(SchemaEcheancier.natures(lignes).avance()));
-        if (!DossierService.estSorti(folder)) {
+        if (!DossierSorti.estSorti(folder)) {
             folder.setTotalToPay(prix
                     .add(requireNonNullElse(folder.getModificationsAmount(), BigDecimal.ZERO))
                     .add(somme(lignes, c -> Boolean.TRUE.equals(c.getIsSaleExpense())))

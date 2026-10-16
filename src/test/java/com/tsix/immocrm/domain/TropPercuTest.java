@@ -53,6 +53,7 @@ class TropPercuTest {
                 () -> assertThat(b.reste()).isEqualByComparingTo("945000"));
     }
 
+    /** Cas B de FEATURE-dossier-durcissement.md §2 : résiliation au débit non décaissée. */
     @Test
     void dossierAnnule_tropPercuEstLeRemboursementPrevu() {
         // Annulé : total = réglé − remboursement prévu (échéance au débit), donc trop-perçu = ce remboursement.
@@ -63,5 +64,57 @@ class TropPercuTest {
         assertAll(
                 () -> assertThat(r.tropPercu()).isEqualByComparingTo("270000"),
                 () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("270000"));
+    }
+
+    /** Ligne de remboursement au débit sans nature (ni avance, ni résiliation) : réglé signé, négatif si décaissé. */
+    private static TropPercu.Ligne remboursementSimple(String montant, String regle) {
+        return new TropPercu.Ligne(new BigDecimal(montant), new BigDecimal(regle), false,
+                false, false, false, false, false, false, false);
+    }
+
+    @Test
+    void casA_dossierActif_remboursementNonDecaisse_resteEntier() {
+        TropPercu.Resultat r = TropPercu.calculer(
+                List.of(avance("110000", "110000"), remboursementSimple("10000", "0")),
+                new BigDecimal("100000"), BigDecimal.ZERO, false);
+
+        assertAll(
+                () -> assertThat(r.tropPercu()).isEqualByComparingTo("10000"),
+                () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("10000"));
+    }
+
+    @Test
+    void casAPrime_dossierActif_remboursementDecaisse_resteNul() {
+        TropPercu.Resultat r = TropPercu.calculer(
+                List.of(avance("110000", "110000"), remboursementSimple("10000", "-10000")),
+                new BigDecimal("100000"), BigDecimal.ZERO, false);
+
+        assertAll(
+                () -> assertThat(r.tropPercu()).isEqualByComparingTo("10000"),
+                () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("0"));
+    }
+
+    /** Vue : TotalSettled = … − CancelSettled (remboursé, positif) → TotalRest = 0, donc ni trop-perçu ni reste. */
+    @Test
+    void casBPrime_dossierAnnule_resiliationDecaissee_plusRienARembourser() {
+        TropPercu.Ligne resiliationDecaissee = remboursement("270000", "-270000");
+        List<TropPercu.Ligne> lignes = List.of(avance("1000000", "300000"), resiliationDecaissee);
+
+        TropPercu.Resultat r = TropPercu.calculer(lignes, new BigDecimal("1000000"), BigDecimal.ZERO, true);
+        TropPercu.Bilan b = TropPercu.bilan(lignes, new BigDecimal("1000000"), BigDecimal.ZERO, true);
+
+        assertAll(
+                () -> assertThat(b.totalRegle()).isEqualByComparingTo("30000"),
+                () -> assertThat(r.tropPercu()).isEqualByComparingTo("0"),
+                () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("0"));
+    }
+
+    @Test
+    void remboursementSuperieurAuTropPercu_resteJamaisNegatif() {
+        TropPercu.Resultat r = TropPercu.calculer(
+                List.of(avance("110000", "110000"), remboursementSimple("15000", "-15000")),
+                new BigDecimal("100000"), BigDecimal.ZERO, false);
+
+        assertThat(r.tropPercuReste()).isEqualByComparingTo("0");
     }
 }

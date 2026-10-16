@@ -1,10 +1,10 @@
 package com.tsix.immocrm.services.dossier.liste;
 
 import com.tsix.immocrm.domain.ColonneDossier;
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TropPercu;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -32,14 +33,14 @@ import static com.tsix.immocrm.domain.ColonneDossier.*;
 public class MontantsParNatureDossier {
 
     /** Ce qui exige les requêtes ; {@code prixContractuel} est une colonne de ComFolder. */
-    public static final Set<ColonneDossier> COLONNES = EnumSet.of(
+    public static final Set<ColonneDossier> COLONNES = Collections.unmodifiableSet(EnumSet.of(
             PRIX_CONTRACTUEL_REGLE, PRIX_CONTRACTUEL_RESTE, PRIX_REGLE, PRIX_RESTE, NET_A_PAYER_REGLE,
             NET_A_PAYER_RESTE, TAUX_AVANCE, TAUX_AVANCE_REEL, AVANCE, AVANCE_REGLEE, AVANCE_RESTE, AUTOFINANCEMENT,
             AUTOFINANCEMENT_REGLE, AUTOFINANCEMENT_RESTE, CREDIT, CREDIT_REGLE, CREDIT_RESTE, FRAIS, FRAIS_REGLES,
-            FRAIS_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE);
+            FRAIS_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE));
 
     /** Les colonnes que {@code GET /api/dossiers/totaux} additionne (les taux ne s'additionnent pas). */
-    public static final Set<ColonneDossier> SOMMABLES = sommables();
+    public static final Set<ColonneDossier> SOMMABLES = Collections.unmodifiableSet(sommables());
 
     /** Ids par requête, sous la limite de 2 100 paramètres liés de SQL Server. */
     static final int TAILLE_TRANCHE = 2_000;
@@ -95,7 +96,7 @@ public class MontantsParNatureDossier {
             regleParEcheance.put((UUID) r[0], (BigDecimal) r[1]);
         }
         for (Object[] e : em.createQuery(ECHEANCES, Object[].class).setParameter("ids", ids).getResultList()) {
-            BigDecimal regle = regleParEcheance.getOrDefault((UUID) e[1], BigDecimal.ZERO);
+            BigDecimal regle = regleParEcheance.getOrDefault(e[1], BigDecimal.ZERO);
             TropPercu.Ligne ligne = new TropPercu.Ligne((BigDecimal) e[2], regle, (Boolean) e[4], vrai(e[5]),
                     vrai(e[6]), vrai(e[7]), vrai(e[8]), vrai(e[9]), vrai(e[10]), vrai(e[11]));
             parDossier.computeIfAbsent((UUID) e[0], k -> new ArrayList<>())
@@ -124,7 +125,7 @@ public class MontantsParNatureDossier {
         m.put(TAUX_AVANCE, pourcentage(m.get(AVANCE), f.getPriceAfterDiscount()));
         m.put(TAUX_AVANCE_REEL, pourcentage(m.get(AVANCE_REGLEE), m.get(AVANCE)));
 
-        boolean sorti = estSorti(f);
+        boolean sorti = DossierSorti.estSorti(f);
         TropPercu.Bilan bilan = TropPercu.bilan(lignes, f.getPrice(), f.getModificationsAmount(), sorti);
         m.put(NET_A_PAYER_REGLE, bilan.totalRegle());
         m.put(NET_A_PAYER_RESTE, bilan.reste());
@@ -154,18 +155,6 @@ public class MontantsParNatureDossier {
             return BigDecimal.ZERO;
         }
         return nonNul(part).multiply(CENT).divide(base, ECHELLE, RoundingMode.HALF_UP);
-    }
-
-    /** Statut d'annulation ou de résiliation ({@code IsCancellation} de la vue) ; code inconnu = en cours. */
-    static boolean estSorti(ComFolder f) {
-        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
-            return false;
-        }
-        try {
-            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     private static Set<ColonneDossier> sommables() {

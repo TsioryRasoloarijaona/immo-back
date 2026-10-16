@@ -8,6 +8,7 @@ import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
 import com.tsix.immocrm.dto.dossier.EcheanceDto;
 import com.tsix.immocrm.dto.dossier.ModifierEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -57,6 +58,7 @@ public class EcheancierService {
     private final VerificationSchemaEcriture verification;
     private final ReequilibrageSchema reequilibrage;
     private final TotauxDossierEcheancier totaux;
+    private final AlertesImpayes alertes;
 
     public EcheancierService(ComFolderRepository folderRepository, ComDocumentRepository documentRepository,
                               StlSettlementLineRepository settlementLineRepository,
@@ -68,6 +70,7 @@ public class EcheancierService {
         this.verification = ecrituresSchema.verification();
         this.reequilibrage = ecrituresSchema.reequilibrage();
         this.totaux = ecrituresSchema.totaux();
+        this.alertes = ecrituresSchema.alertes();
         this.clock = clock;
         this.ligneOmran = ligneOmran;
         this.ecritureReglement = ecritureReglement;
@@ -136,7 +139,8 @@ public class EcheancierService {
                 Champs.de(payeur, CfgTier::getId),
                 Champs.de(payeur, TierNomFormatter::nom),
                 s.getNotes(),
-                s.getStatus()
+                s.getStatus(),
+                Champs.de(s.getCfgCompany(), CfgCompany::getId)
         );
     }
 
@@ -181,6 +185,7 @@ public class EcheancierService {
 
         ComDocument enregistree = documentRepository.save(document);
         reequilibrage.reporter(folder, enregistree);
+        alertes.synchroniser(enregistree);
         totaux.rafraichir(folder);
         return toDtoApresEcriture(enregistree, folder);
     }
@@ -215,6 +220,7 @@ public class EcheancierService {
 
         ComDocument enregistree = documentRepository.save(document);
         reequilibrage.reporter(folder, enregistree);
+        alertes.synchroniser(enregistree);
         totaux.rafraichir(folder);
         return toDtoApresEcriture(enregistree, folder);
     }

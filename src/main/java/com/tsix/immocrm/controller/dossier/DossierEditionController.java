@@ -42,7 +42,8 @@ public class DossierEditionController {
             @ApiResponse(responseCode = "403",
                     description = "Un champ envoyé appartient à un groupe interdit au rôle, ou est dans champsVerrouilles."),
             @ApiResponse(responseCode = "404", description = DESCRIPTION_404),
-            @ApiResponse(responseCode = "409", description = "Dossier annulé ou désisté : seul l'onglet Annulation change.")
+            @ApiResponse(responseCode = "409",
+                    description = "Dossier sorti hors onglet Annulation, ou délai / crédit maximal de la tranche dépassé.")
     })
     public DossierModifieDto modifier(
             @Parameter(description = DESCRIPTION_ID) @PathVariable UUID id,

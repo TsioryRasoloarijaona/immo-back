@@ -1,13 +1,19 @@
 package com.tsix.immocrm.controller.dossier;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.stl.StlAccount;
+import com.tsix.immocrm.entities.stl.StlAccountPosition;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.repositories.stl.StlAccountPositionRepository;
+import com.tsix.immocrm.repositories.stl.StlAccountRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
@@ -91,6 +97,15 @@ class ReglementStatutPreuveTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private CfgCompanyRepository companyRepository;
+
+    @Autowired
+    private StlAccountRepository accountRepository;
+
+    @Autowired
+    private StlAccountPositionRepository positionRepository;
 
     // ---------------------------------------------------------------- fixtures
 
@@ -423,8 +438,139 @@ class ReglementStatutPreuveTest {
     private void pointer(ComFolder folder, UUID reglementId) throws Exception {
         mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"statut\":\"POINTED\",\"dateReglement\":\"2026-09-05T09:00:00\"}"))
+                        .content(pointage("2026-09-05T09:00:00", compte(null).getId())))
                 .andExpect(status().isOk());
+    }
+
+    private static String pointage(String date, UUID compteId) {
+        return "{\"statut\":\"POINTED\",\"dateReglement\":\"" + date + "\""
+                + (compteId != null ? ",\"compteId\":\"" + compteId + "\"" : "") + "}";
+    }
+
+    private CfgCompany societe(String code) {
+        CfgCompany societe = new CfgCompany();
+        societe.setId(UUID.randomUUID());
+        societe.setCode(code + "-" + UUID.randomUUID().toString().substring(0, 8));
+        societe.setDescription(code);
+        societe.setIsActive(true);
+        return companyRepository.save(societe);
+    }
+
+    private StlAccount compte(CfgCompany societe) {
+        StlAccount compte = new StlAccount();
+        compte.setId(UUID.randomUUID());
+        compte.setCode("CPT-" + UUID.randomUUID().toString().substring(0, 8));
+        compte.setDescription("Compte test");
+        compte.setCfgCompany(societe);
+        return accountRepository.save(compte);
+    }
+
+    private void rapprochement(StlAccount compte, LocalDateTime date) {
+        StlAccountPosition position = new StlAccountPosition();
+        position.setId(UUID.randomUUID());
+        position.setStlAccountId(compte.getId());
+        position.setPositionDate(date);
+        position.setPosition(BigDecimal.ZERO);
+        positionRepository.save(position);
+    }
+
+    /** Règlement en attente avec sa preuve, prêt à pointer ; sa société est {@code societe} (null possible). */
+    private UUID reglementAPointer(ComFolder folder, CfgCompany societe) throws Exception {
+        UUID reglementId = creerReglement(folder, newEcheance(folder, "100000"), "50000.00");
+        deposerPreuve(folder, reglementId);
+        StlSettlement reglement = settlementRepository.findById(reglementId).orElseThrow();
+        reglement.setCfgCompany(societe);
+        settlementRepository.save(reglement);
+        return reglementId;
+    }
+
+    // ------------------------------------------------- pointage : compte (Settlement.cs:Verif)
+
+    @Test
+    void pointer_sansCompte_returns400AvecLeMessageOmran() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-60");
+        UUID reglementId = reglementAPointer(folder, null);
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON).content(pointage("2026-09-05T09:00:00", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                        "Si votre pièce possède une date de pointage, il est obligatoire de lui affecter un compte !"));
+
+        assertThat(settlementRepository.findById(reglementId).orElseThrow().getStatus()).isEqualTo("IN_WORK");
+    }
+
+    @Test
+    void pointer_compteDUneAutreSociete_returns400() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-61");
+        UUID reglementId = reglementAPointer(folder, societe("SOC-A"));
+        StlAccount compteAutre = compte(societe("SOC-B"));
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pointage("2026-09-05T09:00:00", compteAutre.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void pointer_compteInconnu_returns400() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-62");
+        UUID reglementId = reglementAPointer(folder, null);
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pointage("2026-09-05T09:00:00", UUID.randomUUID())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void pointer_dateAuDernierRapprochement_returns409() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-63");
+        CfgCompany societe = societe("SOC-R");
+        UUID reglementId = reglementAPointer(folder, societe);
+        StlAccount compte = compte(societe);
+        rapprochement(compte, LocalDateTime.of(2026, 9, 5, 9, 0));
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pointage("2026-09-05T09:00:00", compte.getId())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Vous ne pouvez pas pointer une pièce à une date inférieure "
+                        + "à la date du dernier rapprochement du compte affecté 05/09/2026 09:00:00 !"));
+    }
+
+    @Test
+    void pointer_compteDeLaSociete_apresLeRapprochement_ecritLeCompte() throws Exception {
+        ComFolder folder = newFolder("DOS-RSP-64");
+        CfgCompany societe = societe("SOC-OK");
+        UUID reglementId = reglementAPointer(folder, societe);
+        StlAccount compte = compte(societe);
+        rapprochement(compte, LocalDateTime.of(2026, 8, 31, 0, 0));
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pointage("2026-09-05T09:00:00", compte.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.societeId").value(societe.getId().toString()));
+
+        StlSettlement pointe = settlementRepository.findById(reglementId).orElseThrow();
+        assertThat(pointe.getStlAccount().getId()).isEqualTo(compte.getId());
+    }
+
+    @Test
+    void comptes_filtresSurLaSociete_sansParametreTous() throws Exception {
+        CfgCompany societe = societe("SOC-LISTE");
+        StlAccount deLaSociete = compte(societe);
+        StlAccount autre = compte(societe("SOC-AUTRE"));
+
+        mockMvc.perform(get("/api/referentiels/comptes").param("societeId", societe.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(deLaSociete.getId().toString()));
+        mockMvc.perform(get("/api/referentiels/comptes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItems(
+                        deLaSociete.getId().toString(), autre.getId().toString())));
     }
 
     @Test
@@ -588,7 +734,7 @@ class ReglementStatutPreuveTest {
 
         mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"statut\":\"POINTED\",\"dateReglement\":\"2026-09-05T09:00:00\"}"))
+                        .content(pointage("2026-09-05T09:00:00", compte(null).getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("POINTED"))
                 .andExpect(jsonPath("$.dateReglement").value("2026-09-05T09:00:00"));
@@ -641,7 +787,7 @@ class ReglementStatutPreuveTest {
 
         mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"statut\":\"POINTED\",\"dateReglement\":\"2026-09-05T09:00:00\"}"))
+                        .content(pointage("2026-09-05T09:00:00", compte(null).getId())))
                 .andExpect(status().isOk());
 
         // POINTED est terminal : ni re-pointage, ni annulation après coup.

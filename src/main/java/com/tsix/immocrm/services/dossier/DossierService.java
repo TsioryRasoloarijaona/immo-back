@@ -118,6 +118,7 @@ public class DossierService {
     private final WorkflowDossier workflow;
     private final OffreOrigineDossier offreOrigine;
     private final ArchivageProspectionsVente archivage;
+    private final AlertesImpayes alertesImpayes;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -153,6 +154,7 @@ public class DossierService {
         this.workflow = ecrituresOmran.workflow();
         this.offreOrigine = ecrituresOmran.offreOrigine();
         this.archivage = ecrituresOmran.archivage();
+        this.alertesImpayes = ecrituresOmran.alertes();
     }
 
     /**
@@ -193,7 +195,7 @@ public class DossierService {
      * ont été libérés, il montre son lot principal ({@code ComFolder.StkItemId}). FEATURE-liberer-lot.md R8.
      */
     private List<ArticleSummaryDto> articlesDuDossier(ComFolder folder) {
-        if (estSorti(folder) && folder.getStkItem() != null) {
+        if (DossierSorti.estSorti(folder) && folder.getStkItem() != null) {
             return List.of(toArticleSummary(folder.getStkItem()));
         }
         return stkItemRepository.findByComFolderId(folder.getId()).stream()
@@ -289,6 +291,9 @@ public class DossierService {
         List<ComDocument> echeancier = echeancierInitial(folder, tranche, request.prix(),
                 offre.map(OffreRetenue::schema).orElse(List.of()));
         creationOmran.completerAvecEcheancier(folder, echeancier);
+        alertesImpayes.synchroniser(echeancier);
+        // Sale.cs:BeforeInsert → VerifThreshold : sur l'échéancier écrit, la transaction annule tout en cas de 409.
+        workflow.verifierEnregistrement(folder);
         folder = folderRepository.save(folder);
         synchroniserTypeTiers(folder);
 
@@ -719,19 +724,6 @@ public class DossierService {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId));
         return montantsDossier.calculer(folder);
-    }
-
-    /** Équivaut au {@code IsCancellation} de la vue légataire, d'où aucune colonne mappée pour l'obtenir. */
-    static boolean estSorti(ComFolder f) {
-        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
-            return false;
-        }
-        // fromCode lève sur un code hors référentiel : pas de 500 sur les montants pour autant.
-        try {
-            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     /** Vide si le dossier n'a pas de statut <b>ou</b> un code inconnu : les appelants les traitent pareil. */

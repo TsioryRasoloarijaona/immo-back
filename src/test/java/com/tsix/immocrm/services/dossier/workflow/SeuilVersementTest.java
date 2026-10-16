@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.dossier.workflow;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,6 +17,46 @@ class SeuilVersementTest {
     private static SituationFinanciere verse(BigDecimal avanceReglee, BigDecimal credit) {
         return new SituationFinanciere(PRIX, credit, BigDecimal.ZERO, avanceReglee, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, List.of());
+    }
+
+    private static final LocalDateTime REMISE_PREVUE = LocalDateTime.of(2027, 6, 30, 0, 0);
+    private static final SeuilVersement.DelaiMax DELAI_90 = new SeuilVersement.DelaiMax(true, 90);
+
+    @Test
+    void delaiMax_derniereEcheanceApresRemisePlusDelai_refuse() {
+        assertThat(SeuilVersement.delaiMax(DELAI_90, REMISE_PREVUE.plusDays(91), REMISE_PREVUE, null))
+                .contains("Vous avez dépassé le délai max de paiement !");
+    }
+
+    @Test
+    void delaiMax_derniereEcheanceAuDernierJour_accepte() {
+        assertThat(SeuilVersement.delaiMax(DELAI_90, REMISE_PREVUE.plusDays(90), REMISE_PREVUE, null)).isEmpty();
+    }
+
+    @Test
+    void delaiMax_optionDesactivee_aucunControle() {
+        SeuilVersement.DelaiMax sansOption = new SeuilVersement.DelaiMax(false, 90);
+
+        assertThat(SeuilVersement.delaiMax(sansOption, REMISE_PREVUE.plusYears(5), REMISE_PREVUE, null)).isEmpty();
+    }
+
+    @Test
+    void delaiMax_sansRemisePrevue_comparerALaRemiseEffective() {
+        assertThat(SeuilVersement.delaiMax(DELAI_90, REMISE_PREVUE.plusDays(91), null, REMISE_PREVUE))
+                .contains("Vous avez dépassé le délai max de paiement");
+    }
+
+    @Test
+    void delaiMax_aucuneDateDeRemise_aucunControle() {
+        assertThat(SeuilVersement.delaiMax(DELAI_90, REMISE_PREVUE, null, null)).isEmpty();
+    }
+
+    @Test
+    void creditMax_creditAuDelaDuPourcentage_refuse() {
+        SeuilVersement.Regles max70 = new SeuilVersement.Regles(false, false, true, new BigDecimal("0.7"));
+
+        assertThat(SeuilVersement.creditMax(max70, new BigDecimal("700000"), PRIX))
+                .contains("Vous avez dépassez le montant max du crédit !");
     }
 
     @Test

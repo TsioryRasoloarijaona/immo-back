@@ -10,4 +10,6 @@ public interface StlAccountRepository extends JpaRepository<StlAccount, UUID> {
 
     /** Pas de colonne Sorting : tri alphabétique. */
     List<StlAccount> findAllByOrderByDescriptionAsc();
+
+    List<StlAccount> findByCfgCompanyIdOrderByDescriptionAsc(UUID societeId);
 }

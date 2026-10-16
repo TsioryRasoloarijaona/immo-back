@@ -63,7 +63,7 @@ public final class TropPercu {
                 : nonNul(prix).add(nonNul(modifications))
                         .add(somme(lignes, l -> l.frais() && l.auCredit()))
                         .add(penalites(lignes));
-        return new Bilan(total, regleHorsAnnulation.subtract(regle(lignes, Ligne::resiliation)));
+        return new Bilan(total, regleHorsAnnulation.subtract(rembourse(lignes, Ligne::resiliation)));
     }
 
     /** Paramètres : ceux de {@link #bilan}. */
@@ -72,12 +72,21 @@ public final class TropPercu {
         if (reste.signum() >= 0) {
             return Resultat.AUCUN;
         }
-        // TropPercuRest = TropPercu − TropPercuSettled, TropPercuSettled = −Σ réglé des échéances au débit.
-        // Écart voulu à la vue : elle ne compte que les remboursements passés par BuyDocument ; ici un
-        // remboursement réglé par décaissement compte aussi (voir RAPPORT-vente-socle.md).
+        // TropPercuRest = TropPercu − TropPercuSettled (remboursé, positif) ; voir FEATURE-dossier-durcissement.md §2.
+        // La résiliation remboursée est déjà ôtée du réglé (bilan) : ne pas la retrancher une seconde fois.
         BigDecimal tropPercu = reste.negate();
-        BigDecimal tropPercuRegleVue = regle(lignes, Ligne::auDebit).negate();
-        return new Resultat(tropPercu, tropPercu.add(tropPercuRegleVue));
+        BigDecimal tropPercuReste = tropPercu
+                .subtract(rembourse(lignes, l -> l.auDebit() && !l.resiliation()))
+                .max(BigDecimal.ZERO);
+        return new Resultat(tropPercu, tropPercuReste);
+    }
+
+    /**
+     * Montant décaissé vers le client sur les échéances retenues : −Σ réglé signé (un décaissement est négatif),
+     * quel que soit le sens de la catégorie, pour qu'un remboursement n'augmente jamais le trop-perçu.
+     */
+    private static BigDecimal rembourse(List<Ligne> lignes, Predicate<Ligne> filtre) {
+        return regle(lignes, filtre).negate();
     }
 
     private static BigDecimal penalites(List<Ligne> lignes) {

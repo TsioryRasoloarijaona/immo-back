@@ -8,10 +8,14 @@ import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 import static java.util.Objects.requireNonNullElse;
@@ -43,6 +47,14 @@ public class SituationFinanciereDossier {
         }
         return new SituationFinanciere(cumul.avance, cumul.credit, cumul.autoFinancement, cumul.avanceReglee,
                 cumul.creditRegle, cumul.autoFinancementRegle, cumul.modifications, cumul.echeances);
+    }
+
+    /** Date de la dernière échéance du dossier, toutes catégories ({@code Sale.cs:VerifThreshold} l.3084). */
+    public Optional<LocalDateTime> derniereEcheance(ComFolder dossier) {
+        return documentRepository.findByComFolderIdOrderByDocDateAsc(dossier.getId()).stream()
+                .map(ComDocument::getDocDate)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder());
     }
 
     private static final class Cumul {

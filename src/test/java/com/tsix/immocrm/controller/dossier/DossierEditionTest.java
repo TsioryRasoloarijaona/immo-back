@@ -120,6 +120,45 @@ class DossierEditionTest {
         assertThat(relu(dossier).getAgreementSavingDate()).isNull();
     }
 
+    /** Tranche à délai maximal de 30 jours après la remise des clés prévue, dernière échéance à J+60. */
+    private void echeanceHorsDelai() {
+        StkItem article = dossier.getStkItem();
+        article.setDeliveryDate(LocalDateTime.of(2027, 1, 1, 0, 0));
+        stkItemRepository.save(article);
+        var tranche = article.getStkHierarchy();
+        tranche.setIsWithVerifMaxEcheanceDelai(true);
+        tranche.setMaxEcheanceDelai(30);
+        fixture.echeance(dossier, fixture.categorieEcheance("AV-DELAI", false, false), new BigDecimal("1000"),
+                LocalDateTime.of(2027, 3, 2, 0, 0));
+    }
+
+    @Test
+    void enregistrement_dernierEcheanceHorsDelaiMax_409() throws Exception {
+        echeanceHorsDelai();
+
+        modifier(dossier, DIRECTION, "{\"minute\":\"2025-03-01T00:00:00\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Vous avez dépassé le délai max de paiement !"));
+    }
+
+    @Test
+    void enregistrement_echeanceDansLeDelai_accepte() throws Exception {
+        echeanceHorsDelai();
+        dossier.getStkItem().getStkHierarchy().setMaxEcheanceDelai(90);
+
+        modifier(dossier, DIRECTION, "{\"minute\":\"2025-03-01T00:00:00\"}")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void enregistrement_dossierSorti_pasDeControleDeDelai() throws Exception {
+        dossier = fixture.dossier("DOS-EDI-SORTI", fixture.tranche("EDI-SORTI", true), StatutDossier.ANNULATION);
+        echeanceHorsDelai();
+
+        modifier(dossier, ADMIN, "{\"annulationCauses\":\"Changement d'avis\"}")
+                .andExpect(status().isOk());
+    }
+
     @Test
     void champsAVider_clientInterdit_400() throws Exception {
         modifier(dossier, ADMIN, "{\"champsAVider\":[\"clientId\"]}")

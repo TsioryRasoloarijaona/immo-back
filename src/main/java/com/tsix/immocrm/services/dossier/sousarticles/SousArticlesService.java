@@ -1,7 +1,6 @@
 package com.tsix.immocrm.services.dossier.sousarticles;
 
 import com.tsix.immocrm.domain.ConventionRemise;
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.sousarticles.SousArticleDisponibleDto;
 import com.tsix.immocrm.dto.dossier.sousarticles.SousArticleDto;
 import com.tsix.immocrm.dto.dossier.sousarticles.SousArticlesDto;
@@ -10,12 +9,12 @@ import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
-import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
 import com.tsix.immocrm.services.dossier.TotauxDossierEcheancier;
 import com.tsix.immocrm.services.dossier.fiche.EcritureDossier;
@@ -188,19 +187,8 @@ public class SousArticlesService {
 
     /** Un dossier sorti a libéré ses articles : y rattacher un sous-article le réoccuperait. */
     private static void exigerDossierActif(ComFolder dossier) {
-        if (estSorti(Champs.de(dossier.getStrStatus(), StrStatus::getCode))) {
+        if (DossierSorti.estSorti(dossier)) {
             throw new ConflictException("Dossier annulé ou désisté : ses sous-articles ne se modifient plus.");
-        }
-    }
-
-    private static boolean estSorti(String code) {
-        if (code == null) {
-            return false;
-        }
-        try {
-            return StatutDossier.fromCode(code).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
         }
     }
 

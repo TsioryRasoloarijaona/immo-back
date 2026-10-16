@@ -112,7 +112,7 @@ public class VerificationSchemaEcriture {
     /** Statut courant « avec vérification du schéma », hors annulation et désistement (« hors sortie »). */
     static boolean soumis(ComFolder folder) {
         return folder.getStrStatus() != null && Boolean.TRUE.equals(folder.getStrStatus().getVerificationSchema())
-                && !DossierService.estSorti(folder);
+                && !DossierSorti.estSorti(folder);
     }
 
     private List<ComDocument> lignes(ComFolder folder) {

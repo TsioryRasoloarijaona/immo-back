@@ -226,12 +226,13 @@ public class ReferentielController {
 
     @GetMapping("/comptes")
     @Operation(
-            summary = "Dropdown \"Compte\" pour GET /api/encaissements",
-            description = "Comptes bancaires (StlAccount) — un compte par entité juridique en "
-                    + "données réelles."
+            summary = "Dropdown \"Compte\" (encaissements, pointage d'un règlement)",
+            description = "Comptes bancaires (StlAccount) triés par libellé ; filtrés sur la société si societeId est donné."
     )
-    public List<ReferentielItemDto> getComptes() {
-        return referentielService.comptes();
+    public List<ReferentielItemDto> getComptes(
+            @Parameter(description = "Société du règlement à pointer ; absent = tous les comptes.")
+            @RequestParam(required = false) UUID societeId) {
+        return referentielService.comptes(societeId);
     }
 
     @GetMapping("/depots")

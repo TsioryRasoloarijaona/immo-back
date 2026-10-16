@@ -116,6 +116,8 @@ public class FixtureDossierVente {
         s.setCode(statut.getCode());
         s.setSorting(statut.ordinal());
         s.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        s.setAnnulation(statut == StatutDossier.ANNULATION);
+        s.setResiliation(statut == StatutDossier.DESISTEMENT);
         return depots.statuts().save(s);
     }
 
