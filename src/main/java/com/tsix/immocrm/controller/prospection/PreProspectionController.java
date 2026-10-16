@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospection.CreerPreProspectionRequest;
 import com.tsix.immocrm.dto.prospection.LierProspectRequest;
@@ -145,6 +146,37 @@ public class PreProspectionController {
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @GetMapping("/totaux")
+    @Operation(
+            summary = "Résumés (Σ) de la liste des pré-prospections sur tout le filtre, pas sur une page",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Effectif du filtre et un résumé par jeton demandé"),
+                    @ApiResponse(responseCode = "400", description = "Jeton d'`agregats` inconnu, colonne non "
+                            + "agrégeable ou fonction refusée pour son type.", content = @Content)
+            })
+    public TotauxListeDto totauxPreProspections(
+            @Parameter(example = "surface:AVG")
+            @RequestParam(required = false) List<String> agregats,
+            @RequestParam(required = false) List<String> etape,
+            @RequestParam(required = false) List<String> origine,
+            @RequestParam(required = false) List<UUID> commercial,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @Parameter(example = "false")
+            @RequestParam(defaultValue = "false") boolean inclureSansTranche,
+            @Parameter(description = "Id(s) de projet de la tranche, comme la liste. Répétable.")
+            @RequestParam(required = false) List<UUID> projetId,
+            @Parameter(example = "2026-01-01")
+            @RequestParam(required = false) String dateDebut,
+            @Parameter(example = "2026-12-31")
+            @RequestParam(required = false) String dateFin,
+            @RequestParam(required = false) String search,
+            @Parameter(example = "true")
+            @RequestParam(required = false) Boolean ouvertes) {
+        return prospectionService.totauxPreProspections(new FiltresListeProspection(etape, origine, commercial,
+                        trancheId, inclureSansTranche, dateDebut, dateFin, search, ouvertes), projetId,
+                ColonneProspection.resoudreAgregats(agregats));
     }
 
     @PostMapping

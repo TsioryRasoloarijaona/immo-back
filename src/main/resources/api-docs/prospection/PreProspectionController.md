@@ -99,6 +99,40 @@ ouvertes, `false` = archivées.
 tranche ; sans `trancheId`, seulement celles sans tranche. Les effectifs retombent sur le
 `totalElements` de la liste appelée avec les mêmes filtres.
 
+## totauxPreProspections
+
+Les résumés Σ de la liste plate (bande « Totaux sur N ligne(s) filtrée(s) »), calculés sur **toutes**
+les pré-prospections du filtre et non sur la page affichée : passer de la page 1 à la page 2 ne les
+change pas. Pas de pagination, pas de groupe : en mode groupé, les `totaux` de `/groupes` servent.
+
+**Mêmes lignes que la liste** : mêmes filtres, même sens, même périmètre commercial et même
+restriction aux entités juridiques actives que `GET /api/pre-prospections`. `nombreTotal` égale donc
+le `totalElements` de la liste appelée avec les mêmes filtres.
+
+### param agregats
+
+Mêmes jetons et mêmes règles que `GET /api/pre-prospections/groupes` : un **nom nu** (`surface`) vaut
+une somme, un nom **qualifié** (`surface:AVG`) applique la fonction nommée (`SUM`, `AVG`, `MIN`,
+`MAX`, `COUNT`). Les fonctions acceptées par colonne sont publiées par le catalogue (`fonctions`) :
+nombre et montant toutes, date `MIN`/`MAX`/`COUNT`, texte `COUNT`. Chaque résultat revient sous le
+jeton tel qu'envoyé.
+
+Les colonnes calculées par page (`joursInactivite`, `nbInteractions`, `derniere*`, `dossier*`,
+`statutDossier`) ne sont pas agrégeables : 400. `nbVisites` et `derniereVisiteDate` le sont, comme
+dans `/groupes`.
+
+Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
+
+### param ouvertes
+
+Filtre d'archivage à trois états, **identique à celui de la liste** : absent = tout, `true` =
+ouvertes, `false` = archivées.
+
+### param inclureSansTranche
+
+« Non affectés », **identique à la liste** : avec `trancheId`, ajoute les pré-prospections sans
+tranche ; sans `trancheId`, seulement celles sans tranche.
+
 ## creer
 
 Équivalent de l'écran « Pré-prospection » d'OMRAN, dont la trace d'audit fixe la séquence : code

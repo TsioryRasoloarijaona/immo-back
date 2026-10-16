@@ -430,6 +430,33 @@ class PerimetreCommercialTest {
                 .andExpect(jsonPath("$.montantBrut").value(1000));
     }
 
+    /** FEATURE-totaux-pre-prospections.md R2 : chaque commercial ne compte que son projet, l'administrateur tout. */
+    @Test
+    void totauxDesPreProspections_suiventLePerimetreDeLAppelant() throws Exception {
+        AdmUser commercialA = newUser("perim.pretot.a." + UUID.randomUUID());
+        affecter(commercialA, projetA);
+        AdmUser commercialB = newUser("perim.pretot.b." + UUID.randomUUID());
+        affecter(commercialB, projetB);
+        AdmUser admin = newUser("perim.pretot.admin." + UUID.randomUUID());
+        affecter(admin, projetA);
+        donnerRole(admin, "Administrateur");
+        newPreProspection("PRE-PERIM-TOT-A1", trancheA);
+        newPreProspection("PRE-PERIM-TOT-A2", trancheA);
+        newPreProspection("PRE-PERIM-TOT-B1", trancheB);
+
+        verifierTotauxPreProspections(connecte(commercialA, "Commercial"), 2);
+        verifierTotauxPreProspections(connecte(commercialB, "Commercial"), 1);
+        verifierTotauxPreProspections(connecte(admin, "Administrateur"), 3);
+    }
+
+    private void verifierTotauxPreProspections(RequestPostProcessor appelant, int attendu) throws Exception {
+        mockMvc.perform(get("/api/pre-prospections/totaux").param("search", "PRE-PERIM-TOT-")
+                        .param("agregats", "code:COUNT").with(appelant))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombreTotal").value(attendu))
+                .andExpect(jsonPath("$.totaux['code:COUNT']").value(attendu));
+    }
+
     // ------------------------------------------------------------------ §8.3 — non-régression
 
     @Test
