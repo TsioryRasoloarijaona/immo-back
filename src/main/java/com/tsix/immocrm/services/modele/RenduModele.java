@@ -17,14 +17,19 @@ import org.docx4j.wml.HeaderReference;
 import org.docx4j.wml.ObjectFactory;
 import org.docx4j.wml.SectPr;
 import org.jsoup.helper.W3CDom;
+import org.jsoup.nodes.Comment;
 import org.jsoup.nodes.DataNode;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.NodeTraversor;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -66,7 +71,7 @@ public class RenduModele {
             builder.useProtocolsStreamImplementation(url -> {
                 throw new IllegalStateException("Ressource externe refusée : " + url);
             }, "http", "https", "file", "jar", "ftp");
-            builder.withW3cDocument(new W3CDom().fromJsoup(document), null);
+            builder.withW3cDocument(new W3CDom().fromJsoup(pourXml(document)), null);
             builder.toStream(out);
             builder.run();
         } catch (IOException | RuntimeException e) {
@@ -102,7 +107,7 @@ public class RenduModele {
     private static List<Object> convertir(WordprocessingMLPackage paquet, Element contenu) throws Docx4JException {
         Document document = document(STYLE_COMMUN);
         document.body().appendChildren(contenu.childNodesCopy());
-        return new XHTMLImporterImpl(paquet).convert(document.outerHtml(), null);
+        return new XHTMLImporterImpl(paquet).convert(pourXml(document).outerHtml(), null);
     }
 
     private static void ajouterEnTete(WordprocessingMLPackage paquet, SectPr section, List<Object> contenu)
@@ -129,6 +134,36 @@ public class RenduModele {
         reference.setId(relation.getId());
         reference.setType(HdrFtrRef.DEFAULT);
         section.getEGHdrFtrReferences().add(reference);
+    }
+
+    /**
+     * Le XHTML passe par un parseur XML (docx4j) : commentaires (« -- » interdit) et caractères de contrôle collés
+     * depuis Word (U+000B…) y sont fatals. Retirés ici, pour le contenu comme pour les valeurs des champs.
+     */
+    static Document pourXml(Document document) {
+        List<Node> commentaires = new ArrayList<>();
+        NodeTraversor.traverse((noeud, profondeur) -> {
+            if (noeud instanceof Comment) {
+                commentaires.add(noeud);
+            } else if (noeud instanceof TextNode texte) {
+                texte.text(caracteresXml(texte.getWholeText()));
+            } else if (noeud instanceof Element element) {
+                element.attributes().forEach(a -> a.setValue(caracteresXml(a.getValue())));
+            }
+        }, document);
+        commentaires.forEach(Node::remove);
+        return document;
+    }
+
+    private static String caracteresXml(String texte) {
+        StringBuilder propre = new StringBuilder(texte.length());
+        texte.codePoints().map(c -> permisEnXml(c) ? c : ' ').forEach(propre::appendCodePoint);
+        return propre.toString();
+    }
+
+    private static boolean permisEnXml(int c) {
+        return c == 0x9 || c == 0xA || c == 0xD || (c >= 0x20 && c <= 0xD7FF)
+                || (c >= 0xE000 && c <= 0xFFFD) || (c >= 0x10000 && c <= 0x10FFFF);
     }
 
     private static Document document(String style) {
