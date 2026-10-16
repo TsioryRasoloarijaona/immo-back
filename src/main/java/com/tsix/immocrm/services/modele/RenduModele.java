@@ -8,6 +8,7 @@ import org.docx4j.jaxb.Context;
 import org.docx4j.model.structure.PageSizePaper;
 import org.docx4j.openpackaging.exceptions.Docx4JException;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
+import org.docx4j.openpackaging.parts.Part;
 import org.docx4j.openpackaging.parts.WordprocessingML.FooterPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.HeaderPart;
 import org.docx4j.relationships.Relationship;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * HTML rempli → PDF (openhtmltopdf) ou Word (docx4j ImportXHTML), même feuille de style. Le document est construit par
@@ -42,6 +44,7 @@ public class RenduModele {
     private static final String ENTETE = "entete";
     private static final String PIED = "pied";
     private static final double TWIPS_PAR_MM = 1440 / 25.4;
+    private static final int A4_LARGEUR_TWIPS = 11906;
     private static final String STYLE_COMMUN = """
             body { font-family: sans-serif; font-size: 9.5pt; }
             h1 { font-size: 14pt; margin: 0 0 8pt 0; }
@@ -89,12 +92,15 @@ public class RenduModele {
             section.getPgMar().setLeft(twips(miseEnPage.margeGauche()));
             section.getPgMar().setRight(twips(miseEnPage.margeDroite()));
 
-            paquet.getMainDocumentPart().getContent().addAll(convertir(paquet, corps));
+            int largeurUtile = A4_LARGEUR_TWIPS - twips(miseEnPage.margeGauche()).intValue()
+                    - twips(miseEnPage.margeDroite()).intValue();
+            Conversion conversion = new Conversion(paquet, largeurUtile, new AtomicInteger());
+            paquet.getMainDocumentPart().getContent().addAll(conversion.convertir(paquet.getMainDocumentPart(), corps));
             if (enTete != null) {
-                ajouterEnTete(paquet, section, convertir(paquet, enTete));
+                ajouterEnTete(conversion, section, enTete);
             }
             if (pied != null) {
-                ajouterPied(paquet, section, convertir(paquet, pied));
+                ajouterPied(conversion, section, pied);
             }
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             paquet.save(out);
@@ -104,32 +110,37 @@ public class RenduModele {
         }
     }
 
-    private static List<Object> convertir(WordprocessingMLPackage paquet, Element contenu) throws Docx4JException {
-        Document document = document(STYLE_COMMUN);
-        document.body().appendChildren(contenu.childNodesCopy());
-        return new XHTMLImporterImpl(paquet).convert(pourXml(document).outerHtml(), null);
+    /** Un import par partie : ses images doivent être rattachées à cette partie (voir {@link ImagesWordModele}). */
+    private record Conversion(WordprocessingMLPackage paquet, int largeurMaxTwips, AtomicInteger identifiants) {
+
+        List<Object> convertir(Part cible, Element contenu) throws Docx4JException {
+            Document document = document(STYLE_COMMUN);
+            document.body().appendChildren(contenu.childNodesCopy());
+            XHTMLImporterImpl importeur = new XHTMLImporterImpl(paquet);
+            importeur.setXHTMLImageHandler(new ImagesWordModele(cible, largeurMaxTwips, identifiants));
+            return importeur.convert(pourXml(document).outerHtml(), null);
+        }
     }
 
-    private static void ajouterEnTete(WordprocessingMLPackage paquet, SectPr section, List<Object> contenu)
-            throws Docx4JException {
+    /** La partie est ajoutée au paquet avant la conversion : ses images s'y rattachent. */
+    private static void ajouterEnTete(Conversion conversion, SectPr section, Element contenu) throws Docx4JException {
         ObjectFactory fabrique = Context.getWmlObjectFactory();
         HeaderPart partie = new HeaderPart();
         partie.setJaxbElement(fabrique.createHdr());
-        partie.getContent().addAll(contenu);
-        Relationship relation = paquet.getMainDocumentPart().addTargetPart(partie);
+        Relationship relation = conversion.paquet().getMainDocumentPart().addTargetPart(partie);
+        partie.getContent().addAll(conversion.convertir(partie, contenu));
         HeaderReference reference = fabrique.createHeaderReference();
         reference.setId(relation.getId());
         reference.setType(HdrFtrRef.DEFAULT);
         section.getEGHdrFtrReferences().add(reference);
     }
 
-    private static void ajouterPied(WordprocessingMLPackage paquet, SectPr section, List<Object> contenu)
-            throws Docx4JException {
+    private static void ajouterPied(Conversion conversion, SectPr section, Element contenu) throws Docx4JException {
         ObjectFactory fabrique = Context.getWmlObjectFactory();
         FooterPart partie = new FooterPart();
         partie.setJaxbElement(fabrique.createFtr());
-        partie.getContent().addAll(contenu);
-        Relationship relation = paquet.getMainDocumentPart().addTargetPart(partie);
+        Relationship relation = conversion.paquet().getMainDocumentPart().addTargetPart(partie);
+        partie.getContent().addAll(conversion.convertir(partie, contenu));
         FooterReference reference = fabrique.createFooterReference();
         reference.setId(relation.getId());
         reference.setType(HdrFtrRef.DEFAULT);

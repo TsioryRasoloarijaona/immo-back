@@ -153,21 +153,20 @@
         <dependency>
             <groupId>io.github.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>
-            <version>1.1.22</version>
+            <version>1.1.31</version>
         </dependency>
 
-        <!-- HTML → Word (.docx) -->
+        <!-- HTML → Word (.docx) : ImportXHTML-core suit io.github.openhtmltopdf (l'ancien ImportXHTML 11.4.8
+             tirait com.openhtmltopdf 1.0.10, en conflit sur les mêmes paquets). -->
         <dependency>
             <groupId>org.docx4j</groupId>
             <artifactId>docx4j-JAXB-ReferenceImpl</artifactId>
-            <version>11.5.1</version>
+            <version>11.5.14</version>
         </dependency>
-        <!-- Source: https://mvnrepository.com/artifact/org.docx4j/docx4j-ImportXHTML -->
         <dependency>
             <groupId>org.docx4j</groupId>
-            <artifactId>docx4j-ImportXHTML</artifactId>
-            <version>11.4.8</version>
-            <scope>compile</scope>
+            <artifactId>docx4j-ImportXHTML-core</artifactId>
+            <version>11.5.14</version>
         </dependency>
     </dependencies>
 

@@ -6,7 +6,6 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -102,8 +101,6 @@ class ModeleDocumentLogoTest {
     }
 
     @Test
-    @Disabled("Toute image en Word échoue (AbstractMethodError) : docx4j-ImportXHTML 11.4.8 tire com.openhtmltopdf 1.0.10, "
-            + "incompatible avec io.github.openhtmltopdf 1.1.22 — changement de pom.xml à décider (voir RAPPORT-modeles-documents.md)")
     void logoDeCentKoDansLEnTete_renduEnWord() throws Exception {
         ComFolder dossier = fixtureActe.dossier("LOGO-DOCX", false, true);
         String id = creerAvecLogo("TST_LOGO_DOCX");
@@ -115,6 +112,24 @@ class ModeleDocumentLogoTest {
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
             assertThat(document.getHeaderList()).isNotEmpty()
                     .anySatisfy((XWPFHeader h) -> assertThat(h.getAllPictures()).isNotEmpty());
+        }
+    }
+
+    @Test
+    void imageDansLeCorps_renduEnWordDansLeCorps() throws Exception {
+        ComFolder dossier = fixtureActe.dossier("IMG-CORPS", false, true);
+        String reponse = mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON)
+                        .content(modele("TST_IMAGE_CORPS", "<p>" + png(60) + "</p>", "<p>En-tête</p>")))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String id = json.readTree(reponse).get("id").asString();
+
+        byte[] docx = mockMvc.perform(get(GENERER, id).param(FICHE_ID, dossier.getId().toString()).param("format", "docx"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertThat(document.getAllPictures()).isNotEmpty();
         }
     }
 
