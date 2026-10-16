@@ -74,6 +74,9 @@ class PerimetreInterceptorInvarianteTest {
             "/api/dossiers/groupes",
             "/api/prospections/groupes",
             "/api/pre-prospections/groupes",
+            // Même Specification que la liste (ProspectionService#specPreProspectionsVisibles) ;
+            // vérifié par PerimetreCommercialTest#totauxDesPreProspections_suiventLePerimetreDeLAppelant.
+            "/api/pre-prospections/totaux",
             // Même justification, pour les encaissements
             // (FEATURE-colonnes-groupement-encaissements.md) : EncaissementService#grouper compose
             // specEncaissements avec PerimetreCommercialService#filtreEncaissements, la même
