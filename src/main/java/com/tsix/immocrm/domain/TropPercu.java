@@ -73,8 +73,11 @@ public final class TropPercu {
             return Resultat.AUCUN;
         }
         // TropPercuRest = TropPercu − TropPercuSettled (remboursé, positif) ; voir FEATURE-dossier-durcissement.md §2.
+        // La résiliation remboursée est déjà ôtée du réglé (bilan) : ne pas la retrancher une seconde fois.
         BigDecimal tropPercu = reste.negate();
-        BigDecimal tropPercuReste = tropPercu.subtract(rembourse(lignes, Ligne::auDebit)).max(BigDecimal.ZERO);
+        BigDecimal tropPercuReste = tropPercu
+                .subtract(rembourse(lignes, l -> l.auDebit() && !l.resiliation()))
+                .max(BigDecimal.ZERO);
         return new Resultat(tropPercu, tropPercuReste);
     }
 
