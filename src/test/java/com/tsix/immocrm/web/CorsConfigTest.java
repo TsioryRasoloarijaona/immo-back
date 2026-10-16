@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +80,19 @@ class CorsConfigTest {
     void apiEndpoint_rejectsLookalikeDomain() throws Exception {
         mockMvc.perform(get("/api/projets").header(HttpHeaders.ORIGIN, "https://arpent.evil-ayaddeveloppement.com"))
                 .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Le 401 vient de la chaîne de sécurité, avant MVC : sans en-têtes CORS, le navigateur le masque en erreur CORS et
+     * le front ne voit jamais le 401 (« non connecté », « session expirée »).
+     */
+    @Test
+    @WithAnonymousUser
+    void nonConnecte_le401PorteLesEnTetesCors() throws Exception {
+        mockMvc.perform(get("/api/mon-compte").header(HttpHeaders.ORIGIN, "http://localhost:5173"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5173"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
