@@ -11,6 +11,9 @@ logiciel de bureau — est-il bien importé ?**
 - `grafana-vue-generale.json` — vue générale de l'API (santé, HTTP, JVM, pools) ; son
   premier panneau, **« Version déployée »**, affiche le tag de l'image qui tourne
   (`sha-…` = commit de merge sur `main`). Réimporter après chaque modification du JSON.
+- `grafana-utilisateurs.json` — **qui utilise Arpent** : connectés maintenant, actifs dans le
+  temps, dernière activité par utilisateur, requêtes et routes appelées par utilisateur
+  (voir « Suivi des utilisateurs » ci-dessous).
 
 ## Prérequis
 
@@ -46,3 +49,26 @@ logiciel de bureau — est-il bien importé ?**
 - Échec répété : `increase(sync_table_failures_total[15m]) > 0`.
 
 Voir `instructions/FEATURE-moniteur-pipeline-synchro.md` pour le détail.
+
+## Suivi des utilisateurs
+
+| Métrique | Type | Sens |
+|---|---|---|
+| `arpent_utilisateur_requetes_total{utilisateur,type,methode,uri}` | counter | requêtes authentifiées ; `uri` = modèle de route (`/api/prospections/{id}`), jamais l'id ; `type` = `session` ou `cle_api` |
+| `arpent_utilisateur_derniere_activite_secondes{utilisateur,type}` | gauge | epoch de la dernière requête, flux SSE de notifications exclu ; repart vide au redémarrage (le dashboard lit `max_over_time`) |
+
+Vie privée (loi 09-08) : seuls login, type d'accès, méthode et modèle de route sont collectés —
+jamais corps, query string, id, IP ni donnée client. **Informer le personnel avant la mise en
+service.**
+
+Mise en service après le merge (le déploiement de l'image suffit côté application) :
+
+1. Vérifier sur l'hôte, après une action dans Arpent :
+   ```bash
+   curl -s http://127.0.0.1:9091/actuator/prometheus | grep '^arpent_utilisateur'
+   ```
+2. Grafana → `Dashboards → Import → Upload JSON` → `grafana-utilisateurs.json`, datasource
+   Prometheus.
+3. Historique = rétention Prometheus (15 j par défaut). Pour comparer des mois, passer
+   `--storage.tsdb.retention.time=90d` dans la commande du service Prometheus du compose, puis
+   `docker compose up -d prometheus` (≈ quelques Mo pour ~2 000 séries).
