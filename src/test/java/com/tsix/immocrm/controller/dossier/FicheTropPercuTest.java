@@ -259,6 +259,30 @@ class FicheTropPercuTest {
                 .andExpect(jsonPath("$.parCategorie[?(@.categorie=='REMB-TP-5')].montant").value(-50000.0));
     }
 
+    /** FEATURE-dossier-durcissement.md §2 : un remboursement décaissé solde le trop-perçu au lieu de l'augmenter. */
+    @Test
+    void remboursementDecaisse_plusDeResteARembourser() throws Exception {
+        UUID dossierId = setUpDossier("7", "1050000.00");
+        ComSettlementCategory remboursement = new ComSettlementCategory();
+        remboursement.setId(UUID.randomUUID());
+        remboursement.setCode("REMB-TP-7");
+        remboursement.setIsCredit(false);
+        remboursement.setExcludeFromPrice(false);
+        categoryRepository.save(remboursement);
+        ComDocument ligne = new ComDocument();
+        ligne.setId(UUID.randomUUID());
+        ligne.setComFolder(echeance.getComFolder());
+        ligne.setAmount(new BigDecimal("50000.00"));
+        ligne.setComSettlementCategory(remboursement);
+        documentRepository.save(ligne);
+        reglement(ligne, false, "50000.00");
+
+        mockMvc.perform(get("/api/dossiers/{id}/montants", dossierId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tropPercu").value(50000.0))
+                .andExpect(jsonPath("$.tropPercuReste").value(0));
+    }
+
     /** Revue : frais payés en plus du prix = ni trop-perçu ni reste négatif ; même source que GET .../montants. */
     @Test
     void fraisPayes_resteNulEtAucunTropPercu() {

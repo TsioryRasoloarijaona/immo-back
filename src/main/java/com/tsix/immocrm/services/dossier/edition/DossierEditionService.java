@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.dossier.edition;
 
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.edition.DossierModifieDto;
 import com.tsix.immocrm.dto.dossier.edition.DroitsEditionDto;
 import com.tsix.immocrm.dto.dossier.edition.ModifierDossierRequest;
@@ -9,9 +8,11 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
 import com.tsix.immocrm.services.dossier.fiche.DossierFicheService;
 import com.tsix.immocrm.services.dossier.fiche.EcritureDossier;
+import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -66,10 +67,12 @@ public class DossierEditionService {
     private final NoteEdition notes;
     private final HistoriqueDossier historique;
     private final DossierFicheService ficheService;
+    private final WorkflowDossier workflow;
 
     public DossierEditionService(EcritureDossier ecriture, ChampsEdition champs, PrixEdition prix,
                                  ClientEdition client, NoteEdition notes, HistoriqueDossier historique,
-                                 DossierFicheService ficheService) {
+                                 DossierFicheService ficheService, WorkflowDossier workflow) {
+        this.workflow = workflow;
         this.ecriture = ecriture;
         this.champs = champs;
         this.prix = prix;
@@ -83,7 +86,7 @@ public class DossierEditionService {
     public DroitsEditionDto droits(UUID dossierId) {
         ComFolder dossier = ecriture.charger(dossierId);
         Set<String> roles = rolesAppelant();
-        boolean sorti = estSorti(dossier);
+        boolean sorti = DossierSorti.estSorti(dossier);
         List<String> groupes = Arrays.stream(GroupeEdition.values())
                 .filter(g -> g.autorise(roles))
                 .filter(g -> !sorti || g == GroupeEdition.ANNULATION)
@@ -110,7 +113,7 @@ public class DossierEditionService {
         autoriser(groupes, roles);
         VerrousEdition.verifier(dossier, r, aVider, roles);
         prix.verifierVerrou(dossier, r, PlafondRemise.niveauDe(roles));
-        boolean sorti = estSorti(dossier);
+        boolean sorti = DossierSorti.estSorti(dossier);
         if (sorti && !EnumSet.of(GroupeEdition.ANNULATION).containsAll(groupes)) {
             throw new ConflictException("Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.");
         }
@@ -133,6 +136,7 @@ public class DossierEditionService {
             OrdreDatesDossier.verifier(dossier);
         }
         if (!modifies.isEmpty()) {
+            workflow.verifierEnregistrement(dossier);
             ecriture.signer(dossier);
             historique.evenement(dossier, tronquer("Modification : " + String.join(", ", modifies)));
         }
@@ -239,17 +243,6 @@ public class DossierEditionService {
                 .filter(a -> a != null && a.startsWith(PREFIXE_ROLE))
                 .map(a -> a.substring(PREFIXE_ROLE.length()))
                 .collect(Collectors.toSet());
-    }
-
-    private static boolean estSorti(ComFolder f) {
-        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
-            return false;
-        }
-        try {
-            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     private static String tronquer(String texte) {

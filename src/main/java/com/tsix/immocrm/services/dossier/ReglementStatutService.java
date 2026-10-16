@@ -13,6 +13,7 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -23,6 +24,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -39,14 +41,21 @@ public class ReglementStatutService {
     private final StlSettlementLineRepository settlementLineRepository;
     private final PieceJointeSupport pieceJointeSupport;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final EffetsStatut effets;
     private final Clock clock;
+
+    /** Contrôle du compte au pointage et alertes d'impayé à l'annulation, regroupés (S107). */
+    @Component
+    public record EffetsStatut(ComptePointage compte, AlertesImpayes alertes) {
+    }
 
     public ReglementStatutService(ComFolderRepository folderRepository,
                                   StlSettlementRepository settlementRepository,
                                   StlSettlementLineRepository settlementLineRepository,
                                   PieceJointeSupport pieceJointeSupport,
-                                  UtilisateurAffiche utilisateurAffiche, Clock clock) {
+                                  UtilisateurAffiche utilisateurAffiche, EffetsStatut effets, Clock clock) {
         this.utilisateurAffiche = utilisateurAffiche;
+        this.effets = effets;
         this.clock = clock;
         this.folderRepository = folderRepository;
         this.settlementRepository = settlementRepository;
@@ -98,6 +107,7 @@ public class ReglementStatutService {
             if (request.dateReglement() == null) {
                 throw new InvalidRequestException("dateReglement est requise pour passer un règlement à POINTED");
             }
+            settlement.setStlAccount(effets.compte().verifier(settlement, request.compteId(), request.dateReglement()));
             settlement.setSettlementDate(request.dateReglement());
         }
 
@@ -105,6 +115,11 @@ public class ReglementStatutService {
         settlement.setUserUpdate(utilisateurAffiche.courant().nom());
         settlement.setUserUpdateDateTime(LocalDateTime.now(clock));
         settlement = settlementRepository.save(settlement);
+        if (cible == StatutReglement.CANCELED) {
+            // Le réglé annulé ne compte plus : le reste remonte et l'alerte d'impayé se réactive.
+            lignes.stream().map(StlSettlementLine::getComDocument).filter(Objects::nonNull).distinct()
+                    .forEach(effets.alertes()::synchroniser);
+        }
 
         // Le DTO porte la part d'une seule échéance ; un règlement éclaté en couvre plusieurs :
         // la première par id, pour rester déterministe.

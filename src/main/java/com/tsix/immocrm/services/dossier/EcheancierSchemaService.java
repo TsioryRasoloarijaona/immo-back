@@ -124,6 +124,7 @@ public class EcheancierSchemaService {
                 .toList();
         ecritures.reequilibrage().reporter(folder, creees.get(creees.size() - 1));
         Set<UUID> retirees = retirerLignesNulles(dossierId);
+        ecritures.alertes().synchroniser(creees.stream().filter(d -> !retirees.contains(d.getId())).toList());
         ecritures.totaux().rafraichir(folder);
         BigDecimal ecart = echeancierService.ecartSchema(folder);
         return creees.stream()

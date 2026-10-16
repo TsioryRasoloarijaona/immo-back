@@ -1,10 +1,10 @@
 package com.tsix.immocrm.services.dossier.liste;
 
 import com.tsix.immocrm.domain.ColonneDossier;
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TropPercu;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
@@ -124,7 +124,7 @@ public class MontantsParNatureDossier {
         m.put(TAUX_AVANCE, pourcentage(m.get(AVANCE), f.getPriceAfterDiscount()));
         m.put(TAUX_AVANCE_REEL, pourcentage(m.get(AVANCE_REGLEE), m.get(AVANCE)));
 
-        boolean sorti = estSorti(f);
+        boolean sorti = DossierSorti.estSorti(f);
         TropPercu.Bilan bilan = TropPercu.bilan(lignes, f.getPrice(), f.getModificationsAmount(), sorti);
         m.put(NET_A_PAYER_REGLE, bilan.totalRegle());
         m.put(NET_A_PAYER_RESTE, bilan.reste());
@@ -154,18 +154,6 @@ public class MontantsParNatureDossier {
             return BigDecimal.ZERO;
         }
         return nonNul(part).multiply(CENT).divide(base, ECHELLE, RoundingMode.HALF_UP);
-    }
-
-    /** Statut d'annulation ou de résiliation ({@code IsCancellation} de la vue) ; code inconnu = en cours. */
-    static boolean estSorti(ComFolder f) {
-        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
-            return false;
-        }
-        try {
-            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     private static Set<ColonneDossier> sommables() {

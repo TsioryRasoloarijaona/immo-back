@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier.workflow;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,9 +38,9 @@ public final class SeuilVersement {
     public static Optional<String> controler(Configuration config, Regles regles, SituationFinanciere situation,
                                              BigDecimal prixApresRemise, BigDecimal prix) {
         BigDecimal credit = situation.credit();
-        if (regles.verifCreditMax() && credit.signum() != 0
-                && credit.compareTo(nonNul(prix).multiply(nonNul(regles.pourcentageCreditMax()))) > 0) {
-            return Optional.of("Vous avez dépassez le montant max du crédit !");
+        Optional<String> creditMax = creditMax(regles, credit, prix);
+        if (creditMax.isPresent()) {
+            return creditMax;
         }
         if (config == null || config.operateur() == SANS_SEUIL) {
             return Optional.empty();
@@ -60,6 +61,39 @@ public final class SeuilVersement {
             // Sale.cs compare l'avance réglée au montant du crédit et affiche ratio × crédit : repris tel quel.
             BigDecimal avanceReglee = SituationFinanciere.auCentime(situation.avanceReglee());
             return comparer(config.operateur(), avanceReglee, credit, " du crédit", ratio, ratio.multiply(credit));
+        }
+        return Optional.empty();
+    }
+
+    /** Crédit maximal de la tranche ({@code Sale.cs:VerifThreshold} l.3097) : crédit &gt; prix × pourcentage. */
+    public static Optional<String> creditMax(Regles regles, BigDecimal credit, BigDecimal prix) {
+        if (regles.verifCreditMax() && credit.signum() != 0
+                && credit.compareTo(nonNul(prix).multiply(nonNul(regles.pourcentageCreditMax()))) > 0) {
+            return Optional.of("Vous avez dépassez le montant max du crédit !");
+        }
+        return Optional.empty();
+    }
+
+    /** Délai maximal de paiement de la tranche : option, nombre de jours ({@code MaxEcheanceDelai}, NULL = 0). */
+    public record DelaiMax(boolean verifier, Integer jours) {
+    }
+
+    /**
+     * {@code Sale.cs:VerifThreshold} l.3082-3095, textes repris tels quels (le second finit par « ! ») : dernière
+     * échéance après la remise des clés prévue + délai, ou après la remise effective si aucune n'est prévue.
+     */
+    public static Optional<String> delaiMax(DelaiMax delai, LocalDateTime derniereEcheance,
+                                            LocalDateTime remisePrevue, LocalDateTime remiseEffective) {
+        if (!delai.verifier() || derniereEcheance == null) {
+            return Optional.empty();
+        }
+        long jours = delai.jours() != null ? delai.jours() : 0;
+        if (remisePrevue == null && remiseEffective != null) {
+            return derniereEcheance.isAfter(remiseEffective.plusDays(jours))
+                    ? Optional.of("Vous avez dépassé le délai max de paiement") : Optional.empty();
+        }
+        if (remisePrevue != null && derniereEcheance.isAfter(remisePrevue.plusDays(jours))) {
+            return Optional.of("Vous avez dépassé le délai max de paiement !");
         }
         return Optional.empty();
     }

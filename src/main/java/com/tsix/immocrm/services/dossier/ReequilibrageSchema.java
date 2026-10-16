@@ -21,10 +21,13 @@ public class ReequilibrageSchema {
 
     private final ComDocumentRepository documentRepository;
     private final LigneEcheancierOmran ligneOmran;
+    private final AlertesImpayes alertes;
 
-    public ReequilibrageSchema(ComDocumentRepository documentRepository, LigneEcheancierOmran ligneOmran) {
+    public ReequilibrageSchema(ComDocumentRepository documentRepository, LigneEcheancierOmran ligneOmran,
+                               AlertesImpayes alertes) {
         this.documentRepository = documentRepository;
         this.ligneOmran = ligneOmran;
+        this.alertes = alertes;
     }
 
     /** À appeler une fois la ligne écrite (ou supprimée) ; rend la ligne qui a absorbé l'écart. */
@@ -40,7 +43,7 @@ public class ReequilibrageSchema {
             c.setAmount(requireNonNullElse(c.getAmount(), BigDecimal.ZERO).add(ecart));
             ligneOmran.completer(c, folder);
             ligneOmran.signerModification(c);
-            documentRepository.save(c);
+            alertes.synchroniser(documentRepository.save(c));
         });
         return cible;
     }

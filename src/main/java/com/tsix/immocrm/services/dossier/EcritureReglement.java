@@ -43,12 +43,14 @@ public class EcritureReglement {
     private final UtilisateurAffiche utilisateurAffiche;
     private final ReglementOmran reglementOmran;
     private final PenaliteRetardService penalites;
+    private final AlertesImpayes alertes;
     private final Clock clock;
 
     public EcritureReglement(AffectationsReglement affectations, DepotsReglement depots,
                              UtilisateurAffiche utilisateurAffiche, ReglementOmran reglementOmran,
-                             PenaliteRetardService penalites, Clock clock) {
+                             PenaliteRetardService penalites, AlertesImpayes alertes, Clock clock) {
         this.affectations = affectations;
+        this.alertes = alertes;
         this.depots = depots;
         this.utilisateurAffiche = utilisateurAffiche;
         this.reglementOmran = reglementOmran;
@@ -141,11 +143,12 @@ public class EcritureReglement {
 
     /** Avant l'enregistrement : la pénalité se calcule sur le reste d'avant ce règlement (FEATURE-impayes.md P3). */
     private void genererPenalites(List<LigneAffectee> lignes) {
-        lignes.forEach(ligne -> penalites.genererPenalite(ligne.echeance()));
+        lignes.forEach(ligne -> penalites.genererPenalite(ligne.echeance()).ifPresent(alertes::synchroniser));
     }
 
+    /** {@code SettlementLine.cs} AfterInsert : l'alerte d'impayé de chaque échéance réglée suit son nouveau reste. */
     private List<StlSettlementLine> ecrireLignes(StlSettlement reglement, List<LigneAffectee> lignes) {
-        return lignes.stream().map(ligne -> {
+        List<StlSettlementLine> ecrites = lignes.stream().map(ligne -> {
             StlSettlementLine line = new StlSettlementLine();
             line.setId(UUID.randomUUID());
             line.setStlSettlement(reglement);
@@ -153,6 +156,8 @@ public class EcritureReglement {
             line.setAmount(ligne.montant());
             return depots.lignes().save(line);
         }).toList();
+        lignes.stream().map(LigneAffectee::echeance).distinct().forEach(alertes::synchroniser);
+        return ecrites;
     }
 
     /** Un règlement naît IN_WORK, sans date de règlement : elle n'appartient qu'au passage à POINTED. */

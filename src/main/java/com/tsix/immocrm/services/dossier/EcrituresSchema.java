@@ -8,5 +8,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public record EcrituresSchema(DefautsEcheance defauts, VerificationSchemaEcriture verification,
-                              ReequilibrageSchema reequilibrage, TotauxDossierEcheancier totaux) {
+                              ReequilibrageSchema reequilibrage, TotauxDossierEcheancier totaux,
+                              AlertesImpayes alertes) {
 }

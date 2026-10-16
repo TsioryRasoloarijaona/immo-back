@@ -9,7 +9,8 @@ le front l'affiche « — ». Le « Prix contractuel » est `ComFolder.Agreement
 de schéma de financement qui ne sont pas paramétrées "Exclure ce montant du prix contractuel" », aide OMRAN),
 et non le total à payer.
 
-`aDesImpayes` alimente le bandeau « Ce dossier possède des pièces de règlement impayées » : vrai dès qu'une
-échéance du schéma de financement est échue (date dépassée) avec un reste dû positif, les règlements annulés
-ne comptant pas. `instructionNonLue` est vrai seulement pour le commercial destinataire d'une instruction
+`aDesImpayes` alimente le bandeau « Ce dossier possède des pièces de règlement impayées » : vrai dès que le
+dossier a une ligne de l'écran Impayés (`GET /api/impayes`), même règle : catégorie d'encaissement
+(`IsCredit`), statut du dossier « vente effective » (ni réservation, ni annulation, ni désistement), échéance
+au plus tard aujourd'hui et reste dû positif, les règlements annulés ne comptant pas. `instructionNonLue` est vrai seulement pour le commercial destinataire d'une instruction
 qu'il n'a pas encore lue (voir `PATCH /api/dossiers/{id}/instructions/{instructionId}/lue`).

@@ -8,5 +8,6 @@ import org.springframework.stereotype.Component;
 public record EcrituresOmranDossier(CreationDossierOmran creation, HistoriqueDossier historique,
                                     LigneEcheancierOmran ligneEcheancier, ControleSortieDossier controleSortie,
                                     MontantsDossier montants, WorkflowDossier workflow,
-                                    OffreOrigineDossier offreOrigine, ArchivageProspectionsVente archivage) {
+                                    OffreOrigineDossier offreOrigine, ArchivageProspectionsVente archivage,
+                                    AlertesImpayes alertes) {
 }

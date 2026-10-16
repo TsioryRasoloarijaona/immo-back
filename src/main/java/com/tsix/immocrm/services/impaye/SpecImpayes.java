@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.impaye;
 
 import com.tsix.immocrm.domain.ChampDateImpaye;
 import com.tsix.immocrm.domain.EchuA;
+import com.tsix.immocrm.domain.Impaye;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Échéances candidates des impayés, sans le filtre « reste &gt; 0 » ni le périmètre (ajouté par l'appelant).
@@ -54,16 +56,32 @@ final class SpecImpayes {
     static Specification<ComDocument> de(FiltresImpayes f, LocalDate aujourdhui, int age) {
         return (root, query, cb) -> {
             Jointures j = jointures(root, chargement(query.getResultType()));
-            List<Predicate> predicats = new ArrayList<>();
-            // R1 : catégorie d'encaissement, dossier à un statut de vente effective (NULL exclu).
-            predicats.add(cb.isTrue(j.categorie().get("isCredit")));
-            predicats.add(cb.isTrue(j.statut().get("venteEffective")));
+            List<Predicate> predicats = regleImpaye(j, cb);
             ajouterEchu(predicats, root.get(DOC_DATE), cb, f.echu(), aujourdhui, age);
             ajouterPeriode(predicats, root.get(DOC_DATE), cb, f, age);
             ajouterReferentiels(predicats, j, cb, f);
             ajouterTextes(predicats, root, j, cb, f);
             return cb.and(predicats.toArray(new Predicate[0]));
         };
+    }
+
+    /** Échéances échues d'un dossier selon la même règle que l'écran (sans filtre ni périmètre), reste non filtré. */
+    static Specification<ComDocument> duDossier(UUID dossierId, LocalDate aujourdhui) {
+        return (root, query, cb) -> {
+            Jointures j = jointures(root, chargement(query.getResultType()));
+            List<Predicate> predicats = regleImpaye(j, cb);
+            ajouterEchu(predicats, root.get(DOC_DATE), cb, EchuA.ECHEANCE, aujourdhui, 0);
+            predicats.add(cb.equal(j.dossier().get(ID), dossierId));
+            return cb.and(predicats.toArray(new Predicate[0]));
+        };
+    }
+
+    /** R1 : catégorie d'encaissement, dossier à un statut de vente effective (NULL exclu). */
+    private static List<Predicate> regleImpaye(Jointures j, CriteriaBuilder cb) {
+        List<Predicate> predicats = new ArrayList<>();
+        predicats.add(cb.isTrue(j.categorie().get("isCredit")));
+        predicats.add(cb.isTrue(j.statut().get("venteEffective")));
+        return predicats;
     }
 
     /** Pas de {@code fetch} dans une requête de comptage : Hibernate le refuse. */
@@ -90,10 +108,10 @@ final class SpecImpayes {
         return new Jointures(dossier, categorie, statut, article, tranche, projet, societe, client);
     }
 
-    /** R4 : « ≤ aujourd'hui » s'écrit {@code < demain 00:00}, comme {@code StatutEcheance.EN_RETARD}. */
+    /** R4 : borne de {@link Impaye#borneEchue}, la même que {@code StatutEcheance.EN_RETARD}. */
     private static void ajouterEchu(List<Predicate> predicats, Path<LocalDateTime> date, CriteriaBuilder cb,
                                     EchuA echu, LocalDate aujourdhui, int age) {
-        LocalDateTime demain = aujourdhui.plusDays(1).atStartOfDay();
+        LocalDateTime demain = Impaye.borneEchue(aujourdhui);
         switch (echu != null ? echu : EchuA.ECHEANCE) {
             case ECHEANCE -> predicats.add(cb.lessThan(date, demain));
             case RECOUVREMENT -> predicats.add(cb.lessThan(date, demain.minusDays(age)));

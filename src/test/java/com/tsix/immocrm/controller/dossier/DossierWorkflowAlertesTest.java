@@ -7,11 +7,13 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.fixtures.FixtureStatutsDossier;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.services.dossier.AlertesImpayes;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,11 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -49,6 +54,7 @@ class DossierWorkflowAlertesTest {
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private StrStatusRepository statusRepository;
     @Autowired private EntityManager em;
+    @Autowired private AlertesImpayes alertesImpayes;
 
     @Test
     void changementDeStatut_eteintLesRelancesDeLaProspection_epargneImpayesAutresProspectionsEtStatutsSuperieurs()
@@ -84,6 +90,78 @@ class DossierWorkflowAlertesTest {
                 () -> assertEquals(Boolean.TRUE, actif(impaye), "impayé épargné"),
                 () -> assertEquals(Boolean.TRUE, actif(autreProspection), "autre prospection intacte"),
                 () -> assertEquals(Boolean.TRUE, actif(statutSuperieur), "alerte d'un statut d'ordre supérieur intacte"));
+    }
+
+    /** FEATURE-dossier-durcissement.md §3 : règlement total → alerte éteinte ; règlement annulé → réactivée. */
+    @Test
+    void alerteImpaye_regleeEteinte_puisReglementAnnuleReactivee() throws Exception {
+        AdmUser admin = fixture.compte("TST-ADM-IMP", ADMIN);
+        ComFolder dossier = fixture.dossier("TST-IMP-AL", fixture.tranche("TST-IMP-AL", true), StatutDossier.RESERVATION);
+        ComDocument echeance = fixture.echeance(dossier,
+                fixture.categorieEcheance("TST-AVANCE-IMP", true, false, false, null), new BigDecimal("1000"), ECHEANCE);
+        alertesImpayes.synchroniser(echeance);
+        AdmAlertData alerte = alerteDe(echeance);
+
+        String json = mockMvc.perform(post("/api/dossiers/{id}/echeancier/{echeanceId}/reglements",
+                        dossier.getId(), echeance.getId())
+                        .with(FixtureDossierVente.connecte(admin, ADMIN)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"montant\":1000,\"dateEcheance\":\"2026-01-10T00:00:00\",\"typeId\":\""
+                                + typeReglement().getId() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        em.flush();
+        Boolean apresReglement = em.find(AdmAlertData.class, alerte.getId()).getActive();
+
+        mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", dossier.getId(),
+                        com.jayway.jsonpath.JsonPath.read(json, "$.id"))
+                        .with(FixtureDossierVente.connecte(admin, ADMIN)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"CANCELED\"}"))
+                .andExpect(status().isOk());
+        em.flush();
+        em.clear();
+
+        assertAll(
+                () -> assertEquals(Boolean.FALSE, apresReglement, "règlement total : alerte éteinte"),
+                () -> assertEquals(Boolean.TRUE, actif(alerte), "règlement annulé : alerte réactivée"));
+    }
+
+    @Test
+    void alerteImpaye_creeeAvecLaRegleOmran() {
+        ComFolder dossier = fixture.dossier("TST-IMP-MSG", fixture.tranche("TST-IMP-MSG", true), StatutDossier.RESERVATION);
+        ComDocument echeance = fixture.echeance(dossier,
+                fixture.categorieEcheance("TST-AVANCE-MSG", true, false, false, null), new BigDecimal("273000"), ECHEANCE);
+
+        alertesImpayes.synchroniser(echeance);
+        alertesImpayes.synchroniser(echeance);
+
+        List<ComActionMessage> actions = em.createQuery(
+                        "SELECT m FROM ComActionMessage m WHERE m.comDocument.id = :id", ComActionMessage.class)
+                .setParameter("id", echeance.getId()).getResultList();
+        assertThat(actions).singleElement().satisfies(m -> assertAll(
+                () -> assertEquals("TST-AVANCE-MSG (273 000.00 DH arrivé(e) à échéance)", m.getAlertMessage()),
+                () -> assertEquals(ECHEANCE, m.getAlertValidityDate()),
+                () -> assertEquals(Boolean.TRUE, m.getIsUnpaid()),
+                () -> assertEquals(Boolean.TRUE, m.getIsSystem()),
+                () -> assertEquals(dossier.getStrStatus().getId(), m.getStrFolderStatusId())));
+        assertEquals(Boolean.TRUE, alerteDe(echeance).getActive());
+    }
+
+    private AdmAlertData alerteDe(ComDocument echeance) {
+        em.flush();
+        return em.createQuery("SELECT a FROM AdmAlertData a WHERE a.relatedKey IN "
+                        + "(SELECT m.id FROM ComActionMessage m WHERE m.comDocument.id = :id)", AdmAlertData.class)
+                .setParameter("id", echeance.getId()).getSingleResult();
+    }
+
+    private StlSettlementType typeReglement() {
+        StlSettlementType type = new StlSettlementType();
+        type.setId(UUID.randomUUID());
+        type.setCode("VIR-IMP-" + UUID.randomUUID());
+        type.setDescription("Virement");
+        type.setIsReferenceMandatory(false);
+        type.setIsBankMandatory(false);
+        em.persist(type);
+        return type;
     }
 
     private StrStatus ordre(StatutDossier code, int ordre) {

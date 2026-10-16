@@ -1,13 +1,12 @@
 package com.tsix.immocrm.services.dossier.fiche;
 
 import com.tsix.immocrm.domain.ConventionRemise;
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.reinitialisation.EtatPrixDto;
 import com.tsix.immocrm.dto.dossier.reinitialisation.ReinitialisationDto;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderItem;
 import com.tsix.immocrm.entities.stk.StkItem;
-import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -163,17 +162,8 @@ public class ReinitialisationService {
 
     /** Un dossier sorti a libéré ses articles : le stock ne le décrit plus. */
     private static void exigerDossierActif(ComFolder dossier) {
-        StrStatus statut = dossier.getStrStatus();
-        if (statut != null && statut.getCode() != null && estSortie(statut.getCode())) {
+        if (DossierSorti.estSorti(dossier)) {
             throw new ConflictException("Dossier annulé ou désisté : réinitialisation impossible.");
-        }
-    }
-
-    private static boolean estSortie(String code) {
-        try {
-            return StatutDossier.fromCode(code).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
         }
     }
 

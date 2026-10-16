@@ -63,7 +63,7 @@ public final class TropPercu {
                 : nonNul(prix).add(nonNul(modifications))
                         .add(somme(lignes, l -> l.frais() && l.auCredit()))
                         .add(penalites(lignes));
-        return new Bilan(total, regleHorsAnnulation.subtract(regle(lignes, Ligne::resiliation)));
+        return new Bilan(total, regleHorsAnnulation.subtract(rembourse(lignes, Ligne::resiliation)));
     }
 
     /** Paramètres : ceux de {@link #bilan}. */
@@ -72,12 +72,21 @@ public final class TropPercu {
         if (reste.signum() >= 0) {
             return Resultat.AUCUN;
         }
-        // TropPercuRest = TropPercu − TropPercuSettled, TropPercuSettled = −Σ réglé des échéances au débit.
-        // Écart voulu à la vue : elle ne compte que les remboursements passés par BuyDocument ; ici un
-        // remboursement réglé par décaissement compte aussi (voir RAPPORT-vente-socle.md).
+        // TropPercuRest = TropPercu − TropPercuSettled (remboursé, positif) ; voir FEATURE-dossier-durcissement.md §2.
         BigDecimal tropPercu = reste.negate();
-        BigDecimal tropPercuRegleVue = regle(lignes, Ligne::auDebit).negate();
-        return new Resultat(tropPercu, tropPercu.add(tropPercuRegleVue));
+        BigDecimal tropPercuReste = tropPercu.subtract(rembourse(lignes, Ligne::auDebit)).max(BigDecimal.ZERO);
+        return new Resultat(tropPercu, tropPercuReste);
+    }
+
+    /**
+     * Réglé compté dans le sens de l'échéance ({@code CancelSettled}, {@code TropPercuSettled} de la vue, positifs) :
+     * le réglé signé d'une échéance au débit est négatif quand le remboursement est décaissé, on l'inverse.
+     */
+    private static BigDecimal rembourse(List<Ligne> lignes, Predicate<Ligne> filtre) {
+        return lignes.stream()
+                .filter(filtre)
+                .map(l -> l.auDebit() ? nonNul(l.regle()).negate() : nonNul(l.regle()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal penalites(List<Ligne> lignes) {

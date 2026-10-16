@@ -9,6 +9,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTrancheStatusRepository;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -76,12 +77,49 @@ public class ControlesTransition {
         return ControleSchema.controler(lu, situations.de(dossier));
     }
 
-    private Optional<String> seuil(ComFolder dossier, StrStatus cible, SituationFinanciere situation) {
+    /**
+     * Contrôles de chaque enregistrement de la fiche ({@code Sale.cs:VerifThreshold} avant son retour l.3127) :
+     * délai maximal de paiement puis crédit maximal ; message OMRAN du premier qui échoue.
+     */
+    public Optional<String> enregistrement(ComFolder dossier) {
         CfgTranche tranche = tranche(dossier);
-        SeuilVersement.Regles regles = new SeuilVersement.Regles(
-                Boolean.TRUE.equals(cible.getVenteAuComptant()), Boolean.TRUE.equals(cible.getVenteACredit()),
+        if (tranche == null) {
+            return Optional.empty();
+        }
+        SeuilVersement.DelaiMax delai = new SeuilVersement.DelaiMax(
+                Boolean.TRUE.equals(tranche.getIsWithVerifMaxEcheanceDelai()), tranche.getMaxEcheanceDelai());
+        if (delai.verifier()) {
+            Optional<String> horsDelai = SeuilVersement.delaiMax(delai,
+                    situations.derniereEcheance(dossier).orElse(null), remiseClesPrevue(dossier, tranche),
+                    dossier.getDeliveryDateReal());
+            if (horsDelai.isPresent()) {
+                return horsDelai;
+            }
+        }
+        SeuilVersement.Regles regles = regles(tranche, null);
+        if (!regles.verifCreditMax()) {
+            return Optional.empty();
+        }
+        return SeuilVersement.creditMax(regles, situations.de(dossier).credit(), dossier.getPrice());
+    }
+
+    /** {@code Sale.cs:DeliveryDate} : date de livraison de l'article, sinon début de finalisation de la tranche. */
+    private static LocalDateTime remiseClesPrevue(ComFolder dossier, CfgTranche tranche) {
+        LocalDateTime surArticle = dossier.getStkItem().getDeliveryDate();
+        return surArticle != null ? surArticle : tranche.getStartDateFinalisation();
+    }
+
+    private static SeuilVersement.Regles regles(CfgTranche tranche, StrStatus cible) {
+        return new SeuilVersement.Regles(
+                cible != null && Boolean.TRUE.equals(cible.getVenteAuComptant()),
+                cible != null && Boolean.TRUE.equals(cible.getVenteACredit()),
                 tranche != null && Boolean.TRUE.equals(tranche.getIsWithVerifCredit()),
                 tranche != null ? tranche.getCreditPercent() : null);
+    }
+
+    private Optional<String> seuil(ComFolder dossier, StrStatus cible, SituationFinanciere situation) {
+        CfgTranche tranche = tranche(dossier);
+        SeuilVersement.Regles regles = regles(tranche, cible);
         return SeuilVersement.controler(configuration(dossier, cible).orElse(null), regles, situation,
                 dossier.getPriceAfterDiscount(), dossier.getPrice());
     }

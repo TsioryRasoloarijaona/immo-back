@@ -237,6 +237,8 @@ class TracabiliteHistoriqueHotlineTest {
         s.setCode(statut.getCode());
         s.setDescription(statut.getCode());
         s.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        s.setAnnulation(statut == StatutDossier.ANNULATION);
+        s.setResiliation(statut == StatutDossier.DESISTEMENT);
         return strStatusRepository.save(s);
     }
 

@@ -7,7 +7,11 @@ import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.dto.impaye.ImpayeDto;
+import com.tsix.immocrm.services.impaye.ImpayeService;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -17,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +42,8 @@ class DossierFicheTest {
     @Autowired private FixtureDossierVente fixture;
     @Autowired private ComFolderRepository folderRepository;
     @Autowired private CfgTrancheRepository trancheRepository;
+    @Autowired private StrStatusRepository statusRepository;
+    @Autowired private ImpayeService impayeService;
 
     @Test
     void fiche_chaqueOngletRenvoieSesChamps() throws Exception {
@@ -89,15 +97,82 @@ class DossierFicheTest {
                 .andExpect(jsonPath("$.instructionNonLue").value(false));
     }
 
+    /** Statut de vente effective ({@code BoolField001}) comme en production : faux pour réservation et sorties. */
+    private ComFolder dossierVente(String code, StatutDossier statut) {
+        ComFolder f = fixture.dossier(code, fixture.tranche("TR-" + code, true), statut);
+        f.getStrStatus().setVenteEffective(statut != StatutDossier.RESERVATION && !statut.isSortie());
+        statusRepository.save(f.getStrStatus());
+        return f;
+    }
+
+    private static LocalDateTime hier() {
+        return LocalDateTime.now().minusDays(1);
+    }
+
     @Test
-    void fiche_echeanceEchueNonSoldee_leveLeBandeauImpayes() throws Exception {
-        ComFolder f = fixture.dossier("DOS-IMPAYE", fixture.tranche("FICHE-B", true), StatutDossier.RESERVATION);
+    void fiche_avanceEchueHierNonSoldee_leveLeBandeauImpayes() throws Exception {
+        ComFolder f = dossierVente("DOS-IMPAYE", StatutDossier.CONCRETISATION);
         ComSettlementCategory avance = fixture.categorieEcheance("AVANCE-FICHE", false, false);
-        fixture.echeance(f, avance, new BigDecimal("50000"), LocalDateTime.now().minusDays(10));
+        fixture.echeance(f, avance, new BigDecimal("50000"), hier());
 
         mockMvc.perform(get(FICHE, f.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aDesImpayes").value(true));
+    }
+
+    @Test
+    void fiche_ligneAuDebitNonReglee_pasDeBandeau() throws Exception {
+        ComFolder f = dossierVente("DOS-DEBIT", StatutDossier.CONCRETISATION);
+        ComSettlementCategory remboursement = fixture.categorieEcheance("REMB-FICHE", false, false);
+        remboursement.setIsCredit(false);
+        fixture.echeance(f, remboursement, new BigDecimal("50000"), hier());
+
+        mockMvc.perform(get(FICHE, f.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aDesImpayes").value(false));
+    }
+
+    @Test
+    void fiche_dossierAnnule_pasDeBandeau() throws Exception {
+        ComFolder f = dossierVente("DOS-ANNULE-IMP", StatutDossier.ANNULATION);
+        fixture.echeance(f, fixture.categorieEcheance("AVANCE-ANN", false, false), new BigDecimal("50000"), hier());
+
+        mockMvc.perform(get(FICHE, f.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aDesImpayes").value(false));
+    }
+
+    @Test
+    void fiche_dossierEnReservation_pasDeBandeau() throws Exception {
+        ComFolder f = dossierVente("DOS-RESA-IMP", StatutDossier.RESERVATION);
+        fixture.echeance(f, fixture.categorieEcheance("AVANCE-RESA", false, false), new BigDecimal("50000"), hier());
+
+        mockMvc.perform(get(FICHE, f.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aDesImpayes").value(false));
+    }
+
+    /** Même jeu de données : les lignes de l'écran Impayés du dossier sont celles qui allument le bandeau. */
+    @Test
+    void bandeau_memesEcheancesQueLEcranImpayes() {
+        ComFolder f = dossierVente("DOS-CROISE", StatutDossier.CONCRETISATION);
+        ComSettlementCategory avance = fixture.categorieEcheance("AVANCE-CROISE", false, false);
+        ComSettlementCategory remboursement = fixture.categorieEcheance("REMB-CROISE", false, false);
+        remboursement.setIsCredit(false);
+        fixture.echeance(f, avance, new BigDecimal("50000"), hier());
+        fixture.echeance(f, avance, new BigDecimal("30000"), LocalDateTime.now().toLocalDate().atStartOfDay());
+        fixture.echeance(f, avance, new BigDecimal("20000"), LocalDateTime.now().plusDays(5));
+        fixture.echeance(f, remboursement, new BigDecimal("10000"), hier());
+
+        List<UUID> ecran = impayeService.lignes(new ImpayeService.FiltresImpayes(null, null, null, null, null, null,
+                        null, null, null, null, null), Sort.unsorted()).stream()
+                .filter(l -> f.getId().equals(l.dossierId()))
+                .map(ImpayeDto::echeanceId)
+                .toList();
+
+        assertThat(impayeService.echeancesImpayees(f.getId()))
+                .hasSize(2)
+                .containsExactlyInAnyOrderElementsOf(ecran);
     }
 
     @Test

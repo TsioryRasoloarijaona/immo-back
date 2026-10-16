@@ -1,6 +1,5 @@
 package com.tsix.immocrm.services.dossier.fiche;
 
-import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.reajustement.LigneReajustementDto;
 import com.tsix.immocrm.dto.dossier.reajustement.LigneReajustementDto.LigneCible;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -19,6 +18,8 @@ import com.tsix.immocrm.repositories.com.CategorieAutofinancementRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.services.dossier.AlertesImpayes;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -62,6 +63,7 @@ public class ReajustementSuperficiesService {
     private final ComDocumentRepository documentRepository;
     private final CategorieAutofinancementRepository categorieRepository;
     private final PerimetreCommercialService perimetreService;
+    private final AlertesImpayes alertes;
 
     @SuppressWarnings("java:S107") // un dépôt par table lue ou écrite
     public ReajustementSuperficiesService(EcritureDossier ecriture, TrancheVisibleRepository trancheRepository,
@@ -69,8 +71,9 @@ public class ReajustementSuperficiesService {
                                           ComFolderItemRepository folderItemRepository,
                                           ComDocumentRepository documentRepository,
                                           CategorieAutofinancementRepository categorieRepository,
-                                          PerimetreCommercialService perimetreService) {
+                                          PerimetreCommercialService perimetreService, AlertesImpayes alertes) {
         this.ecriture = ecriture;
+        this.alertes = alertes;
         this.trancheRepository = trancheRepository;
         this.folderRepository = folderRepository;
         this.folderItemRepository = folderItemRepository;
@@ -132,20 +135,9 @@ public class ReajustementSuperficiesService {
         Specification<ComFolder> dansLaTranche = (root, query, cb) ->
                 cb.equal(root.get("stkItem").get("stkHierarchy").get("id"), tranche.getId());
         return folderRepository.findAll(dansLaTranche.and(perimetreService.filtreDossiers())).stream()
-                .filter(Predicate.not(ReajustementSuperficiesService::estSorti))
+                .filter(Predicate.not(DossierSorti::estSorti))
                 .sorted(Comparator.comparing(f -> Objects.requireNonNullElse(f.getCode(), "")))
                 .toList();
-    }
-
-    private static boolean estSorti(ComFolder f) {
-        if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
-            return false;
-        }
-        try {
-            return StatutDossier.fromCode(f.getStrStatus().getCode()).isSortie();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     private record Plan(ComFolder dossier, RecalculPrixDossier.Resultat resultat, List<ComFolderItem> sousArticles,
@@ -286,7 +278,7 @@ public class ReajustementSuperficiesService {
         ligne.setNotes(ajouterNote(ligne.getNotes(), note));
         ligne.setUserUpdate(auteur);
         ligne.setUserUpdateDateTime(maintenant);
-        documentRepository.save(ligne);
+        alertes.synchroniser(documentRepository.save(ligne));
         ecriture.signer(dossier);
         return p.ligne();
     }

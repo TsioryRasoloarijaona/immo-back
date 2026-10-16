@@ -140,6 +140,8 @@ vocation correspondante ! », et l'échéancier de l'offre qui ne correspond plu
 Avec `offreId` seulement. L'offre a déjà donné un dossier de vente : le `detail` nomme son code et
 son id, et la propriété `dossierExistant` (`{id, code, location}`) permet de l'ouvrir. Ou la
 prospection a déjà un dossier de vente : « Un dossier de vente est déjà généré sur cette prospection ! ».
+Ou, avec ou sans offre, l'échéancier créé dépasse le délai maximal de paiement ou le crédit maximal de
+la tranche (mêmes textes OMRAN que `PATCH /api/dossiers/{id}`) ; rien n'est écrit.
 
 ### reponse 500
 
@@ -421,6 +423,13 @@ et retirer une pièce jointe ne dépointe rien.
 `dateReglement` est **requise** pour `POINTED` (400 sinon) et écrit `StlSettlement.SettlementDate` :
 statut et date d'encaissement sont deux encodages du même fait et n'ont jamais divergé sur les 3 244
 règlements réels. `CANCELED` laisse cette date à `null`.
+
+`compteId` est **requis** pour `POINTED` (`Settlement.cs:Verif`, 400 « Si votre pièce possède une date de
+pointage, il est obligatoire de lui affecter un compte ! ») et écrit `StlSettlement.StlAccountId`. Le compte
+doit appartenir à la société du règlement (`ReglementDto.societeId` ; tout compte si elle est nulle), sinon
+400. Si le compte a un rapprochement (`StlAccountPosition`) à une date postérieure ou égale à `dateReglement`,
+409 « Vous ne pouvez pas pointer une pièce à une date inférieure à la date du dernier rapprochement du compte
+affecté jj/mm/aaaa hh:mm:ss ! ». Liste des comptes : `GET /api/referentiels/comptes?societeId=`.
 
 ## getPiecesJointesReglement
 

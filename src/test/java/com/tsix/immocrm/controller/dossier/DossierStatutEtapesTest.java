@@ -64,6 +64,8 @@ class DossierStatutEtapesTest {
                     status.setId(UUID.randomUUID());
                     status.setCode(code);
                     status.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
+                    status.setAnnulation("ANNULATION".equals(code));
+                    status.setResiliation("DESISTEMENT".equals(code));
                     return strStatusRepository.save(status);
                 });
     }

@@ -13,6 +13,7 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.repositories.stl.VersementsDossierRepository;
+import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.services.dossier.modalite.ModalitePaiementService;
 import org.springframework.stereotype.Component;
 
@@ -100,6 +101,20 @@ public class WorkflowDossier {
         }
         controles.schema(dossier, cible).ifPresent(WorkflowDossier::conflit);
         return seuilIgnore;
+    }
+
+    /**
+     * Enregistrement de la fiche (création, {@code PATCH /api/dossiers/{id}}) : délai et crédit maximaux, 409 avec
+     * le texte OMRAN. Dossier sorti ou appelant sans le droit du seuil : pas de contrôle ({@code Sale.cs:BeforeUpdate}).
+     */
+    public void verifierEnregistrement(ComFolder dossier) {
+        if (DossierSorti.estSorti(dossier)) {
+            return;
+        }
+        Optional<String> refus = controles.enregistrement(dossier);
+        if (refus.isPresent() && intervenantCourant.verifieLeSeuil(intervenantCourant.courant())) {
+            conflit(refus.get());
+        }
     }
 
     public void ecrireDateAssociee(ComFolder dossier, StrStatus cible, StatutDossier code, LocalDateTime date) {

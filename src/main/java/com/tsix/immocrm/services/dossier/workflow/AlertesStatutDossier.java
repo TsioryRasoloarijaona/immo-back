@@ -11,12 +11,12 @@ import com.tsix.immocrm.repositories.adm.AlerteStatutDossierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
+import com.tsix.immocrm.services.dossier.AlertesImpayes;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -28,8 +28,8 @@ import java.util.UUID;
 public class AlertesStatutDossier {
 
     /** {@code ComActionMessageType} « Note » (PKey de production). */
-    static final UUID TYPE_NOTE = UUID.fromString("8EE7C999-F031-445A-B92F-0F75B090B7E6");
-    static final String SYSTEME = "Système";
+    public static final UUID TYPE_NOTE = UUID.fromString("8EE7C999-F031-445A-B92F-0F75B090B7E6");
+    public static final String SYSTEME = "Système";
     private static final int SANS_ORDRE = -1;
 
     private final ComActionMessageRepository messageRepository;
@@ -97,19 +97,6 @@ public class AlertesStatutDossier {
         action.setIsIn(false);
         action.setIsUnpaid(false);
         action.setWithoutRevival(false);
-        ComActionMessage enregistree = messageRepository.save(action);
-
-        AdmAlertData alerte = new AdmAlertData();
-        UUID id = UUID.randomUUID();
-        alerte.setId(id);
-        alerte.setCode(id.toString().toLowerCase(Locale.ROOT));
-        alerte.setDescription(AdmAlertData.DESCRIPTION_ALERTE);
-        alerte.setMessage(enregistree.getAlertMessage());
-        alerte.setGroupping(categorie != null ? categorie.getCode() : null);
-        alerte.setAlertDate(enregistree.getAlertValidityDate());
-        alerte.setRelatedKey(enregistree.getId());
-        alerte.setRightKey(categorie != null ? categorie.getId().toString().toLowerCase(Locale.ROOT) : null);
-        alerte.setActive(true);
-        alerteRepository.save(alerte);
+        alerteRepository.save(AlertesImpayes.nouvelleAlerte(messageRepository.save(action)));
     }
 }

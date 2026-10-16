@@ -35,7 +35,8 @@ public enum StatutEcheance {
         if (reste.compareTo(BigDecimal.ZERO) <= 0) {
             return PAYE;
         }
-        if (dateEcheance != null && !dateEcheance.toLocalDate().isAfter(maintenant.toLocalDate())) {
+        // Même borne que l'écran Impayés ; le statut du dossier n'entre pas dans le statut d'une ligne.
+        if (Impaye.echue(dateEcheance, maintenant.toLocalDate())) {
             return EN_RETARD;
         }
         if (dejaRegle.compareTo(BigDecimal.ZERO) > 0) {
