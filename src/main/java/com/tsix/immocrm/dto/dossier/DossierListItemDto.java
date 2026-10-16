@@ -45,7 +45,7 @@ public record DossierListItemDto(
         @Schema(description = "Prix après remise.")
         BigDecimal prixApresRemise,
 
-        @Schema(description = "Montant de l'avance. Renseigné sur 41,6 % des 358 dossiers réels.")
+        @Schema(description = "« Montant d'accord » (ComFolder.AgreementAmount). Ce n'est pas l'avance : voir `avance`.")
         BigDecimal montantAvance,
 
         @Schema(description = "Probabilité de finalisation. 100 %.")
@@ -200,86 +200,20 @@ public record DossierListItemDto(
         @Schema(description = "Co-acquéreurs (ComFolderCustomer), libellés séparés par des virgules.")
         String autresClients,
 
-        @Schema(description = "Promesse de vente (ComFolder.ReservationDate).")
-        LocalDateTime datePromesseVente,
-
-        @Schema(description = "Promesse de vente côté client (ComFolder.ReservationDateCustomer).")
-        LocalDateTime datePromesseVenteClient,
-
-        @Schema(description = "Enregistrement de la réservation (ComFolder.ReservationRegistryDate).")
-        LocalDateTime dateEnregistrementReservation,
-
         @Schema(description = "Fiche bancaire (ComFolder.BankRecordDate).")
         LocalDateTime dateFicheBancaire,
-
-        @Schema(description = "Fiche intervention (ComFolder.InterventionDate).")
-        LocalDateTime dateFicheIntervention,
-
-        @Schema(description = "Fiche assurance (ComFolder.InsuranceDate).")
-        LocalDateTime dateFicheAssurance,
 
         @Schema(description = "Permis d'habiter de la tranche de l'article principal (CfgTranche.OccupancyPermitsDate).")
         LocalDateTime datePermisHabiter,
 
-        @Schema(description = "Attestation de consignation / octroi crédit (ComFolder.CreditPossessionDate).")
-        LocalDateTime dateOctroiCredit,
-
         @Schema(description = "Minute / enregistrement contrat (ComFolder.AgreementSavingDate).")
         LocalDateTime dateMinute,
-
-        @Schema(description = "Minute côté client (ComFolder.AgreementSavingDateCustomer).")
-        LocalDateTime dateMinuteClient,
-
-        @Schema(description = "Minute / signature contrat avocat (ComFolder.AgreementSavingDateLawyer).")
-        LocalDateTime dateMinuteAvocat,
-
-        @Schema(description = "Remise du contrat pour légalisation (ComFolder.AgreementSavingDateForLegalization).")
-        LocalDateTime dateRemiseLegalisationContrat,
-
-        @Schema(description = "Légalisation du contrat (ComFolder.AgreementSavingDateLegalization).")
-        LocalDateTime dateLegalisationContrat,
-
-        @Schema(description = "Dépôt pour enregistrement du contrat (ComFolder.AgreementSavingDateForRegistry).")
-        LocalDateTime dateDepotEnregistrementContrat,
 
         @Schema(description = "Remise des clés prévisionnelle, celle de la tranche (CfgTranche.DeliveryDate).")
         LocalDateTime dateRemiseClesPrevue,
 
-        @Schema(description = "Remise des clés côté client (ComFolder.DeliveryDateRealCustomer).")
-        LocalDateTime dateRemiseClesClient,
-
-        @Schema(description = "Enregistrement de la remise des clés (ComFolder.DeliveryRegistryDate).")
-        LocalDateTime dateEnregistrementRemiseCles,
-
-        @Schema(description = "Expédition / certificat de propriété (ComFolder.OwnershipCertificateDate).")
-        LocalDateTime dateExpedition,
-
         @Schema(description = "Enregistrement du contrat (ComFolder.AgreementRegistryDate).")
         LocalDateTime dateEnregistrementContrat,
-
-        @Schema(description = "Relance 1 du titre foncier (ComFolder.Revival1).")
-        LocalDateTime dateRelance1,
-
-        @Schema(description = "Échéance de la relance 1 (ComFolder.Revival1ValidityDate).")
-        LocalDateTime echeanceRelance1,
-
-        @Schema(description = "Relance 2 du titre foncier (ComFolder.Revival2).")
-        LocalDateTime dateRelance2,
-
-        @Schema(description = "Échéance de la relance 2 (ComFolder.Revival2ValidityDate).")
-        LocalDateTime echeanceRelance2,
-
-        @Schema(description = "Dépôt à la CPF (ComFolder.FinalTitleDateDeposit).")
-        LocalDateTime dateDepotCpf,
-
-        @Schema(description = "Retrait du dossier client de la CPF (ComFolder.FinalTitleDateWithdrawal).")
-        LocalDateTime dateRetraitCpf,
-
-        @Schema(description = "Remise du certificat de propriété au client (ComFolder.FinalTitleDate).")
-        LocalDateTime dateRemiseCertificat,
-
-        @Schema(description = "Numéro du titre foncier définitif (ComFolder.FinalTitleNumber).")
-        String numeroTitre,
 
         @Schema(description = "Fin de validité du statut courant (ComFolder.StatusValidityDate).")
         LocalDateTime dateValiditeStatut,
@@ -293,38 +227,11 @@ public record DossierListItemDto(
         @Schema(description = "Date d'envoi au notaire confirmée (ComFolder.IsConfirmedAgreementDate).")
         Boolean envoiNotaireConfirme,
 
-        @Schema(description = "Visite technique / réception (ComFolder.ReceptionDate).")
-        LocalDateTime dateVisiteTechnique,
-
-        @Schema(description = "Envoi du dossier à MEILLEURTAUX (ComFolder.LoanCompanySendDate).")
-        LocalDateTime dateEnvoiMeilleurTaux,
-
         @Schema(description = "Décision de MEILLEURTAUX (ComFolder.LoanCompanyDecisionDate).")
         LocalDateTime dateDecisionMeilleurTaux,
 
-        @Schema(description = "Libellé de la décision MEILLEURTAUX (ComLoanCompanyDecision.Description).")
-        String decisionMeilleurTaux,
-
-        @Schema(description = "Acte de précision (ComFolder.PrecisionActDate).")
-        LocalDateTime dateActePrecision,
-
-        @Schema(description = "Acte de précision côté client (ComFolder.PrecisionActDateCustomer).")
-        LocalDateTime dateActePrecisionClient,
-
-        @Schema(description = "Enregistrement de l'acte de précision (ComFolder.PrecisionActRegistryDate).")
-        LocalDateTime dateEnregistrementActePrecision,
-
-        @Schema(description = "Remise pour légalisation de l'acte de précision (PrecisionActDateForLegalization).")
-        LocalDateTime dateRemiseLegalisationActePrecision,
-
-        @Schema(description = "Dépôt pour enregistrement de l'acte de précision (PrecisionActDateForRegistry).")
-        LocalDateTime dateDepotEnregistrementActePrecision,
-
         @Schema(description = "Impression du contrat de réservation / promesse (ComFolder.ContractPrintDate).")
         LocalDateTime dateImpressionContrat,
-
-        @Schema(description = "Second gestionnaire du dossier (ComFolder.CfgSaleManager2Id).")
-        String gestionnaire2Nom,
 
         @Schema(description = "Banque du crédit ou du leasing (ComFolder.CreditBankId).")
         String banqueCredit,
@@ -425,13 +332,33 @@ public record DossierListItemDto(
         @Schema(description = "Actions du dossier (réservation, livraison, annulation) datées d'aujourd'hui ou avant.")
         Integer nombreActions,
 
-        @Schema(description = "Jours entre l'envoi au notaire et l'octroi du crédit. Calculé.")
-        Integer delaiCredit,
-
-        @Schema(description = "Jours entre l'octroi du crédit et la remise des clés. Calculé.")
-        Integer delaiCreditRemiseCles,
-
         @Schema(description = "Jours entre l'envoi et la décision MEILLEURTAUX ; 0 si l'une manque, comme OMRAN.")
-        Integer delaiMeilleurTaux
+        Integer delaiMeilleurTaux,
+
+        // Montants par nature (FEATURE-dossiers-liste-complete.md) : descriptions dans api-docs/schemas.
+        BigDecimal prixContractuel,
+        BigDecimal prixContractuelRegle,
+        BigDecimal prixContractuelReste,
+        BigDecimal prixRegle,
+        BigDecimal prixReste,
+        BigDecimal netAPayerRegle,
+        BigDecimal netAPayerReste,
+        BigDecimal tauxAvance,
+        BigDecimal tauxAvanceReel,
+        BigDecimal avance,
+        BigDecimal avanceReglee,
+        BigDecimal avanceReste,
+        BigDecimal autofinancement,
+        BigDecimal autofinancementRegle,
+        BigDecimal autofinancementReste,
+        BigDecimal credit,
+        BigDecimal creditRegle,
+        BigDecimal creditReste,
+        BigDecimal frais,
+        BigDecimal fraisRegles,
+        BigDecimal fraisReste,
+        BigDecimal tropPercu,
+        BigDecimal tropPercuRegle,
+        BigDecimal tropPercuReste
 ) {
 }

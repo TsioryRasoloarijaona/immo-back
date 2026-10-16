@@ -10,6 +10,7 @@ import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.liste.ChampDateListeDto;
 import com.tsix.immocrm.dto.dossier.liste.StatutListeDossierDto;
+import com.tsix.immocrm.dto.dossier.liste.TotauxDossiersDto;
 import com.tsix.immocrm.services.dossier.liste.FiltresListeDossiers;
 import com.tsix.immocrm.services.dossier.liste.ListeDossiersService;
 import com.tsix.immocrm.web.Groupements;
@@ -137,6 +138,28 @@ public class DossierListeController {
         return listeService.grouper(filtres, groupe, Groupements.granularite(groupe, granularite),
                 ColonneDossier.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @GetMapping("/totaux")
+    @Operation(summary = "Σ des montants par nature sur tout le filtre de la liste (bande de totaux)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Sommes du filtre, une clé par colonne additionnable."),
+            @ApiResponse(responseCode = "400", content = @Content)
+    })
+    public TotauxDossiersDto totaux(
+            @RequestParam(required = false) List<String> statut,
+            @RequestParam(required = false) UUID commercial,
+            @RequestParam(required = false) UUID projet,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) ChampDateDossier champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @RequestParam(required = false) Boolean dateVide,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "false") boolean inclureSortis,
+            @RequestParam(required = false) LignesListeDossiers lignes) {
+        return listeService.totaux(new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
+                dateDebut, dateFin, dateVide, search, inclureSortis, lignes));
     }
 
     @GetMapping("/export")

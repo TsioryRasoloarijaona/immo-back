@@ -48,6 +48,10 @@ Remplace le tri reçu par celui d'OMRAN : code de l'article principal, puis tran
 
 Colonnes à sérialiser, répétable ou séparées par des virgules. Absent : les 13 colonnes historiques. Catalogue et liste blanche : `GET /api/referentiels/colonnes/dossiers`. Un nom hors catalogue rend 400 avec la liste des noms valides. `id` est toujours servi.
 
+Les colonnes renseignées sur moins de 1 % des dossiers réels ont quitté le catalogue (relances, CPF, certificat, actes de précision, minute avocat et client, légalisation, fiches assurance et intervention, remise des clés client, promesses de vente, visite technique, envoi et décision MEILLEURTAUX en libellé, octroi du crédit et ses deux délais, gestionnaire 2, `numeroTitre`…) : les demander rend 400. Leurs dates restent des filtres de période (`champDate`).
+
+Les montants par nature (`avance`, `credit`, `frais`, `netAPayerReste`, `tropPercu`…) sont calculés par page depuis l'échéancier et les règlements : une de ces colonnes demandée coûte deux requêtes par page, aucune si elles sont absentes.
+
 ### param groupeColonne
 
 Déplie un groupe : restreint la liste aux dossiers d'un groupe renvoyé par `GET /api/dossiers/groupes`. Attend le nom de la colonne qui a servi au groupement. Un dépliage ne sert jamais de lot libre.
@@ -97,6 +101,14 @@ Inclure le groupe des lignes dont la colonne groupée est vide. **Faux par défa
 ### reponse 400
 
 `groupBy` absent, inconnu, ou désignant une colonne non groupable ; ou `agregats` contenant une colonne non agrégeable. Le corps (RFC 7807) porte la liste des noms acceptés.
+
+## totaux
+
+Σ en tête des colonnes de montants par nature, sur **toutes** les lignes filtrées (pas seulement la page) : mêmes filtres, mêmes statuts visibles et même périmètre commercial que `GET /api/dossiers`. Chaque montant est celui de la colonne du même nom, dossier par dossier, puis additionné — jamais un second calcul. `sommes` a une clé par colonne additionnable (`prixContractuel`, `prixContractuelRegle`, `prixContractuelReste`, `prixRegle`, `prixReste`, `netAPayerRegle`, `netAPayerReste`, `avance`, `avanceReglee`, `avanceReste`, `autofinancement`, `autofinancementRegle`, `autofinancementReste`, `credit`, `creditRegle`, `creditReste`, `frais`, `fraisRegles`, `fraisReste`, `tropPercu`, `tropPercuRegle`, `tropPercuReste`) ; les taux ne s'additionnent pas et n'y figurent pas. Les lots libres n'ont pas de montant : `lignes=LIBRES` rend des sommes nulles. Les Σ des colonnes de table (`prix`, `totalAPayer`…) restent servies par `GET /api/dossiers/groupes` (`totaux`).
+
+### reponse 400
+
+Valeur d'énumération invalide (`champDate`, `lignes`).
 
 ## exporter
 
