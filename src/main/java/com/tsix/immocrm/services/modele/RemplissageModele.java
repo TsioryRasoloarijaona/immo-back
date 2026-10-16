@@ -21,16 +21,16 @@ import static com.tsix.immocrm.services.modele.ContenuModele.VALEUR;
  */
 final class RemplissageModele {
 
-    private final Catalogue<?> catalogue;
+    private final DescriptionChamps catalogue;
     private final ValeursFiche valeurs;
 
-    private RemplissageModele(Catalogue<?> catalogue, ValeursFiche valeurs) {
+    private RemplissageModele(DescriptionChamps catalogue, ValeursFiche valeurs) {
         this.catalogue = catalogue;
         this.valeurs = valeurs;
     }
 
     /** {@code corps} est modifié en place : passer une copie du résultat de {@link ContenuModele#analyser}. */
-    static Element remplir(Element corps, Catalogue<?> catalogue, ValeursFiche valeurs) {
+    static Element remplir(Element corps, DescriptionChamps catalogue, ValeursFiche valeurs) {
         new RemplissageModele(catalogue, valeurs).traiterEnfants(corps, null, null);
         numeroter(corps);
         return corps;

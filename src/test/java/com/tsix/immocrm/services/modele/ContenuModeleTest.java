@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Liste blanche du HTML restreint (FEATURE-modeles-documents.md §5, §11). */
 class ContenuModeleTest {
 
-    private static final Catalogue<?> CATALOGUE = CatalogueDossierVente.CATALOGUE;
+    private static final DescriptionChamps CATALOGUE = CatalogueDossierVente.CATALOGUE;
 
     private static void refuse(String html, String message) {
         assertThatThrownBy(() -> ContenuModele.analyser(html, CATALOGUE))
@@ -106,9 +106,9 @@ class ContenuModeleTest {
     @Test
     void imagesDePlusDe2MoParVersion_400() {
         String image = "<img src=\"" + png(450 * 1024) + "\">";
-        ContenuModele.Analyse analyse = ContenuModele.analyser(image.repeat(5), CATALOGUE);
+        long octets = ContenuModele.analyser(image.repeat(5), CATALOGUE).octetsImages();
 
-        assertThatThrownBy(() -> ContenuModele.verifierPoidsVersion(analyse.octetsImages()))
+        assertThatThrownBy(() -> ContenuModele.verifierPoidsVersion(octets))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("2 Mo maximum");
     }

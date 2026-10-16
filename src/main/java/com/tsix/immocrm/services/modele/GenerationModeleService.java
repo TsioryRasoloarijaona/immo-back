@@ -35,7 +35,28 @@ public class GenerationModeleService {
     }
 
     /** Document produit ; {@code nomFichier} sans extension. */
-    public record DocumentProduit(byte[] contenu, String codeFiche, String nomFichier, FormatDocument format) {
+    public static final class DocumentProduit {
+        private final byte[] contenu;
+        private final String codeFiche;
+        private final String nomFichier;
+
+        DocumentProduit(byte[] contenu, String codeFiche, String nomFichier) {
+            this.contenu = contenu;
+            this.codeFiche = codeFiche;
+            this.nomFichier = nomFichier;
+        }
+
+        public byte[] contenu() {
+            return contenu;
+        }
+
+        public String codeFiche() {
+            return codeFiche;
+        }
+
+        public String nomFichier() {
+            return nomFichier;
+        }
     }
 
     /** Modèle actif seulement (404 sinon) ; fiche hors périmètre = 404. */
@@ -78,6 +99,6 @@ public class GenerationModeleService {
                 : rendu.pdf(rempli.corps(), rempli.enTete(), rempli.pied(), rempli.miseEnPage());
         String nom = (modele.getCode().replace('_', '-') + "-" + (fiche.code() != null ? fiche.code() : ficheId))
                 .toLowerCase(Locale.ROOT);
-        return new DocumentProduit(contenu, fiche.code(), nom, format);
+        return new DocumentProduit(contenu, fiche.code(), nom);
     }
 }

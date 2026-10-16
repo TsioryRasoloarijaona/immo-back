@@ -7,7 +7,7 @@ import org.jsoup.nodes.Element;
 record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto miseEnPage) {
 
     /** {@code miseEnPage} déjà normalisée ({@link MiseEnPageModele#normaliser}). */
-    static ModelePrepare preparer(Catalogue<?> catalogue, String contenu, MiseEnPageDto miseEnPage) {
+    static ModelePrepare preparer(DescriptionChamps catalogue, String contenu, MiseEnPageDto miseEnPage) {
         ContenuModele.Analyse corps = ContenuModele.analyser(contenu, catalogue);
         ContenuModele.Analyse enTete = analyserOptionnel(miseEnPage.enTete(), catalogue);
         ContenuModele.Analyse pied = analyserOptionnel(miseEnPage.piedDePage(), catalogue);
@@ -16,14 +16,14 @@ record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto 
     }
 
     /** Copie remplie : le résultat d'analyse reste intact. */
-    ModelePrepare remplir(Catalogue<?> catalogue, ValeursFiche valeurs) {
+    ModelePrepare remplir(DescriptionChamps catalogue, ValeursFiche valeurs) {
         return new ModelePrepare(RemplissageModele.remplir(corps.clone(), catalogue, valeurs),
                 enTete == null ? null : RemplissageModele.remplir(enTete.clone(), catalogue, valeurs),
                 pied == null ? null : RemplissageModele.remplir(pied.clone(), catalogue, valeurs),
                 miseEnPage);
     }
 
-    private static ContenuModele.Analyse analyserOptionnel(String html, Catalogue<?> catalogue) {
+    private static ContenuModele.Analyse analyserOptionnel(String html, DescriptionChamps catalogue) {
         return html == null ? null : ContenuModele.analyser(html, catalogue);
     }
 

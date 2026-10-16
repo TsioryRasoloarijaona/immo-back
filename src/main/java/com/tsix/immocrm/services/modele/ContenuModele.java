@@ -59,10 +59,10 @@ public final class ContenuModele {
             "data:image/png;base64,", new byte[]{(byte) 0x89, 'P', 'N', 'G'},
             "data:image/jpeg;base64,", new byte[]{(byte) 0xFF, (byte) 0xD8});
 
-    private final Catalogue<?> catalogue;
+    private final DescriptionChamps catalogue;
     private long octetsImages;
 
-    private ContenuModele(Catalogue<?> catalogue) {
+    private ContenuModele(DescriptionChamps catalogue) {
         this.catalogue = catalogue;
     }
 
@@ -70,7 +70,7 @@ public final class ContenuModele {
     public record Analyse(Element corps, long octetsImages) {
     }
 
-    public static Analyse analyser(String html, Catalogue<?> catalogue) {
+    public static Analyse analyser(String html, DescriptionChamps catalogue) {
         if (html == null) {
             throw new InvalidRequestException("Contenu absent.");
         }
@@ -118,26 +118,21 @@ public final class ContenuModele {
         String valeur = attribut.getValue();
         switch (attribut.getKey()) {
             case STYLE -> verifierStyle(balise, valeur);
-            case COLSPAN, ROWSPAN, START -> {
-                if (!entierCourt(valeur)) {
-                    throw new InvalidRequestException("Valeur invalide pour %s sur <%s> : %s"
-                            .formatted(attribut.getKey(), balise, valeur));
-                }
-            }
+            case COLSPAN, ROWSPAN, START -> exiger(entierCourt(valeur),
+                    "Valeur invalide pour %s sur <%s> : %s".formatted(attribut.getKey(), balise, valeur));
             case "src" -> octetsImages += verifierImage(valeur);
-            case NUMERO, SAUT_PAGE -> {
-                if (!valeur.isEmpty()) {
-                    throw new InvalidRequestException("%s ne prend pas de valeur.".formatted(attribut.getKey()));
-                }
-            }
-            case VALEUR -> {
-                if (!"true".equals(valeur) && !"false".equals(valeur)) {
-                    throw new InvalidRequestException("data-valeur vaut true ou false (reçu : %s).".formatted(valeur));
-                }
-            }
+            case NUMERO, SAUT_PAGE -> exiger(valeur.isEmpty(), "%s ne prend pas de valeur.".formatted(attribut.getKey()));
+            case VALEUR -> exiger("true".equals(valeur) || "false".equals(valeur),
+                    "data-valeur vaut true ou false (reçu : %s).".formatted(valeur));
             default -> {
                 // alt, data-champ, data-si, data-repeter : vérifiés ailleurs ou texte libre échappé à la sortie.
             }
+        }
+    }
+
+    private static void exiger(boolean condition, String message) {
+        if (!condition) {
+            throw new InvalidRequestException(message);
         }
     }
 

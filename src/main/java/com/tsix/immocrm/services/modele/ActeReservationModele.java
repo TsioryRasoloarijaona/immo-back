@@ -32,7 +32,22 @@ public class ActeReservationModele {
     }
 
     /** Document et code du dossier (pour le nom de fichier {@code acte-reservation-<code>}). */
-    public record Acte(byte[] contenu, String dossierCode) {
+    public static final class Acte {
+        private final byte[] contenu;
+        private final String dossierCode;
+
+        Acte(byte[] contenu, String dossierCode) {
+            this.contenu = contenu;
+            this.dossierCode = dossierCode;
+        }
+
+        public byte[] contenu() {
+            return contenu;
+        }
+
+        public String dossierCode() {
+            return dossierCode;
+        }
     }
 
     public Acte rendre(UUID dossierId, FormatDocument format) {

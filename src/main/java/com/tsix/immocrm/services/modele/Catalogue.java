@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /** Catalogue d'une catégorie sur sa source {@code T} : une seule déclaration pour l'éditeur, la validation et la génération. */
-public final class Catalogue<T> {
+public final class Catalogue<T> implements DescriptionChamps {
 
     private final List<GroupeChamps<T>> groupes;
     private final List<ListeChamps<T, ?>> listes;
@@ -32,11 +32,12 @@ public final class Catalogue<T> {
         });
     }
 
+    @Override
     public boolean estListe(String cle) {
         return typesParListe.containsKey(cle);
     }
 
-    /** Liste qui déclare ce champ, vide pour un champ simple ou inconnu. */
+    @Override
     public Optional<String> listeDuChamp(String cle) {
         return typesParListe.entrySet().stream()
                 .filter(e -> e.getValue().containsKey(cle))
@@ -44,7 +45,7 @@ public final class Catalogue<T> {
                 .findFirst();
     }
 
-    /** Type d'un champ visible depuis {@code listeCourante} (ses champs, puis les champs simples). */
+    @Override
     public Optional<TypeChamp> type(String cle, String listeCourante) {
         if (listeCourante != null) {
             TypeChamp dansListe = typesParListe.getOrDefault(listeCourante, Map.of()).get(cle);
@@ -63,6 +64,7 @@ public final class Catalogue<T> {
         return new ValeursFiche(champs, valeursListes);
     }
 
+    @Override
     public CatalogueChampsDto versDto(CategorieModele categorie) {
         return new CatalogueChampsDto(categorie.name(),
                 groupes.stream().map(g -> new GroupeChampsDto(g.libelle(), dtos(g.champs()))).toList(),

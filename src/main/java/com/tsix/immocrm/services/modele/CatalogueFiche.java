@@ -9,7 +9,7 @@ public interface CatalogueFiche {
 
     CategorieModele categorie();
 
-    Catalogue<?> catalogue();
+    DescriptionChamps catalogue();
 
     /** 404 si la fiche est introuvable ou hors du périmètre de l'appelant. */
     FicheLue lire(UUID ficheId);
