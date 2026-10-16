@@ -13,9 +13,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class CorsConfig implements WebMvcConfigurer {
 
     private final PerimetreInterceptor perimetreInterceptor;
+    private final SuiviUtilisateursInterceptor suiviUtilisateursInterceptor;
 
-    public CorsConfig(PerimetreInterceptor perimetreInterceptor) {
+    public CorsConfig(PerimetreInterceptor perimetreInterceptor,
+                      SuiviUtilisateursInterceptor suiviUtilisateursInterceptor) {
         this.perimetreInterceptor = perimetreInterceptor;
+        this.suiviUtilisateursInterceptor = suiviUtilisateursInterceptor;
     }
 
     /**
@@ -27,6 +30,7 @@ public class CorsConfig implements WebMvcConfigurer {
         registry.addInterceptor(perimetreInterceptor)
                 .addPathPatterns("/api/dossiers/**", "/api/prospections/**",
                         "/api/pre-prospections/**", "/api/encaissements/**");
+        registry.addInterceptor(suiviUtilisateursInterceptor).addPathPatterns("/api/**");
     }
 
     @Override
