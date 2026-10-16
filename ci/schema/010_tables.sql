@@ -931,7 +931,7 @@ CREATE TABLE [dbo].[AppModeleDocumentVersion](
 	[AppModeleDocumentId] [uniqueidentifier] NOT NULL,
 	[Numero] [int] NOT NULL,
 	[Contenu] [nvarchar](max) COLLATE French_CI_AS NOT NULL,
-	[MiseEnPage] [nvarchar](400) COLLATE French_CI_AS NOT NULL,
+	[MiseEnPage] [nvarchar](max) COLLATE French_CI_AS NOT NULL,
 	[CreeLe] [datetime2](7) NOT NULL,
 	[CreePar] [nvarchar](255) COLLATE French_CI_AS NOT NULL,
  CONSTRAINT [PK_AppModeleDocumentVersion] PRIMARY KEY CLUSTERED

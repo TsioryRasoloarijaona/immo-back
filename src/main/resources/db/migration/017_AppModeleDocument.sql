@@ -51,7 +51,7 @@ BEGIN
         AppModeleDocumentId uniqueidentifier NOT NULL,
         Numero              int              NOT NULL,
         Contenu             nvarchar(max)    NOT NULL,
-        MiseEnPage          nvarchar(400)    NOT NULL,
+        MiseEnPage          nvarchar(max)    NOT NULL,
         CreeLe              datetime2(7)     NOT NULL,
         CreePar             nvarchar(255)    NOT NULL,
 

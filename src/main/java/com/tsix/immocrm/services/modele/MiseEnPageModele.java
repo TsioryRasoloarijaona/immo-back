@@ -13,7 +13,6 @@ public class MiseEnPageModele {
     static final String A4 = "A4";
     private static final int MARGE_DEFAUT = 15;
     private static final int MARGE_MAX = 60;
-    private static final int JSON_MAX = 400;
 
     private final JsonMapper json;
 
@@ -34,13 +33,9 @@ public class MiseEnPageModele {
                 vide(source.enTete()), vide(source.piedDePage()));
     }
 
+    /** Taille bornée en amont : en-tête et pied passent par {@link ModelePrepare} (liste blanche, poids des images). */
     public String ecrire(MiseEnPageDto miseEnPage) {
-        String texte = json.writeValueAsString(miseEnPage);
-        if (texte.length() > JSON_MAX) {
-            throw new InvalidRequestException("Mise en page trop longue : %d caractères (400 au plus, en-tête et pied compris)."
-                    .formatted(texte.length()));
-        }
-        return texte;
+        return json.writeValueAsString(miseEnPage);
     }
 
     public MiseEnPageDto lire(String texte) {

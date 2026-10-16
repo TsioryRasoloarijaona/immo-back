@@ -43,8 +43,8 @@ public class AppModeleDocumentVersion {
     /** JSON {@link com.tsix.immocrm.dto.modele.MiseEnPageDto}. */
     @NotNull
     @Nationalized
-    @Size(max = 400)
-    @Column(name = "MiseEnPage", nullable = false, length = 400)
+    @Lob
+    @Column(name = "MiseEnPage", nullable = false)
     private String miseEnPage;
 
     @NotNull
