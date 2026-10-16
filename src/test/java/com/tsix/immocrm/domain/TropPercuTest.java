@@ -39,6 +39,20 @@ class TropPercuTest {
                 () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("50000"));
     }
 
+    /** Net à payer de la liste OMRAN : Total et TotalSettled de la vue, dont le trop-perçu est le reste négatif. */
+    @Test
+    void bilan_totalEtTotalRegleDeLaVue() {
+        TropPercu.Ligne frais = new TropPercu.Ligne(new BigDecimal("15000"), new BigDecimal("15000"), true,
+                true, false, false, false, false, false, false);
+        TropPercu.Bilan b = TropPercu.bilan(List.of(avance("100000", "60000"), frais),
+                new BigDecimal("1000000"), new BigDecimal("5000"), false);
+
+        assertAll(
+                () -> assertThat(b.total()).isEqualByComparingTo("1020000"),
+                () -> assertThat(b.totalRegle()).isEqualByComparingTo("75000"),
+                () -> assertThat(b.reste()).isEqualByComparingTo("945000"));
+    }
+
     @Test
     void dossierAnnule_tropPercuEstLeRemboursementPrevu() {
         // Annulé : total = réglé − remboursement prévu (échéance au débit), donc trop-perçu = ce remboursement.

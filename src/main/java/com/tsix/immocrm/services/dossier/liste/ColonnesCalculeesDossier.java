@@ -25,7 +25,7 @@ public class ColonnesCalculeesDossier {
 
     /** Ce qui exige la requête native. */
     public static final Set<ColonneDossier> COLONNES = EnumSet.of(
-            ColonneDossier.DECISION_MEILLEUR_TAUX, ColonneDossier.NOMBRE_ETATS_MODIFICATION,
+            ColonneDossier.NOMBRE_ETATS_MODIFICATION,
             ColonneDossier.NOMBRE_CADEAUX, ColonneDossier.PRIX_VENTE_M2_TTC, ColonneDossier.PRIX_VENTE_M2_HT,
             ColonneDossier.ALERTE, ColonneDossier.NOMBRE_ACTIONS, ColonneDossier.DERNIERE_COMMUNICATION_DATE,
             ColonneDossier.DERNIERE_COMMUNICATION_RESULTAT, ColonneDossier.DERNIERE_COMMUNICATION_MESSAGE,
@@ -41,7 +41,6 @@ public class ColonnesCalculeesDossier {
     // Catégories « communication » d'OMRAN : 1111 communication, 2222 réservation, 3333 livraison, 9999 annulation.
     private static final String REQUETE = """
             SELECT f.PKey,
-              (SELECT d.Description FROM ComLoanCompanyDecision d WHERE d.PKey = f.ComLoanCompanyDecisionId),
               (SELECT COUNT(*) FROM ComModification m WHERE m.Status = 'ENCOURS' AND m.ComFolderId = f.PKey),
               (SELECT COUNT(*) FROM ComFolderGift g WHERE g.ComFolderId = f.PKey),
               (SELECT SUM(ISNULL(i.Area, 0)) FROM ComFolderItem i
@@ -123,9 +122,9 @@ public class ColonnesCalculeesDossier {
         for (Object ligne : lignes) {
             Object[] l = (Object[]) ligne;
             parDossier.put(uuid(l[0]), new ValeursCalculees(
-                    (String) l[1], entier(l[2]), entier(l[3]), decimal(l[4]), date(l[5]), entier(l[6]),
-                    date(l[7]), (String) l[8], (String) l[9], entier(l[10]) == 1,
-                    vide(l[11]), vide(l[12]), vide(l[13])));
+                    entier(l[1]), entier(l[2]), decimal(l[3]), date(l[4]), entier(l[5]),
+                    date(l[6]), (String) l[7], (String) l[8], entier(l[9]) == 1,
+                    vide(l[10]), vide(l[11]), vide(l[12])));
         }
     }
 

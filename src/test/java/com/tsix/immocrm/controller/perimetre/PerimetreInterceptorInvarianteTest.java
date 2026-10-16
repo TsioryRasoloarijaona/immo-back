@@ -96,6 +96,9 @@ class PerimetreInterceptorInvarianteTest {
             // périmètre compris (ListeDossiersService#specification) ; statuts et dates de période sont
             // des référentiels, aucune ressource scopée.
             "/api/dossiers/export",
+            // Σ des montants par nature (FEATURE-dossiers-liste-complete.md B4) : même Specification et même
+            // périmètre que la liste. Vérifié par DossierListeMontantsNatureTest#totaux_dUnCommercial_seulementSonPerimetre.
+            "/api/dossiers/totaux",
             "/api/dossiers/statuts",
             "/api/dossiers/champs-date",
             // Exports des listes (FEATURE-export-listes.md) : chacun relit la liste par sa propre méthode

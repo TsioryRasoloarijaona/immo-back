@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.liste.StatutListeDossierDto;
+import com.tsix.immocrm.dto.dossier.liste.TotauxDossiersDto;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -23,8 +24,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,20 +58,20 @@ public class ListeDossiersService {
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
     private final StatutsVisiblesListe statutsVisibles;
-    private final ColonnesCalculeesDossier colonnesCalculees;
+    private final CalculsDeLaPage calculs;
     private final LotsLibres lotsLibres;
     private final StrStatusRepository statusRepository;
 
     public ListeDossiersService(ComFolderRepository folderRepository, PerimetreCommercialService perimetreService,
                                 GroupementService groupementService, StatutsVisiblesListe statutsVisibles,
-                                ColonnesCalculeesDossier colonnesCalculees, LotsLibres lotsLibres,
+                                CalculsDeLaPage calculs, LotsLibres lotsLibres,
                                 StrStatusRepository statusRepository) {
         this.statusRepository = statusRepository;
         this.folderRepository = folderRepository;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
         this.statutsVisibles = statutsVisibles;
-        this.colonnesCalculees = colonnesCalculees;
+        this.calculs = calculs;
         this.lotsLibres = lotsLibres;
     }
 
@@ -139,13 +143,47 @@ public class ListeDossiersService {
         return spec.and(perimetreService.filtreDossiers());
     }
 
+    /**
+     * Σ des montants par nature sur toutes les lignes de la liste : même spécification, même périmètre et mêmes
+     * statuts visibles que {@link #lister}, même calcul par dossier que ses colonnes.
+     */
+    public TotauxDossiersDto totaux(FiltresListeDossiers filtres) {
+        if (!filtres.lignes().avecDossiers()) {
+            return new TotauxDossiersDto(0, sommesNulles());
+        }
+        List<ComFolder> dossiers = folderRepository.findAll(specification(filtres, null));
+        Map<String, BigDecimal> sommes = sommesNulles();
+        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = calculs.montants().pour(dossiers);
+        for (ComFolder f : dossiers) {
+            // prixContractuel est une colonne de ComFolder (nulle en ligne si absente) : lue ici, pas recalculée.
+            Map<ColonneDossier, BigDecimal> montants = new EnumMap<>(parDossier.get(f.getId()));
+            montants.put(ColonneDossier.PRIX_CONTRACTUEL,
+                    f.getAgreementPrice() != null ? f.getAgreementPrice() : BigDecimal.ZERO);
+            MontantsParNatureDossier.SOMMABLES.forEach(c -> sommes.merge(c.nom(), montants.get(c), BigDecimal::add));
+        }
+        return new TotauxDossiersDto(dossiers.size(), sommes);
+    }
+
+    private static Map<String, BigDecimal> sommesNulles() {
+        Map<String, BigDecimal> sommes = new LinkedHashMap<>();
+        MontantsParNatureDossier.SOMMABLES.forEach(c -> sommes.put(c.nom(), BigDecimal.ZERO));
+        return sommes;
+    }
+
     private List<LigneDossier> lignesDeDossiers(List<ComFolder> dossiers, Set<ColonneDossier> colonnes) {
-        Map<UUID, ValeursCalculees> calculs = ColonnesCalculeesDossier.requises(colonnes)
-                ? colonnesCalculees.pour(dossiers.stream().map(ComFolder::getId).toList(),
+        Map<UUID, ValeursCalculees> valeurs = ColonnesCalculeesDossier.requises(colonnes)
+                ? calculs.colonnes().pour(dossiers.stream().map(ComFolder::getId).toList(),
                         PerimetreCommercialService.admUserIdCourant().orElse(null))
                 : Map.of();
+        Map<UUID, Map<ColonneDossier, BigDecimal>> montants = MontantsParNatureDossier.requises(colonnes)
+                ? calculs.montants().pour(dossiers)
+                : Map.of();
         return dossiers.stream()
-                .map(f -> MappingListeDossier.depuisDossier(f, colonnes, calculs.get(f.getId())))
+                .map(f -> {
+                    LigneDossier ligne = MappingListeDossier.depuisDossier(f, colonnes, valeurs.get(f.getId()));
+                    montants.getOrDefault(f.getId(), Map.of()).forEach(ligne::met);
+                    return ligne;
+                })
                 .toList();
     }
 

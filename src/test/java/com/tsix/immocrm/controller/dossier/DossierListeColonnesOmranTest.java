@@ -112,11 +112,8 @@ class DossierListeColonnesOmranTest {
     @Test
     void familleDates_jalonsDuDossierEtDeLaTranche() throws Exception {
         ComFolder f = dossier();
-        f.setReservationDate(LocalDateTime.of(2025, 1, 5, 0, 0));
         f.setBankRecordDate(LocalDateTime.of(2025, 2, 6, 0, 0));
-        f.setAgreementSavingDateLawyer(LocalDateTime.of(2025, 3, 7, 0, 0));
-        f.setPrecisionActDateForRegistry(LocalDateTime.of(2025, 4, 8, 0, 0));
-        f.setFinalTitleNumber("TF-1234/56");
+        f.setAgreementSavingDate(LocalDateTime.of(2025, 3, 7, 0, 0));
         f.setIsConfirmedAgreementDate(true);
         f.setContractPrintDate(LocalDateTime.of(2025, 5, 9, 0, 0));
         tranche.setOccupancyPermitsDate(LocalDateTime.of(2026, 6, 30, 0, 0));
@@ -124,15 +121,11 @@ class DossierListeColonnesOmranTest {
         relire();
 
         mockMvc.perform(get("/api/dossiers").param("search", prefixe).param("colonnes",
-                        "datePromesseVente,dateFicheBancaire,dateMinuteAvocat,dateDepotEnregistrementActePrecision,"
-                                + "numeroTitre,envoiNotaireConfirme,dateImpressionContrat,datePermisHabiter,"
+                        "dateFicheBancaire,dateMinute,envoiNotaireConfirme,dateImpressionContrat,datePermisHabiter,"
                                 + "dateRemiseClesPrevue"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(PREMIER + "datePromesseVente").value("2025-01-05T00:00:00"))
                 .andExpect(jsonPath(PREMIER + "dateFicheBancaire").value("2025-02-06T00:00:00"))
-                .andExpect(jsonPath(PREMIER + "dateMinuteAvocat").value("2025-03-07T00:00:00"))
-                .andExpect(jsonPath(PREMIER + "dateDepotEnregistrementActePrecision").value("2025-04-08T00:00:00"))
-                .andExpect(jsonPath(PREMIER + "numeroTitre").value("TF-1234/56"))
+                .andExpect(jsonPath(PREMIER + "dateMinute").value("2025-03-07T00:00:00"))
                 .andExpect(jsonPath(PREMIER + "envoiNotaireConfirme").value(true))
                 .andExpect(jsonPath(PREMIER + "dateImpressionContrat").value("2025-05-09T00:00:00"))
                 .andExpect(jsonPath(PREMIER + "datePermisHabiter").value("2026-06-30T00:00:00"))
@@ -201,42 +194,40 @@ class DossierListeColonnesOmranTest {
     @Test
     void familleDelais_joursEntreJalons_etZeroMeilleurTauxSansDecision() throws Exception {
         ComFolder f = dossier();
-        f.setAgreementDate(LocalDateTime.of(2025, 1, 1, 23, 0));
-        f.setCreditPossessionDate(LocalDateTime.of(2025, 1, 31, 1, 0));
-        f.setDeliveryDateReal(LocalDateTime.of(2025, 3, 2, 9, 0));
         f.setLoanCompanySendDate(LocalDateTime.of(2025, 1, 10, 0, 0));
         relire();
 
-        mockMvc.perform(get("/api/dossiers").param("search", prefixe)
-                        .param("colonnes", "delaiCredit,delaiCreditRemiseCles,delaiMeilleurTaux"))
+        mockMvc.perform(get("/api/dossiers").param("search", prefixe).param("colonnes", "delaiMeilleurTaux"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(PREMIER + "delaiCredit").value(30))
-                .andExpect(jsonPath(PREMIER + "delaiCreditRemiseCles").value(30))
                 .andExpect(jsonPath(PREMIER + "delaiMeilleurTaux").value(0));
     }
 
     @Test
-    void familleActeurs_gestionnaire2EtBanque() throws Exception {
+    void familleActeurs_banque() throws Exception {
         ComFolder f = dossier();
-        CfgTier gestionnaire = fixture.tier("GEST2");
-        gestionnaire.setFirstName("Sara");
-        gestionnaire.setLastName("IDRISSI");
         CfgTier banque = fixture.tier("BANQ");
         banque.setFirstName(null);
         banque.setLastName(null);
         banque.setSocialReason("BANQUE POPULAIRE");
-        f.setCfgSaleManager2Id(gestionnaire);
         f.setCreditBank(banque);
         relire();
 
-        mockMvc.perform(get("/api/dossiers").param("search", prefixe).param("colonnes", "gestionnaire2Nom,banqueCredit"))
+        mockMvc.perform(get("/api/dossiers").param("search", prefixe).param("colonnes", "banqueCredit"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(PREMIER + "gestionnaire2Nom").value("Sara IDRISSI"))
                 .andExpect(jsonPath(PREMIER + "banqueCredit").value("BANQUE POPULAIRE"));
     }
 
+    /** Colonnes vides à plus de 99 % en base réelle : retirées du catalogue (FEATURE-dossiers-liste-complete.md B5). */
     @Test
-    void familleCalculees_sousArticlesCadeauxModificationsCoAcquereursDecision() throws Exception {
+    void colonneRetireeDuCatalogue_400() throws Exception {
+        mockMvc.perform(get("/api/dossiers").param("colonnes", "code,gestionnaire2Nom"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/dossiers").param("colonnes", "numeroTitre"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void familleCalculees_sousArticlesCadeauxModificationsCoAcquereurs() throws Exception {
         ComFolder f = dossier();
         em.persist(itemDuDossier(f, "A-01", "Appartement 1", BigDecimal.ZERO, false));
         em.persist(itemDuDossier(f, "P-07", "Parking 7", BigDecimal.ONE, true));
@@ -252,23 +243,16 @@ class DossierListeColonnesOmranTest {
         inserer("INSERT INTO ComFolderGift (PKey, ComFolderId) VALUES (NEWID(), ?1)", f.getId());
         inserer("INSERT INTO ComModification (PKey, Status, ComFolderId) VALUES (NEWID(), 'ENCOURS', ?1)", f.getId());
         inserer("INSERT INTO ComModification (PKey, Status, ComFolderId) VALUES (NEWID(), 'VALIDEE', ?1)", f.getId());
-        UUID decision = UUID.randomUUID();
-        em.createNativeQuery("INSERT INTO ComLoanCompanyDecision (PKey, Code, Description) VALUES (?1, 'ACC', 'ACCORD')")
-                .setParameter(1, decision).executeUpdate();
-        em.createNativeQuery("UPDATE ComFolder SET ComLoanCompanyDecisionId = ?1 WHERE PKey = ?2")
-                .setParameter(1, decision).setParameter(2, f.getId()).executeUpdate();
         relire();
 
         mockMvc.perform(get("/api/dossiers").param("search", prefixe).param("colonnes",
-                        "sousArticlesCodes,sousArticlesLibelles,nombreCadeaux,nombreEtatsModification,autresClients,"
-                                + "decisionMeilleurTaux"))
+                        "sousArticlesCodes,sousArticlesLibelles,nombreCadeaux,nombreEtatsModification,autresClients"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(PREMIER + "sousArticlesCodes").value("A-01, P-07"))
                 .andExpect(jsonPath(PREMIER + "sousArticlesLibelles").value("Appartement 1, Parking 7"))
                 .andExpect(jsonPath(PREMIER + "nombreCadeaux").value(2))
                 .andExpect(jsonPath(PREMIER + "nombreEtatsModification").value(1))
-                .andExpect(jsonPath(PREMIER + "autresClients").value("KARIMI Youssef"))
-                .andExpect(jsonPath(PREMIER + "decisionMeilleurTaux").value("ACCORD"));
+                .andExpect(jsonPath(PREMIER + "autresClients").value("KARIMI Youssef"));
     }
 
     @Test

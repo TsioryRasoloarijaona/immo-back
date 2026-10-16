@@ -139,8 +139,6 @@ public final class MappingListeDossier {
                         CfgTier::getId))
                 .met(RESPONSABLE_VENTE_NOM, siDemande(colonnes, RESPONSABLE_VENTE_NOM, f.getCfgSaleManager(),
                         TierNomFormatter::nom))
-                .met(GESTIONNAIRE_2_NOM, siDemande(colonnes, GESTIONNAIRE_2_NOM, f.getCfgSaleManager2Id(),
-                        TierNomFormatter::nom))
                 .met(BANQUE_CREDIT, siDemande(colonnes, BANQUE_CREDIT, f.getCreditBank(), TierNomFormatter::nom));
     }
 
@@ -151,7 +149,8 @@ public final class MappingListeDossier {
                 .met(PRIX_APRES_REMISE, f.getPriceAfterDiscount())
                 // Le « montant d'avance » vient d'AgreementAmount : ComFolder n'a pas d'AdvanceAmount.
                 .met(MONTANT_AVANCE, f.getAgreementAmount())
-                .met(PROBABILITE_FINALISATION, f.getProbabilityOfFinalisation());
+                .met(PROBABILITE_FINALISATION, f.getProbabilityOfFinalisation())
+                .met(PRIX_CONTRACTUEL, f.getAgreementPrice());
     }
 
     private static void prix(LigneDossier l, ComFolder f, ValeursCalculees calcul) {
@@ -184,55 +183,24 @@ public final class MappingListeDossier {
         l.met(DATE_COMPROMIS, f.getCreditApprovalDate())
                 .met(DATE_ENVOI_NOTAIRE, f.getAgreementDate())
                 .met(DATE_LIVRAISON_REELLE, f.getDeliveryDateReal())
-                .met(DATE_PROMESSE_VENTE, f.getReservationDate())
-                .met(DATE_PROMESSE_VENTE_CLIENT, f.getReservationDateCustomer())
-                .met(DATE_ENREGISTREMENT_RESERVATION, f.getReservationRegistryDate())
                 .met(DATE_FICHE_BANCAIRE, f.getBankRecordDate())
-                .met(DATE_FICHE_INTERVENTION, f.getInterventionDate())
-                .met(DATE_FICHE_ASSURANCE, f.getInsuranceDate())
-                .met(DATE_OCTROI_CREDIT, f.getCreditPossessionDate())
                 .met(DATE_MINUTE, f.getAgreementSavingDate())
-                .met(DATE_MINUTE_CLIENT, f.getAgreementSavingDateCustomer())
-                .met(DATE_MINUTE_AVOCAT, f.getAgreementSavingDateLawyer())
-                .met(DATE_REMISE_LEGALISATION_CONTRAT, f.getAgreementSavingDateForLegalization())
-                .met(DATE_LEGALISATION_CONTRAT, f.getAgreementSavingDateLegalization())
-                .met(DATE_DEPOT_ENREGISTREMENT_CONTRAT, f.getAgreementSavingDateForRegistry())
-                .met(DATE_REMISE_CLES_CLIENT, f.getDeliveryDateRealCustomer())
-                .met(DATE_ENREGISTREMENT_REMISE_CLES, f.getDeliveryRegistryDate())
-                .met(DATE_EXPEDITION, f.getOwnershipCertificateDate())
                 .met(DATE_ENREGISTREMENT_CONTRAT, f.getAgreementRegistryDate())
-                .met(DATE_RELANCE_1, f.getRevival1())
-                .met(ECHEANCE_RELANCE_1, f.getRevival1ValidityDate())
-                .met(DATE_RELANCE_2, f.getRevival2())
-                .met(ECHEANCE_RELANCE_2, f.getRevival2ValidityDate())
-                .met(DATE_DEPOT_CPF, f.getFinalTitleDateDeposit())
-                .met(DATE_RETRAIT_CPF, f.getFinalTitleDateWithdrawal())
-                .met(DATE_REMISE_CERTIFICAT, f.getFinalTitleDate())
-                .met(NUMERO_TITRE, f.getFinalTitleNumber())
                 .met(DATE_VALIDITE_STATUT, f.getStatusValidityDate())
                 .met(DATE_MODIFICATION_REMISE, f.getDiscountChangeDate())
                 .met(DATE_ENVOI_NOTAIRE_PREVUE, f.getAgreementDatePrevisionel())
                 .met(ENVOI_NOTAIRE_CONFIRME, f.getIsConfirmedAgreementDate())
-                .met(DATE_VISITE_TECHNIQUE, f.getReceptionDate())
-                .met(DATE_ENVOI_MEILLEUR_TAUX, f.getLoanCompanySendDate())
                 .met(DATE_DECISION_MEILLEUR_TAUX, f.getLoanCompanyDecisionDate())
-                .met(DATE_ACTE_PRECISION, f.getPrecisionActDate())
-                .met(DATE_ACTE_PRECISION_CLIENT, f.getPrecisionActDateCustomer())
-                .met(DATE_ENREGISTREMENT_ACTE_PRECISION, f.getPrecisionActRegistryDate())
-                .met(DATE_REMISE_LEGALISATION_ACTE_PRECISION, f.getPrecisionActDateForLegalization())
-                .met(DATE_DEPOT_ENREGISTREMENT_ACTE_PRECISION, f.getPrecisionActDateForRegistry())
                 .met(DATE_IMPRESSION_CONTRAT, f.getContractPrintDate())
                 .met(CADEAU_PLUS_TARD, f.getIsWithGiftChoiceLater());
     }
 
-    /** Les trois premiers sont des {@code @Formula} ; les autres, le {@code DATEDIFF(d, …)} de la vue en Java. */
+    /** Les trois premiers sont des {@code @Formula} ; le dernier, le {@code DATEDIFF(d, …)} de la vue en Java. */
     private static void delais(LigneDossier l, ComFolder f) {
         Integer meilleurTaux = jours(f.getLoanCompanySendDate(), f.getLoanCompanyDecisionDate());
         l.met(DELAI_CONCRETISATION, f.getDelaiConcretisation())
                 .met(DELAI_NOTAIRE, f.getDelaiNotaire())
                 .met(DELAI_LIVRAISON, f.getDelaiLivraison())
-                .met(DELAI_CREDIT, jours(f.getAgreementDate(), f.getCreditPossessionDate()))
-                .met(DELAI_CREDIT_REMISE_CLES, jours(f.getCreditPossessionDate(), f.getDeliveryDateReal()))
                 // ISNULL(…, 0) dans la vue : zéro, pas null, quand une des deux dates manque.
                 .met(DELAI_MEILLEUR_TAUX, meilleurTaux != null ? meilleurTaux : 0);
     }
@@ -296,8 +264,7 @@ public final class MappingListeDossier {
     }
 
     private static void calcules(LigneDossier l, ValeursCalculees c) {
-        l.met(DECISION_MEILLEUR_TAUX, c.decisionMeilleurTaux())
-                .met(NOMBRE_ETATS_MODIFICATION, c.nombreEtatsModification())
+        l.met(NOMBRE_ETATS_MODIFICATION, c.nombreEtatsModification())
                 .met(NOMBRE_CADEAUX, c.nombreCadeaux())
                 .met(ALERTE, c.alerte())
                 .met(NOMBRE_ACTIONS, c.nombreActions())

@@ -36,11 +36,21 @@ public final class TropPercu {
     }
 
     /**
+     * {@code Total} et {@code TotalSettled} de la vue (« Net à payer » et « Net à payer réglé » de la liste OMRAN),
+     * {@code reste} = {@code TotalRest}. Même formule que le trop-perçu, qui n'en est que le reste négatif.
+     */
+    public record Bilan(BigDecimal total, BigDecimal totalRegle) {
+        public BigDecimal reste() {
+            return total.subtract(totalRegle);
+        }
+    }
+
+    /**
      * @param prix          {@code ComFolder.Price}
      * @param modifications {@code ComFolder.ModificationsAmount}
      * @param sorti         statut d'annulation ou de résiliation ({@code IsCancellation} de la vue)
      */
-    public static Resultat calculer(List<Ligne> lignes, BigDecimal prix, BigDecimal modifications, boolean sorti) {
+    public static Bilan bilan(List<Ligne> lignes, BigDecimal prix, BigDecimal modifications, boolean sorti) {
         BigDecimal regleHorsAnnulation = regle(lignes, Ligne::avance)
                 .add(regle(lignes, Ligne::creditBancaire))
                 .add(regle(lignes, Ligne::autoFinancement))
@@ -53,8 +63,12 @@ public final class TropPercu {
                 : nonNul(prix).add(nonNul(modifications))
                         .add(somme(lignes, l -> l.frais() && l.auCredit()))
                         .add(penalites(lignes));
-        BigDecimal totalRegle = regleHorsAnnulation.subtract(regle(lignes, Ligne::resiliation));
-        BigDecimal reste = total.subtract(totalRegle);
+        return new Bilan(total, regleHorsAnnulation.subtract(regle(lignes, Ligne::resiliation)));
+    }
+
+    /** Paramètres : ceux de {@link #bilan}. */
+    public static Resultat calculer(List<Ligne> lignes, BigDecimal prix, BigDecimal modifications, boolean sorti) {
+        BigDecimal reste = bilan(lignes, prix, modifications, sorti).reste();
         if (reste.signum() >= 0) {
             return Resultat.AUCUN;
         }
