@@ -1,13 +1,14 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheBancairePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheDossierVentePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.PdfMerger;
+import com.tsix.immocrm.services.modele.ActeReservationModele;
+import com.tsix.immocrm.services.modele.FormatDocument;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +25,7 @@ public class DocumentLotService {
 
     private final FicheReservationService ficheReservationService;
     private final FicheReservationPdfRenderer ficheReservationPdfRenderer;
-    private final ActeReservationService acteReservationService;
-    private final ActeReservationPdfRenderer acteReservationPdfRenderer;
+    private final ActeReservationModele acteReservationModele;
     private final FicheBancaireService ficheBancaireService;
     private final FicheBancairePdfRenderer ficheBancairePdfRenderer;
     private final FicheVisiteTechniqueService ficheVisiteTechniqueService;
@@ -39,8 +39,7 @@ public class DocumentLotService {
 
     public DocumentLotService(FicheReservationService ficheReservationService,
                                FicheReservationPdfRenderer ficheReservationPdfRenderer,
-                               ActeReservationService acteReservationService,
-                               ActeReservationPdfRenderer acteReservationPdfRenderer,
+                               ActeReservationModele acteReservationModele,
                                FicheBancaireService ficheBancaireService,
                                FicheBancairePdfRenderer ficheBancairePdfRenderer,
                                FicheVisiteTechniqueService ficheVisiteTechniqueService,
@@ -54,8 +53,7 @@ public class DocumentLotService {
         this.perimetreService = perimetreService;
         this.ficheReservationService = ficheReservationService;
         this.ficheReservationPdfRenderer = ficheReservationPdfRenderer;
-        this.acteReservationService = acteReservationService;
-        this.acteReservationPdfRenderer = acteReservationPdfRenderer;
+        this.acteReservationModele = acteReservationModele;
         this.ficheBancaireService = ficheBancaireService;
         this.ficheBancairePdfRenderer = ficheBancairePdfRenderer;
         this.ficheVisiteTechniqueService = ficheVisiteTechniqueService;
@@ -74,7 +72,7 @@ public class DocumentLotService {
     }
 
     public byte[] acteReservation(List<UUID> dossierIds) {
-        return genererLot(dossierIds, id -> acteReservationPdfRenderer.render(acteReservationService.collect(id)));
+        return genererLot(dossierIds, id -> acteReservationModele.rendre(id, FormatDocument.PDF).contenu());
     }
 
     public byte[] ficheBancaire(List<UUID> dossierIds) {

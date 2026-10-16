@@ -898,6 +898,58 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+CREATE TABLE [dbo].[AppModeleDocument](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[Categorie] [nvarchar](40) COLLATE French_CI_AS NOT NULL,
+	[Code] [nvarchar](60) COLLATE French_CI_AS NOT NULL,
+	[Libelle] [nvarchar](200) COLLATE French_CI_AS NOT NULL,
+	[Ordre] [int] NOT NULL,
+	[Actif] [bit] NOT NULL,
+	[VersionCouranteId] [uniqueidentifier] NULL,
+	[CreeLe] [datetime2](7) NOT NULL,
+	[CreePar] [nvarchar](255) COLLATE French_CI_AS NOT NULL,
+	[ModifieLe] [datetime2](7) NOT NULL,
+	[ModifiePar] [nvarchar](255) COLLATE French_CI_AS NOT NULL,
+ CONSTRAINT [PK_AppModeleDocument] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+ CONSTRAINT [UQ_AppModeleDocument_Categorie_Code] UNIQUE NONCLUSTERED
+(
+	[Categorie] ASC,
+	[Code] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[AppModeleDocumentVersion](
+	[PKey] [uniqueidentifier] NOT NULL,
+	[AppModeleDocumentId] [uniqueidentifier] NOT NULL,
+	[Numero] [int] NOT NULL,
+	[Contenu] [nvarchar](max) COLLATE French_CI_AS NOT NULL,
+	[MiseEnPage] [nvarchar](400) COLLATE French_CI_AS NOT NULL,
+	[CreeLe] [datetime2](7) NOT NULL,
+	[CreePar] [nvarchar](255) COLLATE French_CI_AS NOT NULL,
+ CONSTRAINT [PK_AppModeleDocumentVersion] PRIMARY KEY CLUSTERED
+(
+	[PKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF),
+ CONSTRAINT [UQ_AppModeleDocumentVersion_Modele_Numero] UNIQUE NONCLUSTERED
+(
+	[AppModeleDocumentId] ASC,
+	[Numero] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF)
+)
+
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE TABLE [dbo].[BuyDocument](
 	[PKey] [uniqueidentifier] NOT NULL,
 	[Code] [nvarchar](255) COLLATE French_CI_AS NULL,
