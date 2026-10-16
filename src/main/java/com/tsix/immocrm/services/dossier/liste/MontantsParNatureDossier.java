@@ -118,7 +118,6 @@ public class MontantsParNatureDossier {
 
         BigDecimal contractuelRegle = echeances.stream().filter(Echeance::auPrixContractuel)
                 .map(e -> nonNul(e.ligne().regle())).reduce(BigDecimal.ZERO, BigDecimal::add);
-        m.put(PRIX_CONTRACTUEL, nonNul(f.getAgreementPrice()));
         m.put(PRIX_CONTRACTUEL_REGLE, contractuelRegle);
         m.put(PRIX_CONTRACTUEL_RESTE, nonNul(f.getAgreementPrice()).subtract(contractuelRegle));
 

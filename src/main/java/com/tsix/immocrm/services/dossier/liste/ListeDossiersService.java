@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +153,12 @@ public class ListeDossiersService {
         }
         List<ComFolder> dossiers = folderRepository.findAll(specification(filtres, null));
         Map<String, BigDecimal> sommes = sommesNulles();
-        for (Map<ColonneDossier, BigDecimal> montants : calculs.montants().pour(dossiers).values()) {
+        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = calculs.montants().pour(dossiers);
+        for (ComFolder f : dossiers) {
+            // prixContractuel est une colonne de ComFolder (nulle en ligne si absente) : lue ici, pas recalculée.
+            Map<ColonneDossier, BigDecimal> montants = new EnumMap<>(parDossier.get(f.getId()));
+            montants.put(ColonneDossier.PRIX_CONTRACTUEL,
+                    f.getAgreementPrice() != null ? f.getAgreementPrice() : BigDecimal.ZERO);
             MontantsParNatureDossier.SOMMABLES.forEach(c -> sommes.merge(c.nom(), montants.get(c), BigDecimal::add));
         }
         return new TotauxDossiersDto(dossiers.size(), sommes);
