@@ -77,6 +77,7 @@ import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.dto.common.GroupeDto;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
 import com.tsix.immocrm.services.groupement.GroupementService;
@@ -273,12 +274,24 @@ public class ProspectionService {
     /** {@code projetIds} : projet de la tranche, comme le filtre avancé {@code projetId} des prospections. */
     public Page<ProspectionListItemDto> findPreProspections(FiltresListeProspection liste, List<UUID> projetIds,
             ColonneProspection groupeColonne, String groupeValeur, Granularite granularite, Pageable pageable) {
-        Specification<ComProspection> spec = specPreProspections(criteres(liste, null), projetIds)
-                .and(perimetreService.filtreProspections())
+        Specification<ComProspection> spec = specPreProspectionsVisibles(liste, projetIds)
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         // Sélection par défaut forcée : ComSaleProspectionView exclut les pré-prospections, la
         // lire ne rendrait que des null.
         return versListe(prospectionRepository.findAll(spec, pageable), ColonneProspection.parDefautSet());
+    }
+
+    /** Résumés sur toutes les lignes de {@link #findPreProspections} (même spec, même périmètre), sans page. */
+    public TotauxListeDto totauxPreProspections(FiltresListeProspection liste, List<UUID> projetIds,
+            List<AgregatDemande> agregats) {
+        GroupementService.Totaux totaux = groupementService.totaux(ComProspection.class,
+                specPreProspectionsVisibles(liste, projetIds), agregats);
+        return new TotauxListeDto(totaux.nombre(), totaux.valeurs());
+    }
+
+    private Specification<ComProspection> specPreProspectionsVisibles(FiltresListeProspection liste,
+            List<UUID> projetIds) {
+        return specPreProspections(criteres(liste, null), projetIds).and(perimetreService.filtreProspections());
     }
 
     /** Voir {@code instructions/FEATURE-groupement-listes.md}. */
