@@ -53,6 +53,7 @@ class TropPercuTest {
                 () -> assertThat(b.reste()).isEqualByComparingTo("945000"));
     }
 
+    /** Cas B de FEATURE-dossier-durcissement.md §2 : résiliation au débit non décaissée. */
     @Test
     void dossierAnnule_tropPercuEstLeRemboursementPrevu() {
         // Annulé : total = réglé − remboursement prévu (échéance au débit), donc trop-perçu = ce remboursement.
@@ -91,17 +92,6 @@ class TropPercuTest {
         assertAll(
                 () -> assertThat(r.tropPercu()).isEqualByComparingTo("10000"),
                 () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("0"));
-    }
-
-    @Test
-    void casB_dossierAnnule_resiliationNonDecaissee() {
-        TropPercu.Resultat r = TropPercu.calculer(
-                List.of(avance("1000000", "300000"), remboursement("270000", "0")),
-                new BigDecimal("1000000"), BigDecimal.ZERO, true);
-
-        assertAll(
-                () -> assertThat(r.tropPercu()).isEqualByComparingTo("270000"),
-                () -> assertThat(r.tropPercuReste()).isEqualByComparingTo("270000"));
     }
 
     /** Vue : TotalSettled = … − CancelSettled (remboursé, positif) → TotalRest = 0, donc ni trop-perçu ni reste. */

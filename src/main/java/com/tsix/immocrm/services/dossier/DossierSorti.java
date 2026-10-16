@@ -12,9 +12,9 @@ public final class DossierSorti {
     private DossierSorti() {
     }
 
-    /** Sans statut, ou drapeaux NULL (lus 0 par la vue) : le dossier est en cours. */
+    /** Sans statut, ou drapeaux NULL (lus 0 par la vue) : le dossier est en cours. {@code dossier} non nul. */
     public static boolean estSorti(ComFolder dossier) {
-        StrStatus statut = dossier != null ? dossier.getStrStatus() : null;
+        StrStatus statut = dossier.getStrStatus();
         return statut != null && !statut.estActif();
     }
 }
