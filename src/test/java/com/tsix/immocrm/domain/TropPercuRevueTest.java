@@ -32,4 +32,24 @@ class TropPercuRevueTest {
 
         assertThat(r.tropPercuReste()).isEqualByComparingTo("170000");
     }
+
+    /**
+     * « REMBOURSEMENT POUR ANNULATION » est au crédit (IsCredit = 1, IsSaleResiliation = 1, yesRemsProd) :
+     * le décaissement de 100 000 ne doit pas faire naître un trop-perçu (§2 : un remboursement ne l'augmente jamais).
+     */
+    @Test
+    void dossierAnnule_resiliationAuCreditDecaissee_neCreePasDeTropPercu() {
+        TropPercu.Ligne avance = avance("1000000", "300000");
+        TropPercu.Ligne resiliationAuCredit = new TropPercu.Ligne(new BigDecimal("270000"),
+                new BigDecimal("-100000"), true, false, false, false, false, false, false, true);
+        TropPercu.Resultat avant = TropPercu.calculer(
+                List.of(avance, new TropPercu.Ligne(new BigDecimal("270000"), BigDecimal.ZERO, true,
+                        false, false, false, false, false, false, true)),
+                new BigDecimal("1000000"), BigDecimal.ZERO, true);
+        TropPercu.Resultat apres = TropPercu.calculer(List.of(avance, resiliationAuCredit),
+                new BigDecimal("1000000"), BigDecimal.ZERO, true);
+
+        assertThat(avant.tropPercu()).isEqualByComparingTo("0");
+        assertThat(apres.tropPercu()).isLessThanOrEqualTo(avant.tropPercu());
+    }
 }
