@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
+import com.tsix.immocrm.services.prospect.CommercialService;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,8 @@ import static com.tsix.immocrm.services.dossier.edition.GroupeEdition.PRIX;
 @Component
 class ChampsEdition {
 
+    private static final String COMMERCIAL_ID = "commercialId";
+
     private final CfgTierRepository tierRepository;
     private final EntityManager entityManager;
     private final List<Champ<?>> champs = new ArrayList<>();
@@ -47,8 +50,9 @@ class ChampsEdition {
                 ComFolder::setCancelDate);
         texte("annulationCauses", ANNULATION, ModifierDossierRequest::annulationCauses, ComFolder::getCancelDescription,
                 ComFolder::setCancelDescription);
-        tiers("commercialId", COMMERCIAL, ModifierDossierRequest::commercialId, ComFolder::getCfgCommercial,
-                ComFolder::setCfgCommercial);
+        champs.add(new Champ<>(COMMERCIAL_ID, COMMERCIAL, ModifierDossierRequest::commercialId,
+                f -> Champs.de(f.getCfgCommercial(), CfgTier::getId),
+                (f, id) -> f.setCfgCommercial(id == null ? null : commercial(id)), true));
         tiers("gestionnaire1Id", GESTIONNAIRES, ModifierDossierRequest::gestionnaire1Id, ComFolder::getCfgSaleManager,
                 ComFolder::setCfgSaleManager);
         tiers("gestionnaire2Id", GESTIONNAIRES, ModifierDossierRequest::gestionnaire2Id,
@@ -81,6 +85,9 @@ class ChampsEdition {
     }
 
     private void dates() {
+        // La date du dossier ne se vide pas : elle borne l'ordre des jalons (OrdreDatesDossier).
+        champs.add(new Champ<>("dateDossier", DATES, ModifierDossierRequest::dateDossier, ComFolder::getDocDate,
+                ComFolder::setDocDate, false));
         date("concretisation", ModifierDossierRequest::concretisation, ComFolder::getAdvanceDate,
                 ComFolder::setAdvanceDate);
         date("promesseVente", ModifierDossierRequest::promesseVente, ComFolder::getReservationDate,
@@ -219,6 +226,14 @@ class ChampsEdition {
             throw new InvalidRequestException("meilleurTauxDecisionId : décision introuvable (%s).".formatted(id));
         }
         return id;
+    }
+
+    private CfgTier commercial(UUID id) {
+        CfgTier tier = tier(COMMERCIAL_ID, id);
+        if (!CommercialService.estCommercial(tier)) {
+            throw new InvalidRequestException("commercialId : ce tiers n'est pas un commercial (%s).".formatted(id));
+        }
+        return tier;
     }
 
     CfgTier tier(String champ, UUID id) {

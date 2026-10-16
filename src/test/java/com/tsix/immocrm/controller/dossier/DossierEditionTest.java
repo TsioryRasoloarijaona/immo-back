@@ -2,11 +2,13 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.fixtures.FixtureInteraction;
+import com.tsix.immocrm.repositories.cfg.CfgTierKindRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierTypeRepository;
 import com.tsix.immocrm.repositories.com.ActionDossierRepository;
@@ -62,6 +64,7 @@ class DossierEditionTest {
     @Autowired private StkItemRepository stkItemRepository;
     @Autowired private CfgTierRepository tierRepository;
     @Autowired private CfgTierTypeRepository tierTypeRepository;
+    @Autowired private CfgTierKindRepository tierKindRepository;
     @Autowired private StrStatusRepository statusRepository;
     @Autowired private ActionDossierRepository actionRepository;
     @Autowired private EntityManager em;
@@ -236,7 +239,12 @@ class DossierEditionTest {
 
     @Test
     void commercialEtPenalites_parLAdministrateur() throws Exception {
+        CfgTierKind genre = new CfgTierKind();
+        genre.setId(UUID.randomUUID());
+        genre.setCode("COM");
         CfgTier commercial = fixture.tier("COM-EDI");
+        commercial.setCfgTierKind(tierKindRepository.save(genre));
+        tierRepository.save(commercial);
 
         modifier(dossier, ADMIN, "{\"commercialId\":\"%s\",\"penalitesDesactivees\":true}".formatted(commercial.getId()))
                 .andExpect(status().isOk());

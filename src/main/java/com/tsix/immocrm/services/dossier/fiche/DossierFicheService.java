@@ -288,6 +288,8 @@ public class DossierFicheService {
                 f.getLoanCompanySendDate(),
                 decisionMeilleurTaux,
                 f.getLoanCompanyDecisionDate(),
-                f.getIsPenaltyDisabled());
+                f.getIsPenaltyDisabled(),
+                f.getComLoanCompanyDecisionId(),
+                Champs.de(f.getCfgCommercial(), CfgTier::getId));
     }
 }

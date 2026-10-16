@@ -23,6 +23,11 @@ public class CommercialService {
         this.tierRepository = tierRepository;
     }
 
+    /** Même règle que la liste {@code GET /api/commerciaux}. */
+    public static boolean estCommercial(CfgTier tier) {
+        return tier.getCfgTierKind() != null && COMMERCIAL_KIND_CODES.contains(tier.getCfgTierKind().getCode());
+    }
+
     public Page<CommercialListItemDto> findAll(Pageable pageable) {
         return tierRepository.findAll((root, query, cb) ->
                         root.get("cfgTierKind").get("code").in(COMMERCIAL_KIND_CODES), pageable)

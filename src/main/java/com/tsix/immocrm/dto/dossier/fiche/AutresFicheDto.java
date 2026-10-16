@@ -40,6 +40,10 @@ public record AutresFicheDto(
         @Schema(description = "Date de la décision MEILLEURTAUX (ComFolder.loanCompanyDecisionDate).")
         LocalDateTime meilleurTauxDecisionDate,
         @Schema(description = "« Pénalité désactivée » (ComFolder.IsPenaltyDisabled).")
-        Boolean penalitesDesactivees
+        Boolean penalitesDesactivees,
+        @Schema(description = "Décision MEILLEURTAUX choisie (ComFolder.ComLoanCompanyDecisionId), null si non décidée.")
+        UUID meilleurTauxDecisionId,
+        @Schema(description = "Commercial du dossier (ComFolder.CfgCommercialId), null si aucun.")
+        UUID commercialId
 ) {
 }

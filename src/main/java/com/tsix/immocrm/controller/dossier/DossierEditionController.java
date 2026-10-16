@@ -39,7 +39,8 @@ public class DossierEditionController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Modification enregistrée ; dossier signé et historisé."),
             @ApiResponse(responseCode = "400"),
-            @ApiResponse(responseCode = "403", description = "Un champ envoyé appartient à un groupe interdit au rôle."),
+            @ApiResponse(responseCode = "403",
+                    description = "Un champ envoyé appartient à un groupe interdit au rôle, ou est dans champsVerrouilles."),
             @ApiResponse(responseCode = "404", description = DESCRIPTION_404),
             @ApiResponse(responseCode = "409", description = "Dossier annulé ou désisté : seul l'onglet Annulation change.")
     })
