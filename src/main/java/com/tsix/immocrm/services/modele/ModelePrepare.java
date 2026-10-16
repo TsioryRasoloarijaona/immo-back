@@ -51,7 +51,7 @@ record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto 
         return this;
     }
 
-    private static int longueur(String texte) {
+    private static long longueur(String texte) {
         return texte == null ? 0 : texte.length();
     }
 
