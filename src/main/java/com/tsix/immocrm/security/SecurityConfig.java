@@ -7,6 +7,7 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -55,6 +56,8 @@ public class SecurityConfig {
                 // En SameSite=None, les POST multipart de pièces jointes (type simple, sans préflight) seraient
                 // exposés : il faudrait alors exiger un en-tête applicatif sur les méthodes non sûres.
                 .csrf(csrf -> csrf.disable())
+                // Bean CorsConfigurationSource de CorsConfig : en-têtes CORS aussi sur les 401/403 de cette chaîne.
+                .cors(Customizer.withDefaults())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
