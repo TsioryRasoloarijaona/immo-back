@@ -1,11 +1,13 @@
 package com.tsix.immocrm.controller.prospection;
 
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageSubCategory;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.fixtures.FixtureInteraction;
+import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
@@ -55,6 +57,9 @@ class ProspectionInteractionsTest {
 
     @Autowired
     private FixtureInteraction fixtureInteraction;
+
+    @Autowired
+    private AdmUserRepository admUserRepository;
 
     private String note() {
         return fixtureInteraction.typeNote().getId().toString();
@@ -128,29 +133,81 @@ class ProspectionInteractionsTest {
                 .andExpect(jsonPath("$.content[0].employeId").doesNotExist());
     }
 
-    /** L'employé lié reste prioritaire quand il existe — le repli ne s'applique qu'à son absence. */
-    @Test
-    void findInteractions_avecEmploye_lEmployeResteLAuteurAffiche() throws Exception {
+    private CfgTier newEmploye(String prenom, String nom) {
         CfgTier employe = new CfgTier();
         employe.setId(UUID.randomUUID());
-        employe.setCode("EMP-AUTEUR");
-        employe.setFirstName("Hamza");
-        employe.setLastName("ATCHANY");
-        employe = tierRepository.save(employe);
+        employe.setCode("EMP-" + UUID.randomUUID());
+        employe.setFirstName(prenom);
+        employe.setLastName(nom);
+        return tierRepository.save(employe);
+    }
 
-        ComProspection prospection = newProspection("PSN-AUTEUR-2");
+    private AdmUser newCompte(String description, CfgTier employe) {
+        AdmUser compte = new AdmUser();
+        compte.setId(UUID.randomUUID());
+        compte.setCode("tst.auteur." + UUID.randomUUID());
+        compte.setDescription(description);
+        compte.setDisabled(false);
+        compte.setCfgEmployee(employe);
+        return admUserRepository.save(compte);
+    }
 
+    private ComActionMessage newAction(ComProspection prospection, AdmUser compte, CfgTier commercial,
+                                       String userName, String userCreate) {
         ComActionMessage message = new ComActionMessage();
         message.setId(UUID.randomUUID());
         message.setComProspection(prospection);
         message.setDocDate(LocalDateTime.now());
-        message.setCfgEmployee(employe);
-        message.setUserName("compte.generique");
-        actionMessageRepository.save(message);
+        message.setAdmUser(compte);
+        message.setCfgEmployee(commercial);
+        message.setUserName(userName);
+        message.setUserCreate(userCreate);
+        return actionMessageRepository.save(message);
+    }
+
+    /** OMRAN met dans CfgEmployeeId le commercial de la fiche : l'auteur est l'employé du compte AdmUser. */
+    @Test
+    void findInteractions_auteurEstLEmployeDuCompte_pasLeCommercialConcerne() throws Exception {
+        CfgTier auteur = newEmploye("Othman", "DIOURI");
+        CfgTier commercial = newEmploye("Sabah", "HANINI");
+        ComProspection prospection = newProspection("PSN-AUTEUR-2");
+        newAction(prospection, newCompte("o.diouri", auteur), commercial, "Othman DIOURI", "Othman DIOURI");
 
         mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].employeNom").value("Hamza ATCHANY"));
+                .andExpect(jsonPath("$.content[0].employeNom").value("Othman DIOURI"))
+                .andExpect(jsonPath("$.content[0].employeId").value(commercial.getId().toString()));
+    }
+
+    @Test
+    void findInteractions_compteSansEmploye_libelleDuCompte() throws Exception {
+        ComProspection prospection = newProspection("PSN-AUTEUR-3");
+        newAction(prospection, newCompte("Compte Accueil", null), newEmploye("Sabah", "HANINI"),
+                "accueil", "accueil");
+
+        mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].employeNom").value("Compte Accueil"));
+    }
+
+    @Test
+    void findInteractions_sansCompte_userNamePlutotQueLeCommercial() throws Exception {
+        ComProspection prospection = newProspection("PSN-AUTEUR-4");
+        newAction(prospection, null, newEmploye("Hamza", "ATCHANY"), "compte.generique", "autre.compte");
+
+        mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].employeNom").value("compte.generique"));
+    }
+
+    @Test
+    void findInteractions_sansCompteNiUserName_userCreate() throws Exception {
+        ComProspection prospection = newProspection("PSN-AUTEUR-5");
+        newAction(prospection, null, newEmploye("Hamza", "ATCHANY"), null, "createur.legacy");
+
+        mockMvc.perform(get("/api/prospections/{id}/interactions", prospection.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].employeNom").value("createur.legacy"));
     }
 
     @Test

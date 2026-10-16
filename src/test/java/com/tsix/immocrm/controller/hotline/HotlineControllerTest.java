@@ -1,10 +1,12 @@
 package com.tsix.immocrm.controller.hotline;
 
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
@@ -47,6 +49,8 @@ class HotlineControllerTest {
     private ComActionMessageRepository actionMessageRepository;
     @Autowired
     private StkVocationRepository vocationRepository;
+    @Autowired
+    private AdmUserRepository admUserRepository;
 
     @Test
     void recherche_matchesTierRegardlessOfPhoneFormat_andReturnsItsHistory() throws Exception {
@@ -94,6 +98,49 @@ class HotlineControllerTest {
                 .andExpect(jsonPath("$.fiches[0].interactions.length()").value(1))
                 .andExpect(jsonPath("$.fiches[0].interactions[0].note").value("Appel entrant test hotline"))
                 .andExpect(jsonPath("$.fiches[0].interactions[0].description").value("08/09/2026 11:38 Testeur"));
+    }
+
+    /** Même règle que la fiche prospection : l'auteur vient du compte AdmUser, pas de CfgEmployeeId. */
+    @Test
+    void recherche_auteurDeLInteraction_estLEmployeDuCompte_pasLeCommercialConcerne() throws Exception {
+        CfgTier tier = newTier("HOTLINE-AUTEUR", "+212 6 77 31 42 59");
+        CfgTier auteur = newTier("EMP-HOTLINE-AUTEUR", null);
+        auteur.setFirstName("Othman");
+        auteur.setLastName("DIOURI");
+        CfgTier commercial = newTier("EMP-HOTLINE-COMMERCIAL", null);
+        commercial.setFirstName("Sabah");
+        commercial.setLastName("HANINI");
+
+        AdmUser compte = new AdmUser();
+        compte.setId(UUID.randomUUID());
+        compte.setCode("tst.hotline." + UUID.randomUUID());
+        compte.setDescription("o.diouri");
+        compte.setDisabled(false);
+        compte.setCfgEmployee(auteur);
+        admUserRepository.save(compte);
+
+        ComActionMessage interaction = new ComActionMessage();
+        interaction.setId(UUID.randomUUID());
+        interaction.setCfgTier(tier);
+        interaction.setDocDate(LocalDateTime.now());
+        interaction.setAdmUser(compte);
+        interaction.setCfgEmployee(commercial);
+        interaction.setUserName("Othman DIOURI");
+        actionMessageRepository.save(interaction);
+
+        mockMvc.perform(get("/api/hotline/recherche").param("telephone", "0677314259"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fiches[0].interactions.length()").value(1))
+                .andExpect(jsonPath("$.fiches[0].interactions[0].employeNom").value("Othman DIOURI"));
+    }
+
+    private CfgTier newTier(String code, String mobile) {
+        CfgTier tier = new CfgTier();
+        tier.setId(UUID.randomUUID());
+        tier.setCode(code);
+        tier.setLastName(code);
+        tier.setMobile(mobile);
+        return tierRepository.save(tier);
     }
 
     @Test

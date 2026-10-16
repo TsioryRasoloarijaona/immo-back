@@ -182,7 +182,6 @@ public class HotlineService {
                 m.getDescription(),
                 m.getIsIn(),
                 m.getCfgEmployee() != null ? m.getCfgEmployee().getId() : null,
-                // Employé, puis UserName (FIX-auteur-interactions.md).
                 ProspectionService.nomAuteur(m),
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getId() : null,
                 m.getComActionMessageType() != null ? m.getComActionMessageType().getDescription() : null,

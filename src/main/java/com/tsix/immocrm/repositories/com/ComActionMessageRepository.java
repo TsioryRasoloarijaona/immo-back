@@ -3,6 +3,8 @@ package com.tsix.immocrm.repositories.com;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -20,7 +22,13 @@ public interface ComActionMessageRepository extends JpaRepository<ComActionMessa
     /** Ce que le bureau désarme quand une nouvelle alerte est posée — voir {@code AlerteRelanceService}. */
     List<ComActionMessage> findByComProspectionIdAndAlertValidityDateIsNotNullAndComDocumentIsNull(UUID prospectionId);
 
+    /** Compte auteur et son employé chargés avec la page : {@code ProspectionService.nomAuteur} les lit par ligne. */
+    @EntityGraph(attributePaths = {"admUser", "admUser.cfgEmployee"})
     Page<ComActionMessage> findByComProspectionIdOrderByDocDateDesc(UUID prospectionId, Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = {"admUser", "admUser.cfgEmployee"})
+    Page<ComActionMessage> findAll(Specification<ComActionMessage> spec, Pageable pageable);
 
     Page<ComActionMessage> findByCfgTierIdOrderByDocDateDesc(UUID tierId, Pageable pageable);
 
