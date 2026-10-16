@@ -2,7 +2,6 @@ package com.tsix.immocrm.controller.dossier;
 
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
-import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
@@ -31,7 +30,6 @@ import com.tsix.immocrm.dto.dossier.TransitionSuggereeDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.AuthenticatedUser;
-import com.tsix.immocrm.services.dossier.ActeReservationService;
 import com.tsix.immocrm.services.dossier.AutorisationVersementService;
 import com.tsix.immocrm.services.dossier.DocumentLotService;
 import com.tsix.immocrm.services.dossier.DossierHistoriqueService;
@@ -47,8 +45,6 @@ import com.tsix.immocrm.services.dossier.PieceJointeService;
 import com.tsix.immocrm.services.dossier.RecuReglementService;
 import com.tsix.immocrm.services.dossier.ReglementPieceJointeService;
 import com.tsix.immocrm.services.dossier.ReglementStatutService;
-import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
-import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.AutorisationVersementPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheBancairePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheDossierVentePdfRenderer;
@@ -57,6 +53,8 @@ import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
+import com.tsix.immocrm.services.modele.ActeReservationModele;
+import com.tsix.immocrm.services.modele.FormatDocument;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -101,9 +99,7 @@ public class DossierController {
     private final FicheReservationService ficheReservationService;
     private final FicheReservationPdfRenderer ficheReservationPdfRenderer;
     private final FicheReservationDocxRenderer ficheReservationDocxRenderer;
-    private final ActeReservationService acteReservationService;
-    private final ActeReservationPdfRenderer acteReservationPdfRenderer;
-    private final ActeReservationDocxRenderer acteReservationDocxRenderer;
+    private final ActeReservationModele acteReservationModele;
     private final FicheBancaireService ficheBancaireService;
     private final FicheBancairePdfRenderer ficheBancairePdfRenderer;
     private final FicheVisiteTechniqueService ficheVisiteTechniqueService;
@@ -126,9 +122,7 @@ public class DossierController {
                               PieceJointeService pieceJointeService, FicheReservationService ficheReservationService,
                               FicheReservationPdfRenderer ficheReservationPdfRenderer,
                               FicheReservationDocxRenderer ficheReservationDocxRenderer,
-                              ActeReservationService acteReservationService,
-                              ActeReservationPdfRenderer acteReservationPdfRenderer,
-                              ActeReservationDocxRenderer acteReservationDocxRenderer,
+                              ActeReservationModele acteReservationModele,
                               FicheBancaireService ficheBancaireService,
                               FicheBancairePdfRenderer ficheBancairePdfRenderer,
                               FicheVisiteTechniqueService ficheVisiteTechniqueService,
@@ -152,9 +146,7 @@ public class DossierController {
         this.ficheReservationService = ficheReservationService;
         this.ficheReservationPdfRenderer = ficheReservationPdfRenderer;
         this.ficheReservationDocxRenderer = ficheReservationDocxRenderer;
-        this.acteReservationService = acteReservationService;
-        this.acteReservationPdfRenderer = acteReservationPdfRenderer;
-        this.acteReservationDocxRenderer = acteReservationDocxRenderer;
+        this.acteReservationModele = acteReservationModele;
         this.ficheBancaireService = ficheBancaireService;
         this.ficheBancairePdfRenderer = ficheBancairePdfRenderer;
         this.ficheVisiteTechniqueService = ficheVisiteTechniqueService;
@@ -501,13 +493,19 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/documents/acte-reservation")
+    @Operation(summary = "Acte de réservation (PDF ou DOCX)",
+            description = "Rendu par le modèle `DOSSIER_VENTE/ACTE_RESERVATION` s'il est actif, sinon par l'acte codé en dur.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document généré."),
+            @ApiResponse(responseCode = "400", description = "`format` autre que `pdf` ou `docx`, ou modèle devenu invalide."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable ou hors périmètre.")
+    })
     public ResponseEntity<byte[]> getActeReservation(@PathVariable UUID id,
-            @RequestParam(defaultValue = "pdf") String format) {
-        ActeReservationData data = acteReservationService.collect(id);
-        String nomFichier = "acte-reservation-" + (data.dossierCode() != null ? data.dossierCode() : id);
-        return documentResponse(format, nomFichier,
-                () -> acteReservationPdfRenderer.render(data),
-                () -> acteReservationDocxRenderer.render(data));
+            @Parameter(description = "`pdf` (défaut) ou `docx`.") @RequestParam(defaultValue = "pdf") String format) {
+        FormatDocument sortie = FormatDocument.depuis(format);
+        ActeReservationModele.Acte acte = acteReservationModele.rendre(id, sortie);
+        String nomFichier = "acte-reservation-" + (acte.dossierCode() != null ? acte.dossierCode() : id);
+        return documentResponse(format, nomFichier, acte::contenu, acte::contenu);
     }
 
     @GetMapping("/{id}/documents/fiche-bancaire")

@@ -189,6 +189,11 @@ REFERENCES [dbo].[AdmUser] ([PKey])
 GO
 ALTER TABLE [dbo].[AppNotification] CHECK CONSTRAINT [FK_AppNotification_AdmUser]
 GO
+ALTER TABLE [dbo].[AppModeleDocumentVersion]  WITH CHECK ADD  CONSTRAINT [FK_AppModeleDocumentVersion_AppModeleDocument] FOREIGN KEY([AppModeleDocumentId])
+REFERENCES [dbo].[AppModeleDocument] ([PKey])
+GO
+ALTER TABLE [dbo].[AppModeleDocumentVersion] CHECK CONSTRAINT [FK_AppModeleDocumentVersion_AppModeleDocument]
+GO
 ALTER TABLE [dbo].[BuyDocument]  WITH CHECK ADD  CONSTRAINT [BuyDocument__BuyDocument_FK1] FOREIGN KEY([InvoiceSourceId])
 REFERENCES [dbo].[BuyDocument] ([PKey])
 GO

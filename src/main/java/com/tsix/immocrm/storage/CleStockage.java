@@ -24,6 +24,12 @@ public final class CleStockage {
                 + normaliserExtension(extension);
     }
 
+    /** {@code {prefix}/modeles/images/{imageId}{ext}} : images des modèles de documents (FEATURE-modeles-documents.md §13). */
+    public static String imageModele(String prefix, UUID imageId, String extension) {
+        return normaliserPrefixe(prefix) + "modeles/images/" + imageId.toString().toLowerCase(Locale.ROOT)
+                + normaliserExtension(extension);
+    }
+
     /**
      * {@code "/prod/"} → {@code "prod/"} ; vide → {@code ""}. Facultatif avec un bucket par environnement ; vide, il ne
      * doit pas laisser de {@code /} en tête (dossier sans nom dans la console MinIO).

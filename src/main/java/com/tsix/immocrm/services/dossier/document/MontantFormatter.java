@@ -7,8 +7,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/** Formats « 1 200 000.00 DH » et « dd/MM/yyyy » des documents de dossier. */
-final class MontantFormatter {
+/** Formats « 1 200 000.00 DH » et « dd/MM/yyyy » des documents de dossier (et des modèles de documents). */
+public final class MontantFormatter {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -23,20 +23,20 @@ final class MontantFormatter {
     private MontantFormatter() {
     }
 
-    static String montant(BigDecimal value) {
+    public static String montant(BigDecimal value) {
         BigDecimal safe = value != null ? value : BigDecimal.ZERO;
         return MONTANT_FORMAT.format(safe) + " DH";
     }
 
-    static String date(LocalDate date) {
+    public static String date(LocalDate date) {
         return date != null ? date.format(DATE_FORMAT) : "";
     }
 
-    static String vide(String value) {
+    public static String vide(String value) {
         return value != null ? value : "";
     }
 
-    static String pourcentage(BigDecimal value) {
+    public static String pourcentage(BigDecimal value) {
         BigDecimal safe = value != null ? value : BigDecimal.ZERO;
         return MONTANT_FORMAT.format(safe) + " %";
     }

@@ -37,7 +37,7 @@ public class CollecteurLignesEcrites
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
-            "AppFileObject", "AppNotification");
+            "AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument", "AppModeleDocumentVersion");
 
     /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */
     static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
