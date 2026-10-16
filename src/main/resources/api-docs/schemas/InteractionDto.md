@@ -16,15 +16,17 @@ information** — utilisez `note`.
 
 ## employeId
 
-Id de l'employé lié (`CfgEmployeeId`). Renseigné sur 77 % des interactions réelles seulement —
-`null` ne veut pas dire auteur inconnu, voir `employeNom`.
+Id de l'employé **concerné** (`CfgEmployeeId`) : le commercial de la fiche, que le logiciel de
+bureau y recopie — **pas l'auteur**. Peut donc différer de `employeNom`. `null` sur une partie des
+lignes réelles.
 
 ## employeNom
 
 **Nom d'affichage de l'auteur — toujours renseigné quand la base le connaît (99,996 % des lignes
-réelles).** L'employé lié quand il existe, sinon le compte qui a saisi l'interaction (`UserName`,
-puis `UserCreate`) — c'est ce que le logiciel de bureau affiche. Ne PAS afficher de repli type «
-Système » côté client sur la seule absence d'`employeId`.
+réelles).** L'employé du compte qui a saisi l'action (`AdmUser.CfgEmployeeId`), sinon le libellé
+de ce compte, sinon `UserName`, puis `UserCreate` — ce que « Suivi des actions » affiche sous
+Utilisateur / Personnel. Jamais tiré de `CfgEmployeeId` (le commercial concerné, voir `employeId`).
+Ne PAS afficher de repli type « Système » côté client sur la seule absence d'`employeId`.
 
 ## dateRdv
 

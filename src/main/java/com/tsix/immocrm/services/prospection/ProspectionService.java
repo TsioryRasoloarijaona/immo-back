@@ -1403,14 +1403,19 @@ public class ProspectionService {
     }
 
     /**
-     * Employé lié, sinon {@code UserName} puis {@code UserCreate} : l'employé manque souvent
-     * (voir {@code FIX-auteur-interactions.md}). Partagé avec {@code HotlineService}, la règle
-     * ne doit vivre qu'ici.
+     * L'auteur : employé du compte ({@code AdmUser}), sinon son libellé, puis {@code UserName}, {@code UserCreate}.
+     * Jamais {@code CfgEmployee} : OMRAN y met le commercial de la fiche. Partagé avec {@code HotlineService}.
      */
     public static String nomAuteur(ComActionMessage m) {
-        String employe = TierNomFormatter.nom(m.getCfgEmployee());
-        if (StringUtils.hasText(employe)) {
-            return employe;
+        AdmUser compte = m.getAdmUser();
+        if (compte != null) {
+            String employe = TierNomFormatter.nom(compte.getCfgEmployee());
+            if (StringUtils.hasText(employe)) {
+                return employe;
+            }
+            if (StringUtils.hasText(compte.getDescription())) {
+                return compte.getDescription();
+            }
         }
         return StringUtils.hasText(m.getUserName()) ? m.getUserName() : m.getUserCreate();
     }
