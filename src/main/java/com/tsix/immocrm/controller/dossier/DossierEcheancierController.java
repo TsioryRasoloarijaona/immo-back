@@ -48,13 +48,16 @@ public class DossierEcheancierController {
     }
 
     @DeleteMapping("/{echeanceId}")
-    @PreAuthorize("hasRole('Administrateur')")
-    @Operation(summary = "Supprime une ligne d'échéancier (Administrateur)")
+    @PreAuthorize("hasAnyRole('Administrateur', 'Commercial Chef', 'Direction Générale', "
+            + "'Responsable marketing et communication')")
+    @Operation(summary = "Supprime une ligne d'échéancier (droit OMRAN ComFolderDeleteLine)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ligne supprimée ; état du schéma après report, écart compris."),
-            @ApiResponse(responseCode = "403", description = "Réservé à l'Administrateur."),
+            @ApiResponse(responseCode = "403", description = "Réservé à Administrateur, Commercial Chef, Direction Générale, "
+                    + "Responsable marketing et communication."),
             @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable (ou d'un autre dossier)."),
-            @ApiResponse(responseCode = "409", description = "Échéance réglée, facturée, en décompte ou en recouvrement.")
+            @ApiResponse(responseCode = "409", description = "Échéance réglée, facturée, en décompte ou en recouvrement ; "
+                    + "ou suppression qui creuse l'écart du schéma.")
     })
     public EtatSchemaDto supprimer(@Parameter(description = DOSSIER) @PathVariable UUID id,
                                    @Parameter(description = "Identifiant de l'échéance (ComDocument.PKey).")
@@ -69,7 +72,8 @@ public class DossierEcheancierController {
             @ApiResponse(responseCode = "201", description = "Lignes créées (sans celles ramenées à zéro)."),
             @ApiResponse(responseCode = "400", description = "Champ manquant, montant au-delà du montant initial, "
                     + "ou date avant le début des finalisations."),
-            @ApiResponse(responseCode = "404", description = DESCRIPTION_404)
+            @ApiResponse(responseCode = "404", description = DESCRIPTION_404),
+            @ApiResponse(responseCode = "409", description = DossierController.SCHEMA_CREUSE)
     })
     public List<EcheanceDto> genererPeriodique(@Parameter(description = DOSSIER) @PathVariable UUID id,
                                                @RequestBody GenererPeriodiqueRequest request) {

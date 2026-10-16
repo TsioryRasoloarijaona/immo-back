@@ -890,7 +890,8 @@ class EncaissementColonnesEtGroupementTest {
     @Test
     void pointagePrevu_reporteAAujourdhuiUnReglementEchuNonPointe() throws Exception {
         // Dates dans la plage smalldatetime de la base de CI (1900-01-01 .. 2079-06-06).
-        java.time.LocalDate jour = java.time.LocalDate.now();
+        // « Aujourd'hui » de SQL Server (la colonne lit GETDATE()) : en CI la JVM peut avoir déjà changé de jour.
+        java.time.LocalDate jour = aujourdhuiSelonLaBase();
         StlSettlement echu = newEncaissement("CGE-PTG-1", new BigDecimal("100.00"));
         echu.setEcheanceDate(jour.minusDays(10).atStartOfDay());
         settlementRepository.save(echu);
@@ -904,7 +905,6 @@ class EncaissementColonnesEtGroupementTest {
         aVenir.setEcheanceDate(futur.atStartOfDay());
         settlementRepository.save(aVenir);
         relireDepuisLaBase();
-        // Horloge de SQL Server, comme la vue OMRAN (même machine que la JVM en local comme en CI).
         String aujourdhui = jour.toString();
 
         mockMvc.perform(get("/api/encaissements").param("reference", "CGE-PTG-")
@@ -922,5 +922,10 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].reference").value("CGE-PTG-3"));
+    }
+
+    private java.time.LocalDate aujourdhuiSelonLaBase() {
+        Object jour = entityManager.createNativeQuery("SELECT CONVERT(char(10), GETDATE(), 23)").getSingleResult();
+        return java.time.LocalDate.parse(jour.toString().trim());
     }
 }

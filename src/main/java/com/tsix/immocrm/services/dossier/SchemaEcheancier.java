@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
 
 import java.math.BigDecimal;
@@ -56,6 +57,29 @@ public final class SchemaEcheancier {
                 c -> Boolean.TRUE.equals(c.getIsSaleAutoFinancment()));
         return autofinancement.isPresent() ? autofinancement
                 : derniere(lignes, ligneModifiee, c -> Boolean.TRUE.equals(c.getIsSaleCredit()));
+    }
+
+    /**
+     * Ligne qui absorbera l'écart après l'écriture de {@code ligne} ({@code ComDocument.cs:ManageDocument}) : vide si
+     * la catégorie ne met pas à jour le schéma, si le dossier n'a pas de statut ou si l'écart est déjà nul.
+     */
+    public static Optional<ComDocument> cibleDuReport(ComFolder folder, List<ComDocument> lignes, ComDocument ligne) {
+        // GetSchemaDifference vaut 0 sur un dossier sans statut.
+        if (!metAJourLeSchema(ligne) || folder.getStrStatus() == null
+                || ecart(folder.getPriceAfterDiscount(), lignes).signum() == 0) {
+            return Optional.empty();
+        }
+        return ligneDeReport(lignes, ligne.getId());
+    }
+
+    /** Copie détachée, jamais enregistrée, des champs que lit le schéma : pour simuler une écriture. */
+    public static ComDocument copie(ComDocument ligne, BigDecimal montant, ComSettlementCategory categorie) {
+        ComDocument copie = new ComDocument();
+        copie.setId(ligne.getId());
+        copie.setDocDate(ligne.getDocDate());
+        copie.setAmount(montant);
+        copie.setComSettlementCategory(categorie);
+        return copie;
     }
 
     /** Reste de l'autofinancement : montant signé − réglé signé, ligne par ligne. */

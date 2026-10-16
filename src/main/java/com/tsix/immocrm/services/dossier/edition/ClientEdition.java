@@ -3,14 +3,18 @@ package com.tsix.immocrm.services.dossier.edition;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComFolderCustomer;
+import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.com.ComFolderCustomerRepository;
+import com.tsix.immocrm.services.dossier.ArchivageProspectionsVente;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
 import com.tsix.immocrm.services.dossier.TransformationProspectClient;
+import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -25,13 +29,24 @@ class ClientEdition {
     private final TransformationProspectClient transformation;
     private final HistoriqueDossier historique;
     private final EntityManager entityManager;
+    private final ArchivageProspectionsVente archivage;
 
     ClientEdition(ComFolderCustomerRepository folderCustomerRepository, TransformationProspectClient transformation,
-                  HistoriqueDossier historique, EntityManager entityManager) {
+                  HistoriqueDossier historique, EntityManager entityManager, ArchivageProspectionsVente archivage) {
         this.folderCustomerRepository = folderCustomerRepository;
         this.transformation = transformation;
         this.historique = historique;
         this.entityManager = entityManager;
+        this.archivage = archivage;
+    }
+
+    /**
+     * {@code Sale.cs:AfterUpdate} → {@code ManageProspectionToArchive} quand le client a changé : ses prospections
+     * ouvertes, hors celle du dossier, sont archivées ; rend leurs codes.
+     */
+    List<String> archiverProspectionsDuClient(ComFolder dossier) {
+        return archivage.archiverCellesDe(List.of(dossier.getCfgCustomer().getId()),
+                Champs.de(dossier.getComProspection(), ComProspection::getId));
     }
 
     /** Vrai si le client a changé. */
