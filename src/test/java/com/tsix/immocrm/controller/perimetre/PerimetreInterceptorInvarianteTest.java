@@ -51,6 +51,8 @@ class PerimetreInterceptorInvarianteTest {
     private static final Set<String> ROUTES_SANS_ID_AUTORISEES = Set.of(
             "/api/dossiers",
             "/api/dossiers/simulation-financement",
+            // Référentiel ComLoanCompanyDecision (FEATURE-vente-edition.md) : ne charge aucun dossier.
+            "/api/dossiers/decisions-meilleurtaux",
             "/api/dossiers/documents/fiche-reservation",
             "/api/dossiers/documents/acte-reservation",
             "/api/dossiers/documents/fiche-bancaire",
@@ -78,6 +80,10 @@ class PerimetreInterceptorInvarianteTest {
             // Specification que la liste. Vérifié par
             // EncaissementGroupementTest#sommeDesEffectifs_egaleLeTotalDeLaListe.
             "/api/encaissements/groupes",
+            // Bande « Total : » de la liste plate (FEATURE-encaissements-offres-lot2.md B1) : même justification,
+            // EncaissementService#totaux compose specEncaissements avec filtreEncaissements, la Specification de la
+            // liste. Vérifié par PerimetreCommercialTest#commercialAffecteProjetA_totauxDesEncaissementsExcluentLeProjetB.
+            "/api/encaissements/totaux",
             // Import CSV de leads (FEATURE-creation-pre-prospection.md §5). Aucune ressource
             // chargée par identifiant : un fichier en entrée. Le périmètre est contrôlé dans le
             // service — la tranche cible par verifierEcritureSurTranche (403, rien d'écrit), et les
@@ -85,7 +91,22 @@ class PerimetreInterceptorInvarianteTest {
             // liste : un contact hors périmètre n'est jamais nommé. Vérifié par
             // PreProspectionImportTest#doublonHorsPerimetre_nEstJamaisNomme.
             "/api/pre-prospections/import",
-            "/api/pre-prospections/import/apercu");
+            "/api/pre-prospections/import/apercu",
+            // Liste des dossiers (FEATURE-vente-liste.md) : l'export rejoue la Specification de la liste,
+            // périmètre compris (ListeDossiersService#specification) ; statuts et dates de période sont
+            // des référentiels, aucune ressource scopée.
+            "/api/dossiers/export",
+            // Σ des montants par nature (FEATURE-dossiers-liste-complete.md B4) : même Specification et même
+            // périmètre que la liste. Vérifié par DossierListeMontantsNatureTest#totaux_dUnCommercial_seulementSonPerimetre.
+            "/api/dossiers/totaux",
+            "/api/dossiers/statuts",
+            "/api/dossiers/champs-date",
+            // Exports des listes (FEATURE-export-listes.md) : chacun relit la liste par sa propre méthode
+            // paginée (ProspectionService#findAll / #findPreProspections, EncaissementService#findAll),
+            // périmètre commercial compris. Vérifié par ExportListesTest (ligne hors périmètre absente).
+            "/api/prospections/export",
+            "/api/pre-prospections/export",
+            "/api/encaissements/export");
 
     // Qualifié : le contexte porte aussi le controllerEndpointHandlerMapping d'Actuator.
     @Autowired

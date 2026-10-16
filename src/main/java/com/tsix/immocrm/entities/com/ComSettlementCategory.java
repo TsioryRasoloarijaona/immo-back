@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -61,6 +62,10 @@ public class ComSettlementCategory {
     @Column(name = "IsSalePenality")
     private Boolean isSalePenality;
 
+    // Pénalité de retard possible sur cette catégorie (ComDocument.cs:ManagePenalty) ; pas IsSalePenality.
+    @Column(name = "IsWithPenalty")
+    private Boolean isWithPenalty;
+
     @Column(name = "IsSaleResiliation")
     private Boolean isSaleResiliation;
 
@@ -69,6 +74,20 @@ public class ComSettlementCategory {
 
     @Column(name = "ExcludeFromPrice")
     private Boolean excludeFromPrice;
+
+    // « Mettre à jour le schéma de financement » : l'écart est reporté sur le dernier autofinancement, sinon crédit.
+    @Column(name = "CanUpdateDocuments")
+    private Boolean canUpdateDocuments;
+
+    @Column(name = "IsSaleBeforeReservation")
+    private Boolean isSaleBeforeReservation;
+
+    // Ligne datée au plus tôt du début des finalisations de la tranche.
+    @Column(name = "IsConfermentBasedDate")
+    private Boolean isConfermentBasedDate;
+
+    @Column(name = "VatRatio", precision = 26, scale = 16)
+    private BigDecimal vatRatio;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkVocationId")

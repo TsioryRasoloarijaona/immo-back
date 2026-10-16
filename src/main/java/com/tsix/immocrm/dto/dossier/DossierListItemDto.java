@@ -45,7 +45,7 @@ public record DossierListItemDto(
         @Schema(description = "Prix après remise.")
         BigDecimal prixApresRemise,
 
-        @Schema(description = "Montant de l'avance. Renseigné sur 41,6 % des 358 dossiers réels.")
+        @Schema(description = "« Montant d'accord » (ComFolder.AgreementAmount). Ce n'est pas l'avance : voir `avance`.")
         BigDecimal montantAvance,
 
         @Schema(description = "Probabilité de finalisation. 100 %.")
@@ -149,7 +149,7 @@ public record DossierListItemDto(
         @Schema(example = "Hamza ATCHANY")
         String responsableVenteNom,
 
-        @Schema(description = "Date du compromis (ComFolder.AgreementDate). 73 / 358.")
+        @Schema(description = "Date du compromis / approbation crédit (ComFolder.CreditApprovalDate).")
         LocalDateTime dateCompromis,
 
         @Schema(description = "Date de livraison réelle (ComFolder.DeliveryDateReal). 63 / 358.")
@@ -158,11 +158,207 @@ public record DossierListItemDto(
         @Schema(example = "47")
         Integer delaiConcretisation,
 
-        @Schema(description = "Jours entre la concrétisation et le compromis. Calculé côté "
-                + "serveur. Calculable sur 73 / 358.", example = "112")
+        @Schema(description = "Jours entre la concrétisation et l'envoi au notaire. Calculé côté serveur.",
+                example = "112")
         Integer delaiNotaire,
 
         @Schema(example = "365")
-        Integer delaiLivraison
+        Integer delaiLivraison,
+
+        @Schema(description = "Date d'envoi au notaire / avocat (ComFolder.AgreementDate).")
+        LocalDateTime dateEnvoiNotaire,
+
+        // Parité grille OMRAN (FEATURE-vente-liste.md §1).
+
+        @Schema(description = "Lot libre : `id` = article, `code` = code article, `statut` = LIBRE, `prix` = prix TTC du lot.")
+        Boolean libre,
+
+        @Schema(description = "Client marqué ancien client (ComFolder.IsOldCustomer).")
+        Boolean ancienClient,
+
+        @Schema(description = "Prénom du client principal (CfgTier.FirstName).")
+        String clientPrenom,
+
+        @Schema(description = "Nom du client principal (CfgTier.LastName).")
+        String clientNomFamille,
+
+        @Schema(description = "Mobile du client principal, sans indicatif (CfgTier.Mobile).")
+        String clientMobile,
+
+        @Schema(description = "Indicatif du mobile du client (CfgTier.MobileIndicatif).", example = "212")
+        String clientMobileIndicatif,
+
+        @Schema(description = "Numéro de pièce d'identité du client (CfgTier.IDNumber).")
+        String clientCin,
+
+        @Schema(description = "Mobile formaté « (indicatif) numéro », calculé côté serveur comme OMRAN.")
+        String clientMobileComplet,
+
+        @Schema(description = "Téléphone formaté « (indicatif) numéro », calculé côté serveur comme OMRAN.")
+        String clientTelephone,
+
+        @Schema(description = "Co-acquéreurs (ComFolderCustomer), libellés séparés par des virgules.")
+        String autresClients,
+
+        @Schema(description = "Fiche bancaire (ComFolder.BankRecordDate).")
+        LocalDateTime dateFicheBancaire,
+
+        @Schema(description = "Permis d'habiter de la tranche de l'article principal (CfgTranche.OccupancyPermitsDate).")
+        LocalDateTime datePermisHabiter,
+
+        @Schema(description = "Minute / enregistrement contrat (ComFolder.AgreementSavingDate).")
+        LocalDateTime dateMinute,
+
+        @Schema(description = "Remise des clés prévisionnelle, celle de la tranche (CfgTranche.DeliveryDate).")
+        LocalDateTime dateRemiseClesPrevue,
+
+        @Schema(description = "Enregistrement du contrat (ComFolder.AgreementRegistryDate).")
+        LocalDateTime dateEnregistrementContrat,
+
+        @Schema(description = "Fin de validité du statut courant (ComFolder.StatusValidityDate).")
+        LocalDateTime dateValiditeStatut,
+
+        @Schema(description = "Dernière modification de la remise (ComFolder.DiscountChangeDate).")
+        LocalDateTime dateModificationRemise,
+
+        @Schema(description = "Envoi au notaire prévisionnel (ComFolder.AgreementDatePrevisionel).")
+        LocalDateTime dateEnvoiNotairePrevue,
+
+        @Schema(description = "Date d'envoi au notaire confirmée (ComFolder.IsConfirmedAgreementDate).")
+        Boolean envoiNotaireConfirme,
+
+        @Schema(description = "Décision de MEILLEURTAUX (ComFolder.LoanCompanyDecisionDate).")
+        LocalDateTime dateDecisionMeilleurTaux,
+
+        @Schema(description = "Impression du contrat de réservation / promesse (ComFolder.ContractPrintDate).")
+        LocalDateTime dateImpressionContrat,
+
+        @Schema(description = "Banque du crédit ou du leasing (ComFolder.CreditBankId).")
+        String banqueCredit,
+
+        @Schema(description = "Support de la source de contact de la prospection d'origine.")
+        String supportSource,
+
+        @Schema(description = "Action commerciale de la prospection d'origine (ComAction).")
+        String actionCommerciale,
+
+        @Schema(description = "Superficie en m² (ComFolder.Area ; StkItem.Area sur un lot libre).")
+        BigDecimal superficie,
+
+        @Schema(description = "Superficie globale en m² (ComFolder.GlobalArea).")
+        BigDecimal superficieGlobale,
+
+        @Schema(description = "Codes des articles du dossier (ComFolderItem), distincts, séparés par des virgules.")
+        String sousArticlesCodes,
+
+        @Schema(description = "Libellés des articles du dossier (ComFolderItem), distincts, séparés par des virgules.")
+        String sousArticlesLibelles,
+
+        @Schema(description = "Prix du m² HT avant remise (ComFolder.UnitCostHT).")
+        BigDecimal prixM2HtAvantRemise,
+
+        @Schema(description = "Prix de l'article HT avant remise (ComFolder.ItemPriceHT).")
+        BigDecimal prixArticleHtAvantRemise,
+
+        @Schema(description = "Prix des sous-articles HT avant remise (ComFolder.UnderItemsPriceHT).")
+        BigDecimal prixSousArticlesHtAvantRemise,
+
+        @Schema(description = "Prix de vente HT avant remise (ComFolder.PriceBeforeDiscountHT).")
+        BigDecimal prixAvantRemiseHt,
+
+        @Schema(description = "Prix du m² TTC avant remise (ComFolder.UnitCost).")
+        BigDecimal prixM2AvantRemise,
+
+        @Schema(description = "Prix de l'article TTC avant remise (ComFolder.ItemPrice).")
+        BigDecimal prixArticleAvantRemise,
+
+        @Schema(description = "Prix des sous-articles TTC avant remise (ComFolder.UnderItemsPrice).")
+        BigDecimal prixSousArticlesAvantRemise,
+
+        @Schema(description = "Taux de TVA en fraction (0.2 = 20 %) (ComFolder.VATRatio).", example = "0.2")
+        BigDecimal tva,
+
+        @Schema(description = "« Prix de vente du m² HT » d'OMRAN : ComFolder.UnitCostHT, avant remise comme la vue.")
+        BigDecimal prixM2Ht,
+
+        @Schema(description = "« Prix de vente article HT » d'OMRAN : ComFolder.ItemPriceHT, avant remise comme la vue.")
+        BigDecimal prixArticleHt,
+
+        @Schema(description = "« Prix de vente sous-articles HT » d'OMRAN : ComFolder.UnderItemsPriceHT, comme la vue.")
+        BigDecimal prixSousArticlesHt,
+
+        @Schema(description = "Prix de vente HT (ComFolder.PriceHT).")
+        BigDecimal prixHt,
+
+        @Schema(description = "Prix article TTC après remise ÷ superficie (÷ 1 si 0, null si absente), comme la vue.")
+        BigDecimal prixM2Ttc,
+
+        @Schema(description = "Prix de vente de l'article TTC après remise (ComFolder.ItemPriceAfter).")
+        BigDecimal prixArticleTtc,
+
+        @Schema(description = "Prix de vente des sous-articles TTC après remise (ComFolder.UnderItemsPriceAfter).")
+        BigDecimal prixSousArticlesTtc,
+
+        @Schema(description = "Prix après remise ÷ (superficie + superficie des annexes), TTC. Calculé.")
+        BigDecimal prixVenteM2Ttc,
+
+        @Schema(description = "Prix après remise ÷ (superficie + superficie des annexes) ÷ (1 + TVA). Calculé.")
+        BigDecimal prixVenteM2Ht,
+
+        @Schema(description = "Modifications au statut ENCOURS (ComModification).")
+        Integer nombreEtatsModification,
+
+        @Schema(description = "Cadeaux attribués au dossier (ComFolderGift).")
+        Integer nombreCadeaux,
+
+        @Schema(description = "Le client choisira son cadeau plus tard (ComFolder.IsWithGiftChoiceLater).")
+        Boolean cadeauPlusTard,
+
+        @Schema(description = "Date de la dernière communication non système de la prospection d'origine.")
+        LocalDateTime derniereCommunicationDate,
+
+        @Schema(description = "Résultat (sous-catégorie) de la dernière communication.")
+        String derniereCommunicationResultat,
+
+        @Schema(description = "Message de la dernière communication, à défaut son résultat.")
+        String derniereCommunicationMessage,
+
+        @Schema(description = "Date de la dernière alerte active de la prospection d'origine ; `null` = pas d'icône.")
+        LocalDateTime alerte,
+
+        @Schema(description = "Vrai si une instruction non lue de la prospection vise l'utilisateur connecté.")
+        Boolean instructionNonLue,
+
+        @Schema(description = "Actions du dossier (réservation, livraison, annulation) datées d'aujourd'hui ou avant.")
+        Integer nombreActions,
+
+        @Schema(description = "Jours entre l'envoi et la décision MEILLEURTAUX ; 0 si l'une manque, comme OMRAN.")
+        Integer delaiMeilleurTaux,
+
+        // Montants par nature (FEATURE-dossiers-liste-complete.md) : descriptions dans api-docs/schemas.
+        BigDecimal prixContractuel,
+        BigDecimal prixContractuelRegle,
+        BigDecimal prixContractuelReste,
+        BigDecimal prixRegle,
+        BigDecimal prixReste,
+        BigDecimal netAPayerRegle,
+        BigDecimal netAPayerReste,
+        BigDecimal tauxAvance,
+        BigDecimal tauxAvanceReel,
+        BigDecimal avance,
+        BigDecimal avanceReglee,
+        BigDecimal avanceReste,
+        BigDecimal autofinancement,
+        BigDecimal autofinancementRegle,
+        BigDecimal autofinancementReste,
+        BigDecimal credit,
+        BigDecimal creditRegle,
+        BigDecimal creditReste,
+        BigDecimal frais,
+        BigDecimal fraisRegles,
+        BigDecimal fraisReste,
+        BigDecimal tropPercu,
+        BigDecimal tropPercuRegle,
+        BigDecimal tropPercuReste
 ) {
 }

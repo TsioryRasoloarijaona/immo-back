@@ -18,6 +18,33 @@ IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = 'E7C73F70-7507-40D9-AA78
     VALUES ('E7C73F70-7507-40D9-AA78-A2825C42B600', N'ComFolder', N'Dossier de vente');
 GO
 
+-- Referentiels ecrits sur chaque reglement et echeance de vente, comme OMRAN
+-- (instructions/FEATURE-interop-omran-ecritures.md, regle 2.4) : StlSettlement porte des FK vers
+-- StrEntity, AdmModule et StlCurrency ; ComDocument vers AdmModule. PKey de production,
+-- reprises comme replis dans ReferencesOmran et dans ReferentielSeme.
+IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = 'D7061C59-A039-4EF8-A6ED-B0E886F8EDFF')
+    INSERT INTO dbo.StrEntity (PKey, Code, Description)
+    VALUES ('D7061C59-A039-4EF8-A6ED-B0E886F8EDFF', N'StlSettlementIn', N'Encaissement');
+GO
+IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = '8287D7A9-2D51-4F2E-8F47-0F1B738F1A11')
+    INSERT INTO dbo.StrEntity (PKey, Code, Description)
+    VALUES ('8287D7A9-2D51-4F2E-8F47-0F1B738F1A11', N'StlSettlementOut', N'Decaissement');
+GO
+-- StrEntity « ComQuote » : ecrite sur chaque offre de vente (StlQuote__StrEntity_FK1), repli de
+-- ReferencesOmran.ENTITE_OFFRE_VENTE.
+IF NOT EXISTS (SELECT 1 FROM dbo.StrEntity WHERE PKey = 'E7C73F70-1111-40D9-AA78-A2825C42B602')
+    INSERT INTO dbo.StrEntity (PKey, Code, Description)
+    VALUES ('E7C73F70-1111-40D9-AA78-A2825C42B602', N'ComQuote', N'Offre vente');
+GO
+IF NOT EXISTS (SELECT 1 FROM dbo.AdmModule WHERE PKey = '00002C2D-BDFA-4541-94F7-C708A0E00001')
+    INSERT INTO dbo.AdmModule (PKey, Code, Description)
+    VALUES ('00002C2D-BDFA-4541-94F7-C708A0E00001', N'COM', N'Vente');
+GO
+IF NOT EXISTS (SELECT 1 FROM dbo.StlCurrency WHERE PKey = '24EB36A2-2E81-4A12-AF02-6259CFA25BD6')
+    INSERT INTO dbo.StlCurrency (PKey, Code, Description)
+    VALUES ('24EB36A2-2E81-4A12-AF02-6259CFA25BD6', N'MAD', N'MAD');
+GO
+
 -- PrjProject de reference, cible de AdmUserHabilitation.PrjProjectId.
 --
 -- AdmUserHabilitation est polymorphe : une portee par ligne, parmi societe / projet / tranche /

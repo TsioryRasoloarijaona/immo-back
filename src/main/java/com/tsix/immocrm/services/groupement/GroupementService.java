@@ -154,22 +154,47 @@ public class GroupementService {
     private <E> ResultatGroupement totalGeneral(Class<E> racine, Specification<E> spec, Chemin cle,
                                                 Granularite granularite, List<AgregatDemande> agregats,
                                                 boolean inclureSansValeur, Page<GroupeDto> page) {
+        Totaux totaux = agregerTout(racine, agregats, (cb, jointures, filtres) -> predicats(cb, filtres,
+                expressionCle(cb, jointures, cle, granularite), inclureSansValeur), spec);
+        return new ResultatGroupement(page, totaux.valeurs(), totaux.nombre());
+    }
+
+    /** Agrégats et effectif de toutes les lignes filtrées, sans groupe : le même calcul que la bande des groupes. */
+    public record Totaux(Map<String, Object> valeurs, long nombre) {
+    }
+
+    /**
+     * Totaux d'une liste plate : exactement les agrégats de {@link #grouper} sur tout le filtre (exclusions de
+     * {@link Chemin#sauf} comprises). La {@code spec} est celle de la liste, périmètre inclus.
+     */
+    @Transactional(readOnly = true)
+    public <E> Totaux totaux(Class<E> racine, Specification<E> spec, List<AgregatDemande> agregats) {
+        return agregerTout(racine, agregats, (cb, jointures, filtres) -> filtres != null ? filtres : cb.conjunction(),
+                spec);
+    }
+
+    private interface Restriction {
+        Predicate appliquer(CriteriaBuilder cb, Jointures jointures, Predicate filtres);
+    }
+
+    private <E> Totaux agregerTout(Class<E> racine, List<AgregatDemande> agregats, Restriction restriction,
+                                   Specification<E> spec) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<E> root = cq.from(racine);
         Jointures jointures = new Jointures(root);
-        Expression<?> exprCle = expressionCle(cb, jointures, cle, granularite);
+        Predicate filtres = spec.toPredicate(root, cq, cb);
+        Predicate where = restriction.appliquer(cb, jointures, filtres);
 
         List<Selection<?>> selections = new ArrayList<>();
         selections.add(cb.count(root));
         List<Agregation> plans = planifier(cb, jointures, agregats, selections);
 
         cq.multiselect(selections);
-        cq.where(predicats(cb, spec.toPredicate(root, cq, cb), exprCle, inclureSansValeur));
+        cq.where(where);
 
         Tuple t = em.createQuery(cq).getSingleResult();
-        long nombreTotal = ((Number) t.get(0)).longValue();
-        return new ResultatGroupement(page, valeurs(t, plans), nombreTotal);
+        return new Totaux(valeurs(t, plans), ((Number) t.get(0)).longValue());
     }
 
     // ------------------------------------------------------------------
@@ -203,12 +228,13 @@ public class GroupementService {
 
             switch (demande.fonction()) {
                 case SUM, AVG -> {
+                    principal = horsExclusion(cb, jointures, chemin, principal.as(BigDecimal.class));
                     plan.indexPrincipal = selections.size();
                     selections.add(cb.sum(principal.as(BigDecimal.class)));
                     if (chemin.cheminSoustrait() != null) {
                         plan.indexSoustrait = selections.size();
-                        selections.add(cb.sum(
-                                jointures.chemin(chemin.cheminSoustrait()).as(BigDecimal.class)));
+                        selections.add(cb.sum(horsExclusion(cb, jointures, chemin,
+                                jointures.chemin(chemin.cheminSoustrait()).as(BigDecimal.class))));
                     }
                     if (demande.fonction() == FonctionAgregat.AVG) {
                         // Effectif des lignes renseignées, pas du groupe : les cases vides
@@ -229,6 +255,21 @@ public class GroupementService {
             plans.add(plan);
         }
         return plans;
+    }
+
+    /**
+     * {@code CASE WHEN <ligne non exclue> THEN valeur END}, sans {@code ELSE} : NULL hors de la somme et de
+     * l'effectif d'une moyenne, sans littéral numérique ({@link Chemin#sauf}).
+     */
+    private static Expression<BigDecimal> horsExclusion(CriteriaBuilder cb, Jointures jointures, Chemin chemin,
+                                                        Expression<BigDecimal> valeur) {
+        Chemin.Exclusion exclusion = chemin.exclusion();
+        if (exclusion == null) {
+            return valeur;
+        }
+        Path<?> discriminant = jointures.chemin(exclusion.chemin());
+        Predicate gardee = cb.or(cb.isNull(discriminant), cb.notEqual(discriminant, exclusion.valeur()));
+        return cb.<BigDecimal>selectCase().when(gardee, valeur);
     }
 
     /**

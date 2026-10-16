@@ -67,6 +67,8 @@ public class DocumentLotService {
         this.pdfMerger = pdfMerger;
     }
 
+    /** Écrit (première impression : {@code ContractPrintDate}) : hors lecture seule, donc sur la source. */
+    @Transactional
     public byte[] ficheReservation(List<UUID> dossierIds) {
         return genererLot(dossierIds, id -> ficheReservationPdfRenderer.render(ficheReservationService.collect(id)));
     }

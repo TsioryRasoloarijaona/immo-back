@@ -39,6 +39,22 @@ présentes : `/api/suivi-actions/groupes?groupBy=utilisateur`. Répétable, OU. 
 l'administrateur seulement** : pour un autre rôle, la liste est déjà réduite à ses propres actions
 et ce filtre ne peut que la restreindre davantage.
 
+## exporter
+
+Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/suivi-actions`, sans pagination, même portée (un non-administrateur n'exporte que ses actions) et même périmètre commercial. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, nombres et booléens en cellules typées. Auteur du classeur = utilisateur connecté, titre « Suivi des actions », fichier `suivi-actions_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes. Les filtres de colonne de la grille ne sont pas transmis.
+
+### param format
+
+Seule valeur acceptée : `xlsx`.
+
+### param colonnes
+
+Colonnes exportées, dans l'ordre voulu (celui de la grille). Absent : la grille OMRAN.
+
+### reponse 400
+
+`format` autre que `xlsx`, ou colonne inconnue.
+
 ## grouper
 
 La bande de groupement de la grille OMRAN, calculée côté serveur : **un groupe par valeur** de

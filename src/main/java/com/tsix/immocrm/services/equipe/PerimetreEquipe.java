@@ -44,9 +44,7 @@ public record PerimetreEquipe(UUID appelantId, boolean exempte, List<ProjetPerim
      * dans l'équipe, ou n'y est pas affecté au projet de la ligne. Un employé peut porter deux comptes.
      */
     public MembreEquipe destinataire(UUID commercialId, @Nullable UUID projetId, String ligne) {
-        List<MembreEquipe> comptes = membres.stream()
-                .filter(m -> commercialId != null && commercialId.equals(m.employeId()))
-                .toList();
+        List<MembreEquipe> comptes = comptesDe(commercialId);
         if (comptes.isEmpty()) {
             throw new ConflictException("Le commercial demandé ne fait pas partie de votre équipe.");
         }
@@ -55,5 +53,24 @@ public record PerimetreEquipe(UUID appelantId, boolean exempte, List<ProjetPerim
                 .findFirst()
                 .orElseThrow(() -> new ConflictException(
                         "Le commercial " + comptes.getFirst().nom() + " n'est pas affecté au projet de la ligne " + ligne + "."));
+    }
+
+    /**
+     * Réaffecter une ligne sans tranche (listée par {@code GET /api/prospections} et {@code /api/pre-prospections}) :
+     * un chef ne la reprend que si elle est à un membre de son équipe (403 sinon), pour la donner à un autre membre.
+     */
+    public void verifierReaffectationSansProjet(@Nullable UUID commercialActuel, UUID commercialId, String ligne) {
+        if (!exempte && comptesDe(commercialActuel).isEmpty()) {
+            throw new ForbiddenException(ligne + " : son commercial n'est pas dans votre équipe.");
+        }
+        if (comptesDe(commercialId).isEmpty()) {
+            throw new ConflictException("Le commercial demandé ne fait pas partie de votre équipe.");
+        }
+    }
+
+    private List<MembreEquipe> comptesDe(@Nullable UUID employeId) {
+        return membres.stream()
+                .filter(m -> employeId != null && employeId.equals(m.employeId()))
+                .toList();
     }
 }

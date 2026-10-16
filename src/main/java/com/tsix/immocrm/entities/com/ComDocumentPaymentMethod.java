@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -40,6 +41,14 @@ public class ComDocumentPaymentMethod {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComFolderId")
     private ComFolder comFolder;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ComSettlementCategoryId")
+    private ComSettlementCategory comSettlementCategory;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
 
     @Size(max = 255)
     @Nationalized

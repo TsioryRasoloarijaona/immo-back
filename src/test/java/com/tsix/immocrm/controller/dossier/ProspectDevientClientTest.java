@@ -22,6 +22,7 @@ import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.services.dossier.TransformationProspectClient;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +84,10 @@ class ProspectDevientClientTest {
     private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
     private EntityManager entityManager;
+    @Autowired
+    private com.tsix.immocrm.repositories.com.ComFolderCustomerRepository folderCustomerRepository;
+    @Autowired
+    private com.tsix.immocrm.repositories.cfg.CfgTierKindRepository tierKindRepository;
 
     private CfgTierType type(String code) {
         return tierTypeRepository.findByCode(code).orElseGet(() -> {
@@ -157,13 +162,30 @@ class ProspectDevientClientTest {
     }
 
     @Test
-    void prospectLocation_devientClientLocation() throws Exception {
+    void prospectLocation_devientClient_commeManageTier() throws Exception {
         statut(CONCRETISATION, true);
-        type("CLIRNT");
+        type(CLIENT);
         CfgTier client = tiers("PRORNT");
         ComFolder folder = dossier(statut(RESERVATION, false), client);
 
         changerStatut(folder, CONCRETISATION);
+
+        assertThat(codeTypeDe(client)).isEqualTo(CLIENT);
+    }
+
+    /** ManageTier ne rétrograde que CLI : un client location sans dossier actif reste CLIRNT. */
+    @Test
+    void desistement_clientLocation_resteClientLocation() throws Exception {
+        StrStatus desistement = statut("DESISTEMENT", false);
+        desistement.setResiliation(true);
+        strStatusRepository.save(desistement);
+        type(PROSPECT);
+        CfgTier client = tiers("CLIRNT");
+        ComFolder folder = dossier(statut(CONCRETISATION, true), client);
+
+        mockMvc.perform(patch(STATUT, folder.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"DESISTEMENT\",\"note\":\"Financement refusé\"}"))
+                .andExpect(status().isOk());
 
         assertThat(codeTypeDe(client)).isEqualTo("CLIRNT");
     }
@@ -194,8 +216,9 @@ class ProspectDevientClientTest {
                 .andExpect(jsonPath(DERNIER_EVENEMENT).value("Statut changé vers RESERVATION"));
     }
 
+    /** B3 (FEATURE-vente-socle.md) : plus aucun dossier actif « client » ⇒ retour prospect, comme Sale.cs:ManageTier. */
     @Test
-    void concretisationVersReservation_neRepassePasEnProspect() throws Exception {
+    void concretisationVersReservation_sansAutreDossierActif_repasseEnProspect() throws Exception {
         statut(RESERVATION, false);
         type(PROSPECT);
         CfgTier client = tiers(CLIENT);
@@ -203,7 +226,72 @@ class ProspectDevientClientTest {
 
         changerStatut(folder, RESERVATION);
 
+        assertThat(codeTypeDe(client)).isEqualTo(PROSPECT);
+        mockMvc.perform(get(HISTORIQUE, folder.getId()))
+                .andExpect(jsonPath("$.content[*].description", org.hamcrest.Matchers.hasItem(
+                        TransformationProspectClient.MENTION_RETOUR_PROSPECT)));
+    }
+
+    @Test
+    void concretisationVersReservation_autreDossierActifClient_resteClient() throws Exception {
+        statut(RESERVATION, false);
+        type(PROSPECT);
+        StrStatus concretisation = statut(CONCRETISATION, true);
+        CfgTier client = tiers(CLIENT);
+        dossier(concretisation, client);
+        ComFolder folder = dossier(concretisation, client);
+
+        changerStatut(folder, RESERVATION);
+
         assertThat(codeTypeDe(client)).isEqualTo(CLIENT);
+    }
+
+    @Test
+    void acquereurAvecDossierActif_devientClient() throws Exception {
+        statut(CONCRETISATION, true);
+        type(CLIENT);
+        CfgTier principal = tiers(PROSPECT);
+        CfgTier acquereur = tiers(PROSPECT);
+        ComFolder folder = dossier(statut(RESERVATION, false), principal);
+        coAcquereur(folder, acquereur);
+
+        changerStatut(folder, CONCRETISATION);
+
+        assertThat(codeTypeDe(acquereur)).isEqualTo(CLIENT);
+    }
+
+    @Test
+    void desistement_clientSansAutreDossier_redevientProspect_kindVide() throws Exception {
+        StrStatus desistement = statut("DESISTEMENT", false);
+        desistement.setResiliation(true);
+        strStatusRepository.save(desistement);
+        type(PROSPECT);
+        CfgTier client = tiers(CLIENT);
+        com.tsix.immocrm.entities.cfg.CfgTierKind nature = new com.tsix.immocrm.entities.cfg.CfgTierKind();
+        nature.setId(UUID.randomUUID());
+        nature.setCode("KIND-PDC");
+        client.setCfgTierKind(tierKindRepository.save(nature));
+        tierRepository.save(client);
+        ComFolder folder = dossier(statut(CONCRETISATION, true), client);
+
+        mockMvc.perform(patch(STATUT, folder.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"DESISTEMENT\",\"note\":\"Financement refusé\"}"))
+                .andExpect(status().isOk());
+
+        entityManager.flush();
+        entityManager.clear();
+        CfgTier relu = tierRepository.findById(client.getId()).orElseThrow();
+        assertThat(relu.getCfgTierType().getCode()).isEqualTo(PROSPECT);
+        assertThat(relu.getCfgTierKind()).isNull();
+    }
+
+    private void coAcquereur(ComFolder folder, CfgTier acquereur) {
+        com.tsix.immocrm.entities.com.ComFolderCustomer lien = new com.tsix.immocrm.entities.com.ComFolderCustomer();
+        lien.setId(UUID.randomUUID());
+        lien.setComFolder(folder);
+        lien.setCfgTier(acquereur);
+        lien.setPartPercent(new java.math.BigDecimal("0.5"));
+        folderCustomerRepository.save(lien);
     }
 
     @Test

@@ -44,7 +44,7 @@ import java.util.UUID;
 public class ImportPreProspectionService {
 
     // Défauts = ceux des leads injectés par n8n depuis les mêmes formulaires.
-    static final String CODE_ETAPE_DEFAUT = "1 A TRAITER";
+    public static final String CODE_ETAPE_DEFAUT = "1 A TRAITER";
     static final String CODE_ORIGINE_DEFAUT = "FACEBOOK";
     static final String CODE_TYPE_DEFAUT = "WEB";
 

@@ -411,6 +411,43 @@ class EncaissementControllerTest {
                 .andExpect(jsonPath("$.dossierCode").exists());
     }
 
+    /** D2 : la fiche n'accepte que ce que la liste montre. */
+    @Test
+    void findById_decaissement_returns404() throws Exception {
+        ComDocument echeance = newEcheance("FDEB");
+        StlSettlement decaissement = newSettlement("FDEB", new BigDecimal("-470000"), "IN_WORK", false, false);
+        linkToEcheance(decaissement, echeance, new BigDecimal("-470000"));
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements/" + decaissement.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void findById_reglementSansLigneDeVente_returns404() throws Exception {
+        StlSettlement horsVente = newSettlement("FHV", new BigDecimal("500"), "IN_WORK", false);
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements/" + horsVente.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    /** D1 : affecté 0 et reste = montant pour un CANCELED ; ses affectations restent listées (historique). */
+    @Test
+    void findById_reglementAnnule_resteEgalAuMontantEtAffectationsListees() throws Exception {
+        ComDocument echeance = newEcheance("FANN");
+        StlSettlement annule = newSettlement("FANN", new BigDecimal("1000"), "CANCELED", false);
+        linkToEcheance(annule, echeance, new BigDecimal("1000"));
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements/" + annule.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CANCELED"))
+                .andExpect(jsonPath("$.montantBrut").value(1000))
+                .andExpect(jsonPath("$.montantBrutRestant").value(1000))
+                .andExpect(jsonPath("$.affectations.length()").value(1));
+    }
+
     @Test
     void findById_returns404WhenUnknown() throws Exception {
         mockMvc.perform(get("/api/encaissements/" + UUID.randomUUID()))

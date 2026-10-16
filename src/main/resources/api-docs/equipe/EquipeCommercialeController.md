@@ -24,8 +24,32 @@ périmètre. Pour lister les prospections d'un commercial : `GET /api/prospectio
 Pré-prospections ouvertes, sans commercial, dont la tranche est sur un projet de l'appelant (toutes
 pour Administrateur / Direction Générale sans `projet`, lignes sans tranche comprises), **reçues dans la
 période** (`ComProspection.DocDate` entre `du` et `au`, 30 derniers jours par défaut, même règle que
-`entonnoir` et `commerciaux`). La plus ancienne est celle de la période. Pour lister ces lignes :
-`GET /api/pre-prospections?ouvertes=true&dateDebut=…&dateFin=…` puis garder celles sans commercial.
+`entonnoir` et `commerciaux`) et, par défaut, **jamais traitées** : aucune action (`ComActionMessage`)
+autre que système (`IsSystem`) **et** étape de départ (`1 A TRAITER` ou aucune), même règle que la Boîte
+de tri. `toutes=true` lève cette dernière condition. La plus ancienne est celle de la période. La liste
+elle-même :
+`GET /api/equipe/a-distribuer/lignes` avec les mêmes paramètres — son `totalElements` est toujours ce
+`nombre`.
+
+## lignesADistribuer
+
+Les lignes que compte `GET /api/equipe/a-distribuer` pour les mêmes paramètres (même règle, même
+périmètre, même 403 pour un projet hors périmètre), paginées et triées par `DocDate` croissante.
+Avec `toutes=true`, `dejaTraitee` signale celles qui ont au moins une action non système ou dont l'étape
+n'est plus l'étape de départ.
+
+## activiteLeads
+
+État des leads affichés dans la fenêtre « Leads de … » (pré-prospections et prospections,
+`ComProspection.PKey`), en une requête pour une page de la liste. **Action** = ligne `ComActionMessage`
+non système (`IsSystem` faux ou absent) ; `endormi` suit exactement la colonne `sansActionDepuis7Jours`
+de `GET /api/equipe/commerciaux`. `jamaisTraite` = la règle « non traitée » de la Boîte de tri et de
+« À distribuer » (0 action **et** étape de départ).
+
+Seuls les leads du périmètre de l'appelant sont renvoyés : Administrateur / Direction Générale = projets
+des sociétés actives et leads sans projet ; chef = ses projets, plus les leads sans projet tenus par un
+membre de son équipe. Un id hors périmètre, inconnu ou qui n'est pas un lead est **omis** sans erreur.
+Lecture seule.
 
 ## distribuer
 
@@ -42,14 +66,19 @@ n'est pas affecté au projet de la ligne : rien n'est écrit.
 
 ## reaffecter
 
-Change le commercial (`ComProspection.CfgCommercialId`) de prospections ouvertes et trace « Commercial
-réaffecté : A → B » dans leur historique. Le commercial référent de la fiche prospect n'est pas
-modifié. Tout le lot ou rien.
+Change le commercial (`ComProspection.CfgCommercialId`) de prospections **et de pré-prospections déjà
+affectées**, ouvertes, et trace « Commercial réaffecté : A → B — motif » dans leur historique. Une
+pré-prospection réaffectée reste une pré-prospection (aucune transformation). Le commercial référent
+de la fiche prospect n'est pas modifié. Un lot peut mêler les deux. Tout le lot ou rien.
+
+Une ligne **sans tranche** (donc sans projet) se réaffecte par un chef seulement si son commercial actuel
+est de son équipe (403 sinon), vers n'importe quel membre de l'équipe.
 
 ### reponse 409
 
-Une ligne est une pré-prospection (elle se distribue) ou une prospection clôturée, ou le commercial
-n'est pas de l'équipe ou pas affecté au projet de la ligne : rien n'est écrit.
+Une ligne est clôturée, ou c'est une pré-prospection sans commercial (elle se distribue :
+`POST /api/equipe/distribuer`), ou le commercial n'est pas de l'équipe ou pas affecté au projet de la
+ligne : rien n'est écrit.
 
 ## repartir
 
@@ -63,6 +92,11 @@ tri), puis la dernière pré-prospection reçue la plus ancienne, puis le nom ; 
 au fil du lot. Une ligne déjà attribuée n'est jamais reprise (`DEJA_ATTRIBUEE`). Avec `simulation`
 (défaut `true`) rien n'est écrit ; sinon historique « Commercial assigné : B — répartition
 automatique » et notification à chaque commercial. 403 si une ligne est hors des projets d'un chef.
+
+Le lot est soit `preProspectionIds` (les lignes cochées), soit `filtre` : alors **toutes** les lignes que
+`GET /api/equipe/a-distribuer/lignes` renverrait pour ce filtre, toutes pages confondues — c'est-à-dire
+le `nombre` du compteur. Exactement un des deux, sinon 400 ; au-delà de 5 000 lignes au filtre, 400
+(découper la période).
 
 ## modifierAffectations
 

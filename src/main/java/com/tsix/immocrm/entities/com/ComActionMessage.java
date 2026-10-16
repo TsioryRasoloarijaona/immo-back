@@ -126,6 +126,10 @@ public class ComActionMessage {
     @Column(name = "IsSent")
     private Boolean isSent;
 
+    /** Statut du dossier au moment de l'action (actions de dossier seulement). */
+    @Column(name = "StrFolderStatusId")
+    private UUID strFolderStatusId;
+
     /** « Action » : nature de l'interaction (Note, Visite, Téléphone entrant…). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComActionMessageTypeId")

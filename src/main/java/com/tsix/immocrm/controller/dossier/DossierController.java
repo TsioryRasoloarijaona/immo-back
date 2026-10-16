@@ -1,12 +1,7 @@
 package com.tsix.immocrm.controller.dossier;
 
-import com.tsix.immocrm.domain.ChampDateDossier;
-import com.tsix.immocrm.domain.ColonneDossier;
-import com.tsix.immocrm.domain.Granularite;
-import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
-import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.dto.dossier.AutorisationVersementData;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
@@ -14,7 +9,6 @@ import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
 import com.tsix.immocrm.dto.dossier.CreerEcheanceRequest;
 import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
-import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.EcheanceDto;
 import com.tsix.immocrm.dto.dossier.EtapeSuivanteDto;
 import com.tsix.immocrm.dto.dossier.FicheBancaireData;
@@ -33,6 +27,7 @@ import com.tsix.immocrm.dto.dossier.RecuReglementData;
 import com.tsix.immocrm.dto.dossier.ReglementDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
+import com.tsix.immocrm.dto.dossier.TransitionSuggereeDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.AuthenticatedUser;
@@ -62,17 +57,13 @@ import com.tsix.immocrm.services.dossier.document.FicheReservationPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheTropPercuPdfRenderer;
 import com.tsix.immocrm.services.dossier.document.FicheVisiteTechniquePdfRenderer;
 import com.tsix.immocrm.services.dossier.document.RecuReglementPdfRenderer;
-import com.tsix.immocrm.web.Groupements;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -90,7 +81,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -180,80 +170,6 @@ public class DossierController {
         this.payeurService = payeurService;
     }
 
-    @GetMapping
-    @Operation(summary = "Liste paginée des dossiers de vente")
-    public PageDto<DossierListItemDto> findAll(
-            @Parameter(example = "Réservation")
-            @RequestParam(required = false) List<String> statut,
-            @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")
-            @RequestParam(required = false) UUID commercial,
-            @Parameter(description = "Id de l'entité/projet (CfgProject.id), résolu par la tranche "
-                    + "de l'article principal du dossier.")
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @Parameter(example = "CONCRETISATION")
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @Parameter(description = "Borne inférieure (incluse) de la plage sur champDate, "
-                    + "format ISO-8601.", example = "2026-01-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @Parameter(description = "Borne supérieure (incluse) de la plage sur champDate, "
-                    + "format ISO-8601.", example = "2026-12-31T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) String search,
-            @Parameter(example = "code,statut,projetCode,trancheCode,creePar")
-            @RequestParam(required = false) List<String> colonnes,
-            @Parameter(example = "statut")
-            @RequestParam(required = false) String groupeColonne,
-            @Parameter(example = "CONCRETISATION")
-            @RequestParam(required = false) String groupeValeur,
-            @Parameter(example = "MOIS")
-            @RequestParam(required = false) Granularite granularite,
-            @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        ColonneDossier groupe = Groupements.colonneDeDepliage(
-                groupeColonne, groupeValeur, ColonneDossier::resoudreGroupement);
-        return PageDto.of(dossierService.findAll(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, search, groupe, groupeValeur,
-                Groupements.granularite(groupe, granularite), pageable,
-                ColonneDossier.resoudre(colonnes)));
-    }
-
-    @GetMapping("/groupes")
-    @Operation(
-            summary = "Liste des dossiers repliée en groupes, avec effectifs et totaux",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Groupes, paginés comme une liste"),
-                    @ApiResponse(responseCode = "400", content = @Content)
-            })
-    public PageGroupesDto grouper(
-            @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau de "
-                    + "groupement est supporté.", example = "statut", required = true)
-            @RequestParam String groupBy,
-            @Parameter(example = "prix,totalAPayer,prix:AVG")
-            @RequestParam(required = false) List<String> agregats,
-            @Parameter(example = "MOIS")
-            @RequestParam(required = false) Granularite granularite,
-            @Parameter(description = "Ordre des groupes : LIBELLE (croissant, défaut) ou NOMBRE "
-                    + "(effectif décroissant).", example = "NOMBRE")
-            @RequestParam(required = false) TriGroupe tri,
-            @Parameter(example = "false")
-            @RequestParam(defaultValue = "false") boolean inclureSansValeur,
-            @RequestParam(required = false) List<String> statut,
-            @RequestParam(required = false) UUID commercial,
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) String search,
-            @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
-        ColonneDossier groupe = ColonneDossier.resoudreGroupement(groupBy);
-        return dossierService.grouper(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, search, groupe,
-                Groupements.granularite(groupe, granularite),
-                ColonneDossier.resoudreAgregats(agregats),
-                tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
-    }
-
     @GetMapping("/{id}")
     @Operation(summary = "Détail d'un dossier de vente")
     @ApiResponses({
@@ -282,7 +198,9 @@ public class DossierController {
             @ApiResponse(responseCode = "201", description = "Dossier créé."),
             @ApiResponse(responseCode = "400"),
             @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
-                    + "le périmètre commercial de l'appelant.")
+                    + "le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "409"),
+            @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<DossierDetailDto> create(@RequestBody CreerDossierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.create(request));
@@ -293,6 +211,7 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Statut changé."),
             @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403"),
             @ApiResponse(responseCode = "404"),
             @ApiResponse(responseCode = "409")
     })
@@ -301,8 +220,25 @@ public class DossierController {
     }
 
     @GetMapping("/{id}/statut/etapes-suivantes")
-    public List<EtapeSuivanteDto> getEtapesSuivantes(@PathVariable UUID id) {
+    @Operation(summary = "Statuts que l'utilisateur connecté peut donner au dossier")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Transitions exécutables, vide si aucune."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
+    public List<EtapeSuivanteDto> getEtapesSuivantes(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).") @PathVariable UUID id) {
         return dossierService.etapesSuivantes(id);
+    }
+
+    @GetMapping("/{id}/statut/transition-suggeree")
+    @Operation(summary = "Passage automatique de statut proposé")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Proposition, champs nuls s'il n'y en a pas."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
+    public TransitionSuggereeDto getTransitionSuggeree(
+            @Parameter(description = "Identifiant du dossier (ComFolder.PKey).") @PathVariable UUID id) {
+        return dossierService.transitionSuggeree(id);
     }
 
     @GetMapping("/{id}/historique")
@@ -318,11 +254,25 @@ public class DossierController {
     }
 
     @PostMapping("/{id}/echeancier")
+    @Operation(summary = "Ajoute une ligne d'échéancier au dossier",
+            description = "Société, module, TVA, HT et date à minuit sont écrits comme le logiciel de bureau.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Échéance créée."),
+            @ApiResponse(responseCode = "400", description = "Catégorie (`categorieId`) absente ou introuvable."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable.")
+    })
     public ResponseEntity<EcheanceDto> addEcheance(@PathVariable UUID id, @RequestBody CreerEcheanceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(echeancierService.addEcheance(id, request));
     }
 
     @PatchMapping("/{id}/echeancier/{echeanceId}")
+    @Operation(summary = "Modifie une ligne d'échéancier")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Échéance modifiée."),
+            @ApiResponse(responseCode = "400", description = "Catégorie introuvable, ligne sans catégorie, ou ligne non soldée "
+                    + "datée avant le début des finalisations."),
+            @ApiResponse(responseCode = "404", description = "Dossier ou échéance introuvable.")
+    })
     public EcheanceDto updateEcheance(@PathVariable UUID id, @PathVariable UUID echeanceId,
                                        @RequestBody ModifierEcheanceRequest request) {
         return echeancierService.updateEcheance(id, echeanceId, request);
@@ -533,6 +483,8 @@ public class DossierController {
     // -- Génération de documents (modèles légataires : instructions/templates) --
 
     @GetMapping("/{id}/documents/fiche-reservation")
+    @Operation(summary = "Fiche de réservation (PDF ou DOCX)",
+            description = "La première génération pose la date d'impression du contrat (`ContractPrintDate`).")
     public ResponseEntity<byte[]> getFicheReservation(@PathVariable UUID id,
             @RequestParam(defaultValue = "pdf") String format) {
         FicheReservationData data = ficheReservationService.collect(id);

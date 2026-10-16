@@ -53,5 +53,11 @@ public class CfgTrancheStatus {
     @JoinColumn(name = "ComFolderStatusPaymentTypeId")
     private ComFolderStatusPaymentType comFolderStatusPaymentType;
 
+    /** Statut dont c'est le seuil de versement ; {@code CfgTrancheId} nul = seuil global. */
+    @Column(name = "StrStatusId")
+    private UUID strStatusId;
+
+    @Column(name = "StrFolderEntityId")
+    private UUID strFolderEntityId;
 
 }

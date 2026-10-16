@@ -91,7 +91,7 @@ public class BoiteDeTriService {
     // ---------------------------------------------------------------- lecture
 
     /**
-     * Pré-prospections ouvertes du commercial appelant, sans interaction saisie (une ligne traitée revient par sa
+     * Pré-prospections ouvertes du commercial appelant, non traitées (une ligne traitée revient par sa
      * relance dans « Ma journée »), les plus récentes d'abord ; {@code toutes} lève les 6 mois.
      */
     public Page<LigneTriDto> lister(boolean toutes, Pageable pageable) {
@@ -99,7 +99,7 @@ public class BoiteDeTriService {
         LocalDate aujourdhui = LocalDate.now(clock);
         Specification<ComProspection> spec = perimetreService.filtreProspections()
                 .and(LignesParcours.aTrier(commercial, toutes ? null : aujourdhui.minusMonths(LignesParcours.MOIS_RECENTS)))
-                .and(LignesParcours.sansInteraction());
+                .and(LignesParcours.nonTraitee());
         Page<ComProspection> page = prospectionRepository.findAll(spec, PageRequest.of(pageable.getPageNumber(),
                 pageable.getPageSize(), Sort.by(Sort.Order.desc(LignesParcours.DOC_DATE), Sort.Order.asc("id"))));
         Map<UUID, DerniereAlerteProjection> alertes = page.isEmpty() ? Map.of()

@@ -16,15 +16,23 @@ import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
+import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.SortDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +44,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -46,10 +55,13 @@ public class ProspectController {
 
     private final ProspectService prospectService;
     private final ProspectSubResourcesService subResourcesService;
+    private final ExportTableur exportTableur;
 
-    public ProspectController(ProspectService prospectService, ProspectSubResourcesService subResourcesService) {
+    public ProspectController(ProspectService prospectService, ProspectSubResourcesService subResourcesService,
+                              ExportTableur exportTableur) {
         this.prospectService = prospectService;
         this.subResourcesService = subResourcesService;
+        this.exportTableur = exportTableur;
     }
 
     @GetMapping
@@ -59,6 +71,32 @@ public class ProspectController {
             @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(prospectService.findAll(search, type, pageable, ColonneProspect.resoudre(colonnes)));
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export Excel de la liste des prospects, filtres et colonnes appliqués")
+    @Parameter(name = "sort", in = ParameterIn.QUERY, example = "userCreateDateTime,desc",
+            description = "Tri `propriete,asc|desc`, répétable, comme la liste. Défaut : userCreateDateTime,desc.",
+            array = @ArraySchema(schema = @Schema(type = "string")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
+                    content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "400", content = @Content)
+    })
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @Parameter(example = ExportTableur.FORMAT_XLSX)
+            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) List<String> type,
+            @Parameter(example = "code,nom,prenom,telephone")
+            @RequestParam(required = false) List<String> colonnes,
+            @Parameter(hidden = true) @SortDefault(sort = "userCreateDateTime", direction = Sort.Direction.DESC) Sort sort) {
+        ExportTableur.exigerXlsx(format);
+        Set<ColonneProspect> selection = ColonneProspect.resoudre(colonnes);
+        List<ProspectListItemDto> lignes = LignesExport.toutes(sort, page ->
+                prospectService.findAll(search, type, page, selection));
+        return exportTableur.reponse("prospects", "Prospects", LignesExport.ordre(colonnes, selection), lignes);
     }
 
     @GetMapping("/{id}")

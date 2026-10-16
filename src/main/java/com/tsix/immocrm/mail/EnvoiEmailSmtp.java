@@ -91,6 +91,9 @@ public class EnvoiEmailSmtp implements EnvoiEmail {
             MimeMessageHelper aide = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
             aide.setFrom(expediteurEffectif, properties.getNomExpediteur());
             aide.setTo(message.destinataire());
+            if (!message.copies().isEmpty()) {
+                aide.setCc(message.copies().toArray(String[]::new));
+            }
             aide.setSubject(message.sujet());
 
             Context contexte = new Context(Locale.FRENCH, message.variables());

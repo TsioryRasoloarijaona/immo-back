@@ -73,6 +73,8 @@ class PrixPlancherTest {
     private CfgProjectRepository projectRepository;
     @Autowired
     private CfgTrancheRepository trancheRepository;
+    @Autowired
+    private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
 
     private CfgTranche tranche;
     private StkItemType itemType;
@@ -82,6 +84,7 @@ class PrixPlancherTest {
 
     @BeforeEach
     void setUp() {
+        fixtureStatuts.reservation();
         CfgProject project = new CfgProject();
         project.setId(UUID.randomUUID());
         project.setCode("PRJ-PLANCHER");

@@ -65,8 +65,10 @@ public class EquipeEcrituresService {
     private final AdmUserRepository userRepository;
     private final AdmUserHabilitationRepository habilitationRepository;
     private final RepartitionLeadsService repartition;
+    private final ADistribuerService aDistribuer;
 
     public EquipeEcrituresService(EquipeCommercialeService equipeService,
+                                  ADistribuerService aDistribuer,
                                   HistoriqueProspection historique,
                                   ComProspectionRepository prospectionRepository,
                                   CfgTierRepository tierRepository,
@@ -75,6 +77,7 @@ public class EquipeEcrituresService {
                                   AdmUserHabilitationRepository habilitationRepository,
                                   RepartitionLeadsService repartition) {
         this.equipeService = equipeService;
+        this.aDistribuer = aDistribuer;
         this.repartition = repartition;
         this.historique = historique;
         this.prospectionRepository = prospectionRepository;
@@ -106,20 +109,28 @@ public class EquipeEcrituresService {
 
     // ---------------------------------------------------------------- réaffecter
 
-    /** Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. */
+    /**
+     * Change {@code CfgCommercialId} seul : le commercial référent du prospect n'est pas touché. Une pré-prospection
+     * déjà affectée se réaffecte et reste une pré-prospection ; sans commercial, elle se distribue (409).
+     */
     public ResultatLotDto reaffecter(ReaffecterRequest request) {
         List<ComProspection> lignes = lignesDemandees(request.prospectionIds());
         exiger(request.commercialId(), "commercialId est requis");
         PerimetreEquipe perimetre = equipeService.perimetre();
 
-        verifierPerimetre(lignes, perimetre);
+        lignes.stream().filter(l -> projetDe(l.getStkHierarchy()) == null).forEach(l -> perimetre
+                .verifierReaffectationSansProjet(idDe(l.getCfgCommercial()), request.commercialId(), LIGNE + l.getCode()));
+        verifierPerimetre(lignes.stream().filter(l -> projetDe(l.getStkHierarchy()) != null).toList(), perimetre);
         for (ComProspection ligne : lignes) {
-            if (DiscriminantPreProspection.estPreProspection(ligne)) {
+            if (ligne.getCfgCommercial() == null && DiscriminantPreProspection.estPreProspection(ligne)) {
                 throw new ConflictException(LIGNE + ligne.getCode()
-                        + " : une pré-prospection se distribue, elle ne se réaffecte pas.");
+                        + " : pré-prospection sans commercial, à distribuer, pas à réaffecter.");
             }
             verifierOuverte(ligne);
-            perimetre.destinataire(request.commercialId(), projetDe(ligne.getStkHierarchy()), ligne.getCode());
+            UUID projet = projetDe(ligne.getStkHierarchy());
+            if (projet != null) {
+                perimetre.destinataire(request.commercialId(), projet, ligne.getCode());
+            }
         }
         String motif = StringUtils.hasText(request.motif()) ? " — " + request.motif().strip() : "";
         return ecrire(lignes, request.commercialId(), motif);
@@ -133,7 +144,7 @@ public class EquipeEcrituresService {
      * attribuée n'est jamais reprise. {@code simulation} (défaut vrai) n'écrit rien.
      */
     public ResultatRepartitionDto repartir(RepartirRequest request) {
-        List<ComProspection> lignes = lignesDemandees(request.preProspectionIds());
+        List<ComProspection> lignes = lotARepartir(request);
         boolean simulation = !Boolean.FALSE.equals(request.simulation());
         PerimetreEquipe perimetre = equipeService.perimetre();
 
@@ -166,6 +177,15 @@ public class EquipeEcrituresService {
         }
         return new ResultatRepartitionDto(simulation, attributions, nonAttribuees,
                 RepartitionLeadsService.parCommercial(decisions));
+    }
+
+    /** Exactement un des deux : les ids cochés, ou toutes les lignes du filtre de la carte (§3.3). */
+    private List<ComProspection> lotARepartir(RepartirRequest request) {
+        boolean parIds = !demandes(request.preProspectionIds()).isEmpty();
+        if (parIds == (request.filtre() != null)) {
+            throw new InvalidRequestException("Donner soit preProspectionIds (non vide), soit filtre — pas les deux.");
+        }
+        return parIds ? lignesDemandees(request.preProspectionIds()) : aDistribuer.toutesLesLignes(request.filtre());
     }
 
     private static void verifierPerimetre(List<ComProspection> lignes, PerimetreEquipe perimetre) {
@@ -323,6 +343,10 @@ public class EquipeEcrituresService {
         if (valeur == null) {
             throw new InvalidRequestException(message);
         }
+    }
+
+    private static UUID idDe(CfgTier tier) {
+        return tier != null ? tier.getId() : null;
     }
 
     private static UUID projetDe(CfgTranche tranche) {

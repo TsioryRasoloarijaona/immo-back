@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.com;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
@@ -113,5 +114,19 @@ public class ComDocument {
     @Column(name = "Code")
     private String code;
 
+    // ComImpayedView d'OMRAN fait INNER JOIN CfgCompany ; GET /api/impayes passe par le projet (FEATURE-impayes R5).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
 
+    @Column(name = "AdmModuleId")
+    private UUID admModuleId;
+
+    // Ligne versée dans un dossier de recouvrement : elle ne se supprime plus (ComDocument.cs:VerifyLinksForDeletion).
+    @Column(name = "StlRecoveryFolderId")
+    private UUID stlRecoveryFolderId;
+
+    // Posé par LigneEcheancierOmran.signerCreation : les numéros de quittance ne se donnent qu'à l'insertion.
+    @Transient
+    private boolean nouvelleLigne;
 }

@@ -24,9 +24,11 @@ SYNDIC / BANQUE / CERTIFIÉ / EFFET ; libre pour ESPÈCES.
 
 ## payeurId
 
-Tiers ayant effectivement réglé (`StlSettlement.TierId`) — « réglé par », peut différer de
-l'acquéreur principal (co-acquéreur, tiers payeur...). **Requis** : alimente le bloc « Versement
-effectué par » de l'autorisation d'encaissement. Confirmé renseigné sur >99% des règlements réels.
+Tiers ayant effectivement réglé (`StlSettlement.TierPayerId`) — « réglé par », peut différer de
+l'acquéreur principal (co-acquéreur, tiers payeur...). Alimente le bloc « Versement effectué par » de
+l'autorisation d'encaissement et le reçu. **Facultatif** : absent, le payeur est le client du
+dossier. `StlSettlement.TierId` reçoit toujours le client du dossier, comme le logiciel de bureau ;
+400 si `payeurId` est absent et que le dossier n'a pas de client.
 
 ## statut
 

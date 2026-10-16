@@ -8,8 +8,9 @@ import java.util.UUID;
 
 /**
  * {@code montantRegle}/{@code reste}/{@code statutCalcule} : calculés à la lecture depuis les
- * {@code StlSettlementLine}, jamais stockés. {@code statutCalcule} : PAYE (reste &lt;= 0), PARTIEL,
- * EN_RETARD (rien réglé, échéance passée), A_VENIR (rien réglé, à venir).
+ * {@code StlSettlementLine}, jamais stockés ; un décaissement compte en négatif. {@code statutCalcule} :
+ * PAYE (reste &lt;= 0), EN_RETARD (reste &gt; 0, échéance aujourd'hui ou passée), PARTIEL (entamée, à venir),
+ * A_VENIR (rien réglé, à venir).
  */
 public record EcheanceDto(
         UUID id,
@@ -31,6 +32,10 @@ public record EcheanceDto(
         @Schema(example = "25/00167")
         String decompte,
 
-        LocalDateTime creeLe
+        LocalDateTime creeLe,
+
+        @Schema(description = "Écart du schéma (prix après remise − avance − crédit − autofinancement) après l'écriture ; "
+                + "null en lecture.")
+        BigDecimal ecartSchema
 ) {
 }

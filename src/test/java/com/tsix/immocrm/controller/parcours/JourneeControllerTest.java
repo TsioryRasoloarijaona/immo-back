@@ -4,12 +4,18 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
+import com.tsix.immocrm.entities.com.ComProspectionKind;
+import com.tsix.immocrm.fixtures.FixtureInteraction;
+import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
+import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +24,10 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,6 +47,15 @@ class JourneeControllerTest {
 
     @Autowired
     private ComProspectionRepository prospectionRepository;
+
+    @Autowired
+    private ComActionMessageRepository messageRepository;
+
+    @Autowired
+    private FixtureInteraction fixtureInteraction;
+
+    @Autowired
+    private EntityManager em;
 
     @Autowired
     private Clock clock;
@@ -189,6 +207,100 @@ class JourneeControllerTest {
         mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nouveauxLeads.total").value(0));
+    }
+
+    // ---------------------------------------------------------------- à jour des actions faites ailleurs
+
+    /** FEATURE-tri-a-jour.md §Règle 1 : une étape changée = traité, sans interaction écrite. */
+    @Test
+    void nouveauxLeads_etapeChangee_sortDesNouveauxLeads() throws Exception {
+        ComProspection lead = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+        ComProspectionKind enCours = outils.etape("2 EN COURS DE TRAITEMENT", false);
+
+        mockMvc.perform(patch("/api/prospections/{id}/etape", lead.getId())
+                        .with(ParcoursOutils.connecte(moi, "Commercial"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"etapeId\":\"%s\"}".formatted(enCours.getId())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nouveauxLeads.total").value(0));
+    }
+
+    @Test
+    void nouveauxLeads_aLEtapeDeDepart_resteNouveau() throws Exception {
+        ComProspection lead = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+        lead.setComProspectionKind(outils.etape("1 A TRAITER", false));
+        prospectionRepository.saveAndFlush(lead);
+
+        mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nouveauxLeads.total").value(1))
+                .andExpect(jsonPath("$.nouveauxLeads.lignes[0].prospectionId").value(lead.getId().toString()));
+    }
+
+    /** §Règle 2 : une interaction sans nouvelle date close la relance en cours. */
+    @Test
+    void relanceDuJour_interactionSansDate_disparait() throws Exception {
+        ComProspection p = outils.prospection(moi, tranche, aujourdhui.atStartOfDay());
+        outils.relance(p, aujourdhui.atTime(11, 0), null);
+
+        noter(p, null);
+
+        mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relancesDuJour.total").value(0));
+    }
+
+    @Test
+    void relanceDuJour_interactionAvecDate_remplaceLAncienne() throws Exception {
+        ComProspection p = outils.prospection(moi, tranche, aujourdhui.atStartOfDay());
+        outils.relance(p, aujourdhui.atTime(11, 0), null);
+
+        String nouvelle = noter(p, aujourdhui.atTime(15, 0));
+
+        mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relancesDuJour.total").value(1))
+                .andExpect(jsonPath("$.relancesDuJour.lignes[0].interactionId").value(nouvelle));
+    }
+
+    /** §Règle 2 : la transformation close les relances vivantes du lead. */
+    @Test
+    void transformer_desarmeLesRelancesVivantes() throws Exception {
+        ComProspection lead = outils.preProspection(moi, aujourdhui.atTime(9, 0));
+        lead.setCfgProspect(outils.tier("JR-PROS"));
+        prospectionRepository.saveAndFlush(lead);
+        ComActionMessage relance = outils.relance(lead, aujourdhui.atTime(11, 0), null);
+
+        mockMvc.perform(post("/api/prospections/{id}/transformer", lead.getId())
+                        .with(ParcoursOutils.connecte(moi, "Commercial"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commercialId\":\"%s\",\"trancheId\":\"%s\"}"
+                                .formatted(moi.getCfgEmployee().getId(), tranche.getId())))
+                .andExpect(status().isOk());
+        em.flush();
+
+        assertThat(messageRepository.findById(relance.getId()))
+                .get().extracting(ComActionMessage::getWithoutRevival).isEqualTo(true);
+        mockMvc.perform(get(JOURNEE).with(ParcoursOutils.connecte(moi, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relancesDuJour.total").value(0));
+    }
+
+    /** Note postée par l'API ; {@code dateAlerte} nulle = sans nouvelle relance. Rend l'id de l'interaction. */
+    private String noter(ComProspection p, LocalDateTime dateAlerte) throws Exception {
+        String alerte = dateAlerte == null ? "" : ",\"dateAlerte\":\"%s\"".formatted(dateAlerte);
+        String reponse = mockMvc.perform(post("/api/prospections/{id}/interactions", p.getId())
+                        .with(ParcoursOutils.connecte(moi, "Commercial"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actionTypeId\":\"%s\",\"description\":\"point fait\"%s}"
+                                .formatted(fixtureInteraction.typeNote().getId(), alerte)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        em.flush();
+        return JsonPath.read(reponse, "$.id");
     }
 
     @Test

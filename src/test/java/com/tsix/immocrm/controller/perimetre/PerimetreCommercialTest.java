@@ -87,6 +87,7 @@ class PerimetreCommercialTest {
 
     @Autowired private FixtureReferentielStk fixtureReferentielStk;
     @Autowired private MockMvc mockMvc;
+    @Autowired private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
     @Autowired private AdmUserRepository userRepository;
     @Autowired private AdmUserHabilitationRepository habilitationRepository;
     @Autowired private AdmRoleRepository roleRepository;
@@ -412,6 +413,21 @@ class PerimetreCommercialTest {
         mockMvc.perform(get("/api/encaissements/{id}", reglementA.getId())
                         .with(connecte(commercial, "Commercial")))
                 .andExpect(status().isOk());
+    }
+
+    /** La bande « Total : » (FEATURE-encaissements-offres-lot2.md B1) ne somme que le périmètre, comme la liste. */
+    @Test
+    void commercialAffecteProjetA_totauxDesEncaissementsExcluentLeProjetB() throws Exception {
+        AdmUser commercial = newUser("perim.enctot." + UUID.randomUUID());
+        affecter(commercial, projetA);
+        newReglement("ENC-PERIM-TOT-A", newDossier("DOS-PERIM-TOT-A", trancheA));
+        newReglement("ENC-PERIM-TOT-B", newDossier("DOS-PERIM-TOT-B", trancheB));
+
+        mockMvc.perform(get("/api/encaissements/totaux").param("reference", "ENC-PERIM-TOT-")
+                        .with(connecte(commercial, "Commercial")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(1))
+                .andExpect(jsonPath("$.montantBrut").value(1000));
     }
 
     // ------------------------------------------------------------------ §8.3 — non-régression
@@ -778,6 +794,7 @@ class PerimetreCommercialTest {
     void creationDeDossierDansLePerimetre_reste201() throws Exception {
         AdmUser commercial = newUser("perim.create.ok." + UUID.randomUUID());
         affecter(commercial, projetA);
+        fixtureStatuts.reservation();
 
         CfgTier prospect = new CfgTier();
         prospect.setId(UUID.randomUUID());

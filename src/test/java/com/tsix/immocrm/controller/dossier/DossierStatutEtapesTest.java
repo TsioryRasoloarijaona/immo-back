@@ -129,10 +129,11 @@ class DossierStatutEtapesTest {
 
     @Test
     void getEtapesSuivantes_returnsMilestoneFieldPerReachableStatus() throws Exception {
-        newDossierStatus("FORMALISE");
+        // StrWorkFlow : ENVOI AU NOTAIRE → MINUTE et → LIVRAISON PROVISOIRE (FEATURE-vente-socle.md B2).
+        newDossierStatus("ENVOI AU NOTAIRE");
         newDossierStatus("MINUTE");
         newDossierStatus("LIVRAISON PROVISOIRE");
-        ComFolder folder = newDossier("DOS-ETAPE-SUIVANTES", "FORMALISE");
+        ComFolder folder = newDossier("DOS-ETAPE-SUIVANTES", "ENVOI AU NOTAIRE");
 
         String json = mockMvc.perform(get("/api/dossiers/{id}/statut/etapes-suivantes", folder.getId()))
                 .andExpect(status().isOk())

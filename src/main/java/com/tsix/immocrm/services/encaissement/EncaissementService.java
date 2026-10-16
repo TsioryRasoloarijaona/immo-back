@@ -4,11 +4,13 @@ import com.tsix.immocrm.domain.AgregatDemande;
 import com.tsix.immocrm.domain.ChampDateEncaissement;
 import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.Granularite;
+import com.tsix.immocrm.domain.MontantRestant;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.dto.encaissement.AffectationDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
+import com.tsix.immocrm.dto.encaissement.TotauxEncaissementsDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -116,12 +118,37 @@ public class EncaissementService {
                 agregats, tri, inclureSansValeur, pageable);
     }
 
+    /**
+     * Bande « Total : » de la liste plate : la spec et le périmètre de {@link #findAll}, et les agrégats de
+     * {@code /groupes} ({@link GroupementService#totaux}), donc les mêmes exclusions des CANCELED.
+     */
+    public TotauxEncaissementsDto totaux(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
+                                         UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
+                                         UUID tierId, String reference, String search,
+                                         Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
+                                         ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
+                montantA, champDate, dateDebut, dateFin))
+                .and(perimetreService.filtreEncaissements());
+        List<ColonneEncaissement> sommees = List.of(ColonneEncaissement.MONTANT_BRUT,
+                ColonneEncaissement.MONTANT_BRUT_RESTANT, ColonneEncaissement.MONTANT_NET, ColonneEncaissement.MONTANT_BASE);
+        List<AgregatDemande> agregats = ColonneEncaissement.resoudreAgregats(
+                sommees.stream().map(ColonneEncaissement::nom).toList());
+        GroupementService.Totaux totaux = groupementService.totaux(StlSettlement.class, spec, agregats);
+        List<BigDecimal> sommes = agregats.stream().map(a -> (BigDecimal) totaux.valeurs().get(a.jeton())).toList();
+        return new TotauxEncaissementsDto(totaux.nombre(), sommes.get(0), sommes.get(1), sommes.get(2), sommes.get(3));
+    }
+
     /** Filtres de la liste des encaissements, tels que reçus du contrôleur. */
     private record FiltresEncaissements(
             List<UUID> entiteIds, List<UUID> typeIds, List<String> etats, UUID compteId,
             UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
             String search, Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
             ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+
+        static final FiltresEncaissements AUCUN = new FiltresEncaissements(null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     /** Sans le périmètre commercial, que chaque appelant ajoute explicitement (comme {@code specDossiers}). */
@@ -240,9 +267,12 @@ public class EncaissementService {
         }
     }
 
-    /** Pas de restriction « Vente » : un id direct désigne un règlement précis, quelle que soit son origine. */
+    /** Le filtre de la liste (encaissement de vente, périmètre) : un décaissement ou un achat donne 404. */
     public EncaissementDetailDto findById(UUID id) {
-        StlSettlement settlement = settlementRepository.findById(id)
+        Specification<StlSettlement> memeQueLaListe = specEncaissements(FiltresEncaissements.AUCUN)
+                .and(perimetreService.filtreEncaissements())
+                .and((root, query, cb) -> cb.equal(root.get("id"), id));
+        StlSettlement settlement = settlementRepository.findOne(memeQueLaListe)
                 .orElseThrow(() -> new ResourceNotFoundException("Encaissement introuvable: " + id));
         // Toutes les colonnes : la fiche n'est pas filtrable par ?colonnes=.
         return EncaissementDetailDto.de(
@@ -295,10 +325,8 @@ public class EncaissementService {
 
         // Part affectée pré-agrégée (sommable par /groupes). Le total de groupe fait la même
         // soustraction, SUM(amount) - SUM(affecte) : ligne et bande « Total : » ne divergent pas.
-        BigDecimal affecte = s.getAffectation() != null && s.getAffectation().getMontantAffecte() != null
-                ? s.getAffectation().getMontantAffecte()
-                : BigDecimal.ZERO;
-        BigDecimal montantBrutRestant = montantBrut.subtract(affecte);
+        BigDecimal affecte = s.getAffectation() != null ? s.getAffectation().getMontantAffecte() : null;
+        BigDecimal montantBrutRestant = MontantRestant.reglement(montantBrut, affecte);
 
         // Net = brut − RS − timbre, porté par la @Formula de l'entité ; le repli Java couvre l'entité
         // construite en mémoire, qu'une formule ne peuple jamais.
@@ -328,6 +356,7 @@ public class EncaissementService {
                 s.getDocDate(),
                 s.getEcheanceDate(),
                 s.getSettlementDate(),
+                s.getPointagePrevu(),
                 Champs.de(tier, CfgTier::getId),
                 tier != null ? TierNomFormatter.nom(tier) : null,
                 montantBrut,

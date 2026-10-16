@@ -29,6 +29,27 @@ celles sans tranche restent visibles de tous.
 Code(s) ComProspectionKind ("Nature"/étape) à filtrer. Répéter le paramètre pour plusieurs étapes.
 Absent = toutes les étapes.
 
+### param search
+
+Recherche multi-critère du logiciel de bureau, **espaces et casse ignorés des deux côtés** (« 06 12 34
+» trouve « 061234 »). Champs : code, nom / téléphone / email saisis (`Temp*`), notes ; prospect lié
+(nom affiché, prénom + nom dans les deux ordres, mobile, mobile précédé de l'indicatif, de `+` ou de
+`00`, téléphone, email, CIN, ville) ; article (code, libellé, catégorie, type, présentation) ; client
+et statut du dossier issu de la prospection ; source et type (code), support et nature (libellé) ;
+autres tranches, catégories et types du profil. Voir `FEATURE-prospection-filtres.md` §1.
+
+### param dateDebut
+
+Borne basse (incluse) de la période, sur la date choisie par `periodeSur` (défaut : date du
+document). `AAAA-MM-JJ` = depuis le début du jour ; une date-heure ISO-8601 reste acceptée. 400 si
+illisible.
+
+### param dateFin
+
+Borne haute de la période. `AAAA-MM-JJ` = **jour entier inclus** (`< fin + 1 jour`, comme le
+logiciel de bureau) ; une date-heure ISO-8601 reste acceptée et vaut borne incluse. 400 si illisible.
+Ignorée, comme `dateDebut`, quand `dateRenseignee` est fourni.
+
 ### param ouvertes
 
 Filtre d'archivage, **à trois états**. Absent : toutes les prospections. `true` : seulement les
@@ -233,6 +254,8 @@ poser/remplacer ici (avec périmètre commercial et cohérence `articleId`, comm
 .../tranche-principale`) ; si `trancheId` est omis, la prospection doit **déjà** en porter une,
 faute de quoi la transformation est refusée (400).
 
+Les relances en cours de la ligne sont désarmées (comme à l'archivage) : elles quittent « Ma journée ».
+
 ### reponse 400
 
 `commercialId` manquant ; aucun prospect lié ; commercial/tranche/article introuvable ; l'article ne
@@ -325,8 +348,9 @@ prospection, exactement comme dans le logiciel de bureau : les relances précéd
 prospection sont désarmées (`WithoutRevival`, alerte éteinte dans `AdmAlertData`) et la nouvelle est
 posée là où l'écran du légataire la lit. Elle disparaît donc de `derniereAlerteDate` de la liste et
 du tableau de bord des relances, et la nouvelle prend sa place. **Une interaction sans `dateAlerte`
-ne touche à aucune relance existante** — c'est la règle du légataire, vérifiée sur sa trace d'audit
-: ni la date de l'alerte ni une simple note ne l'éteignent.
+(note comprise) clôt les relances en cours** sans en poser de nouvelle : elles sont désarmées comme à
+l'archivage et disparaissent de « Ma journée ». C'est un écart voulu au légataire, qui les laissait
+vivantes. Les relances rattachées à une échéance de dossier et les rappels d'impayé ne sont pas touchés.
 
 ### reponse 400
 
@@ -454,10 +478,15 @@ voir `CreerDevisRequest` pour le détail du calcul et des remplacements possible
 `remisePercent`). Sans `articleId`, l'offre est "libre": `prix` devient directement le prix de vente
 TTC, sans ventilation HT/m²/sous-articles.
 
+Comme OMRAN, l'offre est écrite avec l'entité « ComQuote » (`StrEntityId`), la vocation de l'article
+(`StkVocationId`) et l'utilisateur connecté (`UserCreate` / `UserUpdate`).
+
 ### reponse 400
 
 `trancheId` manquant/introuvable, `prix` manquant alors qu'aucun `articleId` n'est fourni, ou un id
-(article/sous-article/prospect/commercial/mode de paiement) est introuvable.
+(article/sous-article/prospect/commercial/mode de paiement) est introuvable. Aussi : l'article
+n'appartient pas à la tranche choisie, un sous-article n'est pas un enfant de l'article, ou l'article
+est déjà vendu (porté par un dossier). Rien n'est écrit dans ces cas.
 
 ## getDevisDocument
 

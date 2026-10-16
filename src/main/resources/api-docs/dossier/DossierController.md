@@ -6,117 +6,6 @@ Collection soumise au périmètre commercial : sur **toutes** les routes portant
 
 **Entités juridiques en exploitation.** Cette collection ne renvoie que les dossiers rattachés à une entité juridique active (`CfgCompany.IsActive`) — aujourd'hui ADMOD et GHRIZA, comme dans l'application de bureau. Restriction **globale et permanente**, distincte du périmètre commercial : elle s'applique à tout appelant, y compris aux rôles qui en sont exemptés (dont Administrateur). Un dossier masqué renvoie 404 sur toutes les routes portant son identifiant, exactement comme un dossier inexistant.
 
-## findAll
-
-Filtre optionnellement par statut (multi-sélection, une valeur pour un seul statut se comporte comme
-avant), commercial, entité (projet), tranche(s), plage de dates sur un jalon au choix, et recherche
-libre sur le code du dossier OU le nom/prénom/raison sociale du client lié. Voir
-instructions/filtres-avances.md pour le détail des filtres avancés.
-
-**Périmètre commercial** : si l'appelant est restreint (`UtilisateurCourantDto.perimetreRestreint =
-true`), cette liste ne contient que les dossiers de ses projets affectés — filtrage côté serveur,
-appliqué en plus des filtres ci-dessus. Le front ne doit pas refiltrer par projet lui-même. Les
-dossiers dont le projet ne se résout pas restent visibles de tous.
-
-### param statut
-
-Code(s) StrStatus à filtrer. Répéter le paramètre pour sélectionner plusieurs statuts
-(?statut=Réservation&statut=Concrétisation). Absent = tous les statuts.
-
-### param trancheId
-
-Id(s) de tranche (CfgTranche.id, StkItem.stkHierarchy). Répéter le paramètre pour plusieurs
-tranches. Renvoie les dossiers dont au moins un article lié — ou l'article principal — appartient à
-une des tranches demandées.
-
-### param champDate
-
-Jalon sur lequel appliquer dateDebut/dateFin. Ignoré si aucun des deux n'est fourni. Défaut :
-RESERVATION (= date de création du dossier).
-
-### param search
-
-Recherche libre sur le code du dossier OU le nom/prénom/raison sociale du client lié (sous-chaîne,
-insensible à la casse).
-
-### param colonnes
-
-Colonnes a serialiser, repetable ou separees par des virgules. Absent : les 13 colonnes historiques.
-Catalogue et liste blanche : `GET /api/referentiels/colonnes/dossiers`. Un nom hors catalogue rend
-400 avec la liste des noms valides. `id` est toujours servi.
-
-### param groupeColonne
-
-Déplie un groupe : restreint la liste aux dossiers d'un groupe renvoyé par `GET
-/api/dossiers/groupes`. Attend le nom de la colonne qui a servi au groupement.
-
-### param groupeValeur
-
-Valeur du groupe à déplier — **la `cle` renvoyée telle quelle par `/groupes`**, sans transformation.
-Omise alors que `groupeColonne` est fourni : le groupe des dossiers sans valeur sur cette colonne.
-
-### param granularite
-
-Granularité appliquée quand `groupeColonne` est une date. Doit être identique à celle passée à
-`/groupes`, sinon la clé ne retombe pas sur le même groupe. Défaut : MOIS.
-
-## grouper
-
-Reproduit la bande de groupement du logiciel de bureau : au lieu des lignes, renvoie **un groupe par
-valeur distincte** de la colonne `groupBy`, chacun portant son effectif et les sommes demandées.
-
-**Pourquoi cet endpoint plutôt qu'un groupement côté front** : la liste est paginée. Grouper une
-page ne donnerait que des groupes tronqués et des totaux faux. Les effectifs et totaux ci-dessous
-portent sur **tout le périmètre filtré**, pas sur une page.
-
-**Les filtres sont exactement ceux de `GET /api/dossiers`** — mêmes noms, même sémantique, périmètre
-commercial compris. Un même jeu de filtres des deux côtés garantit que la somme des effectifs des
-groupes est égale au `totalElements` de la liste.
-
-**Les groupes sont repliés** : pour obtenir les lignes de l'un d'eux, rappeler `GET /api/dossiers`
-avec `?groupeColonne=<groupBy>&groupeValeur=<la cle du groupe>`.
-
-Colonnes groupables et agrégeables : `GET /api/referentiels/colonnes/dossiers` (booléens `groupable`
-/ `agregeable`). Toutes les colonnes ne le sont pas, et c'est mesuré : un montant porte presque
-autant de valeurs distinctes que de lignes, une date exacte aussi — d'où `granularite` pour les
-dates et le refus de grouper un montant.
-
-### param agregats
-
-Agrégats à calculer, répétable ou séparés par des virgules.
-
-Deux formes. Un **nom nu** (`prix`) vaut une **somme** et revient sous ce nom nu — c'est le
-comportement historique, inchangé. Un nom **qualifié** (`prix:AVG`) applique la fonction nommée et
-revient sous le jeton complet `prix:AVG`. Les deux formes peuvent coexister dans le même appel.
-
-Fonctions : `SUM`, `AVG`, `MIN`, `MAX`, `COUNT` — mais **pas sur toutes les colonnes**. Sommer une
-date n'a pas de sens, et une colonne calculée par différence n'a pas d'extremum exprimable. La liste
-autorisée par colonne est publiée par le catalogue (`fonctions`) : le menu Σ doit s'y piloter, pas
-sur une liste en dur. Une fonction refusée rend 400 avec les fonctions acceptées par cette
-colonne-là.
-
-`AVG` est calculée à partir de la somme et de l'effectif renseigné, en décimal exact et arrondie au
-centime — jamais en virgule flottante.
-
-Absent : seul l'effectif de chaque groupe est renvoyé.
-
-### param granularite
-
-Granularité de regroupement d'une colonne date. Ignorée si `groupBy` n'est pas une date. Défaut :
-MOIS — grouper sur la date exacte rendrait 214 groupes pour 358 dossiers, soit une liste plate.
-
-### param inclureSansValeur
-
-Inclure le groupe des lignes dont la colonne groupée est vide. **Faux par défaut** : l'écran veut
-les valeurs qui existent, et sur une colonne peu renseignée le groupe vide écraserait tous les
-autres. Passer `true` pour le récupérer — la somme des effectifs retombe alors sur le
-`totalElements` de la liste non groupée.
-
-### reponse 400
-
-`groupBy` absent, inconnu, ou désignant une colonne non groupable ; ou `agregats` contenant une
-colonne non agrégeable. Le corps (RFC 7807) porte la liste des noms acceptés.
-
 ## findById
 
 Fiche complète du dossier : statut courant et étapes atteignables, client/commercial/notaire,
@@ -148,6 +37,10 @@ avant remise, annexes comprises — articles suivants de `articleIds`) — même
 /api/dossiers` persistera pour les mêmes paramètres. FRAIS SYNDIC ne dépend pas du prix (barème de
 la tranche) et n'est donc jamais remisé.
 
+Les sous-articles libres du lot (`StkItem.ParentId`) absents de `articleIds` sont comptés comme à la
+création, qui les rattache d'office : ils sont listés dans `annexesAutomatiques` (prix de référence
+compris dans `prixAvantRemise`), pour que l'aperçu égale le dossier créé.
+
 ### reponse 200
 
 Schéma calculé. `lignes` peut être vide si aucune catégorie AUTO-FINANCEMENT/AVANCE/FRAIS SYNDIC
@@ -171,6 +64,27 @@ d'une Offre (prix commercial de l'article, taux de TVA) — sauf que le total du
 l'appelant renvoie **403** (et non 404 : ici c'est l'appelant qui a nommé l'article, il n'y a rien à
 cacher). Le projet est déduit du premier article via sa tranche.
 
+**Offre d'origine** : `offreId` (optionnel) est écrit dans `ComFolder.StlQuoteId`, comme OMRAN
+(`GenerateComFolderFromQuote`). Avant toute écriture, l'offre est contrôlée comme dans le logiciel de
+bureau : introuvable ou d'une autre prospection, sans article, premier article de `articleIds` autre que
+celui de l'offre, article ou sous-article de l'offre déjà
+lié à un dossier, vocation de l'article différente de celle de l'offre → **400** ; projet de l'article
+de l'offre hors périmètre → **403** ; offre déjà transformée en dossier, ou prospection qui a déjà un
+dossier de vente → **409**. Avec une offre, le dossier reprend :
+- son **échéancier** : une échéance par ligne du schéma saisi sur l'offre (`StlQuoteDocument` :
+  catégorie, montant, date, société, ratio de remise), à la place du schéma calculé ; sans schéma
+  saisi, le schéma calculé habituel. Comme `Sale.cs:VerifSchema`, les lignes AVANCE, CRÉDIT et
+  AUTO-FINANCEMENT de ce schéma doivent égaler, au centime, le prix après remise calculé depuis la
+  requête (lignes hors prix exclues) : sinon **400** sans écriture (« L'échéancier repris de l'offre … ne
+  correspond plus au prix du dossier … ») ;
+- le **prix des sous-articles** figurant dans l'offre (`StlQuoteItem` : avant remise HT/TTC, remise,
+  après remise, TVA), au lieu du prix catalogue du jour ;
+- son **taux de commission** (`CommissionRate`), que la requête ne porte pas ;
+- son **commercial** (`CfgCommercialId`), à défaut celui de la prospection.
+
+Le prix, la remise, les notes et le mode de paiement restent ceux de la requête (le formulaire les
+préremplit depuis l'offre).
+
 **Remise commerciale** — deux modes, selon `remisePercent` :
 - `remisePercent` **fourni** (écran de création où le commercial saisit la remise) : `prix` est le
   total TTC **avant** remise, annexes comprises (articles suivants de `articleIds`, comptés à leur
@@ -192,31 +106,114 @@ plancher) s'il est > 0 ; il sert de base pour l'article principal, les annexes, 
 les offres. Sans prix de référence, la base avant remise est le prix négocié (remise nulle). C'est
 la valeur exposée par `prixSuggere` sur les articles.
 
-**Prospect → client** : si le statut initial porte l'indicateur OMRAN « Transforme le prospect en
-client », le tiers passe au type client (voir `PATCH /api/dossiers/{id}/statut`).
+**Sans `prix`** : les montants sont quand même écrits, depuis le prix de référence des articles (0
+s'ils n'en ont pas), sans frais de syndic ; aucun schéma de financement n'est généré.
+
+**Écritures compatibles OMRAN** (le dossier apparaît dans les écrans du logiciel de bureau) : statut
+initial RESERVATION (obligatoire), type de document `ComFolder`, `DocDate` à minuit, description
+« <code> du jj/mm/aaaa », répartition du client principal à 100 %, superficies, prix au m², prix
+contractuel, schéma texte, constantes et signatures de création. Les articles suivants de
+`articleIds` deviennent les sous-articles du lot principal (ligne `ComFolderItem`, historique
+« AFFECTATION »). Voir `FEATURE-interop-omran-ecritures.md` §3.
+
+**Sous-articles du lot** : comme le logiciel de bureau, tout sous-article libre du lot principal
+(`StkItem.ParentId` = le lot, sans dossier) est rattaché même s'il n'est pas dans `articleIds` ; son
+prix de référence entre dans le prix des sous-articles, donc dans le prix avant remise et la superficie
+globale. `prix` doit en tenir compte (avec `remisePercent`, il est le total annexes comprises). Le prix de
+référence d'un lot (`comSalePrice`) inclut déjà ses sous-articles chez OMRAN : le prix du lot seul en est
+déduit, pour ne pas les compter deux fois — un lot et ses enfants valent donc son `prixSuggere`.
+
+**Type du tiers** : le client (et chaque acquéreur) est client tant qu'il a un dossier actif dont le
+statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/dossiers/{id}/statut`).
 
 ### reponse 400
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
 de paiement introuvable, prospection sans prospect lié, article déjà occupé, `remisePercent` hors
-de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes.
+de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des annexes. Avec `offreId`, les
+messages du logiciel de bureau : « Vous n'avez pas sélectionné un article ! », « Cet article n'est pas
+disponible en stock ! », « Le sous article <code> n'est pas libre ! », « Cet article n'a pas la
+vocation correspondante ! », et l'échéancier de l'offre qui ne correspond plus au prix du dossier.
+
+### reponse 409
+
+Avec `offreId` seulement. L'offre a déjà donné un dossier de vente : le `detail` nomme son code et
+son id, et la propriété `dossierExistant` (`{id, code, location}`) permet de l'ouvrir. Ou la
+prospection a déjà un dossier de vente : « Un dossier de vente est déjà généré sur cette prospection ! ».
+
+### reponse 500
+
+Statut RESERVATION introuvable dans la configuration des dossiers de vente : aucun dossier n'est
+créé, le `detail` le dit.
 
 ## changerStatut
 
-Change le statut du dossier. La transition doit figurer dans la table des transitions validées
-(sinon **409**, avec `transitionsAutorisees`) ; un dossier sans statut courant accepte tout statut.
+Change le statut du dossier selon le **workflow paramétré d'OMRAN** (CONFIGURATION › VENTE › Statuts /
+Transitions), dans cet ordre :
 
-**Prospect → client, comme OMRAN** : si le statut cible porte l'indicateur « Transforme le prospect
-en client » (`StrStatus.BoolField011` : CONCRETISATION, COMPROMIS, FORMALISE…), et que le client du
-dossier est de type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`), son type devient le type client
-correspondant (`CLI`, `CLIRNT`, `CLIPRM`, `CLIROM`), dans la même transaction. Une ligne
-d'historique distincte « Prospect transformé en client » (type `STATUT`) s'ajoute alors à celle du
-changement de statut, dont la note reste intacte.
-Déjà client, type absent ou inconnu : rien ne change. Jamais de retour client → prospect.
+1. **Transition** lue dans `StrWorkFlow` depuis le statut courant (sinon **409**, avec
+   `transitionsAutorisees` = les cibles que l'appelant peut exécuter). Base sans paramétrage : table de repli
+   des 34 transitions. Un dossier **sans statut** est refusé (**409**, reprise de données nécessaire).
+2. **Intervenant** : un des rôles de l'appelant (ou l'appelant lui-même) doit être intervenant de la
+   transition (`StrWorkFlowIntervener`), sinon **403**. L'Administrateur passe toujours.
+3. `date` et `note` sont posées, puis les **champs obligatoires** de la transition et du statut cible sont
+   contrôlés, sur le dossier **et** sur le client et les acquéreurs personnes physiques ; puis les **pièces à
+   joindre** (une pièce « juste à cocher » peut n'être que cochée). Manque → **400**, `detail` = texte
+   d'OMRAN : « Pour exécuter la transition : … Le champ '…' est obligatoire ! … Le document de type : … est
+   obligatoire ! ».
+4. Hors annulation / désistement : **seuil de versement** du statut cible (`CfgTrancheStatus`, ligne de la
+   tranche sinon globale ; versements = réglé des échéances avance, auto-financement et crédit) — refus
+   **409** « Il faut que la sommes des versements soit au moins égal à 12,50 %. Soit un montant de … ».
+   `ignorerSeuil=true` le saute (Administrateur seulement, sinon **403**) et laisse une ligne d'historique.
+   Puis, si le statut le demande, **schéma de financement** : prix après remise = avance + crédit +
+   auto-financement au centime près (sinon **409** « Votre schéma de financement ne correspond pas… »).
+5. La `date` va sur la **date associée** au statut cible (`StrStatus.StrFieldDateId` : CONCRETISATION →
+   `advanceDate`, MEILLEURTAUX → `loanCompanySendDate`, CREDIT DEBLOQUE → `creditApprovalDate`, FORMALISE →
+   `ownershipCertificateDate`…), ignorée s'il n'en a pas. Sans `date`, rien n'est écrit : une date déjà
+   renseignée n'est jamais écrasée d'office (un retour à RESERVATION garde `docDate`) ; `dateActuelle` de
+   `etapes-suivantes` dit si la colonne est déjà remplie.
+   Le seuil de versement n'est contrôlé que pour un utilisateur dont un rôle porte le droit OMRAN
+   `toolVerifyThreshold` (tout le monde si ce droit n'est pas paramétré).
+6. `StatusValidityDate` = aujourd'hui + durée de vie du statut (vide sans durée) ; si elle change, une action
+   système « l'état … du dossier de vente N° … est expiré » est posée avec son alerte à cette date. Les
+   relances de la prospection sont désarmées et leurs alertes éteintes (impayés épargnés). Un statut « avec
+   affectation de gestionnaire » donne au dossier sans gestionnaire le personnel de l'appelant.
+7. L'historique (`StrHistory`) porte la transition exécutée (`StrWorkflowId`).
+
+**Type client / prospect, comme OMRAN** (`Sale.cs:ManageTier`), après chaque changement : le client
+principal et chaque acquéreur (`ComFolderCustomer`) qui a au moins un dossier actif (statut ni
+annulation ni résiliation) dont le statut porte l'indicateur « Transforme le prospect en client »
+(`StrStatus.BoolField011`) passe d'un type prospect (`PRO`, `PRORNT`, `PROPRM`, `PROROM`) au type
+`CLI` ; un `CLI` qui n'en a plus aucun redevient `PRO` (`CLIRNT`, `CLIPRM`, `CLIROM` restent). `CfgTierKindId` est
+remis à vide dans les deux cas. Une ligne d'historique distincte (type `STATUT`) le dit : « Prospect
+transformé en client » ou « Retour prospect » (suivie du nom pour un acquéreur) ; la note du
+changement de statut reste intacte.
+
+**Sortie (ANNULATION ou DESISTEMENT) : le lot est libéré**, comme OMRAN, dans la même transaction.
+Chaque article lié au dossier (lot principal et annexes TER / PARKING) perd son `ComFolderId` et
+redevient `DISPONIBLE` ; un sous-article sans « Toujours affecté » (`AlwaysAffected`) perd aussi son
+article parent. `ComFolder.StkItemId` est conservé : le détail d'un dossier sorti montre toujours son
+lot principal dans `articles`, même revendu depuis. `note` est **obligatoire** (la cause, écrite dans
+`CancelDescription`) ; `date` va dans `CancelDate` (maintenant si absente), pour les deux sorties.
+Chaque sous-article libéré reçoit une ligne d'historique « ANNULATION AFFECTATION ». La sortie est
+refusée (**409**) si un dossier de syndic en cours est rattaché, ou si une facture de chiffre
+d'affaires du dossier n'est pas annulée par un avoir.
+
+**Réactivation ANNULATION → RESERVATION**, comme OMRAN : le lot principal et **tous** les
+sous-articles du dossier (`ComFolderItem`) doivent être libres (sinon **409**) ; tous reprennent le
+dossier (sous-articles rattachés au lot, ligne « AFFECTATION »). `CancelDate` est vidée et
+`CancelDescription` remise à vide.
 
 ### reponse 400
 
-`statut` absent ou inconnu.
+`statut` absent ou inconnu, `note` absente ou vide vers ANNULATION / DESISTEMENT (« La cause est
+obligatoire pour une annulation ou un désistement »), ou champs obligatoires / pièces à joindre manquants
+(texte d'OMRAN dans `detail`) ; rien n'est écrit.
+
+### reponse 403
+
+L'appelant n'est pas intervenant de la transition, `ignorerSeuil` demandé sans être Administrateur, ou un
+article à libérer ou à réoccuper est sur un projet hors du périmètre commercial de l'appelant.
 
 ### reponse 404
 
@@ -224,23 +221,71 @@ Dossier introuvable.
 
 ### reponse 409
 
-Transition non autorisée depuis le statut courant ; le corps liste `transitionsAutorisees`.
+Transition non paramétrée depuis le statut courant (le corps liste `transitionsAutorisees`), dossier
+sans statut, seuil de versement non atteint, schéma de financement différent du prix, réactivation d'un dossier annulé dont le lot a été revendu entre-temps (« Le lot <code>
+a été revendu entre-temps : créer un nouveau dossier ») ou dont un sous-article est pris (« Le sous
+article <code> n'est pas libre… »), sortie avec un dossier de syndic en cours ou une facture sans
+avoir ; le statut ne change pas.
+
+## getEtapesSuivantes
+
+Transitions que l'utilisateur connecté peut exécuter depuis le statut courant (`StrWorkFlow` filtré par
+ses rôles ; toutes pour l'Administrateur), avec pour chacune la **date associée** au statut cible
+(`champDate` en camelCase, nul si le statut n'en a pas), le libellé de la transition et le drapeau
+« avec proposition du passage automatique ». Liste vide pour un dossier sans statut.
+
+## getTransitionSuggeree
+
+Passage automatique à proposer après un règlement ou un enregistrement (OMRAN le propose à la fermeture
+du dossier) : l'**unique** transition « avec proposition du passage automatique » que l'appelant peut
+exécuter depuis le statut courant, si le **seuil de versement de son statut cible** est atteint (même
+calcul que le refus de `PATCH …/statut`). `date` = date du dernier règlement d'une échéance avance,
+auto-financement ou crédit. Aucune proposition (tous les champs nuls) sans transition automatique, avec
+deux ou plus, sans seuil paramétré pour la cible, ou seuil non atteint.
+
+## updateEcheance
+
+Mise à jour partielle d'une ligne d'échéancier, comme l'écran « Document » d'OMRAN : les champs absents (ou `null`)
+restent inchangés ; HT, TVA, société et date à minuit sont recalculés, la ligne garde toujours une catégorie.
+
+**Changement de catégorie** (`categorieId` différent de l'actuelle, `ComDocument.cs:SetDefaluts`) : le taux de TVA
+et « Exclure du prix » sont repris de la nouvelle catégorie, la remise ancien client est recalculée. Un
+`exclureDuPrix` envoyé dans la même requête prime sur celui de la catégorie. Le montant et la date ne sont **jamais**
+recalculés : ceux envoyés sont appliqués, sinon ceux de la ligne restent.
+
+**Numéro de quittance** (`decompte`) : attribué à l'insertion seulement ; une modification ne le change jamais, même
+quand la ligne passe à une catégorie de frais.
+
+**Report de l'écart** : si la catégorie de la ligne « met à jour le schéma de financement », l'écart prix après
+remise − (avance + crédit + autofinancement) est reporté sur le dernier autofinancement, sinon le dernier crédit
+(voir le tag de l'échéancier). Sinon rien n'est reporté et l'équilibre n'est pas forcé : `ecartSchema` de la réponse
+donne l'écart restant, à afficher tant qu'il est non nul.
+
+**Montant sous le déjà réglé** : accepté, comme OMRAN ; `reste` de la réponse est alors négatif.
+
+**Date** : une ligne d'une catégorie « basée sur la date des finalisations » ne peut pas être datée avant le début des
+finalisations de la tranche tant qu'elle n'est pas soldée (400) ; une ligne soldée peut l'être.
 
 ## addReglement
 
 Crée un `StlSettlement` + sa `StlSettlementLine` de rattachement à l'échéance `echeanceId`. Le
-règlement naît toujours au statut `IN_WORK`.
+règlement naît toujours au statut `IN_WORK`. C'est `POST /api/dossiers/{id}/reglements` avec une seule
+affectation `{echeanceId, montant}` ; pour répartir un règlement sur plusieurs échéances, utiliser celui-ci.
 
 **Saisie complète obligatoire** (400 sur chaque manquement) : `montant` (strictement positif et au
-plus égal au reste à payer de l'échéance), `dateEcheance`, `typeId` et `payeurId`. `reference` (n°
-de chèque...) est requise dès que le type choisi a `TypeReglementDto.referenceObligatoire=true`
-(CHÈQUE, EFFET...) ; `banqueId` est requise dès que `TypeReglementDto.banqueObligatoire=true` — ce
-flag était annoncé mais pas appliqué jusqu'ici.
+plus égal au reste à payer de l'échéance), `dateEcheance` et `typeId`. `reference` (n° de chèque...)
+est requise dès que le type choisi a `TypeReglementDto.referenceObligatoire=true` (CHÈQUE, EFFET...) ;
+`banqueId` est requise dès que `TypeReglementDto.banqueObligatoire=true`.
 
-`typeId` et `payeurId` sont exigés parce qu'ils alimentent le « Mode de versement » et le «
-Versement effectué par » de l'**autorisation d'encaissement**, à ouvrir juste après création via
-`GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement` (le `reglementId`
-est l'`id` renvoyé ici).
+`typeId` alimente le « Mode de versement » de l'**autorisation d'encaissement**, à ouvrir juste
+après création via `GET /api/dossiers/{id}/reglements/{reglementId}/documents/autorisation-versement`
+(le `reglementId` est l'`id` renvoyé ici). `payeurId` (« Versement effectué par ») est facultatif :
+absent, c'est le client du dossier.
+
+**Écritures compatibles OMRAN** : le tiers du règlement (`TierId`) est toujours le client du dossier,
+le payeur saisi va dans `TierPayerId` ; `DocDate` = aujourd'hui à minuit ; société du projet, module
+COM, type de document « encaissement », devise par défaut, description « <type> <banque> N° <réf> du
+jj/mm/aaaa ». Voir `FEATURE-interop-omran-ecritures.md` §5.
 
 `dateReglement` et `statut=POINTED` sont **refusés** (400) : pointer un règlement exige une preuve
 de paiement, impossible à fournir avant que le règlement existe. Pour saisir un règlement déjà
@@ -249,7 +294,8 @@ encaissé, enchaîner : ce `POST`, puis `POST .../reglements/{reglementId}/piece
 
 ### reponse 400
 
-Champ obligatoire absent (`montant`, `dateEcheance`, `typeId`, `payeurId`), montant négatif/nul ou
+Champ obligatoire absent (`montant`, `dateEcheance`, `typeId` ; `payeurId` si le dossier n'a pas de
+client), montant négatif/nul ou
 dépassant le reste à payer, `reference`/`banqueId` absente alors que le type la requiert, ou
 `dateReglement`/`statut=POINTED` fournis.
 
@@ -285,6 +331,13 @@ cela dans le schéma, et non sur le libellé de la catégorie, qui est du texte 
 ⚠️ **Sur un dossier sorti** (`ANNULATION` / `DESISTEMENT`, signalé par `dossierSorti`), `netAPayer`
 se réduit à ce qui a été encaissé et son reste vaut zéro : un dossier annulé ne reste rien devoir.
 Règle vérifiée sans exception sur les 30 dossiers sortis réels.
+
+**Signes** : le réglé d'une échéance est la somme de ses lignes de règlement, un décaissement
+(`StlSettlement.IsCredit = 0`) comptant en négatif, les règlements annulés exclus ; une échéance de
+catégorie au débit (remboursement, `IsCredit = 0`) se **retranche** des montants et totaux.
+
+`tropPercu` / `tropPercuReste` : formule de la vue `ComSaleFolderView` du logiciel de bureau (total
+dû − total réglé, quand il est négatif), rendue en positif ; 0 pour un dossier débiteur.
 
 ### reponse 200
 
@@ -456,9 +509,10 @@ Modélisé bande par bande sur le template legacy Stimulsoft `ComSaleFicheTropPe
 attestant que les versements du client dépassent le prix du dossier : état civil de l'acquéreur et
 de ses éventuels co-acquéreurs, désignation complète du bien (avec sous-articles), prix et total des
 frais (réutilise `GET /api/dossiers/{id}/montants` pour le total des frais, jamais re-dérivé), puis
-le détail chronologique de chaque versement et le "Reste à payer" (négatif quand il y a
-effectivement un trop perçu — c'est cette valeur, en valeur absolue, qui est reprise dans le montant
-du trop perçu, y compris en toutes lettres). PDF uniquement — pas de variante Word pour ce document.
+le détail chronologique de chaque versement et le "Reste à payer". Le montant du trop perçu (en
+chiffres et en lettres) est le `tropPercu` de `GET .../montants` — formule de la vue `ComSaleFolderView`
+du logiciel de bureau, 0 pour un dossier débiteur ; le "Reste à payer" est le reste du net à payer de
+ce même calcul (frais compris), jamais négatif. PDF uniquement — pas de variante Word pour ce document.
 
 ## getRecuReglement
 

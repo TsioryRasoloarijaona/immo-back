@@ -49,6 +49,8 @@ class DossierCreateTest {
     @Autowired
     private FixtureReferentielStk fixtureReferentielStk;
     @Autowired
+    private com.tsix.immocrm.fixtures.FixtureStatutsDossier fixtureStatuts;
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -97,7 +99,8 @@ class DossierCreateTest {
     private ComFolderRepository folderRepository;
 
     @Autowired
-    private com.tsix.immocrm.repositories.str.StrStatusRepository strStatusRepository;
+    private com.tsix.immocrm.repositories.stl.StlQuoteRepository quoteRepository;
+
 
     private StkItemType itemType;
     private StkItemCategory itemCategory;
@@ -105,6 +108,8 @@ class DossierCreateTest {
 
     @BeforeEach
     void setUp() {
+        // Sans RESERVATION la création est refusée (500), comme chez OMRAN.
+        fixtureStatuts.reservation();
         itemType = new StkItemType();
         itemType.setId(UUID.randomUUID());
         itemType.setCode("TYPE-CREATE-TEST");
@@ -145,6 +150,65 @@ class DossierCreateTest {
         prospection.setCode("PSN-CREATE-TEST");
         prospection.setCfgProspect(prospect);
         return prospectionRepository.save(prospection);
+    }
+
+    /** Offre sur l'article, de même vocation : les contrôles de GenerateComFolderFromQuote passent. */
+    private com.tsix.immocrm.entities.stl.StlQuote nouvelleOffre(ComProspection prospection, String code, StkItem article) {
+        com.tsix.immocrm.entities.stl.StlQuote offre = new com.tsix.immocrm.entities.stl.StlQuote();
+        offre.setId(UUID.randomUUID());
+        offre.setCode(code);
+        offre.setComProspection(prospection);
+        offre.setStkItem(article);
+        offre.setStkVocation(article.getStkVocation());
+        return quoteRepository.save(offre);
+    }
+
+    private ComPaymentMethod nouveauModePaie(String code) {
+        ComPaymentMethod modePaie = new ComPaymentMethod();
+        modePaie.setId(UUID.randomUUID());
+        modePaie.setCode(code);
+        return paymentMethodRepository.save(modePaie);
+    }
+
+    @Test
+    void create_avecOffreDeLaProspection_renseigneStlQuoteId() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        StkItem item = newAvailableItem("LOT-CREATE-OFFRE");
+        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(prospection, "OFF-CREATE-A4", item);
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"A4-CIN","offreId":"%s"}
+                """.formatted(prospection.getId(), item.getId(), nouveauModePaie("VIR-A4").getId(), offre.getId());
+
+        String json = mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        entityManager.flush();
+        entityManager.clear();
+        UUID dossierId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(json, "$.id"));
+        org.assertj.core.api.Assertions.assertThat(folderRepository.findById(dossierId).orElseThrow().getStlQuoteId())
+                .isEqualTo(offre.getId());
+    }
+
+    @Test
+    void create_avecOffreDUneAutreProspection_returns400SansDossier() throws Exception {
+        ComProspection prospection = newProspectionWithProspect();
+        ComProspection autre = new ComProspection();
+        autre.setId(UUID.randomUUID());
+        autre.setCode("PSN-CREATE-A4-AUTRE");
+        autre = prospectionRepository.save(autre);
+        StkItem item = newAvailableItem("LOT-CREATE-OFFRE-AUTRE");
+        com.tsix.immocrm.entities.stl.StlQuote offre = nouvelleOffre(autre, "OFF-CREATE-A4-AUTRE", item);
+        String body = """
+                {"prospectionId":"%s","articleIds":["%s"],"modePaieId":"%s","cin":"A4-CIN","offreId":"%s"}
+                """.formatted(prospection.getId(), item.getId(), nouveauModePaie("VIR-A4-AUTRE").getId(), offre.getId());
+        long avant = folderRepository.count();
+
+        mockMvc.perform(post("/api/dossiers").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+
+        entityManager.flush();
+        org.assertj.core.api.Assertions.assertThat(folderRepository.count()).isEqualTo(avant);
     }
 
     @Test
@@ -274,14 +338,6 @@ class DossierCreateTest {
      */
     @Test
     void create_historiseLeStatutDansLesDeuxTables() throws Exception {
-        // Sans ce statut, la création n'historise rien du tout : enregistrerHistoriqueStatut est
-        // court-circuité quand RESERVATION est introuvable (garde défensive de genererCodeDossier).
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-HISTO-TEST");
 
@@ -322,12 +378,6 @@ class DossierCreateTest {
 
     @Test
     void create_setsInitialStatusToReservation() throws Exception {
-        com.tsix.immocrm.entities.str.StrStatus reservation = new com.tsix.immocrm.entities.str.StrStatus();
-        reservation.setId(UUID.randomUUID());
-        reservation.setCode("RESERVATION");
-        reservation.setStrConfigEntityId(com.tsix.immocrm.domain.StatutDossier.CONFIG_ENTITY_ID);
-        strStatusRepository.save(reservation);
-
         ComProspection prospection = newProspectionWithProspect();
         StkItem item = newAvailableItem("LOT-STATUT-INIT-TEST");
 

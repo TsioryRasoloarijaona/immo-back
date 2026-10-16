@@ -38,7 +38,7 @@ public class GenerateurCodeSequence {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public String suivant(String codeSequence, int largeurAnneeDefaut, int largeurNumeroDefaut) {
-        AdmSequence sequence = sequenceRepository.findByCode(codeSequence)
+        AdmSequence sequence = sequenceRepository.findPourIncrementByCode(codeSequence)
                 .orElseGet(() -> amorcer(codeSequence, largeurAnneeDefaut, largeurNumeroDefaut));
 
         int prochain = (sequence.getSeqValue() != null ? sequence.getSeqValue() : 0) + 1;

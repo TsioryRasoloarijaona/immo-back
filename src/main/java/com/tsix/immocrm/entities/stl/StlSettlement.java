@@ -201,6 +201,19 @@ public class StlSettlement {
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
 
+    // StlSettlementView fait INNER JOIN sur ces quatre référentiels : NULL = règlement invisible chez OMRAN.
+    @Column(name = "AdmModuleId")
+    private UUID admModuleId;
+
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
+    @Column(name = "StlCurrencyId")
+    private UUID stlCurrencyId;
+
+    @Column(name = "StlCurrencyAffectationId")
+    private UUID stlCurrencyAffectationId;
+
     /** Compte bancaire de destination. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StlAccountId")
@@ -216,6 +229,16 @@ public class StlSettlement {
     /** Brut moins retenue à la source et timbre ; même ligne, donc {@code SUM()} l'accepte. */
     @Formula("Amount - ISNULL(AmountRS, 0) - ISNULL(AmountStamp, 0)")
     private BigDecimal montantNetCalcule;
+
+    /**
+     * « Date pointage reportée » ({@code MotionDate} de {@code StlSettlementView}) : règlement ou échéance, reportée à
+     * aujourd'hui (horloge SQL Server, comme la vue) si elle est passée et le règlement non pointé. Voir
+     * FEATURE-encaissements-offres-lot2.md B2.
+     */
+    @Formula("CASE WHEN ISNULL(SettlementDate, EcheanceDate) < DATEADD(day, DATEDIFF(day, 0, GETDATE()) + 1, 0)"
+            + " AND ISNULL(Status, '') <> 'POINTED' THEN DATEADD(day, DATEDIFF(day, 0, GETDATE()), 0)"
+            + " ELSE ISNULL(SettlementDate, EcheanceDate) END")
+    private LocalDateTime pointagePrevu;
 
     /**
      * Terme retranché de {@code montantBrutRestant}. {@code @ManyToOne} bien qu'un-à-un : un

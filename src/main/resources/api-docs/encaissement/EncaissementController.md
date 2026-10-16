@@ -38,7 +38,8 @@ remonte dès qu'une de ses échéances porte sur un lot de l'une des tranches ci
 
 ### param colonnes
 
-Colonnes à sérialiser, répétable ou séparées par des virgules. Absent : les 27 colonnes historiques.
+Colonnes à sérialiser, répétable ou séparées par des virgules. Absent : les 27 colonnes `parDefaut` du
+catalogue (`pointagePrevu` y remplace `dateReglement`, toujours servie si demandée).
 Catalogue et liste blanche : `GET /api/referentiels/colonnes/encaissements`. Un nom hors catalogue
 rend 400 avec la liste des noms valides. `id` est toujours servi.
 
@@ -101,6 +102,10 @@ centime — jamais en virgule flottante.
 
 Absent : seul l'effectif de chaque groupe est renvoyé.
 
+Les règlements `CANCELED` restent comptés dans l'effectif de leur groupe et de `totaux`, mais sortent
+de toutes les sommes et moyennes de montants (`montantBrut`, `montantBrutRestant`, `montantNet`,
+`montantBase`).
+
 ### param granularite
 
 Granularité de regroupement d'une colonne date. Ignorée si `groupBy` n'est pas une date. Défaut :
@@ -118,6 +123,30 @@ somme des effectifs retombe alors sur le `totalElements` de la liste non groupé
 `groupBy` absent, inconnu, ou désignant une colonne non groupable ; ou `agregats` contenant une
 colonne non agrégeable. Le corps (RFC 7807) porte la liste des noms acceptés.
 
+## totaux
+
+Bande « Total : » de la liste plate (écran OMRAN `SettlementList`) : effectif et sommes sur **tout**
+le filtre, pas sur la page chargée. Mêmes paramètres et même sémantique que `GET /api/encaissements`
+(sans pagination, sans dépliage de groupe), périmètre commercial compris : `nombre` est égal au
+`totalElements` de la liste. Les sommes sont calculées par le même code que `totaux` de
+`/groupes` : les règlements `CANCELED` comptent dans `nombre` mais sortent de toutes les sommes.
+
+## exporter
+
+Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/encaissements`, sans pagination, périmètre commercial appliqué. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, montants, nombres et booléens en cellules typées. Auteur du classeur = utilisateur connecté, titre « Encaissements », fichier `encaissements_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes. Les filtres de colonne de la grille (appliqués côté navigateur à la page chargée) ne sont pas transmis.
+
+### param format
+
+Seule valeur acceptée : `xlsx`.
+
+### param colonnes
+
+Colonnes exportées, dans l'ordre voulu (celui de la grille). Absent : les colonnes par défaut de la liste.
+
+### reponse 400
+
+`format` autre que `xlsx`, ou colonne inconnue.
+
 ## findById
 
 Alimente le panneau détail "Pièce de règlement" côté front (`EncaissementDetail.tsx`).
@@ -128,7 +157,12 @@ liste.
 légataire. C'est la réponse à « ce règlement, il a payé quoi ? », que la liste ne sait pas donner :
 elle n'expose qu'un `dossierCode`, celui de la *première* ligne, et masque donc les autres sur les 8
 règlements réels qui couvrent plusieurs dossiers. La somme des `montantAffecte` vaut `montantBrut -
-montantBrutRestant`. Tableau vide = règlement encaissé mais pas encore imputé.
+montantBrutRestant`, sauf pour un règlement `CANCELED` : ses affectations restent listées (historique)
+mais il n'en compte aucune — `montantBrutRestant` = `montantBrut`, comme dans l'échéancier. Jamais
+vide : un règlement sans aucune ligne de vente n'est pas servi (404, voir ci-dessous).
+
+**Même filtre que la liste** : un décaissement (`IsCredit` ≠ 1) ou un règlement sans ligne de vente
+renvoie **404**, comme un id inconnu.
 
 **Cette réponse n'est pas filtrée par `?colonnes=`** — une fiche dit tout, là où une grille laisse
 choisir ses colonnes. Elle porte donc plus de clés que les lignes de la liste : celles hors
@@ -139,6 +173,6 @@ sélection par défaut, plus `affectations`. Aucune clé ne disparaît et aucune
 
 ### reponse 404
 
-Aucun StlSettlement pour cet id, ou encaissement hors du périmètre commercial de l'appelant — les
-deux cas sont volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque
+Aucun StlSettlement pour cet id, décaissement, règlement hors Vente, ou encaissement hors du
+périmètre commercial de l'appelant — ces cas sont volontairement indiscernables. Également renvoyé (plutôt qu'un 400) lorsque
 l'identifiant fourni n'est pas un UUID valide.

@@ -208,6 +208,21 @@ class FicheReservationTest {
         return folder.getId();
     }
 
+    /** B9 (FEATURE-vente-socle.md) : la première impression pose ContractPrintDate, les suivantes ne la changent pas. */
+    @Test
+    void premiereImpression_poseContractPrintDate_uneSeuleFois() throws Exception {
+        UUID dossierId = setUpDossier("B9");
+        java.time.LocalDateTime ancienne = java.time.LocalDateTime.of(2020, 1, 2, 3, 4);
+
+        mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-reservation", dossierId)).andExpect(status().isOk());
+        ComFolder apresPremiere = folderRepository.findById(dossierId).orElseThrow();
+        assertThat(apresPremiere.getContractPrintDate()).isNotNull();
+        apresPremiere.setContractPrintDate(ancienne);
+        mockMvc.perform(get("/api/dossiers/{id}/documents/fiche-reservation", dossierId)).andExpect(status().isOk());
+
+        assertThat(folderRepository.findById(dossierId).orElseThrow().getContractPrintDate()).isEqualTo(ancienne);
+    }
+
     @Test
     void getFicheReservation_pdf_returnsPdfBytes() throws Exception {
         UUID dossierId = setUpDossier("PDF");

@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -67,6 +68,47 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
     boolean existsVisible(@Param("id") UUID id);
 
     Page<ComFolder> findByCfgCustomerId(UUID customerId, Pageable pageable);
+
+    /**
+     * Le tiers, client principal ou acquéreur ({@code ComFolderCustomer}), a un dossier dont le statut
+     * transforme en client ({@code BoolField011}) et n'est ni annulé ni résilié — {@code Sale.cs:ManageTier}.
+     */
+    @Query("SELECT COUNT(f) > 0 FROM ComFolder f JOIN f.strStatus s "
+            + "WHERE (f.cfgCustomer.id = :tierId OR EXISTS (SELECT fc.id FROM ComFolderCustomer fc "
+            + "WHERE fc.comFolder = f AND fc.cfgTier.id = :tierId)) "
+            + "AND s.transformeProspectEnClient = true "
+            + "AND (s.annulation IS NULL OR s.annulation = false) "
+            + "AND (s.resiliation IS NULL OR s.resiliation = false)")
+    boolean aUnDossierActifClient(@Param("tierId") UUID tierId);
+
+    /** Même règle pour un dossier de location ({@code RntFolder}, sans entité) : statut {@code BoolField001} actif. */
+    @Query(value = "SELECT COUNT(*) FROM RntFolder r INNER JOIN StrStatus s ON s.PKey = r.StrStatusId "
+            + "WHERE r.CfgCustomerId = :tierId AND s.BoolField001 = 1 "
+            + "AND ISNULL(s.BoolField002, 0) = 0 AND ISNULL(s.BoolField003, 0) = 0", nativeQuery = true)
+    long compterLocationsActives(@Param("tierId") UUID tierId);
+
+    /** [id, code] des dossiers de vente créés depuis l'offre ({@code ComFolder.StlQuoteId}). */
+    @Query("SELECT f.id, f.code FROM ComFolder f WHERE f.stlQuoteId = :offreId ORDER BY f.code ASC")
+    List<Object[]> dossiersDeLOffre(@Param("offreId") UUID offreId);
+
+    /** {@code Prospection.cs:VerifComFolderIsCreated} : tout dossier de vente, sorti compris. */
+    boolean existsByComProspectionId(UUID prospectionId);
+
+    /** Codes des dossiers de location créés depuis l'offre ({@code RntFolder.StlQuoteId}, FK sans cascade). */
+    @Query(value = "SELECT ISNULL(r.Code, '') FROM RntFolder r WHERE r.StlQuoteId = :offreId ORDER BY r.Code ASC",
+            nativeQuery = true)
+    List<String> locationsDeLOffre(@Param("offreId") UUID offreId);
+
+    /** Dossiers de syndic rattachés et en cours (statut ni {@code BoolField001} ni {@code BoolField002}), {@code Sale.cs:BeforeUpdate}. */
+    @Query(value = "SELECT COUNT(*) FROM SynFolder sf INNER JOIN StrStatus s ON sf.StrStatusId = s.PKey "
+            + "WHERE s.BoolField001 = 0 AND s.BoolField002 = 0 AND sf.ComFolderId = :dossierId", nativeQuery = true)
+    long compterSyndicsEnCours(@Param("dossierId") UUID dossierId);
+
+    /** Factures du dossier nettes de leurs avoirs (HT, {@code REFUND} en négatif), {@code Sale.cs:Verif}. */
+    @Query(value = "SELECT ISNULL(SUM(l.TotalHT * IIF(d.DocType = 'REFUND', -1, 1)), 0) FROM StlDocumentLine l "
+            + "INNER JOIN StlDocument d ON l.StlDocumentId = d.PKey WHERE l.ComFolderId = :dossierId",
+            nativeQuery = true)
+    BigDecimal soldeFacturesNetDesAvoirs(@Param("dossierId") UUID dossierId);
 
     /** Tuple : [cfgCustomerId, nbDossiers]. */
     @Query("SELECT f.cfgCustomer.id, COUNT(f) FROM ComFolder f "

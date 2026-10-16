@@ -20,6 +20,8 @@ public record CreerDossierRequest(
         BigDecimal remisePercent,
         String notes,
         UUID modePaieId,
-        String cin
+        String cin,
+        @Schema(description = "Offre d'origine (StlQuote), optionnelle : contrôles et reprises décrits sur POST /api/dossiers.")
+        UUID offreId
 ) {
 }

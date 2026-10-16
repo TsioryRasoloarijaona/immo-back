@@ -356,6 +356,35 @@ class EncaissementColonnesEtGroupementTest {
                 .andExpect(jsonPath("$.content[?(@.cle=='DECAISS CGE')].agregats.montantBrut").value(500.00));
     }
 
+    /** D1 : un règlement annulé reste compté dans son groupe, mais sort de toutes les sommes de montants. */
+    @Test
+    void reglementAnnule_compteDansLeGroupeMaisHorsDesSommes() throws Exception {
+        StlSettlementType type = newType("TYPE-CGE-ANN", "ANNULE CGE");
+        StlSettlement valide = newEncaissement("CGE-ANN-1", new BigDecimal("300.00"));
+        valide.setStlSettlementType(type);
+        settlementRepository.save(valide);
+        StlSettlement annule = newEncaissement("CGE-ANN-2", new BigDecimal("700.00"));
+        annule.setStlSettlementType(type);
+        annule.setStatus("CANCELED");
+        settlementRepository.save(annule);
+        relireDepuisLaBase();
+
+        mockMvc.perform(get("/api/encaissements/groupes")
+                        .param("groupBy", "typeLibelle")
+                        .param("agregats", "montantBrut,montantNet,montantBrutRestant,montantBrut:AVG,"
+                                + "montantBrut:COUNT")
+                        .param("reference", "CGE-ANN-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].nombre").value(2))
+                .andExpect(jsonPath("$.content[0].agregats.montantBrut").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats.montantNet").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats.montantBrutRestant").value(0))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:AVG']").value(300.00))
+                .andExpect(jsonPath("$.content[0].agregats['montantBrut:COUNT']").value(2))
+                .andExpect(jsonPath("$.totaux.montantBrut").value(300.00))
+                .andExpect(jsonPath("$.nombreTotal").value(2));
+    }
+
     @Test
     void depliage_rendExactementLesLignesComptees() throws Exception {
         StlSettlementType vise = newType("TYPE-CGE-VISE", "VISE CGE");
@@ -815,5 +844,83 @@ class EncaissementColonnesEtGroupementTest {
         assertThat(fonctionsParColonne.get("dossierCode")).isEmpty();
         // Et le booléen historique reste vrai exactement quand SUM est offert.
         assertThat(fonctionsParColonne.get("etat")).containsExactly("COUNT");
+    }
+
+    // ------------------------------------------------------------------
+    // Lot 2 : totaux de la liste plate, pointage prévu
+    // ------------------------------------------------------------------
+
+    /** B1 : les totaux du filtre égalent la somme de toutes les pages, CANCELED compté mais hors des sommes. */
+    @Test
+    void totauxListePlate_egalentLaSommeDeToutesLesPagesHorsAnnules() throws Exception {
+        newEncaissement("CGE-TOT-1", new BigDecimal("1000.50"));
+        newEncaissement("CGE-TOT-2", new BigDecimal("2000.25"));
+        StlSettlement annule = newEncaissement("CGE-TOT-3", new BigDecimal("4000.00"));
+        annule.setStatus("CANCELED");
+        settlementRepository.save(annule);
+        relireDepuisLaBase();
+
+        BigDecimal sommePages = BigDecimal.ZERO;
+        for (int page = 0; page < 3; page++) {
+            String corps = mockMvc.perform(get("/api/encaissements").param("reference", "CGE-TOT-")
+                            .param("size", "1").param("page", String.valueOf(page))
+                            .param("colonnes", "montantBrut,etat"))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode ligne = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                    .readTree(corps).get("content").get(0);
+            if (!"CANCELED".equals(ligne.get("etat").asText())) {
+                sommePages = sommePages.add(ligne.get("montantBrut").decimalValue());
+            }
+        }
+
+        mockMvc.perform(get("/api/encaissements/totaux").param("reference", "CGE-TOT-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value(3))
+                .andExpect(jsonPath("$.montantBrut").value(sommePages.doubleValue()))
+                .andExpect(jsonPath("$.montantBrut").value(3000.75))
+                .andExpect(jsonPath("$.montantNet").value(3000.75))
+                .andExpect(jsonPath("$.montantBrutRestant").value(0));
+    }
+
+    /**
+     * B2 : {@code MotionDate} de {@code StlSettlementView} — un IN_WORK échu passe à aujourd'hui, un pointé garde sa
+     * date de règlement, une échéance à venir reste telle quelle.
+     */
+    @Test
+    void pointagePrevu_reporteAAujourdhuiUnReglementEchuNonPointe() throws Exception {
+        // Dates dans la plage smalldatetime de la base de CI (1900-01-01 .. 2079-06-06).
+        java.time.LocalDate jour = java.time.LocalDate.now();
+        StlSettlement echu = newEncaissement("CGE-PTG-1", new BigDecimal("100.00"));
+        echu.setEcheanceDate(jour.minusDays(10).atStartOfDay());
+        settlementRepository.save(echu);
+        StlSettlement pointe = newEncaissement("CGE-PTG-2", new BigDecimal("200.00"));
+        pointe.setStatus("POINTED");
+        pointe.setEcheanceDate(LocalDateTime.of(2024, 3, 1, 0, 0));
+        pointe.setSettlementDate(LocalDateTime.of(2024, 3, 5, 0, 0));
+        settlementRepository.save(pointe);
+        StlSettlement aVenir = newEncaissement("CGE-PTG-3", new BigDecimal("300.00"));
+        java.time.LocalDate futur = jour.plusYears(5);
+        aVenir.setEcheanceDate(futur.atStartOfDay());
+        settlementRepository.save(aVenir);
+        relireDepuisLaBase();
+        // Horloge de SQL Server, comme la vue OMRAN (même machine que la JVM en local comme en CI).
+        String aujourdhui = jour.toString();
+
+        mockMvc.perform(get("/api/encaissements").param("reference", "CGE-PTG-")
+                        .param("colonnes", "reference,pointagePrevu").param("sort", "pointagePrevu,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].reference").value("CGE-PTG-2"))
+                .andExpect(jsonPath("$.content[0].pointagePrevu").value(Matchers.startsWith("2024-03-05")))
+                .andExpect(jsonPath("$.content[1].reference").value("CGE-PTG-1"))
+                .andExpect(jsonPath("$.content[1].pointagePrevu").value(Matchers.startsWith(aujourdhui)))
+                .andExpect(jsonPath("$.content[2].pointagePrevu").value(Matchers.startsWith(futur.toString())));
+
+        mockMvc.perform(get("/api/encaissements").param("reference", "CGE-PTG-")
+                        .param("champDate", "POINTAGE_PREVU")
+                        .param("dateDebut", futur + "T00:00:00").param("dateFin", futur + "T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].reference").value("CGE-PTG-3"));
     }
 }

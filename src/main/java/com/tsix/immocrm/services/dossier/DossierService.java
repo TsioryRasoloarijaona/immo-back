@@ -1,21 +1,14 @@
 package com.tsix.immocrm.services.dossier;
 
-import com.tsix.immocrm.domain.AgregatDemande;
-import com.tsix.immocrm.domain.ChampDateDossier;
 import com.tsix.immocrm.domain.Chemin;
-import com.tsix.immocrm.domain.Granularite;
-import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
-import com.tsix.immocrm.domain.EtapeMilestone;
+import com.tsix.immocrm.domain.DisponibiliteArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
-import com.tsix.immocrm.domain.TransitionsValidees;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.dossier.ArticleSummaryDto;
-import com.tsix.immocrm.dto.dossier.CategorieMontantDto;
-import com.tsix.immocrm.dto.dossier.SyntheseMontantDto;
 import com.tsix.immocrm.dto.dossier.ChangerStatutRequest;
 import com.tsix.immocrm.dto.dossier.CreerDossierRequest;
 import com.tsix.immocrm.dto.dossier.DossierDetailDto;
@@ -25,6 +18,7 @@ import com.tsix.immocrm.dto.dossier.LigneSchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.MontantsDossierDto;
 import com.tsix.immocrm.dto.dossier.SchemaFinancementDto;
 import com.tsix.immocrm.dto.dossier.SimulerSchemaFinancementRequest;
+import com.tsix.immocrm.dto.dossier.TransitionSuggereeDto;
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -37,45 +31,36 @@ import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.entities.com.ComProspectionKind;
 import com.tsix.immocrm.entities.com.ComProspectionOrigin;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
-import com.tsix.immocrm.entities.stk.StkBuilding;
-import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItem;
-import com.tsix.immocrm.entities.stk.StkItemCategory;
-import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.adm.AdmUser;
-import com.tsix.immocrm.entities.str.StrHistory;
-import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
+import com.tsix.immocrm.entities.stl.StlQuoteDocument;
 import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
-import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
-import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
-import com.tsix.immocrm.repositories.str.StrHistoryRepository;
-import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
-import com.tsix.immocrm.services.groupement.GroupementService;
-import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.services.dossier.OffreOrigineDossier.OffreRetenue;
+import com.tsix.immocrm.services.dossier.liste.FiltresListeDossiers;
+import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
+import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
+import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
+import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
-import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
-import jakarta.persistence.criteria.Predicate;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,17 +69,17 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import static java.util.Objects.requireNonNullElse;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -105,49 +90,50 @@ public class DossierService {
 
     private static final String DOSSIER_INTROUVABLE = "Dossier introuvable: ";
     private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
+    private static final String CAUSE_OBLIGATOIRE = "La cause est obligatoire pour une annulation ou un désistement";
+    static final String DOSSIER_SANS_STATUT =
+            "Dossier sans statut : reprise nécessaire (script instructions/sql/VENTE-reprise-interop.sql)";
+    static final String SEUIL_IGNORE = "Seuil de versement non vérifié (Administrateur) pour le statut ";
 
     private final ComFolderRepository folderRepository;
     private final StkItemRepository stkItemRepository;
     private final ComProspectionRepository prospectionRepository;
     private final StrStatusRepository strStatusRepository;
     private final ComDocumentRepository documentRepository;
-    private final StlSettlementLineRepository settlementLineRepository;
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final CfgTierRepository tierRepository;
     private final ComSettlementCategoryRepository settlementCategoryRepository;
-    private final StrFolderStatusHistoryRepository statusHistoryRepository;
     private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
-    private final GroupementService groupementService;
-    private final ComActionMessageRepository actionMessageRepository;
-    private final StrHistoryRepository strHistoryRepository;
     private final UtilisateurAffiche utilisateurAffiche;
     private final AlerteRelanceService alerteRelanceService;
     private final TransformationProspectClient transformationProspectClient;
     private final Clock clock;
+    private final LiberationLot liberationLot;
+    private final CreationDossierOmran creationOmran;
+    private final HistoriqueDossier historique;
+    private final LigneEcheancierOmran ligneOmran;
+    private final ControleSortieDossier controleSortie;
+    private final MontantsDossier montantsDossier;
+    private final WorkflowDossier workflow;
+    private final OffreOrigineDossier offreOrigine;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
-                           ComDocumentRepository documentRepository, StlSettlementLineRepository settlementLineRepository,
+                           ComDocumentRepository documentRepository,
                            ComPaymentMethodRepository paymentMethodRepository, CfgTierRepository tierRepository,
                            ComSettlementCategoryRepository settlementCategoryRepository,
-                           StrFolderStatusHistoryRepository statusHistoryRepository,
                            GenerateurCodeSequence generateurCode,
                            PerimetreCommercialService perimetreService,
-                           GroupementService groupementService,
-                           ComActionMessageRepository actionMessageRepository,
-                           StrHistoryRepository strHistoryRepository,
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
                            TransformationProspectClient transformationProspectClient,
-                           Clock clock) {
+                           Clock clock, LiberationLot liberationLot, EcrituresOmranDossier ecrituresOmran) {
         this.clock = clock;
+        this.liberationLot = liberationLot;
         this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
         this.perimetreService = perimetreService;
-        this.groupementService = groupementService;
-        this.actionMessageRepository = actionMessageRepository;
-        this.strHistoryRepository = strHistoryRepository;
         this.utilisateurAffiche = utilisateurAffiche;
         this.folderRepository = folderRepository;
         this.stkItemRepository = stkItemRepository;
@@ -155,11 +141,16 @@ public class DossierService {
         this.documentRepository = documentRepository;
         this.settlementCategoryRepository = settlementCategoryRepository;
         this.strStatusRepository = strStatusRepository;
-        this.settlementLineRepository = settlementLineRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.tierRepository = tierRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
         this.generateurCode = generateurCode;
+        this.creationOmran = ecrituresOmran.creation();
+        this.historique = ecrituresOmran.historique();
+        this.ligneOmran = ecrituresOmran.ligneEcheancier();
+        this.controleSortie = ecrituresOmran.controleSortie();
+        this.montantsDossier = ecrituresOmran.montants();
+        this.workflow = ecrituresOmran.workflow();
+        this.offreOrigine = ecrituresOmran.offreOrigine();
     }
 
     /**
@@ -176,119 +167,36 @@ public class DossierService {
         return prefixe + " " + generateurCode.suivant(GenerateurCodeSequence.SEQUENCE_DOSSIER, 4, 5);
     }
 
-    public Page<DossierListItemDto> findAll(List<String> statuts, UUID commercial, UUID projet,
-            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, ColonneDossier groupeColonne, String groupeValeur,
-            Granularite granularite, Pageable pageable, Set<ColonneDossier> colonnes) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(statuts, commercial, projet, trancheIds,
-                champDate, dateDebut, dateFin, search));
-        if (groupeColonne != null) {
-            // Dépliage d'un groupe : la même expression de clé que /groupes, donc une valeur
-            // réémise telle quelle par le front retombe exactement sur les lignes comptées.
-            spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
-                    root, cb, groupeColonne.chemin(), granularite, groupeValeur));
-        }
-        return folderRepository.findAll(spec.and(perimetreService.filtreDossiers()), pageable)
-                .map(f -> toListItem(f, colonnes));
-    }
-
-    /** Même {@link #specDossiers} et même périmètre que la liste : la somme des groupes retombe sur son total. */
-    public ResultatGroupement grouper(List<String> statuts, UUID commercial, UUID projet,
-            List<UUID> trancheIds, ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-            String search, ColonneDossier groupeBy, Granularite granularite,
-            List<AgregatDemande> agregats, TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(statuts, commercial, projet, trancheIds,
-                champDate, dateDebut, dateFin, search))
-                .and(perimetreService.filtreDossiers());
-        return groupementService.grouper(ComFolder.class, spec, groupeBy.chemin(), granularite,
-                agregats, tri, inclureSansValeur, pageable);
-    }
-
     /**
-     * Assiette du tableau de bord par tranche : même spec et même périmètre que {@link #findAll},
+     * Assiette du tableau de bord par tranche : même spec et même périmètre que la liste, sortis compris,
      * pour retomber sur son total ({@code FEATURE-dashboard-filtre-tranche.md} R2/R3).
      */
     public Set<UUID> idsDossiersDeTranche(UUID trancheId) {
-        Specification<ComFolder> spec = specDossiers(new FiltresDossiers(null, null, null, List.of(trancheId),
-                null, null, null, null))
+        Specification<ComFolder> spec = SpecificationsListeDossiers.de(FiltresListeDossiers.deTranche(trancheId),
+                        Optional.empty())
                 .and(perimetreService.filtreDossiers());
         return folderRepository.findAll(spec).stream()
                 .map(ComFolder::getId)
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    /** Filtres de la liste des dossiers, tels que reçus du contrôleur. */
-    private record FiltresDossiers(List<String> statuts, UUID commercial, UUID projet, List<UUID> trancheIds,
-                                   ChampDateDossier champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
-                                   String search) {
-    }
-
-    /** Sans le périmètre commercial, que chaque appelant ajoute explicitement. */
-    private static Specification<ComFolder> specDossiers(FiltresDossiers filtres) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (filtres.statuts() != null && !filtres.statuts().isEmpty()) {
-                List<String> statutsLower = filtres.statuts().stream().map(String::toLowerCase).toList();
-                predicates.add(cb.lower(root.get("strStatus").get("code")).in(statutsLower));
-            }
-            if (filtres.commercial() != null) {
-                predicates.add(cb.equal(root.get("cfgCommercial").get("id"), filtres.commercial()));
-            }
-            if (filtres.projet() != null) {
-                // Par la tranche de l'article principal, jamais StkItem.CfgProjectId, colonne morte
-                // (FEATURE-perimetre-commercial.md, piège 1).
-                predicates.add(cb.equal(
-                        root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), filtres.projet()));
-            }
-            if (filtres.trancheIds() != null && !filtres.trancheIds().isEmpty()) {
-                // Partagé avec le tableau de bord et GET /api/clients (FEATURE-dashboard-filtre-tranche.md R2).
-                predicates.add(AppartenanceTranche.dossier(root, query, cb, filtres.trancheIds()));
-            }
-            ajouterFiltreDates(predicates, root, cb, filtres);
-            if (StringUtils.hasText(filtres.search())) {
-                predicates.add(predicatRecherche(root, cb, filtres.search()));
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
-    }
-
-    private static void ajouterFiltreDates(List<Predicate> predicates, jakarta.persistence.criteria.Root<ComFolder> root,
-                                           jakarta.persistence.criteria.CriteriaBuilder cb, FiltresDossiers filtres) {
-        LocalDateTime dateDebut = filtres.dateDebut();
-        LocalDateTime dateFin = filtres.dateFin();
-        if (dateDebut == null && dateFin == null) {
-            return;
-        }
-        ChampDateDossier champDate = filtres.champDate() != null ? filtres.champDate() : ChampDateDossier.RESERVATION;
-        jakarta.persistence.criteria.Path<LocalDateTime> colonne = root.get(champDate.getChampEntite());
-        if (dateDebut != null) {
-            predicates.add(cb.greaterThanOrEqualTo(colonne, dateDebut));
-        }
-        if (dateFin != null) {
-            predicates.add(cb.lessThanOrEqualTo(colonne, dateFin));
-        }
-    }
-
-    private static Predicate predicatRecherche(jakarta.persistence.criteria.Root<ComFolder> root,
-                                               jakarta.persistence.criteria.CriteriaBuilder cb, String search) {
-        String pattern = "%" + search.toLowerCase() + "%";
-        jakarta.persistence.criteria.Join<ComFolder, CfgTier> client = root.join("cfgCustomer",
-                jakarta.persistence.criteria.JoinType.LEFT);
-        return cb.or(
-                cb.like(cb.lower(root.get("code")), pattern),
-                cb.like(cb.lower(client.get("lastName")), pattern),
-                cb.like(cb.lower(client.get("firstName")), pattern),
-                cb.like(cb.lower(client.get("socialReason")), pattern)
-        );
-    }
-
     public DossierDetailDto findById(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
-        List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
+        return toDetail(folder, articlesDuDossier(folder));
+    }
+
+    /**
+     * Dossier actif : ses articles liés ({@code StkItem.ComFolderId}). Dossier sorti : ses articles
+     * ont été libérés, il montre son lot principal ({@code ComFolder.StkItemId}). FEATURE-liberer-lot.md R8.
+     */
+    private List<ArticleSummaryDto> articlesDuDossier(ComFolder folder) {
+        if (estSorti(folder) && folder.getStkItem() != null) {
+            return List.of(toArticleSummary(folder.getStkItem()));
+        }
+        return stkItemRepository.findByComFolderId(folder.getId()).stream()
                 .map(DossierService::toArticleSummary)
                 .toList();
-        return toDetail(folder, articles);
     }
 
     /**
@@ -315,12 +223,15 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
+        Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
+                request.articleIds().get(0));
+        PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
 
         List<StkItem> articles = new ArrayList<>();
         for (UUID articleId : request.articleIds()) {
             StkItem item = stkItemRepository.findById(articleId)
                     .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId));
-            if (item.getComFolderId() != null) {
+            if (DisponibiliteArticle.estOccupe(item)) {
                 throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + articleId);
             }
             articles.add(item);
@@ -333,61 +244,106 @@ public class DossierService {
                     "Création de dossier sur l'article " + article.getCode());
         }
 
-        CfgTier client = prospection.getCfgProspect();
-        client.setIDNumber(request.cin());
-        tierRepository.save(client);
+        // OMRAN refuse un dossier sans statut : contrôlé avant la première écriture.
+        StrStatus statutInitial = creationOmran.statutInitial();
 
+        CfgTier client = prospection.getCfgProspect();
+        StkItem principal = articles.get(0);
+        List<StkItem> annexes = annexesDuDossier(principal, articles.subList(1, articles.size()));
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
-        folder.setDocDate(LocalDateTime.now(clock));
-        folder.setUserCreate(utilisateurAffiche.courant().nom());
-        folder.setUserCreateDateTime(LocalDateTime.now(clock));
-        folder.setCode(genererCodeDossier(articles.get(0)));
-        // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) ne portent que le
-        // lien inverse StkItem.ComFolderId, posé plus bas.
-        folder.setStkItem(articles.get(0));
-        folder.setStkVocation(articles.get(0).getStkVocation());
+        folder.setDocDate(LocalDate.now(clock).atStartOfDay());
+        // ComFolder.StkItemId = le lot principal ; les annexes (TER, PARKING) sont ses sous-articles.
+        folder.setStkItem(principal);
+        folder.setStkVocation(principal.getStkVocation());
         folder.setCfgCustomer(client);
-        folder.setCfgCommercial(prospection.getCfgCommercial());
+        // Depuis une offre, son commercial (Quote.cs:2394), à défaut celui de la prospection.
+        folder.setCfgCommercial(offre.map(o -> o.offre().getCfgCommercial()).orElse(prospection.getCfgCommercial()));
         folder.setComProspection(prospection);
+        folder.setStlQuoteId(offre.map(o -> o.offre().getId()).orElse(null));
         folder.setNotes(request.notes());
         folder.setComPaymentMethod(modePaie);
-        // Tout dossier réel commence en RESERVATION. Ligne StrStatus absente : on crée quand même.
-        StrStatus statutInitial = strStatusRepository.findByStrConfigEntityIdAndCode(
-                StatutDossier.CONFIG_ENTITY_ID, StatutDossier.RESERVATION.getCode());
         folder.setStrStatus(statutInitial);
 
-        CfgTranche tranche = articles.get(0).getStkHierarchy();
-        if (request.prix() != null) {
-            List<StkItem> annexes = articles.size() > 1 ? articles.subList(1, articles.size()) : List.of();
-            BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
-                    .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
-                    .map(SchemaFinancementCalculator.Ligne::montant)
-                    .findFirst().orElse(BigDecimal.ZERO);
-            appliquerMontants(folder, articles.get(0), annexes, request.prix(), request.remisePercent(), fraisSyndic);
-        }
+        CfgTranche tranche = principal.getStkHierarchy();
+        appliquerMontantsCreation(folder, principal, new AnnexesPrix(annexes, prixAnnexes), tranche, request);
+        // Dernier contrôle, sur le prix calculé : les écritures (tiers, compteur du code) ne commencent qu'après.
+        BigDecimal prixApresRemise = folder.getPriceAfterDiscount();
+        offre.ifPresent(o -> offreOrigine.verifierEcheancier(o, prixApresRemise));
+
+        client.setIDNumber(request.cin());
+        tierRepository.save(client);
+        folder.setCode(genererCodeDossier(principal));
+        creationOmran.completer(folder, principal, annexes, client);
+        // Le formulaire ne saisit pas la commission : celle de l'offre, comme GenerateComFolderFromQuote.
+        offre.map(o -> o.offre().getCommissionRate()).ifPresent(folder::setCommissionRate);
 
         folder = folderRepository.save(folder);
-        if (statutInitial != null) {
-            enregistrerHistoriqueStatut(folder, statutInitial, null);
-            basculerProspectEnClient(folder, statutInitial);
-        }
+        creationOmran.rattacherAnnexes(folder, principal, annexes, prixAnnexes);
+        creationOmran.historiserCreation(folder, principal);
+        principal.setComFolderId(folder.getId());
+        stkItemRepository.save(principal);
 
-        for (StkItem item : articles) {
-            item.setComFolderId(folder.getId());
-            stkItemRepository.save(item);
-        }
-
-        if (request.prix() != null) {
-            // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
-            // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû.
-            genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount());
-        }
+        List<ComDocument> echeancier = echeancierInitial(folder, tranche, request.prix(),
+                offre.map(OffreRetenue::schema).orElse(List.of()));
+        creationOmran.completerAvecEcheancier(folder, echeancier);
+        folder = folderRepository.save(folder);
+        synchroniserTypeTiers(folder);
 
         cloturerLaProspection(prospection);
 
-        List<ArticleSummaryDto> articleDtos = articles.stream().map(DossierService::toArticleSummary).toList();
+        List<ArticleSummaryDto> articleDtos = Stream.concat(Stream.of(principal), annexes.stream())
+                .map(DossierService::toArticleSummary).toList();
         return toDetail(folder, articleDtos);
+    }
+
+    /**
+     * Annexes saisies, puis tous les sous-articles libres du lot ({@code ParentId}) même non saisis : OMRAN
+     * les prend tous ({@code Sale.cs:SetStkItemId}) ; ils entrent dans les prix des sous-articles.
+     */
+    private List<StkItem> annexesDuDossier(StkItem principal, List<StkItem> saisies) {
+        List<StkItem> annexes = new ArrayList<>(saisies);
+        Set<UUID> deja = new HashSet<>();
+        deja.add(principal.getId());
+        saisies.forEach(a -> deja.add(a.getId()));
+        stkItemRepository.findByParentId(principal.getId()).stream()
+                .filter(enfant -> enfant.getComFolderId() == null && deja.add(enfant.getId()))
+                .sorted(Comparator.comparing(StkItem::getCode, Comparator.nullsLast(Comparator.naturalOrder())))
+                .forEach(annexes::add);
+        return List.copyOf(annexes);
+    }
+
+    /**
+     * Montants toujours écrits, comme OMRAN : sans {@code prix} saisi, le prix de référence des articles
+     * (0 s'ils n'en ont pas), sans frais de syndic puisqu'aucun schéma n'est généré.
+     */
+    private void appliquerMontantsCreation(ComFolder folder, StkItem principal, AnnexesPrix annexes,
+                                           CfgTranche tranche, CreerDossierRequest request) {
+        PrixArticle.PrixDeReference prixLot = prixDuLotSeul(principal);
+        if (request.prix() == null) {
+            BigDecimal prixReference = annexes.articles().stream()
+                    .map(annexes.prix()::ttc)
+                    .reduce(prixLot != null ? prixLot.ttc() : BigDecimal.ZERO, BigDecimal::add);
+            appliquerMontants(folder, principal, prixLot, annexes, prixReference, request.remisePercent(), BigDecimal.ZERO);
+            return;
+        }
+        BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
+                .filter(ligne -> "FRAIS SYNDIC".equals(ligne.categorieCode()))
+                .map(SchemaFinancementCalculator.Ligne::montant)
+                .findFirst().orElse(BigDecimal.ZERO);
+        appliquerMontants(folder, principal, prixLot, annexes, request.prix(), request.remisePercent(), fraisSyndic);
+    }
+
+    /** Prix de référence du lot hors sous-articles, qui sont comptés comme annexes ; null sans prix. */
+    private PrixArticle.PrixDeReference prixDuLotSeul(StkItem principal) {
+        return PrixArticle.prixDuLotSeul(principal, stkItemRepository.findByParentId(principal.getId())).orElse(null);
+    }
+
+    /** Lot sans sous-article connu : son prix de référence tel quel. */
+    static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
+                                  BigDecimal prixNegocie, BigDecimal remisePercent, BigDecimal fraisSyndic) {
+        appliquerMontants(folder, principal, PrixArticle.prixDeReference(principal).orElse(null), annexes,
+                prixNegocie, remisePercent, fraisSyndic);
     }
 
     /**
@@ -395,22 +351,34 @@ public class DossierService {
      * Remise explicite : {@code prixNegocie} est le total (principal + annexes) <b>avant</b> remise ;
      * sinon c'est le prix <b>après</b> remise et le taux s'en déduit. {@code TotalToPay} = prix après remise TTC + frais syndic.
      */
-    static void appliquerMontants(ComFolder folder, StkItem principal, List<StkItem> annexes,
-                                           BigDecimal prixNegocie, BigDecimal remisePercent,
-                                           BigDecimal fraisSyndic) {
+    static void appliquerMontants(ComFolder folder, StkItem principal, PrixArticle.PrixDeReference prixLot,
+                                  List<StkItem> annexes, BigDecimal prixNegocie, BigDecimal remisePercent,
+                                  BigDecimal fraisSyndic) {
+        appliquerMontants(folder, principal, prixLot, new AnnexesPrix(annexes, PrixSousArticles.CATALOGUE),
+                prixNegocie, remisePercent, fraisSyndic);
+    }
+
+    /** Sous-articles du dossier et la source de leurs prix (offre d'origine ou catalogue). */
+    record AnnexesPrix(List<StkItem> articles, PrixSousArticles prix) {
+    }
+
+    static void appliquerMontants(ComFolder folder, StkItem principal, PrixArticle.PrixDeReference prixLot,
+                                  AnnexesPrix annexes, BigDecimal prixNegocie, BigDecimal remisePercent,
+                                  BigDecimal fraisSyndic) {
         boolean remiseExplicite = remisePercent != null;
         BigDecimal vatRatio = principal.getVat() != null ? principal.getVat() : BigDecimal.ZERO;
 
         BigDecimal underItemsPrice = BigDecimal.ZERO;
         BigDecimal underItemsPriceHT = BigDecimal.ZERO;
-        for (StkItem annexe : annexes) {
-            BigDecimal prixAnnexe = PrixArticle.ttcOuZero(annexe);
-            BigDecimal prixAnnexeHT = PrixArticle.htOuZero(annexe, vatRatio);
+        for (StkItem annexe : annexes.articles()) {
+            BigDecimal prixAnnexe = annexes.prix().ttc(annexe);
+            // HT du sous-article à son propre taux (un jardin est souvent à 0 %), comme son SalePriceHT chez OMRAN.
+            BigDecimal prixAnnexeHT = annexes.prix().ht(annexe, vatRatio);
             underItemsPrice = underItemsPrice.add(prixAnnexe);
             underItemsPriceHT = underItemsPriceHT.add(prixAnnexeHT);
         }
 
-        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(principal, prixNegocie, remiseExplicite,
+        PrixTtcHt prixPrincipal = prixPrincipalAvantRemise(prixLot, prixNegocie, remiseExplicite,
                 vatRatio, underItemsPrice);
         BigDecimal itemPrice = prixPrincipal.ttc();
         BigDecimal itemPriceHT = prixPrincipal.ht();
@@ -418,33 +386,19 @@ public class DossierService {
         BigDecimal priceBeforeDiscount = itemPrice.add(underItemsPrice);
         BigDecimal priceBeforeDiscountHT = itemPriceHT.add(underItemsPriceHT);
 
-        BigDecimal discountAmount;
-        BigDecimal discountAmountHT;
-        BigDecimal priceAfterDiscount;
-        BigDecimal priceAfterDiscountHT;
-        if (remiseExplicite) {
-            discountAmount = priceBeforeDiscount.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-            discountAmountHT = priceBeforeDiscountHT.multiply(remisePercent)
-                    .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-            priceAfterDiscount = priceBeforeDiscount.subtract(discountAmount);
-            priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
-        } else {
-            priceAfterDiscount = prixNegocie;
-            priceAfterDiscountHT = diviserParTaux(priceAfterDiscount, vatRatio);
-            discountAmount = priceBeforeDiscount.subtract(priceAfterDiscount);
-            discountAmountHT = priceBeforeDiscountHT.subtract(priceAfterDiscountHT);
-        }
-
-        // Remise répartie au prorata HT entre principal et annexes, comme DevisService#calculerMontants.
-        BigDecimal partPrincipal = priceBeforeDiscountHT.signum() != 0
-                ? itemPriceHT.divide(priceBeforeDiscountHT, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
-        BigDecimal itemPriceAfterHT = itemPriceHT.subtract(discountAmountHT.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal itemPriceAfter = itemPrice.subtract(discountAmount.multiply(partPrincipal)).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal underItemsPriceAfterHT = underItemsPriceHT
-                .subtract(discountAmountHT.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal underItemsPriceAfter = underItemsPrice
-                .subtract(discountAmount.multiply(BigDecimal.ONE.subtract(partPrincipal))).setScale(6, RoundingMode.HALF_UP);
+        // Sale.cs:RecalcDiscount : un seul taux, appliqué au HT du lot et de chaque sous-article ; sans taux
+        // saisi, il se déduit des TTC (prix négocié / prix avant remise), jamais d'un HT à TVA unique.
+        BigDecimal taux = tauxDeRemise(remisePercent, prixNegocie, priceBeforeDiscount);
+        BigDecimal resteATaux = BigDecimal.ONE.subtract(taux);
+        BigDecimal discountAmountHT = priceBeforeDiscountHT.multiply(taux).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal priceAfterDiscountHT = priceBeforeDiscountHT.subtract(discountAmountHT);
+        BigDecimal itemPriceAfterHT = itemPriceHT.multiply(resteATaux).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal underItemsPriceAfterHT = priceAfterDiscountHT.subtract(itemPriceAfterHT);
+        BigDecimal itemPriceAfter = itemPriceAfterHT.multiply(BigDecimal.ONE.add(vatRatio)).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal priceAfterDiscount = remiseExplicite
+                ? priceBeforeDiscount.subtract(priceBeforeDiscount.multiply(taux).setScale(6, RoundingMode.HALF_UP))
+                : prixNegocie;
+        BigDecimal underItemsPriceAfter = priceAfterDiscount.subtract(itemPriceAfter);
 
         folder.setVATRatio(vatRatio);
         folder.setItemPrice(itemPrice);
@@ -472,7 +426,25 @@ public class DossierService {
     private record PrixTtcHt(BigDecimal ttc, BigDecimal ht) {
     }
 
-    private static PrixTtcHt prixPrincipalAvantRemise(StkItem principal, BigDecimal prixNegocie,
+    private static final BigDecimal DEMI_CENTIME = new BigDecimal("0.005");
+
+    /** Taux 0–1 : celui saisi, sinon l'écart du prix négocié au prix avant remise, en TTC ; 0 sans base. */
+    static BigDecimal tauxDeRemise(BigDecimal remisePercent, BigDecimal prixNegocie, BigDecimal prixAvantRemise) {
+        if (remisePercent != null) {
+            return remisePercent.divide(BigDecimal.valueOf(100), 20, RoundingMode.HALF_UP);
+        }
+        if (prixNegocie == null || prixAvantRemise.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal ecart = prixAvantRemise.subtract(prixNegocie);
+        // Un écart sous le demi-centime vient de l'arrondi du prix saisi (prix de base à 6 décimales) : pas une remise.
+        if (ecart.abs().compareTo(DEMI_CENTIME) < 0) {
+            return BigDecimal.ZERO;
+        }
+        return ecart.divide(prixAvantRemise, 20, RoundingMode.HALF_UP);
+    }
+
+    private static PrixTtcHt prixPrincipalAvantRemise(PrixArticle.PrixDeReference reference, BigDecimal prixNegocie,
                                                       boolean remiseExplicite, BigDecimal vatRatio,
                                                       BigDecimal prixAnnexes) {
         if (remiseExplicite && prixNegocie != null) {
@@ -485,9 +457,8 @@ public class DossierService {
             BigDecimal itemPrice = prixNegocie.subtract(prixAnnexes);
             return new PrixTtcHt(itemPrice, diviserParTaux(itemPrice, vatRatio));
         }
-        Optional<PrixArticle.PrixDeReference> reference = PrixArticle.prixDeReference(principal);
-        if (reference.isPresent()) {
-            return new PrixTtcHt(reference.get().ttc(), reference.get().ht(vatRatio));
+        if (reference != null) {
+            return new PrixTtcHt(reference.ttc(), reference.ht(vatRatio));
         }
         // Sans prix de référence, la base avant remise est le prix négocié : remise nulle.
         BigDecimal itemPrice = prixNegocie != null ? prixNegocie : BigDecimal.ZERO;
@@ -509,28 +480,60 @@ public class DossierService {
     }
 
     /**
+     * Le schéma saisi sur l'offre d'origine ({@code StlQuoteDocument}) s'il y en a un, comme
+     * {@code GenerateComFolderFromQuote} ; sinon le schéma par défaut, et rien sans prix saisi.
+     */
+    private List<ComDocument> echeancierInitial(ComFolder folder, CfgTranche tranche, BigDecimal prixSaisi,
+                                                List<StlQuoteDocument> schemaOffre) {
+        if (!schemaOffre.isEmpty()) {
+            return schemaOffre.stream()
+                    .map(ligne -> {
+                        ComDocument document = nouvelleEcheance(folder, ligne.getComSettlementCategory(),
+                                ligne.getAmount(), ligne.getDocDate(), ligne.getDiscountRatio());
+                        if (ligne.getCfgCompany() != null) {
+                            document.setCfgCompany(ligne.getCfgCompany());
+                        }
+                        return documentRepository.save(document);
+                    })
+                    .toList();
+        }
+        // Base = prix APRÈS remise, pas le `prix` de la requête : avec une remise explicite,
+        // AVANCE et AUTO-FINANCEMENT portent sur le prix réellement dû.
+        return prixSaisi != null ? genererSchemaFinancement(folder, tranche, folder.getPriceAfterDiscount()) : List.of();
+    }
+
+    /**
      * Une échéance {@code ComDocument} par ligne ; catégorie cherchée par {@code Code} dans la
      * vocation du dossier, ligne ignorée si elle n'y existe pas (la création n'est jamais bloquée).
      */
-    private void genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
+    private List<ComDocument> genererSchemaFinancement(ComFolder folder, CfgTranche tranche, BigDecimal prix) {
         UUID vocationId = folder.getStkVocation().getId();
-        String auteur = utilisateurAffiche.courant().nom();
+        List<ComDocument> lignes = new ArrayList<>();
         for (SchemaFinancementCalculator.Ligne ligne : SchemaFinancementCalculator.calculer(tranche, prix)) {
             settlementCategoryRepository.findByCodeAndStkVocationId(ligne.categorieCode(), vocationId)
-                    .ifPresent(categorie -> {
-                        ComDocument document = new ComDocument();
-                        document.setId(UUID.randomUUID());
-                        document.setComFolder(folder);
-                        document.setDocDate(LocalDateTime.now(clock));
-                        document.setUserCreate(auteur);
-                        document.setUserCreateDateTime(LocalDateTime.now(clock));
-                        document.setAmount(ligne.montant());
-                        document.setComSettlementCategory(categorie);
-                        document.setExcludeFromPrice(categorie.getExcludeFromPrice());
-                        document.setDescription(categorie.getDescription());
-                        documentRepository.save(document);
-                    });
+                    .ifPresent(categorie -> lignes.add(documentRepository.save(
+                            nouvelleEcheance(folder, categorie, ligne.montant(), null, null))));
         }
+        return lignes;
+    }
+
+    /** Seule construction d'une échéance initiale ; date absente = date du dossier, remise absente = défaut OMRAN. */
+    private ComDocument nouvelleEcheance(ComFolder folder, ComSettlementCategory categorie, BigDecimal montant,
+                                         LocalDateTime date, BigDecimal ratioRemise) {
+        ComDocument document = new ComDocument();
+        document.setId(UUID.randomUUID());
+        document.setComFolder(folder);
+        document.setDocDate(date != null ? date : folder.getDocDate());
+        ligneOmran.signerCreation(document);
+        document.setAmount(montant);
+        document.setComSettlementCategory(categorie);
+        document.setDiscountRatio(ratioRemise);
+        if (categorie != null) {
+            document.setExcludeFromPrice(categorie.getExcludeFromPrice());
+            document.setDescription(categorie.getDescription());
+        }
+        ligneOmran.completer(document, folder);
+        return document;
     }
 
     /**
@@ -546,11 +549,12 @@ public class DossierService {
 
         StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
                 .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + request.articleIds().get(0)));
-        // Les articles suivants sont les annexes du calcul de remise, comme à la création.
-        List<StkItem> annexes = request.articleIds().subList(1, request.articleIds().size()).stream()
+        // Les articles suivants, puis les sous-articles libres du lot : mêmes annexes qu'à la création.
+        List<StkItem> saisies = request.articleIds().subList(1, request.articleIds().size()).stream()
                 .map(articleId -> stkItemRepository.findById(articleId)
                         .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId)))
                 .toList();
+        List<StkItem> annexes = annexesDuDossier(premierArticle, saisies);
 
         UUID vocationId = premierArticle.getStkVocation().getId();
         CfgTranche tranche = premierArticle.getStkHierarchy();
@@ -558,7 +562,8 @@ public class DossierService {
         // appliquerMontants sur un ComFolder jetable, jamais persisté, plutôt qu'une copie de la
         // formule : la simulation ne peut pas diverger de POST /api/dossiers.
         ComFolder apercu = new ComFolder();
-        appliquerMontants(apercu, premierArticle, annexes, request.prix(), request.remisePercent(), BigDecimal.ZERO);
+        appliquerMontants(apercu, premierArticle, prixDuLotSeul(premierArticle), annexes, request.prix(),
+                request.remisePercent(), BigDecimal.ZERO);
         BigDecimal prixApresRemise = apercu.getPriceAfterDiscount();
 
         List<LigneSchemaFinancementDto> lignes = SchemaFinancementCalculator.calculer(tranche, prixApresRemise).stream()
@@ -574,13 +579,18 @@ public class DossierService {
 
         // DiscountAmount est HT (convention OMRAN) : le montant TTC de la réponse est l'écart des prix TTC.
         return new SchemaFinancementDto(lignes, totalGeneral, apercu.getPriceBeforeDiscount(),
-                apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
-                ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise);
+                apercu.getDiscount().signum() == 0 ? BigDecimal.ZERO : apercu.getPriceBeforeDiscount().subtract(prixApresRemise),
+                ConventionRemise.pourcentage(apercu.getDiscount()), prixApresRemise,
+                annexes.subList(saisies.size(), annexes.size()).stream()
+                        .map(a -> new SchemaFinancementDto.AnnexeAutomatique(a.getId(), a.getCode(), a.getDescription(),
+                                a.getArea(), PrixArticle.ttcOuZero(a)))
+                        .toList());
     }
 
     /**
-     * 409 hors {@link TransitionsValidees}. Un dossier sans statut courant (ou à code inconnu)
-     * accepte n'importe quel {@link StatutDossier} comme premier statut.
+     * Moteur {@link WorkflowDossier} : 409 hors transition paramétrée ({@code StrWorkFlow}, repli
+     * {@code TransitionsValidees}) ou dossier sans statut, 403 si l'appelant n'est pas intervenant, 400 champs ou
+     * pièces manquants, 409 seuil de versement / schéma. Voir FEATURE-vente-workflow.md.
      */
     @Transactional
     public DossierDetailDto changerStatut(UUID id, ChangerStatutRequest request) {
@@ -594,57 +604,71 @@ public class DossierService {
         } catch (IllegalArgumentException e) {
             throw new InvalidRequestException("Statut inconnu: " + request.statut());
         }
+        if (folder.getStrStatus() == null) {
+            throw new ConflictException(DOSSIER_SANS_STATUT);
+        }
 
+        TransitionDossier transition = workflow.transitionAutorisee(folder, cible);
         Optional<StatutDossier> actuel = statutActuel(folder);
-        if (actuel.isPresent() && !TransitionsValidees.estValide(actuel.get(), cible)) {
-            StatutDossier depuis = actuel.get();
-            List<String> autorisees = TransitionsValidees.transitionsAutorisees(depuis).stream()
-                    .map(StatutDossier::getCode)
-                    .toList();
-            throw new InvalidStatutTransitionException(
-                    "Transition invalide: " + depuis.getCode() + " -> " + cible.getCode(), autorisees);
+        if (cible.isSortie() && !StringUtils.hasText(request.note())) {
+            throw new InvalidRequestException(CAUSE_OBLIGATOIRE);
+        }
+        boolean dejaSorti = actuel.map(StatutDossier::isSortie).orElse(false);
+        boolean reactivation = dejaSorti && !cible.isSortie();
+        if (cible.isSortie() && !dejaSorti) {
+            controleSortie.verifier(folder);
+        }
+        if (reactivation) {
+            liberationLot.verifierReoccupable(folder);
         }
 
         StrStatus strStatus = strStatusRepository.findByStrConfigEntityIdAndCode(StatutDossier.CONFIG_ENTITY_ID, cible.getCode());
         if (strStatus == null) {
             throw new InvalidRequestException("StrStatus introuvable pour le code: " + cible.getCode());
         }
-        folder.setStrStatus(strStatus);
-        appliquerChampEtape(folder, cible, request);
-        marquerModification(folder);
-        enregistrerHistoriqueStatut(folder, strStatus, request.note());
-        basculerProspectEnClient(folder, strStatus);
+        // Date et note posées avant les contrôles, comme la saisie d'OMRAN ; un refus annule la transaction.
+        appliquerChampEtape(folder, strStatus, cible, request);
+        boolean seuilIgnore = workflow.verifier(folder, transition, strStatus, Boolean.TRUE.equals(request.ignorerSeuil()));
 
-        List<ArticleSummaryDto> articles = stkItemRepository.findByComFolderId(id).stream()
-                .map(DossierService::toArticleSummary)
-                .toList();
-        return toDetail(folderRepository.save(folder), articles);
+        // Avant toute écriture sur le dossier : un 403 de périmètre sur un article le laisse intact.
+        if (cible.isSortie()) {
+            liberationLot.liberer(folder, strStatus);
+        } else if (reactivation) {
+            liberationLot.reoccuper(folder, strStatus);
+        }
+        folder.setStrStatus(strStatus);
+        if (reactivation) {
+            // Sale.cs:BeforeUpdate : un dossier réactivé perd sa date et sa cause d'annulation.
+            folder.setCancelDate(null);
+            folder.setCancelDescription("");
+        }
+        workflow.apresChangement(folder, strStatus, cible, this::employeCourant);
+        marquerModification(folder);
+        historique.ligneStatut(folder, strStatus, folder.getStkItem(), request.note());
+        historique.statutGenerique(folder, strStatus, request.note(), transition.workflowId(),
+                transition.parametree() ? transition.description() : null);
+        if (seuilIgnore) {
+            historique.evenement(folder, SEUIL_IGNORE + strStatus.getDescription());
+        }
+
+        ComFolder enregistre = folderRepository.save(folder);
+        synchroniserTypeTiers(enregistre);
+        return toDetail(enregistre, articlesDuDossier(enregistre));
+    }
+
+    /** Personnel de l'utilisateur connecté ({@code ConnectedUser.CfgEmployeeId}), pour le gestionnaire auto. */
+    private CfgTier employeCourant() {
+        AdmUser compte = utilisateurAffiche.courant().compte();
+        return compte != null ? compte.getCfgEmployee() : null;
     }
 
     /**
-     * Bascule prospect → client si le statut cible le demande, avec sa propre ligne d'historique :
-     * la note du changement de statut reste intacte (NVARCHAR(255)). FEATURE-lot4 §3.
+     * Type client / prospect des tiers du dossier ({@code Sale.cs:ManageTier}), une ligne d'historique
+     * par tiers changé : la note du changement de statut reste intacte (NVARCHAR(255)).
      */
-    private void basculerProspectEnClient(ComFolder folder, StrStatus statutCible) {
-        if (transformationProspectClient.appliquer(folder, statutCible)) {
-            enregistrerEvenementHistorique(folder, TransformationProspectClient.MENTION_HISTORIQUE);
-        }
-    }
-
-    /** Ligne {@code StrHistory} sans statut : un événement du dossier qui n'est pas un changement de statut. */
-    private void enregistrerEvenementHistorique(ComFolder folder, String description) {
-        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now(clock);
-        StrHistory evenement = new StrHistory();
-        evenement.setId(UUID.randomUUID());
-        evenement.setDocDate(maintenant);
-        evenement.setUserDate(maintenant);
-        evenement.setObjectId(folder.getId());
-        evenement.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
-        evenement.setAdmUserId(auteur.compteId());
-        evenement.setAdmUserDescription(auteur.nom());
-        evenement.setDescription(description);
-        strHistoryRepository.save(evenement);
+    private void synchroniserTypeTiers(ComFolder folder) {
+        transformationProspectClient.synchroniser(folder)
+                .forEach(mention -> historique.evenement(folder, mention));
     }
 
     /** GEN0016 : toute écriture sur le dossier signe {@code UserUpdate}/{@code UserUpdateDateTime}. */
@@ -666,42 +690,11 @@ public class DossierService {
         alerteRelanceService.desarmerToutes(prospection.getId());
     }
 
-    /**
-     * Dans les <strong>deux</strong> tables qu'alimente OMRAN, auteur compris ; {@code StrWorkflowId}
-     * reste nul, cas admis par le légataire. Voir {@code FEATURE-conformite-legataire.md} §3.
-     */
-    private void enregistrerHistoriqueStatut(ComFolder folder, StrStatus nouveauStatut, String note) {
-        UtilisateurAffiche.Auteur auteur = utilisateurAffiche.courant();
-        LocalDateTime maintenant = LocalDateTime.now(clock);
-
-        StrFolderStatusHistory historique = new StrFolderStatusHistory();
-        historique.setId(UUID.randomUUID());
-        historique.setDocDate(maintenant);
-        historique.setComFolder(folder);
-        historique.setStrFolderStatus(nouveauStatut);
-        historique.setDescription(note);
-        historique.setAdmUserId(auteur.compteId());
-        historique.setCfgTier(folder.getCfgCustomer());
-        statusHistoryRepository.save(historique);
-
-        StrHistory generique = new StrHistory();
-        generique.setId(UUID.randomUUID());
-        generique.setDocDate(maintenant);
-        generique.setUserDate(maintenant);
-        generique.setObjectId(folder.getId());
-        generique.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
-        generique.setAdmUserId(auteur.compteId());
-        generique.setAdmUserDescription(auteur.nom());
-        generique.setStrStatusId(nouveauStatut != null ? nouveauStatut.getId() : null);
-        generique.setStrStatusDescription(nouveauStatut != null ? nouveauStatut.getCode() : null);
-        generique.setDescription(note);
-        strHistoryRepository.save(generique);
-    }
-
-    // La date va sur la colonne jalon de l'étape (EtapeMilestone) ; la note va sur CancelDescription
-    // pour ANNULATION (la cause d'annulation), sur Notes sinon.
-    private void appliquerChampEtape(ComFolder folder, StatutDossier cible, ChangerStatutRequest request) {
-        if (cible == StatutDossier.ANNULATION) {
+    // La date va sur la date associée du statut cible (WorkflowDossier) ; la note va sur CancelDescription
+    // pour les deux sorties ANNULATION et DESISTEMENT (la cause), sur Notes sinon.
+    private void appliquerChampEtape(ComFolder folder, StrStatus strStatus, StatutDossier cible,
+                                     ChangerStatutRequest request) {
+        if (cible.isSortie()) {
             folder.setCancelDate(request.date() != null ? request.date() : LocalDateTime.now(clock));
             if (request.note() != null) {
                 folder.setCancelDescription(request.note());
@@ -711,23 +704,7 @@ public class DossierService {
         if (request.note() != null) {
             folder.setNotes(request.note());
         }
-        if (request.date() == null) {
-            return;
-        }
-        switch (cible) {
-            case CONCRETISATION -> folder.setAdvanceDate(request.date());
-            case MEILLEURTAUX -> folder.setLoanCompanyDecisionDate(request.date());
-            case COMPROMIS -> folder.setCreditApprovalDate(request.date());
-            case ENVOI_AU_NOTAIRE -> folder.setAgreementDate(request.date());
-            case CREDIT_DEBLOQUE -> folder.setCreditPossessionDate(request.date());
-            case MINUTE -> folder.setAgreementSavingDate(request.date());
-            case REMISE_DES_CLEFS -> folder.setDeliveryDateReal(request.date());
-            case FORMALISE -> folder.setAgreementRegistryDate(request.date());
-            default -> {
-                // RESERVATION, CREDIT_EN_COURS, LIVRAISON_PROVISOIRE, DESISTEMENT : pas de colonne
-                // jalon confirmée — voir EtapeMilestone.
-            }
-        }
+        workflow.ecrireDateAssociee(folder, strStatus, cible, request.date());
     }
 
     /**
@@ -737,79 +714,11 @@ public class DossierService {
     public MontantsDossierDto montants(UUID dossierId) {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + dossierId));
-        List<ComDocument> lignes = documentRepository.findByComFolderIdOrderByDocDateAsc(dossierId);
-
-        Map<UUID, BigDecimal> regleParEcheance = new LinkedHashMap<>();
-        for (Object[] row : settlementLineRepository.sumAmountByComFolderIdGroupedByComDocument(dossierId)) {
-            regleParEcheance.put((UUID) row[0], (BigDecimal) row[1]);
-        }
-
-        Map<String, BigDecimal> montantParCategorie = new LinkedHashMap<>();
-        Map<String, Integer> nombreParCategorie = new LinkedHashMap<>();
-        Map<String, BigDecimal> regleParCategorie = new LinkedHashMap<>();
-        BigDecimal totalGeneral = BigDecimal.ZERO;
-        BigDecimal totalSoumisReglePrixTTC = BigDecimal.ZERO;
-        BigDecimal fraisExclusDuPrix = BigDecimal.ZERO;
-        BigDecimal regleTotal = BigDecimal.ZERO;
-        BigDecimal regleSoumisAuPrix = BigDecimal.ZERO;
-
-        for (ComDocument ligne : lignes) {
-            String categorie = ligne.getComSettlementCategory() != null ? ligne.getComSettlementCategory().getCode() : "SANS_CATEGORIE";
-            BigDecimal montant = ligne.getAmount() != null ? ligne.getAmount() : BigDecimal.ZERO;
-            BigDecimal regle = regleParEcheance.getOrDefault(ligne.getId(), BigDecimal.ZERO);
-
-            montantParCategorie.merge(categorie, montant, BigDecimal::add);
-            nombreParCategorie.merge(categorie, 1, Integer::sum);
-            regleParCategorie.merge(categorie, regle, BigDecimal::add);
-            totalGeneral = totalGeneral.add(montant);
-            regleTotal = regleTotal.add(regle);
-            if (Boolean.TRUE.equals(ligne.getExcludeFromPrice())) {
-                fraisExclusDuPrix = fraisExclusDuPrix.add(montant);
-            } else {
-                totalSoumisReglePrixTTC = totalSoumisReglePrixTTC.add(montant);
-                regleSoumisAuPrix = regleSoumisAuPrix.add(regle);
-            }
-        }
-
-        List<CategorieMontantDto> parCategorie = montantParCategorie.entrySet().stream()
-                .map(e -> {
-                    BigDecimal montant = e.getValue();
-                    BigDecimal regle = regleParCategorie.get(e.getKey());
-                    return new CategorieMontantDto(e.getKey(), montant, nombreParCategorie.get(e.getKey()),
-                            regle, montant.subtract(regle));
-                })
-                .toList();
-
-        return new MontantsDossierDto(parCategorie, totalGeneral, totalSoumisReglePrixTTC,
-                prixVente(folder, regleSoumisAuPrix),
-                netAPayer(folder, fraisExclusDuPrix, regleTotal),
-                estSorti(folder));
-    }
-
-    /**
-     * « Prix de vente » de l'onglet Montants : {@code ComFolder.Price}, <strong>pas</strong> re-dérivé
-     * de l'échéancier — le prix stocké fait foi, c'est ce que lit la vue légataire.
-     */
-    private static SyntheseMontantDto prixVente(ComFolder f, BigDecimal regleSoumisAuPrix) {
-        BigDecimal montant = requireNonNullElse(f.getPrice(), BigDecimal.ZERO);
-        return new SyntheseMontantDto(montant, regleSoumisAuPrix, montant.subtract(regleSoumisAuPrix));
-    }
-
-    /**
-     * « Net à payer » = prix de vente + frais exclus du prix ; sur un dossier sorti, = déjà encaissé,
-     * reste 0. Voir {@code FEATURE-fiche-dossier-alignement-ecran.md} §5.
-     */
-    private static SyntheseMontantDto netAPayer(ComFolder f, BigDecimal fraisExclusDuPrix,
-                                                BigDecimal regleTotal) {
-        if (estSorti(f)) {
-            return new SyntheseMontantDto(regleTotal, regleTotal, BigDecimal.ZERO);
-        }
-        BigDecimal montant = requireNonNullElse(f.getPrice(), BigDecimal.ZERO).add(fraisExclusDuPrix);
-        return new SyntheseMontantDto(montant, regleTotal, montant.subtract(regleTotal));
+        return montantsDossier.calculer(folder);
     }
 
     /** Équivaut au {@code IsCancellation} de la vue légataire, d'où aucune colonne mappée pour l'obtenir. */
-    private static boolean estSorti(ComFolder f) {
+    static boolean estSorti(ComFolder f) {
         if (f.getStrStatus() == null || f.getStrStatus().getCode() == null) {
             return false;
         }
@@ -837,35 +746,23 @@ public class DossierService {
         }
     }
 
-    /** Pour chaque statut atteignable, la colonne jalon où {@code PATCH .../statut} écrirait sa date. */
+    /** Statuts atteignables par l'appelant, et la date associée où {@code PATCH .../statut} écrirait sa date. */
     public List<EtapeSuivanteDto> etapesSuivantes(UUID id) {
         ComFolder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
-
-        return statutActuel(folder)
-                .map(actuel -> TransitionsValidees.transitionsAutorisees(actuel).stream()
-                        .map(statut -> {
-                            EtapeMilestone.Info info = EtapeMilestone.of(statut);
-                            return new EtapeSuivanteDto(
-                                    statut.getCode(), info.champ(), info.libelle(), info.confiance().name());
-                        })
-                        .toList())
-                .orElseGet(List::of);
+        return workflow.etapesSuivantes(folder);
     }
 
-    private static List<String> etapesAtteignables(ComFolder folder) {
-        if (folder.getStrStatus() == null || folder.getStrStatus().getCode() == null) {
-            return List.of();
-        }
-        StatutDossier statut;
-        try {
-            statut = StatutDossier.fromCode(folder.getStrStatus().getCode());
-        } catch (IllegalArgumentException e) {
-            return List.of();
-        }
-        return TransitionsValidees.transitionsAutorisees(statut).stream()
-                .map(StatutDossier::getCode)
-                .toList();
+    /** Passage automatique proposé (statut et date), ou une proposition vide. */
+    public TransitionSuggereeDto transitionSuggeree(UUID id) {
+        ComFolder folder = folderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(DOSSIER_INTROUVABLE + id));
+        return workflow.suggestion(folder);
+    }
+
+    /** Codes des statuts atteignables par l'appelant (même source que {@link #etapesSuivantes}). */
+    private List<String> etapesAtteignables(ComFolder folder) {
+        return workflow.statutsAtteignables(folder);
     }
 
     /**
@@ -873,83 +770,10 @@ public class DossierService {
      * que si leurs colonnes sont demandées. {@code colonnes} : {@code Set.of()} hors liste.
      */
     public static DossierListItemDto toListItem(ComFolder f, Set<ColonneDossier> colonnes) {
-        boolean patrimoine = ColonneDossier.exigeLePatrimoine(colonnes);
-        CfgTranche tranche = patrimoine ? tranche(f) : null;
-        CfgProject projet = patrimoine ? projet(f) : null;
-        CfgCompany societe = patrimoine ? societe(f) : null;
-        ComProspection prospection = ColonneDossier.exigeLaProspection(colonnes)
-                ? f.getComProspection() : null;
-        StkItem article = ColonneDossier.exigeLArticle(colonnes) ? f.getStkItem() : null;
-        StkVocation vocation = patrimoine ? f.getStkVocation() : null;
-        return new DossierListItemDto(
-                f.getId(),
-                f.getCode(),
-                f.getDocDate(),
-                Champs.de(f.getStrStatus(), StrStatus::getCode),
-                Champs.de(f.getCfgCustomer(), CfgTier::getId),
-                TierNomFormatter.nom(f.getCfgCustomer()),
-                Champs.de(f.getCfgCommercial(), CfgTier::getId),
-                TierNomFormatter.nom(f.getCfgCommercial()),
-                f.getPrice(),
-                f.getTotalToPay(),
-                f.getAdvanceDate(),
-                Champs.de(f.getComProspection(), ComProspection::getId),
-                Champs.de(f.getComProspection(), ComProspection::getCode),
-                f.getPriceBeforeDiscount(),
-                ConventionRemise.pourcentage(f.getDiscount()),
-                f.getDiscountAmount(),
-                f.getPriceAfterDiscount(),
-                // Le « montant d'avance » vient d'AgreementAmount : ComFolder n'a pas d'AdvanceAmount.
-                f.getAgreementAmount(),
-                f.getProbabilityOfFinalisation(),
-                Champs.de(projet, CfgProject::getId),
-                Champs.de(projet, CfgProject::getCode),
-                Champs.de(projet, CfgProject::getDescription),
-                Champs.de(tranche, CfgTranche::getId),
-                Champs.de(tranche, CfgTranche::getCode),
-                Champs.de(tranche, CfgTranche::getDescription),
-                Champs.de(societe, CfgCompany::getId),
-                Champs.de(societe, CfgCompany::getCode),
-                Champs.de(societe, CfgCompany::getDescription),
-                Champs.de(vocation, StkVocation::getCode),
-                Champs.de(vocation, StkVocation::getDescription),
-                siDemande(colonnes, ColonneDossier.AVOCAT_ID, f.getCfgLawyer(), CfgTier::getId),
-                siDemande(colonnes, ColonneDossier.AVOCAT_NOM, f.getCfgLawyer(), TierNomFormatter::nom),
-                siDemande(colonnes, ColonneDossier.MODE_PAIE, f.getComPaymentMethod(), ComPaymentMethod::getCode),
-                Champs.de(prospection, ComProspection::getComProspectionKind, ComProspectionKind::getDescription),
-                Champs.de(prospection, ComProspection::getComProspectionOrigin, ComProspectionOrigin::getDescription),
-                Champs.de(prospection, ComProspection::getDocDate),
-                f.getUserCreate(),
-                f.getUserCreateDateTime(),
-                f.getUserUpdate(),
-                f.getUserUpdateDateTime(),
-                Champs.de(article, StkItem::getId),
-                Champs.de(article, StkItem::getCode),
-                Champs.de(article, StkItem::getDescription),
-                Champs.de(article, StkItem::getTitleNumber),
-                Champs.de(article, StkItem::getStkBuilding, StkBuilding::getDescription),
-                Champs.de(article, StkItem::getStkFloor, StkFloor::getDescription),
-                Champs.de(article, StkItem::getStkItemCategory, StkItemCategory::getCode),
-                Champs.de(article, StkItem::getStkItemType, StkItemType::getCode),
-                Champs.de(article, StkItem::getStkPresentationType, StkPresentationType::getCode),
-                siDemande(colonnes, ColonneDossier.RESPONSABLE_VENTE_ID, f.getCfgSaleManager(), CfgTier::getId),
-                siDemande(colonnes, ColonneDossier.RESPONSABLE_VENTE_NOM, f.getCfgSaleManager(), TierNomFormatter::nom),
-                f.getAgreementDate(),
-                f.getDeliveryDateReal(),
-                // Scalaires @Formula : lus avec l'entité, aucun coût conditionnel à gérer.
-                f.getDelaiConcretisation(),
-                f.getDelaiNotaire(),
-                f.getDelaiLivraison()
-        );
+        return MappingListeDossier.depuisDossier(f, colonnes, null).versDto();
     }
 
-    /** Lu seulement si la colonne est demandée : une colonne absente vaut {@code null}. */
-    private static <T, R> R siDemande(Set<ColonneDossier> colonnes, ColonneDossier colonne,
-                                      T source, Function<T, R> lecteur) {
-        return colonnes.contains(colonne) ? Champs.de(source, lecteur) : null;
-    }
-
-    private static DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
+    private DossierDetailDto toDetail(ComFolder f, List<ArticleSummaryDto> articles) {
         CfgProject projet = projet(f);
         CfgTranche tranche = tranche(f);
         CfgCompany societe = societe(f);

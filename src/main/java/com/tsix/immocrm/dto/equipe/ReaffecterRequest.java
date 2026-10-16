@@ -5,10 +5,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
 
-@Schema(description = "Réaffectation en lot de prospections ouvertes à un autre commercial de l'équipe.")
+@Schema(description = "Réaffectation en lot de lignes ouvertes (prospections ou pré-prospections affectées) à un autre commercial.")
 public record ReaffecterRequest(
 
-        @Schema(description = "Prospections à réaffecter (au moins une).", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Prospections et/ou pré-prospections déjà affectées à réaffecter (au moins une).",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         List<UUID> prospectionIds,
 
         @Schema(description = "Employé (CfgTier) du nouveau commercial.", requiredMode = Schema.RequiredMode.REQUIRED)

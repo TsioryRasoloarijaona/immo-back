@@ -121,5 +121,10 @@ public class ComFolderItem {
     @Column(name = "IsTitled")
     private Boolean isTitled;
 
+    @Column(name = "StkBuildingId")
+    private UUID stkBuildingId;
+
+    @Column(name = "StkFloorId")
+    private UUID stkFloorId;
 
 }

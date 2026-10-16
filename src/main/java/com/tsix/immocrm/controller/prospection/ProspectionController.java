@@ -38,6 +38,7 @@ import com.tsix.immocrm.dto.prospection.TransformerProspectionRequest;
 import com.tsix.immocrm.services.prospection.ConfirmationVisiteService;
 import com.tsix.immocrm.services.prospection.OffrePrixService;
 import com.tsix.immocrm.services.prospection.DevisService;
+import com.tsix.immocrm.services.prospection.FiltresListeProspection;
 import com.tsix.immocrm.services.prospection.NdaService;
 import com.tsix.immocrm.services.prospection.OffreDevisDocumentService;
 import com.tsix.immocrm.services.prospect.ProspectSubResourcesService;
@@ -60,7 +61,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -76,7 +76,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -146,12 +145,10 @@ public class ProspectionController {
             @Parameter(description = "Id(s) de tranche visée (CfgTranche.id, "
                     + "ComProspection.stkHierarchy). Répéter le paramètre pour plusieurs tranches.")
             @RequestParam(required = false) List<UUID> trancheId,
-            @Parameter(description = "Borne inférieure (incluse) sur la date du document, "
-                    + "format ISO-8601.", example = "2026-01-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @Parameter(description = "Borne supérieure (incluse) sur la date du document, "
-                    + "format ISO-8601.", example = "2026-12-31T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @Parameter(example = "2026-01-01")
+            @RequestParam(required = false) String dateDebut,
+            @Parameter(example = "2026-12-31")
+            @RequestParam(required = false) String dateFin,
             @RequestParam(required = false) String search,
             @Parameter(example = "true")
             @RequestParam(required = false) Boolean ouvertes,
@@ -170,8 +167,8 @@ public class ProspectionController {
         Set<ColonneProspection> selection = ColonneProspection.resoudre(colonnes);
         ColonneProspection groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneProspection::resoudreGroupement);
-        return PageDto.of(prospectionService.findAll(etape, origine, commercial, trancheId, dateDebut, dateFin,
-                search, ouvertes, filtres, selection, groupe, groupeValeur,
+        return PageDto.of(prospectionService.findAll(new FiltresListeProspection(etape, origine, commercial,
+                        trancheId, false, dateDebut, dateFin, search, ouvertes), filtres, selection, groupe, groupeValeur,
                 Groupements.granularite(groupe, granularite), pageable));
     }
 
@@ -198,16 +195,18 @@ public class ProspectionController {
             @RequestParam(required = false) List<String> origine,
             @RequestParam(required = false) List<UUID> commercial,
             @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @Parameter(example = "2026-01-01")
+            @RequestParam(required = false) String dateDebut,
+            @Parameter(example = "2026-12-31")
+            @RequestParam(required = false) String dateFin,
             @RequestParam(required = false) String search,
             @Parameter(example = "true")
             @RequestParam(required = false) Boolean ouvertes,
             @ModelAttribute FiltresAvancesProspection filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneProspection groupe = ColonneProspection.resoudreGroupement(groupBy);
-        return prospectionService.grouperProspections(etape, origine, commercial, trancheId,
-                dateDebut, dateFin, search, ouvertes, filtres, groupe,
+        return prospectionService.grouperProspections(new FiltresListeProspection(etape, origine, commercial,
+                        trancheId, false, dateDebut, dateFin, search, ouvertes), filtres, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();

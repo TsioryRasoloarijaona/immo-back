@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * {@code typeId} et {@code payeurId} requis : sans eux l'« Autorisation d'encaissement » sort trouée.
+ * {@code typeId} requis : sans lui l'« Autorisation d'encaissement » sort trouée ; {@code payeurId} absent
+ * = le client du dossier.
  * {@code dateReglement} ({@code SettlementDate}) est refusée ici : elle n'existe que sur les règlements
  * pointés, posée par {@code PATCH .../statut}. Voir FEATURE-reglement-statut-preuve.md §2 et §4.
  */
@@ -29,7 +30,6 @@ public record CreerReglementRequest(
         @Schema(example = "CHQ-000123")
         String reference,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         UUID payeurId,
 
         @Schema(description = "Commentaire libre. Facultatif.")

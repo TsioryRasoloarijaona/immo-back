@@ -35,7 +35,7 @@ public class CollecteurLignesEcrites
     static final List<String> ORDRE_CLES_ETRANGERES = List.of(
             "CfgProject", "CfgTranche", "StkItem", "CfgTier", "ComAction",
             "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
-            "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem",
+            "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject", "AppNotification");
 

@@ -44,6 +44,10 @@ public class ComFolder {
     @JoinColumn(name = "StkItemId")
     private StkItem stkItem;
 
+    /** Offre d'origine : OMRAN s'en sert pour savoir qu'un dossier a déjà été créé depuis l'offre. */
+    @Column(name = "StlQuoteId")
+    private UUID stlQuoteId;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "Code")
@@ -80,6 +84,10 @@ public class ComFolder {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StrStatusId")
     private StrStatus strStatus;
+
+    // Les vues d'OMRAN font INNER JOIN StrEntity : un dossier sans cette colonne n'apparaît dans aucune.
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ComPaymentMethodId")
@@ -249,6 +257,10 @@ public class ComFolder {
 
     @Column(name = "loanCompanyDecisionDate")
     private LocalDateTime loanCompanyDecisionDate;
+
+    // FK vers ComLoanCompanyDecision, table absente de yesRemsTest : identifiant nu, pas d'association.
+    @Column(name = "ComLoanCompanyDecisionId")
+    private UUID comLoanCompanyDecisionId;
 
     // Colonne "text" (ANSI), pas "ntext" : en @Nationalized le driver la lie en NVARCHAR et toute
     // requête sur ComFolder échoue (« La conversion de text en NCHAR n'est pas prise en charge »).

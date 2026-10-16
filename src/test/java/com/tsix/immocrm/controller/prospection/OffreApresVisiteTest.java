@@ -137,7 +137,7 @@ class OffreApresVisiteTest {
     }
 
     /** Article valorisé, sans quoi l'offre n'aurait aucun prix à annoncer. */
-    private StkItem newArticle() {
+    private StkItem newArticle(CfgTranche tranche) {
         StkVocation vocation = new StkVocation();
         vocation.setId(UUID.randomUUID());
         vocation.setCode("VOC-OAV-" + UUID.randomUUID());
@@ -161,6 +161,7 @@ class OffreApresVisiteTest {
         article.setStkItemType(type);
         article.setStkItemCategory(categorie);
         article.setStkVocation(vocation);
+        article.setStkHierarchy(tranche);
         article.setStkKind(fixtureReferentielStk.natureParDefaut());
         article.setArea(new BigDecimal("100.000000"));
         article.setComSalePriceHT(new BigDecimal("1000000.000000"));
@@ -182,7 +183,7 @@ class OffreApresVisiteTest {
             p.setComProspectionKind(newEtape(etapeCode));
         }
         if (avecArticle) {
-            p.setStkItem(newArticle());
+            p.setStkItem(newArticle(tranche));
         }
         return prospectionRepository.save(p);
     }

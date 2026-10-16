@@ -4,7 +4,8 @@ package com.tsix.immocrm.domain;
 public enum ChampDateEncaissement {
     DATE_PIECE("docDate", "Date pièce (date de saisie du règlement)"),
     DATE_ECHEANCE("echeanceDate", "Date d'échéance"),
-    DATE_REGLEMENT("settlementDate", "Date de règlement effectif");
+    DATE_REGLEMENT("settlementDate", "Date de règlement effectif"),
+    POINTAGE_PREVU("pointagePrevu", "Pointage prévu (reporté à aujourd'hui si échu et non pointé)");
 
     private final String champEntite;
     private final String libelle;
