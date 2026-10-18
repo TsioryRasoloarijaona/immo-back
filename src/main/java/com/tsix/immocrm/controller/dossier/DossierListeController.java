@@ -26,23 +26,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.SortDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.time.LocalDateTime;
+import java.beans.PropertyEditorSupport;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 
@@ -59,29 +61,26 @@ public class DossierListeController {
         this.exportTableur = exportTableur;
     }
 
+    private static final String FILTRES_GROUPES = "filtresGroupes";
+
+    /** /groupes n'a pas de paramètre {@code lignes} : toute valeur vaut absente (DOSSIERS), jamais un 400. */
+    @InitBinder(FILTRES_GROUPES)
+    void sansLignes(WebDataBinder binder) {
+        // setDisallowedFields est sans effet sur une liaison par constructeur (record).
+        binder.registerCustomEditor(LignesListeDossiers.class, new PropertyEditorSupport() {
+            @Override
+            public void setAsText(String texte) {
+                setValue(null);
+            }
+        });
+    }
+
     @GetMapping
     @Operation(summary = "Liste paginée des dossiers de vente")
     @ApiResponse(responseCode = "400", content = @Content)
+    @Parameter(name = "lignes", in = ParameterIn.QUERY, example = "DOSSIERS")
     public PageDto<DossierListItemDto> findAll(
-            @Parameter(example = "CONCRETISATION")
-            @RequestParam(required = false) List<String> statut,
-            @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")
-            @RequestParam(required = false) UUID commercial,
-            @Parameter(description = "Id du projet (CfgProject.id), résolu par la tranche de l'article principal.")
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @Parameter(example = "CONCRETISATION")
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @Parameter(description = "Borne inférieure (incluse) sur champDate, ISO-8601.", example = "2026-01-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @Parameter(description = "Borne supérieure (incluse) sur champDate, ISO-8601.", example = "2026-12-31T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) Boolean dateVide,
-            @RequestParam(required = false) String search,
-            @Parameter(example = "false")
-            @RequestParam(defaultValue = "false") boolean inclureSortis,
-            @Parameter(example = "DOSSIERS")
-            @RequestParam(required = false) LignesListeDossiers lignes,
+            @ParameterObject @ModelAttribute FiltresListeDossiers filtres,
             @Parameter(example = "false")
             @RequestParam(defaultValue = "false") boolean ordreOmran,
             @Parameter(example = "code,statut,projetCode,trancheCode,creePar")
@@ -93,8 +92,6 @@ public class DossierListeController {
             @Parameter(example = "MOIS")
             @RequestParam(required = false) Granularite granularite,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        FiltresListeDossiers filtres = new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, dateVide, search, inclureSortis, lignes);
         ColonneDossier groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneDossier::resoudreGroupement);
         ListeDossiersService.Depliage depliage = groupe == null ? null
@@ -109,6 +106,7 @@ public class DossierListeController {
             @ApiResponse(responseCode = "200", description = "Groupes, paginés comme une liste"),
             @ApiResponse(responseCode = "400", content = @Content)
     })
+    @Parameter(name = "lignes", in = ParameterIn.QUERY, hidden = true)
     public PageGroupesDto grouper(
             @Parameter(description = "Colonne de groupement. **Requis.** Un seul niveau de "
                     + "groupement est supporté.", example = "statut", required = true)
@@ -122,19 +120,8 @@ public class DossierListeController {
             @RequestParam(required = false) TriGroupe tri,
             @Parameter(example = "false")
             @RequestParam(defaultValue = "false") boolean inclureSansValeur,
-            @RequestParam(required = false) List<String> statut,
-            @RequestParam(required = false) UUID commercial,
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) Boolean dateVide,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "false") boolean inclureSortis,
+            @ParameterObject @ModelAttribute(FILTRES_GROUPES) FiltresListeDossiers filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
-        FiltresListeDossiers filtres = new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, dateVide, search, inclureSortis, LignesListeDossiers.DOSSIERS);
         ColonneDossier groupe = ColonneDossier.resoudreGroupement(groupBy);
         return listeService.grouper(filtres, groupe, Groupements.granularite(groupe, granularite),
                 ColonneDossier.resoudreAgregats(agregats),
@@ -147,20 +134,8 @@ public class DossierListeController {
             @ApiResponse(responseCode = "200", description = "Sommes du filtre, une clé par colonne additionnable."),
             @ApiResponse(responseCode = "400", content = @Content)
     })
-    public TotauxDossiersDto totaux(
-            @RequestParam(required = false) List<String> statut,
-            @RequestParam(required = false) UUID commercial,
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) Boolean dateVide,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "false") boolean inclureSortis,
-            @RequestParam(required = false) LignesListeDossiers lignes) {
-        return listeService.totaux(new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, dateVide, search, inclureSortis, lignes));
+    public TotauxDossiersDto totaux(@ParameterObject @ModelAttribute FiltresListeDossiers filtres) {
+        return listeService.totaux(filtres);
     }
 
     @GetMapping("/totaux-colonnes")
@@ -173,19 +148,8 @@ public class DossierListeController {
     public TotauxListeDto totauxColonnes(
             @Parameter(example = "prix:AVG")
             @RequestParam(required = false) List<String> agregats,
-            @RequestParam(required = false) List<String> statut,
-            @RequestParam(required = false) UUID commercial,
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) Boolean dateVide,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "false") boolean inclureSortis,
-            @RequestParam(required = false) LignesListeDossiers lignes) {
-        return listeService.totauxColonnes(new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, dateVide, search, inclureSortis, lignes), ColonneDossier.resoudreAgregats(agregats));
+            @ParameterObject @ModelAttribute FiltresListeDossiers filtres) {
+        return listeService.totauxColonnes(filtres, ColonneDossier.resoudreAgregats(agregats));
     }
 
     @GetMapping("/export")
@@ -202,24 +166,12 @@ public class DossierListeController {
     public ResponseEntity<StreamingResponseBody> exporter(
             @Parameter(example = ExportTableur.FORMAT_XLSX)
             @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
-            @RequestParam(required = false) List<String> statut,
-            @RequestParam(required = false) UUID commercial,
-            @RequestParam(required = false) UUID projet,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) ChampDateDossier champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
-            @RequestParam(required = false) Boolean dateVide,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "false") boolean inclureSortis,
-            @RequestParam(required = false) LignesListeDossiers lignes,
+            @ParameterObject @ModelAttribute FiltresListeDossiers filtres,
             @RequestParam(defaultValue = "false") boolean ordreOmran,
             @Parameter(example = "code,statut,clientNom,prix")
             @RequestParam(required = false) List<String> colonnes,
             @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
         ExportTableur.exigerXlsx(format);
-        FiltresListeDossiers filtres = new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
-                dateDebut, dateFin, dateVide, search, inclureSortis, lignes);
         List<ColonneDossier> ordre = LignesExport.ordre(colonnes, ColonneDossier.resoudre(colonnes));
         List<DossierListItemDto> lignesExport = listeService.toutes(filtres, ordreOmran, sort,
                 new LinkedHashSet<>(ordre));
