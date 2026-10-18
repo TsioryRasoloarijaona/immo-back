@@ -150,8 +150,9 @@ somme, un nom **qualifié** (`prix:AVG`) applique la fonction nommée (`SUM`, `A
 `COUNT`). Les fonctions acceptées par colonne sont publiées par le catalogue (`fonctions`). Chaque
 résultat revient sous le jeton tel qu'envoyé ; `null` pour `MIN`/`MAX`/`AVG` sans valeur renseignée.
 
-Les colonnes calculées par la vue légataire (groupes `ACTIVITE`, `CONVERSION`) ne sont pas
-agrégeables : 400. Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
+Une colonne sans chemin agrégeable (absente des `fonctions` du catalogue : `joursInactivite`,
+`nbInteractions`, `derniereActionDate`, dernière communication, colonnes du dossier lié…) rend 400.
+Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
 
 ### param ouvertes
 
