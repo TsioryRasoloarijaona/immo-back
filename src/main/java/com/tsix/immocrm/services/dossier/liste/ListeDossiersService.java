@@ -5,6 +5,7 @@ import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.domain.StatutDossier;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.liste.StatutListeDossierDto;
 import com.tsix.immocrm.dto.dossier.liste.TotauxDossiersDto;
@@ -162,6 +163,19 @@ public class ListeDossiersService {
             MontantsParNatureDossier.SOMMABLES.forEach(c -> sommes.merge(c.nom(), montants.get(c), BigDecimal::add));
         }
         return new TotauxDossiersDto(dossiers.size(), sommes);
+    }
+
+    /**
+     * Résumés Σ sur les seuls dossiers du filtre (même spécification que {@link #lister}) ; les lots libres
+     * ne sont pas des dossiers et n'y entrent jamais, {@code lignes=LIBRES} donne donc 0 ligne.
+     */
+    public TotauxListeDto totauxColonnes(FiltresListeDossiers filtres, List<AgregatDemande> agregats) {
+        Specification<ComFolder> spec = specification(filtres, null);
+        if (!filtres.lignes().avecDossiers()) {
+            spec = spec.and((root, query, cb) -> cb.disjunction());
+        }
+        GroupementService.Totaux totaux = groupementService.totaux(ComFolder.class, spec, agregats);
+        return new TotauxListeDto(totaux.nombre(), totaux.valeurs());
     }
 
     private static Map<String, BigDecimal> sommesNulles() {

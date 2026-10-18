@@ -133,6 +133,31 @@ la liste appelée avec la même valeur.
 `groupBy` absent, inconnu ou non groupable ; ou `agregats` contenant une colonne non agrégeable. Le
 corps porte la liste des noms acceptés.
 
+## totauxColonnes
+
+Les résumés Σ de la liste plate (bande « Totaux sur N ligne(s) filtrée(s) »), calculés sur **toutes**
+les prospections du filtre et non sur la page affichée. Pas de pagination, pas de tri, pas de groupe :
+en mode groupé, les `totaux` de `/groupes` servent.
+
+**Mêmes lignes que la liste** : mêmes filtres (filtres avancés compris), même sens, même périmètre
+commercial que `GET /api/prospections`. `nombreTotal` égale donc le `totalElements` de la liste
+appelée avec les mêmes filtres.
+
+### param agregats
+
+Mêmes jetons et mêmes règles que `GET /api/prospections/groupes` : un **nom nu** (`prix`) vaut une
+somme, un nom **qualifié** (`prix:AVG`) applique la fonction nommée (`SUM`, `AVG`, `MIN`, `MAX`,
+`COUNT`). Les fonctions acceptées par colonne sont publiées par le catalogue (`fonctions`). Chaque
+résultat revient sous le jeton tel qu'envoyé ; `null` pour `MIN`/`MAX`/`AVG` sans valeur renseignée.
+
+Les colonnes calculées par la vue légataire (groupes `ACTIVITE`, `CONVERSION`) ne sont pas
+agrégeables : 400. Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
+
+### param ouvertes
+
+Filtre d'archivage à trois états, **identique à celui de la liste** : absent = tout, `true` =
+ouvertes, `false` = archivées.
+
 ## findById
 
 Sert aussi bien une prospection qualifiée qu'une pré-prospection : `GET /api/pre-prospections`

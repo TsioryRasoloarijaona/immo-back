@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.prospection;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.prospect.ContactProspectDto;
 import com.tsix.immocrm.dto.prospect.CreerContactProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
@@ -210,6 +211,34 @@ public class ProspectionController {
                 Groupements.granularite(groupe, granularite),
                 ColonneProspection.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
+    }
+
+    @GetMapping("/totaux-colonnes")
+    @Operation(
+            summary = "Résumés (Σ) de la liste des prospections sur tout le filtre, pas sur une page",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Effectif du filtre et un résumé par jeton demandé"),
+                    @ApiResponse(responseCode = "400", description = "Jeton d'`agregats` inconnu, colonne non "
+                            + "agrégeable ou fonction refusée pour son type.", content = @Content)
+            })
+    public TotauxListeDto totauxColonnes(
+            @Parameter(example = "prix:AVG")
+            @RequestParam(required = false) List<String> agregats,
+            @RequestParam(required = false) List<String> etape,
+            @RequestParam(required = false) List<String> origine,
+            @RequestParam(required = false) List<UUID> commercial,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @Parameter(example = "2026-01-01")
+            @RequestParam(required = false) String dateDebut,
+            @Parameter(example = "2026-12-31")
+            @RequestParam(required = false) String dateFin,
+            @RequestParam(required = false) String search,
+            @Parameter(example = "true")
+            @RequestParam(required = false) Boolean ouvertes,
+            @ModelAttribute FiltresAvancesProspection filtres) {
+        return prospectionService.totauxProspections(new FiltresListeProspection(etape, origine, commercial,
+                        trancheId, false, dateDebut, dateFin, search, ouvertes), filtres,
+                ColonneProspection.resoudreAgregats(agregats));
     }
 
     @GetMapping("/{id}")
