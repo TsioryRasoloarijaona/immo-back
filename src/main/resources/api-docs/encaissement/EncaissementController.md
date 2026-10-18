@@ -131,6 +131,25 @@ le filtre, pas sur la page chargée. Mêmes paramètres et même sémantique que
 `totalElements` de la liste. Les sommes sont calculées par le même code que `totaux` de
 `/groupes` : les règlements `CANCELED` comptent dans `nombre` mais sortent de toutes les sommes.
 
+## totauxColonnes
+
+Les résumés Σ choisis par l'utilisateur en tête de colonne (bande « Totaux sur N ligne(s)
+filtrée(s) »), calculés sur **tous** les encaissements du filtre et non sur la page affichée. Pas de
+pagination, pas de tri, pas de groupe : en mode groupé, les `totaux` de `/groupes` servent. Distinct
+de `GET /api/encaissements/totaux` (bande fixe « Total : »), qui ne change pas.
+
+**Mêmes lignes que la liste** : mêmes filtres, même sens, périmètre commercial compris.
+`nombreTotal` égale le `totalElements` de `GET /api/encaissements` avec les mêmes filtres, règlements
+`CANCELED` compris ; les sommes et moyennes de montants les excluent, comme `/groupes` et `/totaux`.
+
+### param agregats
+
+Mêmes jetons et mêmes règles que `GET /api/encaissements/groupes` : un **nom nu** (`montantBrut`)
+vaut une somme, un nom **qualifié** (`montantBrut:AVG`) applique la fonction nommée (`SUM`, `AVG`,
+`MIN`, `MAX`, `COUNT`) selon les `fonctions` du catalogue. Chaque résultat revient sous le jeton tel
+qu'envoyé ; `null` pour `MIN`/`MAX`/`AVG` sans valeur renseignée. Une colonne non agrégeable rend 400.
+Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
+
 ## exporter
 
 Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/encaissements`, sans pagination, périmètre commercial appliqué. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, montants, nombres et booléens en cellules typées. Auteur du classeur = utilisateur connecté, titre « Encaissements », fichier `encaissements_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes. Les filtres de colonne de la grille (appliqués côté navigateur à la page chargée) ne sont pas transmis.

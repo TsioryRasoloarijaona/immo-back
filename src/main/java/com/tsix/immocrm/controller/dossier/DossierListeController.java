@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.LignesListeDossiers;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
 import com.tsix.immocrm.dto.dossier.liste.ChampDateListeDto;
 import com.tsix.immocrm.dto.dossier.liste.StatutListeDossierDto;
@@ -160,6 +161,31 @@ public class DossierListeController {
             @RequestParam(required = false) LignesListeDossiers lignes) {
         return listeService.totaux(new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
                 dateDebut, dateFin, dateVide, search, inclureSortis, lignes));
+    }
+
+    @GetMapping("/totaux-colonnes")
+    @Operation(summary = "Résumés (Σ) par colonne sur tous les dossiers du filtre, pas sur une page")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Effectif du filtre et un résumé par jeton demandé"),
+            @ApiResponse(responseCode = "400", description = "Jeton d'`agregats` inconnu, colonne non "
+                    + "agrégeable ou fonction refusée pour son type.", content = @Content)
+    })
+    public TotauxListeDto totauxColonnes(
+            @Parameter(example = "prix:AVG")
+            @RequestParam(required = false) List<String> agregats,
+            @RequestParam(required = false) List<String> statut,
+            @RequestParam(required = false) UUID commercial,
+            @RequestParam(required = false) UUID projet,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) ChampDateDossier champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @RequestParam(required = false) Boolean dateVide,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "false") boolean inclureSortis,
+            @RequestParam(required = false) LignesListeDossiers lignes) {
+        return listeService.totauxColonnes(new FiltresListeDossiers(statut, commercial, projet, trancheId, champDate,
+                dateDebut, dateFin, dateVide, search, inclureSortis, lignes), ColonneDossier.resoudreAgregats(agregats));
     }
 
     @GetMapping("/export")

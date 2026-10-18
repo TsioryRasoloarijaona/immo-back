@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.dto.common.GroupeDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.common.PageGroupesDto;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.dto.encaissement.TotauxEncaissementsDto;
@@ -176,6 +177,38 @@ public class EncaissementController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
         return encaissementService.totaux(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId, tierId,
                 reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin);
+    }
+
+    @GetMapping("/totaux-colonnes")
+    @Operation(summary = "Résumés (Σ) par colonne sur tous les encaissements du filtre, pas sur une page")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Effectif du filtre et un résumé par jeton demandé"),
+            @ApiResponse(responseCode = "400", description = "Jeton d'`agregats` inconnu, colonne non "
+                    + "agrégeable ou fonction refusée pour son type.", content = @Content)
+    })
+    public TotauxListeDto totauxColonnes(
+            @Parameter(example = "montantBrut:AVG")
+            @RequestParam(required = false) List<String> agregats,
+            @RequestParam(required = false) List<UUID> entiteId,
+            @RequestParam(required = false) List<UUID> typeId,
+            @RequestParam(required = false) List<String> etat,
+            @RequestParam(required = false) UUID compteId,
+            @RequestParam(required = false) UUID depotId,
+            @RequestParam(required = false) UUID dossierId,
+            @RequestParam(required = false) List<UUID> trancheId,
+            @RequestParam(required = false) UUID tierId,
+            @RequestParam(required = false) String reference,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean comptabilise,
+            @RequestParam(required = false) BigDecimal montantDe,
+            @RequestParam(required = false) BigDecimal montantA,
+            @RequestParam(required = false) ChampDateEncaissement champDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
+        return encaissementService.totauxColonnes(new EncaissementService.FiltresEncaissements(entiteId, typeId, etat,
+                        compteId, depotId, dossierId, trancheId, tierId, reference, search, comptabilise, montantDe,
+                        montantA, champDate, dateDebut, dateFin),
+                ColonneEncaissement.resoudreAgregats(agregats));
     }
 
     @GetMapping("/export")

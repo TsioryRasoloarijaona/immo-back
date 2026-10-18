@@ -107,6 +107,8 @@ class PerimetreCommercialTest {
     @Autowired private StlSettlementRepository settlementRepository;
     @Autowired private StlSettlementLineRepository settlementLineRepository;
 
+    private static final String RECHERCHE = "search";
+
     private StkItemType itemType;
     private StkItemCategory itemCategory;
     private StkVocation vocation;
@@ -455,6 +457,62 @@ class PerimetreCommercialTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombreTotal").value(attendu))
                 .andExpect(jsonPath("$.totaux['code:COUNT']").value(attendu));
+    }
+
+    /** FEATURE-totaux-listes.md R2 : prospections — chaque commercial ne compte que son projet, l'administrateur tout. */
+    @Test
+    void totauxColonnesDesProspections_suiventLePerimetreDeLAppelant() throws Exception {
+        newProspection("PSN-PERIM-TCOL-A1", trancheA);
+        newProspection("PSN-PERIM-TCOL-A2", trancheA);
+        newProspection("PSN-PERIM-TCOL-B1", trancheB);
+
+        verifierTotauxColonnesParAppelant("/api/prospections/totaux-colonnes", RECHERCHE, "PSN-PERIM-TCOL-");
+    }
+
+    /** FEATURE-totaux-listes.md R2 : dossiers — périmètre du commercial, l'administrateur tout. */
+    @Test
+    void totauxColonnesDesDossiers_suiventLePerimetreDeLAppelant() throws Exception {
+        newDossier("DOS-PERIM-TCOL-A1", trancheA);
+        newDossier("DOS-PERIM-TCOL-A2", trancheA);
+        newDossier("DOS-PERIM-TCOL-B1", trancheB);
+
+        verifierTotauxColonnesParAppelant("/api/dossiers/totaux-colonnes", RECHERCHE, "DOS-PERIM-TCOL-");
+    }
+
+    /** FEATURE-totaux-listes.md R2 : encaissements — périmètre du commercial (par le dossier), l'administrateur tout. */
+    @Test
+    void totauxColonnesDesEncaissements_suiventLePerimetreDeLAppelant() throws Exception {
+        newReglement("ENC-PERIM-TCOL-A1", newDossier("DOS-PERIM-ENCTCOL-A1", trancheA));
+        newReglement("ENC-PERIM-TCOL-A2", newDossier("DOS-PERIM-ENCTCOL-A2", trancheA));
+        newReglement("ENC-PERIM-TCOL-B1", newDossier("DOS-PERIM-ENCTCOL-B1", trancheB));
+
+        verifierTotauxColonnesParAppelant("/api/encaissements/totaux-colonnes", "reference", "ENC-PERIM-TCOL-");
+    }
+
+    /** Deux lignes du projet A, une du projet B : A compte 2, B compte 1, l'administrateur (affecté à A) 3. */
+    private void verifierTotauxColonnesParAppelant(String url, String filtre, String valeur) throws Exception {
+        AdmUser commercialA = newUser("perim.tcol.a." + UUID.randomUUID());
+        affecter(commercialA, projetA);
+        AdmUser commercialB = newUser("perim.tcol.b." + UUID.randomUUID());
+        affecter(commercialB, projetB);
+        AdmUser admin = newUser("perim.tcol.admin." + UUID.randomUUID());
+        affecter(admin, projetA);
+        donnerRole(admin, "Administrateur");
+
+        verifierNombreTotal(url, filtre, valeur, connecte(commercialA, "Commercial"), 2);
+        verifierNombreTotal(url, filtre, valeur, connecte(commercialB, "Commercial"), 1);
+        verifierNombreTotal(url, filtre, valeur, connecte(admin, "Administrateur"), 3);
+    }
+
+    private void verifierNombreTotal(String url, String filtre, String valeur, RequestPostProcessor appelant,
+                                     int attendu) throws Exception {
+        // La liste sous le même appelant et le même filtre d'abord : prouve le jeu de données (R1).
+        mockMvc.perform(get(url.replace("/totaux-colonnes", "")).param(filtre, valeur).with(appelant))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(attendu));
+        mockMvc.perform(get(url).param(filtre, valeur).with(appelant))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombreTotal").value(attendu));
     }
 
     // ------------------------------------------------------------------ §8.3 — non-régression

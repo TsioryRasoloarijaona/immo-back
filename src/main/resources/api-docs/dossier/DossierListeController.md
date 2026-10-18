@@ -110,6 +110,22 @@ Inclure le groupe des lignes dont la colonne groupée est vide. **Faux par défa
 
 Valeur d'énumération invalide (`champDate`, `lignes`).
 
+## totauxColonnes
+
+Les résumés Σ de la liste plate (bande « Totaux sur N ligne(s) filtrée(s) »), calculés sur **tous** les dossiers du filtre et non sur la page affichée. Pas de pagination, pas de tri, pas de groupe : en mode groupé, les `totaux` de `/groupes` servent. Distinct de `GET /api/dossiers/totaux` (bande fixe des montants par nature), qui ne change pas.
+
+**Mêmes dossiers que la liste** : mêmes filtres, même sens, sortis exclus par défaut, mêmes statuts visibles et même périmètre commercial que `GET /api/dossiers`.
+
+**Lots libres exclus** : ils ne sont pas des dossiers. Avec `lignes=DOSSIERS` (défaut), `nombreTotal` égale le `totalElements` de la liste ; avec `DOSSIERS_ET_LIBRES`, il compte les seuls dossiers (la liste ajoute les lots libres) ; avec `LIBRES`, il vaut 0 (pas de 400).
+
+### param agregats
+
+Mêmes jetons et mêmes règles que `GET /api/dossiers/groupes` : un **nom nu** (`prix`) vaut une somme, un nom **qualifié** (`prix:AVG`) applique la fonction nommée (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`) selon les `fonctions` du catalogue. Chaque résultat revient sous le jeton tel qu'envoyé ; `null` pour `MIN`/`MAX`/`AVG` sans valeur renseignée. Une colonne calculée par page (montants par nature, dernière communication…) n'est pas agrégeable : 400. Absent ou vide : seul `nombreTotal` est renvoyé, `totaux` vide.
+
+### param lignes
+
+Population de la liste : `DOSSIERS` (défaut), `DOSSIERS_ET_LIBRES`, `LIBRES`. Les totaux ne portent jamais que sur les dossiers.
+
 ## exporter
 
 Classeur Excel (`.xlsx`) de la liste courante : mêmes filtres que `GET /api/dossiers`, sans pagination, périmètre commercial appliqué. Une feuille « DONNEES » ; en-têtes = libellés du catalogue de colonnes, dans l'ordre de `colonnes` ; dates, montants et nombres en cellules typées. Auteur du classeur = utilisateur connecté, titre « Dossiers de vente », fichier `dossiers_<aaaaMMjj_HHmmss>.xlsx`. Plafond : 20 000 lignes.

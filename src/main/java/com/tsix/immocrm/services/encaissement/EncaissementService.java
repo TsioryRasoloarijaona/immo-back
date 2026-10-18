@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.MontantRestant;
 import com.tsix.immocrm.domain.TriGroupe;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.encaissement.AffectationDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
@@ -84,7 +85,7 @@ public class EncaissementService {
                                           ColonneEncaissement groupeColonne, String groupeValeur,
                                           Granularite granularite, Pageable pageable,
                                           Set<ColonneEncaissement> colonnes) {
-        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
                 compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
                 montantA, champDate, dateDebut, dateFin));
         if (groupeColonne != null) {
@@ -93,9 +94,7 @@ public class EncaissementService {
             spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
                     root, cb, groupeColonne.chemin(), granularite, groupeValeur));
         }
-        // Les règlements qu'aucun projet ne résout restent visibles (FEATURE-perimetre-commercial.md §6.4).
-        return settlementRepository.findAll(spec.and(perimetreService.filtreEncaissements()), pageable)
-                .map(s -> toDto(s, colonnes));
+        return settlementRepository.findAll(spec, pageable).map(s -> toDto(s, colonnes));
     }
 
     /**
@@ -110,10 +109,9 @@ public class EncaissementService {
                                        ColonneEncaissement groupeBy, Granularite granularite,
                                        List<AgregatDemande> agregats, TriGroupe tri,
                                        boolean inclureSansValeur, Pageable pageable) {
-        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
                 compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin))
-                .and(perimetreService.filtreEncaissements());
+                montantA, champDate, dateDebut, dateFin));
         return groupementService.grouper(StlSettlement.class, spec, groupeBy.chemin(), granularite,
                 agregats, tri, inclureSansValeur, pageable);
     }
@@ -127,10 +125,9 @@ public class EncaissementService {
                                          UUID tierId, String reference, String search,
                                          Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
                                          ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
-        Specification<StlSettlement> spec = specEncaissements(new FiltresEncaissements(entiteIds, typeIds, etats,
+        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
                 compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin))
-                .and(perimetreService.filtreEncaissements());
+                montantA, champDate, dateDebut, dateFin));
         List<ColonneEncaissement> sommees = List.of(ColonneEncaissement.MONTANT_BRUT,
                 ColonneEncaissement.MONTANT_BRUT_RESTANT, ColonneEncaissement.MONTANT_NET, ColonneEncaissement.MONTANT_BASE);
         List<AgregatDemande> agregats = ColonneEncaissement.resoudreAgregats(
@@ -140,8 +137,24 @@ public class EncaissementService {
         return new TotauxEncaissementsDto(totaux.nombre(), sommes.get(0), sommes.get(1), sommes.get(2), sommes.get(3));
     }
 
+    /**
+     * Résumés Σ sur toutes les lignes de {@link #findAll} (CANCELED compris dans {@code nombre}) ; les sommes
+     * de montants excluent les CANCELED par leurs colonnes, comme {@code /groupes} et la bande « Total : ».
+     */
+    public TotauxListeDto totauxColonnes(FiltresEncaissements filtres, List<AgregatDemande> agregats) {
+        GroupementService.Totaux totaux = groupementService.totaux(StlSettlement.class, specVisible(filtres),
+                agregats);
+        return new TotauxListeDto(totaux.nombre(), totaux.valeurs());
+    }
+
+    /** Spec de la liste et périmètre commercial : partagée par la liste, ses groupes et ses totaux. */
+    private Specification<StlSettlement> specVisible(FiltresEncaissements filtres) {
+        // Les règlements qu'aucun projet ne résout restent visibles (FEATURE-perimetre-commercial.md §6.4).
+        return specEncaissements(filtres).and(perimetreService.filtreEncaissements());
+    }
+
     /** Filtres de la liste des encaissements, tels que reçus du contrôleur. */
-    private record FiltresEncaissements(
+    public record FiltresEncaissements(
             List<UUID> entiteIds, List<UUID> typeIds, List<String> etats, UUID compteId,
             UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
             String search, Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,

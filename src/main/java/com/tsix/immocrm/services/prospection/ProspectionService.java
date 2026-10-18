@@ -255,10 +255,22 @@ public class ProspectionService {
     public Page<ProspectionListItemDto> findAll(FiltresListeProspection liste, FiltresAvancesProspection filtres,
             Set<ColonneProspection> colonnes, ColonneProspection groupeColonne, String groupeValeur,
             Granularite granularite, Pageable pageable) {
-        Specification<ComProspection> spec = specProspections(criteres(liste, filtres), filtres)
-                .and(perimetreService.filtreProspections())
+        Specification<ComProspection> spec = specProspectionsVisibles(liste, filtres)
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
+    }
+
+    /** Résumés sur toutes les lignes de {@link #findAll} (même spec, même périmètre), sans page. */
+    public TotauxListeDto totauxProspections(FiltresListeProspection liste, FiltresAvancesProspection filtres,
+            List<AgregatDemande> agregats) {
+        GroupementService.Totaux totaux = groupementService.totaux(ComProspection.class,
+                specProspectionsVisibles(liste, filtres), agregats);
+        return new TotauxListeDto(totaux.nombre(), totaux.valeurs());
+    }
+
+    private Specification<ComProspection> specProspectionsVisibles(FiltresListeProspection liste,
+            FiltresAvancesProspection filtres) {
+        return specProspections(criteres(liste, filtres), filtres).and(perimetreService.filtreProspections());
     }
 
     /**
