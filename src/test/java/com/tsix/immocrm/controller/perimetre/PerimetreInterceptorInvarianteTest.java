@@ -87,6 +87,12 @@ class PerimetreInterceptorInvarianteTest {
             // EncaissementService#totaux compose specEncaissements avec filtreEncaissements, la Specification de la
             // liste. Vérifié par PerimetreCommercialTest#commercialAffecteProjetA_totauxDesEncaissementsExcluentLeProjetB.
             "/api/encaissements/totaux",
+            // Σ par colonne (FEATURE-totaux-listes.md R1/R2) : specVisible / specProspectionsVisibles /
+            // ListeDossiersService#specification, la Specification de chaque liste, périmètre compris.
+            // Vérifié par PerimetreCommercialTest#totauxColonnesDes{Prospections,Dossiers,Encaissements}_*.
+            "/api/encaissements/totaux-colonnes",
+            "/api/prospections/totaux-colonnes",
+            "/api/dossiers/totaux-colonnes",
             // Import CSV de leads (FEATURE-creation-pre-prospection.md §5). Aucune ressource
             // chargée par identifiant : un fichier en entrée. Le périmètre est contrôlé dans le
             // service — la tranche cible par verifierEcritureSurTranche (403, rien d'écrit), et les
