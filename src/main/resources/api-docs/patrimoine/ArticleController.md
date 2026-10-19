@@ -45,6 +45,41 @@ caves annexées à un lot. `statut` filtre sur la disponibilité (défaut: DISPO
 `categorieId`/`typeId` filtrent comme sur `GET /api/tranches/{id}/articles`. Chaque sous-article
 renvoyé porte son propre `description` (son nom), pas seulement son `code`.
 
+## creer
+
+Crée un article principal (`IsUnderItem = 0`). Obligatoires : `trancheId`, `code` (unique dans la tranche, sans
+casse), `description`, `categorieId` et `typeId` (nature Bâtiment, non paramétrés « pour les sous-articles »),
+`immeubleId`, `etageId`. Défauts : vocation VENTE (PROJET refusée), surface provisoire 1, surface définitive =
+provisoire, prix 0, TVA 0, `estTitre` vrai. Pour chaque surface, le prix au m² se saisit **soit** HT **soit** TTC
+(les deux → 400) ; le serveur calcule l'autre et les prix de l'article comme OMRAN (intermédiaires non arrondis,
+échelle 6 HALF_UP au stockage). `prixVente*` = article + sous-articles rattachés.
+
+## modifier
+
+Champ absent ou `null` = inchangé. La tranche ne se modifie pas (400). Si l'article est **occupé** (dossier de
+vente ou de location, le sien ou celui de son article) : seuls description, notes, adresse, titre foncier,
+titré, surfaces intérieure/murs/parties communes, immeuble et étage restent modifiables ; toute autre valeur
+différente → 409 nommant le dossier. Un changement de prix, de surface ou de TVA recalcule l'article et, pour un
+sous-article rattaché, le prix de vente de son article.
+
+## creerSousArticle
+
+Crée un sous-article (`IsUnderItem = IsUnderItemOrigin = 1`) rattaché à l'article `id`, qui doit être un article
+principal non occupé. Tranche, vocation et nature sont celles de l'article (`trancheId` dans le corps → 400) ;
+immeuble par défaut celui de l'article ; catégorie et type paramétrés « pour les sous-articles » ; `estTitre`
+faux par défaut. Le prix de vente de l'article est recalculé.
+
+## affecter
+
+Corps facultatif `{ "toujoursAffecte": bool }` (défaut faux). Le sous-article doit être libre : même tranche,
+sous-article, sans article, non toujours affecté, sans dossier (409 « Ce sous article n'est pas libre »).
+L'article doit être principal et non occupé.
+
+## desaffecter
+
+Refus si le sous-article a un dossier de vente ou de location, ou si l'article est occupé (409). Effet :
+`ParentId` et `AlwaysAffected` remis à vide, prix de vente de l'article recalculé.
+
 ## getPiecesJointes
 
 Retourne toutes les pièces jointes rattachées à l'article `id` (`AdmAttachedFile.CategoryId =

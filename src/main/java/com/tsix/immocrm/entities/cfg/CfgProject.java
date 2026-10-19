@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -131,4 +132,8 @@ public class CfgProject {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgCompanyId")
     private CfgCompany cfgCompany;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
 }

@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.patrimoine;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
+import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -14,6 +15,7 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
+import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
@@ -44,15 +46,20 @@ import static java.util.Objects.requireNonNullElse;
 @Transactional(readOnly = true)
 public class ArticleService {
 
+    public static final String NATURE_BATIMENT = "BAT";
+    public static final String VOCATION_PROJET = "PROJET";
+
     private final StkItemRepository stkItemRepository;
     private final CfgTrancheRepository trancheRepository;
     private final ComFolderRepository folderRepository;
+    private final EcritureArticle ecriture;
 
     public ArticleService(StkItemRepository stkItemRepository, CfgTrancheRepository trancheRepository,
-                           ComFolderRepository folderRepository) {
+                          ComFolderRepository folderRepository, EcritureArticle ecriture) {
         this.stkItemRepository = stkItemRepository;
         this.trancheRepository = trancheRepository;
         this.folderRepository = folderRepository;
+        this.ecriture = ecriture;
     }
 
     /**
@@ -94,9 +101,62 @@ public class ArticleService {
     }
 
     public ArticleDetailDto findById(UUID id) {
-        StkItem item = stkItemRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
+        return toDetail(charger(id));
+    }
 
+    @Transactional
+    public ArticleDetailDto creerArticle(ArticleEcritureDto saisie) {
+        return toDetail(ecriture.creer(saisie));
+    }
+
+    @Transactional
+    public ArticleDetailDto modifierArticle(UUID id, ArticleEcritureDto saisie) {
+        StkItem article = charger(id);
+        ecriture.modifier(article, saisie);
+        return toDetail(article);
+    }
+
+    @Transactional
+    public ArticleDetailDto creerSousArticle(UUID parentId, ArticleEcritureDto saisie) {
+        return toDetail(ecriture.creerSousArticle(charger(parentId), saisie));
+    }
+
+    @Transactional
+    public ArticleDetailDto affecterSousArticle(UUID parentId, UUID sousArticleId, boolean toujoursAffecte) {
+        StkItem parent = charger(parentId);
+        ecriture.affecter(parent, charger(sousArticleId), toujoursAffecte);
+        return toDetail(parent);
+    }
+
+    @Transactional
+    public ArticleDetailDto desaffecterSousArticle(UUID parentId, UUID sousArticleId) {
+        StkItem parent = charger(parentId);
+        ecriture.desaffecter(parent, charger(sousArticleId));
+        return toDetail(parent);
+    }
+
+    /** Sous-articles rattachables à un article de la tranche (FEATURE-patrimoine-ecriture.md §5.1). */
+    public Page<ArticleListItemDto> findSousArticlesLibres(UUID trancheId, Pageable pageable) {
+        if (!trancheRepository.existsByIdAndCfgProject_CfgCompany_IsActiveTrue(trancheId)) {
+            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
+        }
+        return stkItemRepository.findSousArticlesLibres(trancheId, pageable)
+                .map(item -> toListItem(item, Collections.emptyMap(), Collections.emptyMap()));
+    }
+
+    /** Occupé = affecté à un dossier de vente ou de location, lui ou l'article auquel il est rattaché (§5.4.4, §5.4.8). */
+    public static boolean estOccupe(StkItem item) {
+        boolean propre = item.getComFolderId() != null || item.getRntFolderId() != null;
+        return propre || (item.getParent() != null && estOccupe(item.getParent()));
+    }
+
+    private StkItem charger(UUID id) {
+        return stkItemRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
+    }
+
+    private ArticleDetailDto toDetail(StkItem item) {
+        UUID id = item.getId();
         List<StkItem> sousArticlesItems = stkItemRepository.findByParentId(id);
         Map<UUID, ComFolder> dossiers = loadDossiers(Stream.concat(Stream.of(item), sousArticlesItems.stream()).toList());
         BigDecimal superficieSousArticles = sousArticlesItems.stream()
@@ -114,6 +174,7 @@ public class ArticleService {
         var etage = item.getStkFloor();
         var nature = item.getStkKind();
         var presentationType = item.getStkPresentationType();
+        var vocation = item.getStkVocation();
         ComFolder dossier = item.getComFolderId() != null ? dossiers.get(item.getComFolderId()) : null;
         CfgTier client = Champs.de(dossier, ComFolder::getCfgCustomer);
         Optional<PrixArticle.PrixDeReference> prixSuggere = PrixArticle.prixDeReference(item);
@@ -163,7 +224,37 @@ public class ArticleService {
                 Champs.de(presentationType, StkPresentationType::getDescription),
                 superficieSousArticles,
                 prixSuggere.map(PrixArticle.PrixDeReference::ttc).orElse(null),
-                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false)
+                prixSuggere.map(PrixArticle.PrixDeReference::estPlancher).orElse(false),
+                item.getAreaFloor(),
+                item.getComSaleUnitCostFloorHT(),
+                item.getComSaleUnitCostFloor(),
+                item.getComSaleUnitCostHT(),
+                item.getComSaleUnitCost(),
+                item.getSalePriceFloorHT(),
+                item.getSalePriceFloor(),
+                item.getSalePriceHT(),
+                item.getSalePrice(),
+                item.getComSalePriceFloorHT(),
+                item.getComSalePriceFloor(),
+                item.getComSalePriceHT(),
+                item.getComSalePrice(),
+                item.getDiscountMax(),
+                item.getDiscountMax2(),
+                item.getIsTitled(),
+                item.getAlwaysAffected(),
+                item.getIsUnderItem(),
+                estOccupe(item),
+                Champs.de(vocation, StkVocation::getId),
+                Champs.de(vocation, StkVocation::getCode),
+                Champs.de(vocation, StkVocation::getDescription),
+                item.getNotes(),
+                item.getInteriorArea(),
+                item.getWallsArea(),
+                item.getCommonPartsArea(),
+                item.getUserCreate(),
+                item.getUserCreateDateTime(),
+                item.getUserUpdate(),
+                item.getUserUpdateDateTime()
         );
     }
 

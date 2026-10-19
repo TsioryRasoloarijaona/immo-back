@@ -5,7 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpecificationExecutor<StkItem> {
@@ -23,4 +28,13 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
     @Query("SELECT i.parent.id, COALESCE(SUM(i.area), 0) FROM StkItem i " +
             "WHERE i.parent.id IN :parentIds GROUP BY i.parent.id")
     List<Object[]> sumAreaGroupedByParentIdIn(List<UUID> parentIds);
+
+    /** Unicité du code par tranche, sous-articles compris (collation French_CI_AS : sans casse). */
+    Optional<StkItem> findFirstByStkHierarchyIdAndCode(UUID trancheId, String code);
+
+    /** Filtre OMRAN {@code BuildItem:AffectUnderItem} + nos deux garde-fous d'occupation (FEATURE-patrimoine-ecriture.md §5.1). */
+    @Query("SELECT i FROM StkItem i WHERE i.stkHierarchy.id = :trancheId AND i.isUnderItem = true "
+            + "AND i.alwaysAffected = false AND i.parent IS NULL "
+            + "AND i.comFolderId IS NULL AND i.rntFolderId IS NULL")
+    Page<StkItem> findSousArticlesLibres(@Param("trancheId") UUID trancheId, Pageable pageable);
 }

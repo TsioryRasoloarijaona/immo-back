@@ -75,6 +75,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginSupportRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionProfileCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionProfileRepository;
+import com.tsix.immocrm.repositories.stk.StkBuildingRepository;
 import com.tsix.immocrm.repositories.stk.StkFloorRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -89,6 +90,7 @@ import com.tsix.immocrm.services.patrimoine.StkItemSpecifications;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -152,6 +154,9 @@ public class ReferentielService {
     private final AdmAttachedFileTypeRepository attachedFileTypeRepository;
     private final StkKindRepository kindRepository;
     private final StkFloorRepository floorRepository;
+    private final StkBuildingRepository buildingRepository;
+
+    private static final Sort PAR_TRI = Sort.by("sorting", "code");
 
     public ReferentielService(ComProspectionKindRepository prospectionKindRepository,
                                ComProspectionOriginRepository prospectionOriginRepository,
@@ -192,7 +197,8 @@ public class ReferentielService {
                                StlDepositRepository depositRepository,
                                AdmAttachedFileTypeRepository attachedFileTypeRepository,
                                StkKindRepository kindRepository,
-                               StkFloorRepository floorRepository) {
+                               StkFloorRepository floorRepository,
+                               StkBuildingRepository buildingRepository) {
         this.prospectionKindRepository = prospectionKindRepository;
         this.prospectionOriginRepository = prospectionOriginRepository;
         this.prospectionOriginSupportRepository = prospectionOriginSupportRepository;
@@ -233,6 +239,7 @@ public class ReferentielService {
         this.attachedFileTypeRepository = attachedFileTypeRepository;
         this.kindRepository = kindRepository;
         this.floorRepository = floorRepository;
+        this.buildingRepository = buildingRepository;
     }
 
     public List<ReferentielItemDto> roles() {
@@ -299,9 +306,11 @@ public class ReferentielService {
                 a.getId(), a.getCode(), a.getDescription(), null)).toList();
     }
 
-    public List<ReferentielItemDto> vocations() {
-        return vocationRepository.findAll().stream().map(v -> new ReferentielItemDto(
-                v.getId(), v.getCode(), v.getDescription(), null)).toList();
+    /** {@code pourArticle} : sans la vocation PROJET, refusée sur un article (FEATURE-patrimoine-ecriture.md §6). */
+    public List<ReferentielItemDto> vocations(boolean pourArticle) {
+        return vocationRepository.findAll().stream()
+                .filter(v -> !pourArticle || !ArticleService.VOCATION_PROJET.equals(v.getCode()))
+                .map(v -> new ReferentielItemDto(v.getId(), v.getCode(), v.getDescription(), null)).toList();
     }
 
     /** {@code StkKind}, distinct de la catégorie et du type. */
@@ -311,8 +320,13 @@ public class ReferentielService {
     }
 
     public List<ReferentielItemDto> etages() {
-        return floorRepository.findAll().stream().map(f -> new ReferentielItemDto(
-                f.getId(), f.getCode(), f.getDescription(), null)).toList();
+        return floorRepository.findAll(PAR_TRI).stream().map(f -> new ReferentielItemDto(
+                f.getId(), f.getCode(), f.getDescription(), f.getSorting())).toList();
+    }
+
+    public List<ReferentielItemDto> immeubles() {
+        return buildingRepository.findAll(PAR_TRI).stream().map(b -> new ReferentielItemDto(
+                b.getId(), b.getCode(), b.getDescription(), b.getSorting())).toList();
     }
 
     public List<ReferentielItemDto> tierTypes() {
@@ -388,13 +402,18 @@ public class ReferentielService {
                 s.getId(), s.getCode(), s.getDescription(), s.getSorting())).toList();
     }
 
-    public List<ReferentielItemDto> categoriesBien() {
-        return itemCategoryRepository.findAll().stream().map(c -> new ReferentielItemDto(
+    /** {@code pourSousArticle} renseigné : nature Bâtiment et {@code ForUnderItem} égal (formulaires d'article). */
+    public List<ReferentielItemDto> categoriesBien(Boolean pourSousArticle) {
+        List<StkItemCategory> categories = pourSousArticle == null ? itemCategoryRepository.findAll()
+                : itemCategoryRepository.findByStkKind_CodeAndForUnderItem(ArticleService.NATURE_BATIMENT, pourSousArticle);
+        return categories.stream().map(c -> new ReferentielItemDto(
                 c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
-    public List<ReferentielItemDto> typesBien() {
-        return itemTypeRepository.findAll().stream().map(t -> new ReferentielItemDto(
+    public List<ReferentielItemDto> typesBien(Boolean pourSousArticle) {
+        List<StkItemType> types = pourSousArticle == null ? itemTypeRepository.findAll()
+                : itemTypeRepository.findByStkKind_CodeAndForUnderItem(ArticleService.NATURE_BATIMENT, pourSousArticle);
+        return types.stream().map(t -> new ReferentielItemDto(
                 t.getId(), t.getCode(), t.getDescription(), null)).toList();
     }
 

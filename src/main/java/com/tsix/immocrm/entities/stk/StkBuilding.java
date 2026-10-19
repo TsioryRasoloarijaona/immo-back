@@ -22,6 +22,9 @@ public class StkBuilding {
     @Column(name = "PKey", nullable = false)
     private UUID id;
 
+    @Column(name = "Sorting")
+    private Integer sorting;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "Code")

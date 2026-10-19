@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
@@ -17,4 +18,7 @@ public interface CfgProjectRepository extends JpaRepository<CfgProject, UUID> {
 
     @Query("SELECT p FROM CfgProject p WHERE p.cfgCompany.isActive = true")
     Page<CfgProject> findDesEntitesActives(Pageable pageable);
+
+    /** Collation French_CI_AS : l'égalité SQL ignore déjà la casse et les espaces de fin. */
+    Optional<CfgProject> findFirstByCode(String code);
 }
