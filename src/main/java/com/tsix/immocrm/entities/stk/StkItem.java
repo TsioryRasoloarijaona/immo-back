@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.stk;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -546,4 +547,26 @@ public class StkItem {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkPresentationTypeId")
     private StkPresentationType stkPresentationType;
+
+    // -- Fiche article (FEATURE-patrimoine-article-fiche.md §1) --
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkOrientationId")
+    private StkOrientation stkOrientation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkCostCategoryId")
+    private StkCostCategory stkCostCategory;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkFacadeId")
+    private StkFacade stkFacade;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanySyndicId")
+    private CfgCompany cfgCompanySyndic;
+
+    // Module Syndic : lu pour la suppression (article occupé), jamais écrit par nous.
+    @Column(name = "SynFolderId", insertable = false, updatable = false)
+    private UUID synFolderId;
 }

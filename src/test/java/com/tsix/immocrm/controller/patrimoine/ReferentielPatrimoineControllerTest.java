@@ -5,6 +5,7 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.app.AppApiClient;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.fixtures.FixtureArticleFiche;
 import com.tsix.immocrm.fixtures.FixturePatrimoine;
 import com.tsix.immocrm.fixtures.FixtureTrancheFiche;
 import com.tsix.immocrm.repositories.app.AppApiClientRepository;
@@ -13,6 +14,8 @@ import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.CleApiService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -50,6 +53,7 @@ class ReferentielPatrimoineControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
     @Autowired private FixtureTrancheFiche fiche;
+    @Autowired private FixtureArticleFiche ficheArticle;
     @Autowired private AppApiClientRepository clientRepository;
     @Autowired private CleApiService cleApiService;
 
@@ -206,5 +210,34 @@ class ReferentielPatrimoineControllerTest {
         mockMvc.perform(get(BASE + "standings").header(ApiKeyAuthenticationFilter.EN_TETE, cle))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+    }
+
+    // ------------------------------------------------------------------ FEATURE-patrimoine-article-fiche.md §1, §2, §9.9
+
+    @ParameterizedTest(name = "{1}")
+    @CsvSource({"StkOrientation, orientations", "StkCostCategory, categories-charge", "StkFacade, facades",
+            "StkVue, vues"})
+    void fiche_r9_9_referentielDeLArticle_exposeIdCodeDescription(String table, String ressource) throws Exception {
+        String code = "ART-REF-" + jeton;
+        UUID id = ficheArticle.reference(table, code);
+
+        lire(ressource)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(ligne(id) + ".code").value(code))
+                .andExpect(jsonPath(ligne(id) + ".description").value(FixtureArticleFiche.libelle(code)));
+    }
+
+    /** §2 : référentiel des contenances avec leurs options (option grisée si vide, quantité si IsOptionNWithQuantity). */
+    @Test
+    void fiche_r2_contenances_exposentLesOptions() throws Exception {
+        UUID chambre = ficheArticle.contenance("CH-" + jeton, "SDB", true);
+        UUID salon = ficheArticle.contenance("SAL-" + jeton, "", false);
+
+        lire("contenances")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(ligne(chambre) + ".code").value("CH-" + jeton))
+                .andExpect(jsonPath(ligne(chambre) + ".option1").value("SDB"))
+                .andExpect(jsonPath(ligne(chambre) + ".option1AvecQuantite").value(true))
+                .andExpect(jsonPath(ligne(salon) + ".option1AvecQuantite").value(false));
     }
 }

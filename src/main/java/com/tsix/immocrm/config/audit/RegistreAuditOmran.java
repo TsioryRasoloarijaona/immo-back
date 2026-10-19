@@ -14,8 +14,12 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
 import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
 import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
+import com.tsix.immocrm.entities.stk.StkContenance;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.stk.StkItemContenance;
+import com.tsix.immocrm.entities.stk.StkItemVue;
 import com.tsix.immocrm.entities.stk.StkKind;
+import com.tsix.immocrm.entities.stk.StkVue;
 import com.tsix.immocrm.entities.cfg.CfgTrancheFolderEntity;
 import com.tsix.immocrm.entities.cfg.ComSalesCommission;
 import com.tsix.immocrm.entities.com.ComDocument;
@@ -45,16 +49,20 @@ public final class RegistreAuditOmran {
     static final String ACTIONNAIRE = "Yes.Cfg.CfgShareholder";
     static final String GROUPE = "Yes.Cfg.CfgGroupShareholder";
     static final String LIGNE_GROUPE = "Yes.Cfg.CfgGroupShareholderLine";
+    // Codes OMRAN (StkItemVue.cs, ItemContenance.cs) : aucune ligne en prod (FEATURE-patrimoine-article-fiche.md §11.8).
+    static final String VUE_ARTICLE = "Yes.Stk.Building.StkItemVue";
+    static final String CONTENANCE_ARTICLE = "Yes.Stk.Building.ItemContenance";
     private static final String LIBELLE_TRANCHE = "Tranche";
 
     /** Types que le journal rend : rien d'autre ne sort de {@code AdmWebHistorics} (revue §10.1). */
     public static final List<String> TYPES = List.of(PROGRAMME, TRANCHE, TRANCHE_ARTICLE, ARTICLE, SOUS_ARTICLE, TERRAIN,
-            TRANCHE_ETAGE, ENTITE, REPARTITION, ACTIONNAIRE, GROUPE, LIGNE_GROUPE);
+            TRANCHE_ETAGE, ENTITE, REPARTITION, ACTIONNAIRE, GROUPE, LIGNE_GROUPE, VUE_ARTICLE, CONTENANCE_ARTICLE);
 
     private static final List<Class<?>> CLASSES = List.of(CfgProject.class, CfgTranche.class, StkItem.class,
             CfgTrancheStkItem.class, CfgTrancheLevel.class, CfgTrancheCoveredFloor.class,
             CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
+            StkItemVue.class, StkItemContenance.class,
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class);
 
     private RegistreAuditOmran() {
@@ -96,6 +104,10 @@ public final class RegistreAuditOmran {
                     Objects.toString(f.getSorting(), ""), null, null);
             case AdmUserHabilitation h -> new Trace("Yes.Adm.AdmUserHabilitation", "Habilitation",
                     Objects.toString(Champs.de(h.getAdmUser(), AdmUser::getId), ""), null, null);
+            case StkItemVue v -> ligneArticle(VUE_ARTICLE, "Vues", Champs.de(v.getStkVue(), StkVue::getDescription),
+                    v.getStkItem());
+            case StkItemContenance c -> ligneArticle(CONTENANCE_ARTICLE, "Contenances",
+                    Champs.de(c.getStkContenance(), StkContenance::getDescription), c.getStkItem());
             // Mesurés en prod : classes C# (pas les tables), sans parent ; finalisation libellée par son type de dossier.
             case ComSalesCommission ignore -> new Trace("Yes.Cfg.SalesCommission", "Commission vendeur", "Commission vendeur",
                     null, null);
@@ -104,6 +116,12 @@ public final class RegistreAuditOmran {
             case ComDocument ignore -> new Trace("Yes.Com.Sales.ComDocument", "Financement", "Financement", null, null);
             default -> null;
         });
+    }
+
+    /** Ligne enfant d'un article : parent = l'article, typé selon sa nature (article, sous-article, terrain). */
+    private static Trace ligneArticle(String type, String libelleType, String libelle, StkItem article) {
+        return new Trace(type, libelleType, libelle, article != null ? article(article).type() : null,
+                Champs.de(article, StkItem::getId));
     }
 
     private static String codeActionnaire(LigneActionnaireOmran ligne) {

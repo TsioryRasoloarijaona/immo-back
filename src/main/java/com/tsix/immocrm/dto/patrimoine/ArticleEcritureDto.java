@@ -3,6 +3,8 @@ package com.tsix.immocrm.dto.patrimoine;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -13,10 +15,10 @@ import java.util.UUID;
         + "= inchangé. Taux et remises en fraction (0,2 = 20 %).")
 public record ArticleEcritureDto(
         @Schema(description = "Tranche (StkHierarchyId). Obligatoire pour un article, non modifiable, interdit pour un "
-                + "sous-article (celle du parent).") UUID trancheId,
+                + "sous-article (400, celle du parent).") UUID trancheId,
         @Schema(description = "Code, unique dans la tranche (sous-articles compris). Obligatoire.") String code,
         @Schema(description = "Libellé. Obligatoire.") String description,
-        @Schema(description = "Vocation (StkVocation), défaut VENTE, PROJET refusée. Ignorée pour un sous-article.")
+        @Schema(description = "Vocation (StkVocation), défaut VENTE, PROJET refusée. Interdite pour un sous-article (400).")
         UUID vocationId,
         @Schema(description = "Catégorie nature Bâtiment ; « pour les sous-articles » selon le lot. Obligatoire.")
         UUID categorieId,
@@ -41,6 +43,53 @@ public record ArticleEcritureDto(
         @Schema(description = "WallsArea, ≥ 0.") BigDecimal surfaceMurs,
         @Schema(description = "CommonPartsArea, ≥ 0.") BigDecimal surfacePartiesCommunes,
         @Schema(description = "AlwaysAffected, à la création d'un sous-article seulement (défaut faux).")
-        Boolean toujoursAffecte
+        Boolean toujoursAffecte,
+
+        // -- Fiche article (FEATURE-patrimoine-article-fiche.md §1) --
+        @Schema(description = "Type de présentation (StkPresentationType) de la tranche de l'article ; un changement "
+                + "remplace les contenances par celles du type.") UUID presentationId,
+        @Schema(description = "Orientation (StkOrientation).") UUID orientationId,
+        @Schema(description = "Catégorie de charge (StkCostCategory).") UUID categorieChargeId,
+        @Schema(description = "Façade (StkFacade).") UUID facadeId,
+        @Schema(description = "Entité de gestion du syndic (CfgCompany, CfgCompanySyndicId).") UUID entiteSyndicId,
+        @Schema(description = "Vues (StkVue) : l'ensemble remplace celui de l'article ; [] retire tout, absent = inchangé.")
+        List<UUID> vueIds,
+        @Schema(description = "ComSaleMinAdvance : avance minimum, ≥ 0.") BigDecimal avanceMinimum,
+        @Schema(description = "AmountHT : loyer mensuel HT, ≥ 0.") BigDecimal loyerMensuelHT,
+        @Schema(description = "CautionNumber : nombre de cautions, ≥ 0.") Integer nombreCautions,
+        @Schema(description = "Anomalies (1000 caractères au plus).") String anomalies,
+        @Schema(description = "Contenance en texte libre (1000 caractères au plus).") String contenanceLibre,
+        @Schema(description = "IsAvailableForSaleInWebSite : disponible pour la vente sur le web.") Boolean disponibleVenteWeb,
+        @Schema(description = "IsAvailableForRentInWebSite : disponible pour la location sur le web.")
+        Boolean disponibleLocationWeb,
+        @Schema(description = "RegistryDate : date d'enregistrement.") LocalDateTime dateEnregistrement,
+        @Schema(description = "RegistryNumber : numéro d'enregistrement.") String numeroEnregistrement,
+        @Schema(description = "RegistryPlace : lieu d'enregistrement.") String lieuEnregistrement,
+        @Schema(description = "ImmatriculationCPF.") String cpfImmatriculation,
+        @Schema(description = "ImmatriculationDate.") LocalDateTime dateImmatriculation,
+        @Schema(description = "TitleNumberMother : titre foncier mère.") String titreFoncierMere,
+        @Schema(description = "TitleName : intitulé du titre foncier.") String intituleTitreFoncier,
+        @Schema(description = "TitleDate : date du titre foncier.") LocalDateTime dateTitreFoncier,
+        @Schema(description = "PropertyCalled : propriété dite.") String proprieteDite,
+        @Schema(description = "FractionDivided : fraction divise.") String fractionDivise,
+        @Schema(description = "FractionDividedLand : fraction divise du terrain.") String fractionDiviseTerrain,
+        @Schema(description = "DividedPart : parties divises, ≥ 0.") BigDecimal partiesDivises,
+        @Schema(description = "UndividedPart : parties indivises, ≥ 0.") BigDecimal partiesIndivises,
+        @Schema(description = "GroupLandQuota : quote-part du terrain du groupe.") String quotaTerrainGroupe,
+        @Schema(description = "TitleNotes : notes du titre foncier.") String notesTitreFoncier,
+        @Schema(description = "ElectricityRef (50 caractères au plus, comme chaque compteur).") String referenceElectricite,
+        @Schema(description = "ElectricityMeterPolice.") String policeElectricite,
+        @Schema(description = "ElectricityMeter.") String compteurElectricite,
+        @Schema(description = "ElectricityMeterIndex.") String releveElectricite,
+        @Schema(description = "WaterRef.") String referenceEau,
+        @Schema(description = "WaterMeterPolice.") String policeEau,
+        @Schema(description = "WaterMeter.") String compteurEau,
+        @Schema(description = "WaterMeterIndex.") String releveEau,
+        @Schema(description = "GasRef.") String referenceGaz,
+        @Schema(description = "GasMeterPolice.") String policeGaz,
+        @Schema(description = "GasMeter.") String compteurGaz,
+        @Schema(description = "GasMeterIndex.") String releveGaz,
+        @Schema(description = "PATCH : champs à vider (date, référence → NULL ; nombre → 0 ; case → faux ; texte → \"\"). "
+                + "Classification, surfaces, prix, TVA, textes du socle et vues → 400.") List<String> champsAVider
 ) {
 }

@@ -17,6 +17,8 @@ import java.util.UUID;
 public final class StkItemSpecifications {
 
     private static final String STK_HIERARCHY = "stkHierarchy";
+    private static final String VENTE = "comFolderId";
+    private static final String LOCATION = "rntFolderId";
 
     private StkItemSpecifications() {
     }
@@ -63,8 +65,8 @@ public final class StkItemSpecifications {
         }
         if (f.statut() != null) {
             predicates.add(switch (f.statut()) {
-                case DISPONIBLE -> cb.isNull(root.get("comFolderId"));
-                case OCCUPE -> cb.isNotNull(root.get("comFolderId"));
+                case DISPONIBLE -> cb.and(cb.isNull(root.get(VENTE)), cb.isNull(root.get(LOCATION)));
+                case OCCUPE -> cb.or(cb.isNotNull(root.get(VENTE)), cb.isNotNull(root.get(LOCATION)));
             });
         }
     }

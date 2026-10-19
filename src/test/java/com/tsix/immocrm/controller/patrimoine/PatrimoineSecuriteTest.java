@@ -66,6 +66,9 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles"),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/affecter"),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/desaffecter"),
+                // FEATURE-patrimoine-article-fiche.md §2, §3 : écriture Administrateur.
+                Arguments.of(HttpMethod.DELETE, "/api/articles/" + ID),
+                Arguments.of(HttpMethod.PUT, "/api/articles/" + ID + "/contenances"),
                 // FEATURE-patrimoine-tranche-regles.md §1-§4 : écritures Administrateur du lot P1c.
                 Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/finalisations"),
                 Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/commissions"),

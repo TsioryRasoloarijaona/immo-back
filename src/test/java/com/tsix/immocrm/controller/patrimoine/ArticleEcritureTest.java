@@ -13,7 +13,9 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.fixtures.CorpsJson;
+import com.tsix.immocrm.fixtures.FixtureArticleFiche;
 import com.tsix.immocrm.fixtures.FixturePatrimoine;
+import com.tsix.immocrm.fixtures.FixtureTrancheOnglets;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import jakarta.persistence.Tuple;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +46,7 @@ import static com.tsix.immocrm.fixtures.FixturePatrimoine.guid;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -79,6 +82,8 @@ class ArticleEcritureTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine fixture;
     @Autowired private StkItemRepository stkItemRepository;
+    @Autowired private FixtureArticleFiche ficheArticle;
+    @Autowired private FixtureTrancheOnglets onglets;
 
     private AdmUser admin;
     private CfgProject projet;
@@ -659,8 +664,9 @@ class ArticleEcritureTest {
     void r5_4_4_articleOccupe_modificationDeLaDescription_200() throws Exception {
         UUID id = creerOccupe("ART-ECR-OCC-DESC");
 
+        // titreFoncier retiré du corps : protégé si occupé depuis FEATURE-patrimoine-article-fiche.md §1 (test plus bas).
         modifier(id, corps().avec(DESCRIPTION, "Description modifiee").avec("notes", "Note")
-                .avec("titreFoncier", "TF-9").avec("immeubleId", fixture.immeuble("IMM-ART-ECR-2").getId()))
+                .avec("immeubleId", fixture.immeuble("IMM-ART-ECR-2").getId()))
                 .andExpect(status().isOk());
 
         assertThat(fixture.ligneArticle(id).get("Description")).isEqualTo("Description modifiee");
@@ -682,5 +688,66 @@ class ArticleEcritureTest {
 
         modifier(id, corps().avec(DESCRIPTION, "x")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.occupe").value(true));
+    }
+
+    // ------------------------------------------------------------------ FEATURE-patrimoine-article-fiche.md §1, §4, §9.5
+
+    private UUID creerLoue(String code) throws Exception {
+        UUID id = creerOk(corpsArticle(code));
+        ficheArticle.occuper(id, "RntFolderId", ficheArticle.location("LOC-" + code));
+        return id;
+    }
+
+    /** Fiche §4.3 / §9.5 : un dossier de location occupe l'article comme un dossier de vente. */
+    @ParameterizedTest
+    @ValueSource(strings = {PRIX_DEFINITIF, PRIX_PROVISOIRE, SURFACE_DEFINITIVE, SURFACE_PROVISOIRE})
+    void fiche_r4_3_articleLoue_modificationProtegee_409(String champ) throws Exception {
+        UUID id = creerLoue("ART-LOC-" + champ);
+
+        modifier(id, corps().avec(champ, new BigDecimal("0.1"))).andExpect(status().isConflict());
+    }
+
+    /** Fiche §1 : TitleNumber est une donnée « définitive », protégée si occupé (vente). */
+    @Test
+    void fiche_r1_titreFoncier_articleVendu_409() throws Exception {
+        UUID id = creerOccupe("ART-OCC-TF");
+
+        modifier(id, corps().avec("titreFoncier", "TF-AUTRE")).andExpect(status().isConflict());
+    }
+
+    /** Fiche §1, §7 : foncier protégé si occupé, location comprise. */
+    @Test
+    void fiche_r1_titreFoncier_articleLoue_409() throws Exception {
+        UUID id = creerLoue("ART-LOC-TF");
+
+        modifier(id, corps().avec("titreFoncier", "TF-AUTRE")).andExpect(status().isConflict());
+    }
+
+    @Test
+    void fiche_r9_5_articleLoue_detailOccupe() throws Exception {
+        UUID id = creerLoue("ART-LOC-DTO");
+
+        mockMvc.perform(get(ARTICLE, id).with(connecte(admin))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.occupe").value(true));
+    }
+
+    /** Fiche §9.5 : statutOf ne lisait que ComFolderId ; un article loué s'affiche occupé. */
+    @Test
+    void fiche_r9_5_statutDUnArticleLoue_OCCUPE() throws Exception {
+        UUID id = creerLoue("ART-LOC-STATUT");
+
+        mockMvc.perform(get(ARTICLE, id).with(connecte(admin))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("OCCUPE"));
+    }
+
+    /** Fiche §4.4 / §9.5 : un terrain (nature TER) ne se modifie pas ici (P7a). */
+    @Test
+    void fiche_r9_5_terrain_patch_400_messageFicheTerrain() throws Exception {
+        UUID terrain = onglets.article("TER-ART-ECR-" + UUID.randomUUID().toString().substring(0, 8), tranche.getId(),
+                onglets.natureTerrain(), fixture.vocationProjet());
+
+        modifier(terrain, corps().avec(DESCRIPTION, "Terrain modifie"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsString("Les terrains se modifient depuis la fiche terrain")));
     }
 }

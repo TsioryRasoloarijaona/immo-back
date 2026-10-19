@@ -8,6 +8,7 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -39,20 +40,23 @@ import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
 class EcritureArticle {
 
     private static final String PAS_LIBRE = "Ce sous article n'est pas libre.";
+    private static final String NATURE_TERRAIN = "TER";
 
     private final StkItemRepository items;
     private final CfgTrancheRepository tranches;
     private final ComFolderRepository dossiers;
     private final ReferencesArticle references;
     private final TracePatrimoine trace;
+    private final FicheArticle fiche;
 
     EcritureArticle(StkItemRepository items, CfgTrancheRepository tranches, ComFolderRepository dossiers,
-                    ReferencesArticle references, TracePatrimoine trace) {
+                    ReferencesArticle references, TracePatrimoine trace, FicheArticle fiche) {
         this.items = items;
         this.tranches = tranches;
         this.dossiers = dossiers;
         this.references = references;
         this.trace = trace;
+        this.fiche = fiche;
     }
 
     StkItem creer(ArticleEcritureDto d) {
@@ -63,15 +67,12 @@ class EcritureArticle {
                 .orElseThrow(() -> new InvalidRequestException("Tranche inconnue : " + d.trancheId()));
         StkItem article = nouveau(tranche, references.vocation(d.vocationId()), false);
         article.setIsTitled(ou(d.estTitre(), true));
-        appliquer(article, d, true);
-        enregistrer(article, true);
+        saisir(article, d, true);
         return article;
     }
 
     StkItem creerSousArticle(StkItem parent, ArticleEcritureDto d) {
-        if (d.trancheId() != null) {
-            throw new InvalidRequestException("La tranche d'un sous-article est celle de son article.");
-        }
+        refuserTrancheEtVocation(d);
         exigerPrincipal(parent);
         refuserSiOccupe(parent);
         StkItem sous = nouveau(parent.getStkHierarchy(), parent.getStkVocation(), true);
@@ -79,28 +80,56 @@ class EcritureArticle {
         sous.setStkBuilding(parent.getStkBuilding());
         sous.setIsTitled(ou(d.estTitre(), false));
         sous.setAlwaysAffected(ou(d.toujoursAffecte(), false));
-        appliquer(sous, d, true);
-        enregistrer(sous, true);
+        saisir(sous, d, true);
         reecrireParent(parent);
         return sous;
     }
 
     void modifier(StkItem article, ArticleEcritureDto d) {
+        if (NATURE_TERRAIN.equalsIgnoreCase(Champs.de(article.getStkKind(), StkKind::getCode))) {
+            throw new InvalidRequestException("Les terrains se modifient depuis la fiche terrain.");
+        }
+        if (Boolean.TRUE.equals(article.getIsUnderItem())) {
+            refuserTrancheEtVocation(d);
+        }
         UUID trancheActuelle = Champs.de(article.getStkHierarchy(), CfgTranche::getId);
         if (d.trancheId() != null && !d.trancheId().equals(trancheActuelle)) {
             throw new InvalidRequestException("La tranche d'un article ne se modifie pas.");
         }
-        if (estOccupe(article) && modifieUnChampProtege(article, d)) {
-            throw new ConflictException(("L'article %s est affecté au dossier %s : ses prix, surfaces et "
+        ChampsAVider v = FicheArticle.vidages(d);
+        if (estOccupe(article) && (modifieUnChampProtege(article, d) || v.contient("remiseMax1")
+                || v.contient("remiseMax2"))) {
+            throw new ConflictException(("L'article %s est affecté au dossier %s : ses prix, surfaces, titre foncier et "
                     + "classification ne se modifient plus.").formatted(article.getCode(), dossierOccupant(article)));
         }
-        if (d.vocationId() != null && !Boolean.TRUE.equals(article.getIsUnderItem())) {
+        if (d.vocationId() != null) {
             article.setStkVocation(references.vocation(d.vocationId()));
         }
-        boolean prixRecalcules = appliquer(article, d, false);
-        enregistrer(article, false);
+        boolean prixRecalcules = saisir(article, d, false, v);
         if (prixRecalcules && article.getParent() != null) {
             reecrireParent(article.getParent());
+        }
+    }
+
+    private boolean saisir(StkItem a, ArticleEcritureDto d, boolean creation) {
+        return saisir(a, d, creation, FicheArticle.vidages(d));
+    }
+
+    /** Saisie complète puis enregistrement ; les lignes de la fiche (vues, contenances) suivent l'article. */
+    private boolean saisir(StkItem a, ArticleEcritureDto d, boolean creation, ChampsAVider v) {
+        boolean presentationChangee = fiche.appliquer(a, d, v);
+        boolean prixRecalcules = appliquer(a, d, creation, v);
+        enregistrer(a, creation);
+        fiche.lignes(a, d, presentationChangee);
+        return prixRecalcules;
+    }
+
+    private static void refuserTrancheEtVocation(ArticleEcritureDto d) {
+        if (d.trancheId() != null) {
+            throw new InvalidRequestException("La tranche d'un sous-article est celle de son article.");
+        }
+        if (d.vocationId() != null) {
+            throw new InvalidRequestException("vocationId : la vocation d'un sous-article est celle de son article.");
         }
     }
 
@@ -143,7 +172,7 @@ class EcritureArticle {
     // ------------------------------------------------------------------ saisie
 
     /** Rend vrai si les prix de l'article ont été recalculés. */
-    private boolean appliquer(StkItem a, ArticleEcritureDto d, boolean creation) {
+    private boolean appliquer(StkItem a, ArticleEcritureDto d, boolean creation, ChampsAVider v) {
         boolean sous = Boolean.TRUE.equals(a.getIsUnderItem());
         UUID trancheId = Champs.de(a.getStkHierarchy(), CfgTranche::getId);
         a.setCode(codeLibre(obligatoire(d.code(), a.getCode(), "Le code"), trancheId, a.getId()));
@@ -164,12 +193,13 @@ class EcritureArticle {
         a.setIsTitled(ou(d.estTitre(), a.getIsTitled()));
         a.setAddress(texte(d.adresse(), a.getAddress(), 500, "L'adresse"));
         a.setNotes(texte(d.notes(), a.getNotes(), 1000, "Les notes"));
-        a.setDiscountMax(ou(fraction(d.remiseMax1(), "Remise max 1"), a.getDiscountMax()));
-        a.setDiscountMax2(ou(fraction(d.remiseMax2(), "Remise max 2"), a.getDiscountMax2()));
-        a.setInteriorArea(ou(positif(d.surfaceInterieure(), "Surface intérieure"), a.getInteriorArea()));
-        a.setWallsArea(ou(positif(d.surfaceMurs(), "Surface des murs"), a.getWallsArea()));
-        a.setCommonPartsArea(ou(positif(d.surfacePartiesCommunes(), "Surface des parties communes"),
-                a.getCommonPartsArea()));
+        a.setDiscountMax(v.ou("remiseMax1", fraction(d.remiseMax1(), "Remise max 1"), a.getDiscountMax()));
+        a.setDiscountMax2(v.ou("remiseMax2", fraction(d.remiseMax2(), "Remise max 2"), a.getDiscountMax2()));
+        a.setInteriorArea(v.ou("surfaceInterieure", positif(d.surfaceInterieure(), "Surface intérieure"),
+                a.getInteriorArea()));
+        a.setWallsArea(v.ou("surfaceMurs", positif(d.surfaceMurs(), "Surface des murs"), a.getWallsArea()));
+        a.setCommonPartsArea(v.ou("surfacePartiesCommunes", positif(d.surfacePartiesCommunes(),
+                "Surface des parties communes"), a.getCommonPartsArea()));
         boolean recalcules = appliquerPrix(a, d, creation);
         if (recalcules) {
             recalculerPrixDeVente(a);
@@ -272,6 +302,7 @@ class EcritureArticle {
 
     private static boolean modifieUnChampProtege(StkItem a, ArticleEcritureDto d) {
         return change(d.code(), a.getCode())
+                || change(d.titreFoncier(), a.getTitleNumber())
                 || change(d.categorieId(), Champs.de(a.getStkItemCategory(), StkItemCategory::getId))
                 || change(d.typeId(), Champs.de(a.getStkItemType(), StkItemType::getId))
                 || change(d.vocationId(), Champs.de(a.getStkVocation(), StkVocation::getId))
@@ -329,14 +360,15 @@ class EcritureArticle {
         StkItem porteur = article.getComFolderId() == null && article.getRntFolderId() == null && article.getParent() != null
                 ? article.getParent() : article;
         if (porteur.getComFolderId() == null) {
-            return "de location " + porteur.getRntFolderId();
+            return "de location " + dossiers.codeLocation(porteur.getRntFolderId())
+                    .orElse(porteur.getRntFolderId().toString());
         }
         return dossiers.findById(porteur.getComFolderId()).map(ComFolder::getCode)
                 .orElse(porteur.getComFolderId().toString());
     }
 
     /** Le parent est réécrit avec ses sous-articles, comme OMRAN réenregistre le parent. */
-    private void reecrireParent(StkItem parent) {
+    void reecrireParent(StkItem parent) {
         recalculerPrixDeVente(parent);
         enregistrer(parent, false);
     }

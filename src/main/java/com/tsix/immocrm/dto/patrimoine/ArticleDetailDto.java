@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.patrimoine;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.tsix.immocrm.domain.StatutArticle;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -100,6 +101,7 @@ public record ArticleDetailDto(
         String creePar,
         LocalDateTime creeLe,
         String modifiePar,
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+        @JsonUnwrapped FicheArticleDto fiche
 ) {
 }
