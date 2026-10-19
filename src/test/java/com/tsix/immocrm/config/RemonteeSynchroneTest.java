@@ -155,6 +155,16 @@ class RemonteeSynchroneTest {
                 .isEqualTo(CollecteurLignesEcrites.ORDRE_CLES_ETRANGERES.size());
     }
 
+    /** FEATURE-patrimoine-ecriture.md §2.1 / §13.2 : l'habilitation créée avec un programme ou une tranche remonte après eux. */
+    @Test
+    void ordre_admUserHabilitationConnueEtApresCfgTranche() {
+        int rang = CollecteurLignesEcrites.rang("AdmUserHabilitation");
+
+        assertThat(rang)
+                .isLessThan(CollecteurLignesEcrites.ORDRE_CLES_ETRANGERES.size())
+                .isGreaterThan(CollecteurLignesEcrites.rang("CfgTranche"));
+    }
+
     @Test
     void poolRemontee_distinctDuPoolEcriture_taillePropre() {
         SourceDeVeriteProperties p = new SourceDeVeriteProperties();
