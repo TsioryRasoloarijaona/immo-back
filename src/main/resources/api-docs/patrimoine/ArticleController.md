@@ -56,16 +56,29 @@ provisoire, prix 0, TVA 0, `estTitre` vrai. Pour chaque surface, le prix au m² 
 
 ## modifier
 
-Champ absent ou `null` = inchangé. La tranche ne se modifie pas (400). Si l'article est **occupé** (dossier de
-vente ou de location, le sien ou celui de son article) : seuls description, notes, adresse, titre foncier,
-titré, surfaces intérieure/murs/parties communes, immeuble et étage restent modifiables ; toute autre valeur
-différente → 409 nommant le dossier. Un changement de prix, de surface ou de TVA recalcule l'article et, pour un
-sous-article rattaché, le prix de vente de son article.
+Champ absent ou `null` = inchangé ; `champsAVider` vide un champ de la fiche (dates, références, nombres, cases,
+textes). La tranche ne se modifie pas (400) ; un terrain (nature TER) non plus : 400 « Les terrains se modifient
+depuis la fiche terrain ». Sous-article : `trancheId` ou `vocationId` dans le corps → 400. Si l'article est
+**occupé** (dossier de vente ou de location, le sien ou celui de son article) : code, classification, prix,
+surfaces, TVA, remises et titre foncier (`titreFoncier`) ne se modifient plus → 409 nommant le dossier ; le reste
+de la fiche reste modifiable. Un changement de prix, de surface ou de TVA recalcule l'article et, pour un
+sous-article rattaché, le prix de vente de son article. Un changement de `presentationId` remplace les contenances
+de l'article par celles du type ; `vueIds` remplace l'ensemble des vues.
+
+## supprimer
+
+409 si l'article ou l'un de ses sous-articles rattachés est affecté à un dossier (vente, location, syndic), ou
+encore cité par une prospection, un dossier, une offre, un historique de statut ou un terrain de tranche (le
+détail les compte) ; une autre clé étrangère de la base → 409 nommant la contrainte. Sinon, dans une transaction :
+les sous-articles rattachés, les vues, contenances, tracés de plan, pièces jointes et notes de chacun, puis
+l'article ; une ligne d'audit `Deleted` par objet. Un sous-article supprimé seul fait recalculer le prix de vente
+de son article.
 
 ## creerSousArticle
 
 Crée un sous-article (`IsUnderItem = IsUnderItemOrigin = 1`) rattaché à l'article `id`, qui doit être un article
-principal non occupé. Tranche, vocation et nature sont celles de l'article (`trancheId` dans le corps → 400) ;
+principal non occupé. Tranche, vocation et nature sont celles de l'article (`trancheId` ou `vocationId` dans le
+corps → 400) ;
 immeuble par défaut celui de l'article ; catégorie et type paramétrés « pour les sous-articles » ; `estTitre`
 faux par défaut. Le prix de vente de l'article est recalculé.
 

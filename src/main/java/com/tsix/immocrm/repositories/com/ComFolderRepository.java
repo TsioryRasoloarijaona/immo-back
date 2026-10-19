@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, JpaSpecificationExecutor<ComFolder> {
@@ -93,6 +94,9 @@ public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, Jpa
 
     /** {@code Prospection.cs:VerifComFolderIsCreated} : tout dossier de vente, sorti compris. */
     boolean existsByComProspectionId(UUID prospectionId);
+
+    @Query(value = "SELECT r.Code FROM RntFolder r WHERE r.PKey = :id", nativeQuery = true)
+    Optional<String> codeLocation(@Param("id") UUID id);
 
     /** Codes des dossiers de location créés depuis l'offre ({@code RntFolder.StlQuoteId}, FK sans cascade). */
     @Query(value = "SELECT ISNULL(r.Code, '') FROM RntFolder r WHERE r.StlQuoteId = :offreId ORDER BY r.Code ASC",

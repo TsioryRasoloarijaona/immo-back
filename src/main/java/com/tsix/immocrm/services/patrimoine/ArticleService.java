@@ -5,6 +5,8 @@ import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.patrimoine.LigneContenanceDto;
+import com.tsix.immocrm.dto.patrimoine.LignesTrancheDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -53,13 +55,20 @@ public class ArticleService {
     private final TrancheVisibleRepository trancheRepository;
     private final ComFolderRepository folderRepository;
     private final EcritureArticle ecriture;
+    private final FicheArticle fiche;
+    private final ContenancesArticle contenances;
+    private final SuppressionArticle suppression;
 
     public ArticleService(StkItemRepository stkItemRepository, TrancheVisibleRepository trancheRepository,
-                          ComFolderRepository folderRepository, EcritureArticle ecriture) {
+                          ComFolderRepository folderRepository, EcritureArticle ecriture, FicheArticle fiche,
+                          ContenancesArticle contenances, SuppressionArticle suppression) {
         this.stkItemRepository = stkItemRepository;
         this.trancheRepository = trancheRepository;
         this.folderRepository = folderRepository;
         this.ecriture = ecriture;
+        this.fiche = fiche;
+        this.contenances = contenances;
+        this.suppression = suppression;
     }
 
     /**
@@ -131,6 +140,20 @@ public class ArticleService {
         StkItem parent = charger(parentId);
         ecriture.desaffecter(parent, charger(sousArticleId));
         return toDetail(parent);
+    }
+
+    public LignesTrancheDto<LigneContenanceDto> contenances(UUID id) {
+        return contenances.lire(charger(id));
+    }
+
+    @Transactional
+    public LignesTrancheDto<LigneContenanceDto> enregistrerContenances(UUID id, LignesTrancheDto<LigneContenanceDto> corps) {
+        return contenances.enregistrer(charger(id), corps);
+    }
+
+    @Transactional
+    public void supprimer(UUID id) {
+        suppression.supprimer(charger(id));
     }
 
     /** Sous-articles rattachables à un article de la tranche (FEATURE-patrimoine-ecriture.md §5.1). */
@@ -257,7 +280,8 @@ public class ArticleService {
                 item.getUserCreate(),
                 item.getUserCreateDateTime(),
                 item.getUserUpdate(),
-                item.getUserUpdateDateTime()
+                item.getUserUpdateDateTime(),
+                fiche.lire(item, sousArticlesItems)
         );
     }
 
@@ -358,8 +382,10 @@ public class ArticleService {
         );
     }
 
+    /** Dossier de vente ou de location posé sur l'article lui-même ; même règle que le filtre de statut des listes. */
     public static StatutArticle statutOf(StkItem item) {
-        return item.getComFolderId() == null ? StatutArticle.DISPONIBLE : StatutArticle.OCCUPE;
+        return item.getComFolderId() == null && item.getRntFolderId() == null
+                ? StatutArticle.DISPONIBLE : StatutArticle.OCCUPE;
     }
 
 }

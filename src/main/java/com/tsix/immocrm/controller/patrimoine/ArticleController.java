@@ -20,6 +20,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -185,6 +186,20 @@ public class ArticleController {
     public ArticleDetailDto desaffecter(@Parameter(description = ID_ARTICLE) @PathVariable UUID id,
                                         @Parameter(description = ID_SOUS_ARTICLE) @PathVariable UUID sousArticleId) {
         return articleService.desaffecterSousArticle(id, sousArticleId);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize(ADMINISTRATEUR)
+    @Operation(summary = "Supprime un article, ses sous-articles rattachés et leurs lignes")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Supprimé avec vues, contenances, tracés, pièces et notes."),
+            @ApiResponse(responseCode = "403", description = REPONSE_403),
+            @ApiResponse(responseCode = "404", description = ARTICLE_INTROUVABLE),
+            @ApiResponse(responseCode = "409", description = "Article ou sous-article occupé, ou encore référencé.")
+    })
+    public void supprimer(@Parameter(description = ID_ARTICLE) @PathVariable UUID id) {
+        articleService.supprimer(id);
     }
 
     // -- Pièces jointes (AdmAttachedFile, CategoryId = StkItem.PKey — voir ArticlePieceJointeService) --
