@@ -59,7 +59,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -238,9 +237,11 @@ public class EtatVentesService {
         Map<String, Object> valeurs = new LinkedHashMap<>(totaux.valeurs());
         List<String> enJava = demandes.stream().filter(MONTANTS::containsKey).distinct().toList();
         if (!enJava.isEmpty()) {
-            Collection<Map<ColonneDossier, BigDecimal>> montants = montantsParNature.pour(dossiers(spec)).values();
+            Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = montantsParNature.pour(dossiers(spec));
+            // Une fois par ligne, comme la liste : un dossier à deux articles racines compte deux fois (et son prix aussi).
+            List<UUID> lignes = dossierParLigne(spec);
             for (String nom : enJava) {
-                valeurs.put(nom, montants.stream().map(m -> m.get(MONTANTS.get(nom)))
+                valeurs.put(nom, lignes.stream().map(id -> parDossier.get(id).get(MONTANTS.get(nom)))
                         .reduce(BigDecimal.ZERO, BigDecimal::add));
             }
         }
@@ -254,7 +255,17 @@ public class EtatVentesService {
         Root<StkItemEtatVentes> root = cq.from(StkItemEtatVentes.class);
         Join<StkItemEtatVentes, ComFolder> dossier = root.join(DOSSIER);
         dossier.fetch("strStatus", JoinType.LEFT);
-        cq.select(dossier).where(spec.toPredicate(root, cq, cb));
+        cq.select(dossier).distinct(true).where(spec.toPredicate(root, cq, cb));
+        return em.createQuery(cq).getResultList();
+    }
+
+    /** Id du dossier de chaque ligne vendue du filtre, doublons compris. */
+    private List<UUID> dossierParLigne(Specification<StkItemEtatVentes> spec) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<UUID> cq = cb.createQuery(UUID.class);
+        Root<StkItemEtatVentes> root = cq.from(StkItemEtatVentes.class);
+        Path<UUID> dossierId = root.get(DOSSIER).get(ID);
+        cq.select(dossierId).where(cb.isNotNull(dossierId), spec.toPredicate(root, cq, cb));
         return em.createQuery(cq).getResultList();
     }
 
