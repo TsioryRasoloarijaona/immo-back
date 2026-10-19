@@ -18,7 +18,7 @@ import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.utils.Champs;
@@ -50,11 +50,11 @@ public class ArticleService {
     public static final String VOCATION_PROJET = "PROJET";
 
     private final StkItemRepository stkItemRepository;
-    private final CfgTrancheRepository trancheRepository;
+    private final TrancheVisibleRepository trancheRepository;
     private final ComFolderRepository folderRepository;
     private final EcritureArticle ecriture;
 
-    public ArticleService(StkItemRepository stkItemRepository, CfgTrancheRepository trancheRepository,
+    public ArticleService(StkItemRepository stkItemRepository, TrancheVisibleRepository trancheRepository,
                           ComFolderRepository folderRepository, EcritureArticle ecriture) {
         this.stkItemRepository = stkItemRepository;
         this.trancheRepository = trancheRepository;
@@ -72,9 +72,7 @@ public class ArticleService {
                                                    UUID entiteId, UUID natureId, UUID vocationId, UUID etageId,
                                                    BigDecimal prixDe, BigDecimal prixA, BigDecimal surfaceDe, BigDecimal surfaceA,
                                                    Pageable pageable) {
-        if (!trancheRepository.existsById(trancheId)) {
-            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
-        }
+        exigerTrancheVisible(trancheId);
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(new FiltresArticle(List.of(trancheId), null, false, effectiveStatut,
                 categorieIds, typeIds, null, false, entiteId, natureId, vocationId, etageId,
@@ -137,9 +135,7 @@ public class ArticleService {
 
     /** Sous-articles rattachables à un article de la tranche (FEATURE-patrimoine-ecriture.md §5.1). */
     public Page<ArticleListItemDto> findSousArticlesLibres(UUID trancheId, Pageable pageable) {
-        if (!trancheRepository.existsByIdAndCfgProject_CfgCompany_IsActiveTrue(trancheId)) {
-            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
-        }
+        exigerTrancheVisible(trancheId);
         return stkItemRepository.findSousArticlesLibres(trancheId, pageable)
                 .map(item -> toListItem(item, Collections.emptyMap(), Collections.emptyMap()));
     }
@@ -150,9 +146,16 @@ public class ArticleService {
         return propre || (item.getParent() != null && estOccupe(item.getParent()));
     }
 
-    private StkItem charger(UUID id) {
-        return stkItemRepository.findById(id)
+    /** Seule recherche par id des routes de l'article et de ses sous-ressources (R4). */
+    StkItem charger(UUID id) {
+        return stkItemRepository.findVisible(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
+    }
+
+    private void exigerTrancheVisible(UUID trancheId) {
+        if (trancheRepository.trancheVisible(trancheId).isEmpty()) {
+            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
+        }
     }
 
     private ArticleDetailDto toDetail(StkItem item) {
@@ -261,9 +264,7 @@ public class ArticleService {
     /** Même défaut DISPONIBLE que {@link #findByTranche}. */
     public Page<ArticleListItemDto> findSousArticles(UUID articleId, StatutArticle statut,
                                                        List<UUID> categorieIds, List<UUID> typeIds, Pageable pageable) {
-        if (!stkItemRepository.existsById(articleId)) {
-            throw new ResourceNotFoundException("Article introuvable: " + articleId);
-        }
+        charger(articleId);
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds);
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);

@@ -20,6 +20,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,15 +48,17 @@ public class TrancheService {
     private static final Set<String> OBLIGATOIRES = Set.of("code", "description", "projetId");
 
     private final CfgTrancheRepository trancheRepository;
+    private final TrancheVisibleRepository visibles;
     private final CfgProjectRepository projectRepository;
     private final AdmCountryRepository countryRepository;
     private final ReferencesPatrimoine references;
     private final TracePatrimoine trace;
 
-    public TrancheService(CfgTrancheRepository trancheRepository, CfgProjectRepository projectRepository,
-                          AdmCountryRepository countryRepository, ReferencesPatrimoine references,
-                          TracePatrimoine trace) {
+    public TrancheService(CfgTrancheRepository trancheRepository, TrancheVisibleRepository visibles,
+                          CfgProjectRepository projectRepository, AdmCountryRepository countryRepository,
+                          ReferencesPatrimoine references, TracePatrimoine trace) {
         this.trancheRepository = trancheRepository;
+        this.visibles = visibles;
         this.projectRepository = projectRepository;
         this.countryRepository = countryRepository;
         this.references = references;
@@ -69,9 +72,12 @@ public class TrancheService {
     }
 
     public TrancheDetailDto findById(UUID id) {
-        return trancheRepository.findById(id)
-                .map(TrancheService::toDetail)
-                .orElseThrow(() -> new ResourceNotFoundException(INTROUVABLE + id));
+        return toDetail(visible(id));
+    }
+
+    /** Tranche d'une entité active (ou sans entité), sinon 404 : seule recherche par id des routes de la tranche (R4). */
+    CfgTranche visible(UUID id) {
+        return visibles.trancheVisible(id).orElseThrow(() -> new ResourceNotFoundException(INTROUVABLE + id));
     }
 
     @Transactional
@@ -96,8 +102,7 @@ public class TrancheService {
 
     @Transactional
     public TrancheDetailDto modifierTranche(UUID id, TrancheEcritureDto saisie) {
-        CfgTranche tranche = trancheRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(INTROUVABLE + id));
+        CfgTranche tranche = visible(id);
         if (saisie.projetId() != null && !saisie.projetId().equals(Champs.de(tranche.getCfgProject(), CfgProject::getId))) {
             throw new InvalidRequestException("Le programme d'une tranche ne se modifie pas.");
         }

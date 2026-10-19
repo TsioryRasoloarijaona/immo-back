@@ -2,7 +2,13 @@ package com.tsix.immocrm.config.audit;
 
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.cfg.CfgCompanyShareholder;
+import com.tsix.immocrm.entities.cfg.CfgGroupShareholder;
+import com.tsix.immocrm.entities.cfg.CfgGroupShareholderLine;
 import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgShareholder;
+import com.tsix.immocrm.entities.cfg.LigneActionnaireOmran;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
 import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
@@ -30,15 +36,21 @@ public final class RegistreAuditOmran {
     static final String SOUS_ARTICLE = "Yes.Stk.Building.UnderItem";
     static final String TERRAIN = "Yes.Stk.LandProjectItem";
     static final String TRANCHE_ETAGE = "Yes.Cfg.CfgTrancheLevel";
+    static final String ENTITE = "Yes.Cfg.CfgCompany";
+    static final String REPARTITION = "Yes.Cfg.CfgCompanyShareholder";
+    static final String ACTIONNAIRE = "Yes.Cfg.CfgShareholder";
+    static final String GROUPE = "Yes.Cfg.CfgGroupShareholder";
+    static final String LIGNE_GROUPE = "Yes.Cfg.CfgGroupShareholderLine";
     private static final String LIBELLE_TRANCHE = "Tranche";
 
     /** Types que le journal rend : rien d'autre ne sort de {@code AdmWebHistorics} (revue §10.1). */
     public static final List<String> TYPES = List.of(PROGRAMME, TRANCHE, TRANCHE_ARTICLE, ARTICLE, SOUS_ARTICLE, TERRAIN,
-            TRANCHE_ETAGE);
+            TRANCHE_ETAGE, ENTITE, REPARTITION, ACTIONNAIRE, GROUPE, LIGNE_GROUPE);
 
     private static final List<Class<?>> CLASSES = List.of(CfgProject.class, CfgTranche.class, StkItem.class,
             CfgTrancheStkItem.class, CfgTrancheLevel.class, CfgTrancheCoveredFloor.class,
-            CfgTrancheSettlementCategory.class, AdmUserHabilitation.class);
+            CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
+            CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class);
 
     private RegistreAuditOmran() {
     }
@@ -63,6 +75,13 @@ public final class RegistreAuditOmran {
             case StkItem i -> article(i);
             case CfgTrancheStkItem l -> new Trace(TRANCHE_ARTICLE, LIBELLE_TRANCHE, Objects.toString(l.getSorting(), ""),
                     TRANCHE, Champs.de(l.getCfgTranche(), CfgTranche::getId));
+            case CfgCompany c -> new Trace(ENTITE, "Entité juridique", c.getCode(), null, null);
+            case CfgCompanyShareholder r -> new Trace(REPARTITION, "Répartition", codeActionnaire(r), ENTITE,
+                    Champs.de(r.getCfgCompany(), CfgCompany::getId));
+            case CfgShareholder a -> new Trace(ACTIONNAIRE, "Actionnaire", a.getCode(), null, null);
+            case CfgGroupShareholder g -> new Trace(GROUPE, "Groupe d'actionnaires", g.getCode(), null, null);
+            case CfgGroupShareholderLine l -> new Trace(LIGNE_GROUPE, "Ligne de groupe", codeActionnaire(l), GROUPE,
+                    Champs.de(l.getCfgGroupShareholder(), CfgGroupShareholder::getId));
             // Libellés d'objet mesurés en prod : PKey de la ligne, Sorting, AdmUserId ; sans parent sauf l'étage (§8.10).
             case CfgTrancheLevel l -> new Trace(TRANCHE_ETAGE, "Etage", l.getId().toString(), TRANCHE,
                     Champs.de(l.getCfgTranche(), CfgTranche::getId));
@@ -74,6 +93,10 @@ public final class RegistreAuditOmran {
                     Objects.toString(Champs.de(h.getAdmUser(), AdmUser::getId), ""), null, null);
             default -> null;
         });
+    }
+
+    private static String codeActionnaire(LigneActionnaireOmran ligne) {
+        return Champs.de(ligne.getCfgShareholder(), CfgShareholder::getCode);
     }
 
     private static Trace article(StkItem item) {

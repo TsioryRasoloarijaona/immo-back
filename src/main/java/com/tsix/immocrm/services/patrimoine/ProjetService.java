@@ -4,9 +4,11 @@ import com.tsix.immocrm.domain.ColonneTranche;
 import com.tsix.immocrm.dto.patrimoine.ProjetDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetListItemDto;
+import com.tsix.immocrm.dto.patrimoine.SaisieCoordonnees;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
 import com.tsix.immocrm.dto.patrimoine.ZoneProjetDto;
 import com.tsix.immocrm.dto.patrimoine.ZoneProjetEcritureDto;
+import com.tsix.immocrm.entities.ResponsablesOmran;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
@@ -199,17 +201,10 @@ public class ProjetService {
         p.setDescription(obligatoire(d.description(), p.getDescription(), "La description"));
         p.setDescriptionLong(texte(v.texte("descriptionLongue", d.descriptionLongue()), p.getDescriptionLong(), 500,
                 "La description longue"));
-        coordonnees(p, d, v);
+        coordonnees(p, d, v, references, countryRepository);
         if (d.entiteId() != null) {
             p.setCfgCompany(entiteActive(d.entiteId()));
         }
-        p.setAdmCountry(v.reference("paysId", d.paysId(), p.getAdmCountry(), id -> pays(countryRepository, id)));
-        p.setAdmSignatory(v.reference("signataireId", d.signataireId(), p.getAdmSignatory(),
-                id -> references.tiers(id, "signataireId")));
-        p.setCfgTechnicalManager(v.reference("responsableTechniqueId", d.responsableTechniqueId(),
-                p.getCfgTechnicalManager(), id -> references.tiers(id, "responsableTechniqueId")));
-        p.setCfgSalesManager(v.reference("responsableCommercialId", d.responsableCommercialId(),
-                p.getCfgSalesManager(), id -> references.tiers(id, "responsableCommercialId")));
         p.setWorkStartDate(v.ou("dateDebutTravaux", d.dateDebutTravaux(), p.getWorkStartDate()));
         p.setWorkEndDate(v.ou("dateFinTravaux", d.dateFinTravaux(), p.getWorkEndDate()));
         p.setMarketingStartDate(v.ou("dateDebutCommercialisation", d.dateDebutCommercialisation(),
@@ -219,7 +214,16 @@ public class ProjetService {
         ordre(p.getMarketingStartDate(), p.getMarketingEndDate(), "Commercialisation");
     }
 
-    private static void coordonnees(CfgProject p, ProjetEcritureDto d, ChampsAVider v) {
+    /** Coordonnées, pays, signataire et responsables : communs au programme et à l'entité juridique. */
+    static void coordonnees(ResponsablesOmran p, SaisieCoordonnees d, ChampsAVider v, ReferencesPatrimoine references,
+                            AdmCountryRepository countryRepository) {
+        p.setAdmCountry(v.reference("paysId", d.paysId(), p.getAdmCountry(), id -> pays(countryRepository, id)));
+        p.setAdmSignatory(v.reference("signataireId", d.signataireId(), p.getAdmSignatory(),
+                id -> references.tiers(id, "signataireId")));
+        p.setCfgTechnicalManager(v.reference("responsableTechniqueId", d.responsableTechniqueId(),
+                p.getCfgTechnicalManager(), id -> references.tiers(id, "responsableTechniqueId")));
+        p.setCfgSalesManager(v.reference("responsableCommercialId", d.responsableCommercialId(),
+                p.getCfgSalesManager(), id -> references.tiers(id, "responsableCommercialId")));
         p.setAddress(texte(v.texte("adresse", d.adresse()), p.getAddress(), COURT, "L'adresse"));
         p.setAddress2(texte(v.texte("adresse2", d.adresse2()), p.getAddress2(), COURT, "L'adresse 2"));
         p.setAddress3(texte(v.texte("adresse3", d.adresse3()), p.getAddress3(), COURT, "L'adresse 3"));

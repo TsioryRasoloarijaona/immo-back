@@ -19,6 +19,8 @@ chaque *pull request*.
 | `101_audit_fk.sql` | aucune clé étrangère : `AdmWebSessions`, cible de `AdmWebHistorics.AdmWebSessionsId` en production, est absente du CI | écrit à la main |
 | `104_tranche-onglets_tables.sql` | `CfgTrancheCoveredFloor` (onglet Plancher couvert, FEATURE-patrimoine-tranche-onglets.md) ; idempotent, déjà présente dans `yesRemsTest` | écrit à la main |
 | `105_tranche-onglets_fk.sql` | ses clés vers `CfgTranche` (CASCADE) et `StkItemCategory`, comme en production | écrit à la main |
+| `106_entites_tables.sql` | `CfgShareholder`, `CfgGroupShareholderLine`, `CfgCompanyShareholder` (actionnaires et répartition, FEATURE-entites-juridiques.md) ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
+| `107_entites_fk.sql` | leurs 4 clés étrangères, actions de suppression de production (CASCADE sauf répartition → actionnaire) ; idempotent | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.

@@ -1,6 +1,7 @@
 package com.tsix.immocrm.repositories.stk;
 
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpecificationExecutor<StkItem> {
+
+    /** Article lu ou écrit par id : entité de sa tranche inactive → absent (R4) ; sans tranche ni entité = visible. */
+    @Query("SELECT i FROM StkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE i.id = :id AND " + VisibiliteEntites.CLAUSE_JPQL)
+    Optional<StkItem> findVisible(@Param("id") UUID id);
 
     // StkHierarchyId = la tranche. Les listes filtrées passent par StkItemSpecifications.
     List<StkItem> findByStkHierarchyId(UUID trancheId);

@@ -1,6 +1,7 @@
 package com.tsix.immocrm.entities.cfg;
 
 import com.tsix.immocrm.entities.ResponsablesOmran;
+import com.tsix.immocrm.entities.stl.StlCurrency;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,6 +13,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 /**
  * Entité juridique d'un projet ou d'un règlement. Les documents générés la lisent : ne jamais écrire
  * un nom de société en dur dans un renderer.
@@ -22,8 +26,8 @@ import org.hibernate.annotations.Nationalized;
 @Table(name = "CfgCompany")
 public class CfgCompany extends ResponsablesOmran {
     /**
-     * Décide de la visibilité de l'entité et de ses projets, tranches et articles ; à entretenir en
-     * base (005_CfgCompany_IsActive.sql). {@code null} vaut inactif : ne rien exposer par défaut.
+     * Décide de la visibilité de l'entité et de ses projets, tranches et articles ; basculé par
+     * {@code PATCH /api/entites-juridiques/{id}}. {@code null} vaut inactif : ne rien exposer par défaut.
      */
     @Column(name = "IsActive")
     private Boolean isActive;
@@ -43,4 +47,59 @@ public class CfgCompany extends ResponsablesOmran {
     @Nationalized
     @Column(name = "LegalForm")
     private String legalForm;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "FiscalNumber")
+    private String fiscalNumber;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "CommercialRegister")
+    private String commercialRegister;
+
+    @Column(name = "CreationDate")
+    private LocalDateTime creationDate;
+
+    @Column(name = "Capital", precision = 26, scale = 6)
+    private BigDecimal capital;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Cnss")
+    private String cnss;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Patent")
+    private String patent;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "ICE")
+    private String ice;
+
+    /** « Nombre actionnaires » : nombre de lignes de répartition attendues ({@code Verif}). */
+    @Column(name = "TotalSharing")
+    private Integer totalSharing;
+
+    /** « Nombre de parts (actions) ». */
+    @Column(name = "SharingNumber")
+    private Integer sharingNumber;
+
+    @Column(name = "LiquidationDate")
+    private LocalDateTime liquidationDate;
+
+    /** « Part maison » ; decimal(26,16) en base. */
+    @Column(name = "HomePart", precision = 26, scale = 16)
+    private BigDecimal homePart;
+
+    /** Base : {@code CfgCompany → CfgGroupShareholder} ON DELETE CASCADE — supprimer le groupe supprime l'entité. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgGroupShareholderId")
+    private CfgGroupShareholder cfgGroupShareholder;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StlCurrencyId")
+    private StlCurrency stlCurrency;
 }
