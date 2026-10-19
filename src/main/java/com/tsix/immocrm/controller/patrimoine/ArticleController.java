@@ -196,7 +196,7 @@ public class ArticleController {
             @ApiResponse(responseCode = "204", description = "Supprimé avec vues, contenances, tracés, pièces et notes."),
             @ApiResponse(responseCode = "403", description = REPONSE_403),
             @ApiResponse(responseCode = "404", description = ARTICLE_INTROUVABLE),
-            @ApiResponse(responseCode = "409", description = "Article ou sous-article occupé, ou encore référencé.")
+            @ApiResponse(responseCode = "409", description = "Article ou sous-article occupé, encore référencé ou porteur de dépenses.")
     })
     public void supprimer(@Parameter(description = ID_ARTICLE) @PathVariable UUID id) {
         articleService.supprimer(id);

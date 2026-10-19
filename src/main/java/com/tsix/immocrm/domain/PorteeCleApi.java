@@ -29,15 +29,19 @@ public enum PorteeCleApi {
             route(HttpMethod.GET, "/api/prospections/*")), List.of()),
 
     /**
-     * Résoudre les identifiants (tranche, origine, nature, commercial) par leur code. Le réajustement des
-     * superficies expose clients et prix : exclu, même pour un compte de service Administrateur.
+     * Résoudre les identifiants (tranche, origine, nature, commercial) par leur code. Les lectures de tranche qui
+     * exposent clients, prix, commissions ou stock valorisé sont exclues, même pour un compte de service Administrateur.
      */
     REFERENTIELS_LIRE(List.of(
             route(HttpMethod.GET, "/api/referentiels/**"),
             route(HttpMethod.GET, "/api/projets/**"),
             route(HttpMethod.GET, "/api/tranches/**"),
             route(HttpMethod.GET, "/api/commerciaux")),
-            List.of(route(HttpMethod.GET, "/api/tranches/*/reajustement-superficies")));
+            List.of(route(HttpMethod.GET, "/api/tranches/*/reajustement-superficies"),
+                    route(HttpMethod.GET, "/api/tranches/*/mettre-a-jour-schemas/apercu"),
+                    route(HttpMethod.GET, "/api/tranches/*/commissions"),
+                    route(HttpMethod.GET, "/api/tranches/*/previsions-base"),
+                    route(HttpMethod.GET, "/api/tranches/*/previsions-base/stock")));
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 

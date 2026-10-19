@@ -141,3 +141,22 @@ CREATE TABLE dbo.StkHierarchyPath (
     CONSTRAINT StkHierarchyPath_PK PRIMARY KEY CLUSTERED (PKey ASC)
 );
 GO
+
+-- Bloquant de suppression d'article (deja en CI par 010, absente de yesRemsTest).
+IF OBJECT_ID('dbo.StkExpense', 'U') IS NULL
+CREATE TABLE dbo.StkExpense (
+    Pkey uniqueidentifier NOT NULL,
+    [Date] datetime NULL,
+    Amount decimal(26, 6) NULL,
+    IsValidated bit NOT NULL DEFAULT 0,
+    Notes nvarchar(1000) COLLATE French_CI_AS NULL,
+    CfgSupplierId uniqueidentifier NULL,
+    StkExpenseTypeId uniqueidentifier NULL,
+    StkItemId uniqueidentifier NULL,
+    UserCreate nvarchar(255) COLLATE French_CI_AS NULL,
+    UserCreateDateTime datetime NULL,
+    UserUpdate nvarchar(255) COLLATE French_CI_AS NULL,
+    UserUpdateDateTime datetime NULL,
+    CONSTRAINT StkExpense_PK PRIMARY KEY CLUSTERED (Pkey ASC)
+);
+GO

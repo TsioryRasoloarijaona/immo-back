@@ -35,9 +35,9 @@ public class CollecteurLignesEcrites
     static final List<String> ORDRE_CLES_ETRANGERES = List.of(
             "CfgShareholder", "CfgGroupShareholder", "CfgGroupShareholderLine", "CfgCompany", "CfgCompanyShareholder",
             "CfgProject", "CfgProjectZone", "CfgTranche", "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
-            "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory",
-            "StkItemVue", "StkItemContenance", "StkHierarchyPath", "CfgTier", "ComAction",
-            "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
+            "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
+            "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "CfgTier", "ComAction",
+            "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument", "AppModeleDocumentVersion",

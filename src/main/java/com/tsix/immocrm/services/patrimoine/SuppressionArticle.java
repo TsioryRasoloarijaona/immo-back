@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static com.tsix.immocrm.services.patrimoine.ArticleService.estOccupe;
 
@@ -32,6 +33,8 @@ record SuppressionArticle(EntityManager em, StkItemRepository items, Suppression
             "SELECT COUNT(l) FROM StlQuoteItem l WHERE l.stkItem.id IN :ids", "ligne(s) d'offre",
             "SELECT COUNT(h) FROM StrFolderStatusHistory h WHERE h.stkItem.id IN :ids", "historique(s) de dossier",
             "SELECT COUNT(t) FROM CfgTrancheStkItem t WHERE t.stkItem.id IN :ids", "terrain(s) de tranche");
+    // CASCADE en production : bloquant quand même, une suppression d'article n'efface pas des dépenses (argent).
+    private static final String DEPENSES = "SELECT COUNT(*) FROM StkExpense WHERE StkItemId IN (:ids)";
     private static final List<String> CASCADES = List.of(
             "SELECT v FROM StkItemVue v WHERE v.stkItem.id IN :ids",
             "SELECT c FROM StkItemContenance c WHERE c.stkItem.id IN :ids",
@@ -47,9 +50,11 @@ record SuppressionArticle(EntityManager em, StkItemRepository items, Suppression
                     + "location ou de syndic.").formatted(i.getCode()));
         });
         List<UUID> ids = objets.stream().map(StkItem::getId).toList();
-        List<String> presents = BLOQUANTS.entrySet().stream()
-                .map(b -> Map.entry(em.createQuery(b.getKey(), Long.class).setParameter(IDS, ids).getSingleResult(),
-                        b.getValue()))
+        long depenses = ((Number) em.createNativeQuery(DEPENSES).setParameter(IDS, ids).getSingleResult()).longValue();
+        List<String> presents = Stream.concat(BLOQUANTS.entrySet().stream()
+                        .map(b -> Map.entry(em.createQuery(b.getKey(), Long.class).setParameter(IDS, ids)
+                                .getSingleResult(), b.getValue())),
+                        Stream.of(Map.entry(depenses, "dépense(s)")))
                 .filter(b -> b.getKey() > 0)
                 .map(b -> b.getKey() + " " + b.getValue())
                 .sorted()

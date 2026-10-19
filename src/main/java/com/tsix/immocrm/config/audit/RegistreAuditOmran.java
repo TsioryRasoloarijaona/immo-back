@@ -20,6 +20,10 @@ import com.tsix.immocrm.entities.stk.StkItemContenance;
 import com.tsix.immocrm.entities.stk.StkItemVue;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVue;
+import com.tsix.immocrm.entities.cfg.CfgTrancheFolderEntity;
+import com.tsix.immocrm.entities.cfg.ComSalesCommission;
+import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.utils.Champs;
 
 import java.util.List;
@@ -58,7 +62,8 @@ public final class RegistreAuditOmran {
             CfgTrancheStkItem.class, CfgTrancheLevel.class, CfgTrancheCoveredFloor.class,
             CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
-            StkItemVue.class, StkItemContenance.class);
+            StkItemVue.class, StkItemContenance.class,
+            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class);
 
     private RegistreAuditOmran() {
     }
@@ -103,6 +108,12 @@ public final class RegistreAuditOmran {
                     v.getStkItem());
             case StkItemContenance c -> ligneArticle(CONTENANCE_ARTICLE, "Contenances",
                     Champs.de(c.getStkContenance(), StkContenance::getDescription), c.getStkItem());
+            // Mesurés en prod : classes C# (pas les tables), sans parent ; finalisation libellée par son type de dossier.
+            case ComSalesCommission ignore -> new Trace("Yes.Cfg.SalesCommission", "Commission vendeur", "Commission vendeur",
+                    null, null);
+            case CfgTrancheFolderEntity f -> new Trace("Yes.Cfg.CfgTrancheFolderEntity", "Définition des finalisations",
+                    Objects.toString(Champs.de(f.getStrFolderEntity(), StrEntity::getId), ""), null, null);
+            case ComDocument ignore -> new Trace("Yes.Com.Sales.ComDocument", "Financement", "Financement", null, null);
             default -> null;
         });
     }
