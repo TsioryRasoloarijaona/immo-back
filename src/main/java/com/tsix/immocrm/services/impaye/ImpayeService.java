@@ -33,7 +33,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,9 +47,6 @@ import static java.util.Objects.requireNonNullElse;
 @Service
 @Transactional(readOnly = true)
 public class ImpayeService {
-
-    /** SQL Server refuse plus de 2 100 paramètres par requête. */
-    private static final int LOT_IDS = 2_000;
 
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
@@ -90,7 +86,8 @@ public class ImpayeService {
         int age = parametres.ageRecouvrement();
         List<ComDocument> candidats = documentRepository.findAll(
                 SpecImpayes.de(filtres, aujourdhui, age).and(perimetreService.filtreEcheances()));
-        Map<UUID, BigDecimal> regles = reglesParEcheance(candidats.stream().map(ComDocument::getId).toList());
+        Map<UUID, BigDecimal> regles = settlementLineRepository.reglesParEcheance(
+                candidats.stream().map(ComDocument::getId).toList());
         return candidats.stream()
                 .map(d -> versLigne(d, regles.get(d.getId()), aujourdhui, age))
                 .filter(l -> l.montantReste().signum() > 0)
@@ -105,22 +102,12 @@ public class ImpayeService {
     public List<UUID> echeancesImpayees(UUID dossierId) {
         LocalDate aujourdhui = LocalDate.now(clock);
         List<ComDocument> candidats = documentRepository.findAll(SpecImpayes.duDossier(dossierId, aujourdhui));
-        Map<UUID, BigDecimal> regles = reglesParEcheance(candidats.stream().map(ComDocument::getId).toList());
+        Map<UUID, BigDecimal> regles = settlementLineRepository.reglesParEcheance(
+                candidats.stream().map(ComDocument::getId).toList());
         return candidats.stream()
                 .filter(d -> Impaye.resteDu(d.getAmount(), regles.get(d.getId())))
                 .map(ComDocument::getId)
                 .toList();
-    }
-
-    private Map<UUID, BigDecimal> reglesParEcheance(List<UUID> ids) {
-        Map<UUID, BigDecimal> regles = new HashMap<>();
-        for (int i = 0; i < ids.size(); i += LOT_IDS) {
-            List<UUID> lot = ids.subList(i, Math.min(i + LOT_IDS, ids.size()));
-            for (Object[] ligne : settlementLineRepository.sumAmountByComDocumentIdIn(lot)) {
-                regles.put((UUID) ligne[0], ligne[1] == null ? null : new BigDecimal(ligne[1].toString()));
-            }
-        }
-        return regles;
     }
 
     private static TotauxImpayesDto totaux(List<ImpayeDto> lignes) {

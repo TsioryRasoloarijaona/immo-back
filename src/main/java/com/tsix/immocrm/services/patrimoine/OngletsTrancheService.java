@@ -19,10 +19,9 @@ import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.lnd.LndLevel;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
-import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmParamsGuidRepository;
 import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
+import com.tsix.immocrm.services.patrimoine.ReconciliationLignes.Onglet;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
@@ -30,15 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.fraction;
@@ -53,7 +47,6 @@ import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
 @Transactional(readOnly = true)
 public class OngletsTrancheService {
 
-    private static final String ID = "id";
     private static final String TERRAINS = "SELECT l FROM CfgTrancheStkItem l WHERE l.cfgTranche.id = :id ORDER BY l.sorting";
     private static final String ETAGES = "SELECT l FROM CfgTrancheLevel l LEFT JOIN l.lndLevel n "
             + "WHERE l.cfgTranche.id = :id ORDER BY n.code";
@@ -72,46 +65,36 @@ public class OngletsTrancheService {
     private final TrancheVisibleRepository tranches;
     private final AdmParamsGuidRepository parametres;
     private final SuppressionProjet suppression;
-    private final TracePatrimoine trace;
+    private final ReconciliationLignes reconciliation;
     private final EntityManager em;
 
     public OngletsTrancheService(TrancheVisibleRepository tranches, AdmParamsGuidRepository parametres,
-                                 SuppressionProjet suppression, TracePatrimoine trace, EntityManager em) {
+                                 SuppressionProjet suppression, ReconciliationLignes reconciliation, EntityManager em) {
         this.tranches = tranches;
         this.parametres = parametres;
         this.suppression = suppression;
-        this.trace = trace;
+        this.reconciliation = reconciliation;
         this.em = em;
-    }
-
-    /** Ligne de la liste reçue : son nom dans un message 400 et son rang parmi les lignes gardées. */
-    private record Position(int index, int rang) {
-        String champ(String nom) {
-            return "lignes[%d].%s".formatted(index, nom);
-        }
-    }
-
-    @FunctionalInterface
-    private interface Remplir<E, L> {
-        void appliquer(E entite, L ligne, Position position);
     }
 
     // ------------------------------------------------------------------ lecture
 
     public LignesTrancheDto<LigneTerrainDto> terrains(UUID trancheId) {
-        return lire(visible(trancheId), TERRAINS, CfgTrancheStkItem.class, OngletsTrancheService::terrain);
+        return lire(tranches.exigerVisible(trancheId), TERRAINS, CfgTrancheStkItem.class, OngletsTrancheService::terrain);
     }
 
     public LignesTrancheDto<LigneEtageDto> etages(UUID trancheId) {
-        return lire(visible(trancheId), ETAGES, CfgTrancheLevel.class, OngletsTrancheService::etage);
+        return lire(tranches.exigerVisible(trancheId), ETAGES, CfgTrancheLevel.class, OngletsTrancheService::etage);
     }
 
     public LignesTrancheDto<LignePlancherDto> plancherCouvert(UUID trancheId) {
-        return lire(visible(trancheId), PLANCHERS, CfgTrancheCoveredFloor.class, OngletsTrancheService::plancher);
+        return lire(tranches.exigerVisible(trancheId), PLANCHERS, CfgTrancheCoveredFloor.class,
+                OngletsTrancheService::plancher);
     }
 
     public LignesTrancheDto<LigneFraisDto> frais(UUID trancheId) {
-        return lire(visible(trancheId), FRAIS, CfgTrancheSettlementCategory.class, OngletsTrancheService::frais);
+        return lire(tranches.exigerVisible(trancheId), FRAIS, CfgTrancheSettlementCategory.class,
+                OngletsTrancheService::frais);
     }
 
     public List<ReferentielItemDto> terrainsDisponibles() {
@@ -127,14 +110,14 @@ public class OngletsTrancheService {
                 .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
-    // ------------------------------------------------------------------ écriture
+    // ------------------------------------------------------------------ écriture (doublon de clé ignoré, comme OMRAN)
 
     @Transactional
     public LignesTrancheDto<LigneTerrainDto> enregistrerTerrains(UUID trancheId, LignesTrancheDto<LigneTerrainDto> corps) {
-        CfgTranche tranche = visible(trancheId);
-        reconcilier(tranche, corps, TERRAINS, CfgTrancheStkItem.class, CfgTrancheStkItem::new,
-                LigneTerrainDto::terrainId, "terrainId", (e, l, p) -> {
-                    e.setStkItem(reference(StkItem.class, l.terrainId(), p.champ("terrainId")));
+        CfgTranche tranche = tranches.exigerVisible(trancheId);
+        reconciliation.reconcilier(tranche, corps, new Onglet<>(TERRAINS, CfgTrancheStkItem.class,
+                CfgTrancheStkItem::new, LigneTerrainDto::terrainId, "terrainId", false), (e, l, p) -> {
+                    e.setStkItem(reconciliation.reference(StkItem.class, l.terrainId(), p.champ("terrainId")));
                     e.setRatio(ou(positif(l.ratio(), p.champ("ratio")), BigDecimal.ONE));
                     e.setSorting(p.rang());
                 });
@@ -143,10 +126,10 @@ public class OngletsTrancheService {
 
     @Transactional
     public LignesTrancheDto<LigneEtageDto> enregistrerEtages(UUID trancheId, LignesTrancheDto<LigneEtageDto> corps) {
-        CfgTranche tranche = visible(trancheId);
-        reconcilier(tranche, corps, ETAGES, CfgTrancheLevel.class, CfgTrancheLevel::new,
-                LigneEtageDto::niveauTerrainId, "niveauTerrainId",
-                (e, l, p) -> e.setLndLevel(reference(LndLevel.class, l.niveauTerrainId(), p.champ("niveauTerrainId"))));
+        CfgTranche tranche = tranches.exigerVisible(trancheId);
+        reconciliation.reconcilier(tranche, corps, new Onglet<>(ETAGES, CfgTrancheLevel.class, CfgTrancheLevel::new,
+                LigneEtageDto::niveauTerrainId, "niveauTerrainId", false), (e, l, p) -> e.setLndLevel(
+                        reconciliation.reference(LndLevel.class, l.niveauTerrainId(), p.champ("niveauTerrainId"))));
         return lire(tranche, ETAGES, CfgTrancheLevel.class, OngletsTrancheService::etage);
     }
 
@@ -154,10 +137,12 @@ public class OngletsTrancheService {
     @Transactional
     public LignesTrancheDto<LignePlancherDto> enregistrerPlancherCouvert(UUID trancheId,
                                                                         LignesTrancheDto<LignePlancherDto> corps) {
-        CfgTranche tranche = visible(trancheId);
-        List<CfgTrancheCoveredFloor> gardees = reconcilier(tranche, corps, PLANCHERS, CfgTrancheCoveredFloor.class,
-                CfgTrancheCoveredFloor::new, LignePlancherDto::categorieId, "categorieId", (e, l, p) -> {
-                    e.setStkItemCategory(reference(StkItemCategory.class, l.categorieId(), p.champ("categorieId")));
+        CfgTranche tranche = tranches.exigerVisible(trancheId);
+        List<CfgTrancheCoveredFloor> gardees = reconciliation.reconcilier(tranche, corps, new Onglet<>(PLANCHERS,
+                CfgTrancheCoveredFloor.class, CfgTrancheCoveredFloor::new, LignePlancherDto::categorieId, "categorieId",
+                false), (e, l, p) -> {
+                    e.setStkItemCategory(reconciliation.reference(StkItemCategory.class, l.categorieId(),
+                            p.champ("categorieId")));
                     e.setArea(ou(positif(l.surface(), p.champ("surface")), BigDecimal.ZERO));
                 });
         tranche.setCoveredFloorArea(gardees.stream().map(CfgTrancheCoveredFloor::getArea)
@@ -168,11 +153,12 @@ public class OngletsTrancheService {
     /** Le montant saisi (HT, ou TTC si {@code saisiEnTTC}) donne l'autre par {@link CalculPrixArticle} (§2.4). */
     @Transactional
     public LignesTrancheDto<LigneFraisDto> enregistrerFrais(UUID trancheId, LignesTrancheDto<LigneFraisDto> corps) {
-        CfgTranche tranche = visible(trancheId);
-        reconcilier(tranche, corps, FRAIS, CfgTrancheSettlementCategory.class, CfgTrancheSettlementCategory::new,
-                LigneFraisDto::categorieReglementId, "categorieReglementId", (e, l, p) -> {
-                    e.setComSettlementCategory(reference(ComSettlementCategory.class, l.categorieReglementId(),
-                            p.champ("categorieReglementId")));
+        CfgTranche tranche = tranches.exigerVisible(trancheId);
+        reconciliation.reconcilier(tranche, corps, new Onglet<>(FRAIS, CfgTrancheSettlementCategory.class,
+                CfgTrancheSettlementCategory::new, LigneFraisDto::categorieReglementId, "categorieReglementId", false),
+                (e, l, p) -> {
+                    e.setComSettlementCategory(reconciliation.reference(ComSettlementCategory.class,
+                            l.categorieReglementId(), p.champ("categorieReglementId")));
                     BigDecimal tva = ou(fraction(l.tauxTva(), p.champ("tauxTva")), BigDecimal.ZERO);
                     // Montant forfaitaire = prix d'une surface de 1 : mêmes échelle et arrondi que le prix d'un article.
                     PrixLot montants = Boolean.TRUE.equals(l.saisiEnTTC())
@@ -189,76 +175,14 @@ public class OngletsTrancheService {
 
     @Transactional
     public void supprimerTranche(UUID trancheId) {
-        suppression.tranche(visible(trancheId));
+        suppression.tranche(tranches.exigerVisible(trancheId));
     }
 
     // ------------------------------------------------------------------ outils
 
-    private CfgTranche visible(UUID id) {
-        return tranches.trancheVisible(id).orElseThrow(() -> new ResourceNotFoundException("Tranche introuvable: " + id));
-    }
-
-    private <E, D extends LignesTrancheDto.Ligne> LignesTrancheDto<D> lire(CfgTranche tranche, String jpql,
-                                                                         Class<E> classe, Function<E, D> versDto) {
-        return new LignesTrancheDto<>(lignes(tranche, jpql, classe).stream().map(versDto).toList());
-    }
-
-    private <E> List<E> lignes(CfgTranche tranche, String jpql, Class<E> classe) {
-        return em.createQuery(jpql, classe).setParameter(ID, tranche.getId()).getResultList();
-    }
-
-    /**
-     * {@code id} connu = mise à jour, absent = création, ligne de la base absente du corps = suppression ; une clé
-     * déjà vue (doublon) est ignorée, comme OMRAN. Renvoie les lignes gardées, dans l'ordre du corps.
-     */
-    private <E extends LigneTrancheOmran, L extends LignesTrancheDto.Ligne> List<E> reconcilier(
-            CfgTranche tranche, LignesTrancheDto<L> corps, String jpql, Class<E> classe, Supplier<E> nouvelle,
-            Function<L, UUID> cle, String champCle, Remplir<E, L> remplir) {
-        if (corps == null || corps.lignes() == null) {
-            throw new InvalidRequestException("lignes est obligatoire.");
-        }
-        Map<UUID, E> existantes = lignes(tranche, jpql, classe).stream()
-                .collect(Collectors.toMap(LigneTrancheOmran::getId, e -> e, (a, b) -> a, LinkedHashMap::new));
-        TracePatrimoine.Trace t = trace.maintenant();
-        Set<UUID> vues = new HashSet<>();
-        List<E> gardees = new ArrayList<>();
-        for (int i = 0; i < corps.lignes().size(); i++) {
-            L ligne = corps.lignes().get(i);
-            Position position = new Position(i, gardees.size() + 1);
-            if (ligne == null || cle.apply(ligne) == null) {
-                throw new InvalidRequestException(position.champ(champCle) + " est obligatoire.");
-            }
-            if (vues.add(cle.apply(ligne))) {
-                E entite = ligne.id() == null ? creer(nouvelle, tranche, t) : existantes.remove(ligne.id());
-                if (entite == null) {
-                    throw new InvalidRequestException(position.champ(ID) + " : ligne inconnue de la tranche.");
-                }
-                remplir.appliquer(entite, ligne, position);
-                entite.setUserUpdate(t.auteur());
-                entite.setUserUpdateDateTime(t.le());
-                gardees.add(entite);
-            }
-        }
-        existantes.values().forEach(em::remove);
-        return gardees;
-    }
-
-    private <E extends LigneTrancheOmran> E creer(Supplier<E> nouvelle, CfgTranche tranche, TracePatrimoine.Trace t) {
-        E entite = nouvelle.get();
-        entite.setId(UUID.randomUUID());
-        entite.setCfgTranche(tranche);
-        entite.setUserCreate(t.auteur());
-        entite.setUserCreateDateTime(t.le());
-        em.persist(entite);
-        return entite;
-    }
-
-    private <T> T reference(Class<T> classe, UUID id, String champ) {
-        T trouvee = em.find(classe, id);
-        if (trouvee == null) {
-            throw new InvalidRequestException("%s : référence inconnue (%s).".formatted(champ, id));
-        }
-        return trouvee;
+    private <E extends LigneTrancheOmran, D extends LignesTrancheDto.Ligne> LignesTrancheDto<D> lire(
+            CfgTranche tranche, String jpql, Class<E> classe, Function<E, D> versDto) {
+        return new LignesTrancheDto<>(reconciliation.lignes(tranche, jpql, classe).stream().map(versDto).toList());
     }
 
     private static BigDecimal montant(BigDecimal valeur, String champ) {
