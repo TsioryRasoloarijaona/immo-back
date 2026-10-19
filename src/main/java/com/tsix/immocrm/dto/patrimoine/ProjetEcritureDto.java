@@ -39,5 +39,5 @@ public record ProjetEcritureDto(
         UUID responsableCommercialId,
         @Schema(description = "PATCH : noms de champs à vider (date, pays, personnel → NULL ; texte → \"\").")
         List<String> champsAVider
-) {
+) implements SaisieCoordonnees {
 }

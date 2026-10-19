@@ -19,7 +19,9 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Référentiels de la fiche programme / tranche (FEATURE-patrimoine-tranche-fiche.md §2) : listes de choix et
@@ -100,7 +102,12 @@ public record ReferencesPatrimoine(CfgTierRepository tiers, CfgTrancheStandingRe
     }
 
     private static <T> T trouver(CrudRepository<T, UUID> depot, UUID id, String champ) {
-        return depot.findById(id)
+        return trouver(depot::findById, id, champ);
+    }
+
+    /** Clé étrangère saisie : inconnue → 400 nommant le champ. */
+    static <T> T trouver(Function<UUID, Optional<T>> lecture, UUID id, String champ) {
+        return lecture.apply(id)
                 .orElseThrow(() -> new InvalidRequestException("%s : référence inconnue (%s).".formatted(champ, id)));
     }
 }

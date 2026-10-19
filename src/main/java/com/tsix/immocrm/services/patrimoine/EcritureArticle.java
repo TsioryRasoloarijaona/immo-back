@@ -59,7 +59,7 @@ class EcritureArticle {
         if (d.trancheId() == null) {
             throw new InvalidRequestException("La tranche est obligatoire.");
         }
-        CfgTranche tranche = tranches.findById(d.trancheId())
+        CfgTranche tranche = tranches.trancheVisible(d.trancheId())
                 .orElseThrow(() -> new InvalidRequestException("Tranche inconnue : " + d.trancheId()));
         StkItem article = nouveau(tranche, references.vocation(d.vocationId()), false);
         article.setIsTitled(ou(d.estTitre(), true));
