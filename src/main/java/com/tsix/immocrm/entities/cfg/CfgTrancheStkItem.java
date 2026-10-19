@@ -1,29 +1,23 @@
 package com.tsix.immocrm.entities.cfg;
 
 import com.tsix.immocrm.entities.stk.StkItem;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Size;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
 
+/** Onglet Terrains de la tranche. */
 @Getter
 @Setter
 @Entity
 @Table(name = "CfgTrancheStkItem")
-public class CfgTrancheStkItem {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "CfgTrancheId")
-    private CfgTranche cfgTranche;
-
+public class CfgTrancheStkItem extends LigneTrancheOmran {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "StkItemId")
     private StkItem stkItem;
@@ -33,22 +27,4 @@ public class CfgTrancheStkItem {
 
     @Column(name = "Sorting")
     private Integer sorting;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserUpdate")
-    private String userUpdate;
-
-    @Column(name = "UserUpdateDateTime")
-    private LocalDateTime userUpdateDateTime;
-
-
 }
