@@ -17,6 +17,8 @@ chaque *pull request*.
 | `080_offres_schema_financement.sql` | `StlQuoteDocument` (schéma de financement saisi sur une offre, FEATURE-encaissements-offres-lot2.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 | `100_audit_tables.sql` | `AdmWebHistorics` (journal d'audit OMRAN, `Details` en `text`) et `AdmMessage` (notes), FEATURE-patrimoine-audit-actions.md ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
 | `101_audit_fk.sql` | aucune clé étrangère : `AdmWebSessions`, cible de `AdmWebHistorics.AdmWebSessionsId` en production, est absente du CI | écrit à la main |
+| `104_tranche-onglets_tables.sql` | `CfgTrancheCoveredFloor` (onglet Plancher couvert, FEATURE-patrimoine-tranche-onglets.md) ; idempotent, déjà présente dans `yesRemsTest` | écrit à la main |
+| `105_tranche-onglets_fk.sql` | ses clés vers `CfgTranche` (CASCADE) et `StkItemCategory`, comme en production | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.

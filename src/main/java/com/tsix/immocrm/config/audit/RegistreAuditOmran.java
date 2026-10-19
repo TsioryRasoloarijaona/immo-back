@@ -1,7 +1,12 @@
 package com.tsix.immocrm.config.audit;
 
+import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
+import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
+import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
@@ -24,13 +29,16 @@ public final class RegistreAuditOmran {
     static final String ARTICLE = "Yes.Stk.Building.Item";
     static final String SOUS_ARTICLE = "Yes.Stk.Building.UnderItem";
     static final String TERRAIN = "Yes.Stk.LandProjectItem";
+    static final String TRANCHE_ETAGE = "Yes.Cfg.CfgTrancheLevel";
     private static final String LIBELLE_TRANCHE = "Tranche";
 
     /** Types que le journal rend : rien d'autre ne sort de {@code AdmWebHistorics} (revue §10.1). */
-    public static final List<String> TYPES = List.of(PROGRAMME, TRANCHE, TRANCHE_ARTICLE, ARTICLE, SOUS_ARTICLE, TERRAIN);
+    public static final List<String> TYPES = List.of(PROGRAMME, TRANCHE, TRANCHE_ARTICLE, ARTICLE, SOUS_ARTICLE, TERRAIN,
+            TRANCHE_ETAGE);
 
     private static final List<Class<?>> CLASSES = List.of(CfgProject.class, CfgTranche.class, StkItem.class,
-            CfgTrancheStkItem.class);
+            CfgTrancheStkItem.class, CfgTrancheLevel.class, CfgTrancheCoveredFloor.class,
+            CfgTrancheSettlementCategory.class, AdmUserHabilitation.class);
 
     private RegistreAuditOmran() {
     }
@@ -55,6 +63,15 @@ public final class RegistreAuditOmran {
             case StkItem i -> article(i);
             case CfgTrancheStkItem l -> new Trace(TRANCHE_ARTICLE, LIBELLE_TRANCHE, Objects.toString(l.getSorting(), ""),
                     TRANCHE, Champs.de(l.getCfgTranche(), CfgTranche::getId));
+            // Libellés d'objet mesurés en prod : PKey de la ligne, Sorting, AdmUserId ; sans parent sauf l'étage (§8.10).
+            case CfgTrancheLevel l -> new Trace(TRANCHE_ETAGE, "Etage", l.getId().toString(), TRANCHE,
+                    Champs.de(l.getCfgTranche(), CfgTranche::getId));
+            case CfgTrancheCoveredFloor p -> new Trace("Yes.Cfg.CfgTrancheCoveredFloor", "Prospection de projet",
+                    p.getId().toString(), null, null);
+            case CfgTrancheSettlementCategory f -> new Trace("Yes.Cfg.CfgTrancheSettlementCategory", "Frais de vente",
+                    Objects.toString(f.getSorting(), ""), null, null);
+            case AdmUserHabilitation h -> new Trace("Yes.Adm.AdmUserHabilitation", "Habilitation",
+                    Objects.toString(Champs.de(h.getAdmUser(), AdmUser::getId), ""), null, null);
             default -> null;
         });
     }
