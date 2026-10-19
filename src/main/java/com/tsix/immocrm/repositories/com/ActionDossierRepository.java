@@ -16,12 +16,6 @@ public interface ActionDossierRepository extends JpaRepository<ComActionMessage,
             + "ORDER BY m.docDate DESC")
     List<ComActionMessage> actionsDuDossier(UUID dossierId);
 
-    /** Toute action portant {@code StkItemId} = l'article, dossier compris (FEATURE-patrimoine-audit-actions.md §3). */
-    @Query("SELECT m FROM ComActionMessage m LEFT JOIN FETCH m.comActionMessageType "
-            + "LEFT JOIN FETCH m.comActionMessageCategory WHERE m.stkItem.id = :articleId "
-            + "ORDER BY m.docDate DESC")
-    List<ComActionMessage> actionsDeLArticle(UUID articleId);
-
     Optional<ComActionMessage> findByIdAndComFolderId(UUID id, UUID dossierId);
 
     /** Instruction non lue adressée à un employé ({@code CfgEmployeeId} = commercial destinataire). */
