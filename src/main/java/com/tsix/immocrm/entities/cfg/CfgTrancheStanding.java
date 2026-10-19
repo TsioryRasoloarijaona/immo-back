@@ -1,32 +1,11 @@
 package com.tsix.immocrm.entities.cfg;
 
-import jakarta.persistence.Column;
+import com.tsix.immocrm.entities.CodeLibelleOmran;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
-import org.hibernate.annotations.Nationalized;
 
-import java.util.UUID;
-
-@Getter
-@Setter
+/** Standing d'une tranche. */
 @Entity
 @Table(name = "CfgTrancheStanding")
-public class CfgTrancheStanding {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Description")
-    private String description;
+public class CfgTrancheStanding extends CodeLibelleOmran {
 }

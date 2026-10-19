@@ -1,7 +1,7 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.CoordonneesOmran;
 import com.tsix.immocrm.entities.act.ActAccount;
-import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.lnd.LndLevel;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stk.StkTrancheHeading;
@@ -15,84 +15,15 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "CfgTranche")
-public class CfgTranche {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Description")
-    private String description;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Address")
-    private String address;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Email")
-    private String email;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Mobile")
-    private String mobile;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Phone")
-    private String phone;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Fax")
-    private String fax;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "WebSite")
-    private String webSite;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Address2")
-    private String address2;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Address3")
-    private String address3;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "ZipCode")
-    private String zipCode;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "City")
-    private String city;
-
+public class CfgTranche extends CoordonneesOmran {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgProjectId")
     private CfgProject cfgProject;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "AdmCountryId")
-    private AdmCountry admCountry;
 
     @Column(name = "WorkStartDate")
     private LocalDateTime workStartDate;
@@ -105,22 +36,6 @@ public class CfgTranche {
 
     @Column(name = "MarketingEndDate")
     private LocalDateTime marketingEndDate;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserUpdate")
-    private String userUpdate;
-
-    @Column(name = "UserUpdateDateTime")
-    private LocalDateTime userUpdateDateTime;
 
     @Column(name = "AdvancePercent", precision = 26, scale = 6)
     private BigDecimal advancePercent;
