@@ -45,6 +45,9 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
             """)
     List<CfgTranche> tranchesInteret(@Param("prospectId") UUID prospectId);
 
+    /** Tranche d'une entité en exploitation (lecture par id d'une sous-ressource). */
+    boolean existsByIdAndCfgProject_CfgCompany_IsActiveTrue(UUID id);
+
     /** Par code exact — sert la tranche suggérée à l'import CSV des leads. */
     Optional<CfgTranche> findFirstByCode(String code);
 }

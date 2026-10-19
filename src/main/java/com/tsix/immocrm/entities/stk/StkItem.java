@@ -226,6 +226,14 @@ public class StkItem {
     @Column(name = "ComFolderId")
     private UUID comFolderId;
 
+    // Module Location : lu pour « article occupé », jamais écrit par nous.
+    @Column(name = "RntFolderId", insertable = false, updatable = false)
+    private UUID rntFolderId;
+
+    // Sans elle l'article disparaît d'OMRAN (StkItemView filtre sur StrEntityId).
+    @Column(name = "StrEntityId")
+    private UUID strEntityId;
+
     @Size(max = 255)
     @Nationalized
     @Column(name = "WaterRef")

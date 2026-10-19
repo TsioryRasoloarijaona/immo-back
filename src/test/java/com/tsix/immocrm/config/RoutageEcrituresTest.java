@@ -1,5 +1,8 @@
 package com.tsix.immocrm.config;
 
+import com.tsix.immocrm.services.patrimoine.ArticleService;
+import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.TrancheService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -11,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -48,7 +52,7 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer|attribuer|notifier)[A-Z].*"
+                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer|attribuer|notifier)[A-Z].*"
                     + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|avancer|repartir|appliquer|deposer)$");
 
     @Test
@@ -85,6 +89,44 @@ class RoutageEcrituresTest {
                         + "copie de lecture, ou leur ligne serait ecrasee au prochain rapatriement. "
                         + "Poser @Transactional (sans readOnly) sur la methode.")
                 .isEmpty();
+    }
+
+    /**
+     * FEATURE-patrimoine-ecriture.md §2.1 et §13.7 : les services patrimoine exposent leurs écritures sous les
+     * verbes {@code creer…}, {@code modifier…}, {@code affecter…}, {@code desaffecter…}, aucune en lecture seule.
+     */
+    @Test
+    void servicesPatrimoine_ecrituresNommeesEtJamaisEnLectureSeule() {
+        List<Class<?>> patrimoine = services().stream()
+                .filter(c -> c.getPackageName().equals("com.tsix.immocrm.services.patrimoine"))
+                .toList();
+        List<Method> ecritures = patrimoine.stream()
+                .flatMap(c -> Arrays.stream(c.getDeclaredMethods()))
+                .filter(m -> Modifier.isPublic(m.getModifiers()) && !m.isSynthetic())
+                .filter(m -> ECRITURE.matcher(m.getName()).matches())
+                .toList();
+
+        assertThat(ecritures).extracting(Method::getName)
+                .anyMatch(n -> n.startsWith("creer"))
+                .anyMatch(n -> n.startsWith("modifier"))
+                .anyMatch(n -> n.startsWith("affecter"))
+                .anyMatch(n -> n.startsWith("desaffecter"));
+        assertThat(ecritures)
+                .filteredOn(m -> lectureSeuleEffective(m.getDeclaringClass(), m))
+                .extracting(m -> m.getDeclaringClass().getSimpleName() + "#" + m.getName())
+                .isEmpty();
+    }
+
+    @Test
+    void servicesPatrimoine_chaqueEntiteACreerEtModifier() {
+        assertThat(List.of(ProjetService.class, TrancheService.class, ArticleService.class))
+                .isNotEmpty()
+                .allSatisfy(service -> assertThat(Arrays.stream(service.getDeclaredMethods())
+                        .filter(m -> Modifier.isPublic(m.getModifiers()))
+                        .map(Method::getName).toList())
+                        .as(service.getSimpleName())
+                        .anyMatch(n -> n.startsWith("creer"))
+                        .anyMatch(n -> n.startsWith("modifier")));
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -84,6 +85,10 @@ public class CfgTranche {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgProjectId")
     private CfgProject cfgProject;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
 
     @Column(name = "WorkStartDate")
     private LocalDateTime workStartDate;

@@ -42,6 +42,9 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/referentiels")
 public class ReferentielController {
 
+    private static final String POUR_SOUS_ARTICLE = "Renseigné : nature Bâtiment et « pour les sous-articles » égal "
+            + "à la valeur. Absent = toutes.";
+
     private final ReferentielService referentielService;
 
     public ReferentielController(ReferentielService referentielService) {
@@ -91,8 +94,10 @@ public class ReferentielController {
     }
 
     @GetMapping("/vocations")
-    public List<ReferentielItemDto> getVocations() {
-        return referentielService.vocations();
+    public List<ReferentielItemDto> getVocations(
+            @Parameter(description = "true : sans la vocation PROJET (formulaire d'article). Absent = toutes.")
+            @RequestParam(defaultValue = "false") boolean pourArticle) {
+        return referentielService.vocations(pourArticle);
     }
 
     @GetMapping("/natures")
@@ -102,7 +107,7 @@ public class ReferentielController {
     }
 
     @GetMapping("/etages")
-    @Operation(summary = "Dropdown \"Étage\" pour le filtre etageId des endpoints Article")
+    @Operation(summary = "Dropdown \"Étage\" (StkFloor), trié par Sorting puis code")
     public List<ReferentielItemDto> getEtages() {
         return referentielService.etages();
     }
@@ -180,13 +185,15 @@ public class ReferentielController {
     }
 
     @GetMapping("/categories-bien")
-    public List<ReferentielItemDto> getCategoriesBien() {
-        return referentielService.categoriesBien();
+    public List<ReferentielItemDto> getCategoriesBien(
+            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle) {
+        return referentielService.categoriesBien(pourSousArticle);
     }
 
     @GetMapping("/types-bien")
-    public List<ReferentielItemDto> getTypesBien() {
-        return referentielService.typesBien();
+    public List<ReferentielItemDto> getTypesBien(
+            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle) {
+        return referentielService.typesBien(pourSousArticle);
     }
 
     @GetMapping("/types-relation-contact")
