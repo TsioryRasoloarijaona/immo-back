@@ -197,7 +197,7 @@ public class SuiviCommerciauxController {
     @GetMapping(BASE + "/objectif")
     @Operation(summary = "Objectif de personnes jointes par jour (60 par défaut)")
     public ObjectifCommercialDto objectif() {
-        return new ObjectifCommercialDto(objectifService.objectif());
+        return ObjectifCommercialDto.de(objectifService.objectif());
     }
 
     @PutMapping(BASE + "/objectif")
@@ -209,7 +209,8 @@ public class SuiviCommerciauxController {
             @ApiResponse(responseCode = "403", description = "Appelant non Administrateur.", content = @Content)
     })
     public ObjectifCommercialDto modifierObjectif(@Valid @RequestBody ObjectifCommercialDto corps) {
-        return new ObjectifCommercialDto(objectifService.modifierObjectif(corps.objectifPersonnesJointesJour()));
+        return ObjectifCommercialDto.de(
+                objectifService.modifierObjectif(corps.objectifPersonnesJointesJour().intValueExact()));
     }
 
     @GetMapping("/api/referentiels/colonnes/suivi-commerciaux")

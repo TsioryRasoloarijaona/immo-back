@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.services.equipe.CommerciauxVisibles;
 import com.tsix.immocrm.services.equipe.MembreEquipe;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -58,14 +59,17 @@ public class SuiviCommerciauxMensuelService {
     private final SuiviCommerciauxService suiviService;
     private final PerimetreCommercialService perimetreService;
     private final CommerciauxVisibles commerciaux;
+    private final AdmUserHabilitationRepository habilitationRepository;
     private final EntityManager em;
 
     public SuiviCommerciauxMensuelService(SuiviCommerciauxService suiviService,
                                           PerimetreCommercialService perimetreService,
-                                          CommerciauxVisibles commerciaux, EntityManager em) {
+                                          CommerciauxVisibles commerciaux,
+                                          AdmUserHabilitationRepository habilitationRepository, EntityManager em) {
         this.suiviService = suiviService;
         this.perimetreService = perimetreService;
         this.commerciaux = commerciaux;
+        this.habilitationRepository = habilitationRepository;
         this.em = em;
     }
 
@@ -105,11 +109,15 @@ public class SuiviCommerciauxMensuelService {
         }
         List<MembreEquipe> retenus = commerciaux.retenus(commercialIds);
         boolean filtre = !CollectionUtils.isEmpty(commercialIds);
+        // §9.8 : sans tranche demandée, les tranches habilitées de l'appelant ; aucune habilitation = toutes.
+        List<UUID> tranches = !CollectionUtils.isEmpty(trancheIds) ? trancheIds
+                : PerimetreCommercialService.admUserIdCourant()
+                        .map(habilitationRepository::findTrancheIdsByAdmUserId).orElse(List.of());
         LocalDate debutMois = LocalDate.of(annee, mois, 1);
         LocalDate debutAnnee = LocalDate.of(annee, 1, 1);
         return new MensuelSuiviCommerciauxDto(
-                bloc(retenus, filtre, debutMois.atStartOfDay(), debutMois.plusMonths(1).atStartOfDay(), trancheIds),
-                bloc(retenus, filtre, debutAnnee.atStartOfDay(), debutAnnee.plusYears(1).atStartOfDay(), trancheIds));
+                bloc(retenus, filtre, debutMois.atStartOfDay(), debutMois.plusMonths(1).atStartOfDay(), tranches),
+                bloc(retenus, filtre, debutAnnee.atStartOfDay(), debutAnnee.plusYears(1).atStartOfDay(), tranches));
     }
 
     private BlocMensuel bloc(List<MembreEquipe> retenus, boolean filtre, LocalDateTime debut, LocalDateTime fin,
