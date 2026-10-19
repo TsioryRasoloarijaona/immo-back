@@ -517,7 +517,7 @@ public class ReferentielService {
      */
     public List<ArticleListItemDto> articles(UUID trancheId, StatutArticle statut,
                                               List<UUID> categorieIds, List<UUID> typeIds) {
-        if (!trancheRepository.existsById(trancheId)) {
+        if (trancheRepository.trancheVisible(trancheId).isEmpty()) {
             throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
         }
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;
@@ -532,7 +532,7 @@ public class ReferentielService {
 
     public List<ArticleListItemDto> sousArticles(UUID articleId, StatutArticle statut,
                                                   List<UUID> categorieIds, List<UUID> typeIds) {
-        if (!stkItemRepository.existsById(articleId)) {
+        if (stkItemRepository.findVisible(articleId).isEmpty()) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
         }
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;

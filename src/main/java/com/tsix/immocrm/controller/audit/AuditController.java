@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
-@Tag(name = "Audit", description = "Journal d'audit OMRAN (AdmWebHistorics) des programmes, tranches et articles.")
+@Tag(name = "Audit", description = "Journal d'audit OMRAN (AdmWebHistorics) des programmes, tranches, articles et entités "
+        + "juridiques.")
 @RestController
 @RequestMapping("/api/audit")
 public class AuditController {
@@ -31,10 +32,11 @@ public class AuditController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Une page, éventuellement vide."),
             @ApiResponse(responseCode = "400", description = "`objetId` absent ou mal formé, `page` < 0, `size` hors 1..200."),
-            @ApiResponse(responseCode = "404", description = "Ni programme, ni tranche, ni article visible avec cet id.")
+            @ApiResponse(responseCode = "404", description = "Ni entité juridique, ni programme, tranche ou article visible.")
     })
     public PageDto<LigneAuditDto> lister(
-            @Parameter(description = "PKey du programme, de la tranche ou de l'article.") @RequestParam UUID objetId,
+            @Parameter(description = "PKey de l'entité juridique (même inactive), du programme, de la tranche ou de l'article.")
+            @RequestParam UUID objetId,
             @Parameter(description = "Page, à partir de 0.") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Taille de page, 1 à 200.") @RequestParam(defaultValue = "50") int size) {
         return auditService.lister(objetId, page, size);

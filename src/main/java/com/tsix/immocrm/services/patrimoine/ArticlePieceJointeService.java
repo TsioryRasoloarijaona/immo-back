@@ -25,17 +25,19 @@ public class ArticlePieceJointeService {
     }
 
     public List<PieceJointeDto> findByArticle(UUID articleId) {
-        if (!itemRepository.existsById(articleId)) {
-            throw new ResourceNotFoundException("Article introuvable: " + articleId);
-        }
+        exigerVisible(articleId);
         return support.lister(articleId);
     }
 
     /** 404 si la pièce n'appartient pas à cet article. */
     public URI urlFichier(UUID articleId, UUID pieceId) {
-        if (!itemRepository.existsById(articleId)) {
+        exigerVisible(articleId);
+        return support.urlTelechargement(articleId, pieceId, "cet article");
+    }
+
+    private void exigerVisible(UUID articleId) {
+        if (itemRepository.findVisible(articleId).isEmpty()) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
         }
-        return support.urlTelechargement(articleId, pieceId, "cet article");
     }
 }
