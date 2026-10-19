@@ -5,6 +5,7 @@ import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.domain.ColonneSuiviAction;
+import com.tsix.immocrm.domain.ColonneTranche;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +38,9 @@ public class ColonnesJacksonConfig {
                                 ColonneEncaissement.nomsParDefaut(), ColonneEncaissement.ID.nom()))
                 .addFilter(ColonneSuiviAction.FILTRE,
                         new SelectionColonnesPropertyFilter(
-                                ColonneSuiviAction.nomsParDefaut(), ColonneSuiviAction.ID.nom())));
+                                ColonneSuiviAction.nomsParDefaut(), ColonneSuiviAction.ID.nom()))
+                .addFilter(ColonneTranche.FILTRE,
+                        new SelectionColonnesPropertyFilter(
+                                ColonneTranche.nomsParDefaut(), ColonneTranche.ID.nom())));
     }
 }

@@ -21,14 +21,15 @@ public interface CfgTrancheRepository extends JpaRepository<CfgTranche, UUID> {
     @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true")
     List<CfgTranche> findDesEntitesActives();
 
-    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true")
-    Page<CfgTranche> findDesEntitesActives(Pageable pageable);
-
     @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.id = :projetId AND t.cfgProject.cfgCompany.isActive = true")
     List<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId);
 
-    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.id = :projetId AND t.cfgProject.cfgCompany.isActive = true")
-    Page<CfgTranche> findDesEntitesActivesParProjet(@Param("projetId") UUID projetId, Pageable pageable);
+    /** {@code motif} = {@code %texte%} en minuscules (code, libellé, ville, programme), ou null pour tout. */
+    @Query("SELECT t FROM CfgTranche t WHERE t.cfgProject.cfgCompany.isActive = true "
+            + "AND (:projetId IS NULL OR t.cfgProject.id = :projetId) AND (:motif IS NULL "
+            + "OR lower(t.code) LIKE :motif OR lower(t.description) LIKE :motif OR lower(t.city) LIKE :motif "
+            + "OR lower(t.cfgProject.code) LIKE :motif)")
+    Page<CfgTranche> rechercher(@Param("projetId") UUID projetId, @Param("motif") String motif, Pageable pageable);
 
     /**
      * Union distincte des tranches principales et secondaires ({@code ComProspectionProject}) du prospect,

@@ -33,6 +33,12 @@ public record ProjetDetailDto(
         @Schema(description = "UserCreate : auteur de la création (OMRAN ou Arpent).") String creePar,
         LocalDateTime creeLe,
         @Schema(description = "UserUpdate : auteur de la dernière modification.") String modifiePar,
-        LocalDateTime modifieLe
+        LocalDateTime modifieLe,
+        @Schema(description = "« Courrier signataire » (AdmSignatoryId), null si non renseigné.") UUID signataireId,
+        String signataireLibelle,
+        @Schema(description = "Responsable technique (CfgTechnicalManagerId).") UUID responsableTechniqueId,
+        String responsableTechniqueLibelle,
+        @Schema(description = "Responsable commercial (CfgSalesManagerId).") UUID responsableCommercialId,
+        String responsableCommercialLibelle
 ) {
 }

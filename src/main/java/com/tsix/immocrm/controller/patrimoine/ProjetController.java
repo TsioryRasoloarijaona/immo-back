@@ -5,9 +5,12 @@ import com.tsix.immocrm.dto.patrimoine.ProjetDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ProjetListItemDto;
 import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
+import com.tsix.immocrm.dto.patrimoine.ZoneProjetDto;
+import com.tsix.immocrm.dto.patrimoine.ZoneProjetEcritureDto;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,15 +19,18 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
@@ -34,6 +40,14 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/projets")
 public class ProjetController {
 
+    private static final String ADMIN = "hasRole('Administrateur')";
+    private static final String PAS_ADMIN = "L'appelant n'a pas le rôle Administrateur.";
+    private static final String INTROUVABLE = "Programme introuvable ou de son entité inactive.";
+    private static final String ID_PROGRAMME = "Id du programme (CfgProject.PKey).";
+    private static final String ID_ZONE = "Id de la zone (CfgProjectZone.PKey).";
+    private static final String ZONE_INTROUVABLE = "Programme ou zone introuvable.";
+    private static final String CODE_ZONE_PRIS = "Code déjà pris sous le même parent du programme.";
+
     private final ProjetService projetService;
 
     public ProjetController(ProjetService projetService) {
@@ -41,22 +55,105 @@ public class ProjetController {
     }
 
     @GetMapping
-    @Operation(summary = "Liste paginée des programmes des entités actives")
+    @Operation(summary = "Liste paginée des programmes des entités actives (colonnes de la liste OMRAN)")
     public PageDto<ProjetListItemDto> findAll(
+            @Parameter(description = "Recherche sans casse dans le code, le libellé, la ville et l'entité.")
+            @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(projetService.findAll(pageable));
+        return PageDto.of(projetService.findAll(search, pageable));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Détail d'un programme")
-    @ApiResponse(responseCode = "404", description = "Programme introuvable.")
-    public ProjetDetailDto findById(@Parameter(description = "Id du programme (CfgProject.PKey).") @PathVariable UUID id) {
+    @ApiResponse(responseCode = "404", description = INTROUVABLE)
+    public ProjetDetailDto findById(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
         return projetService.findById(id);
+    }
+
+    @GetMapping("/defauts-entite/{entiteId}")
+    @Operation(summary = "Valeurs par défaut d'un programme tirées de l'entité (code et description compris)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Corps de création pré-rempli."),
+            @ApiResponse(responseCode = "404", description = "Entité introuvable ou inactive.", content = @Content)
+    })
+    public ProjetEcritureDto defautsEntite(
+            @Parameter(description = "Id de l'entité (CfgCompany.PKey).") @PathVariable UUID entiteId) {
+        return projetService.defautsEntite(entiteId);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Supprime un programme sans tranche ni article")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Programme supprimé avec ses habilitations, zones, pièces et notes."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = INTROUVABLE),
+            @ApiResponse(responseCode = "409", description = "Une tranche, un article ou une autre table référence le programme.")
+    })
+    public void supprimer(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
+        projetService.supprimerProjet(id);
+    }
+
+    @GetMapping("/{id}/zones")
+    @Operation(summary = "Zones du programme : arbre rendu à plat (parentId), trié par Sorting")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Zones, tableau JSON."),
+            @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    })
+    public List<ZoneProjetDto> zones(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
+        return projetService.zones(id);
+    }
+
+    @PostMapping("/{id}/zones")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Ajoute une zone au programme")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Zone créée."),
+            @ApiResponse(responseCode = "400", description = "Code ou description manquant."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = "Programme ou zone parente introuvable."),
+            @ApiResponse(responseCode = "409", description = CODE_ZONE_PRIS)
+    })
+    public ZoneProjetDto creerZone(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,
+                                   @RequestBody ZoneProjetEcritureDto saisie) {
+        return projetService.creerZone(id, saisie);
+    }
+
+    @PatchMapping("/{id}/zones/{zoneId}")
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Modifie une zone (absent ou null = inchangé)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Zone modifiée."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = ZONE_INTROUVABLE),
+            @ApiResponse(responseCode = "409", description = CODE_ZONE_PRIS)
+    })
+    public ZoneProjetDto modifierZone(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,
+                                      @Parameter(description = ID_ZONE) @PathVariable UUID zoneId,
+                                      @RequestBody ZoneProjetEcritureDto saisie) {
+        return projetService.modifierZone(id, zoneId, saisie);
+    }
+
+    @DeleteMapping("/{id}/zones/{zoneId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Supprime une zone sans sous-zone ni référence")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Zone supprimée."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = ZONE_INTROUVABLE),
+            @ApiResponse(responseCode = "409", description = "La zone a des sous-zones ou est référencée (SAV, GRH).")
+    })
+    public void supprimerZone(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id,
+                              @Parameter(description = ID_ZONE) @PathVariable UUID zoneId) {
+        projetService.supprimerZone(id, zoneId);
     }
 
     @GetMapping("/{id}/tranches")
     @Operation(summary = "Tranches d'un programme")
-    @ApiResponse(responseCode = "404", description = "Programme introuvable.")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE)
     public PageDto<TrancheListItemDto> findTranches(
             @Parameter(description = "Id du programme (CfgProject.PKey).") @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
