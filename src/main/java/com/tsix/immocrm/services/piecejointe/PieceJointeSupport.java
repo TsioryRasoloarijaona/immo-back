@@ -183,7 +183,7 @@ public class PieceJointeSupport {
 
         return new PieceJointeDto(entity.getId(), entity.getDescription(), entity.getCategory(),
                 Champs.de(type, AdmAttachedFileType::getDescription), entity.getExtension(),
-                entity.getUserCreateDateTime(), entity.getUserCreate());
+                entity.getUserCreateDateTime(), entity.getUserCreate(), entity.getGroupe());
     }
 
     /**
@@ -256,6 +256,6 @@ public class PieceJointeSupport {
     public static PieceJointeDto toDto(AdmAttachedFileSummary a) {
         String type = Champs.de(a.getType(), AdmAttachedFileType::getDescription);
         return new PieceJointeDto(a.getId(), a.getDescription(), a.getCategory(), type, a.getExtension(),
-                a.getUserCreateDateTime(), a.getUserCreate());
+                a.getUserCreateDateTime(), a.getUserCreate(), a.getGroupe());
     }
 }
