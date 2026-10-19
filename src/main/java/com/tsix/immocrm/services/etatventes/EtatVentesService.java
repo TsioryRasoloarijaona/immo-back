@@ -365,6 +365,10 @@ public class EtatVentesService {
         Map<String, ColonneEtatVentes> index = Colonnes.index(ColonneEtatVentes.class);
         List<Sort.Order> ordres = new ArrayList<>();
         for (Sort.Order o : demande) {
+            // « id » = départage ajouté par LignesExport.toutes : couvert par le départage articleId ci-dessous.
+            if ("id".equals(o.getProperty())) {
+                continue;
+            }
             ColonneEtatVentes c = index.get(o.getProperty().toLowerCase(Locale.ROOT));
             if (c == null || c.chemin() == null) {
                 throw new ColonneInconnueException(o.getProperty(), Arrays.stream(ColonneEtatVentes.values())
