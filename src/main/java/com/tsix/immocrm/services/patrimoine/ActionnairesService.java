@@ -145,7 +145,7 @@ public class ActionnairesService {
     }
 
     private List<CfgGroupShareholderLine> nouvellesLignes(CfgGroupShareholder g, List<LigneGroupeDto> saisies) {
-        EntiteJuridiqueService.sansDoublon(saisies.stream().map(LigneGroupeDto::actionnaireId).toList());
+        EntiteJuridiqueService.sansDoublon(saisies, LigneGroupeDto::actionnaireId);
         // decimal(26,6) en base : la somme se contrôle sur les valeurs arrondies comme elles seront stockées.
         List<BigDecimal> pourcentages = saisies.stream()
                 .map(s -> Objects.requireNonNullElse(fraction(s.pourcentage(), "pourcentage"), BigDecimal.ZERO)

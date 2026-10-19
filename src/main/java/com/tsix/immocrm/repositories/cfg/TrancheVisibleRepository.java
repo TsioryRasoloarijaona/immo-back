@@ -11,7 +11,10 @@ import java.util.UUID;
 /** Tranche lue par id sous la règle de visibilité par entité ({@code VisibiliteEntites.CLAUSE_JPQL}). */
 public interface TrancheVisibleRepository extends JpaRepository<CfgTranche, UUID> {
 
-    @Query("SELECT t FROM CfgTranche t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
-            + "WHERE t.id = :id AND " + VisibiliteEntites.CLAUSE_JPQL)
+    /** Partagée avec {@link CfgTrancheRepository#trancheVisible} : une seule formulation de la règle. */
+    String TRANCHE_VISIBLE = "SELECT t FROM CfgTranche t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
+            + "WHERE t.id = :id AND " + VisibiliteEntites.CLAUSE_JPQL;
+
+    @Query(TRANCHE_VISIBLE)
     Optional<CfgTranche> trancheVisible(UUID id);
 }

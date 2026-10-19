@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -46,6 +47,8 @@ public class EntiteJuridiqueController {
     private static final String INTROUVABLE = "Entité introuvable.";
     private static final String VERIF = "Doublon, actionnaire inconnu, ou Verif OMRAN (nombre de lignes / total des parts).";
 
+    private static final String CORPS_REPARTITION =
+            "Le corps doit être un tableau [{actionnaireId, nombreParts}] : actionnaireId UUID, nombreParts entier.";
     private static final TypeReference<List<LigneRepartitionDto>> LIGNES = new TypeReference<>() {
     };
 
@@ -139,10 +142,16 @@ public class EntiteJuridiqueController {
                     content = @Content(array = @ArraySchema(schema = @Schema(implementation = LigneRepartitionDto.class))))
             @RequestBody JsonNode corps) {
         // Corps lu en arbre : @PreAuthorize passe après la lecture, un corps non-tableau doit d'abord donner 403.
-        if (!corps.isArray()) {
-            throw new InvalidRequestException("Le corps doit être un tableau [{actionnaireId, nombreParts}].");
+        List<LigneRepartitionDto> lignes;
+        try {
+            lignes = corps.isArray() ? json.convertValue(corps, LIGNES) : null;
+        } catch (JacksonException e) {
+            lignes = null;
         }
-        return service.remplacerRepartition(id, json.convertValue(corps, LIGNES));
+        if (lignes == null) {
+            throw new InvalidRequestException(CORPS_REPARTITION);
+        }
+        return service.remplacerRepartition(id, lignes);
     }
 
     @PostMapping("/{id}/repartition/depuis-groupe/{groupeId}")

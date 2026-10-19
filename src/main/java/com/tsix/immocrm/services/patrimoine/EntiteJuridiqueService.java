@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -243,7 +244,7 @@ public class EntiteJuridiqueService {
 
     /** Lignes saisies, contrôlées (actionnaire connu, sans doublon, parts ≥ 0) et non enregistrées. */
     private List<CfgCompanyShareholder> nouvelles(CfgCompany c, List<LigneRepartitionDto> saisies) {
-        sansDoublon(saisies.stream().map(LigneRepartitionDto::actionnaireId).toList());
+        sansDoublon(saisies, LigneRepartitionDto::actionnaireId);
         TracePatrimoine.Trace t = trace.maintenant();
         return saisies.stream().map(s -> {
             CfgCompanyShareholder r = new CfgCompanyShareholder();
@@ -265,8 +266,13 @@ public class EntiteJuridiqueService {
         ligne.setUserUpdateDateTime(t.le());
     }
 
-    /** Actionnaire absent ou cité deux fois → 400 (message OMRAN). */
-    static void sansDoublon(List<UUID> actionnaires) {
+    /** Ligne nulle, actionnaire absent ou cité deux fois → 400 (message OMRAN pour le doublon). */
+    static <T> void sansDoublon(List<T> lignes, Function<T, UUID> actionnaire) {
+        // Pas de contains(null) : List.of() le refuse.
+        if (lignes.stream().anyMatch(Objects::isNull)) {
+            throw new InvalidRequestException("Ligne vide dans la liste.");
+        }
+        List<UUID> actionnaires = lignes.stream().map(actionnaire).toList();
         if (actionnaires.stream().anyMatch(Objects::isNull)) {
             throw new InvalidRequestException(ACTIONNAIRE_ID + " : obligatoire sur chaque ligne.");
         }
