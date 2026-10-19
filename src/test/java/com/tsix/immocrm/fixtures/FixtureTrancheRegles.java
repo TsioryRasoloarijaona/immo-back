@@ -142,18 +142,30 @@ public class FixtureTrancheRegles {
     }
 
     /**
-     * Dossier sorti ({@code ANNULATION} / {@code DESISTEMENT}) dont {@code ComFolder.StkItemId} vise encore
-     * l'article, alors que l'article ne le pointe plus (comme les 31 dossiers sortis de production).
+     * Dossier sorti ({@code ANNULATION} / {@code DESISTEMENT}), seul sur son article : à créer avant tout autre
+     * dossier de l'article, le trigger {@code trgAfterComFolderInsert} refusant un dossier sur un article déjà
+     * occupé par un dossier vif.
      */
-    public ComFolder dossierSorti(String code, StkItem article, StatutDossier statut) {
+    public ComFolder dossierSorti(String code, CfgTranche tranche, StatutDossier statut) {
+        return vente.dossier(code, tranche, statut);
+    }
+
+    /**
+     * Dossier courant repris sur l'article d'un dossier sorti, qui garde son {@code ComFolder.StkItemId} : l'article
+     * pointe désormais le nouveau dossier (comme les 31 dossiers sortis de production).
+     */
+    public ComFolder dossierSurArticle(String code, StkItem article) {
         ComFolder folder = new ComFolder();
         folder.setId(UUID.randomUUID());
         folder.setCode(code + "-" + UUID.randomUUID().toString().substring(0, 8));
         folder.setStkVocation(article.getStkVocation());
-        folder.setStrStatus(vente.statut(statut));
+        folder.setStrStatus(vente.statut(StatutDossier.FORMALISE));
         folder.setCfgCustomer(vente.tier("CLI-" + code));
         folder.setStkItem(article);
-        return folderRepository.saveAndFlush(folder);
+        ComFolder enregistre = folderRepository.saveAndFlush(folder);
+        executer(entityManager.createNativeQuery("UPDATE StkItem SET ComFolderId = :dossier WHERE PKey = :id")
+                .setParameter("dossier", enregistre.getId()).setParameter(ID, article.getId()));
+        return enregistre;
     }
 
     /** Article libéré : plus aucun dossier ne l'occupe ({@code StkItem.ComFolderId} nul). */

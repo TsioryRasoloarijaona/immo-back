@@ -188,11 +188,11 @@ class MiseAJourSchemasTest {
                 () -> assertInchangee(posterieure, apres));
     }
 
-    /** Dossier annulé : son {@code StkItemId} vise encore l'article, que le dossier courant occupe. */
+    /** Dossier annulé : son {@code StkItemId} vise encore l'article, que le dossier courant (créé après) occupe. */
     @Test
     void r4_dossierAnnule_exclu() throws Exception {
-        ComFolder courant = dossier("A");
-        ComFolder annule = regles.dossierSorti("ANN-" + jeton, courant.getStkItem(), StatutDossier.ANNULATION);
+        ComFolder annule = regles.dossierSorti("ANN-" + jeton, tranche, StatutDossier.ANNULATION);
+        ComFolder courant = regles.dossierSurArticle("DOS-A-" + jeton, annule.getStkItem());
         ComDocument duCourant = echeance(courant, AVANT);
         ComDocument deLAnnule = echeance(annule, AVANT);
 
@@ -206,9 +206,8 @@ class MiseAJourSchemasTest {
     /** Dossier désisté dont l'article a été libéré ({@code StkItem.ComFolderId} nul). */
     @Test
     void r4_dossierDesiste_articleLibere_exclu() throws Exception {
-        ComFolder ancien = dossier("A");
-        ComFolder desiste = regles.dossierSorti("DES-" + jeton, ancien.getStkItem(), StatutDossier.DESISTEMENT);
-        regles.libererArticle(ancien.getStkItem().getId());
+        ComFolder desiste = regles.dossierSorti("DES-" + jeton, tranche, StatutDossier.DESISTEMENT);
+        regles.libererArticle(desiste.getStkItem().getId());
         ComDocument e = echeance(desiste, AVANT);
 
         executer();
