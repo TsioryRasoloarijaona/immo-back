@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageCategory;
 import com.tsix.immocrm.entities.com.ComActionMessageType;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ForbiddenException;
@@ -40,6 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -61,6 +63,7 @@ public class DossierActionsService {
     private static final String ROLE_ADMINISTRATEUR = "ROLE_Administrateur";
     /** Clé de regroupement des actions sans type, jamais exposée (le DTO porte alors {@code typeId = null}). */
     private static final UUID SANS_TYPE_ID = new UUID(0L, 0L);
+    private static final DateTimeFormatter DESCRIPTION_ARTICLE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final EcritureDossier ecriture;
     private final ActionDossierRepository actionRepository;
@@ -105,6 +108,28 @@ public class DossierActionsService {
     @Transactional
     public ActionDossierDto creer(UUID dossierId, CreerActionDossierRequest request) {
         ComFolder dossier = ecriture.charger(dossierId);
+        ComActionMessageType type = typeSaisi(request);
+        ComActionMessage action = nouvelleAction(dossier, type, request.note(), request.dateAlerte(), dateSaisie(request));
+        ActionDossierDto enregistree = enregistrerSaisie(action);
+        ecriture.signer(dossier);
+        return enregistree;
+    }
+
+    /**
+     * Action saisie depuis la fiche article (FEATURE-patrimoine-audit-actions.md §3, §11.7) : mêmes règles qu'un dossier,
+     * {@code StkItemId} au lieu du contexte dossier, {@code Description} = « jj/MM/aaaa HH:mm auteur » comme OMRAN.
+     */
+    @Transactional
+    public ActionDossierDto creerSurArticle(StkItem article, CreerActionDossierRequest request) {
+        ComActionMessageType type = typeSaisi(request);
+        LocalDateTime date = dateSaisie(request);
+        ComActionMessage action = actionSaisie(type, request.note(), request.dateAlerte(), date);
+        action.setStkItem(article);
+        action.setDescription(date.format(DESCRIPTION_ARTICLE) + " " + action.getUserName());
+        return enregistrerSaisie(action);
+    }
+
+    private ComActionMessageType typeSaisi(CreerActionDossierRequest request) {
         if (request == null || request.typeId() == null) {
             throw new InvalidRequestException("typeId est requis");
         }
@@ -114,15 +139,18 @@ public class DossierActionsService {
         if (ActionsDossier.TYPE_INSTRUCTION.equals(type.getId())) {
             throw new InvalidRequestException("Une instruction se crée par POST /api/dossiers/{id}/instructions");
         }
-        UtilisateurAffiche.Auteur auteur = ecriture.auteur();
-        AdmUser compte = auteur.compte();
-        ComActionMessage action = nouvelleAction(dossier, type, request.note(), request.dateAlerte(),
-                request.date() != null ? request.date() : ecriture.maintenant());
+        return type;
+    }
+
+    private LocalDateTime dateSaisie(CreerActionDossierRequest request) {
+        return request.date() != null ? request.date() : ecriture.maintenant();
+    }
+
+    private ActionDossierDto enregistrerSaisie(ComActionMessage action) {
+        AdmUser compte = action.getAdmUser();
         action.setCfgEmployee(compte != null ? compte.getCfgEmployee() : null);
         action.setIsNotRead(false);
-        ComActionMessage enregistree = actionRepository.save(action);
-        ecriture.signer(dossier);
-        return versDto(enregistree);
+        return versDto(actionRepository.save(action));
     }
 
     /**
@@ -176,26 +204,31 @@ public class DossierActionsService {
                                             LocalDateTime dateAlerte, LocalDateTime date) {
         StrStatus statut = dossier.getStrStatus();
         StatutDossier statutDossier = statutConnu(statut);
-        UtilisateurAffiche.Auteur auteur = ecriture.auteur();
-        LocalDateTime maintenant = ecriture.maintenant();
-
-        ComActionMessage m = new ComActionMessage();
-        m.setId(UUID.randomUUID());
+        ComActionMessage m = actionSaisie(type, note, dateAlerte, date);
         m.setComFolder(dossier);
         m.setComProspection(dossier.getComProspection());
         m.setCfgTier(dossier.getCfgCustomer());
         m.setStkItem(dossier.getStkItem());
         m.setStrFolderStatusId(statut.getId());
-        m.setComActionMessageType(type);
         m.setComActionMessageCategory(categorie(statutDossier));
+        m.setDescription(type.getDescription());
+        return m;
+    }
+
+    /** Colonnes communes à toute action saisie (GEN0005), quel que soit son porteur. */
+    private ComActionMessage actionSaisie(ComActionMessageType type, String note, LocalDateTime dateAlerte,
+                                          LocalDateTime date) {
+        UtilisateurAffiche.Auteur auteur = ecriture.auteur();
+        ComActionMessage m = new ComActionMessage();
+        m.setId(UUID.randomUUID());
+        m.setComActionMessageType(type);
         m.setDocDate(date);
         m.setAlertMessage(note.trim());
-        m.setDescription(type.getDescription());
         m.setAlertValidityDate(dateAlerte);
         m.setAdmUser(auteur.compte());
         m.setUserName(auteur.nom());
         m.setUserCreate(auteur.nom());
-        m.setUserCreateDateTime(maintenant);
+        m.setUserCreateDateTime(ecriture.maintenant());
         m.setIsIn(false);
         m.setIsSystem(false);
         m.setIsUnpaid(false);
@@ -264,7 +297,7 @@ public class DossierActionsService {
         return auth != null && auth.getPrincipal() instanceof AuthenticatedUser user ? user.employeeId() : null;
     }
 
-    static ActionDossierDto versDto(ComActionMessage m) {
+    public static ActionDossierDto versDto(ComActionMessage m) {
         ComActionMessageType type = m.getComActionMessageType();
         boolean instruction = type != null && ActionsDossier.TYPE_INSTRUCTION.equals(type.getId());
         return new ActionDossierDto(

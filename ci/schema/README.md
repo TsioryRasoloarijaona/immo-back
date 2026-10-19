@@ -15,8 +15,23 @@ chaque *pull request*.
 | `070_workflow_vente.sql` | tables de paramétrage du workflow (`StrWorkFlow`, intervenants, champs et pièces obligatoires), **vides** ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 | `070_vente_sous_listes.sql` | `ComModification`, `ComGift`, `ComGiftReason`, `ComGiftQuantity`, `ComFolderGift`, `StlPaymentAuthorizationLine`, `CfgTrancheSettlementCategory` (fiche dossier, FEATURE-vente-echeancier.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
 | `080_offres_schema_financement.sql` | `StlQuoteDocument` (schéma de financement saisi sur une offre, FEATURE-encaissements-offres-lot2.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
+| `100_audit_tables.sql` | `AdmWebHistorics` (journal d'audit OMRAN, `Details` en `text`) et `AdmMessage` (notes), FEATURE-patrimoine-audit-actions.md ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
+| `101_audit_fk.sql` | aucune clé étrangère : `AdmWebSessions`, cible de `AdmWebHistorics.AdmWebSessionsId` en production, est absente du CI | écrit à la main |
 
-Appliquer dans l'ordre numérique.
+Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
+ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
+
+### Plages réservées aux lots du plan Patrimoine
+
+Chaque lot livre `0NN_<lot>_tables.sql` puis `0NN+1_<lot>_fk.sql` (même s'il n'a aucune clé étrangère), dans sa
+plage :
+
+| Lot | Plage | Lot | Plage | Lot | Plage | Lot | Plage |
+|---|---|---|---|---|---|---|---|
+| P0 | 100-101 | P1a | 102-103 | P1b | 104-105 | P5 | 106-107 |
+| P1c | 108-109 | P2a | 110-111 | P2b | 112-113 | P6 | 114-115 |
+| P3 | 116-117 | P4 | 118-119 | P7a | 120-121 | P8a | 122-123 |
+| P7b | 124-125 | P8b | 126-127 | P9 | 128-129 | P10 | 130-131 |
 
 ## Pourquoi le schéma de production plutôt que `yesRemsTest`
 
@@ -106,8 +121,8 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 
 ```powershell
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -C -Q "CREATE DATABASE yesRemsCiCheck"
-foreach ($f in @("010_tables","020_foreign_keys","030_triggers","040_seed_reference","050_views")) {
-  sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsCiCheck -C -I -b -i "ci/schema/$f.sql"
+Get-ChildItem ci/schema/*.sql | Sort-Object Name | ForEach-Object {
+  sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsCiCheck -C -I -b -i $_.FullName
 }
 $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesRemsCiCheck;encrypt=true;trustServerCertificate=true"
 .\mvnw.cmd test
