@@ -246,9 +246,18 @@ public class TrancheService {
         t.setCfgTierOther(v.reference("tiersAutruiId", d.tiersAutruiId(), t.getCfgTierOther(),
                 id -> references.tiers(id, "tiersAutruiId")));
         t.setPrjProject(v.reference("projetFacturationId", d.projetFacturationId(), t.getPrjProject(),
-                id -> references.projet(id, "projetFacturationId")));
+                id -> projetDeLEntite(references.projet(id, "projetFacturationId"), t)));
         t.setActAccount(v.reference("planComptableId", d.planComptableId(), t.getActAccount(),
                 id -> references.compte(id, "planComptableId")));
+    }
+
+    /** Tranche.cs : le sélecteur ne propose que les projets de l'entité du programme. */
+    private static PrjProject projetDeLEntite(PrjProject projet, CfgTranche t) {
+        UUID entite = Champs.de(Champs.de(t.getCfgProject(), CfgProject::getCfgCompany), CfgCompany::getId);
+        if (entite == null || !entite.equals(Champs.de(projet.getCfgCompany(), CfgCompany::getId))) {
+            throw new InvalidRequestException("projetFacturationId : le projet n'appartient pas à l'entité du programme.");
+        }
+        return projet;
     }
 
     private static void dates(CfgTranche t, TrancheEcritureDto d, ChampsAVider v) {
