@@ -68,7 +68,7 @@ final class DetailsAudit {
     private static String scalaire(Object valeur) {
         return switch (valeur) {
             case BigDecimal d -> d.signum() == 0 ? "0" : d.stripTrailingZeros().toPlainString();
-            case Boolean b -> b ? "True" : "False";
+            case Boolean b -> Boolean.TRUE.equals(b) ? "True" : "False";
             case LocalDateTime d -> d.format(DATE_OMRAN);
             case LocalDate d -> d.atStartOfDay().format(DATE_OMRAN);
             case byte[] ignore -> "";

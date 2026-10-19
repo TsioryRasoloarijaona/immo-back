@@ -28,8 +28,12 @@ final class TexteNote {
                 case '"' -> html.append("&quot;");
                 case '\'' -> html.append("&#39;");
                 case '\n' -> html.append("<br>");
-                case '\r' -> { }
-                default -> html.append(c);
+                default -> {
+                    // '\r' omis : « \r\n » donne un seul <br>.
+                    if (c != '\r') {
+                        html.append(c);
+                    }
+                }
             }
         }
         return html.toString();

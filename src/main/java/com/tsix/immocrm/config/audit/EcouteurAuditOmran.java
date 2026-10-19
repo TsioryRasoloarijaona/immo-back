@@ -149,7 +149,10 @@ public class EcouteurAuditOmran implements PostInsertEventListener, PostUpdateEv
 
     private AdmWebHistorics ligne(Changement c, String auteur, LocalDateTime maintenant) {
         Trace trace = RegistreAuditOmran.tracer(c.entite).orElse(null);
-        List<List<String>> lignes = trace == null ? List.of() : changements(c, trace);
+        if (trace == null) {
+            return null;
+        }
+        List<List<String>> lignes = changements(c, trace);
         if (lignes.isEmpty()) {
             return null;
         }
