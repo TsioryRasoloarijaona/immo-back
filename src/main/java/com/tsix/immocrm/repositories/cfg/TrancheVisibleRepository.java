@@ -1,6 +1,7 @@
 package com.tsix.immocrm.repositories.cfg;
 
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,4 +18,9 @@ public interface TrancheVisibleRepository extends JpaRepository<CfgTranche, UUID
 
     @Query(TRANCHE_VISIBLE)
     Optional<CfgTranche> trancheVisible(UUID id);
+
+    /** Tranche visible, sinon 404 (inconnue ou d'une entité inactive). */
+    default CfgTranche exigerVisible(UUID id) {
+        return trancheVisible(id).orElseThrow(() -> new ResourceNotFoundException("Tranche introuvable: " + id));
+    }
 }

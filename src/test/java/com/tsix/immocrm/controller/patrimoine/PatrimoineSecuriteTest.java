@@ -65,7 +65,12 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.PATCH, "/api/articles/" + ID),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles"),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/affecter"),
-                Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/desaffecter"));
+                Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/desaffecter"),
+                // FEATURE-patrimoine-tranche-regles.md §1-§4 : écritures Administrateur du lot P1c.
+                Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/finalisations"),
+                Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/commissions"),
+                Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/previsions-base"),
+                Arguments.of(HttpMethod.POST, "/api/tranches/" + ID + "/mettre-a-jour-schemas"));
     }
 
     private AdmUser compte(String code) {

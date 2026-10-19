@@ -21,6 +21,8 @@ chaque *pull request*.
 | `105_tranche-onglets_fk.sql` | ses clés vers `CfgTranche` (CASCADE) et `StkItemCategory`, comme en production | écrit à la main |
 | `106_entites_tables.sql` | `CfgShareholder`, `CfgGroupShareholderLine`, `CfgCompanyShareholder` (actionnaires et répartition, FEATURE-entites-juridiques.md) ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
 | `107_entites_fk.sql` | leurs 4 clés étrangères, actions de suppression de production (CASCADE sauf répartition → actionnaire) ; idempotent | écrit à la main |
+| `108_tranche-regles_tables.sql` | `ComSalesCommission`, `CfgTrancheFolderEntity`, `CfgPrevision` (commissions, finalisations, prévisions de base, FEATURE-patrimoine-tranche-regles.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
+| `109_tranche-regles_fk.sql` | leurs clés vers `CfgTranche`, `CfgTier`, `ComAction`, `StkItemCategory`, `StrEntity`, `StrStatus`, comme en production | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.

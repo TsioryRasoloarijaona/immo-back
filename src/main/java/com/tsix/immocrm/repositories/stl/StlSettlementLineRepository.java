@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
@@ -42,6 +44,17 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
     @Query("SELECT l.comDocument.id, SUM(" + MONTANT_SIGNE + ") FROM StlSettlementLine l JOIN l.stlSettlement st "
             + "WHERE l.comDocument.id IN :echeanceIds" + COMPTE + " GROUP BY l.comDocument.id")
     List<Object[]> sumAmountByComDocumentIdIn(List<UUID> echeanceIds);
+
+    /** Réglé par échéance, par lots de 2 000 ids (SQL Server refuse plus de 2 100 paramètres) ; absent = rien réglé. */
+    default Map<UUID, BigDecimal> reglesParEcheance(List<UUID> ids) {
+        Map<UUID, BigDecimal> regles = new HashMap<>();
+        for (int i = 0; i < ids.size(); i += 2_000) {
+            for (Object[] ligne : sumAmountByComDocumentIdIn(ids.subList(i, Math.min(i + 2_000, ids.size())))) {
+                regles.put((UUID) ligne[0], ligne[1] == null ? null : new BigDecimal(ligne[1].toString()));
+            }
+        }
+        return regles;
+    }
 
     /** Dossier d'un règlement par ses lignes d'échéance. Tuple : [comFolderId, comFolderCode]. */
     @Query("SELECT d.comFolder.id, d.comFolder.code FROM StlSettlementLine l JOIN l.comDocument d " +
