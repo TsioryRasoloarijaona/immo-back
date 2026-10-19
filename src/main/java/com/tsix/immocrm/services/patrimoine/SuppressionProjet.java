@@ -33,8 +33,7 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         supprimerTout("SELECT h FROM AdmUserHabilitation h WHERE h.cfgProject.id = :id", id);
         supprimerTout("SELECT z FROM CfgProjectZone z WHERE z.cfgProject.id = :id", id);
         supprimerTout("SELECT a FROM AdmAttachedFile a WHERE a.categoryId = :id", id);
-        // Pas d'entité AdmMessage dans ce dépôt (lot P0) : la ligne de la copie reste orpheline, sans effet.
-        em.createNativeQuery("DELETE FROM AdmMessage WHERE CategoryId = :id").setParameter(ID, id).executeUpdate();
+        supprimerTout("SELECT m FROM AdmMessage m WHERE m.categoryId = :id", id);
         em.remove(projet);
         flushOuConflit("le programme");
     }
