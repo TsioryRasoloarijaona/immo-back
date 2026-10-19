@@ -73,10 +73,13 @@ jobs:
           docker cp ci/schema sqlserver:/schema
           docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b \
             -Q "CREATE DATABASE [$DB_TEST]"
-          for f in 010_tables 020_foreign_keys 030_triggers 040_seed_reference 050_views 060_interop_vente 070_workflow_vente 070_vente_sous_listes 080_offres_schema_financement; do
-            echo "--- $f.sql"
+          # Tous les fichiers de ci/schema, tries par nom (LC_ALL=C : ordre independant de la locale).
+          export LC_ALL=C
+          for chemin in ci/schema/*.sql; do
+            f=$(basename "$chemin")
+            echo "--- $f"
             docker exec sqlserver "$SQLCMD" -S localhost -U sa -P "$SA_PWD" -C -b -I \
-              -d "$DB_TEST" -i "/schema/$f.sql"
+              -d "$DB_TEST" -i "/schema/$f"
           done
 
       # mvnw est versionne en 100644 : sans ce chmod, ./mvnw sort en "Permission denied".
