@@ -46,19 +46,19 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         flushOuConflit("la zone");
     }
 
-    private void ajouterSiPresent(List<String> bloquants, String jpql, UUID id, String libelle) {
+    void ajouterSiPresent(List<String> bloquants, String jpql, UUID id, String libelle) {
         long n = em.createQuery(jpql, Long.class).setParameter(ID, id).getSingleResult();
         if (n > 0) {
             bloquants.add(n + " " + libelle);
         }
     }
 
-    private void supprimerTout(String jpql, UUID id) {
+    void supprimerTout(String jpql, UUID id) {
         em.createQuery(jpql, Object.class).setParameter(ID, id).getResultList().forEach(em::remove);
     }
 
     /** Toute autre clé étrangère NO_ACTION (SavClaim, StlItemPricing…) bloque en base : 409 nommant la contrainte. */
-    private void flushOuConflit(String objet) {
+    void flushOuConflit(String objet) {
         try {
             em.flush();
         } catch (ConstraintViolationException e) {

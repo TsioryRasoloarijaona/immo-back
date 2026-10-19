@@ -7,6 +7,7 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.entities.adm.AdmWebHistorics;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.adm.AdmWebHistoricsRepository;
+import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.services.patrimoine.PorteursPatrimoine;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -28,11 +29,14 @@ public class AuditService {
 
     private final AdmWebHistoricsRepository repository;
     private final PorteursPatrimoine porteurs;
+    private final CfgCompanyRepository entites;
     private final JsonMapper json;
 
-    public AuditService(AdmWebHistoricsRepository repository, PorteursPatrimoine porteurs, JsonMapper json) {
+    public AuditService(AdmWebHistoricsRepository repository, PorteursPatrimoine porteurs, CfgCompanyRepository entites,
+                        JsonMapper json) {
         this.repository = repository;
         this.porteurs = porteurs;
+        this.entites = entites;
         this.json = json;
     }
 
@@ -41,7 +45,10 @@ public class AuditService {
         if (page < 0 || size < 1 || size > TAILLE_MAX) {
             throw new InvalidRequestException("page doit être ≥ 0 et size entre 1 et " + TAILLE_MAX);
         }
-        porteurs.exigerVisible(objetId);
+        // Porteur ENTITE : l'écran des entités montre aussi les inactives, leur journal reste lisible (§7.11.3).
+        if (!entites.existsById(objetId)) {
+            porteurs.exigerVisible(objetId);
+        }
         PageRequest demande = PageRequest.of(page, size,
                 Sort.by(Sort.Order.desc("actionDateTime"), Sort.Order.desc("id")));
         return PageDto.of(repository.journal(objetId, RegistreAuditOmran.TYPES, demande).map(this::versDto));
