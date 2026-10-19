@@ -108,6 +108,11 @@ class NotesControllerTest {
         return corps().avec(PORTEUR, ARTICLE).avec("id", article.getId()).avec(TEXTE, texte);
     }
 
+    /** Une colonne datetime revient en LocalDateTime (Hibernate 7) ou en Timestamp selon le pilote. */
+    private static LocalDateTime dateHeure(Object valeur) {
+        return valeur instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) valeur;
+    }
+
     private static RequestPostProcessor commercial(AdmUser user) {
         AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getCode(), null, false, true, 0);
         return authentication(new UsernamePasswordAuthenticationToken(principal, null,
@@ -140,7 +145,7 @@ class NotesControllerTest {
         creer(admin, corpsArticle("Relancer").avec("rappel", "2026-11-02T09:30:00")).andExpect(status().isCreated());
 
         assertThat(audit.notesDuPorteur(article.getId())).singleElement()
-                .satisfies(n -> assertThat(n.get("ReminderDate").toString()).startsWith("2026-11-02 09:30:00"));
+                .satisfies(n -> assertThat(dateHeure(n.get("ReminderDate"))).isEqualTo(LocalDateTime.of(2026, 11, 2, 9, 30)));
     }
 
     // ------------------------------------------------------------------ §11.8 écriture en texte échappé

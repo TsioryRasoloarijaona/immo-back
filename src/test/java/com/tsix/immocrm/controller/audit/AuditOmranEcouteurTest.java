@@ -405,7 +405,8 @@ class AuditOmranEcouteurTest {
         assertAll(
                 () -> assertThat(ligne.get(OBJECT_TYPE)).isEqualTo(TYPE_TRANCHE),
                 () -> assertThat(ligne.get(OBJECT_TYPE_LABEL)).isEqualTo("Tranche"),
-                () -> assertThat(ligne.get(OBJECT_LABEL)).isEqualTo(code),
+                // PATRIMOINE-acquis.md : ObjectLabel d'une tranche = Description (prod), pas le Code.
+                () -> assertThat(ligne.get(OBJECT_LABEL)).isEqualTo("Tranche " + code),
                 () -> assertThat(triplets(ligne.get(DETAILS)))
                         .filteredOn(t -> "AdvancePercent".equals(t.get(0)))
                         .singleElement().satisfies(t -> assertThat(t.get(2)).matches("0\\.30*")));
@@ -565,6 +566,7 @@ class AuditOmranEcouteurTest {
         assertAll(
                 () -> assertThat(ligne.get(OBJECT_TYPE)).isEqualTo("Yes.Stk.Building.UnderItem"),
                 () -> assertThat(ligne.get(OBJECT_TYPE_LABEL)).isEqualTo("Sous article"),
-                () -> assertThat(ligne.get(OBJECT_LABEL)).isEqualTo(code));
+                // PATRIMOINE-acquis.md : ObjectLabel d'un sous-article = Description (prod), pas le Code.
+                () -> assertThat(ligne.get(OBJECT_LABEL)).isEqualTo("Parking " + code));
     }
 }
