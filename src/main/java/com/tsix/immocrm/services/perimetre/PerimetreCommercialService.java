@@ -175,9 +175,14 @@ public class PerimetreCommercialService {
      * Une pré-prospection n'a jamais de commercial : seul le projet peut la restreindre (§5).
      */
     public Specification<ComProspection> filtreProspections() {
+        return filtreParTranche(STK_HIERARCHY);
+    }
+
+    /** Ligne portée par une association directe vers {@code CfgTranche} : projet par la tranche, jointures LEFT. */
+    public <T> Specification<T> filtreParTranche(String associationTranche) {
         Optional<List<UUID>> perimetre = perimetreCourant();
         return (root, query, cb) -> {
-            Join<ComProspection, CfgTranche> tranche = root.join(STK_HIERARCHY, JoinType.LEFT);
+            Join<T, CfgTranche> tranche = root.join(associationTranche, JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
             return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
         };
@@ -221,12 +226,7 @@ public class PerimetreCommercialService {
      * n'en a pas besoin : {@code PerimetreInterceptor} contrôle déjà la prospection porteuse.
      */
     public Specification<StlQuote> filtreDevis() {
-        Optional<List<UUID>> perimetre = perimetreCourant();
-        return (root, query, cb) -> {
-            Join<StlQuote, CfgTranche> tranche = root.join("cfgTranche", JoinType.LEFT);
-            Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
-            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
-        };
+        return filtreParTranche("cfgTranche");
     }
 
     /**
