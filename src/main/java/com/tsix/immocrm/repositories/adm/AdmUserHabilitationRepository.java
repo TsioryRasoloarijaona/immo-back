@@ -16,6 +16,11 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
             + "WHERE h.admUser.id = :admUserId AND h.cfgProject IS NOT NULL")
     List<UUID> findProjetIdsByAdmUserId(@Param("admUserId") UUID admUserId);
 
+    /** Tranches habilitées (portée tranche, comme OMRAN {@code CommercialList.cs} l.158). */
+    @Query("SELECT h.cfgTranche.id FROM AdmUserHabilitation h "
+            + "WHERE h.admUser.id = :admUserId AND h.cfgTranche IS NOT NULL")
+    List<UUID> findTrancheIdsByAdmUserId(@Param("admUserId") UUID admUserId);
+
     /** Le seul sous-ensemble que {@code PUT /api/utilisateurs/{admUserId}/projets} peut supprimer. */
     List<AdmUserHabilitation> findByAdmUserIdAndCfgProjectIsNotNull(UUID admUserId);
 

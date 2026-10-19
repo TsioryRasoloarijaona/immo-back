@@ -136,3 +136,10 @@ $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesR
 
 Les variables d'environnement priment sur `src/test/resources/application.properties` dans
 Spring Boot : rediriger la suite ne demande **aucune modification de fichier**.
+
+## Tableaux de bord
+
+| Fichier | Contenu |
+|---|---|
+| `132_suivi-commerciaux_tables.sql` | `AppParametre` (objectif des commerciaux, FEATURE-suivi-commerciaux.md §7.6), comme `db/migration/018` ; idempotent, applicable aussi à `yesRemsTest` |
+| `133_suivi-commerciaux_fk.sql` | aucune clé étrangère |
