@@ -34,6 +34,7 @@ import static com.tsix.immocrm.fixtures.FixturePatrimoine.decimal;
 import static com.tsix.immocrm.fixtures.FixturePatrimoine.guid;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.containsStringIgnoringCase;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -247,6 +248,16 @@ class SousArticleTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail")
                         .value(containsString("La tranche d'un sous-article est celle de son article")));
+    }
+
+    /** FEATURE-patrimoine-article-fiche.md §4.1, §9.5 : la vocation d'un sous-article est celle de son article. */
+    @Test
+    void fiche_r9_5_vocationIdDansLeCorpsDUnSousArticle_400_surLeChamp() throws Exception {
+        UUID parentId = creerParent("SA-PARENT-VOC", tranche);
+
+        creerSousArticle(parentId, corpsSousArticle("SA-VOC").avec("vocationId", VOCATION_VENTE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsStringIgnoringCase("vocation")));
     }
 
     @Test

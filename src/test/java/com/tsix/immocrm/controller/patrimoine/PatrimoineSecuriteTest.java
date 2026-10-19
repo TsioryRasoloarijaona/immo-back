@@ -65,7 +65,10 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.PATCH, "/api/articles/" + ID),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles"),
                 Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/affecter"),
-                Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/desaffecter"));
+                Arguments.of(HttpMethod.POST, "/api/articles/" + ID + "/sous-articles/" + SOUS_ID + "/desaffecter"),
+                // FEATURE-patrimoine-article-fiche.md §2, §3 : écriture Administrateur.
+                Arguments.of(HttpMethod.DELETE, "/api/articles/" + ID),
+                Arguments.of(HttpMethod.PUT, "/api/articles/" + ID + "/contenances"));
     }
 
     private AdmUser compte(String code) {

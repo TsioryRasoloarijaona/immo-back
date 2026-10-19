@@ -1,6 +1,7 @@
 package com.tsix.immocrm.fixtures;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -45,6 +46,11 @@ public final class CorpsJson {
         }
         if (valeur instanceof Number || valeur instanceof Boolean) {
             return valeur.toString();
+        }
+        if (valeur instanceof Collection<?> liste) {
+            StringJoiner tableau = new StringJoiner(",", "[", "]");
+            liste.forEach(element -> tableau.add(valeurJson(element)));
+            return tableau.toString();
         }
         return '"' + valeur.toString().replace("\\", "\\\\").replace("\"", "\\\"") + '"';
     }
