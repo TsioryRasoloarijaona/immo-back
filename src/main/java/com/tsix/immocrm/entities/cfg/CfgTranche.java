@@ -1,6 +1,10 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.act.ActAccount;
 import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.lnd.LndLevel;
+import com.tsix.immocrm.entities.prj.PrjProject;
+import com.tsix.immocrm.entities.stk.StkTrancheHeading;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -427,6 +431,26 @@ public class CfgTranche {
 
     @Column(name = "CreditPercent", precision = 26, scale = 6)
     private BigDecimal creditPercent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgTrancheStandingId")
+    private CfgTrancheStanding cfgTrancheStanding;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "LndLevelId")
+    private LndLevel lndLevel;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StkTrancheHeadingId")
+    private StkTrancheHeading stkTrancheHeading;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PrjProjectId")
+    private PrjProject prjProject;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ActAccountId")
+    private ActAccount actAccount;
 
     // Lecture seule : lignes de schéma propres à la tranche, ajoutées à la création (Sale.cs:GenerateInitialDocuments).
     @OneToMany(mappedBy = "cfgTranche", fetch = FetchType.LAZY)

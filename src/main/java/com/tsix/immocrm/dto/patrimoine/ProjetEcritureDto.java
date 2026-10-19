@@ -3,6 +3,7 @@ package com.tsix.immocrm.dto.patrimoine;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Schema(description = "Création ou modification d'un programme (CfgProject). En PATCH, champ absent ou null = inchangé, "
@@ -29,6 +30,14 @@ public record ProjetEcritureDto(
         @Schema(description = "Fin des travaux, postérieure ou égale au début.") LocalDateTime dateFinTravaux,
         @Schema(description = "Début de commercialisation.") LocalDateTime dateDebutCommercialisation,
         @Schema(description = "Fin de commercialisation, postérieure ou égale au début.")
-        LocalDateTime dateFinCommercialisation
+        LocalDateTime dateFinCommercialisation,
+        @Schema(description = "« Courrier signataire » (AdmSignatoryId → CfgTier), voir /api/referentiels-patrimoine/personnels.")
+        UUID signataireId,
+        @Schema(description = "Responsable technique (CfgTechnicalManagerId → CfgTier), un personnel.")
+        UUID responsableTechniqueId,
+        @Schema(description = "Responsable commercial (CfgSalesManagerId → CfgTier), un personnel.")
+        UUID responsableCommercialId,
+        @Schema(description = "PATCH : noms de champs à vider (date, pays, personnel → NULL ; texte → \"\").")
+        List<String> champsAVider
 ) {
 }

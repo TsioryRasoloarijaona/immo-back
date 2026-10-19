@@ -22,7 +22,7 @@ public record ColonneDto(
         @Schema(description = "Type d'affichage — permet d'aligner et de formater sans table de "
                 + "correspondance côté front.",
                 example = "NOMBRE",
-                allowableValues = {"TEXTE", "NOMBRE", "MONTANT", "DATE", "BOOLEEN"})
+                allowableValues = {"TEXTE", "NOMBRE", "MONTANT", "POURCENTAGE", "DATE", "BOOLEEN"})
         String type,
 
         @Schema(example = "false")

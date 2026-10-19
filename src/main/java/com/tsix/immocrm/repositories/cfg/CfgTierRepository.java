@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpecificationExecutor<CfgTier> {
 
+    /** Tiers d'un type (CfgTierView.GetEmployeeList : {@code CfgTierTypeId = Employee}). */
+    List<CfgTier> findByCfgTierType_IdOrderByDescriptionAsc(UUID typeId);
+
     /**
      * Les quatre colonnes téléphone, saisies sans format homogène (avec ou sans +212, espaces) : les deux
      * côtés gardent les 9 derniers chiffres, comme {@link com.tsix.immocrm.utils.PhoneNumberUtils#normalize(String)}.

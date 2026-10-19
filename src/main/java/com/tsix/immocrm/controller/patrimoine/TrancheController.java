@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.domain.ColonneTranche;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
@@ -10,6 +11,7 @@ import com.tsix.immocrm.services.patrimoine.TrancheService;
 import com.tsix.immocrm.dto.patrimoine.TrancheEcritureDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,13 +51,23 @@ public class TrancheController {
     }
 
     @GetMapping
-    @Operation(summary = "Liste paginée des tranches, à plat")
+    @Operation(summary = "Liste paginée des tranches, à plat, à colonnes choisies")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page de tranches, colonnes demandées seules."),
+            @ApiResponse(responseCode = "400", description = "Colonne inconnue : le corps liste les noms valides.",
+                    content = @Content)
+    })
     public PageDto<TrancheListItemDto> findAll(
             @Parameter(description = "Id du projet (Entité, CfgProject.id) pour ne renvoyer que "
                     + "ses tranches. Absent = toutes les tranches.")
             @RequestParam(required = false) UUID projetId,
+            @Parameter(description = "Recherche sans casse dans le code, le libellé, la ville et le code du programme.")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Colonnes du catalogue /api/referentiels/colonnes/tranches ; absent = colonnes par défaut.",
+                    example = "code,description,standingLibelle,visibleSav")
+            @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(trancheService.findAll(projetId, pageable));
+        return PageDto.of(trancheService.findAll(projetId, search, ColonneTranche.resoudre(colonnes), pageable));
     }
 
     @GetMapping("/{id}")

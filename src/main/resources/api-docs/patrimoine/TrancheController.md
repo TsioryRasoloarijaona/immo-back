@@ -6,6 +6,18 @@ Toutes les tranches, tous projets confondus, ou filtrées sur un seul projet via
 contournement N+1 (GET /api/projets puis GET /api/projets/{id}/tranches pour chacun) pour peupler
 une checklist de filtre côté front — voir instructions/filtres-avances.md point 2.
 
+`?colonnes=` choisit les colonnes sérialisées (catalogue `GET /api/referentiels/colonnes/tranches`, `id` toujours
+servi) ; absent = colonnes par défaut. Un nom inconnu → 400 dont le corps liste `colonnesValides`. `search` filtre
+sans casse sur le code, le libellé, la ville et le code du programme, combiné à `projetId`.
+
+## modifier
+
+Champ absent ou `null` = inchangé. Pour vider : `champsAVider: ["dateOctroiTitresFonciers", "standingId"]` — date
+et référence → NULL, nombre → 0, case → faux, texte → `""` (jamais NULL là où OMRAN écrit une valeur). Nom inconnu,
+champ obligatoire (`code`, `description`, `projetId`) ou champ à la fois listé et renseigné → 400 dont le `detail`
+nomme `champsAVider`. Une référence inconnue (standing, niveau, rubrique, personnel, tiers, projet de facturation,
+plan comptable) → 400 nommant le champ. Crédit max > 100 % → 400.
+
 ## findArticles
 
 Liste paginée, mélangeant articles racine et sous-articles de la tranche (chacun porte

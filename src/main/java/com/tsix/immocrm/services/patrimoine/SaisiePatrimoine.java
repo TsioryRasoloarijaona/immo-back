@@ -4,6 +4,7 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 /** Contrôles de saisie communs aux programmes, tranches et articles (FEATURE-patrimoine-ecriture.md §2.8, §2.9). */
 final class SaisiePatrimoine {
@@ -11,6 +12,11 @@ final class SaisiePatrimoine {
     static final int COURT = 255;
 
     private SaisiePatrimoine() {
+    }
+
+    /** Recherche de liste : {@code %texte%} en minuscules, null si vide. */
+    static String motif(String search) {
+        return search == null || search.isBlank() ? null : "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
     }
 
     /** PATCH : absent ou {@code null} = valeur actuelle. */
