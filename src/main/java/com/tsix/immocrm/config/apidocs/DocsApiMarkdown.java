@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 import io.swagger.v3.oas.models.OpenAPI;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.BeanUtils;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.MethodParameter;
@@ -319,6 +320,10 @@ public class DocsApiMarkdown {
         for (int i = 0; i < methode.getParameterCount(); i++) {
             MethodParameter mp = new MethodParameter(methode, i);
             mp.initParameterNameDiscovery(noms);
+            if (mp.hasParameterAnnotation(ParameterObject.class) && mp.getParameterType().isRecord()) {
+                champsPublies(mp.getParameterType(), out);
+                continue;
+            }
             Parameter p = mp.getParameterAnnotation(Parameter.class);
             String nom = p != null && p.hidden() ? null : nomPublie(mp);
             if (nom != null) out.put(p != null && !p.name().isBlank() ? p.name() : nom, p);
@@ -327,6 +332,14 @@ public class DocsApiMarkdown {
                 .filter(p -> !p.name().isBlank() && !p.hidden())
                 .forEach(p -> out.put(p.name(), p));
         return out;
+    }
+
+    /** {@code @ParameterObject} : springdoc publie chaque composant du record en paramètre de requête. */
+    private static void champsPublies(Class<?> record, Map<String, Parameter> out) {
+        for (RecordComponent rc : record.getRecordComponents()) {
+            Parameter p = rc.getAccessor().getAnnotation(Parameter.class);
+            if (p == null || !p.hidden()) out.put(rc.getName(), p);
+        }
     }
 
     private static String nomPublie(MethodParameter mp) {
@@ -400,6 +413,11 @@ public class DocsApiMarkdown {
         synchronized (tagsParOperation) {
             tagsParOperation.add(nomsTags);
         }
+
+        // springdoc ignore un @Parameter(name, hidden) de méthode visant un champ de @ParameterObject.
+        AnnotatedElementUtils.findMergedRepeatableAnnotations(handler.getMethod(), Parameter.class, Parameters.class)
+                .stream().filter(p -> p.hidden() && !p.name().isBlank() && operation.getParameters() != null)
+                .forEach(p -> operation.getParameters().removeIf(x -> p.name().equals(x.getName())));
 
         DocOperation doc = operations.getOrDefault(handler.getBeanType(), Map.of()).get(handler.getMethod().getName());
         if (doc == null) return operation;

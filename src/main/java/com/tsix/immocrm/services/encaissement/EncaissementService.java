@@ -29,6 +29,7 @@ import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
@@ -38,6 +39,7 @@ import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -77,17 +79,11 @@ public class EncaissementService {
         this.groupementService = groupementService;
     }
 
-    public Page<EncaissementDto> findAll(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
-                                          UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
-                                          UUID tierId, String reference, String search,
-                                          Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
-                                          ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
+    public Page<EncaissementDto> findAll(FiltresEncaissements filtres,
                                           ColonneEncaissement groupeColonne, String groupeValeur,
                                           Granularite granularite, Pageable pageable,
                                           Set<ColonneEncaissement> colonnes) {
-        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
-                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin));
+        Specification<StlSettlement> spec = specVisible(filtres);
         if (groupeColonne != null) {
             // Dépliage d'un groupe : la même expression de clé que /groupes, donc une valeur
             // réémise telle quelle par le front retombe exactement sur les lignes comptées.
@@ -101,18 +97,11 @@ public class EncaissementService {
      * Même {@link #specEncaissements} et même périmètre que la liste : la somme des groupes retombe
      * sur son {@code totalElements}, sans règlement que l'appelant n'a pas le droit de lire.
      */
-    public ResultatGroupement grouper(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
-                                       UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
-                                       UUID tierId, String reference, String search,
-                                       Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
-                                       ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin,
+    public ResultatGroupement grouper(FiltresEncaissements filtres,
                                        ColonneEncaissement groupeBy, Granularite granularite,
                                        List<AgregatDemande> agregats, TriGroupe tri,
                                        boolean inclureSansValeur, Pageable pageable) {
-        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
-                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin));
-        return groupementService.grouper(StlSettlement.class, spec, groupeBy.chemin(), granularite,
+        return groupementService.grouper(StlSettlement.class, specVisible(filtres), groupeBy.chemin(), granularite,
                 agregats, tri, inclureSansValeur, pageable);
     }
 
@@ -120,14 +109,8 @@ public class EncaissementService {
      * Bande « Total : » de la liste plate : la spec et le périmètre de {@link #findAll}, et les agrégats de
      * {@code /groupes} ({@link GroupementService#totaux}), donc les mêmes exclusions des CANCELED.
      */
-    public TotauxEncaissementsDto totaux(List<UUID> entiteIds, List<UUID> typeIds, List<String> etats,
-                                         UUID compteId, UUID depotId, UUID dossierId, List<UUID> trancheIds,
-                                         UUID tierId, String reference, String search,
-                                         Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
-                                         ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
-        Specification<StlSettlement> spec = specVisible(new FiltresEncaissements(entiteIds, typeIds, etats,
-                compteId, depotId, dossierId, trancheIds, tierId, reference, search, comptabilise, montantDe,
-                montantA, champDate, dateDebut, dateFin));
+    public TotauxEncaissementsDto totaux(FiltresEncaissements filtres) {
+        Specification<StlSettlement> spec = specVisible(filtres);
         List<ColonneEncaissement> sommees = List.of(ColonneEncaissement.MONTANT_BRUT,
                 ColonneEncaissement.MONTANT_BRUT_RESTANT, ColonneEncaissement.MONTANT_NET, ColonneEncaissement.MONTANT_BASE);
         List<AgregatDemande> agregats = ColonneEncaissement.resoudreAgregats(
@@ -153,12 +136,40 @@ public class EncaissementService {
         return specEncaissements(filtres).and(perimetreService.filtreEncaissements());
     }
 
-    /** Filtres de la liste des encaissements, tels que reçus du contrôleur. */
+    /** Filtres de la liste des encaissements, liés depuis la chaîne de requête (noms = paramètres du fil). */
     public record FiltresEncaissements(
-            List<UUID> entiteIds, List<UUID> typeIds, List<String> etats, UUID compteId,
-            UUID depotId, UUID dossierId, List<UUID> trancheIds, UUID tierId, String reference,
-            String search, Boolean comptabilise, BigDecimal montantDe, BigDecimal montantA,
-            ChampDateEncaissement champDate, LocalDateTime dateDebut, LocalDateTime dateFin) {
+            @Parameter(description = "Id(s) d'entité juridique (CfgCompany). Répétable, OR. Absent = toutes.")
+            List<UUID> entiteId,
+            @Parameter(description = "Id(s) de type de règlement (StlSettlementType, voir GET /api/referentiels/types-reglement). Répétable, OR.")
+            List<UUID> typeId,
+            @Parameter(description = "État(s) (StlSettlement.Status : IN_WORK/POINTED/CANCELED confirmés). Répétable, OR, insensible à la casse.", example = "IN_WORK")
+            List<String> etat,
+            @Parameter(description = "Id du compte bancaire de destination (StlAccount, voir GET /api/referentiels/comptes).")
+            UUID compteId,
+            @Parameter(description = "Id de la catégorie de dépôt (StlDeposit, voir GET /api/referentiels/depots).")
+            UUID depotId,
+            @Parameter(description = "Restreint aux règlements d'un seul Dossier (ComFolder.id).")
+            UUID dossierId,
+            List<UUID> trancheId,
+            @Parameter(description = "Id du tiers réglant (CfgTier.id).")
+            UUID tierId,
+            @Parameter(description = "Sous-chaîne sur la référence (StlSettlement.Code, ex. n° de chèque).")
+            String reference,
+            @Parameter(description = "Recherche libre : référence OU nom du tiers réglant.")
+            String search,
+            @Parameter(description = "true = uniquement comptabilisés, false = uniquement non comptabilisés, absent = tous.")
+            Boolean comptabilise,
+            @Parameter(description = "Montant brut minimum (inclus).")
+            BigDecimal montantDe,
+            @Parameter(description = "Montant brut maximum (inclus).")
+            BigDecimal montantA,
+            @Parameter(description = "Jalon sur lequel appliquer dateDebut/dateFin. Ignoré si "
+                    + "aucun des deux n'est fourni. Défaut : DATE_PIECE.", example = "DATE_ECHEANCE")
+            ChampDateEncaissement champDate,
+            @Parameter(description = "Borne inférieure (incluse) de la plage sur champDate, format ISO-8601.", example = "2026-08-01T00:00:00")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @Parameter(description = "Borne supérieure (incluse) de la plage sur champDate, format ISO-8601.", example = "2026-08-31T23:59:59")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
 
         static final FiltresEncaissements AUCUN = new FiltresEncaissements(null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null);
@@ -182,12 +193,12 @@ public class EncaissementService {
                 predicates.add(existeLigne(root, query, cb,
                         echeance -> cb.equal(echeance.get("comFolder").get("id"), f.dossierId())));
             }
-            if (!CollectionUtils.isEmpty(f.trancheIds())) {
+            if (!CollectionUtils.isEmpty(f.trancheId())) {
                 // Le légataire passe par StlSettlementRelationView ; côté Vente, le chemin par les
                 // lignes donne le même résultat (FEATURE-encaissements-conformite-legataire.md §3.2).
                 predicates.add(existeLigne(root, query, cb,
                         echeance -> echeance.get("comFolder").get("stkItem")
-                                .get("stkHierarchy").get("id").in(f.trancheIds())));
+                                .get("stkHierarchy").get("id").in(f.trancheId())));
             }
             ajouterFiltresTexte(predicates, root, cb, f);
             if (f.comptabilise() != null) {
@@ -213,14 +224,14 @@ public class EncaissementService {
 
     private static void ajouterFiltresReferentiels(List<Predicate> predicates, Root<StlSettlement> root,
                                                    CriteriaBuilder cb, FiltresEncaissements f) {
-        if (!CollectionUtils.isEmpty(f.entiteIds())) {
-            predicates.add(root.get("cfgCompany").get("id").in(f.entiteIds()));
+        if (!CollectionUtils.isEmpty(f.entiteId())) {
+            predicates.add(root.get("cfgCompany").get("id").in(f.entiteId()));
         }
-        if (!CollectionUtils.isEmpty(f.typeIds())) {
-            predicates.add(root.get("stlSettlementType").get("id").in(f.typeIds()));
+        if (!CollectionUtils.isEmpty(f.typeId())) {
+            predicates.add(root.get("stlSettlementType").get("id").in(f.typeId()));
         }
-        if (!CollectionUtils.isEmpty(f.etats())) {
-            List<String> etatsLower = f.etats().stream().map(String::toLowerCase).toList();
+        if (!CollectionUtils.isEmpty(f.etat())) {
+            List<String> etatsLower = f.etat().stream().map(String::toLowerCase).toList();
             predicates.add(cb.lower(root.get("status")).in(etatsLower));
         }
         if (f.compteId() != null) {

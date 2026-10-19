@@ -1,6 +1,5 @@
 package com.tsix.immocrm.controller.encaissement;
 
-import com.tsix.immocrm.domain.ChampDateEncaissement;
 import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
@@ -12,6 +11,7 @@ import com.tsix.immocrm.dto.encaissement.EncaissementDetailDto;
 import com.tsix.immocrm.dto.encaissement.EncaissementDto;
 import com.tsix.immocrm.dto.encaissement.TotauxEncaissementsDto;
 import com.tsix.immocrm.services.encaissement.EncaissementService;
+import com.tsix.immocrm.services.encaissement.EncaissementService.FiltresEncaissements;
 import com.tsix.immocrm.web.Groupements;
 import com.tsix.immocrm.web.export.ExportTableur;
 import com.tsix.immocrm.web.export.LignesExport;
@@ -24,21 +24,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.SortDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -61,38 +60,7 @@ public class EncaissementController {
     @GetMapping
     @Operation(summary = "Liste paginée des encaissements (règlements de Dossiers de vente)")
     public PageDto<EncaissementDto> findAll(
-            @Parameter(description = "Id(s) d'entité juridique (CfgCompany). Répétable, OR. Absent = toutes.")
-            @RequestParam(required = false) List<UUID> entiteId,
-            @Parameter(description = "Id(s) de type de règlement (StlSettlementType, voir GET /api/referentiels/types-reglement). Répétable, OR.")
-            @RequestParam(required = false) List<UUID> typeId,
-            @Parameter(description = "État(s) (StlSettlement.Status : IN_WORK/POINTED/CANCELED confirmés). Répétable, OR, insensible à la casse.", example = "IN_WORK")
-            @RequestParam(required = false) List<String> etat,
-            @Parameter(description = "Id du compte bancaire de destination (StlAccount, voir GET /api/referentiels/comptes).")
-            @RequestParam(required = false) UUID compteId,
-            @Parameter(description = "Id de la catégorie de dépôt (StlDeposit, voir GET /api/referentiels/depots).")
-            @RequestParam(required = false) UUID depotId,
-            @Parameter(description = "Restreint aux règlements d'un seul Dossier (ComFolder.id).")
-            @RequestParam(required = false) UUID dossierId,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @Parameter(description = "Id du tiers réglant (CfgTier.id).")
-            @RequestParam(required = false) UUID tierId,
-            @Parameter(description = "Sous-chaîne sur la référence (StlSettlement.Code, ex. n° de chèque).")
-            @RequestParam(required = false) String reference,
-            @Parameter(description = "Recherche libre : référence OU nom du tiers réglant.")
-            @RequestParam(required = false) String search,
-            @Parameter(description = "true = uniquement comptabilisés, false = uniquement non comptabilisés, absent = tous.")
-            @RequestParam(required = false) Boolean comptabilise,
-            @Parameter(description = "Montant brut minimum (inclus).")
-            @RequestParam(required = false) BigDecimal montantDe,
-            @Parameter(description = "Montant brut maximum (inclus).")
-            @RequestParam(required = false) BigDecimal montantA,
-            @Parameter(description = "Jalon sur lequel appliquer dateDebut/dateFin. Ignoré si "
-                    + "aucun des deux n'est fourni. Défaut : DATE_PIECE.", example = "DATE_ECHEANCE")
-            @RequestParam(required = false) ChampDateEncaissement champDate,
-            @Parameter(description = "Borne inférieure (incluse) de la plage sur champDate, format ISO-8601.", example = "2026-08-01T00:00:00")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @Parameter(description = "Borne supérieure (incluse) de la plage sur champDate, format ISO-8601.", example = "2026-08-31T23:59:59")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @ParameterObject @ModelAttribute FiltresEncaissements filtres,
             @Parameter(example = "code,description,montantBrut,typeLibelle,creePar")
             @RequestParam(required = false) List<String> colonnes,
             @Parameter(example = "typeLibelle")
@@ -104,9 +72,7 @@ public class EncaissementController {
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
         ColonneEncaissement groupe = Groupements.colonneDeDepliage(
                 groupeColonne, groupeValeur, ColonneEncaissement::resoudreGroupement);
-        return PageDto.of(encaissementService.findAll(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId,
-                tierId, reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin,
-                groupe, groupeValeur, Groupements.granularite(groupe, granularite), pageable,
+        return PageDto.of(encaissementService.findAll(filtres, groupe, groupeValeur, Groupements.granularite(groupe, granularite), pageable,
                 ColonneEncaissement.resoudre(colonnes)));
     }
 
@@ -130,27 +96,10 @@ public class EncaissementController {
             @RequestParam(required = false) TriGroupe tri,
             @Parameter(example = "false")
             @RequestParam(defaultValue = "false") boolean inclureSansValeur,
-            @RequestParam(required = false) List<UUID> entiteId,
-            @RequestParam(required = false) List<UUID> typeId,
-            @RequestParam(required = false) List<String> etat,
-            @RequestParam(required = false) UUID compteId,
-            @RequestParam(required = false) UUID depotId,
-            @RequestParam(required = false) UUID dossierId,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) UUID tierId,
-            @RequestParam(required = false) String reference,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) Boolean comptabilise,
-            @RequestParam(required = false) BigDecimal montantDe,
-            @RequestParam(required = false) BigDecimal montantA,
-            @RequestParam(required = false) ChampDateEncaissement champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @ParameterObject @ModelAttribute FiltresEncaissements filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneEncaissement groupe = ColonneEncaissement.resoudreGroupement(groupBy);
-        return encaissementService.grouper(entiteId, typeId, etat, compteId, depotId,
-                dossierId, trancheId, tierId, reference, search, comptabilise, montantDe, montantA,
-                champDate, dateDebut, dateFin, groupe,
+        return encaissementService.grouper(filtres, groupe,
                 Groupements.granularite(groupe, granularite),
                 ColonneEncaissement.resoudreAgregats(agregats),
                 tri != null ? tri : TriGroupe.DEFAUT, inclureSansValeur, pageable).versPage();
@@ -158,25 +107,8 @@ public class EncaissementController {
 
     @GetMapping("/totaux")
     @Operation(summary = "Totaux de la liste plate sur tout le filtre (bande « Total : »), mêmes filtres que la liste")
-    public TotauxEncaissementsDto totaux(
-            @RequestParam(required = false) List<UUID> entiteId,
-            @RequestParam(required = false) List<UUID> typeId,
-            @RequestParam(required = false) List<String> etat,
-            @RequestParam(required = false) UUID compteId,
-            @RequestParam(required = false) UUID depotId,
-            @RequestParam(required = false) UUID dossierId,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) UUID tierId,
-            @RequestParam(required = false) String reference,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) Boolean comptabilise,
-            @RequestParam(required = false) BigDecimal montantDe,
-            @RequestParam(required = false) BigDecimal montantA,
-            @RequestParam(required = false) ChampDateEncaissement champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
-        return encaissementService.totaux(entiteId, typeId, etat, compteId, depotId, dossierId, trancheId, tierId,
-                reference, search, comptabilise, montantDe, montantA, champDate, dateDebut, dateFin);
+    public TotauxEncaissementsDto totaux(@ParameterObject @ModelAttribute FiltresEncaissements filtres) {
+        return encaissementService.totaux(filtres);
     }
 
     @GetMapping("/totaux-colonnes")
@@ -189,26 +121,8 @@ public class EncaissementController {
     public TotauxListeDto totauxColonnes(
             @Parameter(example = "montantBrut:AVG")
             @RequestParam(required = false) List<String> agregats,
-            @RequestParam(required = false) List<UUID> entiteId,
-            @RequestParam(required = false) List<UUID> typeId,
-            @RequestParam(required = false) List<String> etat,
-            @RequestParam(required = false) UUID compteId,
-            @RequestParam(required = false) UUID depotId,
-            @RequestParam(required = false) UUID dossierId,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) UUID tierId,
-            @RequestParam(required = false) String reference,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) Boolean comptabilise,
-            @RequestParam(required = false) BigDecimal montantDe,
-            @RequestParam(required = false) BigDecimal montantA,
-            @RequestParam(required = false) ChampDateEncaissement champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin) {
-        return encaissementService.totauxColonnes(new EncaissementService.FiltresEncaissements(entiteId, typeId, etat,
-                        compteId, depotId, dossierId, trancheId, tierId, reference, search, comptabilise, montantDe,
-                        montantA, champDate, dateDebut, dateFin),
-                ColonneEncaissement.resoudreAgregats(agregats));
+            @ParameterObject @ModelAttribute FiltresEncaissements filtres) {
+        return encaissementService.totauxColonnes(filtres, ColonneEncaissement.resoudreAgregats(agregats));
     }
 
     @GetMapping("/export")
@@ -225,30 +139,14 @@ public class EncaissementController {
     public ResponseEntity<StreamingResponseBody> exporter(
             @Parameter(example = ExportTableur.FORMAT_XLSX)
             @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
-            @RequestParam(required = false) List<UUID> entiteId,
-            @RequestParam(required = false) List<UUID> typeId,
-            @RequestParam(required = false) List<String> etat,
-            @RequestParam(required = false) UUID compteId,
-            @RequestParam(required = false) UUID depotId,
-            @RequestParam(required = false) UUID dossierId,
-            @RequestParam(required = false) List<UUID> trancheId,
-            @RequestParam(required = false) UUID tierId,
-            @RequestParam(required = false) String reference,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) Boolean comptabilise,
-            @RequestParam(required = false) BigDecimal montantDe,
-            @RequestParam(required = false) BigDecimal montantA,
-            @RequestParam(required = false) ChampDateEncaissement champDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @ParameterObject @ModelAttribute FiltresEncaissements filtres,
             @Parameter(example = "reference,dateDocument,tierNom,montantBrut")
             @RequestParam(required = false) List<String> colonnes,
             @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
         ExportTableur.exigerXlsx(format);
         Set<ColonneEncaissement> selection = ColonneEncaissement.resoudre(colonnes);
-        List<EncaissementDto> lignes = LignesExport.toutes(sort, page -> encaissementService.findAll(entiteId,
-                typeId, etat, compteId, depotId, dossierId, trancheId, tierId, reference, search, comptabilise,
-                montantDe, montantA, champDate, dateDebut, dateFin, null, null, null, page, selection));
+        List<EncaissementDto> lignes = LignesExport.toutes(sort,
+                page -> encaissementService.findAll(filtres, null, null, null, page, selection));
         return exportTableur.reponse("encaissements", "Encaissements", LignesExport.ordre(colonnes, selection),
                 lignes);
     }

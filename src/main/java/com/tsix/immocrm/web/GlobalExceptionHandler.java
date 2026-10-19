@@ -29,6 +29,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.transaction.TransactionException;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -164,8 +165,20 @@ public class GlobalExceptionHandler {
     /** Paramètre non convertible (valeur d'enum inconnue, nombre illisible…) : 400, pas 500. */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return valeurInvalide(ex.getName(), ex.getValue());
+    }
+
+    /** Même 400 pour un filtre lié par record ({@code @ModelAttribute}) ; une autre erreur de liaison reste à Spring. */
+    @ExceptionHandler(BindException.class)
+    public ProblemDetail handleBindingFailure(BindException ex) throws BindException {
+        FieldError conversion = ex.getFieldErrors().stream().filter(FieldError::isBindingFailure).findFirst()
+                .orElseThrow(() -> ex);
+        return valeurInvalide(conversion.getField(), conversion.getRejectedValue());
+    }
+
+    private static ProblemDetail valeurInvalide(String parametre, Object valeur) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
-                "Valeur invalide pour le paramètre '" + ex.getName() + "' : '" + ex.getValue() + "'");
+                "Valeur invalide pour le paramètre '" + parametre + "' : '" + valeur + "'");
     }
 
     /** {@code ?sort=} sur un nom de champ DTO au lieu de l'attribut d'entité : 400 au lieu d'un 500. */

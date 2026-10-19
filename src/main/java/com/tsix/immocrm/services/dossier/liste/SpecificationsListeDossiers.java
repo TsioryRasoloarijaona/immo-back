@@ -55,8 +55,8 @@ public final class SpecificationsListeDossiers {
                 predicats.add(cb.equal(
                         root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), filtres.projet()));
             }
-            if (filtres.trancheIds() != null && !filtres.trancheIds().isEmpty()) {
-                predicats.add(AppartenanceTranche.dossier(root, query, cb, filtres.trancheIds()));
+            if (filtres.trancheId() != null && !filtres.trancheId().isEmpty()) {
+                predicats.add(AppartenanceTranche.dossier(root, query, cb, filtres.trancheId()));
             }
             ajouterDates(predicats, root, cb, filtres);
             if (StringUtils.hasText(filtres.search())) {
@@ -72,9 +72,9 @@ public final class SpecificationsListeDossiers {
      */
     private static void ajouterStatuts(List<Predicate> predicats, Root<ComFolder> root, CriteriaBuilder cb,
                                        FiltresListeDossiers filtres, Optional<Set<UUID>> statutsVisibles) {
-        boolean statutsDemandes = filtres.statuts() != null && !filtres.statuts().isEmpty();
+        boolean statutsDemandes = filtres.statut() != null && !filtres.statut().isEmpty();
         if (statutsDemandes) {
-            List<String> codes = filtres.statuts().stream().map(s -> s.toLowerCase(Locale.ROOT)).toList();
+            List<String> codes = filtres.statut().stream().map(s -> s.toLowerCase(Locale.ROOT)).toList();
             predicats.add(cb.lower(root.get(STR_STATUS).get(CODE)).in(codes));
         }
         if (!statutsDemandes && !filtres.inclureSortis()) {

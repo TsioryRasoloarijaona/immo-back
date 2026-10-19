@@ -88,8 +88,8 @@ public class LotsLibres {
         if (filtres.projet() != null) {
             p.add(cb.equal(j.projet.get("id"), filtres.projet()));
         }
-        if (filtres.trancheIds() != null && !filtres.trancheIds().isEmpty()) {
-            p.add(j.tranche.get("id").in(filtres.trancheIds()));
+        if (filtres.trancheId() != null && !filtres.trancheId().isEmpty()) {
+            p.add(j.tranche.get("id").in(filtres.trancheId()));
         }
         if (StringUtils.hasText(filtres.search())) {
             String motif = "%" + filtres.search().replace(" ", "").toLowerCase(Locale.ROOT) + "%";
