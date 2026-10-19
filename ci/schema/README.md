@@ -145,3 +145,4 @@ Spring Boot : rediriger la suite ne demande **aucune modification de fichier**.
 |---|---|
 | `132_suivi-commerciaux_tables.sql` | `AppParametre` (objectif des commerciaux, FEATURE-suivi-commerciaux.md §7.6), comme `db/migration/018` ; idempotent, applicable aussi à `yesRemsTest` |
 | `133_suivi-commerciaux_fk.sql` | aucune clé étrangère |
+| `134-135` | réservées au Suivi des affectations (FEATURE-suivi-affectations.md) ; aucune table propre à ce jour |
