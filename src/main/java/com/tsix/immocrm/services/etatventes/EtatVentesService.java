@@ -45,6 +45,7 @@ import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -252,10 +253,13 @@ public class EtatVentesService {
     private List<ComFolder> dossiers(Specification<StkItemEtatVentes> spec) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<ComFolder> cq = cb.createQuery(ComFolder.class);
-        Root<StkItemEtatVentes> root = cq.from(StkItemEtatVentes.class);
-        Join<StkItemEtatVentes, ComFolder> dossier = root.join(DOSSIER);
+        Root<ComFolder> dossier = cq.from(ComFolder.class);
         dossier.fetch("strStatus", JoinType.LEFT);
-        cq.select(dossier).distinct(true).where(spec.toPredicate(root, cq, cb));
+        // Pas de DISTINCT sur l'entité : ComFolder.ComDocumentDetail est de type text en prod (non comparable).
+        Subquery<UUID> ids = cq.subquery(UUID.class);
+        Root<StkItemEtatVentes> ligne = ids.from(StkItemEtatVentes.class);
+        ids.select(ligne.get(DOSSIER).get(ID)).where(spec.toPredicate(ligne, cq, cb));
+        cq.select(dossier).where(dossier.get(ID).in(ids));
         return em.createQuery(cq).getResultList();
     }
 
