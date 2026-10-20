@@ -31,6 +31,8 @@ chaque *pull request*.
 | `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
 | `118_sous-articles_tables.sql` | aucune table nouvelle (sous-articles, FEATURE-patrimoine-sous-articles.md) | écrit à la main |
 | `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
+| `120_terrains_tables.sql` | `BuyVentilationCategory`, `BuyDocumentStatusHistory`, `BuyDocumentWorkFlow` (+ `BuyDocumentLine`, déjà en CI) — facture de frais de terrain, FEATURE-patrimoine-terrains.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
+| `121_terrains_fk.sql` | leurs 9 clés étrangères, actions de suppression de production ; idempotent | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
@@ -129,7 +131,11 @@ Tables lues en SQL natif par la vente et absentes de `yesRemsTest` (une commande
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJECT_ID('dbo.SynFolder', 'U') IS NULL CREATE TABLE dbo.SynFolder (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, ComFolderId uniqueidentifier NULL, StrStatusId uniqueidentifier NULL)"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJECT_ID('dbo.StlDocument', 'U') IS NULL CREATE TABLE dbo.StlDocument (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, DocType nvarchar(255) NULL, DocDate datetime NULL)"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/060_interop_vente.sql"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/120_terrains_tables.sql"
 ```
+
+Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
+d'un terrain portant un frais facturé) sont codés explicitement.
 
 ## Reproduire l'environnement du CI en local
 
