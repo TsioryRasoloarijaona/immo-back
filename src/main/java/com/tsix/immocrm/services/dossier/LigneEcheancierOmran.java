@@ -31,7 +31,7 @@ public class LigneEcheancierOmran {
     static final BigDecimal TVA_PAR_DEFAUT = new BigDecimal("0.2");
 
     /** {@code Sequence.GetNewValue("Yes.Com.SaleWithdrawal")} : la ligne {@code AdmSequence} « Désistement ». */
-    static final String SEQUENCE_QUITTANCE = "Désistement";
+    private static final String SEQUENCE_QUITTANCE = "Désistement";
     private static final int LARGEUR_ANNEE = 2;
     private static final int LARGEUR_NUMERO = 5;
 
@@ -163,6 +163,11 @@ public class LigneEcheancierOmran {
                 || !Boolean.TRUE.equals(categorie.getIsSaleExpense())) {
             return;
         }
-        document.setQuittanceCode(generateurCode.suivant(SEQUENCE_QUITTANCE, LARGEUR_ANNEE, LARGEUR_NUMERO));
+        document.setQuittanceCode(nouvelleQuittance());
+    }
+
+    /** Numéro suivant de la séquence « Désistement » : quittance d'une ligne de frais, code d'un désistement. */
+    public String nouvelleQuittance() {
+        return generateurCode.suivant(SEQUENCE_QUITTANCE, LARGEUR_ANNEE, LARGEUR_NUMERO);
     }
 }
