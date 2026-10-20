@@ -17,6 +17,11 @@ public interface AdmAttachedFileSummaryRepository extends JpaRepository<AdmAttac
             "ORDER BY a.userCreateDateTime DESC")
     List<AdmAttachedFileSummary> findByCategoryId(UUID porteurId);
 
+    /** Groupes déjà saisis, toutes pièces confondues (liste éditable d'OMRAN, {@code Attachment.cs}). */
+    @Query("SELECT DISTINCT TRIM(a.groupe) FROM AdmAttachedFileSummary a WHERE TRIM(a.groupe) <> '' "
+            + "ORDER BY TRIM(a.groupe) ASC")
+    List<String> groupes();
+
     default List<AdmAttachedFileSummary> findByDossierId(UUID dossierId) {
         return findByCategoryId(dossierId);
     }

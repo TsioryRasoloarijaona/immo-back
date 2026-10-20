@@ -42,7 +42,9 @@ public enum PorteeCleApi {
                     route(HttpMethod.GET, "/api/tranches/*/mettre-a-jour-schemas/apercu"),
                     route(HttpMethod.GET, "/api/tranches/*/commissions"),
                     route(HttpMethod.GET, "/api/tranches/*/previsions-base"),
-                    route(HttpMethod.GET, "/api/tranches/*/previsions-base/stock")));
+                    route(HttpMethod.GET, "/api/tranches/*/previsions-base/stock"),
+                    route(HttpMethod.GET, "/api/tranches/*/pieces-jointes/**"),
+                    route(HttpMethod.GET, "/api/projets/*/pieces-jointes/**")));
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 

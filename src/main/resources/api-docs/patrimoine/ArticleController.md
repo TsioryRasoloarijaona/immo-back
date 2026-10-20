@@ -92,24 +92,3 @@ L'article doit être principal et non occupé.
 
 Refus si le sous-article a un dossier de vente ou de location, ou si l'article est occupé (409). Effet :
 `ParentId` et `AlwaysAffected` remis à vide, prix de vente de l'article recalculé.
-
-## getPiecesJointes
-
-Retourne toutes les pièces jointes rattachées à l'article `id` (`AdmAttachedFile.CategoryId =
-StkItem.PKey`, même convention polymorphe sans FK déclarée que pour les pièces jointes de Dossier).
-Ce sont essentiellement des plans (types `PLAN`/`PLAN_ARCHITECTE`/`PLAN_ETAGE`), mais aucun filtrage
-sur `type`/`Category` n'est appliqué ici — tout ce qui est rattaché à l'article ressort. Triées par
-date de dépôt décroissante. Les lignes "cochées mais jamais déposées" (checklist sans fichier réel)
-sont exclues. Liste vide si aucune pièce jointe.
-
-## getFichier
-
-**Renvoie une redirection `302` vers une URL présignée**, pas le contenu binaire : le fichier est
-stocké sur S3/MinIO et transite directement entre le client et le stockage, sans passer par le
-backend.
-
-L'URL signée est valable quelques minutes et vaut autorisation d'accès ; elle n'est délivrée
-qu'après vérification que la pièce appartient bien à cet article.
-
-**La disposition est `inline`** : le plan s'affiche dans un onglet ou une visionneuse sans être
-téléchargé, ce qui est l'usage courant ici. Le nom proposé reprend la description de la pièce.

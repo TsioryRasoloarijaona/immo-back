@@ -33,8 +33,13 @@ public class CollecteurLignesEcrites
 
     /** Parent avant enfant. Une table absente passe en dernier sans être écartée : tenter et journaliser plutôt que taire. */
     static final List<String> ORDRE_CLES_ETRANGERES = List.of(
+            "StkKind", "StkVocation", "LndVocation", "LndLevel", "CfgTrancheStanding", "StkTrancheHeading",
+            "StkBuilding", "StkFloor", "StkOrientation", "StkFacade", "StkVue", "StkCostCategory", "StkContenance",
+            "StkItemCategory", "StkItemType", "StkExpenseType",
             "CfgShareholder", "CfgGroupShareholder", "CfgGroupShareholderLine", "CfgCompany", "CfgCompanyShareholder",
-            "CfgProject", "CfgProjectZone", "CfgTranche", "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
+            "CfgProject", "CfgProjectZone", "CfgTranche",
+            "StkPresentationType", "StkPresentationTypeContenance", "StkItemExonaration", "CfgTrancheStatus",
+            "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
             "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
             "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "StkHierarchyPlan", "CfgTier", "ComAction",
             "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
