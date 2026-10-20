@@ -31,6 +31,8 @@ chaque *pull request*.
 | `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
 | `118_sous-articles_tables.sql` | aucune table nouvelle (sous-articles, FEATURE-patrimoine-sous-articles.md) | écrit à la main |
 | `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
+| `122_faisabilite_tables.sql` | 20 tables des études de faisabilité (étude, unités, tranches, ventilations, configuration, historique, prévisions, financements, workflow) + `AdmParamsString` (`AdmWorkFlowStateType` déjà en CI), FEATURE-patrimoine-faisabilite.md ; idempotent, à appliquer aussi à `yesRemsTest` | régénéré depuis `yesRemsProd` |
+| `123_faisabilite_fk.sql` | leurs 38 clés étrangères, actions de suppression de production (5 CASCADE entrantes sur l'étude) ; idempotent, CI seulement | régénéré depuis `yesRemsProd` |
 | `136_desistements_tables.sql` | `ComSaleWithdrawalCancellation`, `ComSaleWithdrawalReason`, `ComDocument.ComSaleWithdrawalCancellationId` (désistements, FEATURE-desistements.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
 | `137_desistements_fk.sql` | leurs clés vers `ComFolder`, `ComSaleWithdrawalReason`, `StkItem`, `StlSettlementType` et `ComDocument` → désistement, noms de production ; idempotent | écrit à la main |
 

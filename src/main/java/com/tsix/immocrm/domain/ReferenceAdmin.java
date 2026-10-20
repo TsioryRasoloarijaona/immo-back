@@ -3,7 +3,9 @@ package com.tsix.immocrm.domain;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolderStatusPaymentType;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
+import com.tsix.immocrm.entities.stk.SpecificFunction;
 import com.tsix.immocrm.entities.stk.StkContenance;
+import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stl.StlCategory;
 import com.tsix.immocrm.entities.str.StrStatus;
@@ -29,7 +31,10 @@ public enum ReferenceAdmin {
         }
     },
     TYPE_REGLEMENT(ComFolderStatusPaymentType.class, "types-reglement", null),
-    CONTENANCE(StkContenance.class, null, "/api/referentiels-patrimoine/contenances");
+    CONTENANCE(StkContenance.class, null, "/api/referentiels-patrimoine/contenances"),
+    FONCTION_SPECIFIQUE(SpecificFunction.class, "fonctions-specifiques", null),
+    /** Toutes natures confondues (FEATURE-patrimoine-faisabilite.md §3). */
+    CATEGORIE_ARTICLE(StkItemCategory.class, "categories-article", null);
 
     private static final String CHOIX = "/api/referentiels-admin/choix/";
 

@@ -46,6 +46,8 @@ public class CollecteurLignesEcrites
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument", "AppModeleDocumentVersion",
+            "SpecificFunction", "StkFSBaseUnit", "StkFeasibilityStudy", "StkFeasibilityStudyStatusHistory",
+            "StkFSBaseUnitStkFeasibilityStudy", "StkFeasibilityStudyCfgTranche", "StkFeasibilityStudyCfgTrancheStkBaseUnit",
             "AdmMessage", "AdmWebHistorics");
 
     /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */
