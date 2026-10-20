@@ -11,6 +11,7 @@ import com.tsix.immocrm.storage.CleStockage;
 import com.tsix.immocrm.storage.ObjetStocke;
 import com.tsix.immocrm.storage.StockageFichiers;
 import com.tsix.immocrm.storage.StockageProperties;
+import com.tsix.immocrm.utils.SignatureImage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,8 +37,6 @@ import java.util.stream.Collectors;
 public class ImagesModeleService {
 
     static final int IMAGE_MAX_OCTETS = 500 * 1024;
-    private static final byte[] SIGNATURE_PNG = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-    private static final byte[] SIGNATURE_JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
 
     private final AppModeleImageRepository imageRepository;
     private final StockageFichiers stockage;
@@ -157,24 +156,7 @@ public class ImagesModeleService {
     }
 
     private static String typeReconnu(byte[] octets) {
-        if (commencePar(octets, SIGNATURE_PNG)) {
-            return "image/png";
-        }
-        if (commencePar(octets, SIGNATURE_JPEG)) {
-            return "image/jpeg";
-        }
-        throw new InvalidRequestException("Image refusée : PNG ou JPEG seulement (contenu du fichier vérifié).");
-    }
-
-    private static boolean commencePar(byte[] octets, byte[] signature) {
-        if (octets.length < signature.length) {
-            return false;
-        }
-        for (int i = 0; i < signature.length; i++) {
-            if (octets[i] != signature[i]) {
-                return false;
-            }
-        }
-        return true;
+        return SignatureImage.type(octets).orElseThrow(() ->
+                new InvalidRequestException("Image refusée : PNG ou JPEG seulement (contenu du fichier vérifié)."));
     }
 }
