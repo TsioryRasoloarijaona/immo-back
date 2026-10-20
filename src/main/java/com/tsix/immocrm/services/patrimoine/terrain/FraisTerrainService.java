@@ -109,7 +109,9 @@ public class FraisTerrainService {
             throw new InvalidRequestException(p.champ("typeFraisId") + " est obligatoire.");
         }
         StkExpenseType type = references.reference(StkExpenseType.class, l.typeFraisId(), p.champ("typeFraisId"));
-        CfgTier fournisseur = l.fournisseurId() == null ? terrain.getCfgSupplier()
+        CfgTier actuel = existante != null && existante.getCfgSupplier() != null ? existante.getCfgSupplier()
+                : terrain.getCfgSupplier();
+        CfgTier fournisseur = l.fournisseurId() == null ? actuel
                 : references.reference(CfgTier.class, l.fournisseurId(), p.champ("fournisseurId"));
         if (fournisseur == null) {
             throw new InvalidRequestException(p.champ("fournisseurId") + " : " + SANS_FOURNISSEUR);
