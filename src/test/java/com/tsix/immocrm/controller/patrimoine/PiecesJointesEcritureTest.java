@@ -32,7 +32,6 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -207,7 +206,7 @@ class PiecesJointesEcritureTest {
 
         mockMvc.perform(get(pieces(segment, porteur(segment))).with(connecte(admin)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + piece + "')].groupe").value(List.of("GRP-" + jeton)));
+                .andExpect(jsonPath("$[?(@.id=='" + piece + "')].groupe").value(org.hamcrest.Matchers.contains("GRP-" + jeton)));
         mockMvc.perform(get(pieces(segment, porteur(segment)) + "/" + piece + "/fichier").with(connecte(admin)))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", containsString(cle)));
