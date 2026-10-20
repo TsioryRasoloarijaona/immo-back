@@ -15,9 +15,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -31,25 +34,11 @@ public class CollecteurLignesEcrites
 
     private static final Logger log = LoggerFactory.getLogger(CollecteurLignesEcrites.class);
 
-    /** Parent avant enfant. Une table absente passe en dernier sans être écartée : tenter et journaliser plutôt que taire. */
-    static final List<String> ORDRE_CLES_ETRANGERES = List.of(
-            "StkKind", "StkVocation", "LndVocation", "LndLevel", "CfgTrancheStanding", "StkTrancheHeading",
-            "StkBuilding", "StkFloor", "StkOrientation", "StkFacade", "StkVue", "StkCostCategory", "StkContenance",
-            "StkItemCategory", "StkItemType", "StkExpenseType",
-            "CfgShareholder", "CfgGroupShareholder", "CfgGroupShareholderLine", "CfgCompany", "CfgCompanyShareholder",
-            "CfgProject", "CfgProjectZone", "CfgTranche",
-            "StkPresentationType", "StkPresentationTypeContenance", "StkItemExonaration", "CfgTrancheStatus",
-            "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
-            "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
-            "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "StkHierarchyPlan", "CfgTier", "ComAction",
-            "StkExpense", "BuyDocument", "BuyDocumentLine", "BuyVentilationCategory", "BuyDocumentStatusHistory",
-            "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComSaleWithdrawalCancellation", "ComDocument",
-            "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
-            "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
-            "AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument", "AppModeleDocumentVersion",
-            "SpecificFunction", "StkFSBaseUnit", "StkFeasibilityStudy", "StkFeasibilityStudyStatusHistory",
-            "StkFSBaseUnitStkFeasibilityStudy", "StkFeasibilityStudyCfgTranche", "StkFeasibilityStudyCfgTrancheStkBaseUnit",
-            "AdmMessage", "AdmWebHistorics");
+    /**
+     * Parent avant enfant : blocs {@link TablesEcrites} de {@code config.ecritures} mis bout à bout par rang. Une table
+     * absente passe en dernier sans être écartée : tenter et journaliser plutôt que taire.
+     */
+    static final List<String> ORDRE_CLES_ETRANGERES = ordre(Contributions.trouver(TablesEcrites.class));
 
     /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */
     static final List<String> JAMAIS_RAPATRIEES = List.of("AdmSequence");
@@ -125,6 +114,24 @@ public class CollecteurLignesEcrites
 
     static void reinitialiser() {
         EN_COURS.remove();
+    }
+
+    /** Un rang ou une table en double rendrait l'ordre arbitraire : refusé au chargement. */
+    static List<String> ordre(List<TablesEcrites> blocs) {
+        Map<Integer, TablesEcrites> parRang = new TreeMap<>();
+        for (TablesEcrites bloc : blocs) {
+            TablesEcrites autre = parRang.put(bloc.rang(), bloc);
+            if (autre != null) {
+                throw new IllegalStateException("Rang " + bloc.rang() + " partagé par " + autre.getClass().getSimpleName()
+                        + " et " + bloc.getClass().getSimpleName());
+            }
+        }
+        List<String> tables = parRang.values().stream().flatMap(b -> b.tables().stream()).toList();
+        Set<String> vues = new HashSet<>();
+        tables.stream().filter(t -> !vues.add(t)).findFirst().ifPresent(t -> {
+            throw new IllegalStateException("Table " + t + " déclarée dans deux blocs");
+        });
+        return tables;
     }
 
     /** Rang dans {@link #ORDRE_CLES_ETRANGERES} ; une table absente passe en dernier. */
