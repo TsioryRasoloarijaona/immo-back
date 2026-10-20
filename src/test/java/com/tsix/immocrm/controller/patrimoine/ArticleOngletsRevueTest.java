@@ -26,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -100,8 +99,7 @@ class ArticleOngletsRevueTest {
         String dossiers = corps("/api/articles/{id}/dossiers", commercial);
         String historique = corps("/api/articles/{id}/historique", commercial);
 
-        List<String> originesDossiers = JsonPath.read(dossiers, "$..origine");
-        assertThat(originesDossiers).doesNotContain("LOCATION");
+        assertThat(dossiers).doesNotContain("\"LOCATION\"");
         assertThat(historique).doesNotContain(libelle);
     }
 

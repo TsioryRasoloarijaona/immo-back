@@ -32,6 +32,7 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -81,6 +82,21 @@ public class PieceJointeSupport {
 
     /** Fichier lu et validé, avant toute écriture. */
     private record Contenu(byte[] octets, String extension, String legende) {
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Contenu c && Arrays.equals(octets, c.octets)
+                    && Objects.equals(extension, c.extension) && Objects.equals(legende, c.legende);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hash(extension, legende) + Arrays.hashCode(octets);
+        }
+
+        @Override
+        public String toString() {
+            return "Contenu[octets=" + octets.length + " o, extension=" + extension + ", legende=" + legende + "]";
+        }
     }
 
     /**
