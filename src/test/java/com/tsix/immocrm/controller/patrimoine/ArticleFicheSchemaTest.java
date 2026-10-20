@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.patrimoine;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import com.tsix.immocrm.fixtures.NommageSchemaCi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -178,7 +179,6 @@ class ArticleFicheSchemaTest {
 
     @Test
     void r9_3_readmeDuSchemaCi_citeLesFichiers110Et111() throws IOException {
-        assertThat(lire(SCHEMA_CI.resolve("README.md")))
-                .contains("110_article-fiche_tables.sql", "111_article-fiche_fk.sql");
+        NommageSchemaCi.verifier(110, "article-fiche");
     }
 }

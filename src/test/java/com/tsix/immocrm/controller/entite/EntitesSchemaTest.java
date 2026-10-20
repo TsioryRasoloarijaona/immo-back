@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.entite;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import com.tsix.immocrm.fixtures.NommageSchemaCi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -197,7 +198,6 @@ class EntitesSchemaTest {
 
     @Test
     void r7_1_readmeDuSchema_decritLes2Fichiers() throws IOException {
-        assertThat(lire(SCHEMA_CI.resolve("README.md")))
-                .contains("106_entites_tables.sql", "107_entites_fk.sql");
+        NommageSchemaCi.verifier(106, "entites");
     }
 }

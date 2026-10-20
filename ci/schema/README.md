@@ -4,54 +4,23 @@ Ces fichiers reconstituent, dans un SQL Server vierge, le schéma dont la suite 
 besoin. Ils sont consommés par `.github/workflows/ci.yml`, qui monte une base éphémère à
 chaque *pull request*.
 
-| Fichier | Contenu | Origine |
-|---|---|---|
-| `010_tables.sql` | 165 tables : colonnes, clés primaires, contraintes `CHECK`, valeurs par défaut, index | généré |
-| `020_foreign_keys.sql` | 562 clés étrangères, dans une passe séparée pour s'affranchir de l'ordre de création | généré |
-| `030_triggers.sql` | 4 triggers (`ComFolder`, `RntFolder`) | généré |
-| `040_seed_reference.sql` | lignes de configuration indispensables | écrit à la main |
-| `050_views.sql` | `ComSaleProspectionView`, les 2 tables qu'elle lit, et son semis | écrit à la main |
-| `060_interop_vente.sql` | `AdmParamsGuid`, `StlDocumentLine`, `ComLoanCompanyDecision` (lues par la vente hors entités JPA) et la devise par défaut ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
-| `070_workflow_vente.sql` | tables de paramétrage du workflow (`StrWorkFlow`, intervenants, champs et pièces obligatoires), **vides** ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
-| `070_vente_sous_listes.sql` | `ComModification`, `ComGift`, `ComGiftReason`, `ComGiftQuantity`, `ComFolderGift`, `StlPaymentAuthorizationLine`, `CfgTrancheSettlementCategory` (fiche dossier, FEATURE-vente-echeancier.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
-| `080_offres_schema_financement.sql` | `StlQuoteDocument` (schéma de financement saisi sur une offre, FEATURE-encaissements-offres-lot2.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
-| `100_audit_tables.sql` | `AdmWebHistorics` (journal d'audit OMRAN, `Details` en `text`) et `AdmMessage` (notes), FEATURE-patrimoine-audit-actions.md ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
-| `101_audit_fk.sql` | aucune clé étrangère : `AdmWebSessions`, cible de `AdmWebHistorics.AdmWebSessionsId` en production, est absente du CI | écrit à la main |
-| `104_tranche-onglets_tables.sql` | `CfgTrancheCoveredFloor` (onglet Plancher couvert, FEATURE-patrimoine-tranche-onglets.md) ; idempotent, déjà présente dans `yesRemsTest` | écrit à la main |
-| `105_tranche-onglets_fk.sql` | ses clés vers `CfgTranche` (CASCADE) et `StkItemCategory`, comme en production | écrit à la main |
-| `106_entites_tables.sql` | `CfgShareholder`, `CfgGroupShareholderLine`, `CfgCompanyShareholder` (actionnaires et répartition, FEATURE-entites-juridiques.md) ; idempotent, déjà présentes dans `yesRemsTest` | écrit à la main |
-| `107_entites_fk.sql` | leurs 4 clés étrangères, actions de suppression de production (CASCADE sauf répartition → actionnaire) ; idempotent | écrit à la main |
-| `108_tranche-regles_tables.sql` | `ComSalesCommission`, `CfgTrancheFolderEntity`, `CfgPrevision` (commissions, finalisations, prévisions de base, FEATURE-patrimoine-tranche-regles.md) ; idempotent, applicable aussi à `yesRemsTest` | écrit à la main |
-| `109_tranche-regles_fk.sql` | leurs clés vers `CfgTranche`, `CfgTier`, `ComAction`, `StkItemCategory`, `StrEntity`, `StrStatus`, comme en production | écrit à la main |
-| `110_article-fiche_tables.sql` | `StkVue`, `StkItemVue`, `StkContenance`, `StkItemContenance`, `StkPresentationTypeContenance`, `StkHierarchyPath` (+ `StkOrientation`, `StkCostCategory`, `StkFacade`, `StkExpense`, déjà en CI) — fiche article, FEATURE-patrimoine-article-fiche.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
-| `111_article-fiche_fk.sql` | leurs 8 clés étrangères, actions de suppression de production ; idempotent | écrit à la main |
-| `112_article-onglets_tables.sql` | `SynFolder.StkItemId` / `CfgCustomerId` et `ComSaleWithdrawalProduct` (onglets de l'article, FEATURE-patrimoine-article-onglets.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
-| `113_article-onglets_fk.sql` | aucune clé étrangère | écrit à la main |
-| `114_referentiels_tables.sql` | `StkItemExonaration` (+ `LndVocation`, `StkExpenseType`, déjà en CI) — référentiels en écriture, FEATURE-patrimoine-referentiels.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
-| `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
-| `118_sous-articles_tables.sql` | aucune table nouvelle (sous-articles, FEATURE-patrimoine-sous-articles.md) | écrit à la main |
-| `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
-| `120_terrains_tables.sql` | `BuyVentilationCategory`, `BuyDocumentStatusHistory`, `BuyDocumentWorkFlow` (+ `BuyDocumentLine`, déjà en CI) — facture de frais de terrain, FEATURE-patrimoine-terrains.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
-| `121_terrains_fk.sql` | leurs 9 clés étrangères, actions de suppression de production ; idempotent | écrit à la main |
-| `122_faisabilite_tables.sql` | 20 tables des études de faisabilité (étude, unités, tranches, ventilations, configuration, historique, prévisions, financements, workflow) + `AdmParamsString` (`AdmWorkFlowStateType` déjà en CI), FEATURE-patrimoine-faisabilite.md ; idempotent, à appliquer aussi à `yesRemsTest` | régénéré depuis `yesRemsProd` |
-| `123_faisabilite_fk.sql` | leurs 38 clés étrangères, actions de suppression de production (5 CASCADE entrantes sur l'étude) ; idempotent, CI seulement | régénéré depuis `yesRemsProd` |
-| `136_desistements_tables.sql` | `ComSaleWithdrawalCancellation`, `ComSaleWithdrawalReason`, `ComDocument.ComSaleWithdrawalCancellationId` (désistements, FEATURE-desistements.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
-| `137_desistements_fk.sql` | leurs clés vers `ComFolder`, `ComSaleWithdrawalReason`, `StkItem`, `StlSettlementType` et `ComDocument` → désistement, noms de production ; idempotent | écrit à la main |
+Le socle ne bouge pas au fil des lots : `010_tables.sql`, `020_foreign_keys.sql` (passe séparée, pour
+s'affranchir de l'ordre de création) et `030_triggers.sql` sont générés (voir « Régénérer ») ;
+`040_seed_reference.sql` et `050_views.sql` sont écrits à la main.
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
-ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
+ajouté à `ci.yml`, ni à ce README.
 
-### Plages réservées aux lots du plan Patrimoine
+### Nommage des fichiers d'un lot
 
-Chaque lot livre `0NN_<lot>_tables.sql` puis `0NN+1_<lot>_fk.sql` (même s'il n'a aucune clé étrangère), dans sa
-plage :
+Un lot qui crée ou complète des tables livre deux fichiers, le second même vide :
 
-| Lot | Plage | Lot | Plage | Lot | Plage | Lot | Plage |
-|---|---|---|---|---|---|---|---|
-| P0 | 100-101 | P1a | 102-103 | P1b | 104-105 | P5 | 106-107 |
-| P1c | 108-109 | P2a | 110-111 | P2b | 112-113 | P6 | 114-115 |
-| P3 | 116-117 | P4 | 118-119 | P7a | 120-121 | P8a | 122-123 |
-| P7b | 124-125 | P8b | 126-127 | P9 | 128-129 | P10 | 130-131 |
+- `NNN_<lot>_tables.sql` — tables et colonnes, idempotent (`IF OBJECT_ID(…) IS NULL`), applicable aussi à `yesRemsTest` ;
+- `NNN+1_<lot>_fk.sql` — leurs clés étrangères, avec les noms et actions de suppression de production ; idempotent.
+
+`NNN` est pair et pris au-dessus du plus grand numéro présent quand le lot est coupé. Deux lots parallèles sur le même
+numéro ne se gênent pas : `<lot>` distingue les fichiers, et des lots indépendants n'ont pas d'ordre entre eux. Ce que
+crée un fichier et la spec qui le justifie se lisent dans son en-tête et dans `FEATURE-<lot>.md`, pas ici.
 
 ## Pourquoi le schéma de production plutôt que `yesRemsTest`
 
@@ -154,11 +123,3 @@ $env:SPRING_DATASOURCE_URL = "jdbc:sqlserver://localhost:49687;databaseName=yesR
 
 Les variables d'environnement priment sur `src/test/resources/application.properties` dans
 Spring Boot : rediriger la suite ne demande **aucune modification de fichier**.
-
-## Tableaux de bord
-
-| Fichier | Contenu |
-|---|---|
-| `132_suivi-commerciaux_tables.sql` | `AppParametre` (objectif des commerciaux, FEATURE-suivi-commerciaux.md §7.6), comme `db/migration/018` ; idempotent, applicable aussi à `yesRemsTest` |
-| `133_suivi-commerciaux_fk.sql` | aucune clé étrangère |
-| `134-135` | réservées au Suivi des affectations (FEATURE-suivi-affectations.md) ; aucune table propre à ce jour |
