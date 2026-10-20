@@ -49,6 +49,13 @@ public class ReferentielAdminService {
     private static final String CODE = "code";
     private static final String SORTING = "sorting";
     private static final String ANNEE = "annee";
+    // EXEC n'ouvre pas la transaction implicite du pilote : sans BEGIN, sp_getapplock répond -999 si rien n'a encore
+    // été lu ; le COMMIT/ROLLBACK du pilote (IF @@TRANCOUNT > 0) la referme.
+    private static final String VERROU = """
+            SET NOCOUNT ON; DECLARE @r int; IF @@TRANCOUNT = 0 BEGIN TRANSACTION;
+            EXEC @r = sp_getapplock @Resource = :ressource, @LockMode = 'Exclusive', @LockOwner = 'Transaction',
+                @LockTimeout = 3000;
+            SELECT @r""";
     private static final Comparator<Map<String, Object>> ORDRE = Comparator
             .comparing((Map<String, Object> l) -> l.get(SORTING) instanceof Integer i ? i : null,
                     Comparator.nullsLast(Comparator.naturalOrder()))
@@ -131,6 +138,7 @@ public class ReferentielAdminService {
         tracer(bw, true);
         em.persist(bw.getWrappedInstance());
         enfants.ifPresent(lignes -> remplacerEnfants(r, bw, lignes));
+        em.flush();
         return ligne(r, bw);
     }
 
@@ -150,6 +158,7 @@ public class ReferentielAdminService {
         valeurs.forEach(bw::setPropertyValue);
         tracer(bw, false);
         enfants.ifPresent(lignes -> remplacerEnfants(r, bw, lignes));
+        em.flush();
         return ligne(r, bw);
     }
 
@@ -349,26 +358,43 @@ public class ReferentielAdminService {
         return new InvalidRequestException(c.nom() + " est obligatoire.");
     }
 
-    /** Une autre ligne de même clé (valeur nulle comprise) → 409 ; la clé résulte du corps, sinon de la base. */
+    /**
+     * Une autre ligne de même clé (valeur nulle comprise) → 409 ; la clé résulte du corps, sinon de la base.
+     * Aucune contrainte en base (tables OMRAN) : un verrou applicatif sur la clé, gardé jusqu'à la fin de la
+     * transaction, sérialise les écritures concurrentes de même clé (FEATURE-patrimoine-referentiels.md §8.2).
+     */
     private void unicite(ReferentielAdmin r, Map<String, Object> valeurs, BeanWrapper actuel, UUID id) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Long> q = cb.createQuery(Long.class);
         Root<?> racine = q.from(r.classe());
         List<Predicate> conditions = new ArrayList<>();
         List<String> doublon = new ArrayList<>();
+        StringBuilder cle = new StringBuilder();
         for (String propriete : r.cle()) {
             Object valeur = valeurs.containsKey(propriete) || actuel == null ? valeurs.get(propriete)
                     : actuel.getPropertyValue(propriete);
             conditions.add(valeur == null ? cb.isNull(racine.get(propriete)) : cb.equal(racine.get(propriete), valeur));
+            cle.append('|').append(affichee(valeur));
             r.champs().stream().filter(c -> propriete.equals(c.propriete())).findFirst()
                     .ifPresent(c -> doublon.add(c.nom() + " = " + affichee(valeur)));
         }
         if (id != null) {
             conditions.add(cb.notEqual(racine.get(ID), id));
         }
+        verrouiller(r, cle.toString());
         q.select(cb.count(racine)).where(conditions.toArray(Predicate[]::new));
         if (em.createQuery(q).getSingleResult() > 0) {
             throw new ConflictException("%s : une autre ligne a déjà %s.".formatted(r.libelle(), String.join(", ", doublon)));
+        }
+    }
+
+    /** Ressource hachée : 255 caractères au plus, et casse ignorée comme la collation des codes. */
+    private void verrouiller(ReferentielAdmin r, String cle) {
+        String ressource = "%s:%08x".formatted(r.classe().getSimpleName(), cle.toLowerCase(Locale.ROOT).hashCode());
+        Number resultat = (Number) em.createNativeQuery(VERROU).setParameter("ressource", ressource).getSingleResult();
+        if (resultat.intValue() < 0) {
+            throw new ConflictException("%s : une autre saisie de la même ligne est en cours, réessayez."
+                    .formatted(r.libelle()));
         }
     }
 
