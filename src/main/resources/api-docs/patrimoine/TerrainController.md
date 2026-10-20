@@ -36,9 +36,10 @@ d'une prospection foncière (400). `champsAVider` : `niveauId`, `vocationTerrain
 
 ## supprimer
 
-Refus 409 : un frais validé (« Frais <type> du <date> (<montant>) validé ») ou porté par une facture, un terrain
-occupé, un sous-terrain, ou encore référencé (prospection, dossier, offre… ; une autre clé étrangère → 409 nommant la
-contrainte). Sinon le terrain part avec ses frais non validés, contenances, pièces jointes et notes.
+Refus 409 : un frais validé (« Suppression impossible : frais <type> du <date> (<montant>) validé. ») ou porté par
+une facture, un terrain occupé, ou encore référencé (prospection, dossier, offre… ; une autre clé étrangère → 409
+nommant la contrainte) ; un sous-terrain ne se supprime que si le statut de son parent autorise les sous-terrains.
+Sinon le terrain part avec ses sous-terrains, ses frais non validés, contenances, pièces jointes et notes.
 
 ## creerSousTerrain
 

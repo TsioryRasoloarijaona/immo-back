@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.sequence;
 
 import com.tsix.immocrm.entities.adm.AdmSequence;
+import com.tsix.immocrm.exceptions.ConfigurationManquanteException;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -53,6 +55,27 @@ public class GenerateurCodeSequence {
         int annee = LocalDate.now(clock).getYear() % (int) Math.pow(10, largeurAnnee);
         return String.format("%0" + largeurAnnee + "d", annee)
                 + "/" + String.format("%0" + largeurNumero + "d", prochain);
+    }
+
+    /**
+     * Code {@code préfixe + année + séparateur + numéro + suffixe}, tout lu dans la ligne ({@code Sequence.cs:GetNewValue}) ;
+     * année du {@link Clock} si {@code BasedOnSystemYear}, sinon {@code SeqYear}. Ligne absente : pas d'amorçage.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String suivantSelonLigne(String codeSequence) {
+        AdmSequence s = sequenceRepository.findPourIncrementByCode(codeSequence).orElseThrow(
+                () -> new ConfigurationManquanteException("Séquence « " + codeSequence + " » absente d'AdmSequence."));
+        int prochain = Objects.requireNonNullElse(s.getSeqValue(), 0) + 1;
+        s.setSeqValue(prochain);
+        sequenceRepository.save(s);
+        int largeurAnnee = Objects.requireNonNullElse(s.getSeqYearNumber(), 2);
+        int annee = Boolean.FALSE.equals(s.getBasedOnSystemYear()) && s.getSeqYear() != null
+                ? s.getSeqYear() : LocalDate.now(clock).getYear();
+        return Objects.toString(s.getSeqPrefix(), "")
+                + String.format("%0" + largeurAnnee + "d", annee % (int) Math.pow(10, largeurAnnee))
+                + Objects.toString(s.getSeparator(), "")
+                + String.format("%0" + Objects.requireNonNullElse(s.getSeqValueNumber(), 5) + "d", prochain)
+                + Objects.toString(s.getSeqSuffix(), "");
     }
 
     // Amorcer à zéro plutôt qu'échouer : une base de test fraîche ne sème pas AdmSequence.

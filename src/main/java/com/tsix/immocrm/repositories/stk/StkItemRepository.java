@@ -16,9 +16,16 @@ import java.util.UUID;
 
 public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpecificationExecutor<StkItem> {
 
-    /** Article lu ou écrit par id : entité de sa tranche inactive → absent (R4) ; sans tranche ni entité = visible. */
+    /**
+     * Sans tranche (terrain), la société directe {@code CfgCompanyId} décide ; avec tranche, celle du programme seule :
+     * des articles bâtis portent une société directe inactive sous une tranche active (FEATURE-patrimoine-terrains.md).
+     */
+    String SOCIETE_DIRECTE = "(t.id IS NOT NULL OR socd.isActive = true OR socd.id IS NULL)";
+
+    /** Article lu ou écrit par id : entité de sa tranche, sinon sa société directe, inactive → absent (R4). */
     @Query("SELECT i FROM StkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "
-            + "WHERE i.id = :id AND " + VisibiliteEntites.CLAUSE_JPQL)
+            + "LEFT JOIN i.cfgCompany socd WHERE i.id = :id AND " + VisibiliteEntites.CLAUSE_JPQL + " AND "
+            + SOCIETE_DIRECTE)
     Optional<StkItem> findVisible(@Param("id") UUID id);
 
     // StkHierarchyId = la tranche. Les listes filtrées passent par StkItemSpecifications.
@@ -49,6 +56,9 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
     /** « Sous articles » par lot de parents. Tuple : [parentId, code]. */
     @Query("SELECT i.parent.id, i.code FROM StkItem i WHERE i.parent.id IN :parentIds ORDER BY i.code ASC")
     List<Object[]> codesByParentIdIn(List<UUID> parentIds);
+
+    /** Unicité Code + société d'un terrain ({@code nature} = TER). */
+    boolean existsByCfgCompany_IdAndCodeAndStkKind_CodeAndIdNot(UUID societeId, String code, String nature, UUID id);
 
     /** Unicité du code par tranche, sous-articles compris (collation French_CI_AS : sans casse). */
     Optional<StkItem> findFirstByStkHierarchyIdAndCode(UUID trancheId, String code);

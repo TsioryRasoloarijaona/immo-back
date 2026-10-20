@@ -1,6 +1,11 @@
 package com.tsix.immocrm.entities.stk;
 
+import com.tsix.immocrm.entities.adm.AdmCity;
+import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.lnd.LndLevel;
+import com.tsix.immocrm.entities.lnd.LndVocation;
+import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -569,4 +574,34 @@ public class StkItem {
     // Module Syndic : lu pour la suppression (article occupé), jamais écrit par nous.
     @Column(name = "SynFolderId", insertable = false, updatable = false)
     private UUID synFolderId;
+
+    // -- Terrain (FEATURE-patrimoine-terrains.md §1.1) : société directe, sans tranche --
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CfgCompanyId")
+    private CfgCompany cfgCompany;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCountryId")
+    private AdmCountry admCountry;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmCityId")
+    private AdmCity admCity;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StrStatusId")
+    private StrStatus strStatus;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "LndLevelId")
+    private LndLevel lndLevel;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "LndVocationId")
+    private LndVocation lndVocation;
+
+    // Prospection foncière d'origine : l'entité LndLand vient avec P7b.
+    @Column(name = "LndLandId")
+    private UUID lndLandId;
 }

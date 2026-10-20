@@ -7,9 +7,9 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 
 /** Contrôles de saisie communs aux programmes, tranches et articles (FEATURE-patrimoine-ecriture.md §2.8, §2.9). */
-final class SaisiePatrimoine {
+public final class SaisiePatrimoine {
 
-    static final int COURT = 255;
+    public static final int COURT = 255;
 
     private SaisiePatrimoine() {
     }
@@ -20,12 +20,12 @@ final class SaisiePatrimoine {
     }
 
     /** PATCH : absent ou {@code null} = valeur actuelle. */
-    static <T> T ou(T saisie, T actuel) {
+    public static <T> T ou(T saisie, T actuel) {
         return saisie != null ? saisie : actuel;
     }
 
     /** Texte OMRAN : jamais NULL, {@code ""} quand rien n'est saisi (§2.4). */
-    static String texte(String saisie, String actuel, int max, String libelle) {
+    public static String texte(String saisie, String actuel, int max, String libelle) {
         if (saisie != null && saisie.length() > max) {
             throw new InvalidRequestException("%s : %d caractères au plus.".formatted(libelle, max));
         }
@@ -34,7 +34,7 @@ final class SaisiePatrimoine {
     }
 
     /** Champ obligatoire (code, description) : comparé et écrit après {@code trim}. */
-    static String obligatoire(String saisie, String actuel, String libelle) {
+    public static String obligatoire(String saisie, String actuel, String libelle) {
         String valeur = saisie != null ? saisie.trim() : actuel;
         if (valeur == null || valeur.isBlank()) {
             throw new InvalidRequestException(libelle + " est obligatoire.");
@@ -42,14 +42,14 @@ final class SaisiePatrimoine {
         return texte(valeur, null, COURT, libelle);
     }
 
-    static BigDecimal fraction(BigDecimal valeur, String libelle) {
+    public static BigDecimal fraction(BigDecimal valeur, String libelle) {
         if (valeur != null && (valeur.signum() < 0 || valeur.compareTo(BigDecimal.ONE) > 0)) {
             throw new InvalidRequestException(libelle + " : taux entre 0 et 100 %.");
         }
         return valeur;
     }
 
-    static BigDecimal positif(BigDecimal valeur, String libelle) {
+    public static BigDecimal positif(BigDecimal valeur, String libelle) {
         if (valeur != null && valeur.signum() < 0) {
             throw new InvalidRequestException(libelle + " : valeur positive ou nulle.");
         }

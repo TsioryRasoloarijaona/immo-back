@@ -37,7 +37,7 @@ import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
  * (FEATURE-patrimoine-ecriture.md §5). {@code ComFolderId}/{@code RntFolderId} ne sont jamais écrits ici.
  */
 @Component
-class EcritureArticle {
+public class EcritureArticle {
 
     private static final String PAS_LIBRE = "Ce sous article n'est pas libre.";
     private static final String NATURE_TERRAIN = "TER";
@@ -494,6 +494,12 @@ class EcritureArticle {
         a.setStrEntityId(references.entiteArticle());
         a.setIsUnderItem(sous);
         a.setIsUnderItemOrigin(sous);
+        valeursOmran(a);
+        return a;
+    }
+
+    /** Ligne neuve, article ou terrain : drapeaux, textes {@code ""} et montants 0 que lit OMRAN. */
+    public static void valeursOmran(StkItem a) {
         a.setAlwaysAffected(false);
         a.setIsAvailableForSaleInWebSite(false);
         a.setIsAvailableForRentInWebSite(false);
@@ -503,7 +509,6 @@ class EcritureArticle {
         a.setCautionNumber(0);
         textesVides(a);
         zeros(a);
-        return a;
     }
 
     private static void textesVides(StkItem a) {
