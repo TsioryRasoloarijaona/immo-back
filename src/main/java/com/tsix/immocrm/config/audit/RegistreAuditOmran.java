@@ -22,6 +22,7 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
 import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
 import com.tsix.immocrm.entities.stk.StkContenance;
+import com.tsix.immocrm.entities.stk.StkHierarchyPlan;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemContenance;
 import com.tsix.immocrm.entities.stk.StkItemVue;
@@ -72,7 +73,7 @@ public final class RegistreAuditOmran {
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
             StkItemVue.class, StkItemContenance.class,
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
-            AdmAttachedFile.class);
+            AdmAttachedFile.class, StkHierarchyPlan.class);
 
     private RegistreAuditOmran() {
     }
@@ -135,6 +136,7 @@ public final class RegistreAuditOmran {
             // Tous porteurs, sans parent : absente de TYPES, l'onglet Audit d'un porteur ne la lit pas (P2b §8.3).
             case AdmAttachedFile f -> new Trace("Yes.Adm.Attachment.AttachmentWithData", "Pièce jointe",
                     f.getLibelleAudit(), null, null);
+            case StkHierarchyPlan p -> new Trace("Yes.Cfg.StkHierarchyPlan", "Plan", p.getCode(), null, null);
             default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
     }
