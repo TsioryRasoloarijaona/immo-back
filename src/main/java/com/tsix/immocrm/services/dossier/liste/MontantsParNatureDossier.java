@@ -26,8 +26,8 @@ import static com.tsix.immocrm.domain.ColonneDossier.*;
 
 /**
  * Montants par nature de la grille OMRAN (avance, autofinancement, crédit, frais, modifications, pénalités, net à
- * payer, prix contractuel, trop-perçu), formules de {@code ComSaleFolderView} : voir FEATURE-dossiers-liste-complete.md. Deux requêtes par
- * page (échéances, réglé signé) ; le net à payer et le trop-perçu sont lus par {@link TropPercu}, jamais refaits.
+ * payer, prix contractuel, trop-perçu), formules de {@code ComSaleFolderView} : voir FEATURE-dossiers-liste-complete.md.
+ * Deux requêtes par page (échéances, réglé signé) ; net à payer et trop-perçu lus par {@link TropPercu}, jamais refaits.
  */
 @Component
 public class MontantsParNatureDossier {

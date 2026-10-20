@@ -249,10 +249,9 @@ public class EtatVentesService {
     /** Montants des colonnes {@code sources}, par les calculs de la liste des dossiers ; aucune requête sans source. */
     private Map<UUID, Map<ColonneDossier, BigDecimal>> montantsDuDossier(List<ComFolder> dossiers,
                                                                          Set<ColonneDossier> sources) {
-        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = new HashMap<>();
-        if (MontantsParNatureDossier.requises(sources)) {
-            calculs.montants().pour(dossiers).forEach((id, m) -> parDossier.put(id, new EnumMap<>(m)));
-        }
+        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = MontantsParNatureDossier.requises(sources)
+                ? calculs.montants().pour(dossiers)
+                : new HashMap<>();
         if (ColonnesCalculeesDossier.requises(sources)) {
             Map<UUID, ValeursCalculees> valeurs = calculs.colonnes().pour(
                     dossiers.stream().map(ComFolder::getId).toList(), null);
