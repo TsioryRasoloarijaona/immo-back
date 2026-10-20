@@ -37,7 +37,7 @@ public enum ColonneSuiviAffectations implements Colonne {
     TIERS_ID("tiersId", "Id tiers", Groupe.PIECE, TypeColonne.TEXTE, false, null),
     TIERS_NOM("tiersNom", "Tiers", Groupe.PIECE, TypeColonne.TEXTE, true, Chemin.tier("tiers")),
     MONTANT_AFFECTE("montantAffecte", "Montant affecté", Groupe.AFFECTATION, TypeColonne.MONTANT, true,
-            Chemin.agregeable("montantAffecte").sauf("etatPiece", StatutReglement.CANCELED.name())),
+            Chemin.agregeable("montantAffecte").sauf(Cle.ETAT_PIECE, StatutReglement.CANCELED.name())),
     SENS("sens", "Sens", Groupe.AFFECTATION, TypeColonne.TEXTE, false, Chemin.groupable("sens")),
     DATE_MOUVEMENT("dateMouvement", "Date", Groupe.AFFECTATION, TypeColonne.DATE, true,
             Chemin.date("dateMouvement")),
@@ -61,7 +61,8 @@ public enum ColonneSuiviAffectations implements Colonne {
             Chemin.date("dateEcheancePiece")),
     DATE_OPERATION_PIECE("dateOperationPiece", "Date d'opération", Groupe.PIECE, TypeColonne.DATE, false,
             Chemin.date("dateOperationPiece")),
-    ETAT_PIECE("etatPiece", "État pièce", Groupe.PIECE, TypeColonne.TEXTE, false, Chemin.groupable("etatPiece")),
+    ETAT_PIECE(Cle.ETAT_PIECE, "État pièce", Groupe.PIECE, TypeColonne.TEXTE, false,
+            Chemin.groupable(Cle.ETAT_PIECE)),
     MONTANT_PIECE("montantPiece", "Montant pièce", Groupe.PIECE, TypeColonne.MONTANT, false, null),
     TYPE_PIECE_ID("typePieceId", "Id type de pièce", Groupe.PIECE, TypeColonne.TEXTE, false, null),
     TYPE_PIECE_CODE("typePieceCode", "Code type de pièce", Groupe.PIECE, TypeColonne.TEXTE, false,
@@ -75,9 +76,12 @@ public enum ColonneSuiviAffectations implements Colonne {
     NOTES_PIECE("notesPiece", "Notes pièce de règlement", Groupe.PIECE, TypeColonne.TEXTE, true, null),
     DATE_ECHEANCE("dateEcheance", "Date échéance", Groupe.AFFECTATION, TypeColonne.DATE, false,
             Chemin.date("dateEcheance")),
-    MONTANT_ECHEANCE("montantEcheance", "Montant échéance", Groupe.AFFECTATION, TypeColonne.MONTANT, false,
-            Chemin.agregeable("montantEcheance")),
+    MONTANT_ECHEANCE("montantEcheance", "Montant échéance", Groupe.AFFECTATION, TypeColonne.MONTANT, false, null),
     NOTES_ECHEANCE("notesEcheance", "Notes document", Groupe.AFFECTATION, TypeColonne.TEXTE, true, null);
+
+    private static final class Cle {
+        static final String ETAT_PIECE = "etatPiece";
+    }
 
     public enum Groupe { AFFECTATION, PATRIMOINE, VENTE, PIECE }
 

@@ -8,7 +8,7 @@ Suivi des affectations (écran OMRAN « Suivi des affectations ») : une ligne p
 
 ## totauxColonnes
 
-Effectif du filtre (pièces annulées comprises, comme `totalElements`) et un résumé par jeton d'`agregats` (`montantAffecte`, `montantEcheance`, `colonne:FONCTION`). Les sommes de `montantAffecte` excluent les lignes des pièces `CANCELED` ; `montantPiece` n'est pas sommable (une pièce à plusieurs lignes compterait plusieurs fois).
+Effectif du filtre (pièces annulées comprises, comme `totalElements`) et un résumé par jeton d'`agregats` (`montantAffecte`, `colonne:FONCTION`). Les sommes de `montantAffecte` excluent les lignes des pièces `CANCELED` ; `montantPiece` et `montantEcheance` ne sont pas sommables, 400 (une pièce ou une échéance à plusieurs lignes compterait plusieurs fois).
 
 ## grouper
 

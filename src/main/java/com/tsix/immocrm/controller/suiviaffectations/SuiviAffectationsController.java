@@ -120,7 +120,7 @@ public class SuiviAffectationsController {
                     + "invalide.", content = @Content)
     })
     public TotauxListeDto totauxColonnes(
-            @Parameter(example = "montantAffecte,montantEcheance")
+            @Parameter(example = "montantAffecte")
             @RequestParam(required = false) List<String> agregats,
             @ParameterObject @ModelAttribute FiltresSuiviAffectations filtres) {
         return service.totauxColonnes(filtres,
