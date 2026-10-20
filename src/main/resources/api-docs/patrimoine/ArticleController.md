@@ -11,8 +11,8 @@ Colonnes à la demande : `colonnes` prend des noms du catalogue `GET /api/refere
 les champs historiques d'`ArticleListItemDto`, nom inconnu → 400 listant les noms valides) ; les colonnes calculées
 (sommes des sous-articles, codes des sous-articles, parent) ne sont lues que si elles sont demandées.
 `search` filtre en sous-chaîne, sans casse et espaces ignorés des deux côtés, sur le code, la description, le code
-de l'article parent, le code de la tranche, le titre foncier, l'adresse et les libellés de catégorie, type,
-immeuble, étage et vocation. `codeParent` et `etat` : voir `GET /api/sous-articles`. `trancheId`
+de l'article parent, le code de la tranche, du programme et de l'entité, le N° de dossier de vente, le titre
+foncier, l'adresse, les notes et les libellés de catégorie, type, immeuble, étage et vocation. `codeParent` et `etat` : voir `GET /api/sous-articles`. `trancheId`
 restreint à une ou plusieurs tranches (OR) sans changer d'écran. `statut` filtre sur la
 disponibilité mais, à la différence des autres endpoints Article, **n'a pas de valeur par défaut
 ici** : absent = tous les statuts (DISPONIBLE + OCCUPE), pour une vraie vue catalogue. Restreint aux
@@ -94,7 +94,7 @@ faux par défaut. Le prix de vente de l'article est recalculé.
 
 Corps facultatif `{ "toujoursAffecte": bool }` (défaut faux). Le sous-article doit être libre : même tranche,
 sous-article, sans article, non toujours affecté, sans dossier (409 « Ce sous article n'est pas libre »).
-L'article doit être principal et non occupé.
+L'article doit être principal et non occupé, de la vocation du sous-article (400 sinon).
 
 ## desaffecter
 

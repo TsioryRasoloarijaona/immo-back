@@ -118,11 +118,16 @@ class EcritureArticle {
             throw new InvalidRequestException("L'article parent " + parent.getCode() + " n'est pas de la tranche du sous-article.");
         }
         exigerPrincipal(parent);
+        exigerMemeVocation(parent, vocation);
+        refuserSiOccupe(parent);
+        return parent;
+    }
+
+    /** Un rattachement nouveau exige la vocation du parent (R4-3) ; les couples existants ne sont pas repris. */
+    private static void exigerMemeVocation(StkItem parent, StkVocation vocation) {
         if (!Objects.equals(Champs.de(parent.getStkVocation(), StkVocation::getId), Champs.de(vocation, StkVocation::getId))) {
             throw new InvalidRequestException("L'article parent " + parent.getCode() + " n'a pas la vocation du sous-article.");
         }
-        refuserSiOccupe(parent);
-        return parent;
     }
 
     private static void exigerParent(StkItem parent, Boolean toujoursAffecte) {
@@ -201,6 +206,7 @@ class EcritureArticle {
     /** {@code BuildItem:AffectUnderItem} : même tranche, sous-article libre, article non occupé. */
     void affecter(StkItem parent, StkItem sous, boolean toujoursAffecte) {
         exigerPrincipal(parent);
+        exigerMemeVocation(parent, sous.getStkVocation());
         boolean libre = Objects.equals(Champs.de(sous.getStkHierarchy(), CfgTranche::getId),
                 Champs.de(parent.getStkHierarchy(), CfgTranche::getId))
                 && Boolean.TRUE.equals(sous.getIsUnderItem()) && sous.getParent() == null

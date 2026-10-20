@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /** Filtres de {@code GET /api/articles} et {@code GET /api/sous-articles}, liés depuis la chaîne de requête ; absent = pas de filtre. */
 public record FiltresListeArticles(
-        @Parameter(description = "Recherche sans casse ni espaces : code, description, code parent, tranche, titre foncier…",
+        @Parameter(description = "Recherche sans casse ni espaces : code, description, code parent, tranche, N° dossier, notes…",
                 example = "A-204") String search,
         @Parameter(description = "Id(s) de CfgTranche. Répétable, correspondance OR.") List<UUID> trancheId,
         @Parameter(description = "Disponibilité : dossier de vente ou de location de la ligne. Absent = tous.") StatutArticle statut,

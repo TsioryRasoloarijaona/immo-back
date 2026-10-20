@@ -2,11 +2,17 @@ package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComFolder;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -61,8 +67,32 @@ public final class StkItemSpecifications {
             ajouterStructure(predicates, filtres, root, cb);
             ajouterClassement(predicates, filtres, root, cb);
             ajouterCaracteristiques(predicates, filtres, root, cb);
+            if (StringUtils.hasText(filtres.search())) {
+                predicates.add(recherche(motif(filtres.search()), root, query, cb));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /** Recherche OMRAN réduite aux textes directs et aux références (FEATURE-patrimoine-sous-articles.md R4-7). */
+    private static Predicate recherche(String motif, Root<StkItem> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Join<StkItem, CfgTranche> tranche = root.join(STK_HIERARCHY, JoinType.LEFT);
+        Join<CfgTranche, CfgProject> projet = tranche.join("cfgProject", JoinType.LEFT);
+        List<Expression<String>> champs = new ArrayList<>(List.of(root.get("code"), root.get(DESCRIPTION),
+                root.get("titleNumber"), root.get("address"), root.get("notes"),
+                root.join(PARENT, JoinType.LEFT).get("code"), tranche.get("code"), projet.get("code"),
+                projet.join("cfgCompany", JoinType.LEFT).get("code")));
+        for (String reference : List.of("stkItemCategory", "stkItemType", "stkBuilding", "stkFloor", "stkVocation")) {
+            champs.add(root.join(reference, JoinType.LEFT).get(DESCRIPTION));
+        }
+        List<Predicate> correspondances = new ArrayList<>(champs.stream()
+                .map(c -> cb.like(sansEspaces(cb, c), motif)).toList());
+        // N° dossier : StkItem.ComFolderId n'est pas une association JPA.
+        Subquery<UUID> dossier = query.subquery(UUID.class);
+        Root<ComFolder> f = dossier.from(ComFolder.class);
+        correspondances.add(cb.exists(dossier.select(f.get("id"))
+                .where(cb.equal(f.get("id"), root.get(VENTE)), cb.like(sansEspaces(cb, f.get("code")), motif))));
+        return cb.or(correspondances.toArray(new Predicate[0]));
     }
 
     /** Tranches, parent, racines seules et statut d'occupation. */
@@ -95,7 +125,7 @@ public final class StkItemSpecifications {
         }
     }
 
-    /** Catégories, types, recherche libre et entités. */
+    /** Catégories, types, code parent et entités. */
     private static void ajouterClassement(List<Predicate> predicates, FiltresArticle f, Root<StkItem> root,
                                           CriteriaBuilder cb) {
         if (!CollectionUtils.isEmpty(f.categorieIds())) {
@@ -103,16 +133,6 @@ public final class StkItemSpecifications {
         }
         if (!CollectionUtils.isEmpty(f.typeIds())) {
             predicates.add(root.get("stkItemType").get("id").in(f.typeIds()));
-        }
-        if (StringUtils.hasText(f.search())) {
-            String motif = motif(f.search());
-            List<Expression<String>> champs = new ArrayList<>(List.of(root.get("code"), root.get(DESCRIPTION),
-                    root.get("titleNumber"), root.get("address"),
-                    root.join(PARENT, JoinType.LEFT).get("code"), root.join(STK_HIERARCHY, JoinType.LEFT).get("code")));
-            for (String reference : List.of("stkItemCategory", "stkItemType", "stkBuilding", "stkFloor", "stkVocation")) {
-                champs.add(root.join(reference, JoinType.LEFT).get(DESCRIPTION));
-            }
-            predicates.add(cb.or(champs.stream().map(c -> cb.like(sansEspaces(cb, c), motif)).toArray(Predicate[]::new)));
         }
         if (StringUtils.hasText(f.codeParent())) {
             predicates.add(cb.like(sansEspaces(cb, root.get(PARENT).get("code")), motif(f.codeParent())));

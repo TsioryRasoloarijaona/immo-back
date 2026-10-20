@@ -144,7 +144,7 @@ public class ArticleController {
     @Operation(summary = "Rattache un sous-article libre de la tranche à l'article ; renvoie l'article")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Rattaché ; prix de vente de l'article recalculé."),
-            @ApiResponse(responseCode = "400", description = "L'article est lui-même un sous-article."),
+            @ApiResponse(responseCode = "400", description = "L'article est un sous-article, ou d'une autre vocation."),
             @ApiResponse(responseCode = "403", description = REPONSE_403),
             @ApiResponse(responseCode = "404", description = ARTICLE_INTROUVABLE),
             @ApiResponse(responseCode = "409", description = "Sous-article non libre, ou article occupé.")
