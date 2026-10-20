@@ -126,7 +126,8 @@ class DesistementSecuriteTest {
     @Test
     void liste_auPerimetre_visiblePourLHabilite_invisibleHorsProjet() throws Exception {
         UUID id = creerCommeAdmin();
-        AdmUser horsProjet = fixture.compte("TST-DES-SEC-HORS", COMMERCIAL);
+        Scene autre = desistements.scene("SEC2", Parametres.standard());
+        AdmUser horsProjet = desistements.compteHabilite("TST-DES-SEC-HORS", autre.projetId(), COMMERCIAL);
 
         mockMvc.perform(get(LISTE).param("size", "200").with(comme(commercial, COMMERCIAL)))
                 .andExpect(status().isOk())
@@ -134,6 +135,9 @@ class DesistementSecuriteTest {
         mockMvc.perform(get(LISTE).param("size", "200").with(comme(horsProjet, COMMERCIAL)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(LIGNES_IDS, not(hasItem(id.toString()))));
+        mockMvc.perform(get(DESISTEMENT, id).with(comme(horsProjet, COMMERCIAL))).andExpect(status().isNotFound());
+        mockMvc.perform(get(CREER, scene.dossierId()).with(comme(horsProjet, COMMERCIAL)))
+                .andExpect(status().isNotFound());
     }
 
     // ------------------------------------------------------------------ outils
