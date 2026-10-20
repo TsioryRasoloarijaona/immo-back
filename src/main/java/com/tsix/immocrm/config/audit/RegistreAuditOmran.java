@@ -3,6 +3,7 @@ package com.tsix.immocrm.config.audit;
 import com.tsix.immocrm.domain.ReferentielAdmin;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.LigneOmran;
+import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.stk.StkItemExonaration;
 import com.tsix.immocrm.entities.stk.StkPresentationType;
@@ -70,7 +71,8 @@ public final class RegistreAuditOmran {
             CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
             StkItemVue.class, StkItemContenance.class,
-            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class);
+            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
+            AdmAttachedFile.class);
 
     private RegistreAuditOmran() {
     }
@@ -86,6 +88,11 @@ public final class RegistreAuditOmran {
     static boolean trace(Class<?> classe) {
         return CLASSES.contains(classe) || classe == StkPresentationTypeContenance.class
                 || ReferentielAdmin.parClasse(classe).isPresent();
+    }
+
+    /** Une mise à jour qui vaut suppression : la pièce jointe supprimée logiquement. */
+    static boolean suppressionLogique(Object entite) {
+        return entite instanceof AdmAttachedFile f && f.isSuppressionLogique();
     }
 
     /** ObjectLabel : programme et article = Code ; tranche, sous-article, terrain = Description (mesuré en prod). */
@@ -125,6 +132,9 @@ public final class RegistreAuditOmran {
             case StkPresentationTypeContenance c -> new Trace("Yes.Stk.Config.PresentationTypeContenance", "Contenance",
                     Champs.de(c.getStkContenance(), StkContenance::getDescription), PRESENTATION,
                     Champs.de(c.getStkPresentationType(), StkPresentationType::getId));
+            // Tous porteurs, sans parent : absente de TYPES, l'onglet Audit d'un porteur ne la lit pas (P2b §8.3).
+            case AdmAttachedFile f -> new Trace("Yes.Adm.Attachment.AttachmentWithData", "Pièce jointe",
+                    f.getLibelleAudit(), null, null);
             default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
     }

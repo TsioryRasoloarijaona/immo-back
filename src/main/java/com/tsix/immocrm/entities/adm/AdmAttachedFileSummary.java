@@ -52,6 +52,11 @@ public class AdmAttachedFileSummary {
     @JoinColumn(name = "AdmAttachedFileTypeId")
     private AdmAttachedFileType type;
 
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "FoderGroup")
+    private String groupe;
+
     @Column(name = "UserCreateDateTime")
     private LocalDateTime userCreateDateTime;
 

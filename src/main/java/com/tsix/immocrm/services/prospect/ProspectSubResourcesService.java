@@ -31,8 +31,6 @@ import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
-import jakarta.persistence.criteria.Root;
-import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -146,17 +144,9 @@ public class ProspectSubResourcesService {
      */
     public Page<HistoriqueDto> historique(UUID prospectId, Pageable pageable) {
         requireProspect(prospectId);
-        Specification<ComFolder> dossierVisible = perimetreService.filtreDossiers();
-        Specification<StrFolderStatusHistory> spec = (root, query, cb) -> {
-            Subquery<UUID> visible = query.subquery(UUID.class);
-            Root<ComFolder> dossier = visible.from(ComFolder.class);
-            visible.select(dossier.get("id")).where(cb.and(
-                    cb.equal(dossier.get("id"), root.get("comFolder").get("id")),
-                    dossierVisible.toPredicate(dossier, query, cb)));
-            return cb.and(
-                    cb.equal(root.get("cfgTier").get("id"), prospectId),
-                    cb.or(cb.isNull(root.get("comFolder")), cb.exists(visible)));
-        };
+        Specification<StrFolderStatusHistory> spec = Specification
+                .<StrFolderStatusHistory>where((root, query, cb) -> cb.equal(root.get("cfgTier").get("id"), prospectId))
+                .and(perimetreService.filtreHistoriqueStatuts());
         // Tri imposé : un tri client sur un champ du DTO n'existe pas sur l'entité.
         Pageable plusRecentDabord = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Direction.DESC, "docDate").and(Sort.by("id")));
@@ -274,7 +264,8 @@ public class ProspectSubResourcesService {
         );
     }
 
-    private static String libelleStatut(StrStatus statut) {
+    /** Description du statut, sinon son code ; partagé avec l'historique et les dossiers d'un article. */
+    public static String libelleStatut(StrStatus statut) {
         if (statut == null) {
             return null;
         }

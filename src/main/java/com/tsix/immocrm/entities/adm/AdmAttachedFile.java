@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -53,4 +54,30 @@ public class AdmAttachedFile {
 
     @Column(name = "UserCreateDateTime")
     private LocalDateTime userCreateDateTime;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "UserUpdate")
+    private String userUpdate;
+
+    @Column(name = "UserUpdateDateTime")
+    private LocalDateTime userUpdateDateTime;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "CategoryDescription")
+    private String categoryDescription;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "FoderGroup")
+    private String groupe;
+
+    /** ObjectLabel d'audit = code du porteur, que la pièce ne connaît pas : posé par le service qui l'écrit. */
+    @Transient
+    private String libelleAudit;
+
+    /** Vrai quand la modification en cours est une suppression logique (audit « Deleted »). */
+    @Transient
+    private boolean suppressionLogique;
 }

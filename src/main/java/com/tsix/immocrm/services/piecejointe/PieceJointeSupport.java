@@ -15,7 +15,6 @@ import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.storage.CleStockage;
 import com.tsix.immocrm.storage.ObjetStocke;
-import com.tsix.immocrm.storage.PorteurPieceJointe;
 import com.tsix.immocrm.storage.StockageFichiers;
 import com.tsix.immocrm.storage.StockageProperties;
 import com.tsix.immocrm.utils.Champs;
@@ -25,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -32,7 +32,10 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -42,6 +45,10 @@ import java.util.UUID;
 @Service
 @Transactional(readOnly = true)
 public class PieceJointeSupport {
+
+    /** Limite de {@code spring.servlet.multipart.max-file-size}, vérifiée ici aussi (MockMvc ne l'applique pas). */
+    static final long TAILLE_MAX = 50L * 1024 * 1024;
+    private static final String PIECE_INTROUVABLE = "Pièce jointe introuvable pour %s: %s";
 
     private final AdmAttachedFileSummaryRepository summaryRepository;
     private final AdmAttachedFileRepository fileRepository;
@@ -73,27 +80,58 @@ public class PieceJointeSupport {
         this.depotBinaireSource = depotBinaireSource;
     }
 
+    /** Fichier lu et validé, avant toute écriture. */
+    private record Contenu(byte[] octets, String extension, String legende) {
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Contenu c && Arrays.equals(octets, c.octets)
+                    && Objects.equals(extension, c.extension) && Objects.equals(legende, c.legende);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hash(extension, legende) + Arrays.hashCode(octets);
+        }
+
+        @Override
+        public String toString() {
+            return "Contenu[octets=" + octets.length + " o, extension=" + extension + ", legende=" + legende + "]";
+        }
+    }
+
     /**
      * Plus récentes d'abord. Exclut {@code hasFile = false} : cases de checklist « cochée mais
      * jamais déposée » ({@code IsCheckedButNotAttached}), dont le {@code CategoryId} correspond.
      */
     public List<PieceJointeDto> lister(UUID porteurId) {
-        return summaryRepository.findByCategoryId(porteurId).stream()
-                .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
-                .map(PieceJointeSupport::toDto)
-                .toList();
+        return avecFichier(porteurId).stream().map(PieceJointeSupport::toDto).toList();
     }
 
     public boolean auMoinsUnFichier(UUID porteurId) {
-        return summaryRepository.findByCategoryId(porteurId).stream()
-                .anyMatch(a -> Boolean.TRUE.equals(a.getHasFile()));
+        return !avecFichier(porteurId).isEmpty();
     }
 
     /** Mêmes exclusions que {@link #lister}. */
     public long nombreDeFichiers(UUID porteurId) {
+        return avecFichier(porteurId).size();
+    }
+
+    /** La plus récente pièce vivante du porteur de ce type (attachement en masse). */
+    public Optional<UUID> pieceDuType(UUID porteurId, UUID typeId) {
+        return avecFichier(porteurId).stream()
+                .filter(a -> typeId.equals(Champs.de(a.getType(), AdmAttachedFileType::getId)))
+                .map(AdmAttachedFileSummary::getId)
+                .findFirst();
+    }
+
+    public List<String> groupes() {
+        return summaryRepository.groupes();
+    }
+
+    private List<AdmAttachedFileSummary> avecFichier(UUID porteurId) {
         return summaryRepository.findByCategoryId(porteurId).stream()
                 .filter(a -> Boolean.TRUE.equals(a.getHasFile()))
-                .count();
+                .toList();
     }
 
     /**
@@ -102,8 +140,7 @@ public class PieceJointeSupport {
      */
     public URI urlTelechargement(UUID porteurId, UUID pieceId, String libellePorteur) {
         AdmAttachedFile piece = fileRepository.findByIdAndCategoryId(pieceId, porteurId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Pièce jointe introuvable pour " + libellePorteur + ": " + pieceId));
+                .orElseThrow(() -> new ResourceNotFoundException(PIECE_INTROUVABLE.formatted(libellePorteur, pieceId)));
 
         AppFileObject objet = fileObjectRepository
                 .findByAdmAttachedFileIdAndDeletedAtIsNull(pieceId)
@@ -116,63 +153,65 @@ public class PieceJointeSupport {
     }
 
     /**
-     * L'appelant a vérifié le porteur ; {@code category} est cosmétique (la relecture ne filtre que
-     * sur {@code CategoryId}). <b>S3 d'abord, la base ensuite</b> : au pire un objet orphelin, jamais
+     * L'appelant a vérifié le porteur. <b>S3 d'abord, la base ensuite</b> : au pire un objet orphelin, jamais
      * une ligne pointant vers le vide — voir {@code FEATURE-s3-storage.md} §3.4.
      */
     @Transactional
-    public PieceJointeDto deposer(UUID porteurId, PorteurPieceJointe porteur, String category,
-                                  MultipartFile fichier, String description, UUID typeId,
+    public PieceJointeDto deposer(PorteurDepot porteur, MultipartFile fichier, SaisiePieceJointe saisie,
                                   AuthenticatedUser principal) {
-        if (fichier == null || fichier.isEmpty()) {
-            throw new InvalidRequestException("Le fichier est requis et ne peut pas être vide");
-        }
+        AdmAttachedFile piece = new AdmAttachedFile();
+        piece.setId(UUID.randomUUID());
+        piece.setUserCreateDateTime(LocalDateTime.now(clock));
+        piece.setUserCreate(utilisateurAffiche.nom(principal));
+        return ecrire(piece, piece.getId(), porteur, fichier, saisie, principal);
+    }
+
+    /**
+     * Même PKey, contenu sous une <b>nouvelle</b> clé S3 : réécrire l'ancienne écraserait l'objet avant le commit.
+     * L'ancien objet reste orphelin, comme après une suppression logique.
+     */
+    @Transactional
+    public PieceJointeDto remplacer(UUID pieceId, PorteurDepot porteur, MultipartFile fichier, SaisiePieceJointe saisie,
+                                    AuthenticatedUser principal) {
+        AdmAttachedFile piece = fileRepository.findByIdAndCategoryId(pieceId, porteur.id())
+                .orElseThrow(() -> new ResourceNotFoundException(PIECE_INTROUVABLE.formatted(porteur.type().libelle(),
+                        pieceId)));
+        piece.setUserUpdateDateTime(LocalDateTime.now(clock));
+        piece.setUserUpdate(utilisateurAffiche.nom(principal));
+        return ecrire(piece, UUID.randomUUID(), porteur, fichier, saisie, principal);
+    }
+
+    private PieceJointeDto ecrire(AdmAttachedFile piece, UUID idCle, PorteurDepot porteur, MultipartFile fichier,
+                                  SaisiePieceJointe saisie, AuthenticatedUser principal) {
+        Contenu contenu = lire(fichier, saisie.description());
         AdmAttachedFileType type = null;
-        if (typeId != null) {
-            type = typeRepository.findById(typeId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Type de pièce jointe introuvable: " + typeId));
+        if (saisie.typeId() != null) {
+            type = typeRepository.findById(saisie.typeId()).orElseThrow(() -> new ResourceNotFoundException(
+                    "Type de pièce jointe introuvable: " + saisie.typeId()));
         }
 
-        String nomOriginal = fichier.getOriginalFilename();
-        String extension = "";
-        if (StringUtils.hasText(nomOriginal) && nomOriginal.contains(".")) {
-            extension = CleStockage.normaliserExtension(
-                    nomOriginal.substring(nomOriginal.lastIndexOf('.')));
-        }
-        String legende = legende(description, nomOriginal);
-
-        UUID pieceId = UUID.randomUUID();
-        String cle = CleStockage.construire(stockageProperties.getPrefix(), porteur, porteurId,
-                pieceId, extension);
-        String contentType = ContentTypeParExtension.resolve(extension).toString();
-
-        byte[] contenu;
-        try {
-            contenu = fichier.getBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Lecture du fichier échouée", e);
-        }
-
-        ObjetStocke stocke = stockage.deposer(cle, contenu, contentType,
-                nomTelechargement(legende, extension));
+        String cle = CleStockage.construire(stockageProperties.getPrefix(), porteur.type(), porteur.id(), idCle,
+                contenu.extension());
+        ObjetStocke stocke = stockage.deposer(cle, contenu.octets(),
+                ContentTypeParExtension.resolve(contenu.extension()).toString(),
+                nomTelechargement(contenu.legende(), contenu.extension()));
         supprimerSiTransactionAnnulee(cle);
 
-        AdmAttachedFile entity = new AdmAttachedFile();
-        entity.setId(pieceId);
-        entity.setCategory(category);
-        entity.setCategoryId(porteurId);
-        entity.setDescription(legende);
-        entity.setExtension(extension);
-        entity.setAdmAttachedFileTypeId(typeId);
-        entity.setUserCreateDateTime(LocalDateTime.now(clock));
-        entity.setUserCreate(utilisateurAffiche.nom(principal));
-        entity = fileRepository.save(entity);
+        piece.setCategory(porteur.category());
+        piece.setCategoryId(porteur.id());
+        piece.setCategoryDescription(porteur.categoryDescription());
+        piece.setDescription(contenu.legende());
+        piece.setExtension(contenu.extension());
+        piece.setAdmAttachedFileTypeId(saisie.typeId());
+        piece.setGroupe(StringUtils.hasText(saisie.groupe()) ? saisie.groupe().trim() : null);
+        AdmAttachedFile ecrite = fileRepository.save(piece);
+        ecrite.setLibelleAudit(porteur.code());
 
         // OMRAN ne lit que la colonne binaire de la source ; no-op en mono-base.
-        depotBinaireSource.deposer(pieceId, contenu);
+        depotBinaireSource.deposer(ecrite.getId(), contenu.octets());
 
-        AppFileObject objet = new AppFileObject();
-        objet.setAdmAttachedFileId(pieceId);
+        AppFileObject objet = fileObjectRepository.findById(ecrite.getId()).orElseGet(AppFileObject::new);
+        objet.setAdmAttachedFileId(ecrite.getId());
         objet.setStorageKey(stocke.cle());
         objet.setContentType(stocke.contentType());
         objet.setSizeBytes(stocke.tailleOctets());
@@ -181,9 +220,32 @@ public class PieceJointeSupport {
         objet.setUploadedBy(utilisateurAffiche.nom(principal));
         fileObjectRepository.save(objet);
 
-        return new PieceJointeDto(entity.getId(), entity.getDescription(), entity.getCategory(),
-                Champs.de(type, AdmAttachedFileType::getDescription), entity.getExtension(),
-                entity.getUserCreateDateTime(), entity.getUserCreate());
+        return new PieceJointeDto(ecrite.getId(), ecrite.getDescription(), ecrite.getCategory(),
+                Champs.de(type, AdmAttachedFileType::getDescription), ecrite.getExtension(),
+                ecrite.getUserCreateDateTime(), ecrite.getUserCreate(), ecrite.getGroupe());
+    }
+
+    /** Vide → 400, plus de 50 Mo → 413, extension absente ou hors liste blanche → 400 nommant la liste. */
+    private static Contenu lire(MultipartFile fichier, String description) {
+        if (fichier == null || fichier.isEmpty()) {
+            throw new InvalidRequestException("Le fichier est requis et ne peut pas être vide");
+        }
+        if (fichier.getSize() > TAILLE_MAX) {
+            throw new MaxUploadSizeExceededException(TAILLE_MAX);
+        }
+        String nomOriginal = fichier.getOriginalFilename();
+        String extension = StringUtils.hasText(nomOriginal) && nomOriginal.contains(".")
+                ? CleStockage.normaliserExtension(nomOriginal.substring(nomOriginal.lastIndexOf('.')))
+                : "";
+        if (!ContentTypeParExtension.admise(extension)) {
+            throw new InvalidRequestException("Type de fichier non admis (%s). Extensions admises : %s."
+                    .formatted(Objects.toString(nomOriginal, ""), ContentTypeParExtension.ADMISES));
+        }
+        try {
+            return new Contenu(fichier.getBytes(), extension, legende(description, nomOriginal));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Lecture du fichier échouée", e);
+        }
     }
 
     /**
@@ -192,8 +254,7 @@ public class PieceJointeSupport {
      */
     public AppFileObject exigerFichier(UUID porteurId, UUID pieceId, String libellePorteur) {
         fileRepository.findByIdAndCategoryId(pieceId, porteurId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Pièce jointe introuvable pour " + libellePorteur + ": " + pieceId));
+                .orElseThrow(() -> new ResourceNotFoundException(PIECE_INTROUVABLE.formatted(libellePorteur, pieceId)));
 
         return fileObjectRepository.findByAdmAttachedFileIdAndDeletedAtIsNull(pieceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -202,32 +263,49 @@ public class PieceJointeSupport {
 
     /**
      * Suppression logique ; ni la ligne {@code AdmAttachedFile} ni l'objet S3 ne sont supprimés
-     * ({@code FEATURE-suppression-pieces-jointes.md} §5 R1–R2).
+     * ({@code FEATURE-suppression-pieces-jointes.md} §5 R1–R2). {@code codePorteur} = libellé d'audit.
      */
     @Transactional
-    public void marquerSupprime(AppFileObject objet, AuthenticatedUser principal) {
-        appliquerSuppressionLogique(objet, principal);
+    public void marquerSupprime(AppFileObject objet, String codePorteur, AuthenticatedUser principal) {
+        appliquerSuppressionLogique(objet, codePorteur, principal);
     }
 
     @Transactional
-    public void supprimer(UUID porteurId, UUID pieceId, String libellePorteur,
-                          AuthenticatedUser principal) {
-        appliquerSuppressionLogique(exigerFichier(porteurId, pieceId, libellePorteur), principal);
+    public void supprimer(PorteurDepot porteur, UUID pieceId, AuthenticatedUser principal) {
+        appliquerSuppressionLogique(exigerFichier(porteur.id(), pieceId, porteur.type().libelle()), porteur.code(),
+                principal);
     }
 
-    private void appliquerSuppressionLogique(AppFileObject objet, AuthenticatedUser principal) {
-        objet.setDeletedAt(LocalDateTime.now(clock));
-        objet.setDeletedBy(utilisateurAffiche.nom(principal));
+    private void appliquerSuppressionLogique(AppFileObject objet, String codePorteur, AuthenticatedUser principal) {
+        String auteur = utilisateurAffiche.nom(principal);
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        // La pièce est datée et marquée pour que l'audit écrive « Deleted » (FEATURE-patrimoine-article-onglets.md §11).
+        fileRepository.findById(objet.getAdmAttachedFileId()).ifPresent(piece -> {
+            piece.setUserUpdate(auteur);
+            piece.setUserUpdateDateTime(maintenant);
+            piece.setLibelleAudit(codePorteur);
+            piece.setSuppressionLogique(true);
+        });
+        objet.setDeletedAt(maintenant);
+        objet.setDeletedBy(auteur);
         // saveAndFlush : hasFile est une @Formula sur AppFileObject, hors des espaces d'auto-flush
         // d'Hibernate ; sans flush, une relecture dans la même transaction voit encore la pièce.
         fileObjectRepository.saveAndFlush(objet);
     }
 
+    /** Légende par défaut = nom d'origine ; séparateurs de chemin et caractères de contrôle retirés. */
     private static String legende(String description, String nomOriginal) {
-        if (StringUtils.hasText(description)) {
-            return description;
-        }
-        return StringUtils.hasText(nomOriginal) ? nomOriginal : "Pièce jointe";
+        String brute = StringUtils.hasText(description) ? description : nomOriginal;
+        String propre = brute == null ? "" : assainir(brute);
+        return propre.isEmpty() ? "Pièce jointe" : propre;
+    }
+
+    private static String assainir(String texte) {
+        StringBuilder propre = new StringBuilder(texte.length());
+        texte.codePoints()
+                .filter(c -> c != '/' && c != '\\' && !Character.isISOControl(c))
+                .forEach(propre::appendCodePoint);
+        return propre.toString().trim();
     }
 
     private void supprimerSiTransactionAnnulee(String cle) {
@@ -256,6 +334,6 @@ public class PieceJointeSupport {
     public static PieceJointeDto toDto(AdmAttachedFileSummary a) {
         String type = Champs.de(a.getType(), AdmAttachedFileType::getDescription);
         return new PieceJointeDto(a.getId(), a.getDescription(), a.getCategory(), type, a.getExtension(),
-                a.getUserCreateDateTime(), a.getUserCreate());
+                a.getUserCreateDateTime(), a.getUserCreate(), a.getGroupe());
     }
 }
