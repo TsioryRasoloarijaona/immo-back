@@ -1,5 +1,6 @@
 package com.tsix.immocrm.web;
 
+import com.tsix.immocrm.domain.ColonneArticle;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ColonneEncaissement;
 import com.tsix.immocrm.domain.ColonneEtatVentes;
@@ -54,6 +55,8 @@ public class ColonnesJacksonConfig {
                                 ColonneSuiviCommerciaux.ID.nom()))
                 .addFilter(ColonneSuiviAffectations.FILTRE,
                         new SelectionColonnesPropertyFilter(Colonnes.nomsParDefaut(ColonneSuiviAffectations.class),
-                                ColonneSuiviAffectations.ID.nom())));
+                                ColonneSuiviAffectations.ID.nom()))
+                .addFilter(ColonneArticle.FILTRE, new SelectionColonnesPropertyFilter(
+                        Colonnes.nomsParDefaut(ColonneArticle.class), ColonneArticle.ID.nom())));
     }
 }

@@ -60,15 +60,80 @@ class EcritureArticle {
     }
 
     StkItem creer(ArticleEcritureDto d) {
-        if (d.trancheId() == null) {
-            throw new InvalidRequestException("La tranche est obligatoire.");
-        }
-        CfgTranche tranche = tranches.trancheVisible(d.trancheId())
-                .orElseThrow(() -> new InvalidRequestException("Tranche inconnue : " + d.trancheId()));
-        StkItem article = nouveau(tranche, references.vocation(d.vocationId()), false);
+        StkItem article = nouveau(trancheSaisie(d), references.vocation(d.vocationId()), false);
         article.setIsTitled(ou(d.estTitre(), true));
         saisir(article, d, true);
         return article;
+    }
+
+    /** Écran Sous-articles, OMRAN {@code UnderItem()} : sous-article libre, ou rattaché si {@code parentId}. */
+    StkItem creerLibre(ArticleEcritureDto d) {
+        CfgTranche tranche = trancheSaisie(d);
+        StkVocation vocation = references.vocation(d.vocationId());
+        StkItem parent = d.parentId() == null ? null : parentPour(d.parentId(), tranche, vocation);
+        exigerParent(parent, d.toujoursAffecte());
+        StkItem sous = nouveau(tranche, vocation, true);
+        sous.setParent(parent);
+        sous.setIsTitled(ou(d.estTitre(), false));
+        sous.setAlwaysAffected(ou(d.toujoursAffecte(), false));
+        saisir(sous, d, true);
+        if (parent != null) {
+            reecrireParent(parent);
+        }
+        return sous;
+    }
+
+    /** Un rattaché ne se modifie que depuis la fiche de son parent ({@code UnderItemList.cs}) ; {@code parentId} = affecter. */
+    void modifierLibre(StkItem sous, ArticleEcritureDto d) {
+        if (sous.getParent() != null) {
+            throw new ConflictException(("Cet article est attaché à l'article parent %s il sera edité en lecture seule. "
+                    + "Pour le modifier il faut l'ouvrir à partir de la fiche de son article parent !")
+                    .formatted(sous.getParent().getCode()));
+        }
+        if (FicheArticle.vidages(d).contient("parentId")) {
+            throw new InvalidRequestException("parentId : un sous-article se désaffecte depuis la fiche de son article.");
+        }
+        StkVocation vocation = d.vocationId() == null ? sous.getStkVocation() : references.vocation(d.vocationId());
+        StkItem parent = d.parentId() == null ? null : parentPour(d.parentId(), sous.getStkHierarchy(), vocation);
+        exigerParent(parent, d.toujoursAffecte());
+        modifier(sous, d);
+        if (parent != null) {
+            affecter(parent, sous, ou(d.toujoursAffecte(), false));
+        }
+    }
+
+    private CfgTranche trancheSaisie(ArticleEcritureDto d) {
+        if (d.trancheId() == null) {
+            throw new InvalidRequestException("La tranche est obligatoire.");
+        }
+        return tranches.trancheVisible(d.trancheId())
+                .orElseThrow(() -> new InvalidRequestException("Tranche inconnue : " + d.trancheId()));
+    }
+
+    /** OMRAN ne contrôle ni la tranche ni la vocation du parent : nous oui (FEATURE-patrimoine-sous-articles.md §0, R4-3). */
+    private StkItem parentPour(UUID parentId, CfgTranche tranche, StkVocation vocation) {
+        StkItem parent = items.findVisible(parentId)
+                .orElseThrow(() -> new InvalidRequestException("Article parent inconnu : " + parentId));
+        if (!Objects.equals(Champs.de(parent.getStkHierarchy(), CfgTranche::getId), Champs.de(tranche, CfgTranche::getId))) {
+            throw new InvalidRequestException("L'article parent " + parent.getCode() + " n'est pas de la tranche du sous-article.");
+        }
+        exigerPrincipal(parent);
+        exigerMemeVocation(parent, vocation);
+        refuserSiOccupe(parent);
+        return parent;
+    }
+
+    /** Un rattachement nouveau exige la vocation du parent (R4-3) ; les couples existants ne sont pas repris. */
+    private static void exigerMemeVocation(StkItem parent, StkVocation vocation) {
+        if (!Objects.equals(Champs.de(parent.getStkVocation(), StkVocation::getId), Champs.de(vocation, StkVocation::getId))) {
+            throw new InvalidRequestException("L'article parent " + parent.getCode() + " n'a pas la vocation du sous-article.");
+        }
+    }
+
+    private static void exigerParent(StkItem parent, Boolean toujoursAffecte) {
+        if (parent == null && Boolean.TRUE.equals(toujoursAffecte)) {
+            throw new InvalidRequestException("Vous ne pouvez pas toujours affecter un sous article sans article parent !");
+        }
     }
 
     StkItem creerSousArticle(StkItem parent, ArticleEcritureDto d) {
@@ -89,7 +154,7 @@ class EcritureArticle {
         if (NATURE_TERRAIN.equalsIgnoreCase(Champs.de(article.getStkKind(), StkKind::getCode))) {
             throw new InvalidRequestException("Les terrains se modifient depuis la fiche terrain.");
         }
-        if (Boolean.TRUE.equals(article.getIsUnderItem())) {
+        if (Boolean.TRUE.equals(article.getIsUnderItem()) && article.getParent() != null) {
             refuserTrancheEtVocation(d);
         }
         UUID trancheActuelle = Champs.de(article.getStkHierarchy(), CfgTranche::getId);
@@ -104,6 +169,11 @@ class EcritureArticle {
         }
         if (d.vocationId() != null) {
             article.setStkVocation(references.vocation(d.vocationId()));
+        }
+        // Avec parentId (écran Sous-articles), « toujours affecté » suit l'affectation qui vient après.
+        if (d.toujoursAffecte() != null && d.parentId() == null) {
+            exigerParent(article.getParent(), d.toujoursAffecte());
+            article.setAlwaysAffected(d.toujoursAffecte());
         }
         boolean prixRecalcules = saisir(article, d, false, v);
         if (prixRecalcules && article.getParent() != null) {
@@ -136,6 +206,7 @@ class EcritureArticle {
     /** {@code BuildItem:AffectUnderItem} : même tranche, sous-article libre, article non occupé. */
     void affecter(StkItem parent, StkItem sous, boolean toujoursAffecte) {
         exigerPrincipal(parent);
+        exigerMemeVocation(parent, sous.getStkVocation());
         boolean libre = Objects.equals(Champs.de(sous.getStkHierarchy(), CfgTranche::getId),
                 Champs.de(parent.getStkHierarchy(), CfgTranche::getId))
                 && Boolean.TRUE.equals(sous.getIsUnderItem()) && sous.getParent() == null

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.EtatArticle;
 import com.tsix.immocrm.domain.StatutArticle;
 
 import java.math.BigDecimal;
@@ -14,5 +15,6 @@ import java.util.UUID;
 public record FiltresArticle(List<UUID> trancheIds, UUID parentId, boolean topLevelOnly, StatutArticle statut,
                              List<UUID> categorieIds, List<UUID> typeIds, String search, boolean entitesActivesOnly,
                              UUID entiteId, UUID natureId, UUID vocationId, UUID etageId,
-                             BigDecimal prixDe, BigDecimal prixA, BigDecimal surfaceDe, BigDecimal surfaceA) {
+                             BigDecimal prixDe, BigDecimal prixA, BigDecimal surfaceDe, BigDecimal surfaceA,
+                             boolean sousArticlesSeuls, String codeParent, EtatArticle etat) {
 }
