@@ -209,9 +209,11 @@ class EtatVentesMontantsTest {
     }
 
     private void prixDuDossier(ComFolder d) {
-        d.setItemPriceHT(new BigDecimal("500001"));
+        d.setItemPriceHT(new BigDecimal("520001"));
+        d.setItemPriceAfterHT(new BigDecimal("500001"));
         d.setItemPriceAfter(new BigDecimal("600002"));
-        d.setUnderItemsPriceHT(new BigDecimal("70003"));
+        d.setUnderItemsPriceHT(new BigDecimal("73003"));
+        d.setUnderItemsPriceAfterHT(new BigDecimal("70003"));
         d.setUnderItemsPriceAfter(new BigDecimal("84004"));
         d.setPriceHT(new BigDecimal("570005"));
         d.setPrice(new BigDecimal("684006"));
