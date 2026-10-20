@@ -15,6 +15,7 @@ import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.LigneSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.StatutSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalCategorieSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalGeneralSynthese;
+import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -155,6 +156,14 @@ public class EtatVentesService {
         return new SyntheseEtatVentesDto(colonnesStatut(general.keySet()), lignes,
                 new SyntheseEtatVentesDto.TotauxSynthese(parCategorie(lignes),
                         new TotalGeneralSynthese(total(general), general)));
+    }
+
+    public SyntheseVendusLibresDto syntheseVendusLibres(FiltresEtatVentes filtres) {
+        throw new UnsupportedOperationException();
+    }
+
+    public static List<LigneTableurVendusLibres> lignesTableur(SyntheseVendusLibresDto synthese) {
+        throw new UnsupportedOperationException();
     }
 
     private static List<TotalCategorieSynthese> parCategorie(List<LigneSynthese> lignes) {
