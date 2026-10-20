@@ -44,6 +44,8 @@ public class ReferentielController {
 
     private static final String POUR_SOUS_ARTICLE = "Renseigné : nature Bâtiment et « pour les sous-articles » égal "
             + "à la valeur. Absent = toutes.";
+    private static final String NATURE = "Code de la nature (StkKind), ex. TER : ne garde que ses références ; "
+            + "remplace Bâtiment si pourSousArticle est renseigné. Code inconnu = 400. Absent = toutes.";
 
     private final ReferentielService referentielService;
 
@@ -186,14 +188,16 @@ public class ReferentielController {
 
     @GetMapping("/categories-bien")
     public List<ReferentielItemDto> getCategoriesBien(
-            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle) {
-        return referentielService.categoriesBien(pourSousArticle);
+            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle,
+            @Parameter(description = NATURE, example = "TER") @RequestParam(required = false) String nature) {
+        return referentielService.categoriesBien(pourSousArticle, nature);
     }
 
     @GetMapping("/types-bien")
     public List<ReferentielItemDto> getTypesBien(
-            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle) {
-        return referentielService.typesBien(pourSousArticle);
+            @Parameter(description = POUR_SOUS_ARTICLE) @RequestParam(required = false) Boolean pourSousArticle,
+            @Parameter(description = NATURE, example = "TER") @RequestParam(required = false) String nature) {
+        return referentielService.typesBien(pourSousArticle, nature);
     }
 
     @GetMapping("/types-relation-contact")

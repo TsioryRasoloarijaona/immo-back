@@ -8,5 +8,7 @@ import java.util.UUID;
 
 public interface StkItemTypeRepository extends JpaRepository<StkItemType, UUID> {
 
+    List<StkItemType> findByStkKind_Code(String natureCode);
+
     List<StkItemType> findByStkKind_CodeAndForUnderItem(String natureCode, Boolean pourSousArticle);
 }
