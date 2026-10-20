@@ -37,9 +37,10 @@ public record LigneEtatVentesDto(
         @Schema(description = "Prix de vente − réglé (prixReste de la liste des dossiers) ; null si libre.")
         BigDecimal resteARegler,
 
-        @Schema(description = "ComFolder.ItemPriceHT ; libre : SalePrice / (1 + Vat).") BigDecimal prixArticleHt,
+        @Schema(description = "HT après remise : ComFolder.ItemPriceAfterHT ; libre : SalePrice / (1 + Vat).")
+        BigDecimal prixArticleHt,
         @Schema(description = "ComFolder.ItemPriceAfter ; libre : SalePrice.") BigDecimal prixArticleTtc,
-        @Schema(description = "ComFolder.UnderItemsPriceHT ; libre : (ComSalePrice − SalePrice) / (1 + Vat).")
+        @Schema(description = "HT après remise : ComFolder.UnderItemsPriceAfterHT ; libre : (ComSalePrice − SalePrice) / (1 + Vat).")
         BigDecimal prixSousArticlesHt,
         @Schema(description = "ComFolder.UnderItemsPriceAfter ; libre : ComSalePrice − SalePrice.")
         BigDecimal prixSousArticlesTtc,
