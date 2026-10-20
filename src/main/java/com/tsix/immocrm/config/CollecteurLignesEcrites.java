@@ -36,7 +36,7 @@ public class CollecteurLignesEcrites
             "CfgShareholder", "CfgGroupShareholder", "CfgGroupShareholderLine", "CfgCompany", "CfgCompanyShareholder",
             "CfgProject", "CfgProjectZone", "CfgTranche", "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
             "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
-            "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "CfgTier", "ComAction",
+            "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "StkHierarchyPlan", "CfgTier", "ComAction",
             "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",

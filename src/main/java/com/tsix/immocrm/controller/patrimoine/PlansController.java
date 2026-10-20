@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.patrimoine.plans.PlanArticleDto;
 import com.tsix.immocrm.dto.patrimoine.plans.PlanDto;
 import com.tsix.immocrm.dto.patrimoine.plans.TraceDto;
 import com.tsix.immocrm.dto.patrimoine.plans.TrancheAvecPlansDto;
+import com.tsix.immocrm.services.patrimoine.plans.ImageDataUri;
 import com.tsix.immocrm.services.patrimoine.plans.ImportPlansSvg;
 import com.tsix.immocrm.services.patrimoine.plans.PlansService;
 import com.tsix.immocrm.services.patrimoine.plans.PurgePlans;
@@ -77,7 +78,7 @@ public class PlansController {
         if (requete.checkNotModified(etag)) {
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etag).build();
         }
-        PlansService.ImagePlan image = plans.image(planId);
+        ImageDataUri image = plans.image(planId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(image.contentType()))
                 .eTag(etag)

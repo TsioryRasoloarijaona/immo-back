@@ -15,6 +15,7 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
 import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
 import com.tsix.immocrm.entities.stk.StkContenance;
+import com.tsix.immocrm.entities.stk.StkHierarchyPlan;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemContenance;
 import com.tsix.immocrm.entities.stk.StkItemVue;
@@ -63,7 +64,7 @@ public final class RegistreAuditOmran {
             CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
             StkItemVue.class, StkItemContenance.class,
-            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class);
+            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class, StkHierarchyPlan.class);
 
     private RegistreAuditOmran() {
     }
@@ -114,6 +115,7 @@ public final class RegistreAuditOmran {
             case CfgTrancheFolderEntity f -> new Trace("Yes.Cfg.CfgTrancheFolderEntity", "Définition des finalisations",
                     Objects.toString(Champs.de(f.getStrFolderEntity(), StrEntity::getId), ""), null, null);
             case ComDocument ignore -> new Trace("Yes.Com.Sales.ComDocument", "Financement", "Financement", null, null);
+            case StkHierarchyPlan p -> new Trace("Yes.Cfg.StkHierarchyPlan", "Plan", p.getCode(), null, null);
             default -> null;
         });
     }

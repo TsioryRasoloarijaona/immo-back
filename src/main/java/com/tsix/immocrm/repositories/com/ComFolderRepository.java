@@ -18,6 +18,10 @@ import java.util.UUID;
 
 public interface ComFolderRepository extends JpaRepository<ComFolder, UUID>, JpaSpecificationExecutor<ComFolder> {
 
+    /** Tous les dossiers des articles, statut et client chargés : l'appelant garde ceux dont le statut est actif. */
+    @Query("SELECT f FROM ComFolder f LEFT JOIN FETCH f.strStatus LEFT JOIN FETCH f.cfgCustomer WHERE f.stkItem.id IN :articleIds")
+    List<ComFolder> dossiersDesArticles(@Param("articleIds") List<UUID> articleIds);
+
     /**
      * Charge d'un coup les associations que {@code DossierService.toListItem} lit sur chaque ligne : sans
      * ce graphe, la liste est un N+1. Uniquement des {@code ToOne} : une collection ici ferait paginer en mémoire.
