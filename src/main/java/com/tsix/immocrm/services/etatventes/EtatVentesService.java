@@ -5,6 +5,8 @@ import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ColonneEtatVentes;
 import com.tsix.immocrm.domain.ColonneInconnueException;
 import com.tsix.immocrm.domain.Colonnes;
+import com.tsix.immocrm.domain.EtatVente;
+import com.tsix.immocrm.domain.FamilleArticle;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TriGroupe;
@@ -15,6 +17,9 @@ import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.LigneSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.StatutSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalCategorieSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalGeneralSynthese;
+import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto;
+import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto.CompteVendusLibres;
+import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto.FamilleVendusLibres;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -41,6 +46,7 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -57,10 +63,13 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -90,6 +99,8 @@ public class EtatVentesService {
     private static final String CATEGORIE = "categorie";
     private static final String DOSSIER = "dossier";
     private static final String STATUT_CODE = "statutCode";
+    private static final String FAMILLE = "famille";
+    private static final String ETAT_VENTE = "etatVente";
     private static final String CODE = "code";
     private static final String DESCRIPTION = "description";
     private static final String ID = "id";
@@ -122,24 +133,13 @@ public class EtatVentesService {
     // ---------------------------------------------------------------- synthèse
 
     public SyntheseEtatVentesDto synthese(FiltresEtatVentes filtres) {
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
-        Root<StkItemEtatVentes> root = cq.from(StkItemEtatVentes.class);
-        Join<StkItemEtatVentes, CfgTranche> tranche = root.join(TRANCHE);
-        Join<StkItemEtatVentes, StkItemCategory> categorie = root.join(CATEGORIE);
-        List<Expression<?>> cles = List.of(tranche.get(ID), tranche.get(CODE), tranche.get(DESCRIPTION),
-                categorie.get(ID), categorie.get(CODE), categorie.get(DESCRIPTION), root.get(STATUT_CODE));
-        List<Selection<?>> selections = new ArrayList<>(cles);
-        selections.add(cb.count(root));
-        cq.multiselect(selections)
-                .where(specification(filtres).toPredicate(root, cq, cb))
-                .groupBy(cles)
-                .orderBy(cb.asc(tranche.get(CODE)), cb.asc(categorie.get(CODE)));
-
         Map<List<UUID>, Tuple> entetes = new LinkedHashMap<>();
         Map<List<UUID>, Map<String, Long>> comptes = new HashMap<>();
-        for (Tuple t : em.createQuery(cq).getResultList()) {
-            List<UUID> cle = Arrays.asList(t.get(0, UUID.class), t.get(3, UUID.class));
+        for (Tuple t : compter(filtres, root -> {
+            Join<StkItemEtatVentes, StkItemCategory> categorie = root.join(CATEGORIE);
+            return List.of(categorie.get(CODE), categorie.get(ID), categorie.get(DESCRIPTION), root.get(STATUT_CODE));
+        })) {
+            List<UUID> cle = Arrays.asList(t.get(0, UUID.class), t.get(4, UUID.class));
             entetes.putIfAbsent(cle, t);
             comptes.computeIfAbsent(cle, k -> new LinkedHashMap<>()).merge(t.get(6, String.class), t.get(7, Long.class),
                     Long::sum);
@@ -148,13 +148,115 @@ public class EtatVentesService {
             Tuple t = e.getValue();
             Map<String, Long> parStatut = comptes.get(e.getKey());
             return new LigneSynthese(t.get(0, UUID.class), t.get(1, String.class), t.get(2, String.class),
-                    t.get(3, UUID.class), t.get(4, String.class), t.get(5, String.class), total(parStatut), parStatut);
+                    t.get(4, UUID.class), t.get(3, String.class), t.get(5, String.class), total(parStatut), parStatut);
         }).toList();
 
         Map<String, Long> general = fusion(lignes.stream().map(LigneSynthese::parStatut));
         return new SyntheseEtatVentesDto(colonnesStatut(general.keySet()), lignes,
                 new SyntheseEtatVentesDto.TotauxSynthese(parCategorie(lignes),
                         new TotalGeneralSynthese(total(general), general)));
+    }
+
+    /**
+     * Nombre d'articles du filtre par tranche puis {@code cles}, trié dans cet ordre. Colonnes du tuple : id, code et
+     * libellé de tranche, les {@code cles}, le nombre.
+     */
+    private List<Tuple> compter(FiltresEtatVentes filtres,
+                                Function<Root<StkItemEtatVentes>, List<Expression<?>>> autresCles) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<StkItemEtatVentes> root = cq.from(StkItemEtatVentes.class);
+        Join<StkItemEtatVentes, CfgTranche> tranche = root.join(TRANCHE);
+        List<Expression<?>> cles = new ArrayList<>(List.of(tranche.get(ID), tranche.get(CODE),
+                tranche.get(DESCRIPTION)));
+        List<Expression<?>> autres = autresCles.apply(root);
+        cles.addAll(autres);
+        List<Selection<?>> selections = new ArrayList<>(cles);
+        selections.add(cb.count(root));
+        List<Order> ordre = new ArrayList<>(List.of(cb.asc(tranche.get(CODE))));
+        autres.forEach(c -> ordre.add(cb.asc(c)));
+        cq.multiselect(selections)
+                .where(specification(filtres).toPredicate(root, cq, cb))
+                .groupBy(cles)
+                .orderBy(ordre);
+        return em.createQuery(cq).getResultList();
+    }
+
+    /** Une seule requête de comptage, la base de la liste (R1) ; l'état et la famille viennent du {@code @Subselect}. */
+    public SyntheseVendusLibresDto syntheseVendusLibres(FiltresEtatVentes filtres) {
+        Map<UUID, Tuple> tranches = new LinkedHashMap<>();
+        Map<UUID, Map<FamilleArticle, Comptes>> parTranche = new HashMap<>();
+        for (Tuple t : compter(filtres, root -> List.of(root.get(FAMILLE), root.get(ETAT_VENTE), root.get(STATUT_CODE)))) {
+            UUID id = t.get(0, UUID.class);
+            tranches.putIfAbsent(id, t);
+            Comptes c = Comptes.de(t.get(4, EtatVente.class), SANS_STATUT.equals(t.get(5, String.class)),
+                    t.get(6, Long.class));
+            parTranche.computeIfAbsent(id, k -> new EnumMap<>(FamilleArticle.class))
+                    .merge(t.get(3, FamilleArticle.class), c, Comptes::plus);
+        }
+        List<CompteVendusLibres> lignes = new ArrayList<>();
+        List<CompteVendusLibres> totalTranche = new ArrayList<>();
+        Map<FamilleArticle, Comptes> parFamille = new EnumMap<>(FamilleArticle.class);
+        tranches.forEach((id, t) -> {
+            String code = t.get(1, String.class);
+            String libelle = t.get(2, String.class);
+            Map<FamilleArticle, Comptes> familles = parTranche.get(id);
+            familles.forEach((famille, c) -> {
+                lignes.add(c.vers(id, code, libelle, famille));
+                parFamille.merge(famille, c, Comptes::plus);
+            });
+            totalTranche.add(Comptes.somme(familles.values()).vers(id, code, libelle, null));
+        });
+        List<FamilleVendusLibres> familles = Arrays.stream(FamilleArticle.values())
+                .filter(f -> CollectionUtils.isEmpty(filtres.famille()) || filtres.famille().contains(f))
+                .map(FamilleVendusLibres::de).toList();
+        return new SyntheseVendusLibresDto(familles, lignes, totalTranche,
+                parFamille.entrySet().stream().map(e -> e.getValue().vers(null, null, null, e.getKey())).toList(),
+                Comptes.somme(parFamille.values()).vers(null, null, null, null));
+    }
+
+    /** Lignes du classeur, dans l'ordre du JSON : familles d'une tranche, son total, puis le total général. */
+    public static List<LigneTableurVendusLibres> lignesTableur(SyntheseVendusLibresDto synthese) {
+        List<LigneTableurVendusLibres> lignes = new ArrayList<>();
+        for (CompteVendusLibres total : synthese.totalTranche()) {
+            synthese.lignes().stream().filter(l -> total.trancheId().equals(l.trancheId())).forEach(l -> lignes.add(
+                    LigneTableurVendusLibres.de(l.trancheCode(), l.familleCode().libelle(), l)));
+            lignes.add(LigneTableurVendusLibres.de("Total tranche", null, total));
+        }
+        lignes.add(LigneTableurVendusLibres.de("Total général", null, synthese.general()));
+        return lignes;
+    }
+
+    /** Comptes d'une cellule ; {@link #vers} porte la seule règle de pourcentage (R5), reprise par l'export. */
+    private record Comptes(long libres, long reserves, long vendus, long sansStatut) {
+
+        static Comptes de(EtatVente etat, boolean sansStatut, long n) {
+            return new Comptes(etat == EtatVente.LIBRE ? n : 0, etat == EtatVente.RESERVE ? n : 0,
+                    etat == EtatVente.VENDU ? n : 0, sansStatut ? n : 0);
+        }
+
+        static Comptes somme(Collection<Comptes> comptes) {
+            return comptes.stream().reduce(new Comptes(0, 0, 0, 0), Comptes::plus);
+        }
+
+        Comptes plus(Comptes o) {
+            return new Comptes(libres + o.libres, reserves + o.reserves, vendus + o.vendus,
+                    sansStatut + o.sansStatut);
+        }
+
+        CompteVendusLibres vers(UUID trancheId, String trancheCode, String trancheLibelle, FamilleArticle famille) {
+            long total = libres + reserves + vendus;
+            return new CompteVendusLibres(trancheId, trancheCode, trancheLibelle, famille, libres, reserves, vendus,
+                    sansStatut, total, pct(libres, total), pct(reserves, total), pct(vendus, total));
+        }
+
+        private static double pct(long n, long total) {
+            if (total == 0) {
+                return 0;
+            }
+            return BigDecimal.valueOf(n * 100L).divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
     }
 
     private static List<TotalCategorieSynthese> parCategorie(List<LigneSynthese> lignes) {
@@ -307,6 +409,8 @@ public class EtatVentesService {
         dansLaListe(p, root.get(TRANCHE).get(ID), f.trancheId());
         dansLaListe(p, root.get(CATEGORIE).get(ID), f.categorieId());
         dansLaListe(p, root.get("type").get(ID), f.typeId());
+        dansLaListe(p, root.get(FAMILLE), f.famille());
+        dansLaListe(p, root.get(ETAT_VENTE), f.etat());
         if (f.projetId() != null) {
             p.add(cb.equal(root.get(TRANCHE).get("cfgProject").get(ID), f.projetId()));
         }
@@ -326,7 +430,7 @@ public class EtatVentesService {
         return p;
     }
 
-    private static void dansLaListe(List<Predicate> p, Path<Object> chemin, List<UUID> ids) {
+    private static void dansLaListe(List<Predicate> p, Path<Object> chemin, List<?> ids) {
         if (!CollectionUtils.isEmpty(ids)) {
             p.add(chemin.in(ids));
         }
