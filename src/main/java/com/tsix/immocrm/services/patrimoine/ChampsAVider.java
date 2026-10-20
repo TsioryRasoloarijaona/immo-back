@@ -52,7 +52,7 @@ public final class ChampsAVider {
         }
     }
 
-    boolean contient(String nom) {
+    public boolean contient(String nom) {
         return noms.contains(nom);
     }
 

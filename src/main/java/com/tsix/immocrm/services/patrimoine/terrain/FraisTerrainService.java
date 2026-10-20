@@ -71,7 +71,7 @@ public class FraisTerrainService {
     public LignesTrancheDto<LigneFraisTerrainDto> enregistrer(UUID terrainId, LignesTrancheDto<LigneFraisTerrainDto> corps) {
         StkItem terrain = terrains.exiger(terrainId);
         List<LigneFraisTerrainDto> recues = ReconciliationLignes.lignesRecues(corps);
-        Map<UUID, StkExpense> restantes = depenses.findByStkItemIdOrderByDateAscIdAsc(terrainId).stream()
+        Map<UUID, StkExpense> restantes = depenses.findPourEnregistrement(terrainId).stream()
                 .collect(Collectors.toMap(StkExpense::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
         Map<UUID, BuyDocument> facturees = factures.parFrais(restantes.values());
         List<Saisie> saisies = new ArrayList<>();

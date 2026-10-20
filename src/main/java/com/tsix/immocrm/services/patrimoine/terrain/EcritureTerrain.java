@@ -96,7 +96,7 @@ class EcritureTerrain {
         if (t.getParent() != null) {
             exigerSousTerrainsAutorises(t.getParent());
         }
-        if (estOccupe(t) && modifieUnChampProtege(t, d)) {
+        if (estOccupe(t) && (modifieUnChampProtege(t, d) || v.contient("titreFoncier"))) {
             throw new ConflictException(("Le terrain %s est affecté à un dossier : ses surfaces, prix et titre foncier "
                     + "ne se modifient plus.").formatted(t.getCode()));
         }
