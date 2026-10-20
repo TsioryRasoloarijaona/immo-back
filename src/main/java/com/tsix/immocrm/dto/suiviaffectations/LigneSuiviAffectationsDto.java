@@ -31,7 +31,7 @@ public record LigneSuiviAffectationsDto(
         @Schema(description = "StkItem.Code de l'article du dossier.") String articleCode,
         @Schema(description = "Tiers de la pièce (StlSettlement.TierId).") UUID tiersId,
         @Schema(description = "Nom affiché du tiers de la pièce.") String tiersNom,
-        @Schema(description = "Montant de la ligne, négatif si la pièce est un débit (IsCredit = 0), positif sinon.",
+        @Schema(description = "StlSettlementLine.Amount, de signe opposé si la pièce est un débit (IsCredit = 0).",
                 example = "-300") BigDecimal montantAffecte,
         @Schema(description = "DEBIT si StlSettlement.IsCredit = 0, CREDIT sinon (NULL compris).", example = "CREDIT")
         String sens,

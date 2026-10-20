@@ -42,6 +42,13 @@ import java.util.UUID;
         + "s.DocDate AS DatePiece, s.EcheanceDate AS DateEcheancePiece, s.SettlementDate AS DateOperationPiece, "
         + "ISNULL(s.Status, '" + StlSettlementLineSuivi.SANS_ETAT + "') AS EtatPiece, s.Amount AS MontantPiece, "
         + "ty.PKey AS TypePieceId, ty.Code AS TypePieceCode, ty.Description AS TypePieceLibelle, "
+        // Clés de tri des noms affichés : même priorité que TierNomFormatter (raison sociale, libellé, prénom nom).
+        + "CASE WHEN LTRIM(ISNULL(ti.SocialReason, '')) <> '' THEN ti.SocialReason "
+        + "WHEN LTRIM(ISNULL(ti.Description, '')) <> '' THEN ti.Description "
+        + "ELSE NULLIF(LTRIM(RTRIM(CONCAT(ti.FirstName, ' ', ti.LastName))), '') END AS TriTiers, "
+        + "CASE WHEN LTRIM(ISNULL(b.SocialReason, '')) <> '' THEN b.SocialReason "
+        + "WHEN LTRIM(ISNULL(b.Description, '')) <> '' THEN b.Description "
+        + "ELSE NULLIF(LTRIM(RTRIM(CONCAT(b.FirstName, ' ', b.LastName))), '') END AS TriBanque, "
         + "s.CfgBankId AS BanqueId, a.Code AS CompteCode, a.Description AS CompteLibelle, s.Notes AS NotesPiece, "
         + "d.DocDate AS DateEcheance, d.Amount AS MontantEcheance, d.Notes AS NotesEcheance, "
         // R8 : un seul champ cherché, espaces ôtés comme la saisie ; '|' empêche une correspondance à cheval.
@@ -203,4 +210,10 @@ public class StlSettlementLineSuivi {
 
     @Column(name = "Recherche")
     private String recherche;
+
+    @Column(name = "TriTiers")
+    private String triTiers;
+
+    @Column(name = "TriBanque")
+    private String triBanque;
 }

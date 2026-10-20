@@ -69,6 +69,9 @@ public class SuiviAffectationsService {
     private static final String SANS_CATEGORIE = "SANS_CATEGORIE";
     private static final String ID = "id";
     private static final String CATEGORIE_ID = "categorieId";
+    /** Un tiers se groupe sur son id mais se trie sur son nom affiché (sinon ordre des UUID). */
+    private static final Map<ColonneSuiviAffectations, String> TRI_PAR_NOM = Map.of(
+            ColonneSuiviAffectations.TIERS_NOM, "triTiers", ColonneSuiviAffectations.BANQUE_NOM, "triBanque");
 
     private final StlSettlementLineSuiviRepository repository;
     private final PerimetreCommercialService perimetreService;
@@ -251,7 +254,7 @@ public class SuiviAffectationsService {
                 throw new ColonneInconnueException(o.getProperty(), Arrays.stream(ColonneSuiviAffectations.values())
                         .filter(col -> col.chemin() != null).map(ColonneSuiviAffectations::nom).toList());
             }
-            ordres.add(o.withProperty(c.chemin().cheminCle()));
+            ordres.add(o.withProperty(TRI_PAR_NOM.getOrDefault(c, c.chemin().cheminCle())));
         }
         if (ordres.stream().noneMatch(o -> ID.equals(o.getProperty()))) {
             ordres.add(Sort.Order.asc(ID));
