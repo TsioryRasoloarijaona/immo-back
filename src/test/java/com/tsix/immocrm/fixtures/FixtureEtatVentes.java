@@ -148,6 +148,18 @@ public class FixtureEtatVentes {
         return depots.statuts().save(s);
     }
 
+    /** Statut propre au test, hors {@link StatutDossier} et hors sortie (ni annulation ni désistement). */
+    public StrStatus statutEnCours(String code) {
+        StrStatus s = new StrStatus();
+        s.setId(UUID.randomUUID());
+        s.setCode(code);
+        s.setDescription(code);
+        s.setStrConfigEntityId(StatutDossier.CONFIG_ENTITY_ID);
+        s.setAnnulation(false);
+        s.setResiliation(false);
+        return depots.statuts().save(s);
+    }
+
     public CfgTier client(String nom) {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
