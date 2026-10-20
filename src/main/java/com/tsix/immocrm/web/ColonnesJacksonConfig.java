@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.Colonnes;
 import com.tsix.immocrm.domain.ColonneProspect;
 import com.tsix.immocrm.domain.ColonneProspection;
 import com.tsix.immocrm.domain.ColonneSuiviAction;
+import com.tsix.immocrm.domain.ColonneSuiviAffectations;
 import com.tsix.immocrm.domain.ColonneSuiviCommerciaux;
 import com.tsix.immocrm.domain.ColonneTranche;
 import com.tsix.immocrm.dto.prospection.ProspectionListItemDto;
@@ -50,6 +51,9 @@ public class ColonnesJacksonConfig {
                                 Colonnes.nomsParDefaut(ColonneEtatVentes.class), ColonneEtatVentes.ARTICLE_ID.nom()))
                 .addFilter(ColonneSuiviCommerciaux.FILTRE,
                         new SelectionColonnesPropertyFilter(Colonnes.nomsParDefaut(ColonneSuiviCommerciaux.class),
-                                ColonneSuiviCommerciaux.ID.nom())));
+                                ColonneSuiviCommerciaux.ID.nom()))
+                .addFilter(ColonneSuiviAffectations.FILTRE,
+                        new SelectionColonnesPropertyFilter(Colonnes.nomsParDefaut(ColonneSuiviAffectations.class),
+                                ColonneSuiviAffectations.ID.nom())));
     }
 }
