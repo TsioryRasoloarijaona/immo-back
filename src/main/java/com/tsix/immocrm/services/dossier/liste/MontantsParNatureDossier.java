@@ -25,8 +25,8 @@ import java.util.function.Predicate;
 import static com.tsix.immocrm.domain.ColonneDossier.*;
 
 /**
- * Montants par nature de la grille OMRAN (avance, autofinancement, crédit, frais, net à payer, prix contractuel,
- * trop-perçu), formules de {@code ComSaleFolderView} : voir FEATURE-dossiers-liste-complete.md. Deux requêtes par
+ * Montants par nature de la grille OMRAN (avance, autofinancement, crédit, frais, modifications, pénalités, net à
+ * payer, prix contractuel, trop-perçu), formules de {@code ComSaleFolderView} : voir FEATURE-dossiers-liste-complete.md. Deux requêtes par
  * page (échéances, réglé signé) ; le net à payer et le trop-perçu sont lus par {@link TropPercu}, jamais refaits.
  */
 @Component
@@ -34,10 +34,11 @@ public class MontantsParNatureDossier {
 
     /** Ce qui exige les requêtes ; {@code prixContractuel} est une colonne de ComFolder. */
     public static final Set<ColonneDossier> COLONNES = Collections.unmodifiableSet(EnumSet.of(
-            PRIX_CONTRACTUEL_REGLE, PRIX_CONTRACTUEL_RESTE, PRIX_REGLE, PRIX_RESTE, NET_A_PAYER_REGLE,
+            PRIX_CONTRACTUEL_REGLE, PRIX_CONTRACTUEL_RESTE, PRIX_REGLE, PRIX_RESTE, NET_A_PAYER, NET_A_PAYER_REGLE,
             NET_A_PAYER_RESTE, TAUX_AVANCE, TAUX_AVANCE_REEL, AVANCE, AVANCE_REGLEE, AVANCE_RESTE, AUTOFINANCEMENT,
             AUTOFINANCEMENT_REGLE, AUTOFINANCEMENT_RESTE, CREDIT, CREDIT_REGLE, CREDIT_RESTE, FRAIS, FRAIS_REGLES,
-            FRAIS_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE));
+            FRAIS_RESTE, MODIFICATIONS, MODIFICATIONS_REGLEES, MODIFICATIONS_RESTE, PENALITES, PENALITES_REGLES,
+            PENALITES_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE));
 
     /** Les colonnes que {@code GET /api/dossiers/totaux} additionne (les taux ne s'additionnent pas). */
     public static final Set<ColonneDossier> SOMMABLES = Collections.unmodifiableSet(sommables());
@@ -112,6 +113,11 @@ public class MontantsParNatureDossier {
                 AUTOFINANCEMENT_RESTE);
         nature(m, lignes, TropPercu.Ligne::creditBancaire, CREDIT, CREDIT_REGLE, CREDIT_RESTE);
         nature(m, lignes, TropPercu.Ligne::frais, FRAIS, FRAIS_REGLES, FRAIS_RESTE);
+        // Montants de la vue : ComFolder.ModificationsAmount et Σ signée des pénalités, pas la règle « au crédit ».
+        reglement(m, nonNul(f.getModificationsAmount()), lignes, TropPercu.Ligne::modification, MODIFICATIONS,
+                MODIFICATIONS_REGLEES, MODIFICATIONS_RESTE);
+        reglement(m, TropPercu.penalites(lignes), lignes, TropPercu.Ligne::penalite, PENALITES, PENALITES_REGLES,
+                PENALITES_RESTE);
 
         BigDecimal prixRegle = m.get(AVANCE_REGLEE).add(m.get(AUTOFINANCEMENT_REGLE)).add(m.get(CREDIT_REGLE));
         m.put(PRIX_REGLE, prixRegle);
@@ -127,6 +133,7 @@ public class MontantsParNatureDossier {
 
         boolean sorti = DossierSorti.estSorti(f);
         TropPercu.Bilan bilan = TropPercu.bilan(lignes, f.getPrice(), f.getModificationsAmount(), sorti);
+        m.put(NET_A_PAYER, bilan.total());
         m.put(NET_A_PAYER_REGLE, bilan.totalRegle());
         m.put(NET_A_PAYER_RESTE, bilan.reste());
         TropPercu.Resultat tropPercu = TropPercu.calculer(lignes, f.getPrice(), f.getModificationsAmount(), sorti);
@@ -142,6 +149,13 @@ public class MontantsParNatureDossier {
                                ColonneDossier reste) {
         BigDecimal du = lignes.stream().filter(deLaNature.and(l -> Boolean.TRUE.equals(l.sens())))
                 .map(l -> nonNul(l.montant())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        reglement(m, du, lignes, deLaNature, montant, regle, reste);
+    }
+
+    /** {@code du} donné ; réglé = toutes les échéances de la nature ; reste = du − réglé. */
+    private static void reglement(Map<ColonneDossier, BigDecimal> m, BigDecimal du, List<TropPercu.Ligne> lignes,
+                                  Predicate<TropPercu.Ligne> deLaNature, ColonneDossier montant,
+                                  ColonneDossier regle, ColonneDossier reste) {
         BigDecimal paye = lignes.stream().filter(deLaNature)
                 .map(l -> nonNul(l.regle())).reduce(BigDecimal.ZERO, BigDecimal::add);
         m.put(montant, du);

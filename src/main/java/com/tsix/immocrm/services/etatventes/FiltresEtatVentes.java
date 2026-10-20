@@ -1,8 +1,6 @@
 package com.tsix.immocrm.services.etatventes;
 
 import com.tsix.immocrm.domain.ChampDateDossier;
-import com.tsix.immocrm.domain.EtatVente;
-import com.tsix.immocrm.domain.FamilleArticle;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -27,11 +25,7 @@ public record FiltresEtatVentes(
         @Parameter(description = "Borne basse incluse, ISO.", example = "2025-03-01")
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
         @Parameter(description = "Borne haute incluse, ISO.", example = "2025-03-31")
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
-        @Parameter(description = "Famille(s) d'article, répétable ; inconnue = 400.", example = "APPARTEMENT")
-        List<FamilleArticle> famille,
-        @Parameter(description = "État(s) LIBRE, RESERVE (sans statut compris) ou VENDU, répétable ; inconnu = 400.",
-                example = "VENDU") List<EtatVente> etat) {
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au) {
 
     public enum Nature { TOUS, ARTICLES, SOUS_ARTICLES }
 
@@ -40,9 +34,7 @@ public record FiltresEtatVentes(
         champDate = champDate != null ? champDate : ChampDateDossier.RESERVATION;
     }
 
-    public static FiltresEtatVentes synthese(List<UUID> trancheId, UUID projetId, List<UUID> categorieId,
-                                             List<FamilleArticle> famille) {
-        return new FiltresEtatVentes(trancheId, projetId, null, categorieId, null, null, null, null, null, null,
-                famille, null);
+    public static FiltresEtatVentes synthese(List<UUID> trancheId, UUID projetId, List<UUID> categorieId) {
+        return new FiltresEtatVentes(trancheId, projetId, null, categorieId, null, null, null, null, null, null);
     }
 }

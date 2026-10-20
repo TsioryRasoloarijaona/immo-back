@@ -1,7 +1,6 @@
 package com.tsix.immocrm.controller.etatventes;
 
 import com.tsix.immocrm.domain.ColonneEtatVentes;
-import com.tsix.immocrm.domain.ColonneVendusLibres;
 import com.tsix.immocrm.domain.Colonnes;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.TriGroupe;
@@ -10,11 +9,9 @@ import com.tsix.immocrm.dto.common.PageGroupesDto;
 import com.tsix.immocrm.dto.common.TotauxListeDto;
 import com.tsix.immocrm.dto.etatventes.LigneEtatVentesDto;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto;
-import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto;
 import com.tsix.immocrm.dto.referentiel.ColonneDto;
 import com.tsix.immocrm.services.etatventes.EtatVentesService;
 import com.tsix.immocrm.services.etatventes.FiltresEtatVentes;
-import com.tsix.immocrm.services.etatventes.FiltresVendusLibres;
 import com.tsix.immocrm.web.Groupements;
 import com.tsix.immocrm.web.export.ExportTableur;
 import com.tsix.immocrm.web.export.LignesExport;
@@ -74,36 +71,7 @@ public class EtatVentesController {
             @RequestParam(required = false) UUID projetId,
             @Parameter(description = "Id(s) de catégorie d'article (StkItemCategory.id), répétable.")
             @RequestParam(required = false) List<UUID> categorieId) {
-        return service.synthese(FiltresEtatVentes.synthese(trancheId, projetId, categorieId, null));
-    }
-
-    @GetMapping(BASE + "/synthese-vendus-libres")
-    @Operation(summary = "Tableau tranche × famille en Libres / Réservés / Vendus, avec totaux et pourcentages")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Comptes du filtre, dans le périmètre de l'utilisateur."),
-            @ApiResponse(responseCode = "400", description = "Id mal formé ou famille inconnue.", content = @Content)
-    })
-    public SyntheseVendusLibresDto syntheseVendusLibres(@ParameterObject @ModelAttribute FiltresVendusLibres filtres) {
-        return service.syntheseVendusLibres(filtres.versFiltres());
-    }
-
-    @GetMapping(BASE + "/synthese-vendus-libres/export")
-    @Operation(summary = "Export Excel du tableau Libres / Réservés / Vendus, mêmes filtres et mêmes lignes")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille « Libres Réservés Vendus ».",
-                    content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400", description = "Format autre que xlsx, id mal formé ou famille inconnue.",
-                    content = @Content)
-    })
-    public ResponseEntity<StreamingResponseBody> exporterVendusLibres(
-            @Parameter(example = ExportTableur.FORMAT_XLSX)
-            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
-            @ParameterObject @ModelAttribute FiltresVendusLibres filtres) {
-        ExportTableur.exigerXlsx(format);
-        SyntheseVendusLibresDto synthese = service.syntheseVendusLibres(filtres.versFiltres());
-        return exportTableur.reponse("libres-reserves-vendus", "Libres / Réservés / Vendus", "Libres Réservés Vendus",
-                List.of(ColonneVendusLibres.values()), EtatVentesService.lignesTableur(synthese));
+        return service.synthese(FiltresEtatVentes.synthese(trancheId, projetId, categorieId));
     }
 
     @GetMapping(BASE)
@@ -210,8 +178,11 @@ public class EtatVentesController {
     @Operation(summary = "Catalogue des colonnes de l'état des ventes")
     public List<ColonneDto> colonnes() {
         return Arrays.stream(ColonneEtatVentes.values())
-                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(),
-                        c.chemin()))
+                .map(c -> EtatVentesService.sommeCalculee(c)
+                        ? ColonneDto.sommeCalculee(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                                c.parDefaut())
+                        : ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(),
+                                c.chemin()))
                 .toList();
     }
 }

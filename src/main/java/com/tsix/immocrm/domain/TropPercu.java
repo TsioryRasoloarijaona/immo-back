@@ -89,7 +89,8 @@ public final class TropPercu {
         return regle(lignes, filtre).negate();
     }
 
-    private static BigDecimal penalites(List<Ligne> lignes) {
+    /** {@code PenalityAmount} de la vue : échéances de pénalité, au crédit +, sinon −. */
+    public static BigDecimal penalites(List<Ligne> lignes) {
         return lignes.stream()
                 .filter(Ligne::penalite)
                 .map(l -> l.auCredit() ? nonNul(l.montant()) : nonNul(l.montant()).negate())

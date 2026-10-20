@@ -30,6 +30,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -172,11 +174,18 @@ public final class MappingListeDossier {
                 .met(PRIX_ARTICLE_TTC, f.getItemPriceAfter())
                 .met(PRIX_SOUS_ARTICLES_TTC, f.getUnderItemsPriceAfter());
         if (calcul != null) {
-            l.met(PRIX_VENTE_M2_TTC, PrixAuMetreCarre.venteTtc(f.getPriceAfterDiscount(), f.getArea(),
-                            calcul.superficieAnnexes()))
-                    .met(PRIX_VENTE_M2_HT, PrixAuMetreCarre.venteHt(f.getPriceAfterDiscount(), f.getArea(),
-                            calcul.superficieAnnexes(), f.getVATRatio()));
+            prixVenteAuM2(f, calcul).forEach(l::met);
         }
+    }
+
+    /** Prix de vente au m² TTC et HT, annexes comprises ; seul calcul, repris par l'état des ventes. */
+    public static Map<ColonneDossier, BigDecimal> prixVenteAuM2(ComFolder f, ValeursCalculees calcul) {
+        Map<ColonneDossier, BigDecimal> prix = new EnumMap<>(ColonneDossier.class);
+        prix.put(PRIX_VENTE_M2_TTC, PrixAuMetreCarre.venteTtc(f.getPriceAfterDiscount(), f.getArea(),
+                calcul.superficieAnnexes()));
+        prix.put(PRIX_VENTE_M2_HT, PrixAuMetreCarre.venteHt(f.getPriceAfterDiscount(), f.getArea(),
+                calcul.superficieAnnexes(), f.getVATRatio()));
+        return prix;
     }
 
     private static void jalons(LigneDossier l, ComFolder f) {
