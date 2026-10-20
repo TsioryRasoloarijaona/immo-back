@@ -7,17 +7,25 @@ import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
+import com.tsix.immocrm.entities.com.ComSettlementCategory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.stl.StlSettlement;
+import com.tsix.immocrm.entities.stl.StlSettlementLine;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
+import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
@@ -40,6 +48,7 @@ public class FixtureEtatVentes {
     private final FixtureReferentielStk referentielStk;
     private final FixtureStatutsDossier statutsDossier;
     private final Depots depots;
+    private final DepotsReglement depotsReglement;
     private final EntityManager entityManager;
 
     /** Regroupe les dépôts écrits par la fixture (S107). */
@@ -49,12 +58,23 @@ public class FixtureEtatVentes {
                          AdmUserHabilitationRepository habilitations) {
     }
 
+    /** Dépôts des échéances et des règlements (FEATURE-etat-des-ventes-parite.md §5). */
+    @Component
+    public record DepotsReglement(ComSettlementCategoryRepository categories, ComDocumentRepository echeances,
+                                  StlSettlementRepository reglements, StlSettlementLineRepository lignes) {
+    }
+
+    /** Nature d'une catégorie d'échéance, drapeau {@code IsSale*} de {@code ComSettlementCategory}. */
+    public enum Nature { AVANCE, AUTOFINANCEMENT, CREDIT, FRAIS, MODIFICATION, PENALITE }
+
     public FixtureEtatVentes(FixturePatrimoine patrimoine, FixtureReferentielStk referentielStk,
-                             FixtureStatutsDossier statutsDossier, Depots depots, EntityManager entityManager) {
+                             FixtureStatutsDossier statutsDossier, Depots depots, DepotsReglement depotsReglement,
+                             EntityManager entityManager) {
         this.patrimoine = patrimoine;
         this.referentielStk = referentielStk;
         this.statutsDossier = statutsDossier;
         this.depots = depots;
+        this.depotsReglement = depotsReglement;
         this.entityManager = entityManager;
     }
 
@@ -186,6 +206,82 @@ public class FixtureEtatVentes {
         article.setComFolderId(sauve.getId());
         sauve.setStkItem(depots.articles().save(article));
         return depots.dossiers().save(sauve);
+    }
+
+    /** Prix du dossier : {@code Price}, {@code PriceAfterDiscount} et {@code AgreementPrice} au même montant. */
+    public ComFolder prix(ComFolder dossier, BigDecimal prix) {
+        dossier.setPrice(prix);
+        dossier.setPriceAfterDiscount(prix);
+        dossier.setAgreementPrice(prix);
+        return depots.dossiers().save(dossier);
+    }
+
+    /** Enregistre un dossier dont le test a posé des colonnes de prix à la main. */
+    public ComFolder enregistrer(ComFolder dossier) {
+        return depots.dossiers().save(dossier);
+    }
+
+    /** Prix catalogue d'un article : {@code SalePrice}, {@code ComSalePrice}, {@code Vat} (taux), {@code ComSalePriceHT}. */
+    public StkItem catalogue(StkItem article, BigDecimal prixArticle, BigDecimal prixTotal, BigDecimal tva,
+                             BigDecimal prixTotalHt) {
+        article.setSalePrice(prixArticle);
+        article.setComSalePrice(prixTotal);
+        article.setVat(tva);
+        article.setComSalePriceHT(prixTotalHt);
+        return depots.articles().save(article);
+    }
+
+    /** Second article racine retenu par le même dossier ({@code StkItem.ComFolderId}), sans nouveau dossier. */
+    public StkItem rattacher(StkItem article, ComFolder dossier) {
+        article.setComFolderId(dossier.getId());
+        return depots.articles().save(article);
+    }
+
+    // ------------------------------------------------------------------ échéances et règlements
+
+    /** Catégorie propre au test ; {@code auCredit} = {@code ComSettlementCategory.IsCredit}. */
+    public ComSettlementCategory categorieEcheance(Nature nature, boolean auCredit) {
+        ComSettlementCategory c = new ComSettlementCategory();
+        c.setId(UUID.randomUUID());
+        c.setCode(nature.name().substring(0, 3) + "-" + UUID.randomUUID().toString().substring(0, 8));
+        c.setIsCredit(auCredit);
+        c.setIsSaleAdvance(nature == Nature.AVANCE);
+        c.setIsSaleAutoFinancment(nature == Nature.AUTOFINANCEMENT);
+        c.setIsSaleCredit(nature == Nature.CREDIT);
+        c.setIsSaleExpense(nature == Nature.FRAIS);
+        c.setIsSaleModification(nature == Nature.MODIFICATION);
+        c.setIsSalePenality(nature == Nature.PENALITE);
+        return depotsReglement.categories().save(c);
+    }
+
+    /** Échéance d'une nature ; les frais sont hors prix ({@code ExcludeFromPrice}), comme dans la liste des dossiers. */
+    public ComDocument echeance(ComFolder dossier, Nature nature, boolean auCredit, BigDecimal montant) {
+        ComDocument d = new ComDocument();
+        d.setId(UUID.randomUUID());
+        d.setComFolder(dossier);
+        d.setComSettlementCategory(categorieEcheance(nature, auCredit));
+        d.setAmount(montant);
+        d.setDocDate(LocalDateTime.of(2025, 1, 1, 0, 0));
+        d.setExcludeFromPrice(nature == Nature.FRAIS);
+        return depotsReglement.echeances().save(d);
+    }
+
+    /** Règlement d'une échéance ; {@code encaissement} = {@code StlSettlement.IsCredit}, {@code statut} peut être nul. */
+    public void regler(ComDocument echeance, BigDecimal montant, boolean encaissement, String statut) {
+        StlSettlement s = new StlSettlement();
+        s.setId(UUID.randomUUID());
+        s.setCode("RG-" + UUID.randomUUID().toString().substring(0, 8));
+        s.setDocDate(LocalDateTime.of(2025, 2, 1, 0, 0));
+        s.setAmount(montant);
+        s.setIsCredit(encaissement);
+        s.setStatus(statut);
+        depotsReglement.reglements().save(s);
+        StlSettlementLine l = new StlSettlementLine();
+        l.setId(UUID.randomUUID());
+        l.setStlSettlement(s);
+        l.setComDocument(echeance);
+        l.setAmount(montant);
+        depotsReglement.lignes().save(l);
     }
 
     // ------------------------------------------------------------------ périmètre

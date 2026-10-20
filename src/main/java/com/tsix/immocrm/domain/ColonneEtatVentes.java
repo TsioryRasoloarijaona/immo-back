@@ -1,17 +1,16 @@
 package com.tsix.immocrm.domain;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
  * Catalogue des colonnes de {@code GET /api/etat-des-ventes}, sous les noms de {@code LigneEtatVentesDto}
- * (FEATURE-etat-des-ventes.md §3.2). Le chemin sert au groupement, aux agrégats et au tri ; sans chemin, la colonne
- * n'est ni groupable ni triable (nom d'un tiers, montants réglés calculés en Java).
+ * (FEATURE-etat-des-ventes.md §3.2, FEATURE-etat-des-ventes-parite.md §3). Le chemin sert au groupement, aux agrégats
+ * et au tri ; sans chemin, ni groupable ni triable. {@code source} : montant du dossier calculé en Java par la liste des
+ * dossiers, jamais refait ici.
  */
 @Getter
 @Accessors(fluent = true)
-@RequiredArgsConstructor
 public enum ColonneEtatVentes implements Colonne {
 
     ARTICLE_ID("articleId", "Identifiant", Groupe.ARTICLE, TypeColonne.TEXTE, null),
@@ -26,7 +25,7 @@ public enum ColonneEtatVentes implements Colonne {
     ETAGE("etage", "Étage", Groupe.ARTICLE, TypeColonne.TEXTE, Chemin.groupable("etage.code")),
     IMMEUBLE("immeuble", "Immeuble", Groupe.ARTICLE, TypeColonne.TEXTE, Chemin.groupable("immeuble.code")),
     SURFACE("surface", "Surface (m²)", Groupe.ARTICLE, TypeColonne.NOMBRE, Chemin.agregeable("surface")),
-    PRIX_VENTE_TTC("prixVenteTTC", "Prix de vente TTC", Groupe.FINANCIER, TypeColonne.MONTANT,
+    PRIX_VENTE_TTC("prixVenteTTC", "Prix de vente TTC", Groupe.PRIX, TypeColonne.MONTANT,
             Chemin.agregeable("prixVenteTTC")),
     STATUT_CODE("statutCode", "Code statut", Groupe.VENTE, TypeColonne.TEXTE, Chemin.groupable("statutCode")),
     STATUT_LIBELLE("statutLibelle", "Statut", Groupe.VENTE, TypeColonne.TEXTE, null),
@@ -36,10 +35,53 @@ public enum ColonneEtatVentes implements Colonne {
     COMMERCIAL("commercial", "Commercial", Groupe.VENTE, TypeColonne.TEXTE, null),
     DATE_RESERVATION("dateReservation", "Date réservation", Groupe.VENTE, TypeColonne.DATE,
             Chemin.date("dossier.docDate")),
-    MONTANT_REGLE("montantRegle", "Réglé", Groupe.FINANCIER, TypeColonne.MONTANT, null),
-    RESTE_A_REGLER("resteARegler", "Reste à régler", Groupe.FINANCIER, TypeColonne.MONTANT, null);
+    MONTANT_REGLE("montantRegle", "Réglé", ColonneDossier.PRIX_REGLE, true),
+    RESTE_A_REGLER("resteARegler", "Reste à régler", ColonneDossier.PRIX_RESTE, true),
 
-    public enum Groupe { ARTICLE, VENTE, FINANCIER }
+    // -- Prix du dossier, ou du catalogue sur une ligne libre (@Subselect de StkItemEtatVentes).
+    PRIX_ARTICLE_HT("prixArticleHt", "Prix de vente article HT", Chemin.agregeable("prixArticleHt")),
+    PRIX_ARTICLE_TTC("prixArticleTtc", "Prix de vente article TTC", Chemin.agregeable("prixArticleTtc")),
+    PRIX_SOUS_ARTICLES_HT("prixSousArticlesHt", "Prix de vente sous-articles HT",
+            Chemin.agregeable("prixSousArticlesHt")),
+    PRIX_SOUS_ARTICLES_TTC("prixSousArticlesTtc", "Prix de vente sous-articles TTC",
+            Chemin.agregeable("prixSousArticlesTtc")),
+    PRIX_HT("prixHt", "Prix de vente HT", Chemin.agregeable("prixHt")),
+    REMISE_MONTANT("remiseMontant", "Montant remise", Chemin.agregeable("remiseMontant")),
+    PRIX_CONTRACTUEL("prixContractuel", "Prix contractuel", Chemin.agregeable("prixContractuel")),
+
+    // -- Montants du dossier (liste des dossiers) : null sur une ligne libre.
+    PRIX_VENTE_M2_TTC(ColonneDossier.PRIX_VENTE_M2_TTC),
+    PRIX_VENTE_M2_HT(ColonneDossier.PRIX_VENTE_M2_HT),
+    NET_A_PAYER(ColonneDossier.NET_A_PAYER),
+    NET_A_PAYER_REGLE(ColonneDossier.NET_A_PAYER_REGLE),
+    NET_A_PAYER_RESTE(ColonneDossier.NET_A_PAYER_RESTE),
+    AVANCE(ColonneDossier.AVANCE),
+    AVANCE_REGLEE(ColonneDossier.AVANCE_REGLEE),
+    AVANCE_RESTE(ColonneDossier.AVANCE_RESTE),
+    AUTOFINANCEMENT(ColonneDossier.AUTOFINANCEMENT),
+    AUTOFINANCEMENT_REGLE(ColonneDossier.AUTOFINANCEMENT_REGLE),
+    AUTOFINANCEMENT_RESTE(ColonneDossier.AUTOFINANCEMENT_RESTE),
+    CREDIT(ColonneDossier.CREDIT),
+    CREDIT_REGLE(ColonneDossier.CREDIT_REGLE),
+    CREDIT_RESTE(ColonneDossier.CREDIT_RESTE),
+    FRAIS(ColonneDossier.FRAIS),
+    FRAIS_REGLES(ColonneDossier.FRAIS_REGLES),
+    FRAIS_RESTE(ColonneDossier.FRAIS_RESTE),
+    MODIFICATIONS(ColonneDossier.MODIFICATIONS),
+    MODIFICATIONS_REGLEES(ColonneDossier.MODIFICATIONS_REGLEES),
+    MODIFICATIONS_RESTE(ColonneDossier.MODIFICATIONS_RESTE),
+    TROP_PERCU(ColonneDossier.TROP_PERCU),
+    TROP_PERCU_REGLE(ColonneDossier.TROP_PERCU_REGLE),
+    TROP_PERCU_RESTE(ColonneDossier.TROP_PERCU_RESTE),
+    PENALITES(ColonneDossier.PENALITES),
+    PENALITES_REGLES(ColonneDossier.PENALITES_REGLES),
+    PENALITES_RESTE(ColonneDossier.PENALITES_RESTE),
+    PRIX_CONTRACTUEL_REGLE(ColonneDossier.PRIX_CONTRACTUEL_REGLE),
+    PRIX_CONTRACTUEL_RESTE(ColonneDossier.PRIX_CONTRACTUEL_RESTE),
+    TAUX_AVANCE(ColonneDossier.TAUX_AVANCE),
+    TAUX_AVANCE_REEL(ColonneDossier.TAUX_AVANCE_REEL);
+
+    public enum Groupe { ARTICLE, VENTE, PRIX, FINANCIER }
 
     public enum TypeColonne { TEXTE, NOMBRE, MONTANT, DATE }
 
@@ -51,15 +93,41 @@ public enum ColonneEtatVentes implements Colonne {
     private final Groupe groupe;
     private final TypeColonne type;
     private final Chemin chemin;
+    private final ColonneDossier source;
+    private final boolean parDefaut;
+
+    /** Colonne du lot 1, servie sans {@code ?colonnes=}. */
+    ColonneEtatVentes(String nom, String libelle, Groupe groupe, TypeColonne type, Chemin chemin) {
+        this(nom, libelle, groupe, type, chemin, null, true);
+    }
+
+    /** Prix du {@code @Subselect}, sommé en SQL. */
+    ColonneEtatVentes(String nom, String libelle, Chemin chemin) {
+        this(nom, libelle, Groupe.PRIX, TypeColonne.MONTANT, chemin, null, false);
+    }
+
+    ColonneEtatVentes(String nom, String libelle, ColonneDossier source, boolean parDefaut) {
+        this(nom, libelle, Groupe.FINANCIER, TypeColonne.valueOf(source.type().name()), null, source, parDefaut);
+    }
+
+    /** Même nom et même libellé que la colonne de la liste des dossiers. */
+    ColonneEtatVentes(ColonneDossier source) {
+        this(source.nom(), source.libelle(), source, false);
+    }
+
+    ColonneEtatVentes(String nom, String libelle, Groupe groupe, TypeColonne type, Chemin chemin,
+                      ColonneDossier source, boolean parDefaut) {
+        this.nom = nom;
+        this.libelle = libelle;
+        this.groupe = groupe;
+        this.type = type;
+        this.chemin = chemin;
+        this.source = source;
+        this.parDefaut = parDefaut;
+    }
 
     @Override
     public TypeExport typeExport() {
         return TypeExport.valueOf(type.name());
-    }
-
-    /** Toutes les colonnes sont servies sans {@code ?colonnes=}. */
-    @Override
-    public boolean parDefaut() {
-        return true;
     }
 }

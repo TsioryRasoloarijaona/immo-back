@@ -5,8 +5,6 @@ import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ColonneEtatVentes;
 import com.tsix.immocrm.domain.ColonneInconnueException;
 import com.tsix.immocrm.domain.Colonnes;
-import com.tsix.immocrm.domain.EtatVente;
-import com.tsix.immocrm.domain.FamilleArticle;
 import com.tsix.immocrm.domain.Granularite;
 import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.domain.TriGroupe;
@@ -17,9 +15,6 @@ import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.LigneSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.StatutSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalCategorieSynthese;
 import com.tsix.immocrm.dto.etatventes.SyntheseEtatVentesDto.TotalGeneralSynthese;
-import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto;
-import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto.CompteVendusLibres;
-import com.tsix.immocrm.dto.etatventes.SyntheseVendusLibresDto.FamilleVendusLibres;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -32,7 +27,11 @@ import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.stk.StkItemEtatVentesRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
+import com.tsix.immocrm.services.dossier.liste.CalculsDeLaPage;
+import com.tsix.immocrm.services.dossier.liste.ColonnesCalculeesDossier;
+import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
 import com.tsix.immocrm.services.dossier.liste.MontantsParNatureDossier;
+import com.tsix.immocrm.services.dossier.liste.ValeursCalculees;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -63,11 +62,9 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -84,6 +81,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.tsix.immocrm.domain.ColonneEtatVentes.*;
 import static com.tsix.immocrm.entities.stk.StkItemEtatVentes.LIBRE;
 import static com.tsix.immocrm.entities.stk.StkItemEtatVentes.SANS_STATUT;
 
@@ -99,35 +97,38 @@ public class EtatVentesService {
     private static final String CATEGORIE = "categorie";
     private static final String DOSSIER = "dossier";
     private static final String STATUT_CODE = "statutCode";
-    private static final String FAMILLE = "famille";
-    private static final String ETAT_VENTE = "etatVente";
     private static final String CODE = "code";
     private static final String DESCRIPTION = "description";
     private static final String ID = "id";
     private static final String LIBELLE_LIBRE = "Libre";
     private static final String LIBELLE_SANS_STATUT = "Sans statut";
 
-    /** Montants calculés en Java par la liste des dossiers, jamais refaits en SQL : sommés ici pour les totaux. */
-    private static final Map<String, ColonneDossier> MONTANTS = Map.of(
-            ColonneEtatVentes.MONTANT_REGLE.nom(), ColonneDossier.PRIX_REGLE,
-            ColonneEtatVentes.RESTE_A_REGLER.nom(), ColonneDossier.PRIX_RESTE);
+    /** Jetons d'{@code agregats} sommés en Java, par nom exact. */
+    private static final Map<String, ColonneEtatVentes> SOMMES_CALCULEES = Arrays.stream(ColonneEtatVentes.values())
+            .filter(EtatVentesService::sommeCalculee)
+            .collect(Collectors.toUnmodifiableMap(ColonneEtatVentes::nom, Function.identity()));
 
     private final StkItemEtatVentesRepository repository;
     private final PerimetreCommercialService perimetreService;
     private final GroupementService groupementService;
-    private final MontantsParNatureDossier montantsParNature;
+    private final CalculsDeLaPage calculs;
     private final StrStatusRepository statusRepository;
     private final EntityManager em;
 
     public EtatVentesService(StkItemEtatVentesRepository repository, PerimetreCommercialService perimetreService,
-                             GroupementService groupementService, MontantsParNatureDossier montantsParNature,
+                             GroupementService groupementService, CalculsDeLaPage calculs,
                              StrStatusRepository statusRepository, EntityManager em) {
         this.repository = repository;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
-        this.montantsParNature = montantsParNature;
+        this.calculs = calculs;
         this.statusRepository = statusRepository;
         this.em = em;
+    }
+
+    /** Montant du dossier dont la liste des dossiers donne la somme : Σ calculée en Java, jamais en SQL. */
+    public static boolean sommeCalculee(ColonneEtatVentes colonne) {
+        return colonne.source() != null && MontantsParNatureDossier.SOMMABLES.contains(colonne.source());
     }
 
     // ---------------------------------------------------------------- synthèse
@@ -180,83 +181,6 @@ public class EtatVentesService {
                 .groupBy(cles)
                 .orderBy(ordre);
         return em.createQuery(cq).getResultList();
-    }
-
-    /** Une seule requête de comptage, la base de la liste (R1) ; l'état et la famille viennent du {@code @Subselect}. */
-    public SyntheseVendusLibresDto syntheseVendusLibres(FiltresEtatVentes filtres) {
-        Map<UUID, Tuple> tranches = new LinkedHashMap<>();
-        Map<UUID, Map<FamilleArticle, Comptes>> parTranche = new HashMap<>();
-        for (Tuple t : compter(filtres, root -> List.of(root.get(FAMILLE), root.get(ETAT_VENTE), root.get(STATUT_CODE)))) {
-            UUID id = t.get(0, UUID.class);
-            tranches.putIfAbsent(id, t);
-            Comptes c = Comptes.de(t.get(4, EtatVente.class), SANS_STATUT.equals(t.get(5, String.class)),
-                    t.get(6, Long.class));
-            parTranche.computeIfAbsent(id, k -> new EnumMap<>(FamilleArticle.class))
-                    .merge(t.get(3, FamilleArticle.class), c, Comptes::plus);
-        }
-        List<CompteVendusLibres> lignes = new ArrayList<>();
-        List<CompteVendusLibres> totalTranche = new ArrayList<>();
-        Map<FamilleArticle, Comptes> parFamille = new EnumMap<>(FamilleArticle.class);
-        tranches.forEach((id, t) -> {
-            String code = t.get(1, String.class);
-            String libelle = t.get(2, String.class);
-            Map<FamilleArticle, Comptes> familles = parTranche.get(id);
-            familles.forEach((famille, c) -> {
-                lignes.add(c.vers(id, code, libelle, famille));
-                parFamille.merge(famille, c, Comptes::plus);
-            });
-            totalTranche.add(Comptes.somme(familles.values()).vers(id, code, libelle, null));
-        });
-        List<FamilleVendusLibres> familles = Arrays.stream(FamilleArticle.values())
-                .filter(f -> CollectionUtils.isEmpty(filtres.famille()) || filtres.famille().contains(f))
-                .map(FamilleVendusLibres::de).toList();
-        return new SyntheseVendusLibresDto(familles, lignes, totalTranche,
-                parFamille.entrySet().stream().map(e -> e.getValue().vers(null, null, null, e.getKey())).toList(),
-                Comptes.somme(parFamille.values()).vers(null, null, null, null));
-    }
-
-    /** Lignes du classeur, dans l'ordre du JSON : familles d'une tranche, son total, puis le total général. */
-    public static List<LigneTableurVendusLibres> lignesTableur(SyntheseVendusLibresDto synthese) {
-        List<LigneTableurVendusLibres> lignes = new ArrayList<>();
-        for (CompteVendusLibres total : synthese.totalTranche()) {
-            synthese.lignes().stream().filter(l -> total.trancheId().equals(l.trancheId())).forEach(l -> lignes.add(
-                    LigneTableurVendusLibres.de(l.trancheCode(), l.familleCode().libelle(), l)));
-            lignes.add(LigneTableurVendusLibres.de("Total tranche", null, total));
-        }
-        lignes.add(LigneTableurVendusLibres.de("Total général", null, synthese.general()));
-        return lignes;
-    }
-
-    /** Comptes d'une cellule ; {@link #vers} porte la seule règle de pourcentage (R5), reprise par l'export. */
-    private record Comptes(long libres, long reserves, long vendus, long sansStatut) {
-
-        static Comptes de(EtatVente etat, boolean sansStatut, long n) {
-            return new Comptes(etat == EtatVente.LIBRE ? n : 0, etat == EtatVente.RESERVE ? n : 0,
-                    etat == EtatVente.VENDU ? n : 0, sansStatut ? n : 0);
-        }
-
-        static Comptes somme(Collection<Comptes> comptes) {
-            return comptes.stream().reduce(new Comptes(0, 0, 0, 0), Comptes::plus);
-        }
-
-        Comptes plus(Comptes o) {
-            return new Comptes(libres + o.libres, reserves + o.reserves, vendus + o.vendus,
-                    sansStatut + o.sansStatut);
-        }
-
-        CompteVendusLibres vers(UUID trancheId, String trancheCode, String trancheLibelle, FamilleArticle famille) {
-            long total = libres + reserves + vendus;
-            return new CompteVendusLibres(trancheId, trancheCode, trancheLibelle, famille, libres, reserves, vendus,
-                    sansStatut, total, pct(libres, total), pct(reserves, total), pct(vendus, total));
-        }
-
-        private static double pct(long n, long total) {
-            if (total == 0) {
-                return 0;
-            }
-            return BigDecimal.valueOf(n * 100L).divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP)
-                    .doubleValue();
-        }
     }
 
     private static List<TotalCategorieSynthese> parCategorie(List<LigneSynthese> lignes) {
@@ -316,11 +240,27 @@ public class EtatVentesService {
         }
         Pageable trie = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), tri(pageable.getSort()));
         Page<StkItemEtatVentes> page = repository.findAll(spec, trie);
-        boolean avecMontants = colonnes.stream().anyMatch(c -> MONTANTS.containsKey(c.nom()));
-        Map<UUID, Map<ColonneDossier, BigDecimal>> montants = avecMontants
-                ? montantsParNature.pour(page.stream().map(StkItemEtatVentes::getDossier).filter(Objects::nonNull).toList())
-                : new HashMap<>();
+        Map<UUID, Map<ColonneDossier, BigDecimal>> montants = montantsDuDossier(
+                page.stream().map(StkItemEtatVentes::getDossier).filter(Objects::nonNull).distinct().toList(),
+                colonnes.stream().map(ColonneEtatVentes::source).filter(Objects::nonNull).collect(Collectors.toSet()));
         return page.map(l -> versDto(l, l.getDossier() != null ? montants.get(l.getDossier().getId()) : null));
+    }
+
+    /** Montants des colonnes {@code sources}, par les calculs de la liste des dossiers ; aucune requête sans source. */
+    private Map<UUID, Map<ColonneDossier, BigDecimal>> montantsDuDossier(List<ComFolder> dossiers,
+                                                                         Set<ColonneDossier> sources) {
+        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = MontantsParNatureDossier.requises(sources)
+                ? calculs.montants().pour(dossiers)
+                : new HashMap<>();
+        if (ColonnesCalculeesDossier.requises(sources)) {
+            Map<UUID, ValeursCalculees> valeurs = calculs.colonnes().pour(
+                    dossiers.stream().map(ComFolder::getId).toList(), null);
+            for (ComFolder f : dossiers) {
+                parDossier.computeIfAbsent(f.getId(), k -> new EnumMap<>(ColonneDossier.class))
+                        .putAll(MappingListeDossier.prixVenteAuM2(f, valeurs.get(f.getId())));
+            }
+        }
+        return parDossier;
     }
 
     public ResultatGroupement grouper(FiltresEtatVentes filtres, ColonneEtatVentes groupe, Granularite granularite,
@@ -330,21 +270,22 @@ public class EtatVentesService {
                 granularite, agregats, tri, inclureSansValeur, pageable);
     }
 
-    /** Agrégats SQL du catalogue, plus {@code montantRegle} / {@code resteARegler} sommés depuis le calcul Java. */
+    /** Agrégats SQL du catalogue, plus les montants du dossier sommés depuis le calcul Java ({@link #sommeCalculee}). */
     public TotauxListeDto totauxColonnes(FiltresEtatVentes filtres, List<String> agregats) {
         List<String> demandes = agregats != null ? agregats : List.of();
         Specification<StkItemEtatVentes> spec = specification(filtres);
         GroupementService.Totaux totaux = groupementService.totaux(StkItemEtatVentes.class, spec,
                 Colonnes.resoudreAgregats(ColonneEtatVentes.class,
-                        demandes.stream().filter(a -> !MONTANTS.containsKey(a)).toList()));
+                        demandes.stream().filter(a -> !SOMMES_CALCULEES.containsKey(a)).toList()));
         Map<String, Object> valeurs = new LinkedHashMap<>(totaux.valeurs());
-        List<String> enJava = demandes.stream().filter(MONTANTS::containsKey).distinct().toList();
+        List<String> enJava = demandes.stream().filter(SOMMES_CALCULEES::containsKey).distinct().toList();
         if (!enJava.isEmpty()) {
-            Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = montantsParNature.pour(dossiers(spec));
+            Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = calculs.montants().pour(dossiers(spec));
             // Une fois par ligne, comme la liste : un dossier à deux articles racines compte deux fois (et son prix aussi).
             List<UUID> lignes = dossierParLigne(spec);
             for (String nom : enJava) {
-                valeurs.put(nom, lignes.stream().map(id -> parDossier.get(id).get(MONTANTS.get(nom)))
+                ColonneDossier source = SOMMES_CALCULEES.get(nom).source();
+                valeurs.put(nom, lignes.stream().map(id -> parDossier.get(id).get(source))
                         .reduce(BigDecimal.ZERO, BigDecimal::add));
             }
         }
@@ -409,8 +350,6 @@ public class EtatVentesService {
         dansLaListe(p, root.get(TRANCHE).get(ID), f.trancheId());
         dansLaListe(p, root.get(CATEGORIE).get(ID), f.categorieId());
         dansLaListe(p, root.get("type").get(ID), f.typeId());
-        dansLaListe(p, root.get(FAMILLE), f.famille());
-        dansLaListe(p, root.get(ETAT_VENTE), f.etat());
         if (f.projetId() != null) {
             p.add(cb.equal(root.get(TRANCHE).get("cfgProject").get(ID), f.projetId()));
         }
@@ -493,7 +432,7 @@ public class EtatVentesService {
 
     private static LigneEtatVentesDto versDto(StkItemEtatVentes l, Map<ColonneDossier, BigDecimal> montants) {
         ComFolder d = l.getDossier();
-        Function<ColonneDossier, BigDecimal> montant = c -> montants != null ? montants.get(c) : null;
+        Function<ColonneEtatVentes, BigDecimal> m = c -> montants != null ? montants.get(c.source()) : null;
         return new LigneEtatVentesDto(l.getArticleId(), l.getArticleCode(), l.getArticleLibelle(),
                 Champs.de(l.getTranche(), CfgTranche::getCode),
                 Champs.de(l.getCategorie(), StkItemCategory::getCode),
@@ -506,7 +445,20 @@ public class EtatVentesService {
                 TierNomFormatter.nom(Champs.de(d, ComFolder::getCfgCustomer)),
                 TierNomFormatter.nom(Champs.de(d, ComFolder::getCfgCommercial)),
                 Champs.de(d, ComFolder::getDocDate),
-                montant.apply(ColonneDossier.PRIX_REGLE), montant.apply(ColonneDossier.PRIX_RESTE));
+                m.apply(MONTANT_REGLE), m.apply(RESTE_A_REGLER),
+                l.getPrixArticleHt(), l.getPrixArticleTtc(), l.getPrixSousArticlesHt(), l.getPrixSousArticlesTtc(),
+                l.getPrixHt(), l.getRemiseMontant(), l.getPrixContractuel(),
+                m.apply(PRIX_VENTE_M2_TTC), m.apply(PRIX_VENTE_M2_HT),
+                m.apply(NET_A_PAYER), m.apply(NET_A_PAYER_REGLE), m.apply(NET_A_PAYER_RESTE),
+                m.apply(AVANCE), m.apply(AVANCE_REGLEE), m.apply(AVANCE_RESTE),
+                m.apply(AUTOFINANCEMENT), m.apply(AUTOFINANCEMENT_REGLE), m.apply(AUTOFINANCEMENT_RESTE),
+                m.apply(CREDIT), m.apply(CREDIT_REGLE), m.apply(CREDIT_RESTE),
+                m.apply(FRAIS), m.apply(FRAIS_REGLES), m.apply(FRAIS_RESTE),
+                m.apply(MODIFICATIONS), m.apply(MODIFICATIONS_REGLEES), m.apply(MODIFICATIONS_RESTE),
+                m.apply(TROP_PERCU), m.apply(TROP_PERCU_REGLE), m.apply(TROP_PERCU_RESTE),
+                m.apply(PENALITES), m.apply(PENALITES_REGLES), m.apply(PENALITES_RESTE),
+                m.apply(PRIX_CONTRACTUEL_REGLE), m.apply(PRIX_CONTRACTUEL_RESTE),
+                m.apply(TAUX_AVANCE), m.apply(TAUX_AVANCE_REEL));
     }
 
     private static String libelleStatut(StkItemEtatVentes l) {

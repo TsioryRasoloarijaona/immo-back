@@ -62,6 +62,12 @@ n'en font pas partie).
 
 « Prix de vente reste » : prix de vente (`ComFolder.Price`) − `prixRegle`.
 
+## netAPayer
+
+« Net à payer » (`Total` de la vue) : prix + modifications + frais au crédit + pénalités ; sur un dossier
+annulé ou résilié, réglé hors annulation − montant de la résiliation. Calculé, ce n'est pas `totalAPayer`
+(colonne stockée `ComFolder.TotalToPay`, qui peut différer).
+
 ## netAPayerRegle
 
 « Net à payer réglé » (`TotalSettled` de la vue) : réglé de l'avance, du crédit, de l'autofinancement, des
@@ -131,6 +137,31 @@ Réglé des échéances de frais.
 ## fraisReste
 
 `frais − fraisRegles`.
+
+## modifications
+
+« Modifications » : `ComFolder.ModificationsAmount`, 0 si absent.
+
+## modificationsReglees
+
+Réglé des échéances de modification (`IsSaleModification`), au crédit ou non.
+
+## modificationsReste
+
+`modifications − modificationsReglees`.
+
+## penalites
+
+« Pénalités » : Σ des échéances de pénalité (`IsSalePenality`), signées par la catégorie (au crédit +,
+sinon −), comme la vue `ComSaleFolderView`.
+
+## penalitesRegles
+
+Réglé des échéances de pénalité.
+
+## penalitesReste
+
+`penalites − penalitesRegles`.
 
 ## tropPercu
 

@@ -46,4 +46,10 @@ public record ColonneDto(
                 chemin != null && chemin.agregeable(),
                 com.tsix.immocrm.domain.FonctionAgregat.pour(chemin).stream().map(Enum::name).toList());
     }
+
+    /** Colonne sans chemin dont le serveur calcule la seule somme (montant calculé en Java). */
+    public static ColonneDto sommeCalculee(String nom, String libelle, String groupe, String type, boolean parDefaut) {
+        return new ColonneDto(nom, libelle, groupe, type, parDefaut, false, false,
+                List.of(com.tsix.immocrm.domain.FonctionAgregat.SUM.name()));
+    }
 }

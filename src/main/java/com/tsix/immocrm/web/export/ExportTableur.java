@@ -35,7 +35,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Export d'une liste en {@code .xlsx} (POI SXSSF, écrit en flux) : une feuille (« DONNEES » par défaut), une colonne par
+ * Export d'une liste en {@code .xlsx} (POI SXSSF, écrit en flux) : une feuille « DONNEES », une colonne par
  * {@link Colonne} demandée, dans l'ordre reçu. Chaque ligne est un {@code record} dont la composante porte le
  * nom de la colonne ({@link Colonne#nom()}) : aucune connaissance d'un écran particulier.
  */
@@ -74,17 +74,10 @@ public class ExportTableur {
     public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre,
                                                          Collection<? extends Colonne> colonnes,
                                                          List<?> lignes) {
-        return reponse(liste, titre, FEUILLE, colonnes, lignes);
-    }
-
-    /** Comme {@link #reponse(String, String, Collection, List)}, feuille nommée {@code feuille}. */
-    public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre, String feuille,
-                                                         Collection<? extends Colonne> colonnes,
-                                                         List<?> lignes) {
         String nomFichier = liste + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
         String auteur = utilisateurAffiche.courant().nom();
         List<Colonne> ordre = List.copyOf(colonnes);
-        StreamingResponseBody corps = sortie -> ecrire(sortie, titre, feuille, auteur, ordre, lignes);
+        StreamingResponseBody corps = sortie -> ecrire(sortie, titre, auteur, ordre, lignes);
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -93,8 +86,8 @@ public class ExportTableur {
     }
 
     /** Écrit le classeur dans {@code sortie} ; exposé pour les tests. */
-    public void ecrire(OutputStream sortie, String titre, String nomFeuille, String auteur,
-                       List<? extends Colonne> colonnes, List<?> lignes) throws IOException {
+    public void ecrire(OutputStream sortie, String titre, String auteur, List<? extends Colonne> colonnes,
+                       List<?> lignes) throws IOException {
         try (SXSSFWorkbook classeur = new SXSSFWorkbook(LIGNES_EN_MEMOIRE)) {
             POIXMLProperties.CoreProperties proprietes = classeur.getXSSFWorkbook().getProperties()
                     .getCoreProperties();
@@ -102,7 +95,7 @@ public class ExportTableur {
             proprietes.setTitle(titre);
 
             Styles styles = new Styles(classeur);
-            Sheet feuille = classeur.createSheet(nomFeuille);
+            Sheet feuille = classeur.createSheet(FEUILLE);
             Row entete = feuille.createRow(0);
             for (int i = 0; i < colonnes.size(); i++) {
                 Cell cellule = entete.createCell(i);

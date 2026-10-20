@@ -6,18 +6,12 @@
 
 Compte les articles par tranche × catégorie × statut. Statut `LIBRE` : article sans dossier, ou dont le dossier est annulé ou désisté (`StrStatus.BoolField002` / `BoolField003`). `SANS_STATUT` : dossier sans statut, colonne présente seulement si elle compte au moins un article. Sinon le `StrStatus.Code` du dossier. `parStatut` omet les statuts à zéro ; `totaux` donne les mêmes comptes par catégorie et au total.
 
-## syntheseVendusLibres
-
-Compte les articles racines par tranche × famille en trois états, calculés une fois dans la base de l'état des ventes : `LIBRE` (aucun dossier actif ; un dossier annulé ou désisté libère le lot), `RESERVE` (dossier en `RESERVATION` ou sans statut ; `sansStatut` les isole, déjà comptés dans `reserves`), `VENDU` (tout autre statut hors sortie). Famille par code de catégorie : `APP` → `APPARTEMENT`, `PAR` → `PARKING`, `COM` → `MAGASIN`, tout autre code → `AUTRE`. Les sous-articles rattachés (parking d'un appartement) ne sont comptés nulle part. Une ligne par tranche × famille non vide ; pourcentages arrondis à une décimale, base = total de la ligne, 0 si total nul. Chaque cellule égale le `totalElements` de `GET /api/etat-des-ventes?trancheId=&famille=&etat=`. Même visibilité que la liste : une tranche hors périmètre demandée explicitement ne rend aucune ligne (pas de 403).
-
-## exporterVendusLibres
-
-Mêmes filtres et mêmes lignes que `GET /api/etat-des-ventes/synthese-vendus-libres`. Colonnes : Tranche (code), Famille (libellé), Libres, Réservés, Vendus, Total, % Libres, % Réservés, % Vendus (valeurs du JSON, ex. 33.3). Après les familles de chaque tranche, une ligne « Total tranche » ; en fin, « Total général ».
-
 ## lister
 
-Filtres partagés avec la synthèse, plus `statut`, `famille`, `etat`, `typeId`, `nature`, `search` et la période `champDate` + `du` / `au` (jours inclus, sur une date du dossier : un article libre n'en a aucune). Article libre : `prixVenteTTC` = prix catalogue (`ComSalePrice`), aucune donnée de dossier (même un dossier annulé). Tri sur les noms du catalogue `GET /api/referentiels/colonnes/etat-des-ventes` ; `statutLibelle`, `clientNom`, `commercial`, `dossierId`, `montantRegle` et `resteARegler` ne sont pas triables (400). `montantRegle` = prix de vente réglé du dossier, même calcul que la liste des dossiers ; demandé, il coûte deux requêtes par page.
+Filtres partagés avec la synthèse, plus `statut`, `typeId`, `nature`, `search` et la période `champDate` + `du` / `au` (jours inclus, sur une date du dossier : un article libre n'en a aucune). Article libre : prix du catalogue `StkItem` (formules de la branche libre de la vue OMRAN `ComSaleMonitoringView`), aucune donnée de dossier (même un dossier annulé). Tri sur les noms du catalogue `GET /api/referentiels/colonnes/etat-des-ventes` ; les colonnes sans chemin (`statutLibelle`, `clientNom`, `commercial`, `dossierId` et les montants du dossier : `montantRegle`, `avance`, `netAPayer`, `tropPercu`, taux, prix au m²…) ne sont ni triables ni groupables (400).
+
+Montants du dossier : même calcul que `GET /api/dossiers` (une seule formule) ; null sur une ligne libre. En demander un coûte deux requêtes par page, un prix au m² une de plus ; aucune si aucun n'est demandé. Un dossier qui retient deux articles racines apparaît sur deux lignes avec les mêmes montants, comme OMRAN.
 
 ## totauxColonnes
 
-Effectif du filtre et un résumé par jeton d'`agregats` (`surface`, `prixVenteTTC`, `colonne:FONCTION`). `montantRegle` et `resteARegler` (nom nu) sont aussi acceptés : sommes, sur tous les dossiers du filtre, du calcul de la liste des dossiers.
+Effectif du filtre et un résumé par jeton d'`agregats` (`surface`, `prixVenteTTC`, `prixHt`, `colonne:FONCTION`). Les montants du dossier sommables (`montantRegle`, `resteARegler`, `avance`, `netAPayer`, `tropPercu`… : `fonctions = ["SUM"]` au catalogue) sont acceptés en nom nu : somme des lignes de la liste filtrée, donc un dossier à deux articles racines compte deux fois. Taux et prix au m² : 400.

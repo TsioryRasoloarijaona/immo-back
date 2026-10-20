@@ -7,7 +7,7 @@ import java.util.UUID;
  * {@link #CONFIG_ENTITY_ID}. ANNULATION et DESISTEMENT sont les deux sorties, hors de l'ordre de tri.
  */
 public enum StatutDossier {
-    RESERVATION(StatutDossier.CODE_RESERVATION),
+    RESERVATION("RESERVATION"),
     CONCRETISATION("CONCRETISATION"),
     MEILLEURTAUX("MEILLEURTAUX"),
     COMPROMIS("COMPROMIS"),
@@ -20,9 +20,6 @@ public enum StatutDossier {
     LIVRAISON_PROVISOIRE("LIVRAISON PROVISOIRE"),
     ANNULATION("ANNULATION"),
     DESISTEMENT("DESISTEMENT");
-
-    /** Constante de compilation : lue par le {@code @Subselect} de {@code StkItemEtatVentes}. */
-    public static final String CODE_RESERVATION = "RESERVATION";
 
     public static final UUID CONFIG_ENTITY_ID = UUID.fromString("E7C73F70-7507-40D9-AA78-A2825C42B600");
 
