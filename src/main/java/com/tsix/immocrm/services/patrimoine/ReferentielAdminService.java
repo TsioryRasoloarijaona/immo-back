@@ -311,7 +311,12 @@ public class ReferentielAdminService {
                 case OPERATEUR -> operateur(c, entier(v));
                 case DECIMAL -> new BigDecimal(v.toString());
                 case FRACTION -> SaisiePatrimoine.fraction(new BigDecimal(v.toString()), c.nom());
-                case BOOLEEN -> v;
+                case BOOLEEN -> {
+                    if (!(v instanceof Boolean b)) {
+                        throw new IllegalArgumentException(c.nom());
+                    }
+                    yield b;
+                }
                 case REFERENCE -> reference(c, UUID.fromString(v.toString()));
                 case LIGNES -> throw new IllegalStateException(c.nom());
             };
