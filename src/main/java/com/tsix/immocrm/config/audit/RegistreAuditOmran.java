@@ -34,7 +34,14 @@ import com.tsix.immocrm.entities.stk.StkVue;
 import com.tsix.immocrm.entities.cfg.CfgTrancheFolderEntity;
 import com.tsix.immocrm.entities.cfg.ComSalesCommission;
 import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.com.ComSaleWithdrawalCancellation;
 import com.tsix.immocrm.entities.str.StrEntity;
+import com.tsix.immocrm.entities.stk.StkFSBaseUnit;
+import com.tsix.immocrm.entities.stk.StkFSBaseUnitStkFeasibilityStudy;
+import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
+import com.tsix.immocrm.entities.stk.StkFeasibilityStudyCfgTranche;
+import com.tsix.immocrm.entities.stk.StkFeasibilityStudyCfgTrancheStkBaseUnit;
+import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatusHistory;
 import com.tsix.immocrm.utils.Champs;
 
 import java.util.List;
@@ -77,7 +84,10 @@ public final class RegistreAuditOmran {
             StkItemVue.class, StkItemContenance.class,
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
             AdmAttachedFile.class, StkHierarchyPlan.class,
-            StkExpense.class, BuyDocument.class);
+            StkExpense.class, BuyDocument.class,
+            StkFeasibilityStudy.class, StkFSBaseUnitStkFeasibilityStudy.class, StkFeasibilityStudyCfgTranche.class,
+            StkFeasibilityStudyCfgTrancheStkBaseUnit.class, StkFeasibilityStudyStatusHistory.class,
+            ComSaleWithdrawalCancellation.class);
 
     private RegistreAuditOmran() {
     }
@@ -146,6 +156,21 @@ public final class RegistreAuditOmran {
                     Champs.de(e.getStkExpenseType(), StkExpenseType::getDescription), TERRAIN,
                     Champs.de(e.getStkItem(), StkItem::getId));
             case BuyDocument f -> new Trace("Yes.Stl.Debit.Invoice", "Facture", f.getCode(), null, null);
+            // Études de faisabilité (FEATURE-patrimoine-faisabilite.md §2.6) : sans parent ; les deux derniers types
+            // ne sont pas mesurés en prod, ObjectType = classe OMRAN.
+            case StkFeasibilityStudy e -> new Trace("Yes.Stk.StkFeasibilityStudy", "Etude de faisabilité",
+                    e.getDescription(), null, null);
+            case StkFSBaseUnitStkFeasibilityStudy l -> new Trace("Yes.Stk.BalanceSheet.FSBaseUnitStkFeasibilityStudy",
+                    "Prévision", Champs.de(l.getStkFSBaseUnit(), StkFSBaseUnit::getCode), null, null);
+            case StkFeasibilityStudyCfgTranche ignore -> new Trace("Yes.Stk.BalanceSheet.FeasibilityStudyCfgTranche",
+                    LIBELLE_TRANCHE, LIBELLE_TRANCHE, null, null);
+            case StkFeasibilityStudyCfgTrancheStkBaseUnit v -> new Trace(
+                    "Yes.Stk.BalanceSheet.FeasibilityStudyCfgTrancheStkBaseUnit", "Unité de la tranche",
+                    v.getId().toString(), null, null);
+            case StkFeasibilityStudyStatusHistory h -> new Trace("Yes.Stk.Config.FeasibilityStudyStatusHistory",
+                    "Historique des états", h.getId().toString(), null, null);
+            case ComSaleWithdrawalCancellation w -> new Trace("Yes.Com.Sales.SaleWithdrawalCancellation", "Désistement",
+                    w.getCode(), null, null);
             default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
     }
@@ -155,6 +180,7 @@ public final class RegistreAuditOmran {
         String libelle = switch (entite) {
             case CodeLibelleOmran c -> c.getDescription();
             case StkItemExonaration e -> Objects.toString(e.getDocYear(), "");
+            case StkFSBaseUnit u -> u.getDescription();
             case LigneOmran l -> l.getId().toString();
             default -> "";
         };

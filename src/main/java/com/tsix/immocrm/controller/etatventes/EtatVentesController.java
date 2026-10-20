@@ -178,8 +178,11 @@ public class EtatVentesController {
     @Operation(summary = "Catalogue des colonnes de l'état des ventes")
     public List<ColonneDto> colonnes() {
         return Arrays.stream(ColonneEtatVentes.values())
-                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(),
-                        c.chemin()))
+                .map(c -> EtatVentesService.sommeCalculee(c)
+                        ? ColonneDto.sommeCalculee(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                                c.parDefaut())
+                        : ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(),
+                                c.chemin()))
                 .toList();
     }
 }

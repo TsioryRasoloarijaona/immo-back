@@ -43,10 +43,12 @@ public class CollecteurLignesEcrites
             "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
             "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "StkHierarchyPlan", "CfgTier", "ComAction",
             "StkExpense", "BuyDocument", "BuyDocumentLine", "BuyVentilationCategory", "BuyDocumentStatusHistory",
-            "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComDocument",
+            "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComSaleWithdrawalCancellation", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",
             "AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument", "AppModeleDocumentVersion",
+            "SpecificFunction", "StkFSBaseUnit", "StkFeasibilityStudy", "StkFeasibilityStudyStatusHistory",
+            "StkFSBaseUnitStkFeasibilityStudy", "StkFeasibilityStudyCfgTranche", "StkFeasibilityStudyCfgTrancheStkBaseUnit",
             "AdmMessage", "AdmWebHistorics");
 
     /** {@code AdmSequence} est bien écrite à chaque création ; la recopier réinstallerait deux compteurs divergents. */

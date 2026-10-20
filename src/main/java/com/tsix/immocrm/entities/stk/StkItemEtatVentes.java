@@ -19,6 +19,7 @@ import java.util.UUID;
 /**
  * Une ligne de l'état des ventes = un article racine en vente (FEATURE-etat-des-ventes.md R1–R3), base unique de la
  * synthèse, de la liste, des groupes et des totaux (R5). Dossier annulé ou désisté : {@code dossier} NULL, donc Libre.
+ * Prix : colonne du dossier, ou formule de la branche libre de {@code ComSaleMonitoringView} (FEATURE-etat-des-ventes-parite.md §3.2).
  */
 @Entity
 @Immutable
@@ -29,7 +30,16 @@ import java.util.UUID;
         + "f.PKey AS DossierId, "
         + "CASE WHEN f.PKey IS NULL THEN '" + StkItemEtatVentes.LIBRE + "' WHEN s.PKey IS NULL THEN '"
         + StkItemEtatVentes.SANS_STATUT + "' ELSE s.Code END AS StatutCode, "
-        + "CASE WHEN f.PKey IS NULL THEN i.ComSalePrice ELSE f.Price END AS PrixVenteTTC "
+        + "CASE WHEN f.PKey IS NULL THEN i.ComSalePrice ELSE f.Price END AS PrixVenteTTC, "
+        + "CASE WHEN f.PKey IS NULL THEN i.SalePrice / (1 + i.Vat) ELSE f.ItemPriceAfterHT END AS PrixArticleHt, "
+        + "CASE WHEN f.PKey IS NULL THEN i.SalePrice ELSE f.ItemPriceAfter END AS PrixArticleTtc, "
+        + "CASE WHEN f.PKey IS NULL THEN (i.ComSalePrice - i.SalePrice) / (1 + i.Vat) ELSE f.UnderItemsPriceAfterHT END "
+        + "AS PrixSousArticlesHt, "
+        + "CASE WHEN f.PKey IS NULL THEN i.ComSalePrice - i.SalePrice ELSE f.UnderItemsPriceAfter END "
+        + "AS PrixSousArticlesTtc, "
+        + "CASE WHEN f.PKey IS NULL THEN i.ComSalePriceHT ELSE f.PriceHT END AS PrixHt, "
+        + "CASE WHEN f.PKey IS NULL THEN 0 ELSE f.DiscountAmount END AS RemiseMontant, "
+        + "CASE WHEN f.PKey IS NULL THEN i.ComSalePrice ELSE f.AgreementPrice END AS PrixContractuel "
         + "FROM StkItem i "
         + "JOIN CfgTranche t ON t.PKey = i.StkHierarchyId "
         + "JOIN StkVocation v ON v.PKey = i.StkVocationId "
@@ -88,4 +98,25 @@ public class StkItemEtatVentes {
 
     @Column(name = "PrixVenteTTC", precision = 26, scale = 6)
     private BigDecimal prixVenteTTC;
+
+    @Column(name = "PrixArticleHt", precision = 26, scale = 6)
+    private BigDecimal prixArticleHt;
+
+    @Column(name = "PrixArticleTtc", precision = 26, scale = 6)
+    private BigDecimal prixArticleTtc;
+
+    @Column(name = "PrixSousArticlesHt", precision = 26, scale = 6)
+    private BigDecimal prixSousArticlesHt;
+
+    @Column(name = "PrixSousArticlesTtc", precision = 26, scale = 6)
+    private BigDecimal prixSousArticlesTtc;
+
+    @Column(name = "PrixHt", precision = 26, scale = 6)
+    private BigDecimal prixHt;
+
+    @Column(name = "RemiseMontant", precision = 26, scale = 6)
+    private BigDecimal remiseMontant;
+
+    @Column(name = "PrixContractuel", precision = 26, scale = 6)
+    private BigDecimal prixContractuel;
 }

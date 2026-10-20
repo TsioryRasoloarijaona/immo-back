@@ -163,6 +163,11 @@ public class PerimetreCommercialService {
         return parDossierVisible(false);
     }
 
+    /** Toute ligne portée par une association {@code comFolder} : visible ssi son dossier l'est, comme une échéance. */
+    public <T> Specification<T> filtreParDossier() {
+        return parDossierVisible(false);
+    }
+
     /** Ligne {@code StrFolderStatusHistory} : visible sans dossier de vente, sinon comme son dossier. */
     public Specification<StrFolderStatusHistory> filtreHistoriqueStatuts() {
         return parDossierVisible(true);

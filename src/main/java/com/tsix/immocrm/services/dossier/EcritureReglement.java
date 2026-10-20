@@ -60,18 +60,31 @@ public class EcritureReglement {
 
     public ReglementEcrit creer(ComFolder folder, CreerReglementRequest entete,
                                 List<AffectationReglementRequest> repartition, AuthenticatedUser principal) {
+        return creer(folder, entete, repartition, principal, false);
+    }
+
+    /**
+     * {@code decaissement} : remboursement au client ({@code IsCredit = 0}) sur une pièce au débit, plafonné par
+     * {@link AffectationsReglement#resteDu} ; ni pénalité de retard, ni alerte d'impayé.
+     */
+    public ReglementEcrit creer(ComFolder folder, CreerReglementRequest entete,
+                                List<AffectationReglementRequest> repartition, AuthenticatedUser principal,
+                                boolean decaissement) {
         EnTeteValidee valide = validerEnTete(folder, entete);
-        List<LigneAffectee> lignes = affectations.valider(folder.getId(), repartition, List.of());
+        List<LigneAffectee> lignes = affectations.valider(folder.getId(), repartition, List.of(), decaissement);
         BigDecimal affecte = AffectationsReglement.somme(lignes);
         if (affecte.compareTo(valide.montant()) > 0) {
             throw new InvalidRequestException("Le reste à affecter doit être >= 0 : les affectations ("
                     + affecte.toPlainString() + ") dépassent le montant du règlement ("
                     + valide.montant().toPlainString() + ")");
         }
-        genererPenalites(lignes);
+        if (!decaissement) {
+            genererPenalites(lignes);
+        }
 
-        StlSettlement enregistre = depots.reglements().save(nouveauReglement(folder, entete, valide, principal));
-        return new ReglementEcrit(enregistre, ecrireLignes(enregistre, lignes));
+        StlSettlement enregistre = depots.reglements().save(
+                nouveauReglement(folder, entete, valide, principal, decaissement));
+        return new ReglementEcrit(enregistre, ecrireLignes(enregistre, lignes, !decaissement));
     }
 
     private record EnTeteValidee(BigDecimal montant, LocalDateTime dateEcheance, StlSettlementType type,
@@ -98,7 +111,7 @@ public class EcritureReglement {
     }
 
     private StlSettlement nouveauReglement(ComFolder folder, CreerReglementRequest entete, EnTeteValidee valide,
-                                           AuthenticatedUser principal) {
+                                           AuthenticatedUser principal, boolean decaissement) {
         StlSettlement settlement = new StlSettlement();
         settlement.setId(UUID.randomUUID());
         settlement.setDocDate(LocalDate.now(clock).atStartOfDay());
@@ -108,7 +121,7 @@ public class EcritureReglement {
         settlement.setCode(requireNonNullElse(entete.reference(), ""));
         settlement.setNotes(requireNonNullElse(entete.notes(), ""));
         settlement.setStatus(StatutReglement.INITIAL.name());
-        settlement.setIsCredit(Boolean.TRUE);
+        settlement.setIsCredit(!decaissement);
         String auteur = utilisateurAffiche.nom(principal);
         LocalDateTime maintenant = LocalDateTime.now(clock);
         settlement.setUserCreate(auteur);
@@ -138,7 +151,7 @@ public class EcritureReglement {
                     + ") dépassent le reste à affecter (" + resteAAffecter.toPlainString() + ")");
         }
         genererPenalites(lignes);
-        return ecrireLignes(reglement, lignes);
+        return ecrireLignes(reglement, lignes, true);
     }
 
     /** Avant l'enregistrement : la pénalité se calcule sur le reste d'avant ce règlement (FEATURE-impayes.md P3). */
@@ -147,7 +160,7 @@ public class EcritureReglement {
     }
 
     /** {@code SettlementLine.cs} AfterInsert : l'alerte d'impayé de chaque échéance réglée suit son nouveau reste. */
-    private List<StlSettlementLine> ecrireLignes(StlSettlement reglement, List<LigneAffectee> lignes) {
+    private List<StlSettlementLine> ecrireLignes(StlSettlement reglement, List<LigneAffectee> lignes, boolean alerter) {
         List<StlSettlementLine> ecrites = lignes.stream().map(ligne -> {
             StlSettlementLine line = new StlSettlementLine();
             line.setId(UUID.randomUUID());
@@ -156,7 +169,9 @@ public class EcritureReglement {
             line.setAmount(ligne.montant());
             return depots.lignes().save(line);
         }).toList();
-        lignes.stream().map(LigneAffectee::echeance).distinct().forEach(alertes::synchroniser);
+        if (alerter) {
+            lignes.stream().map(LigneAffectee::echeance).distinct().forEach(alertes::synchroniser);
+        }
         return ecrites;
     }
 

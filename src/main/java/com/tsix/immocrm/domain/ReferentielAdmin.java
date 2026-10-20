@@ -8,7 +8,9 @@ import com.tsix.immocrm.entities.lnd.LndVocation;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkContenance;
 import com.tsix.immocrm.entities.stk.StkCostCategory;
+import com.tsix.immocrm.entities.stk.SpecificFunction;
 import com.tsix.immocrm.entities.stk.StkExpenseType;
+import com.tsix.immocrm.entities.stk.StkFSBaseUnit;
 import com.tsix.immocrm.entities.stk.StkFacade;
 import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
@@ -109,7 +111,7 @@ public enum ReferentielAdmin {
     },
     CATEGORIES_CHARGE("categories-charge", "Catégories de charge", Famille.ARTICLES, StkCostCategory.class,
             new Audit("Yes.Stk.Config.CostCategory", "Catégorie de charge"), Colonnes.CODE_LIBELLE, Colonnes.CLE_CODE),
-    CONTENANCES("contenances", "Contenances", Famille.ARTICLES, StkContenance.class,
+    CONTENANCES(Colonnes.CONTENANCES_PRESENTATION, "Contenances", Famille.ARTICLES, StkContenance.class,
             new Audit("Yes.Stk.Config.Contenance", "Contenance"), Colonnes.CONTENANCE, Colonnes.CLE_CODE) {
         @Override
         public List<Bloquant> bloquants() {
@@ -138,16 +140,33 @@ public enum ReferentielAdmin {
             new Audit("Yes.Lnd.Config.Level", "Niveau"), Colonnes.CODE_LIBELLE, Colonnes.CLE_CODE),
     QUOTES_PARTS_EXONEREES("quotes-parts-exonerees", "Quote part exonérée", Famille.AUTRES, StkItemExonaration.class,
             new Audit("Yes.Stk.Config.StkItemExonaration", "Quote part exonérée"), Colonnes.EXONERATION,
-            List.of("cfgTranche", "docYear")),
+            List.of(Colonnes.CFG_TRANCHE, "docYear")),
     RUBRIQUES_TRANCHE("rubriques-tranche", "Rubriques de tranche", Famille.AUTRES, StkTrancheHeading.class,
             new Audit("Yes.Stk.Config.TrancheHeading", "Rubrique de tranche"), Colonnes.RUBRIQUE, Colonnes.CLE_CODE),
     /** Écran limité aux dossiers de vente ; unicité (tranche, entité, statut) : le contrôle lit {@code findFirst()}. */
     SEUILS_VERSEMENT("seuils-versement", "Seuils de versement", Famille.AUTRES, CfgTrancheStatus.class,
             new Audit("Yes.Cfg.CfgTrancheStatus", "Seuil de versement"), Colonnes.SEUIL,
-            List.of("cfgTranche", "strFolderEntityId", "strStatusId")) {
+            List.of(Colonnes.CFG_TRANCHE, "strFolderEntityId", "strStatusId")) {
         @Override
         public Map<String, Object> portee() {
             return Map.of("strFolderEntityId", StatutDossier.CONFIG_ENTITY_ID);
+        }
+    },
+    /** Études de faisabilité (FEATURE-patrimoine-faisabilite.md §3) : table sans colonne d'audit. */
+    UNITES_BASE("unites-de-base", "Unités de base", Famille.AUTRES, StkFSBaseUnit.class,
+            new Audit("Yes.Stk.BalanceSheet.FSBaseUnit", "Unité de base"), Colonnes.UNITE_BASE, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(l) FROM StkFSBaseUnitStkFeasibilityStudy l "
+                    + "WHERE l.stkFSBaseUnit.id = :id", "StkFSBaseUnitStkFeasibilityStudy (unités d'étude)"));
+        }
+    },
+    FONCTIONS_SPECIFIQUES("fonctions-specifiques", "Fonctions spécifiques", Famille.AUTRES, SpecificFunction.class,
+            new Audit("Yes.Stk.Config.SpecificFunction", "Fonction spécifique"), Colonnes.FONCTION, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(u) FROM StkFSBaseUnit u WHERE u.specificFunction.id = :id",
+                    "StkFSBaseUnit (unités de base)"));
         }
     };
 
@@ -255,11 +274,12 @@ public enum ReferentielAdmin {
 
     /** Listes de champs partagées : une classe à part, les constantes d'une énumération ne pouvant s'y référer. */
     private static final class Colonnes {
+        static final String CFG_TRANCHE = "cfgTranche";
         static final List<String> CLE_CODE = List.of("code");
         static final List<String> CLE_NATURE = List.of("stkKind", "code");
         static final List<ChampReferentiel> CODE_LIBELLE = List.of(CODE, DESCRIPTION);
         static final List<ChampReferentiel> TRI_CODE_LIBELLE = List.of(SORTING.requis(), CODE, DESCRIPTION);
-        static final ChampReferentiel TRANCHE = reference("trancheId", "Tranche", "cfgTranche", ReferenceAdmin.TRANCHE);
+        static final ChampReferentiel TRANCHE = reference("trancheId", "Tranche", CFG_TRANCHE, ReferenceAdmin.TRANCHE);
         static final ChampReferentiel CATEGORIE_COMPTABLE = reference("categorieComptableId", "Catégorie comptable",
                 "stlCategory", ReferenceAdmin.CATEGORIE_COMPTABLE).requis();
         static final List<ChampReferentiel> PAR_NATURE = List.of(
@@ -293,6 +313,18 @@ public enum ReferentielAdmin {
                         ReferenceAdmin.TYPE_REGLEMENT).requis(),
                 de("operateur", "Opérateur", Type.OPERATEUR, "thresholdOperator").requis(),
                 de("ratio", "Seuil", Type.FRACTION, "thresholdRatio").requis());
+        static final List<ChampReferentiel> UNITE_BASE = List.of(SORTING.requis(), CODE, DESCRIPTION,
+                reference("fonctionSpecifiqueId", "Fonction spécifique", "specificFunction",
+                        ReferenceAdmin.FONCTION_SPECIFIQUE),
+                reference("categorieArticleId", "Catégorie d'article", "stkItemCategory", ReferenceAdmin.CATEGORIE_ARTICLE),
+                de("estSurface", "Surface", Type.BOOLEEN, "isArea"));
+        static final List<ChampReferentiel> FONCTION = List.of(SORTING.requis(), CODE, DESCRIPTION,
+                de("estTotal", "Total", Type.BOOLEEN, "isTotal"),
+                de("surfaceVendable", "Surface vendable", Type.BOOLEEN, "saleAbleArea"),
+                de("plancherCouvert", "Plancher couvert", Type.BOOLEEN, "coveredArea"),
+                de("surfaceNette", "Surface nette", Type.BOOLEEN, "areaNet"),
+                de("surfaceBrute", "Surface brute", Type.BOOLEEN, "areaBrut"),
+                de("empriseAuSol", "Emprise au sol", Type.BOOLEEN, "areaCos"));
 
         /** Trois options (texte) et leur case, numérotées 1 à 3 dans les trois motifs. */
         private static Stream<ChampReferentiel> options(String nomCase, String proprieteCase, String libelleCase) {

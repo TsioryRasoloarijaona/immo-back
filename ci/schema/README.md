@@ -33,6 +33,10 @@ chaque *pull request*.
 | `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
 | `120_terrains_tables.sql` | `BuyVentilationCategory`, `BuyDocumentStatusHistory`, `BuyDocumentWorkFlow` (+ `BuyDocumentLine`, déjà en CI) — facture de frais de terrain, FEATURE-patrimoine-terrains.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
 | `121_terrains_fk.sql` | leurs 9 clés étrangères, actions de suppression de production ; idempotent | écrit à la main |
+| `122_faisabilite_tables.sql` | 20 tables des études de faisabilité (étude, unités, tranches, ventilations, configuration, historique, prévisions, financements, workflow) + `AdmParamsString` (`AdmWorkFlowStateType` déjà en CI), FEATURE-patrimoine-faisabilite.md ; idempotent, à appliquer aussi à `yesRemsTest` | régénéré depuis `yesRemsProd` |
+| `123_faisabilite_fk.sql` | leurs 38 clés étrangères, actions de suppression de production (5 CASCADE entrantes sur l'étude) ; idempotent, CI seulement | régénéré depuis `yesRemsProd` |
+| `136_desistements_tables.sql` | `ComSaleWithdrawalCancellation`, `ComSaleWithdrawalReason`, `ComDocument.ComSaleWithdrawalCancellationId` (désistements, FEATURE-desistements.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
+| `137_desistements_fk.sql` | leurs clés vers `ComFolder`, `ComSaleWithdrawalReason`, `StkItem`, `StlSettlementType` et `ComDocument` → désistement, noms de production ; idempotent | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
