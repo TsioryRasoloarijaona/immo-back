@@ -38,6 +38,9 @@ public enum StatutReglement {
     public static final String JPQL_COMPTE_DANS_LES_TOTAUX = "(st.status IS NULL OR st.status <> 'CANCELED')";
     public static final String SQL_COMPTE_DANS_LES_TOTAUX = "(s.Status IS NULL OR s.Status <> 'CANCELED')";
 
+    /** {@code StlSettlementLineRepository.MONTANT_SIGNE} en SQL (alias {@code l} ligne, {@code s} règlement). */
+    public static final String SQL_MONTANT_SIGNE = "CASE WHEN s.IsCredit = 0 THEN -l.Amount ELSE l.Amount END";
+
     /** Même règle pour les sommes d'une colonne groupée de {@code StlSettlement} (le comptage garde CANCELED). */
     public static Chemin horsAnnules(Chemin chemin) {
         return chemin.sauf("status", CANCELED.name());
