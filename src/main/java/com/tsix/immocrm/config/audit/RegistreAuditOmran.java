@@ -31,6 +31,7 @@ import com.tsix.immocrm.entities.stk.StkVue;
 import com.tsix.immocrm.entities.cfg.CfgTrancheFolderEntity;
 import com.tsix.immocrm.entities.cfg.ComSalesCommission;
 import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.com.ComSaleWithdrawalCancellation;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.stk.StkFSBaseUnit;
 import com.tsix.immocrm.entities.stk.StkFSBaseUnitStkFeasibilityStudy;
@@ -81,7 +82,8 @@ public final class RegistreAuditOmran {
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
             AdmAttachedFile.class, StkHierarchyPlan.class,
             StkFeasibilityStudy.class, StkFSBaseUnitStkFeasibilityStudy.class, StkFeasibilityStudyCfgTranche.class,
-            StkFeasibilityStudyCfgTrancheStkBaseUnit.class, StkFeasibilityStudyStatusHistory.class);
+            StkFeasibilityStudyCfgTrancheStkBaseUnit.class, StkFeasibilityStudyStatusHistory.class,
+            ComSaleWithdrawalCancellation.class);
 
     private RegistreAuditOmran() {
     }
@@ -158,6 +160,8 @@ public final class RegistreAuditOmran {
                     v.getId().toString(), null, null);
             case StkFeasibilityStudyStatusHistory h -> new Trace("Yes.Stk.Config.FeasibilityStudyStatusHistory",
                     "Historique des états", h.getId().toString(), null, null);
+            case ComSaleWithdrawalCancellation w -> new Trace("Yes.Com.Sales.SaleWithdrawalCancellation", "Désistement",
+                    w.getCode(), null, null);
             default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
     }

@@ -126,6 +126,10 @@ public class ComDocument {
     @Column(name = "StlRecoveryFolderId")
     private UUID stlRecoveryFolderId;
 
+    // Pièce générée par la validation d'un désistement (frais, remboursement).
+    @Column(name = "ComSaleWithdrawalCancellationId")
+    private UUID comSaleWithdrawalCancellationId;
+
     // Posé par LigneEcheancierOmran.signerCreation : les numéros de quittance ne se donnent qu'à l'insertion.
     @Transient
     private boolean nouvelleLigne;

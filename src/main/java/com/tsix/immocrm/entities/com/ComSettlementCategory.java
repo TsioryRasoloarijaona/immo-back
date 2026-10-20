@@ -69,6 +69,10 @@ public class ComSettlementCategory {
     @Column(name = "IsSaleResiliation")
     private Boolean isSaleResiliation;
 
+    // OMRAN « Toujours payé » : son reste dû est retenu sur le remboursement d'un désistement.
+    @Column(name = "IsAlwaysPayed")
+    private Boolean isAlwaysPayed;
+
     @Column(name = "IsSyndic")
     private Boolean isSyndic;
 
