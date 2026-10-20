@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.patrimoine;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import com.tsix.immocrm.fixtures.NommageSchemaCi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -98,7 +99,6 @@ class TrancheOngletsSchemaTest {
 
     @Test
     void r8_1_readmeDuSchemaCi_citeLesFichiers104Et105() throws IOException {
-        assertThat(lire(SCHEMA_CI.resolve("README.md")))
-                .contains("104_tranche-onglets_tables.sql", "105_tranche-onglets_fk.sql");
+        NommageSchemaCi.verifier(104, "tranche-onglets");
     }
 }

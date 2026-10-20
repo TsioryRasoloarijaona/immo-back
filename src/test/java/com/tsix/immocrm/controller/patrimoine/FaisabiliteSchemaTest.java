@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.patrimoine;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import com.tsix.immocrm.fixtures.NommageSchemaCi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -184,7 +185,6 @@ class FaisabiliteSchemaTest {
 
     @Test
     void r1_readmeDuSchemaCi_citeLesFichiers122Et123() throws IOException {
-        assertThat(lire(SCHEMA_CI.resolve("README.md")))
-                .contains("122_faisabilite_tables.sql", "123_faisabilite_fk.sql");
+        NommageSchemaCi.verifier(122, "faisabilite");
     }
 }
