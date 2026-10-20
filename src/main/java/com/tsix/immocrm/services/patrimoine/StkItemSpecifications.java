@@ -38,7 +38,7 @@ public final class StkItemSpecifications {
     public static Specification<StkItem> build(UUID trancheId, UUID parentId, boolean topLevelOnly, StatutArticle statut,
                                          List<UUID> categorieIds, List<UUID> typeIds) {
         return build(new FiltresArticle(trancheId != null ? List.of(trancheId) : null, parentId, topLevelOnly, statut,
-                categorieIds, typeIds, null, false, null, null, null, null, null, null, null, null));
+                categorieIds, typeIds, null, false, null, null, null, null, null, null, null, null, false, null, null));
     }
 
     public static Specification<StkItem> build(FiltresArticle filtres) {

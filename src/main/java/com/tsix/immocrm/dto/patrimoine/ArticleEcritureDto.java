@@ -18,8 +18,8 @@ public record ArticleEcritureDto(
                 + "sous-article (400, celle du parent).") UUID trancheId,
         @Schema(description = "Code, unique dans la tranche (sous-articles compris). Obligatoire.") String code,
         @Schema(description = "Libellé. Obligatoire.") String description,
-        @Schema(description = "Vocation (StkVocation), défaut VENTE, PROJET refusée. Interdite pour un sous-article (400).")
-        UUID vocationId,
+        @Schema(description = "Vocation (StkVocation), défaut VENTE, PROJET refusée. Interdite pour un sous-article "
+                + "rattaché (400).") UUID vocationId,
         @Schema(description = "Catégorie nature Bâtiment ; « pour les sous-articles » selon le lot. Obligatoire.")
         UUID categorieId,
         @Schema(description = "Type, même règle que la catégorie. Obligatoire.") UUID typeId,
@@ -42,8 +42,9 @@ public record ArticleEcritureDto(
         @Schema(description = "InteriorArea, ≥ 0.") BigDecimal surfaceInterieure,
         @Schema(description = "WallsArea, ≥ 0.") BigDecimal surfaceMurs,
         @Schema(description = "CommonPartsArea, ≥ 0.") BigDecimal surfacePartiesCommunes,
-        @Schema(description = "AlwaysAffected, à la création d'un sous-article seulement (défaut faux).")
-        Boolean toujoursAffecte,
+        @Schema(description = "AlwaysAffected (défaut faux) ; vrai sans article parent → 400.") Boolean toujoursAffecte,
+        @Schema(description = "ParentId, /api/sous-articles seulement : rattache le sous-article libre à cet article.")
+        UUID parentId,
 
         // -- Fiche article (FEATURE-patrimoine-article-fiche.md §1) --
         @Schema(description = "Type de présentation (StkPresentationType) de la tranche de l'article ; un changement "

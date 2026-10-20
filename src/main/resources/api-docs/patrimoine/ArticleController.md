@@ -7,7 +7,12 @@ Articles et sous-articles (StkItem) — lots vendables d'une tranche, avec leur 
 Liste paginée de tous les articles racine et sous-articles, toutes tranches confondues — pour
 parcourir/rechercher le patrimoine sans devoir d'abord choisir une Tranche (contrairement à `GET
 /api/tranches/{id}/articles`, point d'entrée à privilégier quand la tranche est déjà connue).
-`search` filtre en sous-chaîne sur `code` OU `description` (insensible à la casse). `trancheId`
+Colonnes à la demande : `colonnes` prend des noms du catalogue `GET /api/referentiels/colonnes/articles` (absent =
+les champs historiques d'`ArticleListItemDto`, nom inconnu → 400 listant les noms valides) ; les colonnes calculées
+(sommes des sous-articles, codes des sous-articles, parent) ne sont lues que si elles sont demandées.
+`search` filtre en sous-chaîne, sans casse et espaces ignorés des deux côtés, sur le code, la description, le code
+de l'article parent, le code de la tranche, le titre foncier, l'adresse et les libellés de catégorie, type,
+immeuble, étage et vocation. `codeParent` et `etat` : voir `GET /api/sous-articles`. `trancheId`
 restreint à une ou plusieurs tranches (OR) sans changer d'écran. `statut` filtre sur la
 disponibilité mais, à la différence des autres endpoints Article, **n'a pas de valeur par défaut
 ici** : absent = tous les statuts (DISPONIBLE + OCCUPE), pour une vraie vue catalogue. Restreint aux
@@ -58,7 +63,9 @@ provisoire, prix 0, TVA 0, `estTitre` vrai. Pour chaque surface, le prix au m² 
 
 Champ absent ou `null` = inchangé ; `champsAVider` vide un champ de la fiche (dates, références, nombres, cases,
 textes). La tranche ne se modifie pas (400) ; un terrain (nature TER) non plus : 400 « Les terrains se modifient
-depuis la fiche terrain ». Sous-article : `trancheId` ou `vocationId` dans le corps → 400. Si l'article est
+depuis la fiche terrain ». Sous-article : `trancheId` dans le corps → 400 ; `vocationId` → 400 pour un sous-article
+rattaché (celle de son article), permis pour un libre. `toujoursAffecte` : vrai sans article parent → 400. Route de
+la fiche parent pour modifier un sous-article rattaché (`PATCH /api/sous-articles/{id}` le refuse). Si l'article est
 **occupé** (dossier de vente ou de location, le sien ou celui de son article) : code, classification, prix,
 surfaces, TVA, remises et titre foncier (`titreFoncier`) ne se modifient plus → 409 nommant le dossier ; le reste
 de la fiche reste modifiable. Un changement de prix, de surface ou de TVA recalcule l'article et, pour un
@@ -72,7 +79,8 @@ encore cité par une prospection, un dossier, une offre, un historique de statut
 détail les compte) ; une autre clé étrangère de la base → 409 nommant la contrainte. Sinon, dans une transaction :
 les sous-articles rattachés, les vues, contenances, tracés de plan, pièces jointes et notes de chacun, puis
 l'article ; une ligne d'audit `Deleted` par objet. Un sous-article supprimé seul fait recalculer le prix de vente
-de son article.
+de son article ; s'il lui est affecté par défaut → 409 « Vous ne pouvez pas supprimer un sous article affecté par
+défaut à l'article en cours ! ».
 
 ## creerSousArticle
 

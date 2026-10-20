@@ -1,17 +1,22 @@
 package com.tsix.immocrm.controller.patrimoine;
 
+import com.tsix.immocrm.domain.ColonneArticle;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.patrimoine.AffectationSousArticleDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.patrimoine.FiltresListeArticles;
+import com.tsix.immocrm.dto.patrimoine.LigneArticleDto;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -19,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,7 +34,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,8 +44,10 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/articles")
 public class ArticleController {
 
-    private static final String ADMINISTRATEUR = "hasRole('Administrateur')";
-    private static final String REPONSE_403 = "L'appelant n'a pas le rôle Administrateur.";
+    static final String ADMINISTRATEUR = "hasRole('Administrateur')";
+    static final String REPONSE_403 = "L'appelant n'a pas le rôle Administrateur.";
+    static final String COLONNES = "Colonnes du catalogue /api/referentiels/colonnes/articles ; absent = colonnes par défaut.";
+    static final String COLONNE_INCONNUE = "Colonne inconnue : le corps liste les noms valides.";
     private static final String ARTICLE_INTROUVABLE = "Article introuvable.";
     private static final String ID_ARTICLE = "Id de l'article (StkItem.PKey).";
     private static final String ID_SOUS_ARTICLE = "Id du sous-article (StkItem.PKey).";
@@ -52,37 +59,17 @@ public class ArticleController {
     }
 
     @GetMapping
-    @Operation(summary = "Catalogue transverse des articles")
-    public PageDto<ArticleListItemDto> findAll(
-            @Parameter(description = "Sous-chaîne recherchée dans le code ou la description de l'article.", example = "A-204")
-            @RequestParam(required = false) String search,
-            @Parameter(description = "Id(s) de CfgTranche. Répétable, correspondance OR. Absent = toutes les tranches (des entités actives).")
-            @RequestParam(required = false) List<UUID> trancheId,
-            @Parameter(description = "Filtre sur la disponibilité. Absent = DISPONIBLE et OCCUPE.")
-            @RequestParam(required = false) StatutArticle statut,
-            @Parameter(description = "Id(s) de StkItemCategory. Répétable, correspondance OR. Absent = toutes.")
-            @RequestParam(required = false) List<UUID> categorieId,
-            @Parameter(description = "Id(s) de StkItemType. Répétable, correspondance OR. Absent = tous.")
-            @RequestParam(required = false) List<UUID> typeId,
-            @Parameter(description = "Id de CfgCompany (entité juridique). Absent = toutes (parmi les entités actives).")
-            @RequestParam(required = false) UUID entiteId,
-            @Parameter(description = "Id de StkKind (nature du bien). Absent = toutes.")
-            @RequestParam(required = false) UUID natureId,
-            @Parameter(description = "Id de StkVocation. Absent = toutes.")
-            @RequestParam(required = false) UUID vocationId,
-            @Parameter(description = "Id de StkFloor (étage). Absent = tous.")
-            @RequestParam(required = false) UUID etageId,
-            @Parameter(description = "Borne basse (incluse) sur le prix de vente (StkItem.ComSalePrice).")
-            @RequestParam(required = false) BigDecimal prixDe,
-            @Parameter(description = "Borne haute (incluse) sur le prix de vente (StkItem.ComSalePrice).")
-            @RequestParam(required = false) BigDecimal prixA,
-            @Parameter(description = "Borne basse (incluse) sur la superficie (StkItem.Area).")
-            @RequestParam(required = false) BigDecimal surfaceDe,
-            @Parameter(description = "Borne haute (incluse) sur la superficie (StkItem.Area).")
-            @RequestParam(required = false) BigDecimal surfaceA,
+    @Operation(summary = "Catalogue transverse des articles, à colonnes choisies")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Page d'articles, colonnes demandées seules."),
+            @ApiResponse(responseCode = "400", description = COLONNE_INCONNUE, content = @Content)
+    })
+    public PageDto<LigneArticleDto> findAll(
+            @ParameterObject @ModelAttribute FiltresListeArticles filtres,
+            @Parameter(description = COLONNES, example = "code,description,parentCode,etat")
+            @RequestParam(required = false) List<String> colonnes,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(articleService.findAll(search, trancheId, statut, categorieId, typeId,
-                entiteId, natureId, vocationId, etageId, prixDe, prixA, surfaceDe, surfaceA, pageable));
+        return PageDto.of(articleService.lister(filtres.versFiltres(false), ColonneArticle.resoudre(colonnes), pageable));
     }
 
     @GetMapping("/{id}")

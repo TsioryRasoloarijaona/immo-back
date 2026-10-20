@@ -1,10 +1,12 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.ColonneArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.patrimoine.LigneArticleDto;
 import com.tsix.immocrm.dto.patrimoine.LigneContenanceDto;
 import com.tsix.immocrm.dto.patrimoine.LignesTrancheDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -85,26 +88,16 @@ public class ArticleService {
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(new FiltresArticle(List.of(trancheId), null, false, effectiveStatut,
                 categorieIds, typeIds, null, false, entiteId, natureId, vocationId, etageId,
-                prixDe, prixA, surfaceDe, surfaceA));
+                prixDe, prixA, surfaceDe, surfaceA, false, null, null));
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
         Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());
         return page.map(item -> toListItem(item, dossiers, superficies));
     }
 
-    /** Catalogue transverse, entités actives : {@code statut} absent = tous, contrairement à {@link #findByTranche}. */
-    public Page<ArticleListItemDto> findAll(String search, List<UUID> trancheIds, StatutArticle statut,
-                                             List<UUID> categorieIds, List<UUID> typeIds,
-                                             UUID entiteId, UUID natureId, UUID vocationId, UUID etageId,
-                                             BigDecimal prixDe, BigDecimal prixA, BigDecimal surfaceDe, BigDecimal surfaceA,
-                                             Pageable pageable) {
-        var spec = StkItemSpecifications.build(new FiltresArticle(trancheIds, null, false, statut,
-                categorieIds, typeIds, search, true, entiteId, natureId, vocationId, etageId,
-                prixDe, prixA, surfaceDe, surfaceA));
-        Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
-        Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
-        Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());
-        return page.map(item -> toListItem(item, dossiers, superficies));
+    /** {@code /api/articles} et {@code /api/sous-articles}, entités actives : {@code statut} absent = tous. */
+    public Page<LigneArticleDto> lister(FiltresArticle filtres, Set<ColonneArticle> colonnes, Pageable pageable) {
+        throw new UnsupportedOperationException();
     }
 
     public ArticleDetailDto findById(UUID id) {
@@ -154,6 +147,21 @@ public class ArticleService {
     @Transactional
     public void supprimer(UUID id) {
         suppression.supprimer(charger(id));
+    }
+
+    @Transactional
+    public ArticleDetailDto creerSousArticleLibre(ArticleEcritureDto saisie) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Transactional
+    public ArticleDetailDto modifierSousArticle(UUID id, ArticleEcritureDto saisie) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Transactional
+    public void supprimerSousArticle(UUID id) {
+        throw new UnsupportedOperationException();
     }
 
     /** Sous-articles rattachables à un article de la tranche (FEATURE-patrimoine-ecriture.md §5.1). */
