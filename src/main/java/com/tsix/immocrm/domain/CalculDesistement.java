@@ -43,6 +43,10 @@ public final class CalculDesistement {
             if (stockee == null) {
                 return this;
             }
+            // Taux × base nul : la formule ne donne que 0, une pénalité non nulle ne peut être que saisie.
+            if (penaliteBrute().signum() == 0) {
+                return new Entree(taux, basePrix, prix, totalRegle, remise, resteFrais, stockee);
+            }
             BigDecimal tolerance = penaliteBrute().abs().multiply(TOLERANCE_REMISE).add(CENTIME);
             boolean arrondi = formule(this).subtract(stockee).abs().compareTo(tolerance) <= 0;
             return arrondi ? new Entree(taux, basePrix, prix, totalRegle, remise, resteFrais, stockee) : this;

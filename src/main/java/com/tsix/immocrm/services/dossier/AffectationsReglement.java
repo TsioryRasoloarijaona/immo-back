@@ -84,6 +84,14 @@ public class AffectationsReglement {
                 .filter(d -> d.getComFolder() != null && dossierId.equals(d.getComFolder().getId()))
                 .orElseThrow(() -> new InvalidRequestException(
                         "L'échéance " + echeanceId + " n'appartient pas à ce dossier"));
+        // Un encaissement sur une pièce au débit relèverait son reste à rembourser (et inversement).
+        boolean pieceAuDebit = Boolean.FALSE.equals(Champs.de(echeance.getComSettlementCategory(),
+                ComSettlementCategory::getIsCredit));
+        if (pieceAuDebit != decaissement) {
+            throw new InvalidRequestException("L'échéance " + libelle(echeance) + (pieceAuDebit
+                    ? " est un remboursement au client : elle ne reçoit qu'un décaissement"
+                    : " est due par le client : elle ne reçoit qu'un encaissement"));
+        }
         BigDecimal reste = resteDu(echeance, decaissement);
         if (montant.compareTo(reste) > 0) {
             throw new InvalidRequestException("montant (" + montant.toPlainString() + ") dépasse le reste à payer "
