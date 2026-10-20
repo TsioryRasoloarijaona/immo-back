@@ -1,6 +1,12 @@
 package com.tsix.immocrm.config.audit;
 
+import com.tsix.immocrm.domain.ReferentielAdmin;
+import com.tsix.immocrm.entities.CodeLibelleOmran;
+import com.tsix.immocrm.entities.LigneOmran;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.stk.StkItemExonaration;
+import com.tsix.immocrm.entities.stk.StkPresentationType;
+import com.tsix.immocrm.entities.stk.StkPresentationTypeContenance;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgCompanyShareholder;
@@ -53,6 +59,7 @@ public final class RegistreAuditOmran {
     static final String VUE_ARTICLE = "Yes.Stk.Building.StkItemVue";
     static final String CONTENANCE_ARTICLE = "Yes.Stk.Building.ItemContenance";
     private static final String LIBELLE_TRANCHE = "Tranche";
+    private static final String PRESENTATION = ReferentielAdmin.TYPES_PRESENTATION.audit().type();
 
     /** Types que le journal rend : rien d'autre ne sort de {@code AdmWebHistorics} (revue §10.1). */
     public static final List<String> TYPES = List.of(PROGRAMME, TRANCHE, TRANCHE_ARTICLE, ARTICLE, SOUS_ARTICLE, TERRAIN,
@@ -77,7 +84,8 @@ public final class RegistreAuditOmran {
     }
 
     static boolean trace(Class<?> classe) {
-        return CLASSES.contains(classe);
+        return CLASSES.contains(classe) || classe == StkPresentationTypeContenance.class
+                || ReferentielAdmin.parClasse(classe).isPresent();
     }
 
     /** ObjectLabel : programme et article = Code ; tranche, sous-article, terrain = Description (mesuré en prod). */
@@ -114,8 +122,22 @@ public final class RegistreAuditOmran {
             case CfgTrancheFolderEntity f -> new Trace("Yes.Cfg.CfgTrancheFolderEntity", "Définition des finalisations",
                     Objects.toString(Champs.de(f.getStrFolderEntity(), StrEntity::getId), ""), null, null);
             case ComDocument ignore -> new Trace("Yes.Com.Sales.ComDocument", "Financement", "Financement", null, null);
-            default -> null;
+            case StkPresentationTypeContenance c -> new Trace("Yes.Stk.Config.PresentationTypeContenance", "Contenance",
+                    Champs.de(c.getStkContenance(), StkContenance::getDescription), PRESENTATION,
+                    Champs.de(c.getStkPresentationType(), StkPresentationType::getId));
+            default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
+    }
+
+    /** Référentiel du lot P6 : libellé d'objet = Description (mesuré en prod), à défaut année ou PKey. */
+    private static Trace referentiel(ReferentielAdmin r, Object entite) {
+        String libelle = switch (entite) {
+            case CodeLibelleOmran c -> c.getDescription();
+            case StkItemExonaration e -> Objects.toString(e.getDocYear(), "");
+            case LigneOmran l -> l.getId().toString();
+            default -> "";
+        };
+        return new Trace(r.audit().type(), r.audit().libelle(), libelle, null, null);
     }
 
     /** Ligne enfant d'un article : parent = l'article, typé selon sa nature (article, sous-article, terrain). */
