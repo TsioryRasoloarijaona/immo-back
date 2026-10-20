@@ -8,6 +8,7 @@ import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneTrancheEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneUniteEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import com.tsix.immocrm.services.patrimoine.EtudeFaisabiliteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -46,6 +47,12 @@ public class EtudeFaisabiliteController {
     private static final String BLOQUEE = "Étude bloquée (« Étude bloquée »).";
     private static final String VERIF = "Champ invalide, référence inconnue ou message Verif OMRAN (detail).";
 
+    private final EtudeFaisabiliteService service;
+
+    public EtudeFaisabiliteController(EtudeFaisabiliteService service) {
+        this.service = service;
+    }
+
     @GetMapping
     @Operation(summary = "Liste des études des sociétés actives, par code")
     @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
@@ -54,7 +61,7 @@ public class EtudeFaisabiliteController {
             @Parameter(description = "Statut (StkFeasibilityStudyStatus.PKey).") @RequestParam(required = false) UUID statutId,
             @Parameter(description = "Sous-chaîne du code ou du libellé, casse ignorée.") @RequestParam(required = false)
             String search) {
-        throw new UnsupportedOperationException();
+        return service.lister(societeId, statutId, search);
     }
 
     @GetMapping("/{id}")
@@ -65,7 +72,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE)
     })
     public EtudeFaisabiliteDto fiche(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.fiche(id);
     }
 
     @PostMapping("/calcul")
@@ -75,14 +82,14 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
     })
     public ValeursFaisabilite calculer(@RequestBody SaisieEtudeDto saisie) {
-        throw new UnsupportedOperationException();
+        return service.calculerApercu(saisie);
     }
 
     @GetMapping("/choix/terrains")
     @Operation(summary = "Terrains choisissables : articles de nature TER visibles, par code")
     @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
     public List<ReferentielItemDto> terrains() {
-        throw new UnsupportedOperationException();
+        return service.terrains();
     }
 
     @GetMapping("/choix/tranches")
@@ -91,7 +98,7 @@ public class EtudeFaisabiliteController {
     public List<ReferentielItemDto> tranches(
             @Parameter(description = "Société de l'étude (CfgCompany.PKey) ; inactive ou absente = liste vide.")
             @RequestParam(required = false) UUID societeId) {
-        throw new UnsupportedOperationException();
+        return service.tranches(societeId);
     }
 
     @PostMapping
@@ -105,7 +112,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "409", description = "Code déjà pris par une autre étude.")
     })
     public EtudeFaisabiliteDto creer(@RequestBody SaisieEtudeDto saisie) {
-        throw new UnsupportedOperationException();
+        return service.creerEtude(saisie);
     }
 
     @PatchMapping("/{id}")
@@ -120,7 +127,7 @@ public class EtudeFaisabiliteController {
     })
     public EtudeFaisabiliteDto modifier(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                         @RequestBody SaisieEtudeDto saisie) {
-        throw new UnsupportedOperationException();
+        return service.modifierEtude(id, saisie);
     }
 
     @DeleteMapping("/{id}")
@@ -134,7 +141,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "409", description = "Prévisions ou financements présents, ou " + BLOQUEE)
     })
     public void supprimer(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        service.supprimerEtude(id);
     }
 
     @PutMapping("/{id}/unites")
@@ -149,7 +156,7 @@ public class EtudeFaisabiliteController {
     })
     public List<LigneUniteEtudeDto> remplacerUnites(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                                     @RequestBody GrilleEtudeDto<LigneUniteEtudeDto> grille) {
-        throw new UnsupportedOperationException();
+        return service.modifierUnites(id, grille.lignes());
     }
 
     @PutMapping("/{id}/tranches")
@@ -164,7 +171,7 @@ public class EtudeFaisabiliteController {
     })
     public List<LigneTrancheEtudeDto> remplacerTranches(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                                         @RequestBody GrilleEtudeDto<LigneTrancheEtudeDto> grille) {
-        throw new UnsupportedOperationException();
+        return service.modifierTranches(id, grille.lignes());
     }
 
     @PostMapping("/{id}/bloquer")
@@ -178,7 +185,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "409", description = "Étude déjà bloquée.")
     })
     public EtudeFaisabiliteDto bloquer(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.modifierBlocage(id, true);
     }
 
     @PostMapping("/{id}/debloquer")
@@ -190,6 +197,6 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE)
     })
     public EtudeFaisabiliteDto debloquer(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.modifierBlocage(id, false);
     }
 }

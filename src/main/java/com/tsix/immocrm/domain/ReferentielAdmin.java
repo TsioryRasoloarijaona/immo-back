@@ -8,7 +8,9 @@ import com.tsix.immocrm.entities.lnd.LndVocation;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkContenance;
 import com.tsix.immocrm.entities.stk.StkCostCategory;
+import com.tsix.immocrm.entities.stk.SpecificFunction;
 import com.tsix.immocrm.entities.stk.StkExpenseType;
+import com.tsix.immocrm.entities.stk.StkFSBaseUnit;
 import com.tsix.immocrm.entities.stk.StkFacade;
 import com.tsix.immocrm.entities.stk.StkFloor;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
@@ -148,6 +150,23 @@ public enum ReferentielAdmin {
         @Override
         public Map<String, Object> portee() {
             return Map.of("strFolderEntityId", StatutDossier.CONFIG_ENTITY_ID);
+        }
+    },
+    /** Études de faisabilité (FEATURE-patrimoine-faisabilite.md §3) : table sans colonne d'audit. */
+    UNITES_BASE("unites-de-base", "Unités de base", Famille.AUTRES, StkFSBaseUnit.class,
+            new Audit("Yes.Stk.BalanceSheet.FSBaseUnit", "Unité de base"), Colonnes.UNITE_BASE, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(l) FROM StkFSBaseUnitStkFeasibilityStudy l "
+                    + "WHERE l.stkFSBaseUnit.id = :id", "StkFSBaseUnitStkFeasibilityStudy (unités d'étude)"));
+        }
+    },
+    FONCTIONS_SPECIFIQUES("fonctions-specifiques", "Fonctions spécifiques", Famille.AUTRES, SpecificFunction.class,
+            new Audit("Yes.Stk.Config.SpecificFunction", "Fonction spécifique"), Colonnes.FONCTION, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(u) FROM StkFSBaseUnit u WHERE u.specificFunction.id = :id",
+                    "StkFSBaseUnit (unités de base)"));
         }
     };
 
@@ -293,6 +312,18 @@ public enum ReferentielAdmin {
                         ReferenceAdmin.TYPE_REGLEMENT).requis(),
                 de("operateur", "Opérateur", Type.OPERATEUR, "thresholdOperator").requis(),
                 de("ratio", "Seuil", Type.FRACTION, "thresholdRatio").requis());
+        static final List<ChampReferentiel> UNITE_BASE = List.of(SORTING.requis(), CODE, DESCRIPTION,
+                reference("fonctionSpecifiqueId", "Fonction spécifique", "specificFunction",
+                        ReferenceAdmin.FONCTION_SPECIFIQUE),
+                reference("categorieArticleId", "Catégorie d'article", "stkItemCategory", ReferenceAdmin.CATEGORIE_ARTICLE),
+                de("estSurface", "Surface", Type.BOOLEEN, "isArea"));
+        static final List<ChampReferentiel> FONCTION = List.of(SORTING.requis(), CODE, DESCRIPTION,
+                de("estTotal", "Total", Type.BOOLEEN, "isTotal"),
+                de("surfaceVendable", "Surface vendable", Type.BOOLEEN, "saleAbleArea"),
+                de("plancherCouvert", "Plancher couvert", Type.BOOLEEN, "coveredArea"),
+                de("surfaceNette", "Surface nette", Type.BOOLEEN, "areaNet"),
+                de("surfaceBrute", "Surface brute", Type.BOOLEEN, "areaBrut"),
+                de("empriseAuSol", "Emprise au sol", Type.BOOLEEN, "areaCos"));
 
         /** Trois options (texte) et leur case, numérotées 1 à 3 dans les trois motifs. */
         private static Stream<ChampReferentiel> options(String nomCase, String proprieteCase, String libelleCase) {

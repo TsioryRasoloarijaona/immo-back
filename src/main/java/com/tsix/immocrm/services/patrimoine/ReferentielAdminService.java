@@ -411,7 +411,11 @@ public class ReferentielAdminService {
                 || code instanceof String c && r.codesProteges().stream().anyMatch(c.trim()::equalsIgnoreCase);
     }
 
+    /** {@code StkFSBaseUnit} n'a aucune colonne d'audit : rien à tracer. */
     private void tracer(BeanWrapper bw, boolean creation) {
+        if (!bw.isWritableProperty("userUpdate")) {
+            return;
+        }
         TracePatrimoine.Trace t = trace.maintenant();
         if (creation) {
             bw.setPropertyValue("userCreate", t.auteur());
