@@ -43,6 +43,11 @@ record SuppressionArticle(EntityManager em, StkItemRepository items, Suppression
             "SELECT m FROM AdmMessage m WHERE m.categoryId IN :ids");
 
     void supprimer(StkItem article) {
+        // BuildItem.cs:DeleteUnderItem ; la suppression du parent, elle, emporte ses sous-articles affectés par défaut.
+        if (article.getParent() != null && Boolean.TRUE.equals(article.getAlwaysAffected())) {
+            throw new ConflictException(
+                    "Vous ne pouvez pas supprimer un sous article affecté par défaut à l'article en cours !");
+        }
         List<StkItem> objets = new ArrayList<>(items.findByParentId(article.getId()));
         objets.add(article);
         objets.stream().filter(i -> estOccupe(i) || i.getSynFolderId() != null).findFirst().ifPresent(i -> {

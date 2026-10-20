@@ -40,6 +40,16 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
             "WHERE i.parent.id IN :parentIds GROUP BY i.parent.id")
     List<Object[]> sumAreaGroupedByParentIdIn(List<UUID> parentIds);
 
+    /** « Prix Sous Article » par lot de parents. Tuple : [parentId, ΣSalePriceHT, ΣSalePrice, ΣSalePriceFloorHT, ΣSalePriceFloor]. */
+    @Query("SELECT i.parent.id, COALESCE(SUM(i.salePriceHT), 0), COALESCE(SUM(i.salePrice), 0), "
+            + "COALESCE(SUM(i.salePriceFloorHT), 0), COALESCE(SUM(i.salePriceFloor), 0) FROM StkItem i "
+            + "WHERE i.parent.id IN :parentIds GROUP BY i.parent.id")
+    List<Object[]> sumPrixGroupedByParentIdIn(List<UUID> parentIds);
+
+    /** « Sous articles » par lot de parents. Tuple : [parentId, code]. */
+    @Query("SELECT i.parent.id, i.code FROM StkItem i WHERE i.parent.id IN :parentIds ORDER BY i.code ASC")
+    List<Object[]> codesByParentIdIn(List<UUID> parentIds);
+
     /** Unicité du code par tranche, sous-articles compris (collation French_CI_AS : sans casse). */
     Optional<StkItem> findFirstByStkHierarchyIdAndCode(UUID trancheId, String code);
 

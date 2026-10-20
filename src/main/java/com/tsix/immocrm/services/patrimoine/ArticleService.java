@@ -23,7 +23,6 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
-import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -34,15 +33,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNullElse;
@@ -56,22 +52,22 @@ public class ArticleService {
 
     private final StkItemRepository stkItemRepository;
     private final TrancheVisibleRepository trancheRepository;
-    private final ComFolderRepository folderRepository;
     private final EcritureArticle ecriture;
     private final FicheArticle fiche;
     private final ContenancesArticle contenances;
     private final SuppressionArticle suppression;
+    private final LignesArticle lignes;
 
     public ArticleService(StkItemRepository stkItemRepository, TrancheVisibleRepository trancheRepository,
-                          ComFolderRepository folderRepository, EcritureArticle ecriture, FicheArticle fiche,
-                          ContenancesArticle contenances, SuppressionArticle suppression) {
+                          EcritureArticle ecriture, FicheArticle fiche,
+                          ContenancesArticle contenances, SuppressionArticle suppression, LignesArticle lignes) {
         this.stkItemRepository = stkItemRepository;
         this.trancheRepository = trancheRepository;
-        this.folderRepository = folderRepository;
         this.ecriture = ecriture;
         this.fiche = fiche;
         this.contenances = contenances;
         this.suppression = suppression;
+        this.lignes = lignes;
     }
 
     /**
@@ -90,14 +86,15 @@ public class ArticleService {
                 categorieIds, typeIds, null, false, entiteId, natureId, vocationId, etageId,
                 prixDe, prixA, surfaceDe, surfaceA, false, null, null));
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
-        Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
-        Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());
+        Map<UUID, ComFolder> dossiers = lignes.dossiers(page.getContent());
+        Map<UUID, BigDecimal> superficies = lignes.superficies(page.getContent());
         return page.map(item -> toListItem(item, dossiers, superficies));
     }
 
     /** {@code /api/articles} et {@code /api/sous-articles}, entités actives : {@code statut} absent = tous. */
     public Page<LigneArticleDto> lister(FiltresArticle filtres, Set<ColonneArticle> colonnes, Pageable pageable) {
-        throw new UnsupportedOperationException();
+        Page<StkItem> page = stkItemRepository.findAll(StkItemSpecifications.build(filtres), pageable);
+        return lignes.de(page, colonnes);
     }
 
     public ArticleDetailDto findById(UUID id) {
@@ -151,17 +148,28 @@ public class ArticleService {
 
     @Transactional
     public ArticleDetailDto creerSousArticleLibre(ArticleEcritureDto saisie) {
-        throw new UnsupportedOperationException();
+        return toDetail(ecriture.creerLibre(saisie));
     }
 
     @Transactional
     public ArticleDetailDto modifierSousArticle(UUID id, ArticleEcritureDto saisie) {
-        throw new UnsupportedOperationException();
+        StkItem sous = chargerSousArticle(id);
+        ecriture.modifierLibre(sous, saisie);
+        return toDetail(sous);
     }
 
     @Transactional
     public void supprimerSousArticle(UUID id) {
-        throw new UnsupportedOperationException();
+        suppression.supprimer(chargerSousArticle(id));
+    }
+
+    /** Routes {@code /api/sous-articles/{id}} : un article principal y est introuvable. */
+    private StkItem chargerSousArticle(UUID id) {
+        StkItem sous = charger(id);
+        if (!Boolean.TRUE.equals(sous.getIsUnderItem())) {
+            throw new ResourceNotFoundException("Sous-article introuvable: " + id);
+        }
+        return sous;
     }
 
     /** Sous-articles rattachables à un article de la tranche (FEATURE-patrimoine-ecriture.md §5.1). */
@@ -192,7 +200,7 @@ public class ArticleService {
     private ArticleDetailDto toDetail(StkItem item) {
         UUID id = item.getId();
         List<StkItem> sousArticlesItems = stkItemRepository.findByParentId(id);
-        Map<UUID, ComFolder> dossiers = loadDossiers(Stream.concat(Stream.of(item), sousArticlesItems.stream()).toList());
+        Map<UUID, ComFolder> dossiers = lignes.dossiers(Stream.concat(Stream.of(item), sousArticlesItems.stream()).toList());
         BigDecimal superficieSousArticles = sousArticlesItems.stream()
                 .map(StkItem::getArea).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -300,36 +308,9 @@ public class ArticleService {
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds);
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
-        Map<UUID, ComFolder> dossiers = loadDossiers(page.getContent());
-        Map<UUID, BigDecimal> superficies = loadSuperficiesSousArticles(page.getContent());
+        Map<UUID, ComFolder> dossiers = lignes.dossiers(page.getContent());
+        Map<UUID, BigDecimal> superficies = lignes.superficies(page.getContent());
         return page.map(item -> toListItem(item, dossiers, superficies));
-    }
-
-    /** Une requête pour toute la page, pas une par article. */
-    private Map<UUID, ComFolder> loadDossiers(List<StkItem> items) {
-        List<UUID> folderIds = items.stream()
-                .map(StkItem::getComFolderId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (folderIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        return folderRepository.findWithStatusAndCustomerByIdIn(folderIds).stream()
-                .collect(Collectors.toMap(ComFolder::getId, Function.identity()));
-    }
-
-    /** Par id d'article parent ; absent = aucun sous-article, {@code toListItem} rend alors zéro. */
-    private Map<UUID, BigDecimal> loadSuperficiesSousArticles(List<StkItem> items) {
-        List<UUID> ids = items.stream().map(StkItem::getId).distinct().toList();
-        if (ids.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        Map<UUID, BigDecimal> result = new HashMap<>();
-        for (Object[] row : stkItemRepository.sumAreaGroupedByParentIdIn(ids)) {
-            result.put((UUID) row[0], (BigDecimal) row[1]);
-        }
-        return result;
     }
 
     /** {@code ReferentielService} passe des maps vides : ses listes sont DISPONIBLE par défaut, sans dossier à lier. */
