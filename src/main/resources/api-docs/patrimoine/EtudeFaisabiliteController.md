@@ -19,7 +19,8 @@ l'appelant ; `tauxTvaDefaut` 0,20 et `tauxTvaInterets` 0,10 si absents. Bloc A e
 Absent ou null = inchangé ; `champsAVider` vide `terrainId`, `debutAchatTerrain`, un nombre (→ 0) ou un texte (→ "").
 Pour chaque paire coefficient ↔ montant, le montant envoyé seul recalcule le coefficient ; sans l'un ni l'autre, le
 coefficient stocké est repris (changer la superficie recalcule donc les montants). Verif s'exécute sur les grilles
-enregistrées (400 avec le message OMRAN, rien n'est écrit). `previsionsARecalculer` est vrai si l'étude a des prévisions.
+enregistrées (400 avec le message OMRAN, rien n'est écrit). Changer `societeId` alors que des tranches de l'étude sont
+liées au patrimoine → 400. Un montant stocké cohérent avec son coefficient (à 1e-6 près) est conservé tel quel. `previsionsARecalculer` est vrai si l'étude a des prévisions.
 
 ## calculer
 
@@ -39,7 +40,7 @@ l'étude a des tranches, ventilation de chaque unité (une unité ajoutée non v
 Liste complète comme les unités. `code` et `sorting` obligatoires, `code` unique dans la liste (409) ; `trancheId` :
 tranche visible de la société de l'étude (400). `unites` de chaque tranche : ventilations recréées, `uniteEtudeId` = ligne
 d'unité de cette étude (400). Verif : somme des poids exactement 1, puis quantité ventilée de chaque unité (arrondi à 2
-décimales).
+décimales). Retirer une tranche qui porte des lignes de prévision → 409.
 
 ## supprimer
 

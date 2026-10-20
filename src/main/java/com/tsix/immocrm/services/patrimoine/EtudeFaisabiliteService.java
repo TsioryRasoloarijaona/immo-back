@@ -143,6 +143,12 @@ public class EtudeFaisabiliteService {
     @Transactional
     public EtudeFaisabiliteDto modifierEtude(UUID id, SaisieEtudeDto saisie) {
         StkFeasibilityStudy e = modifiable(id);
+        // §2.4 : les tranches d'étude pointent des tranches de la société ; en changer les laisserait orphelines.
+        if (saisie.societeId() != null && !saisie.societeId().equals(Champs.de(e.getCfgCompany(), CfgCompany::getId))
+                && grilles.tranches(id).stream().anyMatch(t -> t.getCfgTranche() != null)) {
+            throw new InvalidRequestException("societeId : l'étude a des tranches liées au patrimoine de sa société ; "
+                    + "retirez-les avant de changer de société.");
+        }
         em.detach(e);
         appliquer(e, saisie, ChampsAVider.de(saisie, saisie.champsAVider(), OBLIGATOIRES));
         GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));

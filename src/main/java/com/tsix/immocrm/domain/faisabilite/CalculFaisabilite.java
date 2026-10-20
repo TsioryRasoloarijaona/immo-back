@@ -94,7 +94,11 @@ public final class CalculFaisabilite {
                 debutFinalisation, plus(debutFinalisation, e.dureeFinalisation()));
     }
 
+    /** Un montant dont le coefficient arrondi est {@code coef} est gardé : réécrire une étude ne fait pas dériver ses montants. */
     private static Paire paire(BigDecimal coef, BigDecimal montant, BigDecimal base) {
+        if (coef != null && montant != null && base.signum() != 0 && r(diviser(montant, base)).compareTo(r(coef)) == 0) {
+            return new Paire(coef, montant);
+        }
         if (coef != null) {
             return new Paire(coef, coef.multiply(base, MC));
         }

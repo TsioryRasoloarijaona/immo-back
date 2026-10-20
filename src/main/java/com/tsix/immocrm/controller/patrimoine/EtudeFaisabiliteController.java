@@ -167,7 +167,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "400", description = VERIF),
             @ApiResponse(responseCode = "403", description = PAS_ADMIN),
             @ApiResponse(responseCode = "404", description = INTROUVABLE),
-            @ApiResponse(responseCode = "409", description = "Code de tranche en double, ou " + BLOQUEE)
+            @ApiResponse(responseCode = "409", description = "Code en double, tranche retirée avec prévisions, ou " + BLOQUEE)
     })
     public List<LigneTrancheEtudeDto> remplacerTranches(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                                         @RequestBody GrilleEtudeDto<LigneTrancheEtudeDto> grille) {

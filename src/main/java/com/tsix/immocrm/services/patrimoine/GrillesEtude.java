@@ -231,10 +231,13 @@ class GrillesEtude {
         resultat.forEach(t -> t.ventilations().forEach(x -> ventile.merge(x.getKey().getId(), z(x.getValue().quantite()),
                 BigDecimal::add)));
         exigerSansErreur(erreurs(v, lignes, saisies.stream().map(LigneTrancheEtudeDto::poids).toList(), ventile));
+        Set<UUID> gardees = saisies.stream().map(LigneTrancheEtudeDto::id).filter(Objects::nonNull).collect(Collectors.toSet());
+        List<StkFeasibilityStudyCfgTranche> retirees = existantes.values().stream()
+                .filter(t -> !gardees.contains(t.getId())).toList();
+        exigerSansPrevision(retirees);
 
         ventilations(etudeId).forEach(em::remove);
-        Set<UUID> gardees = saisies.stream().map(LigneTrancheEtudeDto::id).filter(Objects::nonNull).collect(Collectors.toSet());
-        existantes.values().stream().filter(t -> !gardees.contains(t.getId())).forEach(em::remove);
+        retirees.forEach(em::remove);
         em.flush();
         TracePatrimoine.Trace t = trace.maintenant();
         resultat.forEach(r -> ecrireTranche(etude, r, existantes.get(r.saisie().id()), t));
@@ -319,10 +322,29 @@ class GrillesEtude {
 
     // ------------------------------------------------------------------ suppression de l'étude
 
+    /**
+     * {@code StkFSPrevisionStkTranche} et {@code StkFSPrevisionLine} suivent la tranche d'étude en CASCADE côté base :
+     * effacées sans entité, la collecte de rapatriement ne les verrait pas → 409 (prévisions = P8b).
+     */
+    private void exigerSansPrevision(List<StkFeasibilityStudyCfgTranche> tranches) {
+        if (tranches.isEmpty()) {
+            return;
+        }
+        List<UUID> ids = tranches.stream().map(StkFeasibilityStudyCfgTranche::getId).toList();
+        long n = ((Number) em.createNativeQuery("SELECT (SELECT COUNT(*) FROM StkFSPrevisionStkTranche WHERE StkTrancheId IN (:ids))"
+                + " + (SELECT COUNT(*) FROM StkFSPrevisionLine WHERE StkFeasibilityStudyCfgTrancheId IN (:ids))")
+                .setParameter("ids", ids).getSingleResult()).longValue();
+        if (n > 0) {
+            throw new ConflictException("Tranche non supprimable : elle porte encore %d ligne(s) de prévision.".formatted(n));
+        }
+    }
+
     /** Enfants d'abord : chaque ligne passe par une entité (audit et rapatriement), l'historique compris (§8 ter.8). */
     void supprimerTout(UUID etudeId) {
+        List<StkFeasibilityStudyCfgTranche> tranches = tranches(etudeId);
+        exigerSansPrevision(tranches);
         ventilations(etudeId).forEach(em::remove);
-        tranches(etudeId).forEach(em::remove);
+        tranches.forEach(em::remove);
         lignes(etudeId).forEach(em::remove);
         em.createQuery("SELECT h FROM StkFeasibilityStudyStatusHistory h WHERE h.feasibilityStudyId = :etude", Object.class)
                 .setParameter(ETUDE, etudeId).getResultList().forEach(em::remove);
