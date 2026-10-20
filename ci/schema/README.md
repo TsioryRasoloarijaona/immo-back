@@ -31,6 +31,8 @@ chaque *pull request*.
 | `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
 | `118_sous-articles_tables.sql` | aucune table nouvelle (sous-articles, FEATURE-patrimoine-sous-articles.md) | écrit à la main |
 | `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
+| `122_faisabilite_tables.sql` | 20 tables des études de faisabilité (étude, unités, tranches, ventilations, configuration, historique, prévisions, financements, workflow) + `AdmParamsString` (`AdmWorkFlowStateType` déjà en CI), FEATURE-patrimoine-faisabilite.md ; idempotent, à appliquer aussi à `yesRemsTest` | régénéré depuis `yesRemsProd` |
+| `123_faisabilite_fk.sql` | leurs 38 clés étrangères, actions de suppression de production (5 CASCADE entrantes sur l'étude) ; idempotent, CI seulement | régénéré depuis `yesRemsProd` |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
