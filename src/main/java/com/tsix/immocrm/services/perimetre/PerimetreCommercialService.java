@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stl.StlQuote;
 import com.tsix.immocrm.entities.stl.StlSettlement;
 import com.tsix.immocrm.entities.stl.StlSettlementLine;
+import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -159,6 +160,15 @@ public class PerimetreCommercialService {
      * tel quel dans une sous-requête. Une échéance sans dossier n'est jamais visible.
      */
     public Specification<ComDocument> filtreEcheances() {
+        return parDossierVisible(false);
+    }
+
+    /** Ligne {@code StrFolderStatusHistory} : visible sans dossier de vente, sinon comme son dossier. */
+    public Specification<StrFolderStatusHistory> filtreHistoriqueStatuts() {
+        return parDossierVisible(true);
+    }
+
+    private <T> Specification<T> parDossierVisible(boolean visibleSansDossier) {
         Specification<ComFolder> dossiers = filtreDossiers();
         return (root, query, cb) -> {
             Subquery<UUID> visibles = query.subquery(UUID.class);
@@ -166,7 +176,8 @@ public class PerimetreCommercialService {
             visibles.select(dossier.get("id")).where(
                     cb.equal(dossier.get("id"), root.get(COM_FOLDER).get("id")),
                     dossiers.toPredicate(dossier, query, cb));
-            return cb.exists(visibles);
+            Predicate visible = cb.exists(visibles);
+            return visibleSansDossier ? cb.or(cb.isNull(root.get(COM_FOLDER)), visible) : visible;
         };
     }
 

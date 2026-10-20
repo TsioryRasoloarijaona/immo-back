@@ -332,8 +332,9 @@ public class DossierController {
     @Operation(summary = "Dépose une pièce jointe sur le dossier")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Pièce jointe créée."),
-            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide."),
-            @ApiResponse(responseCode = "404", description = "Dossier introuvable, ou typeId ne correspond à aucun type connu.")
+            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide, sans extension ou d'extension non admise."),
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable, ou typeId ne correspond à aucun type connu."),
+            @ApiResponse(responseCode = "413", description = "Fichier de plus de 50 Mo.")
     })
     public ResponseEntity<PieceJointeDto> uploadPieceJointe(
             @PathVariable UUID id,
@@ -426,9 +427,10 @@ public class DossierController {
     @Operation(summary = "Dépose une preuve de paiement sur un règlement")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Pièce jointe créée."),
-            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide."),
+            @ApiResponse(responseCode = "400", description = "Fichier absent ou vide, sans extension ou d'extension non admise."),
             @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, règlement "
-                    + "non rattaché à ce dossier, ou `typeId` inconnu.")
+                    + "non rattaché à ce dossier, ou `typeId` inconnu."),
+            @ApiResponse(responseCode = "413", description = "Fichier de plus de 50 Mo.")
     })
     public ResponseEntity<PieceJointeDto> uploadPieceJointeReglement(
             @PathVariable UUID id,

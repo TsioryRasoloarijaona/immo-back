@@ -73,7 +73,13 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/finalisations"),
                 Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/commissions"),
                 Arguments.of(HttpMethod.PUT, "/api/tranches/" + ID + "/previsions-base"),
-                Arguments.of(HttpMethod.POST, "/api/tranches/" + ID + "/mettre-a-jour-schemas"));
+                Arguments.of(HttpMethod.POST, "/api/tranches/" + ID + "/mettre-a-jour-schemas"),
+                // FEATURE-patrimoine-article-onglets.md §4 : pièces jointes (les POST multipart, en JSON ici → 415,
+                // sont couverts par PiecesJointesEcritureTest et AttachementMasseTest).
+                Arguments.of(HttpMethod.DELETE, "/api/articles/" + ID + "/pieces-jointes/" + SOUS_ID),
+                Arguments.of(HttpMethod.DELETE, "/api/tranches/" + ID + "/pieces-jointes/" + SOUS_ID),
+                Arguments.of(HttpMethod.DELETE, "/api/projets/" + ID + "/pieces-jointes/" + SOUS_ID),
+                Arguments.of(HttpMethod.GET, "/api/articles/groupes-piece-jointe"));
     }
 
     private AdmUser compte(String code) {

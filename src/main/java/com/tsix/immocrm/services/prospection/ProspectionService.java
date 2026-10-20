@@ -99,6 +99,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,6 +109,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -258,6 +260,20 @@ public class ProspectionService {
         Specification<ComProspection> spec = specProspectionsVisibles(liste, filtres)
                 .and(filtreDeGroupe(groupeColonne, groupeValeur, granularite));
         return versListe(prospectionRepository.findAll(spec, pageable), colonnes);
+    }
+
+    /**
+     * Onglet Prospections d'un article = {@code ComSaleProspectionView WHERE StkItemId} : sans pré-prospection ni ligne
+     * sans {@code StrEntityId} (jointure interne de la vue), périmètre de la liste, toutes les colonnes.
+     */
+    public List<ProspectionListItemDto> deLArticle(UUID articleId) {
+        Specification<ComProspection> spec = Specification
+                .<ComProspection>where((root, query, cb) -> cb.equal(root.get("stkItem").get("id"), articleId))
+                .and(Specification.not(DiscriminantPreProspection.estPreProspection()))
+                .and(perimetreService.filtreProspections());
+        Pageable tout = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "docDate").and(Sort.by("id")));
+        return versListe(prospectionRepository.findAll(spec, tout), EnumSet.allOf(ColonneProspection.class))
+                .getContent();
     }
 
     /** Résumés sur toutes les lignes de {@link #findAll} (même spec, même périmètre), sans page. */

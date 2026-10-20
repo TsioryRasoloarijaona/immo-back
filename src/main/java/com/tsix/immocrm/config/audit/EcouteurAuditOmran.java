@@ -89,7 +89,8 @@ public class EcouteurAuditOmran implements PostInsertEventListener, PostUpdateEv
 
     @Override
     public void onPostUpdate(PostUpdateEvent e) {
-        noter(e.getSession(), e.getPersister(), e.getId(), e.getEntity(), MODIFICATION, e.getOldState(), e.getState());
+        String action = RegistreAuditOmran.suppressionLogique(e.getEntity()) ? SUPPRESSION : MODIFICATION;
+        noter(e.getSession(), e.getPersister(), e.getId(), e.getEntity(), action, e.getOldState(), e.getState());
     }
 
     @Override

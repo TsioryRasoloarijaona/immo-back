@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.patrimoine.BilanAttachementDto;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.patrimoine.AttachementMasseService;
 import com.tsix.immocrm.services.patrimoine.PiecesJointesPatrimoineService;
+import com.tsix.immocrm.services.piecejointe.SaisiePieceJointe;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -97,7 +98,7 @@ public class PiecesJointesPatrimoineController {
             @Parameter(description = GROUPE) @RequestParam(required = false) String groupe,
             @AuthenticationPrincipal AuthenticatedUser principal) {
         return service.ajouterPieceJointe(porteur, id, fichier,
-                new PiecesJointesPatrimoineService.Saisie(description, typeId, groupe), principal);
+                new SaisiePieceJointe(description, typeId, groupe), principal);
     }
 
     @DeleteMapping(PIECES + "/{pieceId}")
@@ -137,7 +138,7 @@ public class PiecesJointesPatrimoineController {
             @RequestParam(required = false) String description,
             @AuthenticationPrincipal AuthenticatedUser principal) {
         return masse.importerPiecesEnMasse(id, fichiers,
-                new PiecesJointesPatrimoineService.Saisie(description, typeId, groupe), principal);
+                new SaisiePieceJointe(description, typeId, groupe), principal);
     }
 
     @GetMapping("/articles/groupes-piece-jointe")
