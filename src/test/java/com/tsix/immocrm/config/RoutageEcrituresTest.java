@@ -130,6 +130,28 @@ class RoutageEcrituresTest {
     }
 
     /**
+     * FEATURE-patrimoine-terrains.md §3 et §6.2 : « Valider pour règlement » vit dans un seul composant,
+     * {@code services/patrimoine/terrain/FactureFraisTerrain}, sous le verbe {@code valider}, transactionnel et jamais
+     * en lecture seule (sinon la facture partirait dans la copie).
+     */
+    @Test
+    void factureFraisTerrain_validerTransactionnelNonLectureSeule() throws ClassNotFoundException {
+        Class<?> composant = Class.forName("com.tsix.immocrm.services.patrimoine.terrain.FactureFraisTerrain");
+
+        List<Method> valider = Arrays.stream(composant.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()) && !m.isSynthetic())
+                .filter(m -> m.getName().startsWith("valider"))
+                .toList();
+
+        assertThat(AnnotatedElementUtils.hasAnnotation(composant, Component.class)).isTrue();
+        assertThat(valider).isNotEmpty().allSatisfy(m -> assertThat(
+                        AnnotatedElementUtils.findMergedAnnotation(m, Transactional.class) != null
+                                || AnnotatedElementUtils.findMergedAnnotation(composant, Transactional.class) != null)
+                .as(m.getName() + " transactionnelle").isTrue());
+        assertThat(valider).filteredOn(m -> lectureSeuleEffective(composant, m)).extracting(Method::getName).isEmpty();
+    }
+
+    /**
      * Reproduit la résolution de Spring : l'annotation portée par la méthode l'emporte sur celle
      * de la classe. C'est exactement ce que lira {@code determineCurrentLookupKey()}.
      */

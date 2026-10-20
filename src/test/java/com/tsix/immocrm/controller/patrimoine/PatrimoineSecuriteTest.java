@@ -79,7 +79,14 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.DELETE, "/api/articles/" + ID + "/pieces-jointes/" + SOUS_ID),
                 Arguments.of(HttpMethod.DELETE, "/api/tranches/" + ID + "/pieces-jointes/" + SOUS_ID),
                 Arguments.of(HttpMethod.DELETE, "/api/projets/" + ID + "/pieces-jointes/" + SOUS_ID),
-                Arguments.of(HttpMethod.GET, "/api/articles/groupes-piece-jointe"));
+                Arguments.of(HttpMethod.GET, "/api/articles/groupes-piece-jointe"),
+                // FEATURE-patrimoine-terrains.md §0, §1.2, §2, §3 : écritures Administrateur du lot P7a.
+                Arguments.of(HttpMethod.POST, "/api/terrains"),
+                Arguments.of(HttpMethod.PATCH, "/api/terrains/" + ID),
+                Arguments.of(HttpMethod.DELETE, "/api/terrains/" + ID),
+                Arguments.of(HttpMethod.POST, "/api/terrains/" + ID + "/sous-terrains"),
+                Arguments.of(HttpMethod.PUT, "/api/terrains/" + ID + "/frais"),
+                Arguments.of(HttpMethod.POST, "/api/terrains/" + ID + "/frais/" + SOUS_ID + "/valider"));
     }
 
     private AdmUser compte(String code) {

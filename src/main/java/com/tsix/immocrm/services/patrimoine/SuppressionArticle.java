@@ -19,8 +19,8 @@ import static com.tsix.immocrm.services.patrimoine.ArticleService.estOccupe;
  * {@link SuppressionProjet} : 409 si l'un d'eux est occupé ou référencé, sinon cascades par entités (audit, copie).
  */
 @Component
-record SuppressionArticle(EntityManager em, StkItemRepository items, SuppressionProjet suppression,
-                          EcritureArticle ecriture) {
+public record SuppressionArticle(EntityManager em, StkItemRepository items, SuppressionProjet suppression,
+                                 EcritureArticle ecriture) {
 
     private static final String IDS = "ids";
     /** Références NO_ACTION vers StkItem mappées ; les autres tombent au flush (409 nommant la contrainte). */
@@ -42,7 +42,7 @@ record SuppressionArticle(EntityManager em, StkItemRepository items, Suppression
             "SELECT a FROM AdmAttachedFile a WHERE a.categoryId IN :ids",
             "SELECT m FROM AdmMessage m WHERE m.categoryId IN :ids");
 
-    void supprimer(StkItem article) {
+    public void supprimer(StkItem article) {
         // BuildItem.cs:DeleteUnderItem ; la suppression du parent, elle, emporte ses sous-articles affectés par défaut.
         if (article.getParent() != null && Boolean.TRUE.equals(article.getAlwaysAffected())) {
             throw new ConflictException(

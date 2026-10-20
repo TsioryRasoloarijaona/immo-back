@@ -21,7 +21,10 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheCoveredFloor;
 import com.tsix.immocrm.entities.cfg.CfgTrancheLevel;
 import com.tsix.immocrm.entities.cfg.CfgTrancheSettlementCategory;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStkItem;
+import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.stk.StkContenance;
+import com.tsix.immocrm.entities.stk.StkExpense;
+import com.tsix.immocrm.entities.stk.StkExpenseType;
 import com.tsix.immocrm.entities.stk.StkHierarchyPlan;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemContenance;
@@ -81,6 +84,7 @@ public final class RegistreAuditOmran {
             StkItemVue.class, StkItemContenance.class,
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
             AdmAttachedFile.class, StkHierarchyPlan.class,
+            StkExpense.class, BuyDocument.class,
             StkFeasibilityStudy.class, StkFSBaseUnitStkFeasibilityStudy.class, StkFeasibilityStudyCfgTranche.class,
             StkFeasibilityStudyCfgTrancheStkBaseUnit.class, StkFeasibilityStudyStatusHistory.class,
             ComSaleWithdrawalCancellation.class);
@@ -147,6 +151,11 @@ public final class RegistreAuditOmran {
             case AdmAttachedFile f -> new Trace("Yes.Adm.Attachment.AttachmentWithData", "Pièce jointe",
                     f.getLibelleAudit(), null, null);
             case StkHierarchyPlan p -> new Trace("Yes.Cfg.StkHierarchyPlan", "Plan", p.getCode(), null, null);
+            // FEATURE-patrimoine-terrains.md §3.2 : frais sous son terrain ; facture sans parent, libellée par son code.
+            case StkExpense e -> new Trace("Yes.Stk.Expense.Expense", "Frais de Terrain",
+                    Champs.de(e.getStkExpenseType(), StkExpenseType::getDescription), TERRAIN,
+                    Champs.de(e.getStkItem(), StkItem::getId));
+            case BuyDocument f -> new Trace("Yes.Stl.Debit.Invoice", "Facture", f.getCode(), null, null);
             // Études de faisabilité (FEATURE-patrimoine-faisabilite.md §2.6) : sans parent ; les deux derniers types
             // ne sont pas mesurés en prod, ObjectType = classe OMRAN.
             case StkFeasibilityStudy e -> new Trace("Yes.Stk.StkFeasibilityStudy", "Etude de faisabilité",

@@ -15,7 +15,7 @@ import java.util.function.Function;
  * {@code champsAVider} d'un PATCH (FEATURE-patrimoine-tranche-fiche.md §1.1, §8.3) : un champ listé est remis à NULL
  * (date, clé étrangère), 0 (nombre), false (case) ou {@code ""} (texte, comme OMRAN) ; sinon règle « absent = inchangé ».
  */
-final class ChampsAVider {
+public final class ChampsAVider {
 
     static final String CHAMP = "champsAVider";
 
@@ -26,7 +26,7 @@ final class ChampsAVider {
     }
 
     /** Nom inconnu, obligatoire, ou aussi renseigné dans le corps → 400 nommant {@value #CHAMP}. */
-    static ChampsAVider de(Record saisie, List<String> demandes, Set<String> obligatoires) {
+    public static ChampsAVider de(Record saisie, List<String> demandes, Set<String> obligatoires) {
         if (demandes == null || demandes.isEmpty()) {
             return new ChampsAVider(Set.of());
         }
@@ -52,12 +52,12 @@ final class ChampsAVider {
         }
     }
 
-    boolean contient(String nom) {
+    public boolean contient(String nom) {
         return noms.contains(nom);
     }
 
     /** Date : NULL si vidée. */
-    <T> T ou(String nom, T saisie, T actuel) {
+    public <T> T ou(String nom, T saisie, T actuel) {
         return contient(nom) ? null : SaisiePatrimoine.ou(saisie, actuel);
     }
 
@@ -74,12 +74,12 @@ final class ChampsAVider {
     }
 
     /** Texte : {@code ""} si vidé, à passer à {@link SaisiePatrimoine#texte}. */
-    String texte(String nom, String saisie) {
+    public String texte(String nom, String saisie) {
         return contient(nom) ? "" : saisie;
     }
 
     /** Clé étrangère : NULL si vidée, résolue si saisie, inchangée sinon. */
-    <T> T reference(String nom, UUID id, T actuel, Function<UUID, T> resoudre) {
+    public <T> T reference(String nom, UUID id, T actuel, Function<UUID, T> resoudre) {
         if (contient(nom)) {
             return null;
         }

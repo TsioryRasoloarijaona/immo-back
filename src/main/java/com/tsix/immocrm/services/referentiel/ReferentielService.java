@@ -40,9 +40,11 @@ import com.tsix.immocrm.entities.com.ComProspectionOriginSupport;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
+import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.stl.StlAccount;
 import com.tsix.immocrm.entities.stl.StlSettlementType;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmAttachedFileTypeRepository;
 import com.tsix.immocrm.repositories.adm.AdmCityRepository;
@@ -403,18 +405,41 @@ public class ReferentielService {
     }
 
     /** {@code pourSousArticle} renseigné : nature Bâtiment et {@code ForUnderItem} égal (formulaires d'article). */
-    public List<ReferentielItemDto> categoriesBien(Boolean pourSousArticle) {
-        List<StkItemCategory> categories = pourSousArticle == null ? itemCategoryRepository.findAll()
-                : itemCategoryRepository.findByStkKind_CodeAndForUnderItem(ArticleService.NATURE_BATIMENT, pourSousArticle);
+    public List<ReferentielItemDto> categoriesBien(Boolean pourSousArticle, String nature) {
+        String code = natureFiltre(pourSousArticle, nature);
+        List<StkItemCategory> categories;
+        if (code == null) {
+            categories = itemCategoryRepository.findAll();
+        } else if (pourSousArticle == null) {
+            categories = itemCategoryRepository.findByStkKind_Code(code);
+        } else {
+            categories = itemCategoryRepository.findByStkKind_CodeAndForUnderItem(code, pourSousArticle);
+        }
         return categories.stream().map(c -> new ReferentielItemDto(
                 c.getId(), c.getCode(), c.getDescription(), null)).toList();
     }
 
-    public List<ReferentielItemDto> typesBien(Boolean pourSousArticle) {
-        List<StkItemType> types = pourSousArticle == null ? itemTypeRepository.findAll()
-                : itemTypeRepository.findByStkKind_CodeAndForUnderItem(ArticleService.NATURE_BATIMENT, pourSousArticle);
+    public List<ReferentielItemDto> typesBien(Boolean pourSousArticle, String nature) {
+        String code = natureFiltre(pourSousArticle, nature);
+        List<StkItemType> types;
+        if (code == null) {
+            types = itemTypeRepository.findAll();
+        } else if (pourSousArticle == null) {
+            types = itemTypeRepository.findByStkKind_Code(code);
+        } else {
+            types = itemTypeRepository.findByStkKind_CodeAndForUnderItem(code, pourSousArticle);
+        }
         return types.stream().map(t -> new ReferentielItemDto(
                 t.getId(), t.getCode(), t.getDescription(), null)).toList();
+    }
+
+    /** Code de nature à filtrer : celui demandé (400 s'il est inconnu), sinon Bâtiment si {@code pourSousArticle}. */
+    private String natureFiltre(Boolean pourSousArticle, String nature) {
+        if (nature == null) {
+            return pourSousArticle == null ? null : ArticleService.NATURE_BATIMENT;
+        }
+        return kindRepository.findFirstByCode(nature).map(StkKind::getCode)
+                .orElseThrow(() -> new InvalidRequestException("nature : code de nature inconnu."));
     }
 
     public List<ReferentielItemDto> typesRelationContact() {

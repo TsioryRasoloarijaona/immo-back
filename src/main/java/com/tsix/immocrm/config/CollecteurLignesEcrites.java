@@ -42,6 +42,7 @@ public class CollecteurLignesEcrites
             "AdmUserHabilitation", "StkItem", "CfgTrancheStkItem",
             "CfgTrancheLevel", "CfgTrancheCoveredFloor", "CfgTrancheSettlementCategory", "CfgTrancheFolderEntity",
             "CfgPrevision", "StkItemVue", "StkItemContenance", "StkHierarchyPath", "StkHierarchyPlan", "CfgTier", "ComAction",
+            "StkExpense", "BuyDocument", "BuyDocumentLine", "BuyVentilationCategory", "BuyDocumentStatusHistory",
             "ComSalesCommission", "ComProspection", "ComFolder", "ComFolderItem", "ComSaleWithdrawalCancellation", "ComDocument",
             "StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument",
             "AdmEvent", "ComActionMessage", "AdmAlertData", "StrHistory", "StrFolderStatusHistory", "AdmAttachedFile",

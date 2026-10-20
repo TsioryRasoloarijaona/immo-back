@@ -67,5 +67,4 @@ public final class VisibiliteEntites {
      * Même règle que {@link #actifOuNonResolu}, pour les {@code @Query} ; l'appelant doit nommer
      * {@code soc} la société jointe en LEFT. Les deux formulations doivent rester alignées.
      */
-    public static final String CLAUSE_JPQL = "(soc.isActive = true OR soc.id IS NULL)";
-}
+    public static final String CLAUSE_JPQL = "(soc.isActive = true OR soc.id IS NULL)";}
