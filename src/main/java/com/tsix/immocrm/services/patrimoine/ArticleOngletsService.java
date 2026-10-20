@@ -76,8 +76,11 @@ public class ArticleOngletsService {
 
     /** Lignes de l'article et des transferts produit légalisés qui le visent ; dossier hors périmètre → masquée. */
     public List<ArticleHistoriqueDto> historique(UUID articleId) {
-        UUID id = article(articleId).getId();
+        StkItem article = article(articleId);
+        UUID id = article.getId();
         Map<UUID, String> transferts = transferts(id);
+        // Une ligne sans dossier de vente (location, syndic) suit la visibilité de l'onglet Dossiers.
+        boolean horsVenteVisible = dossiersService.dansLePerimetre(article);
         Specification<StrFolderStatusHistory> spec = Specification
                 .<StrFolderStatusHistory>where((root, query, cb) -> {
                     Predicate deLArticle = cb.equal(root.get("stkItem").get("id"), id);
@@ -89,6 +92,7 @@ public class ArticleOngletsService {
                 Sort.by(Sort.Direction.DESC, "docDate").and(Sort.by("id")));
         Function<StrFolderStatusHistory, String> auteur = auteurStatut.resoudre(lignes);
         return lignes.stream()
+                .filter(h -> horsVenteVisible || h.getComFolder() != null)
                 .map(h -> versDto(h, auteur.apply(h), transferts.get(h.getComSaleWithdrawalProductId())))
                 .toList();
     }

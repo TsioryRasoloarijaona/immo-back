@@ -19,5 +19,6 @@ périmètre. Les lignes de location `RntFolderItem` ne sont pas reprises. Montan
 Lignes `StrFolderStatusHistory` dont `StkItemId` est l'article, plus celles d'un **transfert produit légalisé**
 (`ComSaleWithdrawalProduct.IsLegalized = 1`) dont l'article est l'ancien ou le nouveau. Tri par date décroissante (OMRAN
 trie par date croissante ; le CRM garde l'ordre de l'historique du tiers). Une ligne d'un dossier de vente hors
-périmètre commercial est masquée. Origine : `ComFolderId` → VENTE, sinon `RntFolderId` → LOCATION, sinon `SynFolderId` →
+périmètre commercial est masquée ; une ligne sans dossier de vente (location, syndic) l'est si l'article est hors
+périmètre, comme dans l'onglet Dossiers. Origine : `ComFolderId` → VENTE, sinon `RntFolderId` → LOCATION, sinon `SynFolderId` →
 SYNDIC. Auteur : le compte de la ligne, sinon la ligne `StrHistory` jumelle du dossier de vente, sinon « Système ».
