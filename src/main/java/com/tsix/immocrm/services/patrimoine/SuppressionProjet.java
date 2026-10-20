@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectZoneRepository;
 import jakarta.persistence.EntityManager;
+import org.hibernate.TransientPropertyValueException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 
@@ -99,8 +100,20 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         try {
             em.flush();
         } catch (ConstraintViolationException e) {
-            throw new ConflictException("Suppression impossible : %s est encore référencé(e) ailleurs (%s)."
-                    .formatted(objet, e.getConstraintName()));
+            throw refus(objet, e.getConstraintName());
+        } catch (IllegalStateException e) {
+            // Une entité chargée dans la session cite encore la ligne : Hibernate refuse avant la base, et rejouerait
+            // la suppression au prochain flush si la session n'était pas vidée.
+            if (!(e.getCause() instanceof TransientPropertyValueException t)) {
+                throw e;
+            }
+            em.clear();
+            throw refus(objet, t.getPropertyOwnerEntityName() + "." + t.getPropertyName());
         }
+    }
+
+    private static ConflictException refus(String objet, String reference) {
+        return new ConflictException("Suppression impossible : %s est encore référencé(e) ailleurs (%s)."
+                .formatted(objet, reference));
     }
 }

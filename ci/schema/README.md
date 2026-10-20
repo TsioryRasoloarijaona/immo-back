@@ -27,6 +27,8 @@ chaque *pull request*.
 | `111_article-fiche_fk.sql` | leurs 8 clés étrangères, actions de suppression de production ; idempotent | écrit à la main |
 | `112_article-onglets_tables.sql` | `SynFolder.StkItemId` / `CfgCustomerId` et `ComSaleWithdrawalProduct` (onglets de l'article, FEATURE-patrimoine-article-onglets.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
 | `113_article-onglets_fk.sql` | aucune clé étrangère | écrit à la main |
+| `114_referentiels_tables.sql` | `StkItemExonaration` (+ `LndVocation`, `StkExpenseType`, déjà en CI) — référentiels en écriture, FEATURE-patrimoine-referentiels.md ; idempotent, à appliquer aussi à `yesRemsTest` | écrit à la main |
+| `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.
