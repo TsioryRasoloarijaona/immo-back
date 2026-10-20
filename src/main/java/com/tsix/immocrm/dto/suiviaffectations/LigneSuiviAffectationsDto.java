@@ -42,6 +42,8 @@ public record LigneSuiviAffectationsDto(
         @Schema(description = "Libellé du statut du dossier, « Sans statut » s'il n'en a pas.")
         String statutDossierLibelle,
         @Schema(description = "StlSettlement.PKey de la pièce de règlement.") UUID pieceId,
+        @Schema(description = "Vrai si la fiche /encaissements/{pieceId} s'ouvre (IsCredit = 1) ; faux pour un débit "
+                + "ou un IsCredit vide.") boolean pieceOuvrable,
         @Schema(description = "StlSettlement.Description.") String pieceLibelle,
         @Schema(description = "StlSettlement.Code (n° de chèque, de virement…).") String pieceReference,
         @Schema(description = "StlSettlement.ReceiptCode.") String recuReference,

@@ -96,15 +96,15 @@ public class SuiviAffectationsController {
             @Parameter(description = "Colonne de groupement (catalogue, groupable = true).",
                     example = "categorieLibelle", required = true)
             @RequestParam String groupBy,
-            @Parameter(example = "montantAffecte")
-            @RequestParam(required = false) List<String> agregats,
-            @Parameter(example = "MOIS")
+            @ParameterObject @ModelAttribute FiltresSuiviAffectations filtres,
+            @Parameter(description = "Vrai : groupe des lignes sans valeur inclus.", example = "true")
+            @RequestParam(defaultValue = "false") boolean inclureSansValeur,
+            @Parameter(description = "Pas d'une colonne date.", example = "MOIS")
             @RequestParam(required = false) Granularite granularite,
             @Parameter(description = "LIBELLE (défaut) ou NOMBRE (effectif décroissant).", example = "NOMBRE")
             @RequestParam(required = false) TriGroupe tri,
-            @Parameter(example = "false")
-            @RequestParam(defaultValue = "false") boolean inclureSansValeur,
-            @ParameterObject @ModelAttribute FiltresSuiviAffectations filtres,
+            @Parameter(description = "Jetons d'agrégat par groupe.", example = "montantAffecte")
+            @RequestParam(required = false) List<String> agregats,
             @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         ColonneSuiviAffectations groupe = groupable(groupBy);
         return service.grouper(filtres, groupe, Groupements.granularite(groupe, granularite),
@@ -129,21 +129,22 @@ public class SuiviAffectationsController {
 
     @GetMapping(BASE + "/export")
     @Operation(summary = "Export Excel du suivi des affectations, filtres et colonnes appliqués")
-    @Parameter(name = "sort", in = ParameterIn.QUERY, example = "dateMouvement,desc",
-            description = "Tri `colonne,asc|desc`, répétable, comme la liste. Défaut : dateMouvement,desc.",
-            array = @ArraySchema(schema = @Schema(type = "string")))
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
-                    content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400", content = @Content)
+            @ApiResponse(responseCode = "400", description = "Format autre que xlsx, colonne, tri ou filtre invalide.",
+                    content = @Content),
+            @ApiResponse(responseCode = "200", description = "Classeur Excel, une feuille DONNEES.",
+                    content = @Content(schema = @Schema(type = "string", format = "binary"),
+                            mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
     })
+    @Parameter(name = "sort", in = ParameterIn.QUERY, array = @ArraySchema(schema = @Schema(type = "string")),
+            description = "Tri `colonne,asc|desc`, répétable, comme la liste. Défaut : dateMouvement,desc.",
+            example = "dateMouvement,desc")
     public ResponseEntity<StreamingResponseBody> exporter(
-            @Parameter(example = ExportTableur.FORMAT_XLSX)
-            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
             @ParameterObject @ModelAttribute FiltresSuiviAffectations filtres,
             @Parameter(example = "categorieLibelle,trancheCode,articleCode,montantAffecte,dateMouvement")
             @RequestParam(required = false) List<String> colonnes,
+            @Parameter(description = "Seul xlsx est accepté.", example = ExportTableur.FORMAT_XLSX)
+            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
             @Parameter(hidden = true) @SortDefault(sort = TRI_DEFAUT, direction = Sort.Direction.DESC) Sort sort) {
         ExportTableur.exigerXlsx(format);
         Set<ColonneSuiviAffectations> selection = selection(colonnes);
@@ -162,10 +163,11 @@ public class SuiviAffectationsController {
     @GetMapping("/api/referentiels/colonnes/suivi-affectations")
     @Operation(summary = "Catalogue des colonnes du suivi des affectations")
     public List<ColonneDto> colonnes() {
-        return Arrays.stream(ColonneSuiviAffectations.values())
-                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(),
-                        c.chemin()))
-                .toList();
+        return Arrays.stream(ColonneSuiviAffectations.values()).map(SuiviAffectationsController::versDto).toList();
+    }
+
+    private static ColonneDto versDto(ColonneSuiviAffectations c) {
+        return ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(), c.parDefaut(), c.chemin());
     }
 
     /** @throws com.tsix.immocrm.domain.ColonneInconnueException nom hors catalogue (400) */

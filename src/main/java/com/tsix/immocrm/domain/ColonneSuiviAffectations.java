@@ -49,6 +49,7 @@ public enum ColonneSuiviAffectations implements Colonne {
     STATUT_DOSSIER_LIBELLE("statutDossierLibelle", "État dossier de vente", Groupe.VENTE, TypeColonne.TEXTE, true,
             Chemin.groupable("statutDossierLibelle")),
     PIECE_ID("pieceId", "Id pièce", Groupe.PIECE, TypeColonne.TEXTE, false, null),
+    PIECE_OUVRABLE("pieceOuvrable", "Pièce ouvrable", Groupe.PIECE, TypeColonne.BOOLEEN, false, null),
     PIECE_LIBELLE("pieceLibelle", "Pièce de règlement", Groupe.PIECE, TypeColonne.TEXTE, true,
             Chemin.groupable("pieceLibelle")),
     PIECE_REFERENCE("pieceReference", "Référence pièce", Groupe.PIECE, TypeColonne.TEXTE, false,
@@ -80,7 +81,7 @@ public enum ColonneSuiviAffectations implements Colonne {
 
     public enum Groupe { AFFECTATION, PATRIMOINE, VENTE, PIECE }
 
-    public enum TypeColonne { TEXTE, MONTANT, DATE }
+    public enum TypeColonne { TEXTE, MONTANT, DATE, BOOLEEN }
 
     /** Identifiant du filtre Jackson de {@code LigneSuiviAffectationsDto}. */
     public static final String FILTRE = "colonnesSuiviAffectations";
