@@ -85,7 +85,8 @@ public class DesistementController {
     @Operation(summary = "Modifie un désistement (brouillon : tout ; validé : paiement, dates, motif, observations)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Le désistement modifié."),
-            @ApiResponse(responseCode = "400", description = "Motif, type, banque ou contact inconnu.", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Motif, type, banque ou contact inconnu ; remise hors [0, 1] ; pénalité négative.",
+                    content = @Content),
             @ApiResponse(responseCode = "403", description = ROLES, content = @Content),
             @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content),
             @ApiResponse(responseCode = "409", description = "Désistement légalisé, ou remise/pénalité après validation.",

@@ -16,11 +16,11 @@ Mêmes montants que la liste, plus `resteARembourser` = reste dû de la pièce d
 
 ## modifier
 
-Brouillon : tous les champs. Saisir `penaliteApresRemise` recalcule la remise (1 − pénalité / (taux × base)) ; saisir `remise` recalcule la pénalité ; les montants du dossier sont relus. Validé non légalisé : seuls observations, motif, dates, type de pièce, référence, banque et contact changent — `remise` ou `penaliteApresRemise` donnent 409, les pièces étant déjà générées. Légalisé : 409.
+Brouillon : tous les champs. Saisir `penaliteApresRemise` (≥ 0) la conserve au centime et recalcule la remise (1 − pénalité / (taux × base)) ; saisir `remise` (fraction entre 0 et 1) recalcule la pénalité ; les montants du dossier sont relus, et une pénalité saisie est gardée tant que la base (prix, réglé, taux) ne change pas. Validé non légalisé : seuls observations, motif, dates, type de pièce, référence, banque et contact changent — `remise` ou `penaliteApresRemise` donnent 409, les pièces étant déjà générées. Légalisé : 409.
 
 ## valider
 
-Dans une transaction : contrôle des dates (400), recalcul des montants, puis passage du dossier en DESISTEMENT par le même chemin que `PATCH /api/dossiers/{id}/statut` (date d'annulation = jour, cause = « motif : observations », lot libéré, client repassé prospect s'il n'a plus de dossier actif), puis génération de la pièce « Frais de désistement » (catégorie du paramètre `DefaultCancellationDocumentType`) = pénalité si non nulle, et de la pièce « REMBOURSEMENT POUR DÉSISTEMENT » = à rembourser si positif, toutes deux rattachées au désistement. Une date de légalisation fournie rend le désistement légalisé.
+Dans une transaction : contrôle des dates (400), recalcul des montants, puis passage du dossier en DESISTEMENT par le même chemin que `PATCH /api/dossiers/{id}/statut` (date d'annulation = jour, cause = « motif : observations », lot libéré, client repassé prospect s'il n'a plus de dossier actif ; sans motif ni observations, la cause est « Désistement N° »), puis génération de la pièce « Frais de désistement » (catégorie du paramètre `DefaultCancellationDocumentType`) = pénalité si non nulle (quittance = N° du désistement), et de la pièce « REMBOURSEMENT POUR DÉSISTEMENT » = à rembourser si positif, toutes deux rattachées au désistement. Une date de légalisation fournie rend le désistement légalisé.
 
 ### reponse 409
 

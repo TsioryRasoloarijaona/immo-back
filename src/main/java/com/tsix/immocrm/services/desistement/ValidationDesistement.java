@@ -74,7 +74,8 @@ public class ValidationDesistement {
         }
         LocalDateTime dateValidation = Requis.champ(request.dateValidation(), "dateValidation est requise");
         ComFolder folder = d.getComFolder();
-        CalculDesistement.Entree e = montants.lire(folder, d.getDiscount());
+        CalculDesistement.Entree e = montants.lire(folder, d.getDiscount())
+                .avecPenaliteStockee(d.getTransfertExpenseAmountAfterDiscount());
         BigDecimal penalite = CalculDesistement.penaliteApresRemise(e);
         BigDecimal aRembourser = CalculDesistement.aRembourser(e);
         if (penalite.signum() != 0 && request.dateLegalisation() == null) {
@@ -86,8 +87,9 @@ public class ValidationDesistement {
 
         dossiers.changerStatut(folder.getId(),
                 new ChangerStatutRequest(StatutDossier.DESISTEMENT.getCode(), null, cause(d), null));
-        frais.ifPresent(c -> piece(d, folder, c, penalite, dateValidation));
-        remboursement.ifPresent(c -> piece(d, folder, c, aRembourser, dateValidation));
+        // Sale.cs:CancelFolder : la quittance des frais est le N° du désistement, pas un nouveau numéro.
+        frais.ifPresent(c -> piece(d, folder, c, penalite, dateValidation, d.getCode()));
+        remboursement.ifPresent(c -> piece(d, folder, c, aRembourser, dateValidation, null));
         MontantsDesistement.appliquer(d, e);
         d.setValidityDate(dateValidation);
         if (request.dateLegalisation() != null) {
@@ -118,17 +120,21 @@ public class ValidationDesistement {
         return service.versDto(d);
     }
 
-    /** {@code CancelFolder} : « motif : observations », dans la longueur de l'historique des statuts. */
+    /** {@code CancelFolder} : « motif : observations » (à défaut le N° du désistement), dans la longueur de l'historique. */
     private static String cause(ComSaleWithdrawalCancellation d) {
         String texte = Stream.of(Champs.de(d.getMotif(), ComSaleWithdrawalReason::getDescription), d.getNotes())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(" : "));
+        if (texte.isEmpty()) {
+            texte = "Désistement " + d.getCode();
+        }
         return texte.length() > LONGUEUR_CAUSE ? texte.substring(0, LONGUEUR_CAUSE) : texte;
     }
 
     private void piece(ComSaleWithdrawalCancellation d, ComFolder folder, ComSettlementCategory categorie,
-                       BigDecimal montant, LocalDateTime date) {
+                       BigDecimal montant, LocalDateTime date, String quittance) {
         ComDocument generee = new ComDocument();
+        generee.setQuittanceCode(quittance);
         generee.setId(UUID.randomUUID());
         generee.setComFolder(folder);
         generee.setDocDate(date);

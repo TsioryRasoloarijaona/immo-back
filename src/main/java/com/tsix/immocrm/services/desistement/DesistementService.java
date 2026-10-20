@@ -262,9 +262,17 @@ public class DesistementService {
     private void recalculer(ComSaleWithdrawalCancellation d, ModifierDesistementRequest r) {
         CalculDesistement.Entree e = montants.lire(d.getComFolder(), d.getDiscount());
         if (r.penaliteApresRemise() != null) {
-            e = e.avecRemise(CalculDesistement.remisePour(r.penaliteApresRemise(), e));
+            if (r.penaliteApresRemise().signum() < 0) {
+                throw new InvalidRequestException("penaliteApresRemise doit être positive ou nulle");
+            }
+            e = e.avecPenaliteSaisie(r.penaliteApresRemise());
         } else if (r.remise() != null) {
+            if (r.remise().signum() < 0 || r.remise().compareTo(BigDecimal.ONE) > 0) {
+                throw new InvalidRequestException("remise doit être une fraction entre 0 et 1");
+            }
             e = e.avecRemise(r.remise());
+        } else {
+            e = e.avecPenaliteStockee(d.getTransfertExpenseAmountAfterDiscount());
         }
         MontantsDesistement.appliquer(d, e);
     }
