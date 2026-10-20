@@ -111,7 +111,7 @@ public enum ReferentielAdmin {
     },
     CATEGORIES_CHARGE("categories-charge", "Catégories de charge", Famille.ARTICLES, StkCostCategory.class,
             new Audit("Yes.Stk.Config.CostCategory", "Catégorie de charge"), Colonnes.CODE_LIBELLE, Colonnes.CLE_CODE),
-    CONTENANCES("contenances", "Contenances", Famille.ARTICLES, StkContenance.class,
+    CONTENANCES(Colonnes.CONTENANCES_PRESENTATION, "Contenances", Famille.ARTICLES, StkContenance.class,
             new Audit("Yes.Stk.Config.Contenance", "Contenance"), Colonnes.CONTENANCE, Colonnes.CLE_CODE) {
         @Override
         public List<Bloquant> bloquants() {
@@ -140,13 +140,13 @@ public enum ReferentielAdmin {
             new Audit("Yes.Lnd.Config.Level", "Niveau"), Colonnes.CODE_LIBELLE, Colonnes.CLE_CODE),
     QUOTES_PARTS_EXONEREES("quotes-parts-exonerees", "Quote part exonérée", Famille.AUTRES, StkItemExonaration.class,
             new Audit("Yes.Stk.Config.StkItemExonaration", "Quote part exonérée"), Colonnes.EXONERATION,
-            List.of("cfgTranche", "docYear")),
+            List.of(Colonnes.CFG_TRANCHE, "docYear")),
     RUBRIQUES_TRANCHE("rubriques-tranche", "Rubriques de tranche", Famille.AUTRES, StkTrancheHeading.class,
             new Audit("Yes.Stk.Config.TrancheHeading", "Rubrique de tranche"), Colonnes.RUBRIQUE, Colonnes.CLE_CODE),
     /** Écran limité aux dossiers de vente ; unicité (tranche, entité, statut) : le contrôle lit {@code findFirst()}. */
     SEUILS_VERSEMENT("seuils-versement", "Seuils de versement", Famille.AUTRES, CfgTrancheStatus.class,
             new Audit("Yes.Cfg.CfgTrancheStatus", "Seuil de versement"), Colonnes.SEUIL,
-            List.of("cfgTranche", "strFolderEntityId", "strStatusId")) {
+            List.of(Colonnes.CFG_TRANCHE, "strFolderEntityId", "strStatusId")) {
         @Override
         public Map<String, Object> portee() {
             return Map.of("strFolderEntityId", StatutDossier.CONFIG_ENTITY_ID);
@@ -274,11 +274,12 @@ public enum ReferentielAdmin {
 
     /** Listes de champs partagées : une classe à part, les constantes d'une énumération ne pouvant s'y référer. */
     private static final class Colonnes {
+        static final String CFG_TRANCHE = "cfgTranche";
         static final List<String> CLE_CODE = List.of("code");
         static final List<String> CLE_NATURE = List.of("stkKind", "code");
         static final List<ChampReferentiel> CODE_LIBELLE = List.of(CODE, DESCRIPTION);
         static final List<ChampReferentiel> TRI_CODE_LIBELLE = List.of(SORTING.requis(), CODE, DESCRIPTION);
-        static final ChampReferentiel TRANCHE = reference("trancheId", "Tranche", "cfgTranche", ReferenceAdmin.TRANCHE);
+        static final ChampReferentiel TRANCHE = reference("trancheId", "Tranche", CFG_TRANCHE, ReferenceAdmin.TRANCHE);
         static final ChampReferentiel CATEGORIE_COMPTABLE = reference("categorieComptableId", "Catégorie comptable",
                 "stlCategory", ReferenceAdmin.CATEGORIE_COMPTABLE).requis();
         static final List<ChampReferentiel> PAR_NATURE = List.of(

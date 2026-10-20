@@ -50,8 +50,8 @@ public class EtudeFaisabiliteService {
     static final UUID ETAT_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
     static final UUID ENTITE_ETUDE = UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B900");
     static final String BLOQUEE = "Étude bloquée : débloquez-la avant toute modification.";
-    private static final Set<String> OBLIGATOIRES = Set.of("code", "description", "dateDocument", "societeId");
     private static final String SOCIETE_ID = "societeId";
+    private static final Set<String> OBLIGATOIRES =Set.of("code", "description", "dateDocument", SOCIETE_ID);
     private static final String TERRAIN_ID = "terrainId";
     private static final String NATURE_TERRAIN = "TER";
     private static final BigDecimal TVA_DEFAUT = new BigDecimal("0.20");
