@@ -311,7 +311,12 @@ public class ReferentielAdminService {
                 case OPERATEUR -> operateur(c, entier(v));
                 case DECIMAL -> new BigDecimal(v.toString());
                 case FRACTION -> SaisiePatrimoine.fraction(new BigDecimal(v.toString()), c.nom());
-                case BOOLEEN -> (Boolean) v;
+                case BOOLEEN -> {
+                    if (!(v instanceof Boolean b)) {
+                        throw new IllegalArgumentException(c.nom());
+                    }
+                    yield b;
+                }
                 case REFERENCE -> reference(c, UUID.fromString(v.toString()));
                 case LIGNES -> throw new IllegalStateException(c.nom());
             };
@@ -411,7 +416,11 @@ public class ReferentielAdminService {
                 || code instanceof String c && r.codesProteges().stream().anyMatch(c.trim()::equalsIgnoreCase);
     }
 
+    /** {@code StkFSBaseUnit} n'a aucune colonne d'audit : rien à tracer. */
     private void tracer(BeanWrapper bw, boolean creation) {
+        if (!bw.isWritableProperty("userUpdate")) {
+            return;
+        }
         TracePatrimoine.Trace t = trace.maintenant();
         if (creation) {
             bw.setPropertyValue("userCreate", t.auteur());
