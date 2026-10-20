@@ -31,7 +31,6 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.dossier.AffectationsReglement;
 import com.tsix.immocrm.services.dossier.LigneEcheancierOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
-import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -75,8 +74,6 @@ public class DesistementService {
     static final String NON_LEGALISE_EXISTANT = "Ce dossier a déjà un désistement non légalisé.";
     static final String MONTANTS_FIGES = "Remise et pénalité ne changent plus après la validation : les pièces sont générées.";
     private static final Sort TRI = Sort.by(Sort.Direction.DESC, "claimDate", "userCreateDateTime");
-    private static final int LARGEUR_ANNEE = 2;
-    private static final int LARGEUR_NUMERO = 5;
 
     /** Dépôts des désistements, partagés avec {@link ValidationDesistement}. */
     @Component
@@ -90,18 +87,18 @@ public class DesistementService {
     private final MontantsDesistement montants;
     private final AffectationsReglement affectations;
     private final PerimetreCommercialService perimetre;
-    private final GenerateurCodeSequence generateurCode;
+    private final LigneEcheancierOmran ligneEcheancier;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
     public DesistementService(Depots depots, MontantsDesistement montants, AffectationsReglement affectations,
-                              PerimetreCommercialService perimetre, GenerateurCodeSequence generateurCode,
+                              PerimetreCommercialService perimetre, LigneEcheancierOmran ligneEcheancier,
                               UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.depots = depots;
         this.montants = montants;
         this.affectations = affectations;
         this.perimetre = perimetre;
-        this.generateurCode = generateurCode;
+        this.ligneEcheancier = ligneEcheancier;
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
     }
@@ -148,7 +145,7 @@ public class DesistementService {
         }
         ComSaleWithdrawalCancellation d = new ComSaleWithdrawalCancellation();
         d.setId(UUID.randomUUID());
-        d.setCode(generateurCode.suivant(LigneEcheancierOmran.SEQUENCE_QUITTANCE, LARGEUR_ANNEE, LARGEUR_NUMERO));
+        d.setCode(ligneEcheancier.nouvelleQuittance());
         d.setComFolder(folder);
         d.setStkItem(folder.getStkItem());
         d.setCfgOldCustomer(folder.getCfgCustomer());
