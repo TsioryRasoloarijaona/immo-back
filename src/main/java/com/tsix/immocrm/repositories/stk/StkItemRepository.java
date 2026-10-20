@@ -24,6 +24,11 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
     // StkHierarchyId = la tranche. Les listes filtrées passent par StkItemSpecifications.
     List<StkItem> findByStkHierarchyId(UUID trancheId);
 
+    /** Articles principaux de la tranche d'une nature ({@code StkKind.Code}) : cible de l'attachement en masse. */
+    @Query("SELECT i FROM StkItem i WHERE i.stkHierarchy.id = :trancheId AND i.stkKind.code = :nature "
+            + "AND (i.isUnderItem IS NULL OR i.isUnderItem = false)")
+    List<StkItem> findPrincipauxDeNature(@Param("trancheId") UUID trancheId, @Param("nature") String nature);
+
     // Sans filtre de statut : la fiche article montre tous ses sous-articles.
     List<StkItem> findByParentId(UUID parentId);
 

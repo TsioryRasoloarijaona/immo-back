@@ -7,19 +7,25 @@ package com.tsix.immocrm.storage;
 public enum PorteurPieceJointe {
 
     /** Category calculée au dépôt (« Dossier de vente N° {code} du {date} », convention légataire). */
-    DOSSIER("dossier", null),
+    DOSSIER("dossier", null, "ce dossier"),
 
     /** Valeur du cas courant ; l'autre dépend de {@code StlSettlement.IsCredit} (voir ReglementPieceJointeService). */
-    REGLEMENT("reglement", "Yes.Stl.Credit.Settlement"),
+    REGLEMENT("reglement", "Yes.Stl.Credit.Settlement", "ce règlement"),
 
-    ARTICLE("article", "Yes.Stk.Building.Item");
+    ARTICLE("article", "Yes.Stk.Building.Item", "cet article"),
+
+    TRANCHE("tranche", "Yes.Cfg.CfgTranche", "cette tranche"),
+
+    PROJET("projet", "Yes.Cfg.CfgProject", "ce programme");
 
     private final String segmentCle;
     private final String categoryParDefaut;
+    private final String libelle;
 
-    PorteurPieceJointe(String segmentCle, String categoryParDefaut) {
+    PorteurPieceJointe(String segmentCle, String categoryParDefaut, String libelle) {
         this.segmentCle = segmentCle;
         this.categoryParDefaut = categoryParDefaut;
+        this.libelle = libelle;
     }
 
     public String segmentCle() {
@@ -29,5 +35,10 @@ public enum PorteurPieceJointe {
     /** {@code null} si calculée. */
     public String categoryParDefaut() {
         return categoryParDefaut;
+    }
+
+    /** Complément des messages 404 (« Pièce jointe introuvable pour ce dossier »). */
+    public String libelle() {
+        return libelle;
     }
 }

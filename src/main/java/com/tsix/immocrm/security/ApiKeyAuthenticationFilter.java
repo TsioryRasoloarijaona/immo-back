@@ -14,10 +14,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * {@code X-Api-Key} des clients machine, placé avant le JWT (FEATURE-cle-api-n8n.md §5). Clé présente mais invalide
@@ -52,11 +55,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
 
         CleApiService.ClientResolu client = resolu.get();
-        String chemin = request.getRequestURI();
-        if (!PorteeCleApi.autorise(client.portees(), request.getMethod(), chemin)) {
+        Optional<String> chemin = cheminNormalise(request);
+        if (chemin.isEmpty() || !PorteeCleApi.autorise(client.portees(), request.getMethod(), chemin.get())) {
             refuser(response, HttpStatus.FORBIDDEN, CODE_HORS_PORTEE,
                     "La clé « " + client.client().getNom() + " » n'autorise pas "
-                            + request.getMethod() + " " + chemin + ".");
+                            + request.getMethod() + " " + request.getRequestURI() + ".");
             return;
         }
 
@@ -67,6 +70,20 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(client.principal(), null, authorities));
         cleApiService.tracerUsage(client.client());
         filterChain.doFilter(request, response);
+    }
+
+    // Chemin décodé comme Spring MVC le route (getRequestURI reste encodé : %2D contournait les exclusions).
+    // Tout chemin ambigu (;, //, .., %2F, \, double encodage) est refusé plutôt que deviné.
+    private static Optional<String> cheminNormalise(HttpServletRequest request) {
+        String brut = request.getRequestURI().toLowerCase(Locale.ROOT);
+        if (Stream.of(";", "//", "\\", "%2f", "%5c").anyMatch(brut::contains)) {
+            return Optional.empty();
+        }
+        String decode = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
+        if (decode.contains("%") || decode.contains("..")) {
+            return Optional.empty();
+        }
+        return Optional.of(decode);
     }
 
     private static void refuser(HttpServletResponse response, HttpStatus statut, String code, String detail)

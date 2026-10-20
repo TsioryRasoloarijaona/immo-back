@@ -17,6 +17,8 @@ public record PieceJointeDto(
         @Schema(description = "Extension du fichier, avec le point (ex. \".pdf\").")
         String extension,
         LocalDateTime dateCreation,
-        String creePar
+        String creePar,
+        @Schema(description = "Groupe libre de la pièce (AdmAttachedFile.FoderGroup, ex. « PLAN ») ; null si aucun.")
+        String groupe
 ) {
 }

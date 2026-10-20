@@ -7,6 +7,8 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
+import com.tsix.immocrm.services.piecejointe.PorteurDepot;
+import com.tsix.immocrm.services.piecejointe.SaisiePieceJointe;
 import com.tsix.immocrm.storage.PorteurPieceJointe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,16 +62,16 @@ public class PieceJointeService {
         ComFolder folder = folderRepository.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
         String category = "Dossier de vente N° " + folder.getCode() + " du " + LocalDateTime.now(clock).format(DATE_LEGACY);
-        return support.deposer(dossierId, PorteurPieceJointe.DOSSIER, category, fichier, description,
-                typeId, principal);
+        return support.deposer(new PorteurDepot(dossierId, PorteurPieceJointe.DOSSIER, folder.getCode(), category, null),
+                fichier, new SaisiePieceJointe(description, typeId, null), principal);
     }
 
     /** Suppression logique, sans règle métier côté dossier (contrairement au règlement pointé). */
     @Transactional
     public void supprimer(UUID dossierId, UUID pieceId, AuthenticatedUser principal) {
-        if (!folderRepository.existsById(dossierId)) {
-            throw new ResourceNotFoundException("Dossier introuvable: " + dossierId);
-        }
-        support.supprimer(dossierId, pieceId, "ce dossier", principal);
+        ComFolder folder = folderRepository.findById(dossierId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
+        support.supprimer(PorteurDepot.pourSuppression(dossierId, PorteurPieceJointe.DOSSIER, folder.getCode()),
+                pieceId, principal);
     }
 }

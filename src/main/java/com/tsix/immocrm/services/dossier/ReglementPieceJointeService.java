@@ -11,6 +11,8 @@ import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
+import com.tsix.immocrm.services.piecejointe.PorteurDepot;
+import com.tsix.immocrm.services.piecejointe.SaisiePieceJointe;
 import com.tsix.immocrm.storage.PorteurPieceJointe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,8 +78,8 @@ public class ReglementPieceJointeService {
                                   UUID typeId, AuthenticatedUser principal) {
         StlSettlement settlement = reglementDuDossier(dossierId, reglementId);
         String category = Boolean.FALSE.equals(settlement.getIsCredit()) ? CATEGORY_DEBIT : CATEGORY_CREDIT;
-        return support.deposer(reglementId, PorteurPieceJointe.REGLEMENT, category, fichier, description,
-                typeId, principal);
+        return support.deposer(new PorteurDepot(reglementId, PorteurPieceJointe.REGLEMENT, settlement.getCode(), category,
+                null), fichier, new SaisiePieceJointe(description, typeId, null), principal);
     }
 
     /**
@@ -99,6 +101,6 @@ public class ReglementPieceJointeService {
                     + "laissez celle-ci en place.");
         }
 
-        support.marquerSupprime(objet, principal);
+        support.marquerSupprime(objet, settlement.getCode(), principal);
     }
 }

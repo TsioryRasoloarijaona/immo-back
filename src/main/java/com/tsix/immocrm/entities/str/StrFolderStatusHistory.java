@@ -58,4 +58,14 @@ public class StrFolderStatusHistory {
     @Nationalized
     @Column(name = "Description")
     private String description;
+
+    // Sans entité Rnt/Syn/transfert : identifiants seuls (onglet Historique de l'article).
+    @Column(name = "RntFolderId")
+    private UUID rntFolderId;
+
+    @Column(name = "SynFolderId")
+    private UUID synFolderId;
+
+    @Column(name = "ComSaleWithdrawalProductId")
+    private UUID comSaleWithdrawalProductId;
 }

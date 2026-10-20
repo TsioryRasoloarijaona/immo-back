@@ -1,5 +1,6 @@
 package com.tsix.immocrm.config.audit;
 
+import com.tsix.immocrm.entities.adm.AdmAttachedFile;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
@@ -63,7 +64,8 @@ public final class RegistreAuditOmran {
             CfgTrancheSettlementCategory.class, AdmUserHabilitation.class, CfgCompany.class,
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
             StkItemVue.class, StkItemContenance.class,
-            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class);
+            ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
+            AdmAttachedFile.class);
 
     private RegistreAuditOmran() {
     }
@@ -78,6 +80,11 @@ public final class RegistreAuditOmran {
 
     static boolean trace(Class<?> classe) {
         return CLASSES.contains(classe);
+    }
+
+    /** Une mise à jour qui vaut suppression : la pièce jointe supprimée logiquement. */
+    static boolean suppressionLogique(Object entite) {
+        return entite instanceof AdmAttachedFile f && f.isSuppressionLogique();
     }
 
     /** ObjectLabel : programme et article = Code ; tranche, sous-article, terrain = Description (mesuré en prod). */
@@ -114,6 +121,9 @@ public final class RegistreAuditOmran {
             case CfgTrancheFolderEntity f -> new Trace("Yes.Cfg.CfgTrancheFolderEntity", "Définition des finalisations",
                     Objects.toString(Champs.de(f.getStrFolderEntity(), StrEntity::getId), ""), null, null);
             case ComDocument ignore -> new Trace("Yes.Com.Sales.ComDocument", "Financement", "Financement", null, null);
+            // Tous porteurs, sans parent : absente de TYPES, l'onglet Audit d'un porteur ne la lit pas (P2b §8.3).
+            case AdmAttachedFile f -> new Trace("Yes.Adm.Attachment.AttachmentWithData", "Pièce jointe",
+                    f.getLibelleAudit(), null, null);
             default -> null;
         });
     }

@@ -2,12 +2,10 @@ package com.tsix.immocrm.controller.patrimoine;
 
 import com.tsix.immocrm.domain.StatutArticle;
 import com.tsix.immocrm.dto.common.PageDto;
-import com.tsix.immocrm.dto.dossier.PieceJointeDto;
 import com.tsix.immocrm.dto.patrimoine.AffectationSousArticleDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
-import com.tsix.immocrm.services.patrimoine.ArticlePieceJointeService;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,7 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,11 +46,9 @@ public class ArticleController {
     private static final String ID_SOUS_ARTICLE = "Id du sous-article (StkItem.PKey).";
 
     private final ArticleService articleService;
-    private final ArticlePieceJointeService pieceJointeService;
 
-    public ArticleController(ArticleService articleService, ArticlePieceJointeService pieceJointeService) {
+    public ArticleController(ArticleService articleService) {
         this.articleService = articleService;
-        this.pieceJointeService = pieceJointeService;
     }
 
     @GetMapping
@@ -200,36 +195,5 @@ public class ArticleController {
     })
     public void supprimer(@Parameter(description = ID_ARTICLE) @PathVariable UUID id) {
         articleService.supprimer(id);
-    }
-
-    // -- Pièces jointes (AdmAttachedFile, CategoryId = StkItem.PKey — voir ArticlePieceJointeService) --
-
-    @GetMapping("/{id}/pieces-jointes")
-    @Operation(summary = "Liste les pièces jointes de l'article")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Liste des pièces jointes (peut être vide)."),
-            @ApiResponse(responseCode = "404", description = "Article introuvable.")
-    })
-    public List<PieceJointeDto> getPiecesJointes(
-            @Parameter(description = "Identifiant de l'article (StkItem.PKey).")
-            @PathVariable UUID id) {
-        return pieceJointeService.findByArticle(id);
-    }
-
-    @GetMapping("/{id}/pieces-jointes/{pieceId}/fichier")
-    @Operation(summary = "Affiche ou télécharge une pièce jointe de l'article (ex. un plan)")
-    @ApiResponses({
-            @ApiResponse(responseCode = "302", description = "Redirection vers l'URL présignée du fichier."),
-            @ApiResponse(responseCode = "404", description = "Article introuvable, pièce jointe introuvable "
-                    + "pour cet article, ou aucun fichier stocké pour cette pièce.")
-    })
-    public ResponseEntity<Void> getFichier(
-            @Parameter(description = "Identifiant de l'article (StkItem.PKey).")
-            @PathVariable UUID id,
-            @Parameter(description = "Identifiant de la pièce jointe (AdmAttachedFile.PKey).")
-            @PathVariable UUID pieceId) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(pieceJointeService.urlFichier(id, pieceId))
-                .build();
     }
 }
