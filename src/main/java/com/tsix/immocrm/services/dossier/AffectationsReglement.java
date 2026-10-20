@@ -47,18 +47,25 @@ public class AffectationsReglement {
      */
     public List<LigneAffectee> valider(UUID dossierId, List<AffectationReglementRequest> affectations,
                                        Collection<UUID> dejaAffectees) {
+        return valider(dossierId, affectations, dejaAffectees, false);
+    }
+
+    /** {@code decaissement} : le plafond de chaque ligne est {@link #resteDu(ComDocument, boolean)} au débit. */
+    public List<LigneAffectee> valider(UUID dossierId, List<AffectationReglementRequest> affectations,
+                                       Collection<UUID> dejaAffectees, boolean decaissement) {
         if (affectations == null || affectations.isEmpty()) {
             throw new InvalidRequestException("Au moins une échéance doit être affectée");
         }
         Set<UUID> vues = new HashSet<>(dejaAffectees);
         List<LigneAffectee> lignes = new ArrayList<>();
         for (AffectationReglementRequest affectation : affectations) {
-            lignes.add(validerUne(dossierId, affectation, vues));
+            lignes.add(validerUne(dossierId, affectation, vues, decaissement));
         }
         return lignes;
     }
 
-    private LigneAffectee validerUne(UUID dossierId, AffectationReglementRequest affectation, Set<UUID> vues) {
+    private LigneAffectee validerUne(UUID dossierId, AffectationReglementRequest affectation, Set<UUID> vues,
+                                     boolean decaissement) {
         if (affectation == null || affectation.echeanceId() == null) {
             throw new InvalidRequestException("echeanceId est requis pour chaque affectation");
         }
@@ -77,7 +84,7 @@ public class AffectationsReglement {
                 .filter(d -> d.getComFolder() != null && dossierId.equals(d.getComFolder().getId()))
                 .orElseThrow(() -> new InvalidRequestException(
                         "L'échéance " + echeanceId + " n'appartient pas à ce dossier"));
-        BigDecimal reste = resteDu(echeance);
+        BigDecimal reste = resteDu(echeance, decaissement);
         if (montant.compareTo(reste) > 0) {
             throw new InvalidRequestException("montant (" + montant.toPlainString() + ") dépasse le reste à payer "
                     + "de l'échéance " + libelle(echeance) + " (" + reste.toPlainString() + ")");
@@ -85,10 +92,13 @@ public class AffectationsReglement {
         return new LigneAffectee(echeance, montant);
     }
 
-    /** Le reste que l'échéancier affiche, lu avant ce règlement. */
-    BigDecimal resteDu(ComDocument echeance) {
-        return MontantRestant.echeance(echeance.getAmount(),
-                settlementLineRepository.sumAmountByComDocumentId(echeance.getId()));
+    /**
+     * Le reste que l'échéancier affiche, lu avant ce règlement. Le réglé signé retranche les décaissements : pour
+     * une pièce remboursée au client ({@code decaissement}), c'est son opposé qui la solde.
+     */
+    public BigDecimal resteDu(ComDocument echeance, boolean decaissement) {
+        BigDecimal regle = settlementLineRepository.sumAmountByComDocumentId(echeance.getId());
+        return MontantRestant.echeance(echeance.getAmount(), decaissement && regle != null ? regle.negate() : regle);
     }
 
     public static BigDecimal somme(List<LigneAffectee> lignes) {

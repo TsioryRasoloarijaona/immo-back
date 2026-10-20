@@ -31,6 +31,8 @@ chaque *pull request*.
 | `115_referentiels_fk.sql` | sa clé vers `CfgTranche` (CASCADE), comme en production ; idempotent | écrit à la main |
 | `118_sous-articles_tables.sql` | aucune table nouvelle (sous-articles, FEATURE-patrimoine-sous-articles.md) | écrit à la main |
 | `119_sous-articles_fk.sql` | aucune clé étrangère | écrit à la main |
+| `136_desistements_tables.sql` | `ComSaleWithdrawalCancellation`, `ComSaleWithdrawalReason`, `ComDocument.ComSaleWithdrawalCancellationId` (désistements, FEATURE-desistements.md) ; déjà en CI, idempotent, à appliquer à `yesRemsTest` | écrit à la main |
+| `137_desistements_fk.sql` | leurs clés vers `ComFolder`, `ComSaleWithdrawalReason`, `StkItem`, `StlSettlementType` et `ComDocument` → désistement, noms de production ; idempotent | écrit à la main |
 
 Le CI applique **tous** les `ci/schema/*.sql` triés par nom (ordre `C`) : un nouveau fichier n'a pas à être
 ajouté à `ci.yml`. Les deux `070_*` n'ont pas de dépendance entre eux.

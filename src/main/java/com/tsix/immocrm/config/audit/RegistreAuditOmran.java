@@ -31,6 +31,7 @@ import com.tsix.immocrm.entities.stk.StkVue;
 import com.tsix.immocrm.entities.cfg.CfgTrancheFolderEntity;
 import com.tsix.immocrm.entities.cfg.ComSalesCommission;
 import com.tsix.immocrm.entities.com.ComDocument;
+import com.tsix.immocrm.entities.com.ComSaleWithdrawalCancellation;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.utils.Champs;
 
@@ -73,7 +74,7 @@ public final class RegistreAuditOmran {
             CfgCompanyShareholder.class, CfgShareholder.class, CfgGroupShareholder.class, CfgGroupShareholderLine.class,
             StkItemVue.class, StkItemContenance.class,
             ComSalesCommission.class, CfgTrancheFolderEntity.class, ComDocument.class,
-            AdmAttachedFile.class, StkHierarchyPlan.class);
+            AdmAttachedFile.class, StkHierarchyPlan.class, ComSaleWithdrawalCancellation.class);
 
     private RegistreAuditOmran() {
     }
@@ -137,6 +138,8 @@ public final class RegistreAuditOmran {
             case AdmAttachedFile f -> new Trace("Yes.Adm.Attachment.AttachmentWithData", "Pièce jointe",
                     f.getLibelleAudit(), null, null);
             case StkHierarchyPlan p -> new Trace("Yes.Cfg.StkHierarchyPlan", "Plan", p.getCode(), null, null);
+            case ComSaleWithdrawalCancellation w -> new Trace("Yes.Com.Sales.SaleWithdrawalCancellation", "Désistement",
+                    w.getCode(), null, null);
             default -> ReferentielAdmin.parClasse(entite.getClass()).map(r -> referentiel(r, entite)).orElse(null);
         });
     }

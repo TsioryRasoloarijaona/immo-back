@@ -8,12 +8,16 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID>, JpaSpecificationExecutor<ComDocument> {
 
     // Non paginée : les montants somment toutes les lignes, pas une page.
     List<ComDocument> findByComFolderIdOrderByDocDateAsc(UUID comFolderId);
+
+    Optional<ComDocument> findFirstByComSaleWithdrawalCancellationIdAndComSettlementCategoryIsSaleResiliationTrue(
+            UUID desistementId);
 
     Page<ComDocument> findByComFolderIdOrderByDocDateDesc(UUID comFolderId, Pageable pageable);
 

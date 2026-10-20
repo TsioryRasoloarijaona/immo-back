@@ -71,6 +71,10 @@ public class StrStatus {
     @Column(name = "BoolField005")
     private Boolean venteACredit;
 
+    // OMRAN « Peut effectuer un désistement ».
+    @Column(name = "BoolField010")
+    private Boolean peutDesister;
+
     // OMRAN « Avec vérification du schéma de financement » (Sale.cs:VerifSchema).
     @Column(name = "BoolField012")
     private Boolean verificationSchema;
