@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -148,14 +151,50 @@ public class RemonteeLecture {
         List<Object[]> parametres = lignes.stream()
                 .map(valeurs -> parametres(cle, colonnes, valeurs, valeurs.get(cle)))
                 .toList();
-        for (int depuis = 0; depuis < parametres.size(); depuis += TAILLE_LOT_BASELINE) {
-            versLecture.batchUpdate(fusion,
-                    parametres.subList(depuis, Math.min(depuis + TAILLE_LOT_BASELINE, parametres.size())));
-        }
+        fusionnerJusquaStabilite(parametres, TAILLE_LOT_BASELINE,
+                lot -> versLecture.batchUpdate(fusion, lot),
+                ligne -> versLecture.update(fusion, ligne));
         return parametres.size();
     }
 
     private static final int TAILLE_LOT_BASELINE = 500;
+
+    /**
+     * Par lots ; un lot refusé est rejoué ligne à ligne, puis les refusées repassent tant qu'un tour progresse : une ligne
+     * qui cite une ligne de la même table plus loin dans l'ordre (facture → sa commande) passe au tour suivant au lieu
+     * de bloquer la table à chaque cycle. Une ligne qui ne passe jamais (parent absent) fait échouer la table.
+     */
+    static <T> void fusionnerJusquaStabilite(List<T> lignes, int taille, Consumer<List<T>> parLot, Consumer<T> uneLigne) {
+        List<T> refusees = new ArrayList<>();
+        for (int depuis = 0; depuis < lignes.size(); depuis += taille) {
+            List<T> lot = lignes.subList(depuis, Math.min(depuis + taille, lignes.size()));
+            try {
+                parLot.accept(lot);
+            } catch (DataAccessResourceFailureException e) {
+                throw e;
+            } catch (DataAccessException e) {
+                refusees.addAll(lot); // MERGE idempotent : rejouer les lignes déjà passées ne change rien
+            }
+        }
+        while (!refusees.isEmpty()) {
+            List<T> encore = new ArrayList<>();
+            DataAccessException derniere = null;
+            for (T ligne : refusees) {
+                try {
+                    uneLigne.accept(ligne);
+                } catch (DataAccessResourceFailureException e) {
+                    throw e;
+                } catch (DataAccessException e) {
+                    encore.add(ligne);
+                    derniere = e;
+                }
+            }
+            if (derniere != null && encore.size() == refusees.size()) {
+                throw derniere;
+            }
+            refusees = encore;
+        }
+    }
 
     /** {@code SELECT *}, sauf pour une table de {@link #COLONNES_ABSENTES_DE_LA_COPIE} : liste lue sur la source. */
     private String projection(String table) {
