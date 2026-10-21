@@ -168,11 +168,7 @@ public class RemonteeLecture {
         List<T> refusees = new ArrayList<>();
         for (int depuis = 0; depuis < lignes.size(); depuis += taille) {
             List<T> lot = lignes.subList(depuis, Math.min(depuis + taille, lignes.size()));
-            try {
-                parLot.accept(lot);
-            } catch (DataAccessResourceFailureException e) {
-                throw e;
-            } catch (DataAccessException e) {
+            if (refus(() -> parLot.accept(lot)) != null) {
                 refusees.addAll(lot); // MERGE idempotent : rejouer les lignes déjà passées ne change rien
             }
         }
@@ -180,11 +176,8 @@ public class RemonteeLecture {
             List<T> encore = new ArrayList<>();
             DataAccessException derniere = null;
             for (T ligne : refusees) {
-                try {
-                    uneLigne.accept(ligne);
-                } catch (DataAccessResourceFailureException e) {
-                    throw e;
-                } catch (DataAccessException e) {
+                DataAccessException e = refus(() -> uneLigne.accept(ligne));
+                if (e != null) {
                     encore.add(ligne);
                     derniere = e;
                 }
@@ -193,6 +186,18 @@ public class RemonteeLecture {
                 throw derniere;
             }
             refusees = encore;
+        }
+    }
+
+    /** Le refus de la copie, ou null ; une connexion perdue remonte telle quelle (rien à rejouer). */
+    private static DataAccessException refus(Runnable ecriture) {
+        try {
+            ecriture.run();
+            return null;
+        } catch (DataAccessResourceFailureException e) {
+            throw e;
+        } catch (DataAccessException e) {
+            return e;
         }
     }
 
