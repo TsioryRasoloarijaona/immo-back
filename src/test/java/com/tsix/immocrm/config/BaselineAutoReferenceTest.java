@@ -84,9 +84,10 @@ class BaselineAutoReferenceTest {
             appels.add("lot");
             throw new CannotGetJdbcConnectionException("copie injoignable");
         };
+        Consumer<Ligne> parLigne = l -> appels.add("ligne");
+        List<Ligne> lignes = List.of(new Ligne("a", null));
 
-        assertThatThrownBy(() -> RemonteeLecture.fusionnerJusquaStabilite(
-                List.of(new Ligne("a", null)), 500, horsLigne, l -> appels.add("ligne")))
+        assertThatThrownBy(() -> RemonteeLecture.fusionnerJusquaStabilite(lignes, 500, horsLigne, parLigne))
                 .isInstanceOf(CannotGetJdbcConnectionException.class);
         assertThat(appels).containsExactly("lot");
     }
