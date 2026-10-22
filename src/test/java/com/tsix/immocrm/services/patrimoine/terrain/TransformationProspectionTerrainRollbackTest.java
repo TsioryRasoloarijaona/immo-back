@@ -99,9 +99,10 @@ class TransformationProspectionTerrainRollbackTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("EcritureTerrain.completerDepuisProspection absente (§5.7)"));
         completer.setAccessible(true);
+        Object cible = Mockito.doThrow(new IllegalStateException("Echec simule de la completion"))
+                .when(ecritureTerrain);
         Object[] arguments = Arrays.stream(completer.getParameterTypes()).map(ArgumentMatchers::any).toArray();
-        completer.invoke(Mockito.doThrow(new IllegalStateException("Echec simule de la completion"))
-                .when(ecritureTerrain), arguments);
+        completer.invoke(cible, arguments);
     }
 
     @Test

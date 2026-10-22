@@ -396,10 +396,17 @@ public class FixtureProspectionsTerrain {
     }
 
     public void pieceJointe(UUID prospectionId) {
+        UUID piece = UUID.randomUUID();
         executer(entityManager.createNativeQuery("""
                         INSERT INTO AdmAttachedFile (PKey, Category, CategoryId, Description)
                         VALUES (:id, N'Yes.Lnd.Prospection', :categorie, N'Piece P7b')""")
-                .setParameter(P_ID, UUID.randomUUID()).setParameter("categorie", prospectionId));
+                .setParameter(P_ID, piece).setParameter("categorie", prospectionId));
+        // HasFile est calculé : il faut un AppFileObject non supprimé pointant la pièce.
+        executer(entityManager.createNativeQuery("""
+                        INSERT INTO AppFileObject (AdmAttachedFileId, StorageKey, SizeBytes, UploadedAt)
+                        VALUES (:id, :cle, 1, :maintenant)""")
+                .setParameter(P_ID, piece).setParameter("cle", "test/p7b/" + piece)
+                .setParameter("maintenant", java.time.LocalDateTime.now()));
     }
 
     public void note(UUID prospectionId) {
