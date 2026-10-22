@@ -166,7 +166,10 @@ final class FicheEtude {
                 Champs.de(e.getCfgCompany(), CfgCompany::getId), Champs.de(e.getCfgCompany(), CfgCompany::getDescription),
                 Champs.de(e.getStkItem(), StkItem::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getId),
                 Champs.de(s, StkFeasibilityStudyStatus::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getColorName),
-                Boolean.TRUE.equals(e.getIsLocked()), e.getArea(), e.getTotalCostLand());
+                Boolean.TRUE.equals(e.getIsLocked()), e.getArea(), e.getTotalCostLand(), e.getTotalCost(), e.getTurnover(),
+                e.getAutofinancementAmount(), e.getNetProfitMargin(), e.getConretisationAmount(), e.getFinalizationAmount(),
+                e.getPercentageConcretisation(), e.getProfitRatioByProjectCost(), e.getProfitRatioByTurnover(),
+                e.getProfitRatioByAutofinancementAmount());
     }
 
     private static BigDecimal somme(BigDecimal... termes) {

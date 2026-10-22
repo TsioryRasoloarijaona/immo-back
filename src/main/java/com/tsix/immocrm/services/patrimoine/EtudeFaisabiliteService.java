@@ -224,8 +224,6 @@ public class EtudeFaisabiliteService {
                 i -> ReferencesPatrimoine.trouver(this::terrain, i, TERRAIN_ID)));
         e.setLandDescription(texte(v.texte("descriptionTerrain", d.descriptionTerrain()), e.getLandDescription(), COURT,
                 "La description du terrain"));
-        e.setNumberOfItemForSale(v.ou("nombreArticlesAVendre", positif(d.nombreArticlesAVendre(), "nombreArticlesAVendre"),
-                e.getNumberOfItemForSale()));
         e.setUseLandProportionForTvaCalculation(v.ou("proportionTerrainPourTva", d.proportionTerrainPourTva(),
                 e.getUseLandProportionForTvaCalculation()));
         e.setDefaultVat(v.ou("tauxTvaDefaut", d.tauxTvaDefaut(), e.getDefaultVat()));
@@ -299,9 +297,8 @@ public class EtudeFaisabiliteService {
                 Boolean.TRUE.equals(e.getIsLocked()), e.getNumberOfItemForSale(), e.getUseLandProportionForTvaCalculation(),
                 e.getDefaultVat(), e.getInterestVatRatio(), e.getEcartTypeExpenses(), e.getEcartTypeConcretisation(),
                 e.getEcartTypeFinalization(), e.getBackTimeOnDays(), e.getBackGuaranteeRate(),
-                e.getBackGuaranteeApplicationRate(), FicheEtude.valeurs(e), FicheEtude.bilan(e),
-                grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
-                compter(PREVISIONS, e.getId()) > 0,
+                e.getBackGuaranteeApplicationRate(), e.getPercentageConcretisation(), e.getImpotRatio(), e.getUnitSalePrice(),
+                FicheEtude.valeurs(e), FicheEtude.bilan(e), grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
                 e.getUserCreate(), e.getUserCreateDateTime(), e.getUserUpdate(), e.getUserUpdateDateTime());
     }
 }
