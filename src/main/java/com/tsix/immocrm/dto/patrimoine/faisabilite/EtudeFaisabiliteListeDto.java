@@ -20,5 +20,15 @@ public record EtudeFaisabiliteListeDto(
         @Schema(description = "Couleur du statut (nom .NET, ex. Green), null si aucune.") String statutCouleur,
         @Schema(description = "Étude bloquée (IsLocked) : aucune écriture avant Débloquer.") boolean bloquee,
         @Schema(description = "Superficie du terrain (m²).") BigDecimal superficie,
-        @Schema(description = "Coût total du terrain TTC.") BigDecimal coutTotalTerrain) {
+        @Schema(description = "Coût total du terrain TTC.") BigDecimal coutTotalTerrain,
+        @Schema(description = "Charge TTC (TotalCost).") BigDecimal coutTotal,
+        @Schema(description = "Chiffre d'affaires TTC (Turnover).") BigDecimal chiffreAffaires,
+        @Schema(description = "Fonds propres TTC (AutofinancementAmount).") BigDecimal montantAutofinancement,
+        @Schema(description = "Marge bénéficiaire nette.") BigDecimal margeNette,
+        @Schema(description = "Montant de la concrétisation TTC.") BigDecimal montantConcretisation,
+        @Schema(description = "Montant de la finalisation TTC.") BigDecimal montantFinalisation,
+        @Schema(description = "Taux de concrétisation (fraction).") BigDecimal pourcentageConcretisation,
+        @Schema(description = "Retour sur coût projet ; null si coût HT nul.") BigDecimal rentabiliteCoutProjet,
+        @Schema(description = "Retour sur le C.A. ; null si C.A. HT nul.") BigDecimal rentabiliteChiffreAffaires,
+        @Schema(description = "Retour sur fonds propres ; null si fonds propres HT nuls.") BigDecimal rentabiliteFondsPropres) {
 }

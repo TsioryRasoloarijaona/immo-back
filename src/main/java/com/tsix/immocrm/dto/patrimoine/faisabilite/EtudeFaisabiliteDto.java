@@ -25,7 +25,8 @@ public record EtudeFaisabiliteDto(
         @Schema(description = "Libellé du statut.") String statutLibelle,
         @Schema(description = "Couleur du statut (nom .NET), null si aucune.") String statutCouleur,
         @Schema(description = "Étude bloquée : toute écriture répond 409 avant Débloquer.") boolean bloquee,
-        @Schema(description = "Nombre d'articles à vendre.") Integer nombreArticlesAVendre,
+        @Schema(description = "Calculé : Σ quantités des unités à catégorie d'article (hors sous-article), non surface.")
+        Integer nombreArticlesAVendre,
         @Schema(description = "Quote-part du terrain utilisée pour la TVA.") Boolean proportionTerrainPourTva,
         @Schema(description = "TVA par défaut (fraction).") BigDecimal tauxTvaDefaut,
         @Schema(description = "TVA sur intérêts (fraction).") BigDecimal tauxTvaInterets,
@@ -36,12 +37,14 @@ public record EtudeFaisabiliteDto(
         @Schema(description = "Taux de retenue de garantie (fraction).") BigDecimal tauxRetenueGarantie,
         @Schema(description = "Taux d'application de la retenue de garantie (fraction).")
         BigDecimal tauxApplicationRetenueGarantie,
+        @Schema(description = "Part de la concrétisation dans le chiffre d'affaires (fraction).")
+        BigDecimal pourcentageConcretisation,
+        @Schema(description = "Taux de l'impôt sur les sociétés (fraction).") BigDecimal tauxIs,
+        @Schema(description = "Prix de vente du m² (UnitSalePrice).") BigDecimal prixVenteM2,
         @Schema(description = "Bloc A et phases tels que stockés (recalculés à chaque écriture).") ValeursFaisabilite valeurs,
-        @Schema(description = "Bilan stocké, lecture seule.") BilanEtudeDto bilan,
+        @Schema(description = "Bilan recalculé à chaque écriture depuis les prévisions et le financement.") BilanEtudeDto bilan,
         @Schema(description = "Unités de base de l'étude, par ordre.") List<LigneUniteEtudeDto> unites,
         @Schema(description = "Tranches de l'étude et leurs ventilations, par ordre.") List<LigneTrancheEtudeDto> tranches,
-        @Schema(description = "Vrai si l'étude a des prévisions (FSPrevision) : à recalculer en P8b après une modification.")
-        boolean previsionsARecalculer,
         @Schema(description = "Créateur (UserCreate).") String userCreate,
         @Schema(description = "Date de création.") LocalDateTime userCreateDateTime,
         @Schema(description = "Dernier auteur (UserUpdate).") String userUpdate,

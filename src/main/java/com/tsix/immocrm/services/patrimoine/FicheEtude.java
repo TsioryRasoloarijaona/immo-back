@@ -1,6 +1,10 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.faisabilite.EtatFaisabilite.Parametres;
 import com.tsix.immocrm.domain.faisabilite.ValeursFaisabilite;
+import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.repositories.stk.StkFeasibilityStudyRepository;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.BilanEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteListeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
@@ -13,15 +17,70 @@ import com.tsix.immocrm.utils.Champs;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Stream;
 
+import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.fraction;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.ou;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
 
 /** Correspondance étude ↔ {@link ValeursFaisabilite} et lignes de lecture (FEATURE-patrimoine-faisabilite.md §2.1-2.3). */
 final class FicheEtude {
 
+    private static final BigDecimal ECART_TYPE_MIN = new BigDecimal("0.5");
+
     private FicheEtude() {
+    }
+
+    /** Message OMRAN {@code EcartType_Validating} (FeasibilityStudy.cs l.779). */
+    static void exigerEcartsTypes(BigDecimal... ecartsTypes) {
+        if (Stream.of(ecartsTypes).filter(Objects::nonNull).anyMatch(s -> s.compareTo(ECART_TYPE_MIN) < 0)) {
+            throw new InvalidRequestException("la valeur de l'écart type doit être supérieur ou égal à 0.5");
+        }
+    }
+
+    /** 404 inconnue / société inactive, 409 bloquée : toute écriture d'une étude ou de ses lignes. */
+    static StkFeasibilityStudy modifiable(StkFeasibilityStudyRepository etudes, UUID id) {
+        StkFeasibilityStudy e = etudes.exigerVisible(id);
+        if (Boolean.TRUE.equals(e.getIsLocked())) {
+            throw new ConflictException(EtudeFaisabiliteService.BLOQUEE);
+        }
+        return e;
+    }
+
+    /** Colonnes de l'étude lues par le recalcul (FEATURE-patrimoine-faisabilite-workflow.md §2.2, §2.5). */
+    static Parametres parametres(StkFeasibilityStudy e, int articles) {
+        return new Parametres(e.getPercentageConcretisation(), e.getImpotRatio(), e.getUnitSalePrice(), e.getSalableArea(),
+                e.getTotalCostLand(), Boolean.TRUE.equals(e.getUseLandProportionForTvaCalculation()), e.getDefaultVat(),
+                e.getInterestVatRatio(), e.getLandVatRatio(), e.getPriceArea(), e.getPriceAreaHt(), e.getRegistryCosts(),
+                e.getRegistryCostsHt(), e.getOtherCostsLand(), e.getOtherCostsLandHt(), e.getUnitBackCost(),
+                e.getStartDateExpenses(), e.getEndDateExpenses(), e.getStartDateConcretisation(), e.getEndDateConcretisation(),
+                e.getStartDateFinalization(), e.getEndDateFinalization(), e.getEcartTypeExpenses(),
+                e.getEcartTypeConcretisation(), e.getEcartTypeFinalization(), Objects.requireNonNullElse(e.getBackTimeOnDays(), 0),
+                e.getBackGuaranteeRate(), e.getBackGuaranteeApplicationRate(), articles);
+    }
+
+    /** Colonnes calculées du bilan ; les entrées (pourcentage, IS, prix de vente) restent celles de la saisie. */
+    static void ecrireBilan(StkFeasibilityStudy e, BilanEtudeDto b) {
+        e.setTurnover(b.chiffreAffaires());
+        e.setTotalCostExecution(b.coutExecution());
+        e.setTotalCostExecutionHt(b.coutExecutionHt());
+        e.setTotalCost(b.coutTotal());
+        e.setTotalCostHt(b.coutTotalHt());
+        e.setUnitBackCost(b.coutRevientM2());
+        e.setConretisationAmount(b.montantConcretisation());
+        e.setFinalizationAmount(b.montantFinalisation());
+        e.setTotalCostFunding(b.coutFinancement());
+        e.setAutofinancementRate(b.tauxAutofinancement());
+        e.setAutofinancementAmount(b.montantAutofinancement());
+        e.setClientfinancementRate(b.tauxFinancementClient());
+        e.setCreditfinancementRate(b.tauxFinancementCredit());
+        e.setGrossProfitMargin(b.margeBrute());
+        e.setImpotAmount(b.montantIs());
+        e.setNetProfitMargin(b.margeNette());
+        e.setProfitRatioByProjectCost(b.rentabiliteCoutProjet());
+        e.setProfitRatioByTurnover(b.rentabiliteChiffreAffaires());
+        e.setProfitRatioByAutofinancementAmount(b.rentabiliteFondsPropres());
     }
 
     /**
@@ -29,6 +88,11 @@ final class FicheEtude {
      * montant saisi (coefficient effacé pour que le calcul le reprenne), sinon le coefficient stocké.
      */
     static void appliquerEntrees(StkFeasibilityStudy e, SaisieEtudeDto d, ChampsAVider v) {
+        exigerEcartsTypes(d.ecartTypeTravaux(), d.ecartTypeConcretisation(), d.ecartTypeFinalisation());
+        e.setPercentageConcretisation(v.ou("pourcentageConcretisation",
+                fraction(d.pourcentageConcretisation(), "pourcentageConcretisation"), e.getPercentageConcretisation()));
+        e.setImpotRatio(v.ou("tauxIs", fraction(d.tauxIs(), "tauxIs"), e.getImpotRatio()));
+        e.setUnitSalePrice(v.ou("prixVenteM2", positif(d.prixVenteM2(), "prixVenteM2"), e.getUnitSalePrice()));
         e.setArea(v.ou("superficie", positif(d.superficie(), "superficie"), e.getArea()));
         e.setEquipementsCoef(coef(d.coefEquipements(), d.superficieEquipements(), e.getEquipementsCoef()));
         e.setEquipementsAmount(ou(d.superficieEquipements(), e.getEquipementsAmount()));
@@ -166,7 +230,10 @@ final class FicheEtude {
                 Champs.de(e.getCfgCompany(), CfgCompany::getId), Champs.de(e.getCfgCompany(), CfgCompany::getDescription),
                 Champs.de(e.getStkItem(), StkItem::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getId),
                 Champs.de(s, StkFeasibilityStudyStatus::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getColorName),
-                Boolean.TRUE.equals(e.getIsLocked()), e.getArea(), e.getTotalCostLand());
+                Boolean.TRUE.equals(e.getIsLocked()), e.getArea(), e.getTotalCostLand(), e.getTotalCost(), e.getTurnover(),
+                e.getAutofinancementAmount(), e.getNetProfitMargin(), e.getConretisationAmount(), e.getFinalizationAmount(),
+                e.getPercentageConcretisation(), e.getProfitRatioByProjectCost(), e.getProfitRatioByTurnover(),
+                e.getProfitRatioByAutofinancementAmount());
     }
 
     private static BigDecimal somme(BigDecimal... termes) {
