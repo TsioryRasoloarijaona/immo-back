@@ -16,7 +16,9 @@ public enum PorteurPieceJointe {
 
     TRANCHE("tranche", "Yes.Cfg.CfgTranche", "cette tranche"),
 
-    PROJET("projet", "Yes.Cfg.CfgProject", "ce programme");
+    PROJET("projet", "Yes.Cfg.CfgProject", "ce programme"),
+
+    PROSPECTION_TERRAIN("prospection-terrain", "Yes.Lnd.Prospection", "cette prospection");
 
     private final String segmentCle;
     private final String categoryParDefaut;

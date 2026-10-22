@@ -3,7 +3,9 @@ package com.tsix.immocrm.services.patrimoine;
 import com.tsix.immocrm.dto.dossier.PieceJointeDto;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.lnd.LndLand;
 import com.tsix.immocrm.entities.stk.StkItem;
+import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -29,13 +31,16 @@ public class PiecesJointesPatrimoineService {
     private final TrancheVisibleRepository trancheRepository;
     private final ProjetService projetService;
     private final PieceJointeSupport support;
+    private final ProspectionTerrainService prospectionTerrainService;
 
     public PiecesJointesPatrimoineService(StkItemRepository itemRepository, TrancheVisibleRepository trancheRepository,
-                                          ProjetService projetService, PieceJointeSupport support) {
+                                          ProjetService projetService, PieceJointeSupport support,
+                                          ProspectionTerrainService prospectionTerrainService) {
         this.itemRepository = itemRepository;
         this.trancheRepository = trancheRepository;
         this.projetService = projetService;
         this.support = support;
+        this.prospectionTerrainService = prospectionTerrainService;
     }
 
     public List<PieceJointeDto> lister(String segment, UUID id) {
@@ -70,6 +75,10 @@ public class PiecesJointesPatrimoineService {
             case "tranches" -> {
                 CfgTranche t = trancheRepository.exigerVisible(id);
                 yield depot(id, PorteurPieceJointe.TRANCHE, t.getCode(), t.getDescription());
+            }
+            case "prospections-terrain" -> {
+                LndLand p = prospectionTerrainService.exiger(id);
+                yield depot(id, PorteurPieceJointe.PROSPECTION_TERRAIN, p.getCode(), p.getDescription());
             }
             default -> {
                 CfgProject p = projetService.visible(id);

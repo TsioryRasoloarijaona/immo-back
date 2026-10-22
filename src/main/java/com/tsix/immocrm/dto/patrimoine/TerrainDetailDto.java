@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.patrimoine;
 
+import com.tsix.immocrm.domain.foncier.SurfacesTerrain;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -62,6 +63,9 @@ public record TerrainDetailDto(
         String userCreate,
         LocalDateTime userCreateDateTime,
         String userUpdate,
-        LocalDateTime userUpdateDateTime
+        LocalDateTime userUpdateDateTime,
+        @Schema(description = "Onglet Superficies, lecture seule : données foncières copiées de la prospection d'origine.")
+        SurfacesTerrain superficiesFoncieres,
+        @Schema(description = "ProspectionPriceProposed : prix proposé de la prospection d'origine.") BigDecimal prixPropose
 ) {
 }

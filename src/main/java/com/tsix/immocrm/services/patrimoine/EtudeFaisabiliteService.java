@@ -35,7 +35,6 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.COURT;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.obligatoire;
-import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
 
 /**
@@ -65,17 +64,19 @@ public class EtudeFaisabiliteService {
     private final TracePatrimoine trace;
     private final SuppressionProjet suppression;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final RecalculFaisabiliteService recalcul;
     private final EntityManager em;
 
     public EtudeFaisabiliteService(StkFeasibilityStudyRepository etudes, StkItemRepository articles, GrillesEtude grilles,
                                    TracePatrimoine trace, SuppressionProjet suppression,
-                                   UtilisateurAffiche utilisateurAffiche) {
+                                   UtilisateurAffiche utilisateurAffiche, RecalculFaisabiliteService recalcul) {
         this.etudes = etudes;
         this.articles = articles;
         this.grilles = grilles;
         this.trace = trace;
         this.suppression = suppression;
         this.utilisateurAffiche = utilisateurAffiche;
+        this.recalcul = recalcul;
         this.em = suppression.em();
     }
 
@@ -129,6 +130,10 @@ public class EtudeFaisabiliteService {
         appliquer(e, saisie, ChampsAVider.de(saisie, List.of(), OBLIGATOIRES));
         e.setDefaultVat(Objects.requireNonNullElse(e.getDefaultVat(), TVA_DEFAUT));
         e.setInterestVatRatio(Objects.requireNonNullElse(e.getInterestVatRatio(), TVA_INTERETS));
+        e.setPercentageConcretisation(Objects.requireNonNullElse(e.getPercentageConcretisation(), BigDecimal.ZERO));
+        e.setImpotRatio(Objects.requireNonNullElse(e.getImpotRatio(), BigDecimal.ZERO));
+        e.setUnitSalePrice(Objects.requireNonNullElse(e.getUnitSalePrice(), BigDecimal.ZERO));
+        e.setNumberOfItemForSale(0);
         StkFeasibilityStudyStatus initial = statutInitial();
         e.setStatus(initial);
         e.setStrEntityId(ENTITE_ETUDE);
@@ -136,6 +141,7 @@ public class EtudeFaisabiliteService {
         tracer(e, true);
         em.persist(e);
         em.persist(historique(e, initial));
+        recalcul.recalculer(e);
         return dto(e);
     }
 
@@ -153,7 +159,9 @@ public class EtudeFaisabiliteService {
         appliquer(e, saisie, ChampsAVider.de(saisie, saisie.champsAVider(), OBLIGATOIRES));
         GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
         tracer(e, false);
-        return dto(em.merge(e));
+        StkFeasibilityStudy enregistree = em.merge(e);
+        recalcul.recalculer(enregistree);
+        return dto(enregistree);
     }
 
     /** 409 si bloquée ou porteuse de prévisions / financements (§8 bis.3) ; sinon ses lignes partent avec elle. */
@@ -177,6 +185,7 @@ public class EtudeFaisabiliteService {
         StkFeasibilityStudy e = bloquer ? modifiable(id) : etudes.exigerVisible(id);
         if (bloquer) {
             GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
+            recalcul.recalculer(e);
         }
         e.setIsLocked(bloquer);
         tracer(e, false);
@@ -189,6 +198,7 @@ public class EtudeFaisabiliteService {
         grilles.remplacerUnites(e, Objects.requireNonNullElse(lignes, List.of()), FicheEtude.valeurs(e));
         tracer(e, false);
         em.flush();
+        recalcul.recalculer(e);
         return grilles.unitesDto(id);
     }
 
@@ -198,17 +208,14 @@ public class EtudeFaisabiliteService {
         grilles.remplacerTranches(e, Objects.requireNonNullElse(lignes, List.of()), FicheEtude.valeurs(e));
         tracer(e, false);
         em.flush();
+        recalcul.recalculer(e);
         return grilles.tranchesDto(id);
     }
 
     // ------------------------------------------------------------------ commun
 
     private StkFeasibilityStudy modifiable(UUID id) {
-        StkFeasibilityStudy e = etudes.exigerVisible(id);
-        if (Boolean.TRUE.equals(e.getIsLocked())) {
-            throw new ConflictException(BLOQUEE);
-        }
-        return e;
+        return FicheEtude.modifiable(etudes, id);
     }
 
     /** Identité, références et entrées, puis le calcul partagé ; 400 / 409 avant toute écriture. */
@@ -224,8 +231,6 @@ public class EtudeFaisabiliteService {
                 i -> ReferencesPatrimoine.trouver(this::terrain, i, TERRAIN_ID)));
         e.setLandDescription(texte(v.texte("descriptionTerrain", d.descriptionTerrain()), e.getLandDescription(), COURT,
                 "La description du terrain"));
-        e.setNumberOfItemForSale(v.ou("nombreArticlesAVendre", positif(d.nombreArticlesAVendre(), "nombreArticlesAVendre"),
-                e.getNumberOfItemForSale()));
         e.setUseLandProportionForTvaCalculation(v.ou("proportionTerrainPourTva", d.proportionTerrainPourTva(),
                 e.getUseLandProportionForTvaCalculation()));
         e.setDefaultVat(v.ou("tauxTvaDefaut", d.tauxTvaDefaut(), e.getDefaultVat()));
@@ -299,9 +304,8 @@ public class EtudeFaisabiliteService {
                 Boolean.TRUE.equals(e.getIsLocked()), e.getNumberOfItemForSale(), e.getUseLandProportionForTvaCalculation(),
                 e.getDefaultVat(), e.getInterestVatRatio(), e.getEcartTypeExpenses(), e.getEcartTypeConcretisation(),
                 e.getEcartTypeFinalization(), e.getBackTimeOnDays(), e.getBackGuaranteeRate(),
-                e.getBackGuaranteeApplicationRate(), FicheEtude.valeurs(e), FicheEtude.bilan(e),
-                grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
-                compter(PREVISIONS, e.getId()) > 0,
+                e.getBackGuaranteeApplicationRate(), e.getPercentageConcretisation(), e.getImpotRatio(), e.getUnitSalePrice(),
+                FicheEtude.valeurs(e), FicheEtude.bilan(e), grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
                 e.getUserCreate(), e.getUserCreateDateTime(), e.getUserUpdate(), e.getUserUpdateDateTime());
     }
 }

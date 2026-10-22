@@ -93,19 +93,25 @@ class EtudeFaisabiliteRevueTest {
         return id;
     }
 
-    /** Une tranche retirée emporterait en CASCADE ses lignes de prévision, invisibles du rapatriement : 409. */
+    /**
+     * P8b-1 (FEATURE-patrimoine-faisabilite-workflow.md §2.3) : retirer une tranche avec lignes par tranche devient permis ;
+     * ces lignes dérivées sont reconstruites par le recalcul (aucune sans tranche), plus de 409.
+     */
     @Test
-    void retraitDUneTrancheAvecPrevision_409_trancheConservee() throws Exception {
+    void retraitDUneTrancheAvecPrevision_permis_lignesParTrancheEffacees() throws Exception {
         UUID id = etudeAvecTranche("PRV");
         UUID ligne = fixture.ligneTranche(id, "Tranche 1");
         entityManager.createNativeQuery("INSERT INTO StkFSPrevisionStkTranche (PKey, Amount, FeasibilityStudyId, StkTrancheId) "
                 + "VALUES (NEWID(), 10, :etude, :tranche)").setParameter("etude", id).setParameter("tranche", ligne)
                 .executeUpdate();
 
-        api.tranches(id, lignes(new String[0])).andExpect(status().isConflict());
+        api.tranches(id, lignes(new String[0])).andExpect(status().isOk());
 
-        assertThat(fixture.compter("SELECT COUNT(*) FROM StkFeasibilityStudyCfgTranche WHERE FeasibilityStudyId = :id", id))
-                .isEqualTo(1);
+        assertAll(
+                () -> assertThat(fixture.compter("SELECT COUNT(*) FROM StkFeasibilityStudyCfgTranche WHERE FeasibilityStudyId = :id",
+                        id)).isZero(),
+                () -> assertThat(fixture.compter("SELECT COUNT(*) FROM StkFSPrevisionStkTranche WHERE FeasibilityStudyId = :id",
+                        id)).isZero());
     }
 
     /** §2.4 : changer de société laisserait des tranches d'une autre société : 400. */

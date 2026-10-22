@@ -47,4 +47,8 @@ public class AdmRole {
 
     @Column(name = "UserUpdateDateTime")
     private LocalDateTime userUpdateDateTime;
+
+    /** 0 = rôle libre : ses comptes voient tous les rapports ; NULL vaut 1 (FEATURE-tdb-vente-rapports-socle.md §2). */
+    @Column(name = "WithReportRestriction")
+    private Boolean withReportRestriction;
 }
