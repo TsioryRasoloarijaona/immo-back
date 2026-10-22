@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 import static com.tsix.immocrm.services.rapport.vente.MontantsVenteParTranche.TRANCHE_LIBELLE;
@@ -53,8 +54,7 @@ public class SuiviGlobalVenteRapport implements Rapport {
     private static final String LIBRES = "Libres";
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
 
-    private static final String TRANCHES = """
-            SELECT PKey, Code, Description FROM CfgTranche WHERE PKey IN (:tranches)""";
+    private static final String TRANCHES = "SELECT PKey, Code, Description FROM CfgTranche WHERE PKey IN (:tranches)";
 
     // Une ligne par article de vocation VENTE ; LEFT JOIN : un dossier sans statut reste compté (« Sans statut »).
     private static final String ARTICLES_VENTE = """
@@ -125,8 +125,10 @@ public class SuiviGlobalVenteRapport implements Rapport {
                         montants.annulations(ids), null, null, List.of())));
         sections.add(repartition("categories", "Catégories", principaux, Article::categorie, null));
         sections.add(repartition("types", "Types", principaux, Article::type, null));
-        sections.add(repartition("etages", "Étages", principaux, Article::etage, Article::etageOrdre));
-        sections.add(repartition("immeubles", "Immeubles", principaux, Article::immeuble, Article::immeubleOrdre));
+        sections.add(repartition("etages", "Étages", principaux, Article::etage,
+                a -> a.etageOrdre() == null ? Integer.MAX_VALUE : a.etageOrdre()));
+        sections.add(repartition("immeubles", "Immeubles", principaux, Article::immeuble,
+                a -> a.immeubleOrdre() == null ? Integer.MAX_VALUE : a.immeubleOrdre()));
         sections.add(repartition("presentations", "Présentations", principaux, Article::presentation, null));
         sections.add(repartition("orientations", "Orientations", principaux, Article::orientation, null));
         return new ResultatRapport(sections, List.of(AVERTISSEMENT));
@@ -178,7 +180,7 @@ public class SuiviGlobalVenteRapport implements Rapport {
      * {@code ordre} s'il est donné (étages, immeubles), sinon par libellé.
      */
     private static SectionRapport repartition(String id, String titre, List<Article> articles,
-                                              Function<Article, String> libelle, Function<Article, Integer> ordre) {
+                                              Function<Article, String> libelle, ToIntFunction<Article> ordre) {
         Map<String, long[]> comptes = new LinkedHashMap<>();
         Map<String, Integer> ordres = new LinkedHashMap<>();
         for (Article a : articles) {
@@ -187,8 +189,7 @@ public class SuiviGlobalVenteRapport implements Rapport {
                 long[] c = comptes.computeIfAbsent(valeur, v -> new long[2]);
                 c[0]++;
                 c[1] += a.vendu() ? 1 : 0;
-                Integer o = ordre == null ? null : ordre.apply(a);
-                ordres.merge(valeur, o == null ? Integer.MAX_VALUE : o, Math::min);
+                ordres.merge(valeur, ordre == null ? Integer.MAX_VALUE : ordre.applyAsInt(a), Math::min);
             }
         }
         List<Map<String, Object>> lignes = comptes.entrySet().stream()

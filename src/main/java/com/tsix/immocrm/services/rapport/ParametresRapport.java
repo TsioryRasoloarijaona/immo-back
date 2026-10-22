@@ -68,14 +68,16 @@ public final class ParametresRapport {
             case ENTIER -> entier(p, valeur, p.min(), p.max());
             case TRANCHES, COMMERCIAUX -> uuid(p, valeur);
             case CHOIX -> choix(p, valeur);
-            case BOOLEEN -> {
-                if (!"true".equalsIgnoreCase(valeur) && !"false".equalsIgnoreCase(valeur)) {
-                    throw invalide(p, valeur, "true ou false attendu");
-                }
-            }
+            case BOOLEEN -> booleen(p, valeur);
             case TEXTE -> {
                 // texte libre
             }
+        }
+    }
+
+    private static void booleen(ParametreRapport p, String valeur) {
+        if (!"true".equalsIgnoreCase(valeur) && !"false".equalsIgnoreCase(valeur)) {
+            throw invalide(p, valeur, "true ou false attendu");
         }
     }
 

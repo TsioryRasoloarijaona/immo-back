@@ -34,6 +34,7 @@ public class MontantsVenteParTranche {
     private static final String MONTANT = "Montant";
     private static final String REGLE = "Regle";
     private static final String RESTE = "Reste";
+    private static final String PARAM_TRANCHES = "tranches";
 
     /** Nature : préfixe des trois colonnes, en-tête, colonnes du calcul des dossiers (montant {@code null} = prix). */
     private record Nature(String prefixe, String libelle, ColonneDossier montant, ColonneDossier regle,
@@ -77,9 +78,9 @@ public class MontantsVenteParTranche {
     static List<ColonneRapport> colonnesVentes() {
         List<ColonneRapport> colonnes = new ArrayList<>(List.of(ColonneRapport.texte(TRANCHE_LIBELLE, "Tranche")));
         for (Nature n : NATURES) {
-            colonnes.add(ColonneRapport.montant(n.prefixe() + MONTANT, "Montant", n.libelle()));
+            colonnes.add(ColonneRapport.montant(n.prefixe() + MONTANT, MONTANT, n.libelle()));
             colonnes.add(ColonneRapport.montant(n.prefixe() + REGLE, "Réglé", n.libelle()));
-            colonnes.add(ColonneRapport.montant(n.prefixe() + RESTE, "Reste", n.libelle()));
+            colonnes.add(ColonneRapport.montant(n.prefixe() + RESTE, RESTE, n.libelle()));
         }
         return colonnes;
     }
@@ -87,7 +88,7 @@ public class MontantsVenteParTranche {
     /** Une ligne par tranche ayant au moins un dossier retenu, triées par libellé. */
     List<Map<String, Object>> ventes(List<UUID> tranches) {
         List<ComFolder> dossiers = LotsTranches.lire(tranches, lot -> em.createQuery(DOSSIERS, ComFolder.class)
-                .setParameter("tranches", lot).getResultList());
+                .setParameter(PARAM_TRANCHES, lot).getResultList());
         Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = montants.pour(dossiers);
         Map<UUID, Map<String, Object>> parTranche = new HashMap<>();
         for (ComFolder f : dossiers) {
@@ -106,10 +107,10 @@ public class MontantsVenteParTranche {
     /** Échéances de résiliation ({@code IsSaleResiliation}) par tranche : montant, réglé signé, reste. */
     List<Map<String, Object>> annulations(List<UUID> tranches) {
         List<Object[]> montantsParTranche = LotsTranches.lire(tranches, lot -> em.createQuery(RESILIATIONS,
-                Object[].class).setParameter("tranches", lot).getResultList());
+                Object[].class).setParameter(PARAM_TRANCHES, lot).getResultList());
         Map<Object, BigDecimal> regles = new HashMap<>();
         LotsTranches.lire(tranches, lot -> em.createQuery(RESILIATIONS_REGLEES, Object[].class)
-                .setParameter("tranches", lot).getResultList()).forEach(r -> regles.put(r[0], (BigDecimal) r[1]));
+                .setParameter(PARAM_TRANCHES, lot).getResultList()).forEach(r -> regles.put(r[0], (BigDecimal) r[1]));
         List<Map<String, Object>> lignes = new ArrayList<>();
         for (Object[] r : montantsParTranche) {
             BigDecimal montant = nonNul((BigDecimal) r[2]);

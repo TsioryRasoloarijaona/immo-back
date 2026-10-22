@@ -274,7 +274,7 @@ class RapportsDroitsTest {
         assertThat(appels.statut(get(descripteur("patrimoine", SUIVI_GLOBAL)).with(libre))).isEqualTo(INTROUVABLE);
         List<String> codesPatrimoine = JsonPath.read(appels.corps(get(liste("patrimoine")).with(libre)),
                 "$[*].rapports[*].code");
-        assertThat(codesPatrimoine).doesNotContain(SUIVI_GLOBAL, REPARTITION_CLIENTS);
+        assertThat(codesPatrimoine.contains(SUIVI_GLOBAL) || codesPatrimoine.contains(REPARTITION_CLIENTS)).isFalse();
     }
 
     // ------------------------------------------------------------------ RD2 : ordre des contrôles

@@ -35,10 +35,10 @@ import static com.tsix.immocrm.controller.rapport.AppelsRapports.nombre;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.resultat;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.section;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.totaux;
-import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTest.CODE;
-import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTest.COMMERCIAL_ID;
-import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTest.ETAT;
-import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTest.SERIE;
+import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTestSupport.CODE;
+import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTestSupport.COMMERCIAL_ID;
+import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTestSupport.ETAT;
+import static com.tsix.immocrm.controller.rapport.RapportExtensionsDeTestSupport.SERIE;
 import static com.tsix.immocrm.fixtures.FixtureDossierVente.connecte;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Ajouts au socle B2–B5 (FEATURE-tdb-vente-rapports-socle.md, « Ajouts au socle pour les lots suivants », font foi), via
- * le rapport de test {@link RapportExtensionsDeTest}. B1 est testé sur les rapports réels (n° 12 et n° 13).
+ * le rapport de test {@link RapportExtensionsDeTestSupport}. B1 est testé sur les rapports réels (n° 12 et n° 13).
  * <pre>
  *   commercial A : rôle « Commercial » + rôle libre pour les rapports — ne voit que lui-même (CommerciauxVisibles)
  *   commercial B : rôle « Commercial », hors de la portée de A
@@ -57,7 +57,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@Import(RapportExtensionsDeTest.class)
+@Import(RapportExtensionsDeTestSupport.class)
 class RapportsExtensionsSocleTest {
 
     private static final String DYNAMIQUE = "dynamique";

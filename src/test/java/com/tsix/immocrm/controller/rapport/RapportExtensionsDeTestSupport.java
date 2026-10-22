@@ -35,7 +35,7 @@ import java.util.Map;
  * </pre>
  */
 @TestConfiguration
-class RapportExtensionsDeTest {
+class RapportExtensionsDeTestSupport {
 
     static final String CODE = "ComTestSocleExtensions";
     static final String COMMERCIAL_ID = "commercialId";
@@ -99,13 +99,13 @@ class RapportExtensionsDeTest {
             Class<?> option = typeDesElements(parametre, "options");
             List<Object> options = new ArrayList<>();
             for (String v : valeurs) {
-                options.add(record(option, Map.of("valeur", v, LIBELLE, "Etat " + v)));
+                options.add(construire(option, Map.of("valeur", v, LIBELLE, "Etat " + v)));
             }
             Map<String, Object> commerciaux = new HashMap<>(Map.of(NOM, COMMERCIAL_ID, LIBELLE, "Commerciaux",
                     TYPE, "COMMERCIAUX", MULTIPLE, true, "options", List.of()));
             Map<String, Object> etat = new HashMap<>(Map.of(NOM, ETAT, LIBELLE, "Etat", TYPE, "CHOIX",
                     MULTIPLE, true, "options", options));
-            return List.of(record(parametre, commerciaux), record(parametre, etat));
+            return List.of(construire(parametre, commerciaux), construire(parametre, etat));
         }
 
         @SuppressWarnings("unchecked")
@@ -113,7 +113,7 @@ class RapportExtensionsDeTest {
             Class<?> type = classe("ContexteRapport");
             List<String> choix = (List<String>) type.getMethod("choix", String.class).invoke(contexte, ETAT);
             List<?> commerciaux = (List<?>) type.getMethod("commerciauxVisibles").invoke(contexte);
-            return record(classe("ResultatRapport"), Map.of("sections",
+            return construire(classe("ResultatRapport"), Map.of("sections",
                     List.of(sectionCommerciaux(commerciaux), sectionDynamique(choix)), "avertissements", List.of()));
         }
 
@@ -134,7 +134,7 @@ class RapportExtensionsDeTest {
                 colonnes.add(colonne(c, "NOMBRE", "SOMME"));
                 ligne.put(c, 1);
             }
-            Object graphique = record(classe("GraphiqueRapport"), Map.of(TYPE, "LIGNES", "titre", "Evolution",
+            Object graphique = construire(classe("GraphiqueRapport"), Map.of(TYPE, "LIGNES", "titre", "Evolution",
                     "colonneCategorie", SERIE, "colonnesValeurs", List.copyOf(choix)));
             return section("dynamique", colonnes, List.of(ligne), List.of(graphique));
         }
@@ -147,11 +147,11 @@ class RapportExtensionsDeTest {
             valeurs.put("colonnes", colonnes);
             valeurs.put("lignes", lignes);
             valeurs.put("graphiques", graphiques);
-            return record(classe("SectionRapport"), valeurs);
+            return construire(classe("SectionRapport"), valeurs);
         }
 
         private static Object colonne(String nom, String type, String total) {
-            return record(classe("ColonneRapport"), Map.of(NOM, nom, LIBELLE, "Colonne " + nom, TYPE, type,
+            return construire(classe("ColonneRapport"), Map.of(NOM, nom, LIBELLE, "Colonne " + nom, TYPE, type,
                     "fonctionTotal", total, "parDefaut", true));
         }
     }
@@ -174,18 +174,18 @@ class RapportExtensionsDeTest {
         return c;
     }
 
-    private static Class<?> typeDesElements(Class<?> record, String composante) {
-        for (RecordComponent c : record.getRecordComponents()) {
+    private static Class<?> typeDesElements(Class<?> typeRecord, String composante) {
+        for (RecordComponent c : typeRecord.getRecordComponents()) {
             if (c.getName().equals(composante) && c.getGenericType() instanceof ParameterizedType p) {
                 return (Class<?>) p.getActualTypeArguments()[0];
             }
         }
-        throw new IllegalStateException(record.getSimpleName() + "." + composante + " : liste typée attendue");
+        throw new IllegalStateException(typeRecord.getSimpleName() + "." + composante + " : liste typée attendue");
     }
 
     /** Record construit par nom de composante ; texte → constante d'énumération ; composante non fournie → défaut. */
-    private static Object record(Class<?> record, Map<String, Object> valeurs) {
-        RecordComponent[] composantes = record.getRecordComponents();
+    private static Object construire(Class<?> typeRecord, Map<String, Object> valeurs) {
+        RecordComponent[] composantes = typeRecord.getRecordComponents();
         Class<?>[] types = new Class<?>[composantes.length];
         Object[] arguments = new Object[composantes.length];
         for (int i = 0; i < composantes.length; i++) {
@@ -193,9 +193,9 @@ class RapportExtensionsDeTest {
             arguments[i] = valeur(types[i], valeurs.get(composantes[i].getName()));
         }
         try {
-            return record.getDeclaredConstructor(types).newInstance(arguments);
+            return typeRecord.getDeclaredConstructor(types).newInstance(arguments);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(record.getSimpleName(), e);
+            throw new IllegalStateException(typeRecord.getSimpleName(), e);
         }
     }
 
