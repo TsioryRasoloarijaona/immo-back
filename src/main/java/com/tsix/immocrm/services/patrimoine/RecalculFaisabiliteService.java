@@ -172,10 +172,7 @@ public class RecalculFaisabiliteService {
         noeuds.forEach(n -> n.ventilation().forEach(part -> em.persist(parTranche(id, n, part, t))));
         calcul.lignes().forEach(l -> em.persist(tresorerie(id, l)));
         e.setNumberOfItemForSale(calcul.etat().parametres().nombreArticles());
-        // Sans aucune ligne, le bilan stocké (OMRAN) est gardé : il ne vient d'aucune prévision tenue ici.
-        if (!noeuds.isEmpty()) {
-            FicheEtude.ecrireBilan(e, calcul.bilan().bilan());
-        }
+        FicheEtude.ecrireBilan(e, calcul.bilan().bilan());
         em.flush();
     }
 

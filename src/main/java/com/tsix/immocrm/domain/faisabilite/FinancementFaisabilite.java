@@ -27,10 +27,13 @@ public final class FinancementFaisabilite {
     public static List<Echeance> echeancier(LocalDateTime deblocage, BigDecimal montant, int nombre, Integer periodicite,
                                             Integer grace, BigDecimal taux) {
         LocalDateTime premiere = deblocage.plusMonths(grace == null ? 0 : grace);
-        BigDecimal base = montant.divide(BigDecimal.valueOf(nombre), MC);
+        BigDecimal base = BilanFaisabilite.r(montant.divide(BigDecimal.valueOf(nombre), MC));
+        // Invariant I2 : Σ base = déblocage à l'échelle stockée ; la dernière échéance absorbe le reliquat d'arrondi.
+        BigDecimal derniere = BilanFaisabilite.r(montant.subtract(base.multiply(BigDecimal.valueOf(nombre - 1L))));
         int pas = pas(periodicite);
         return IntStream.range(0, nombre)
-                .mapToObj(i -> echeance(premiere.plusMonths((long) i * pas), base, taux, null)).toList();
+                .mapToObj(i -> echeance(premiere.plusMonths((long) i * pas), i == nombre - 1 ? derniere : base, taux, null))
+                .toList();
     }
 
     /** Saisie à deux sens : le taux gagne ; intérêts seuls → taux = intérêts / base (base ≠ 0). */

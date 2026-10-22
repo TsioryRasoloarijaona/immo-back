@@ -277,13 +277,22 @@ class EtudeFaisabiliteControllerTest {
     // ------------------------------------------------------------------ §2.3 bilan en lecture seule ; §8 bis décision 2
 
     @Test
-    void r2_3_bilanLectureSeule_valeurStockeeConserveeALaModification() throws Exception {
+    void r3_modification_recalculeLeBilanDeLArbreVide_corpsNePeutPasImposerLeBilan() throws Exception {
         UUID id = etudeYestest("BIL");
         fixture.chiffreAffairesStocke(id, d("123456"));
 
-        api.modifier(id, corps().avec(DESCRIPTION, "Modifiee " + jeton).json()).andExpect(status().isOk());
+        api.modifier(id, corps().avec(DESCRIPTION, "Modifiee " + jeton).avec("chiffreAffaires", 999).json())
+                .andExpect(status().isOk());
 
-        assertThat(decimal(fixture.etude(id).get("Turnover"))).isEqualByComparingTo("123456");
+        Tuple etude = fixture.etude(id);
+        assertAll(
+                () -> assertThat(decimal(etude.get("Turnover"))).as("Turnover").isEqualByComparingTo("0"),
+                () -> assertThat(decimal(etude.get("TotalCostHT"))).as("TotalCostHT").isEqualByComparingTo("0"),
+                () -> assertThat(decimal(etude.get("TotalCost"))).as("TotalCost").isEqualByComparingTo("0"),
+                () -> assertThat(decimal(etude.get("AutofinancementRate"))).as("AutofinancementRate").isEqualByComparingTo("1"),
+                () -> assertThat(etude.get("ProfitRatioByTurnover")).as("retour sur C.A.").isNull(),
+                () -> assertThat(etude.get("ProfitRatioByProjectCost")).as("retour sur coût").isNull(),
+                () -> assertThat(etude.get("ProfitRatioByAutofinancementAmount")).as("retour sur fonds propres").isNull());
     }
 
     /** P8b-1 §3 : la modification recalcule les prévisions ; {@code previsionsARecalculer} a disparu (§10). */

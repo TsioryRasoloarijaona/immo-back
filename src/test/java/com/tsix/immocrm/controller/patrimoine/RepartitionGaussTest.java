@@ -121,10 +121,10 @@ class RepartitionGaussTest {
         proches(depense(1, "1"), "500000", "500000");
     }
 
-    /** Exemple du spec : M = 1 000 000, n = 3, σ = 1 → 323 967,33 / 352 065,34 / 323 967,33. */
+    /** Exemple du spec : M = 1 000 000, n = 3, σ = 1 → g = M φ(−0,5) = 352 065,3267 au centre, (M − g)/2 = 323 967,3366 aux bords. */
     @Test
     void r2_5_n3_sigma1_exempleDuSpec() throws Exception {
-        proches(depense(2, "1"), "323967.33", "352065.34", "323967.33");
+        proches(depense(2, "1"), "323967.3366", "352065.3267", "323967.3366");
     }
 
     /** n = 4, σ = 1 : g = M φ((σ−2)/σ) = 241 970,72 ; c = (M − 2g)/2 = 258 029,28 ≥ g → [g, c, c, g]. */

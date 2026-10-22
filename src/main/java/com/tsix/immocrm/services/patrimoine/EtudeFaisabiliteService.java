@@ -141,6 +141,7 @@ public class EtudeFaisabiliteService {
         tracer(e, true);
         em.persist(e);
         em.persist(historique(e, initial));
+        recalcul.recalculer(e);
         return dto(e);
     }
 

@@ -454,7 +454,10 @@ class PrevisionFaisabiliteControllerTest {
     void r3_putUnites_recalculeLeBilan() throws Exception {
         enregistrer(grosOeuvres(), architecte());
 
+        api.tranches(etude, lignes(new String[0])).andExpect(status().isOk());
         api.unites(etude, lignes(ligneUniteCorps(1, uniteBase, d("1485")).avec(ID, unitePv))).andExpect(status().isOk());
+        api.tranches(etude, lignes(tranche(ligneTrancheCorps("Tranche 1", 1, trancheDeLaSociete("T2"), d("1")),
+                ventilation(unitePv, d("1485"))))).andExpect(status().isOk());
 
         assertAll(
                 () -> assertThat(decimal(finance.prevision(etude, cat.grosOeuvres()).get("AmountHT")))
