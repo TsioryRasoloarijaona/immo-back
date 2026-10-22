@@ -52,8 +52,10 @@ class RoutageEcrituresTest {
      */
     private static final Pattern ECRITURE = Pattern.compile(
             "^(creer|create|modifier|update|supprimer|delete|ajouter|add|enregistrer|"
-                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer|attribuer|notifier)[A-Z].*"
-                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|avancer|repartir|appliquer|deposer)$");
+                    + "affecter|desaffecter|cloturer|valider|annuler|generer|envoyer|importer|initialiser|marquer|attribuer|notifier|"
+                    + "transformer|executer)[A-Z].*"
+                    + "|^(creer|create|modifier|update|supprimer|delete|ajouter|add|avancer|repartir|appliquer|deposer|"
+                    + "transformer|executer)$");
 
     @Test
     void aucuneMethodeDEcritureNEstMarqueeEnLectureSeule() {
@@ -149,6 +151,28 @@ class RoutageEcrituresTest {
                                 || AnnotatedElementUtils.findMergedAnnotation(composant, Transactional.class) != null)
                 .as(m.getName() + " transactionnelle").isTrue());
         assertThat(valider).filteredOn(m -> lectureSeuleEffective(composant, m)).extracting(Method::getName).isEmpty();
+    }
+
+    /**
+     * FEATURE-patrimoine-prospections-terrain.md §5 : les écritures du lot P7b sous les verbes {@code transformer…} (terrain
+     * depuis une prospection) et {@code executer…} (transition) existent sous services/patrimoine, jamais en lecture seule.
+     */
+    @Test
+    void prospectionsTerrain_transformerEtExecuter_reconnusEtJamaisEnLectureSeule() {
+        List<Method> ecritures = services().stream()
+                .filter(c -> c.getPackageName().startsWith("com.tsix.immocrm.services.patrimoine"))
+                .flatMap(c -> Arrays.stream(c.getDeclaredMethods()))
+                .filter(m -> Modifier.isPublic(m.getModifiers()) && !m.isSynthetic())
+                .filter(m -> ECRITURE.matcher(m.getName()).matches())
+                .toList();
+
+        assertThat(ecritures).extracting(Method::getName)
+                .anyMatch(n -> n.startsWith("transformer"))
+                .anyMatch(n -> n.startsWith("executer"));
+        assertThat(ecritures)
+                .filteredOn(m -> lectureSeuleEffective(m.getDeclaringClass(), m))
+                .extracting(m -> m.getDeclaringClass().getSimpleName() + "#" + m.getName())
+                .isEmpty();
     }
 
     /**
