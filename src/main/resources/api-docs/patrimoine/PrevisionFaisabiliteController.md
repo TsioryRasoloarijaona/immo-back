@@ -18,7 +18,8 @@ TTC de sa racine. Lignes liées aux relations « prix du terrain », « frais d'
 ## remplacer
 
 Liste complète des lignes saisies, clé = `categorieId` : absente = supprimée ; le serveur ajoute les ancêtres jusqu'aux
-racines et les lignes de relation. Priorité ratio > montantHt > montant, les autres recalculés. 400 : catégorie absente,
+racines et les lignes de relation ; une catégorie cochée sans montant est gardée (montant 0). Une catégorie « sans
+prévision » ne peut être choisie que si l'étude la porte déjà (ligne saisie dans OMRAN). Priorité ratio > montantHt > montant, les autres recalculés. 400 : catégorie absente,
 inconnue ou « sans prévision » ; unité d'une autre étude ; unité et référence à la fois ; TVA hors [0;1] ; ratio ou
 montant négatif ; ligne verrouillée saisie ; « Vous ne pouvez pas selectionnez une catégorie non définie dans le bilan! » ;
 « Vous ne pouvez pas selectionnez cette catégorie possédant une relation hiérarchique avec la catégorie courante! » ;

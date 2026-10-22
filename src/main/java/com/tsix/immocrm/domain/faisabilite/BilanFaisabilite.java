@@ -98,13 +98,10 @@ public final class BilanFaisabilite {
 
     // ------------------------------------------------------------------ contrôles (§2.3)
 
-    /** Lignes sans rien de saisi : simples ancêtres renvoyés par le front, ignorés. */
+    /** Une ligne sans montant reste dans l'arbre (catégorie cochée) : elle est écrite, jamais supprimée par le recalcul. */
     private void retenir(Saisie s) {
         if (s.categorieId() == null) {
             throw new InvalidRequestException("categorieId est obligatoire sur chaque ligne.");
-        }
-        if (!porteuse(s)) {
-            return;
         }
         if (saisies.put(s.categorieId(), s) != null) {
             throw new InvalidRequestException(CATEGORIE + "catégorie en double (%s).".formatted(s.categorieId()));
@@ -117,11 +114,10 @@ public final class BilanFaisabilite {
     }
 
     private void valider(Saisie s) {
-        Categorie c = etat.categories().get(s.categorieId());
-        if (c == null || c.sansPrevision()) {
-            throw new InvalidRequestException(CATEGORIE + "catégorie inconnue ou sans prévision (%s).".formatted(s.categorieId()));
+        if (!etat.categories().containsKey(s.categorieId())) {
+            throw new InvalidRequestException(CATEGORIE + "catégorie inconnue (%s).".formatted(s.categorieId()));
         }
-        if (etat.relations().containsKey(s.categorieId())) {
+        if (etat.relations().containsKey(s.categorieId()) && porteuse(s)) {
             throw new InvalidRequestException(CATEGORIE + "ligne verrouillée : son montant est imposé par l'étude.");
         }
         if (s.uniteId() != null && s.referenceId() != null) {

@@ -57,8 +57,7 @@ public record EtatFaisabilite(Parametres parametres, Map<UUID, Categorie> catego
     }
 
     /** {@code StlCategory} ; {@code recette} = IsCredit. */
-    public record Categorie(UUID id, UUID parentId, String code, String libelle, boolean recette, int ordre,
-                            boolean sansPrevision) {
+    public record Categorie(UUID id, UUID parentId, String code, String libelle, boolean recette, int ordre) {
     }
 
     /** Ligne d'unité de l'étude ; {@code surfaceArticle} = unité surface portant une catégorie d'article. */

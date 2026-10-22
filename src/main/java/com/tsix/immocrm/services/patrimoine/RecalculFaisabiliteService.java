@@ -110,8 +110,7 @@ public class RecalculFaisabiliteService {
     private Map<UUID, Categorie> categories() {
         return em.createQuery("SELECT c FROM StlCategory c", StlCategory.class).getResultList().stream()
                 .collect(Collectors.toMap(StlCategory::getId, c -> new Categorie(c.getId(), c.getParentId(), c.getCode(),
-                        c.getDescription(), Boolean.TRUE.equals(c.getIsCredit()), Objects.requireNonNullElse(c.getSorting(), 0),
-                        Boolean.TRUE.equals(c.getIsWithoutPrevision()))));
+                        c.getDescription(), Boolean.TRUE.equals(c.getIsCredit()), Objects.requireNonNullElse(c.getSorting(), 0))));
     }
 
     /** Catégorie liée → relation ; une relation sans catégorie n'ajoute rien (cas de la production). */

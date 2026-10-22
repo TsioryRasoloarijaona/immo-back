@@ -17,7 +17,9 @@ import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisiePrevisionDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.TotauxPrevisionsDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.TresorerieFaisabiliteDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.VentilationPrevisionDto;
+import com.tsix.immocrm.entities.stk.FSPrevision;
 import com.tsix.immocrm.entities.stk.StkFSPrevisionLine;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyCfgTranche;
 import com.tsix.immocrm.entities.stl.StlCategory;
@@ -32,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -66,14 +69,14 @@ public class PrevisionFaisabiliteService {
     @Transactional
     public BilanFaisabilitePrevisionsDto modifierPrevisions(UUID etudeId, List<SaisiePrevisionDto> lignes) {
         StkFeasibilityStudy e = FicheEtude.modifiable(etudes, etudeId);
-        EtatFaisabilite etat = recalcul.lire(e, saisies(lignes));
+        EtatFaisabilite etat = recalcul.lire(e, saisies(etudeId, lignes));
         RecalculFaisabiliteService.Calcul calcul = RecalculFaisabiliteService.calculer(etat);
         recalcul.enregistrerCalcul(e, calcul);
         return dto(etat, calcul.bilan(), FicheEtude.bilan(e));
     }
 
     public BilanFaisabilitePrevisionsDto calculer(UUID etudeId, List<SaisiePrevisionDto> lignes) {
-        EtatFaisabilite etat = recalcul.lire(etudes.exigerVisible(etudeId), saisies(lignes));
+        EtatFaisabilite etat = recalcul.lire(etudes.exigerVisible(etudeId), saisies(etudeId, lignes));
         BilanFaisabilite.Resultat bilan = BilanFaisabilite.calculer(etat);
         return dto(etat, bilan, bilan.bilan());
     }
@@ -113,10 +116,23 @@ public class PrevisionFaisabiliteService {
                 t -> Objects.requireNonNullElse(t.getCode(), ""), (a, b) -> a, LinkedHashMap::new));
     }
 
-    private static List<Saisie> saisies(List<SaisiePrevisionDto> lignes) {
-        return Objects.requireNonNullElse(lignes, List.<SaisiePrevisionDto>of()).stream()
-                .map(s -> new Saisie(s.categorieId(), s.uniteEtudeId(), s.categorieReferenceId(), s.ratio(), s.montantHt(),
-                        s.montant(), s.tauxTva(), s.estPourProjet(), s.dateApplication())).toList();
+    /**
+     * « Sans prévision » (IsWithoutPrevision) interdit de CHOISIR la catégorie ; une ligne déjà enregistrée (saisie dans
+     * OMRAN, ex. YESTEST) reste acceptée, sinon l'étude ne se relirait plus.
+     */
+    private List<Saisie> saisies(UUID etudeId, List<SaisiePrevisionDto> lignes) {
+        Set<UUID> enregistrees = recalcul.previsions(etudeId).stream().map(FSPrevision::getStlCategoryId)
+                .collect(Collectors.toSet());
+        return Objects.requireNonNullElse(lignes, List.<SaisiePrevisionDto>of()).stream().map(s -> {
+            if (s.categorieId() != null && !enregistrees.contains(s.categorieId())
+                    && Boolean.TRUE.equals(Champs.de(em.find(StlCategory.class, s.categorieId()),
+                    StlCategory::getIsWithoutPrevision))) {
+                throw new InvalidRequestException("categorieId : catégorie « sans prévision », non sélectionnable (%s)."
+                        .formatted(s.categorieId()));
+            }
+            return new Saisie(s.categorieId(), s.uniteEtudeId(), s.categorieReferenceId(), s.ratio(), s.montantHt(),
+                    s.montant(), s.tauxTva(), s.estPourProjet(), s.dateApplication());
+        }).toList();
     }
 
     private static BilanFaisabilitePrevisionsDto dto(EtatFaisabilite etat, BilanFaisabilite.Resultat b, BilanEtudeDto bilan) {
