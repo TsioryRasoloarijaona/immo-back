@@ -90,9 +90,9 @@ public final class TresorerieFaisabilite {
     private static void sansTranche(Parametres p, BilanFaisabilite.Resultat b, List<Ligne> lignes) {
         if (b.recette().signum() != 0) {
             BigDecimal concretisation = z(p.pourcentageConcretisation()).multiply(b.recette(), MC);
-            articles(Type.CONCRETISATION, p.debutConcretisation(), p.finConcretisation(), p.ecartTypeConcretisation(),
-                    concretisation, p.nombreArticles(), null, lignes);
-            articles(Type.FINALISATION, p.debutFinalisation(), p.finFinalisation(), p.ecartTypeFinalisation(),
+            articles(Type.CONCRETISATION, new Periode(p.debutConcretisation(), p.finConcretisation(),
+                    p.ecartTypeConcretisation()), concretisation, p.nombreArticles(), null, lignes);
+            articles(Type.FINALISATION, new Periode(p.debutFinalisation(), p.finFinalisation(), p.ecartTypeFinalisation()),
                     b.recette().subtract(concretisation, MC), p.nombreArticles(), null, lignes);
         }
         if (b.depense().signum() != 0) {
@@ -105,10 +105,10 @@ public final class TresorerieFaisabilite {
         BigDecimal recette = b.recette().multiply(poids, MC);
         if (recette.signum() != 0) {
             BigDecimal concretisation = z(p.pourcentageConcretisation()).multiply(recette, MC);
-            articles(Type.CONCRETISATION, t.debutCommercialisation(), t.finConcretisation(), p.ecartTypeConcretisation(),
-                    concretisation, t.articles(), t.id(), lignes);
-            articles(Type.FINALISATION, t.debutFinalisation(), t.finCommercialisation(), p.ecartTypeFinalisation(),
-                    recette.subtract(concretisation, MC), t.articles(), t.id(), lignes);
+            articles(Type.CONCRETISATION, new Periode(t.debutCommercialisation(), t.finConcretisation(),
+                    p.ecartTypeConcretisation()), concretisation, t.articles(), t.id(), lignes);
+            articles(Type.FINALISATION, new Periode(t.debutFinalisation(), t.finCommercialisation(),
+                    p.ecartTypeFinalisation()), recette.subtract(concretisation, MC), t.articles(), t.id(), lignes);
         }
         BigDecimal depense = b.depenseHorsIndivis().multiply(poids, MC);
         if (depense.signum() != 0) {
@@ -138,16 +138,19 @@ public final class TresorerieFaisabilite {
         }
     }
 
+    /** Période de vente répartie en gaussienne d'écart type {@code sigma}. */
+    private record Periode(LocalDateTime debut, LocalDateTime fin, BigDecimal sigma) {
+    }
+
     /** Variante quantités : chaque mois vaut u × (montant / q) ; q = 0 → aucune ligne. */
-    private static void articles(Type type, LocalDateTime debut, LocalDateTime fin, BigDecimal sigma, BigDecimal montant,
-                                 int q, UUID tranche, List<Ligne> lignes) {
+    private static void articles(Type type, Periode periode, BigDecimal montant, int q, UUID tranche, List<Ligne> lignes) {
         if (montant.signum() == 0 || q <= 0) {
             return;
         }
-        int[] u = RepartitionGauss.quantites(RepartitionGauss.nombreDeMois(debut, fin), sigma, q);
+        int[] u = RepartitionGauss.quantites(RepartitionGauss.nombreDeMois(periode.debut(), periode.fin()), periode.sigma(), q);
         BigDecimal unitaire = montant.divide(BigDecimal.valueOf(q), MC);
         List<BigDecimal> parMois = Arrays.stream(u).mapToObj(x -> r(unitaire.multiply(BigDecimal.valueOf(x), MC))).toList();
-        montants(type, debut, RepartitionGauss.avecReliquat(parMois, montant), tranche, lignes);
+        montants(type, periode.debut(), RepartitionGauss.avecReliquat(parMois, montant), tranche, lignes);
     }
 
     // ------------------------------------------------------------------ courbe et « Données » (§2.6)

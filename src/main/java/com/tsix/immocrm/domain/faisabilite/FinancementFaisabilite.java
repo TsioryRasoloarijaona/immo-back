@@ -2,6 +2,7 @@ package com.tsix.immocrm.domain.faisabilite;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -27,9 +28,10 @@ public final class FinancementFaisabilite {
     public static List<Echeance> echeancier(LocalDateTime deblocage, BigDecimal montant, int nombre, Integer periodicite,
                                             Integer grace, BigDecimal taux) {
         LocalDateTime premiere = deblocage.plusMonths(grace == null ? 0 : grace);
-        BigDecimal base = BilanFaisabilite.r(montant.divide(BigDecimal.valueOf(nombre), MC));
+        BigDecimal total = montant == null ? BigDecimal.ZERO : montant;
+        BigDecimal base = arrondi(total.divide(BigDecimal.valueOf(nombre), MC));
         // Invariant I2 : Σ base = déblocage à l'échelle stockée ; la dernière échéance absorbe le reliquat d'arrondi.
-        BigDecimal derniere = BilanFaisabilite.r(montant.subtract(base.multiply(BigDecimal.valueOf(nombre - 1L))));
+        BigDecimal derniere = arrondi(total.subtract(base.multiply(BigDecimal.valueOf(nombre - 1L))));
         int pas = pas(periodicite);
         return IntStream.range(0, nombre)
                 .mapToObj(i -> echeance(premiere.plusMonths((long) i * pas), i == nombre - 1 ? derniere : base, taux, null))
@@ -49,5 +51,9 @@ public final class FinancementFaisabilite {
             t = b.signum() == 0 ? BigDecimal.ZERO : interets.divide(b, MC);
         }
         return new Echeance(date, b, t, i, b.add(i, MC));
+    }
+
+    private static BigDecimal arrondi(BigDecimal v) {
+        return v.setScale(6, RoundingMode.HALF_UP);
     }
 }

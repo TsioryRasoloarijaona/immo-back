@@ -141,7 +141,8 @@ public final class BilanFaisabilite {
     }
 
     private void ajouterAvecAncetres(UUID id) {
-        for (UUID c = id; c != null && etat.categories().containsKey(c) && arbre.add(c); ) {
+        UUID c = id;
+        while (c != null && etat.categories().containsKey(c) && arbre.add(c)) {
             c = etat.categories().get(c).parentId();
         }
     }
