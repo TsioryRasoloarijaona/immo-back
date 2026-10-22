@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.patrimoine;
 import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgProjectZone;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.entities.lnd.LndLand;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectZoneRepository;
 import jakarta.persistence.EntityManager;
@@ -54,6 +55,15 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
                 "SELECT l FROM CfgTrancheCoveredFloor l WHERE l.cfgTranche.id = :id",
                 "SELECT l FROM CfgTrancheSettlementCategory l WHERE l.cfgTranche.id = :id",
                 "SELECT h FROM AdmUserHabilitation h WHERE h.cfgTranche.id = :id"));
+    }
+
+    /** Prospection terrain (FEATURE-patrimoine-prospections-terrain.md §5.8) : zones et historique de statuts avec elle. */
+    public void prospectionTerrain(LndLand prospection) {
+        supprimer(prospection, prospection.getId(), "la prospection terrain", List.of(
+                new Bloquant("SELECT COUNT(e) FROM StkFeasibilityStudy e WHERE e.lndLandId = :id",
+                        "étude(s) de faisabilité")), List.of(
+                "SELECT z FROM LndLandZone z WHERE z.prospectionId = :id",
+                "SELECT h FROM StrHistory h WHERE h.objectId = :id"));
     }
 
     void zone(CfgProjectZone zone) {

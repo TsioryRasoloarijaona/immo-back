@@ -36,26 +36,26 @@ public abstract class SurfacesFoncieresOmran extends LigneOmran {
     @Column(name = "CoefSaleableArea", precision = 26, scale = 6)
     private BigDecimal coefSaleableArea;
 
+    @Column(name = "CommerceArea", precision = 26, scale = 6)
+    private BigDecimal commerceArea;
+
     @Column(name = "CommerceCoef", precision = 26, scale = 6)
     private BigDecimal commerceCoef;
 
-    @Column(name = "CommerceArea", precision = 26, scale = 6)
-    private BigDecimal commerceArea;
+    @Column(name = "OfficeArea", precision = 26, scale = 6)
+    private BigDecimal officeArea;
 
     @Column(name = "OfficeCoef", precision = 26, scale = 6)
     private BigDecimal officeCoef;
 
-    @Column(name = "OfficeArea", precision = 26, scale = 6)
-    private BigDecimal officeArea;
+    @Column(name = "UndergroundParkingCoef", precision = 26, scale = 6)
+    private BigDecimal undergroundParkingCoef;
 
     @Column(name = "HabitatArea", precision = 26, scale = 6)
     private BigDecimal habitatArea;
 
     @Column(name = "UndergroundParkingArea", precision = 26, scale = 6)
     private BigDecimal undergroundParkingArea;
-
-    @Column(name = "UndergroundParkingCoef", precision = 26, scale = 6)
-    private BigDecimal undergroundParkingCoef;
 
     @Column(name = "AlinmentStop")
     private Integer alinmentStop;

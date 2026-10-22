@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.adm.AdmCity;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.lnd.LndLand;
 import com.tsix.immocrm.entities.lnd.LndLevel;
 import com.tsix.immocrm.entities.lnd.LndVocation;
 import com.tsix.immocrm.entities.stk.StkCostCategory;
@@ -132,6 +133,42 @@ class EcritureTerrain {
         identifier(s, d);
         valoriser(s, d, true);
         return enregistrer(s, true);
+    }
+
+    /** Colonnes foncières de {@code CreateItem} (l.1983-2038) que {@link TerrainEcritureDto} ne porte pas : valeurs stockées. */
+    void completerDepuisProspection(StkItem t, LndLand p) {
+        t.setLndLandId(p.getId());
+        t.setOwner(p.getOwner());
+        t.setCfgMiddleman(p.getCfgMiddleman());
+        t.setCfgLawyer(p.getCfgLawyer());
+        t.setEquipementsArea(p.getEquipementsArea());
+        t.setAreaEquipmentTransferred(p.getAreaEquipmentTransferred());
+        t.setAreaRegularized(p.getAreaRegularized());
+        t.setAreaCeded(p.getAreaCeded());
+        t.setEquipementsCoef(p.getEquipementsCoef());
+        t.setCos(p.getCos());
+        t.setAreaCos(p.getAreaCos());
+        t.setCuf(p.getCuf());
+        t.setAreaCuf(p.getAreaCuf());
+        t.setCoefSaleAbleArea(p.getCoefSaleableArea());
+        t.setSalableArea(p.getSalableArea());
+        t.setHabitatArea(p.getHabitatArea());
+        t.setCommerceCoef(p.getCommerceCoef());
+        t.setCommerceArea(p.getCommerceArea());
+        t.setOfficeCoef(p.getOfficeCoef());
+        t.setOfficeArea(p.getOfficeArea());
+        t.setUndergroundParkingCoef(p.getUndergroundParkingCoef());
+        t.setUndergroundParkingArea(p.getUndergroundParkingArea());
+        t.setAlinmentStop(p.getAlinmentStop());
+        t.setMaxHeight(p.getMaxHeight());
+        t.setProspectionUnitCost(p.getProspectionUnitCost());
+        t.setProspectionPrice(p.getProspectionPrice());
+        t.setProspectionPriceProposed(p.getProspectionPriceProposed());
+        t.setRegistryDate(p.getRegistryDate());
+        t.setRegistryNumber(p.getRegistryNumber());
+        t.setRegistryPlace(p.getRegistryPlace());
+        t.setImmatriculationDate(p.getImmatriculationDate());
+        t.setImmatriculationCPF(p.getImmatriculationCPF());
     }
 
     // ------------------------------------------------------------------ saisie

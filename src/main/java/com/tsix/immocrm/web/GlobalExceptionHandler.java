@@ -9,6 +9,7 @@ import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.exceptions.OffreDejaTransformeeException;
+import com.tsix.immocrm.exceptions.ProspectionDejaTransformeeException;
 import com.tsix.immocrm.exceptions.ProspectionExistanteException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.UnauthorizedException;
@@ -152,6 +153,13 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleOffreDejaTransformee(OffreDejaTransformeeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setProperty("dossierExistant", ex.getDossierExistant());
+        return problem;
+    }
+
+    @ExceptionHandler(ProspectionDejaTransformeeException.class)
+    public ProblemDetail handleProspectionDejaTransformee(ProspectionDejaTransformeeException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("terrainId", ex.getTerrainId());
         return problem;
     }
 
