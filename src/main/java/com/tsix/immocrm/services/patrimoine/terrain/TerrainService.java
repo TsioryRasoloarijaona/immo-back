@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.patrimoine.terrain;
 
+import com.tsix.immocrm.domain.foncier.SurfacesTerrain;
 import com.tsix.immocrm.dto.patrimoine.FiltresTerrains;
 import com.tsix.immocrm.dto.patrimoine.TerrainDetailDto;
 import com.tsix.immocrm.dto.patrimoine.TerrainEcritureDto;
@@ -41,8 +42,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static com.tsix.immocrm.services.patrimoine.ArticleService.VOCATION_PROJET;
 import static com.tsix.immocrm.services.patrimoine.terrain.TerrainsVisibles.NATURE_TERRAIN;
@@ -158,7 +161,20 @@ public class TerrainService {
                 t.getBuildingPermissionDate(), coutTotal, coutUnitaire,
                 t.getTitleNumber(), t.getTitleName(), t.getTitleDate(), t.getAddress(), t.getGmapLink(), t.getNotes(),
                 t.getAnomalies(), items.findByParentId(t.getId()).stream().map(TerrainService::ligne).toList(),
-                t.getUserCreate(), t.getUserCreateDateTime(), t.getUserUpdate(), t.getUserUpdateDateTime());
+                t.getUserCreate(), t.getUserCreateDateTime(), t.getUserUpdate(), t.getUserUpdateDateTime(),
+                superficiesFoncieres(t), t.getProspectionPriceProposed());
+    }
+
+    /** Valeurs stockées (copiées de la prospection d'origine), sans recalcul ; la nette n'est pas une colonne de StkItem. */
+    private static SurfacesTerrain superficiesFoncieres(StkItem t) {
+        BigDecimal nette = Stream.of(t.getEquipementsArea(), t.getAreaEquipmentTransferred(), t.getAreaRegularized(),
+                t.getAreaCeded()).filter(Objects::nonNull).reduce(Objects.requireNonNullElse(t.getArea(), BigDecimal.ZERO),
+                BigDecimal::subtract);
+        return new SurfacesTerrain(t.getArea(), t.getEquipementsArea(), t.getAreaEquipmentTransferred(),
+                t.getAreaRegularized(), t.getAreaCeded(), t.getEquipementsCoef(), nette, t.getCos(), t.getAreaCos(),
+                t.getCuf(), t.getAreaCuf(), t.getCoefSaleAbleArea(), t.getSalableArea(), t.getCommerceCoef(),
+                t.getCommerceArea(), t.getOfficeCoef(), t.getOfficeArea(), t.getHabitatArea(), t.getUndergroundParkingCoef(),
+                t.getUndergroundParkingArea(), t.getProspectionUnitCost(), t.getProspectionPrice());
     }
 
     private static TerrainListeDto ligne(StkItem t) {
