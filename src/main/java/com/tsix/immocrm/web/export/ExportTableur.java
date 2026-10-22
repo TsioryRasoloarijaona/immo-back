@@ -1,6 +1,8 @@
 package com.tsix.immocrm.web.export;
 
 import com.tsix.immocrm.domain.Colonne;
+import com.tsix.immocrm.domain.rapport.ColonneRapport;
+import com.tsix.immocrm.domain.rapport.TypeColonne;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import org.apache.poi.ss.usermodel.Cell;
@@ -28,8 +30,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -48,6 +54,8 @@ public class ExportTableur {
     public static final String FORMAT_XLSX = "xlsx";
 
     private static final int LIGNES_EN_MEMOIRE = 200;
+    private static final int NOM_FEUILLE_MAX = 31;
+    private static final String TOTAL = "Total";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final Clock clock;
@@ -74,10 +82,14 @@ public class ExportTableur {
     public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre,
                                                          Collection<? extends Colonne> colonnes,
                                                          List<?> lignes) {
+        return reponse(liste, titre, List.of(new FeuilleExport(FEUILLE, List.copyOf(colonnes), lignes, null)));
+    }
+
+    /** Une feuille par élément de {@code feuilles}, noms nettoyés et dédoublonnés ({@link #nomFeuille}). */
+    public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre, List<FeuilleExport> feuilles) {
         String nomFichier = liste + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
         String auteur = utilisateurAffiche.courant().nom();
-        List<Colonne> ordre = List.copyOf(colonnes);
-        StreamingResponseBody corps = sortie -> ecrire(sortie, titre, auteur, ordre, lignes);
+        StreamingResponseBody corps = sortie -> ecrire(sortie, titre, auteur, feuilles);
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -88,6 +100,11 @@ public class ExportTableur {
     /** Écrit le classeur dans {@code sortie} ; exposé pour les tests. */
     public void ecrire(OutputStream sortie, String titre, String auteur, List<? extends Colonne> colonnes,
                        List<?> lignes) throws IOException {
+        ecrire(sortie, titre, auteur, List.of(new FeuilleExport(FEUILLE, colonnes, lignes, null)));
+    }
+
+    public void ecrire(OutputStream sortie, String titre, String auteur, List<FeuilleExport> feuilles)
+            throws IOException {
         try (SXSSFWorkbook classeur = new SXSSFWorkbook(LIGNES_EN_MEMOIRE)) {
             POIXMLProperties.CoreProperties proprietes = classeur.getXSSFWorkbook().getProperties()
                     .getCoreProperties();
@@ -95,36 +112,76 @@ public class ExportTableur {
             proprietes.setTitle(titre);
 
             Styles styles = new Styles(classeur);
-            Sheet feuille = classeur.createSheet(FEUILLE);
-            Row entete = feuille.createRow(0);
-            for (int i = 0; i < colonnes.size(); i++) {
-                Cell cellule = entete.createCell(i);
-                cellule.setCellValue(colonnes.get(i).libelle());
-                cellule.setCellStyle(styles.entete);
+            Set<String> pris = new HashSet<>();
+            for (FeuilleExport feuille : feuilles) {
+                ecrireFeuille(classeur.createSheet(nomFeuille(feuille.nom(), pris)), feuille, styles);
             }
-            int numero = 1;
-            for (Object ligne : lignes) {
-                Row row = feuille.createRow(numero++);
-                for (int i = 0; i < colonnes.size(); i++) {
-                    Colonne colonne = colonnes.get(i);
-                    remplir(row.createCell(i), colonne, valeur(ligne, colonne.nom()), styles);
-                }
-            }
-            feuille.createFreezePane(0, 1);
             classeur.write(sortie);
         }
     }
 
-    private static void remplir(Cell cellule, Colonne colonne, Object valeur, Styles styles) {
+    private void ecrireFeuille(Sheet feuille, FeuilleExport contenu, Styles styles) {
+        List<? extends Colonne> colonnes = contenu.colonnes();
+        Row entete = feuille.createRow(0);
+        for (int i = 0; i < colonnes.size(); i++) {
+            Cell cellule = entete.createCell(i);
+            cellule.setCellValue(colonnes.get(i).libelle());
+            cellule.setCellStyle(styles.entete);
+        }
+        int numero = 1;
+        for (Object ligne : contenu.lignes()) {
+            Row row = feuille.createRow(numero++);
+            for (int i = 0; i < colonnes.size(); i++) {
+                Colonne colonne = colonnes.get(i);
+                remplir(row.createCell(i), colonne, valeur(ligne, colonne.nom()), styles, false);
+            }
+        }
+        if (contenu.totaux() != null) {
+            Row total = feuille.createRow(numero);
+            for (int i = 0; i < colonnes.size(); i++) {
+                Colonne colonne = colonnes.get(i);
+                Object valeur = contenu.totaux().get(colonne.nom());
+                if (i == 0 && valeur == null) {
+                    valeur = TOTAL;
+                }
+                remplir(total.createCell(i), colonne, valeur, styles, true);
+            }
+        }
+        feuille.createFreezePane(0, 1);
+    }
+
+    /** Sans {@code []:*?/\}, 31 caractères au plus (limites d'Excel), {@code x (2)} si déjà pris. */
+    static String nomFeuille(String titre, Set<String> pris) {
+        String base = titre == null ? "" : titre.replaceAll("[\\[\\]:*?/\\\\]", "");
+        base = base.isBlank() ? "Feuille" : base;
+        String nom = tronquer(base, NOM_FEUILLE_MAX);
+        for (int n = 2; pris.contains(nom.toLowerCase(Locale.ROOT)); n++) {
+            String suffixe = " (" + n + ")";
+            nom = tronquer(base, NOM_FEUILLE_MAX - suffixe.length()) + suffixe;
+        }
+        pris.add(nom.toLowerCase(Locale.ROOT));
+        return nom;
+    }
+
+    private static String tronquer(String texte, int longueur) {
+        return texte.length() > longueur ? texte.substring(0, longueur) : texte;
+    }
+
+    private static void remplir(Cell cellule, Colonne colonne, Object valeur, Styles styles, boolean total) {
         if (valeur == null) {
             return;
         }
         switch (colonne.typeExport()) {
             case DATE -> remplirDate(cellule, valeur, styles);
-            case MONTANT -> remplirNombre(cellule, valeur, styles.montant);
-            case NOMBRE -> remplirNombre(cellule, valeur, styles.nombre);
+            case MONTANT -> remplirNombre(cellule, valeur, styles.gras(styles.montant, total));
+            case NOMBRE -> remplirNombre(cellule, valeur, styles.gras(styles.nombre(colonne), total));
             case BOOLEEN -> cellule.setCellValue(Boolean.TRUE.equals(valeur) ? "Oui" : "Non");
-            case TEXTE -> cellule.setCellValue(valeur.toString());
+            case TEXTE -> {
+                cellule.setCellValue(valeur.toString());
+                if (total) {
+                    cellule.setCellStyle(styles.entete);
+                }
+            }
         }
     }
 
@@ -152,8 +209,11 @@ public class ExportTableur {
         cellule.setCellStyle(style);
     }
 
-    /** Composante du {@code record} portant le nom de la colonne ; absente = cellule vide. */
+    /** Clé d'une ligne {@code Map}, ou composante du {@code record}, portant le nom de la colonne ; absente = vide. */
     private Object valeur(Object ligne, String nom) {
+        if (ligne instanceof Map<?, ?> map) {
+            return map.get(nom);
+        }
         RecordComponent composante = composantes
                 .computeIfAbsent(ligne.getClass(), ExportTableur::indexer)
                 .get(nom);
@@ -176,23 +236,54 @@ public class ExportTableur {
     }
 
     private static final class Styles {
+        private final SXSSFWorkbook classeur;
+        private final Font police;
         private final CellStyle entete;
         private final CellStyle date;
         private final CellStyle montant;
         private final CellStyle nombre;
+        private final Map<Integer, CellStyle> parDecimales = new HashMap<>();
+        private final Map<CellStyle, CellStyle> enGras = new HashMap<>();
 
         private Styles(SXSSFWorkbook classeur) {
-            Font gras = classeur.createFont();
-            gras.setBold(true);
+            this.classeur = classeur;
+            police = classeur.createFont();
+            police.setBold(true);
             entete = classeur.createCellStyle();
-            entete.setFont(gras);
+            entete.setFont(police);
             short formatDate = classeur.createDataFormat().getFormat("dd/mm/yyyy");
             date = classeur.createCellStyle();
             date.setDataFormat(formatDate);
-            montant = classeur.createCellStyle();
-            montant.setDataFormat(classeur.createDataFormat().getFormat("#,##0.00"));
-            nombre = classeur.createCellStyle();
-            nombre.setDataFormat(classeur.createDataFormat().getFormat("#,##0.##"));
+            montant = format("#,##0.00");
+            nombre = format("#,##0.##");
+        }
+
+        private CellStyle format(String motif) {
+            CellStyle style = classeur.createCellStyle();
+            style.setDataFormat(classeur.createDataFormat().getFormat(motif));
+            return style;
+        }
+
+        /** Colonne de rapport {@code NOMBRE} : ses décimales (B6) ; autres catalogues : format historique. */
+        private CellStyle nombre(Colonne colonne) {
+            if (colonne instanceof ColonneRapport c && c.type() == TypeColonne.NOMBRE) {
+                int decimales = c.decimales();
+                return parDecimales.computeIfAbsent(decimales,
+                        d -> format(d > 0 ? "#,##0." + "0".repeat(d) : "#,##0"));
+            }
+            return nombre;
+        }
+
+        private CellStyle gras(CellStyle base, boolean total) {
+            if (!total) {
+                return base;
+            }
+            return enGras.computeIfAbsent(base, b -> {
+                CellStyle style = classeur.createCellStyle();
+                style.cloneStyleFrom(b);
+                style.setFont(police);
+                return style;
+            });
         }
     }
 }

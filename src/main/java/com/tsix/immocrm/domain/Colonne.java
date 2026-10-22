@@ -6,7 +6,7 @@ package com.tsix.immocrm.domain;
  */
 public sealed interface Colonne
         permits ColonneArticle, ColonneDossier, ColonneEncaissement, ColonneEtatVentes, ColonneImpaye, ColonneProspect, ColonneProspection,
-                ColonneSuiviAction, ColonneSuiviAffectations, ColonneSuiviCommerciaux, ColonneTranche {
+                ColonneSuiviAction, ColonneSuiviAffectations, ColonneSuiviCommerciaux, ColonneTranche, ColonneLibre {
 
     /** Nom technique, tel qu'il est passé dans {@code ?colonnes=} et sérialisé en JSON. */
     String nom();
