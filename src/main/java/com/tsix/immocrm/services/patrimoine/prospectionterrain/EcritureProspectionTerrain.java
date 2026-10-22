@@ -116,6 +116,7 @@ record EcritureProspectionTerrain(EntityManager em, LndLandRepository prospectio
         boolean maroc = maroc();
         mesures(d);
         SurfacesTerrain s = CalculSurfacesTerrain.prospection(saisie(p, d), null, maroc);
+        bornes(s);
         if (s.superficie().signum() <= 0) {
             throw new InvalidRequestException(MESSAGE_SUPERFICIE);
         }
@@ -234,10 +235,12 @@ record EcritureProspectionTerrain(EntityManager em, LndLandRepository prospectio
             obligatoire(l.identification(), null, "identification");
             texte(l.notes(), null, LONG, "notes");
             mesures(l);
-            lignes.add(new LigneZone(z, l, CalculSurfacesTerrain.zone(new SurfacesTerrain(l.superficie(), null, null,
+            SurfacesTerrain s = CalculSurfacesTerrain.zone(new SurfacesTerrain(l.superficie(), null, null,
                     null, null, null, null, l.cos(), l.superficieCos(), l.cuf(), l.superficieCuf(), l.coefVendable(),
                     l.superficieVendable(), l.coefCommerce(), l.superficieCommerce(), l.coefBureau(), l.superficieBureau(),
-                    null, l.coefParking(), l.superficieParking(), null, null))));
+                    null, l.coefParking(), l.superficieParking(), null, null));
+            bornes(s);
+            lignes.add(new LigneZone(z, l, s));
         }
         BigDecimal total = lignes.stream().map(l -> l.surfaces().superficie()).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (total.compareTo(ou(p.getAreaNet(), BigDecimal.ZERO)) > 0) {
@@ -295,15 +298,24 @@ record EcritureProspectionTerrain(EntityManager em, LndLandRepository prospectio
         e.setUndergroundParkingArea(s.superficieParking());
     }
 
-    /** Nombres saisis : superficie > 0, les autres ≥ 0, et dans les bornes de decimal(26,6) (400, pas 500). */
+    /** Nombres saisis ≥ 0 et dans les bornes de decimal(26,6) (400, pas 500) ; superficie d'une prospection > 0. */
     private static void mesures(Record saisie) {
-        for (RecordComponent c : saisie.getClass().getRecordComponents()) {
-            if (Number.class.isAssignableFrom(c.getType()) && valeur(c, saisie) instanceof Number n) {
+        controler(saisie, saisie instanceof ProspectionTerrainEcritureDto, true);
+    }
+
+    /** Valeurs calculées : bornes seules, sinon la base refuse au flush (500). */
+    private static void bornes(Record calcul) {
+        controler(calcul, false, false);
+    }
+
+    private static void controler(Record r, boolean superficieStricte, boolean positifs) {
+        for (RecordComponent c : r.getClass().getRecordComponents()) {
+            if (Number.class.isAssignableFrom(c.getType()) && valeur(c, r) instanceof Number n) {
                 BigDecimal b = new BigDecimal(n.toString());
-                if (SUPERFICIE.equals(c.getName()) && b.signum() <= 0) {
+                if (superficieStricte && SUPERFICIE.equals(c.getName()) && b.signum() <= 0) {
                     throw new InvalidRequestException(MESSAGE_SUPERFICIE);
                 }
-                if (b.signum() < 0 || b.abs().compareTo(BORNE) >= 0) {
+                if ((positifs && b.signum() < 0) || b.abs().compareTo(BORNE) >= 0) {
                     throw new InvalidRequestException(c.getName() + " : valeur positive ou nulle, inférieure à 10^20.");
                 }
             }

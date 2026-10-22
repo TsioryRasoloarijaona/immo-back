@@ -164,6 +164,11 @@ class EcritureTerrain {
         t.setProspectionUnitCost(p.getProspectionUnitCost());
         t.setProspectionPrice(p.getProspectionPrice());
         t.setProspectionPriceProposed(p.getProspectionPriceProposed());
+        // CreateItem l.2027-2029 : le prix au m² arrondi remultiplié s'écarterait du prix proposé ; TVA 0, HT = TTC.
+        t.setSalePriceFloor(t.getProspectionPriceProposed());
+        t.setSalePriceFloorHT(t.getProspectionPriceProposed());
+        t.setSalePrice(t.getProspectionPriceProposed());
+        t.setSalePriceHT(t.getProspectionPriceProposed());
         t.setRegistryDate(p.getRegistryDate());
         t.setRegistryNumber(p.getRegistryNumber());
         t.setRegistryPlace(p.getRegistryPlace());
