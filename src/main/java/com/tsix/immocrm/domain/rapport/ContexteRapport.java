@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 /**
  * Ce que le socle remet à un rapport (FEATURE-tdb-vente-rapports-socle.md §3.3, B2, B4) : valeurs déjà validées,
  * tranches visibles (entités actives ∩ périmètre ∩ demandées) et commerciaux visibles (portée ∩ demandés).
+ * Un rapport ne filtre que par {@link #tranchesVisibles()} / {@link #commerciauxVisibles()}, jamais par les ids demandés.
  */
 public final class ContexteRapport {
 
@@ -53,10 +54,6 @@ public final class ContexteRapport {
     /** Toutes les valeurs appliquées du paramètre (défaut compris), vide si aucune. */
     public List<String> choix(String nom) {
         return valeurs.getOrDefault(nom, List.of());
-    }
-
-    public List<UUID> tranchesDemandees() {
-        return choix(ParametreRapport.TRANCHE_ID).stream().map(UUID::fromString).toList();
     }
 
     public String texte(String nom) {

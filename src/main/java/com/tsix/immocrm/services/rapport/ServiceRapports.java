@@ -148,7 +148,28 @@ public class ServiceRapports {
                 clock, valeurs, tranchesRetenues, () -> commerciauxRetenus(commerciauxDemandes));
         ResultatRapport resultat = o.rapport().executer(contexte);
         verifier(o.rapport(), resultat);
-        return new Execution(valeurs, resultat);
+        return new Execution(appliques(parametres, valeurs, contexte), resultat);
+    }
+
+    /** §4.3 : une demande de tranches ou de commerciaux est renvoyée réduite aux ids visibles retenus. */
+    private static Map<String, List<String>> appliques(List<ParametreRapport> parametres,
+                                                       Map<String, List<String>> valeurs, ContexteRapport contexte) {
+        Map<String, List<String>> appliques = new LinkedHashMap<>(valeurs);
+        for (ParametreRapport p : parametres) {
+            if (valeurs.getOrDefault(p.nom(), List.of()).isEmpty()) {
+                continue;
+            }
+            if (p.type() == TypeParametre.TRANCHES) {
+                appliques.put(p.nom(), texte(contexte.tranchesVisibles()));
+            } else if (p.type() == TypeParametre.COMMERCIAUX) {
+                appliques.put(p.nom(), texte(contexte.commerciauxVisibles()));
+            }
+        }
+        return appliques;
+    }
+
+    private static List<String> texte(List<UUID> ids) {
+        return ids.stream().map(UUID::toString).toList();
     }
 
     private static List<UUID> ids(List<ParametreRapport> parametres, Map<String, List<String>> valeurs,
