@@ -12,6 +12,7 @@ import java.util.UUID;
 import static com.tsix.immocrm.fixtures.ConnexionDeTest.connecte;
 import static com.tsix.immocrm.fixtures.CorpsJson.corps;
 import static com.tsix.immocrm.fixtures.FixtureFaisabilite.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -63,6 +64,27 @@ public final class ApiFaisabilite {
 
     public ResultActions debloquer(UUID id) throws Exception {
         return mockMvc.perform(post(DEBLOQUER, id).with(connecte(admin)));
+    }
+
+    // ------------------------------------------------------------------ sous-ressources d'une étude (P8b-1)
+
+    public ResultActions lire(String url, UUID id) throws Exception {
+        return mockMvc.perform(get(url, id).with(connecte(admin)));
+    }
+
+    public ResultActions remplacer(String url, UUID id, String json) throws Exception {
+        return mockMvc.perform(put(url, id).with(connecte(admin)).contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    public ResultActions envoyer(String url, UUID id, String json) throws Exception {
+        return mockMvc.perform(post(url, id).with(connecte(admin)).contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    /** Unité de base non surface portant une catégorie d'article (compte dans le nombre d'articles à vendre). */
+    public UUID uniteArticle(String code, boolean surface, UUID categorieArticleId) throws Exception {
+        return referentiel(SLUG_UNITES_BASE, corps().avec(SORTING, 1).avec(CODE, code)
+                .avec(DESCRIPTION, "Unite " + code).avec(EST_SURFACE, surface).avec(FONCTION_SPECIFIQUE_ID, null)
+                .avec(CATEGORIE_ARTICLE_ID, categorieArticleId));
     }
 
     // ------------------------------------------------------------------ configuration (patron P6)

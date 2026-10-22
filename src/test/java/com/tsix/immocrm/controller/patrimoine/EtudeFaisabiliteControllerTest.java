@@ -286,23 +286,15 @@ class EtudeFaisabiliteControllerTest {
         assertThat(decimal(fixture.etude(id).get("Turnover"))).isEqualByComparingTo("123456");
     }
 
+    /** P8b-1 §3 : la modification recalcule les prévisions ; {@code previsionsARecalculer} a disparu (§10). */
     @Test
-    void d8bis2_modificationAvecPrevisions_permise_signaleARecalculer() throws Exception {
+    void d8bis2_modificationAvecPrevisions_permise() throws Exception {
         UUID id = etudeYestest("PRV");
         fixture.prevision(id);
 
         api.modifier(id, corps().avec(DESCRIPTION, "Modifiee " + jeton).json())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$." + PREVISIONS_A_RECALCULER).value(true));
-    }
-
-    @Test
-    void d8bis2_modificationSansPrevision_rienARecalculer() throws Exception {
-        UUID id = etudeYestest("SPR");
-
-        api.modifier(id, corps().avec(DESCRIPTION, "Modifiee " + jeton).json())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$." + PREVISIONS_A_RECALCULER).value(false));
+                .andExpect(jsonPath("$." + PREVISIONS_A_RECALCULER).doesNotExist());
     }
 
     // ------------------------------------------------------------------ §8 bis décision 3 : suppression

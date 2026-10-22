@@ -227,6 +227,13 @@ public class FixtureFaisabilite {
         return ((Number) n).intValue();
     }
 
+    /** {@code :id} lié ; le reste du SQL est écrit par le test. */
+    public List<Tuple> lignes(String sql, UUID id) {
+        entityManager.flush();
+        entityManager.clear();
+        return entityManager.createNativeQuery(sql, Tuple.class).setParameter(P_ID, id).getResultList();
+    }
+
     /** PKey de la ligne d'unité de l'étude portant cette unité de base. */
     public UUID ligneUnite(UUID etudeId, UUID uniteBaseId) {
         entityManager.flush();

@@ -8,7 +8,8 @@ import java.util.StringJoiner;
 
 /**
  * Corps JSON plat construit champ par champ : un test retire ou remplace un champ sans recopier tout le corps.
- * Une valeur {@code null} est écrite {@code null} (et non omise) ; {@link #sans} omet le champ.
+ * Une valeur {@code null} est écrite {@code null} (et non omise) ; {@link #sans} omet le champ. Un {@code CorpsJson} (seul ou
+ * dans une liste) est imbriqué tel quel.
  */
 public final class CorpsJson {
 
@@ -40,6 +41,9 @@ public final class CorpsJson {
     private static String valeurJson(Object valeur) {
         if (valeur == null) {
             return "null";
+        }
+        if (valeur instanceof CorpsJson imbrique) {
+            return imbrique.json();
         }
         if (valeur instanceof BigDecimal decimal) {
             return decimal.toPlainString();
