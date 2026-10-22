@@ -267,70 +267,70 @@ public class StkFeasibilityStudy extends AuditOmran {
     @Column(name = "BackGuaranteeApplicationRate", precision = 26, scale = 6)
     private BigDecimal backGuaranteeApplicationRate;
 
-    // ------------------------------------------------------------------ bilan (agrégats des prévisions, lecture seule)
-    @Column(name = "Turnover", precision = 26, scale = 6, insertable = false, updatable = false)
+    // ------------------------------------------------------------------ bilan : entrées (pourcentage, IS, prix de vente) et colonnes écrites par le recalcul
+    @Column(name = "Turnover", precision = 26, scale = 6)
     private BigDecimal turnover;
 
-    @Column(name = "TotalCostExecution", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "TotalCostExecution", precision = 26, scale = 6)
     private BigDecimal totalCostExecution;
 
-    @Column(name = "TotalCostExecutionHT", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "TotalCostExecutionHT", precision = 26, scale = 6)
     private BigDecimal totalCostExecutionHt;
 
-    @Column(name = "TotalCost", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "TotalCost", precision = 26, scale = 6)
     private BigDecimal totalCost;
 
-    @Column(name = "TotalCostHT", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "TotalCostHT", precision = 26, scale = 6)
     private BigDecimal totalCostHt;
 
-    @Column(name = "UnitBackCost", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "UnitBackCost", precision = 26, scale = 6)
     private BigDecimal unitBackCost;
 
-    @Column(name = "UnitSalePrice", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "UnitSalePrice", precision = 26, scale = 6)
     private BigDecimal unitSalePrice;
 
-    @Column(name = "percentageConcretisation", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "percentageConcretisation", precision = 26, scale = 6)
     private BigDecimal percentageConcretisation;
 
-    @Column(name = "ConretisationAmount", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ConretisationAmount", precision = 26, scale = 6)
     private BigDecimal conretisationAmount;
 
-    @Column(name = "FinalizationAmount", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "FinalizationAmount", precision = 26, scale = 6)
     private BigDecimal finalizationAmount;
 
-    @Column(name = "TotalCostFunding", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "TotalCostFunding", precision = 26, scale = 6)
     private BigDecimal totalCostFunding;
 
-    @Column(name = "AutofinancementRate", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "AutofinancementRate", precision = 26, scale = 6)
     private BigDecimal autofinancementRate;
 
-    @Column(name = "AutofinancementAmount", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "AutofinancementAmount", precision = 26, scale = 6)
     private BigDecimal autofinancementAmount;
 
-    @Column(name = "ClientfinancementRate", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ClientfinancementRate", precision = 26, scale = 6)
     private BigDecimal clientfinancementRate;
 
-    @Column(name = "CreditfinancementRate", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "CreditfinancementRate", precision = 26, scale = 6)
     private BigDecimal creditfinancementRate;
 
-    @Column(name = "GrossProfitMargin", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "GrossProfitMargin", precision = 26, scale = 6)
     private BigDecimal grossProfitMargin;
 
-    @Column(name = "ISRatio", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ISRatio", precision = 26, scale = 6)
     private BigDecimal impotRatio;
 
-    @Column(name = "ISAmount", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ISAmount", precision = 26, scale = 6)
     private BigDecimal impotAmount;
 
-    @Column(name = "NetProfitMargin", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "NetProfitMargin", precision = 26, scale = 6)
     private BigDecimal netProfitMargin;
 
-    @Column(name = "ProfitRatioByProjectCost", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ProfitRatioByProjectCost", precision = 26, scale = 6)
     private BigDecimal profitRatioByProjectCost;
 
-    @Column(name = "ProfitRatioByTurnover", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ProfitRatioByTurnover", precision = 26, scale = 6)
     private BigDecimal profitRatioByTurnover;
 
-    @Column(name = "ProfitRatioByAutofinancementAmount", precision = 26, scale = 6, insertable = false, updatable = false)
+    @Column(name = "ProfitRatioByAutofinancementAmount", precision = 26, scale = 6)
     private BigDecimal profitRatioByAutofinancementAmount;
 }

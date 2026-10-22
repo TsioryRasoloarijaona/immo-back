@@ -21,7 +21,7 @@ public final class CalculFaisabilite {
     }
 
     /** Coefficient et montant d'une paire à deux sens : montant = coef × base. */
-    private record Paire(BigDecimal coef, BigDecimal montant) {
+    record Paire(BigDecimal coef, BigDecimal montant) {
     }
 
     /**
@@ -95,7 +95,7 @@ public final class CalculFaisabilite {
     }
 
     /** Un montant dont le coefficient arrondi est {@code coef} est gardé : réécrire une étude ne fait pas dériver ses montants. */
-    private static Paire paire(BigDecimal coef, BigDecimal montant, BigDecimal base) {
+    static Paire paire(BigDecimal coef, BigDecimal montant, BigDecimal base) {
         if (coef != null && montant != null && base.signum() != 0 && r(diviser(montant, base)).compareTo(r(coef)) == 0) {
             return new Paire(coef, montant);
         }
