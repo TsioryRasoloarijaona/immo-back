@@ -64,6 +64,12 @@ public class StrStatus {
     @Column(name = "StrStatusTypeId")
     private UUID strStatusTypeId;
 
+    @Column(name = "IsReadOnly")
+    private Boolean lectureSeule;
+
+    @Column(name = "CanDelete")
+    private Boolean suppressionPermise;
+
     // OMRAN « Vente au comptant » / « Vente à crédit » (contrôle du crédit dans Sale.cs:VerifThreshold).
     @Column(name = "BoolField004")
     private Boolean venteAuComptant;

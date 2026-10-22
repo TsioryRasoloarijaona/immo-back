@@ -32,7 +32,7 @@ public class AuditController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Une page, éventuellement vide."),
             @ApiResponse(responseCode = "400", description = "`objetId` absent ou mal formé, `page` < 0, `size` hors 1..200."),
-            @ApiResponse(responseCode = "404", description = "Ni entité juridique, ni programme, tranche ou article visible.")
+            @ApiResponse(responseCode = "404", description = "Ni entité juridique, ni programme, tranche, article visible, ni prospection terrain.")
     })
     public PageDto<LigneAuditDto> lister(
             @Parameter(description = "PKey de l'entité juridique (même inactive), du programme, de la tranche ou de l'article.")

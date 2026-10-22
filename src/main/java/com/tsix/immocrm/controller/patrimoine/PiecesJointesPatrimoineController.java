@@ -35,10 +35,10 @@ import java.util.UUID;
 @RequestMapping("/api")
 public class PiecesJointesPatrimoineController {
 
-    private static final String PIECES = "/{porteur:articles|tranches|projets}/{id}/pieces-jointes";
+    private static final String PIECES = "/{porteur:articles|tranches|projets|prospections-terrain}/{id}/pieces-jointes";
     private static final String ADMINISTRATEUR = "hasRole('Administrateur')";
-    private static final String PORTEUR = "Genre du porteur : articles, tranches ou projets.";
-    private static final String ID_PORTEUR = "PKey du porteur (StkItem, CfgTranche ou CfgProject).";
+    private static final String PORTEUR = "Genre du porteur : articles, tranches, projets ou prospections-terrain.";
+    private static final String ID_PORTEUR = "PKey du porteur (StkItem, CfgTranche, CfgProject ou LndLand).";
     private static final String ID_PIECE = "Id de la pièce jointe (AdmAttachedFile.PKey).";
     private static final String REPONSE_403 = "L'appelant n'a pas le rôle Administrateur.";
     private static final String TYPE = "Type de document (AdmAttachedFileType.PKey), voir GET /api/referentiels/types-piece-jointe.";
