@@ -200,6 +200,19 @@ public record DossierListItemDto(
         @Schema(description = "Co-acquéreurs (ComFolderCustomer), libellés séparés par des virgules.")
         String autresClients,
 
+        @Schema(description = "E-mail du client principal (CfgTier.EMail).")
+        String clientEmail,
+
+        @Schema(description = "Adresse du client principal : Address, puis Address2 et Address3 s'ils sont remplis, "
+                + "séparés par « , ».")
+        String clientAdresse,
+
+        @Schema(description = "Ville du client principal : celle du référentiel (AdmCityId), sinon City.")
+        String clientVille,
+
+        @Schema(description = "Pays du client principal (AdmCountry.Description).")
+        String clientPays,
+
         @Schema(description = "Fiche bancaire (ComFolder.BankRecordDate).")
         LocalDateTime dateFicheBancaire,
 
@@ -358,6 +371,9 @@ public record DossierListItemDto(
         BigDecimal frais,
         BigDecimal fraisRegles,
         BigDecimal fraisReste,
+        BigDecimal fraisSyndic,
+        BigDecimal fraisSyndicRegles,
+        BigDecimal fraisSyndicReste,
         BigDecimal modifications,
         BigDecimal modificationsReglees,
         BigDecimal modificationsReste,

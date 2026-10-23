@@ -138,6 +138,19 @@ Réglé des échéances de frais.
 
 `frais − fraisRegles`.
 
+## fraisSyndic
+
+Σ au crédit des échéances de la catégorie `AdmParamsGuid.DefaultSyndicFeeDocumentType` (frais syndic), sous-ensemble
+de `frais` ; 0 si le paramètre n'est pas défini.
+
+## fraisSyndicRegles
+
+Réglé signé des échéances de frais syndic, hors règlements annulés (`CANCELED`).
+
+## fraisSyndicReste
+
+`fraisSyndic − fraisSyndicRegles`.
+
 ## modifications
 
 « Modifications » : `ComFolder.ModificationsAmount`, 0 si absent.

@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Liste, groupes et export des dossiers de vente : une seule spécification ({@link SpecificationsListeDossiers})
@@ -54,6 +56,11 @@ public class ListeDossiersService {
 
     /** Plafond de l'export : au-delà, un classeur n'est plus lisible et la requête bloque la base. */
     static final int LIGNES_EXPORT_MAX = 20_000;
+
+    /** Jetons de {@code /totaux-colonnes} servis par le calcul Java des montants (nom seul = somme). */
+    private static final Set<String> SOMMES_CALCULEES = Arrays.stream(ColonneDossier.values())
+            .filter(ListeDossiersService::sommeCalculee).map(ColonneDossier::nom)
+            .collect(Collectors.toUnmodifiableSet());
 
     private final ComFolderRepository folderRepository;
     private final PerimetreCommercialService perimetreService;
@@ -171,13 +178,26 @@ public class ListeDossiersService {
      * Résumés Σ sur les seuls dossiers du filtre (même spécification que {@link #lister}) ; les lots libres
      * ne sont pas des dossiers et n'y entrent jamais, {@code lignes=LIBRES} donne donc 0 ligne.
      */
-    public TotauxListeDto totauxColonnes(FiltresListeDossiers filtres, List<AgregatDemande> agregats) {
+    public TotauxListeDto totauxColonnes(FiltresListeDossiers filtres, List<String> agregats) {
+        List<String> demandes = agregats != null ? agregats : List.of();
+        List<String> enJava = demandes.stream().filter(SOMMES_CALCULEES::contains).distinct().toList();
         Specification<ComFolder> spec = specification(filtres, null);
         if (!filtres.lignes().avecDossiers()) {
             spec = spec.and((root, query, cb) -> cb.disjunction());
         }
-        GroupementService.Totaux totaux = groupementService.totaux(ComFolder.class, spec, agregats);
-        return new TotauxListeDto(totaux.nombre(), totaux.valeurs());
+        GroupementService.Totaux totaux = groupementService.totaux(ComFolder.class, spec,
+                ColonneDossier.resoudreAgregats(demandes.stream().filter(a -> !enJava.contains(a)).toList()));
+        Map<String, Object> valeurs = new LinkedHashMap<>(totaux.valeurs());
+        if (!enJava.isEmpty()) {
+            Map<String, BigDecimal> sommes = totaux(filtres).sommes();
+            enJava.forEach(nom -> valeurs.put(nom, sommes.get(nom)));
+        }
+        return new TotauxListeDto(totaux.nombre(), valeurs);
+    }
+
+    /** Montant par nature sans chemin SQL : sa seule fonction est la somme, calculée en Java par {@link #totaux}. */
+    public static boolean sommeCalculee(ColonneDossier colonne) {
+        return colonne.chemin() == null && MontantsParNatureDossier.SOMMABLES.contains(colonne);
     }
 
     private static Map<String, BigDecimal> sommesNulles() {
