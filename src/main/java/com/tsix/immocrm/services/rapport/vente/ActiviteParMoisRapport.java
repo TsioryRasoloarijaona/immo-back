@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import static com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles.ANNEE;
 import static com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles.MOIS;
 
 /**
@@ -69,7 +68,7 @@ public class ActiviteParMoisRapport extends RapportFluxVente {
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        int annee = contexte.annee(ANNEE);
+        int annee = annee(contexte);
         Set<MesureFlux> mesures = EnumSet.copyOf(FRAIS.values());
         GROUPES.forEach(g -> mesures.addAll(List.of(g.reel(), g.prevu())));
         FluxMensuel f = calculer(contexte, annee, annee, mesures);

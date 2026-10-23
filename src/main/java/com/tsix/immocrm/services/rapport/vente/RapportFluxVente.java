@@ -12,6 +12,7 @@ import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /** Rapport Vente lu dans {@link FluxVenteMensuel}, sur les seules tranches visibles ; paramètres année + tranches. */
@@ -40,6 +41,11 @@ abstract class RapportFluxVente implements Rapport {
     @Override
     public List<ParametreRapport> parametres() {
         return List.of(LignesMensuelles.annee(clock), ParametreRapport.tranches());
+    }
+
+    /** Année demandée ; toujours présente quand le paramètre a un défaut (socle). */
+    protected static int annee(ContexteRapport contexte) {
+        return Objects.requireNonNull(contexte.annee(LignesMensuelles.ANNEE), "Paramètre annee absent");
     }
 
     protected FluxMensuel calculer(ContexteRapport contexte, Integer debut, Integer fin, Set<MesureFlux> mesures) {

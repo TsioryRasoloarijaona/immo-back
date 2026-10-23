@@ -178,19 +178,20 @@ public class FluxVenteMensuel {
         Set<MesureFlux> mesures = calcul.mesures(Famille.REGLEMENT);
         Map<MesureFlux, Set<UUID>> categories = categoriesFrais(mesures);
         for (Ligne l : lectures.reglements(calcul.demande.tranches())) {
-            boolean comptee = false;
-            for (MesureFlux m : mesures) {
-                if (retenue(m, l, calcul.seuils, categories)) {
-                    comptee = true;
-                    if (calcul.retient(l.mouvement())) {
-                        calcul.ajouter(m, l.tranche(), l.mouvement(), l.montant());
-                    }
-                }
+            List<MesureFlux> retenues = mesures.stream().filter(m -> retenue(m, l, calcul.seuils, categories)).toList();
+            if (l.mouvement() == null) {
+                compterSansDate(calcul, l, retenues);
+            } else if (calcul.retient(l.mouvement())) {
+                retenues.forEach(m -> calcul.ajouter(m, l.tranche(), l.mouvement(), l.montant()));
             }
-            if (comptee && l.mouvement() == null) {
-                calcul.sansDate++;
-                calcul.montantSansDate = calcul.montantSansDate.add(l.montant() == null ? BigDecimal.ZERO : l.montant());
-            }
+        }
+    }
+
+    /** Ligne retenue par au moins une mesure mais sans aucune date : hors grille, comptée une fois en anomalie. */
+    private static void compterSansDate(Calcul calcul, Ligne l, List<MesureFlux> retenues) {
+        if (!retenues.isEmpty()) {
+            calcul.sansDate++;
+            calcul.montantSansDate = calcul.montantSansDate.add(l.montant() == null ? BigDecimal.ZERO : l.montant());
         }
     }
 

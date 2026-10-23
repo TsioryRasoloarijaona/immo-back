@@ -23,7 +23,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles.ANNEE;
 
 /**
  * N° 6 ACTIVITÉS COMMERCIALES PAR PROJET et PAR ANNÉE (FEATURE-tdb-vente-rapports-flux.md §4.2), modèle
@@ -59,7 +58,7 @@ public class ActiviteParProjetRapport extends RapportFluxVente {
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        int annee = contexte.annee(ANNEE);
+        int annee = annee(contexte);
         FluxMensuel f = calculer(contexte, annee, annee, Set.copyOf(MESURES.values()));
         List<UUID> actives = f.cles().stream().map(CleFlux::trancheId).distinct().toList();
         List<Map<String, Object>> lignes = new ArrayList<>();

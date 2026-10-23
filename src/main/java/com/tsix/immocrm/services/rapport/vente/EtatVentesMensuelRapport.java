@@ -51,7 +51,7 @@ public class EtatVentesMensuelRapport extends RapportFluxVente {
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        int fin = contexte.annee(ANNEE);
+        int fin = annee(contexte);
         FluxMensuel f = calculer(contexte, fin - FENETRE, fin,
                 MESURES.stream().map(Mesure::mesure).collect(Collectors.toSet()));
         List<SectionRapport> sections = MESURES.stream().map(m -> section(m, f, fin)).toList();
