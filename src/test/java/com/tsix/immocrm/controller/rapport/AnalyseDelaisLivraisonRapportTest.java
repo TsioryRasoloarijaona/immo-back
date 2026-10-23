@@ -254,12 +254,12 @@ class AnalyseDelaisLivraisonRapportTest {
 
     @Test
     void n29_credit_nbDossiers_minuteRemiseCles_titreNull() throws Exception {
-        Map<String, Object> credit = unique(CREDIT);
+        Map<String, Object> ligneCredit = unique(CREDIT);
 
         SoftAssertions soft = new SoftAssertions();
-        soft.assertThat(nombre(credit.get(NB))).isEqualByComparingTo("2");
-        soft.assertThat(nombre(credit.get(MINUTE_REMISE))).isEqualByComparingTo("17.5");
-        soft.assertThat(credit.get(TITRE_ENVOI)).isNull();
+        soft.assertThat(nombre(ligneCredit.get(NB))).isEqualByComparingTo("2");
+        soft.assertThat(nombre(ligneCredit.get(MINUTE_REMISE))).isEqualByComparingTo("17.5");
+        soft.assertThat(ligneCredit.get(TITRE_ENVOI)).isNull();
         soft.assertAll();
     }
 

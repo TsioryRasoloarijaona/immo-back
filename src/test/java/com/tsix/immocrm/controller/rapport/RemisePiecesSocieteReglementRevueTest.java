@@ -73,6 +73,6 @@ class RemisePiecesSocieteReglementRevueTest {
                 get(resultat(VENTE, REMISE_PIECES)).param("du", "2026-03-01").param("au", "2026-03-31")
                         .with(libre)), "remises")).stream().map(l -> l.get("article")).toList();
 
-        assertThat(articles).doesNotContain(prefixe + "-INACTIF");
+        assertThat(articles.contains(prefixe + "-INACTIF")).isFalse();
     }
 }
