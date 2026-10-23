@@ -12,7 +12,6 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatus;
-import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatusHistory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.exceptions.ConflictException;
@@ -135,12 +134,14 @@ public class EtudeFaisabiliteService {
         e.setUnitSalePrice(Objects.requireNonNullElse(e.getUnitSalePrice(), BigDecimal.ZERO));
         e.setNumberOfItemForSale(0);
         StkFeasibilityStudyStatus initial = statutInitial();
+        FicheEtude.exigerChampsDuStatut(initial, e.getCode(), e.getDescription(), e.getDocDate());
         e.setStatus(initial);
         e.setStrEntityId(ENTITE_ETUDE);
         e.setIsLocked(false);
         tracer(e, true);
         em.persist(e);
-        em.persist(historique(e, initial));
+        em.persist(FicheEtude.historique(e.getId(), initial.getId(), e.getUserCreateDateTime(),
+                Champs.de(utilisateurAffiche.courant().compte(), AdmUser::getId)));
         recalcul.recalculer(e);
         return dto(e);
     }
@@ -155,6 +156,10 @@ public class EtudeFaisabiliteService {
             throw new InvalidRequestException("societeId : l'étude a des tranches liées au patrimoine de sa société ; "
                     + "retirez-les avant de changer de société.");
         }
+        // Avant appliquer : un champ du statut vidé en base doit donner « Statuts : », pas « … est obligatoire ».
+        FicheEtude.exigerChampsDuStatut(e.getStatus(), SaisiePatrimoine.ou(saisie.code(), e.getCode()),
+                SaisiePatrimoine.ou(saisie.description(), e.getDescription()),
+                SaisiePatrimoine.ou(saisie.dateDocument(), e.getDocDate()));
         em.detach(e);
         appliquer(e, saisie, ChampsAVider.de(saisie, saisie.champsAVider(), OBLIGATOIRES));
         GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
@@ -185,6 +190,7 @@ public class EtudeFaisabiliteService {
         StkFeasibilityStudy e = bloquer ? modifiable(id) : etudes.exigerVisible(id);
         if (bloquer) {
             GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
+            FicheEtude.exigerChampsDuStatut(e.getStatus(), e.getCode(), e.getDescription(), e.getDocDate());
             recalcul.recalculer(e);
         }
         e.setIsLocked(bloquer);
@@ -268,16 +274,6 @@ public class EtudeFaisabiliteService {
                         + "ORDER BY s.sorting", StkFeasibilityStudyStatus.class)
                 .setParameter("etat", ETAT_NOUVEAU).setMaxResults(1).getResultStream().findFirst()
                 .orElseThrow(() -> new ConflictException("Aucun statut d'étude à l'état « Nouveau » n'est paramétré."));
-    }
-
-    private StkFeasibilityStudyStatusHistory historique(StkFeasibilityStudy e, StkFeasibilityStudyStatus statut) {
-        StkFeasibilityStudyStatusHistory h = new StkFeasibilityStudyStatusHistory();
-        h.setId(UUID.randomUUID());
-        h.setFeasibilityStudyId(e.getId());
-        h.setStatusId(statut.getId());
-        h.setDocDate(e.getUserCreateDateTime());
-        h.setAdmUserId(Champs.de(utilisateurAffiche.courant().compte(), AdmUser::getId));
-        return h;
     }
 
     private long compter(String sql, UUID id) {
