@@ -89,10 +89,11 @@ public class ListeDossiersService {
                                            Pageable pageable, Set<ColonneDossier> colonnes) {
         Pageable page = ordreOmran ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), ORDRE_OMRAN)
                 : pageable;
+        Specification<ComFolder> spec = specification(filtres, depliage);
         List<LigneDossier> lignes = new ArrayList<>();
         long nombreDossiers = 0;
         if (filtres.lignes().avecDossiers()) {
-            Page<ComFolder> dossiers = folderRepository.findAll(specification(filtres, depliage), page);
+            Page<ComFolder> dossiers = folderRepository.findAll(spec, page);
             nombreDossiers = dossiers.getTotalElements();
             lignes.addAll(lignesDeDossiers(dossiers.getContent(), colonnes));
         }
@@ -149,10 +150,11 @@ public class ListeDossiersService {
      * statuts visibles que {@link #lister}, même calcul par dossier que ses colonnes.
      */
     public TotauxDossiersDto totaux(FiltresListeDossiers filtres) {
+        Specification<ComFolder> spec = specification(filtres, null);
         if (!filtres.lignes().avecDossiers()) {
             return new TotauxDossiersDto(0, sommesNulles());
         }
-        List<ComFolder> dossiers = folderRepository.findAll(specification(filtres, null));
+        List<ComFolder> dossiers = folderRepository.findAll(spec);
         Map<String, BigDecimal> sommes = sommesNulles();
         Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = calculs.montants().pour(dossiers);
         for (ComFolder f : dossiers) {

@@ -4,7 +4,7 @@ Liste des dossiers de vente à parité avec la grille OMRAN (`SaleMonitoringList
 
 ## findAll
 
-Filtre optionnellement par statut (codes `StrStatus`, multi-sélection), commercial, projet, tranche(s), période sur une des 47 dates d'OMRAN (`GET /api/dossiers/champs-date`) et recherche libre.
+Filtre optionnellement par statut (codes `StrStatus`, multi-sélection, plus `sansStatut`), commercial, société, projet, tranche(s), période sur une des 47 dates d'OMRAN (`GET /api/dossiers/champs-date`), fourchette de total à payer (`totalMin` / `totalMax`) et recherche libre. Ces filtres sont les mêmes sur `/groupes`, `/totaux`, `/totaux-colonnes` et `/export`. Une borne de total exclut les lots libres (ils n'ont pas de total).
 
 **Dossiers sortis exclus par défaut** : sans filtre `statut`, les dossiers dont le statut est une annulation ou une résiliation (`StrStatus.BoolField002` / `BoolField003`) n'apparaissent pas, comme dans OMRAN. `inclureSortis=true` les réintègre ; un `statut` explicite (par exemple `ANNULATION`) est toujours servi tel quel.
 
@@ -66,7 +66,7 @@ Granularité appliquée quand `groupeColonne` est une date. Doit être identique
 
 ### reponse 400
 
-Colonne inconnue dans `colonnes`, valeur d'énumération invalide (`champDate`, `lignes`, `granularite`) ou `groupeColonne` non groupable.
+Colonne inconnue dans `colonnes`, valeur d'énumération invalide (`champDate`, `lignes`, `granularite`), `groupeColonne` non groupable, `totalMin` / `totalMax` non numérique ou négatif, ou `totalMin > totalMax` (le détail nomme les deux champs).
 
 ## grouper
 
@@ -108,7 +108,7 @@ Inclure le groupe des lignes dont la colonne groupée est vide. **Faux par défa
 
 ### reponse 400
 
-Valeur d'énumération invalide (`champDate`, `lignes`).
+Valeur d'énumération invalide (`champDate`, `lignes`), ou fourchette `totalMin` / `totalMax` invalide (négative ou inversée).
 
 ## totauxColonnes
 
@@ -140,7 +140,7 @@ Colonnes exportées, dans l'ordre voulu (celui de la grille). Absent : les colon
 
 ### reponse 400
 
-`format` autre que `xlsx`, ou colonne inconnue.
+`format` autre que `xlsx`, colonne inconnue, ou fourchette `totalMin` / `totalMax` invalide.
 
 ## statuts
 
