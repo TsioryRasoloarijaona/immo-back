@@ -1,6 +1,8 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.domain.faisabilite.ChampsObligatoiresFaisabilite;
 import com.tsix.immocrm.domain.faisabilite.EtatFaisabilite.Parametres;
+import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatusHistory;
 import com.tsix.immocrm.domain.faisabilite.ValeursFaisabilite;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -15,6 +17,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.utils.Champs;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -37,6 +40,31 @@ final class FicheEtude {
         if (Stream.of(ecartsTypes).filter(Objects::nonNull).anyMatch(s -> s.compareTo(ECART_TYPE_MIN) < 0)) {
             throw new InvalidRequestException("la valeur de l'écart type doit être supérieur ou égal à 0.5");
         }
+    }
+
+    /**
+     * {@code VerifStatusMandatories} (StkFeasibilityStudy.cs l.2435) : champs obligatoires du statut vides → 400 « Statuts : ».
+     * Valeurs passées par l'appelant : celles que l'écriture va enregistrer.
+     */
+    static void exigerChampsDuStatut(StkFeasibilityStudyStatus s, String code, String description, LocalDateTime date) {
+        if (s == null) {
+            return;
+        }
+        List<String> manquants = ChampsObligatoiresFaisabilite.manquants(s.getMandatoryFields(),
+                ch -> ChampsObligatoiresFaisabilite.renseigne(ch, code, description, date));
+        if (!manquants.isEmpty()) {
+            throw new InvalidRequestException("Statuts :\n" + String.join("\n", manquants));
+        }
+    }
+
+    static StkFeasibilityStudyStatusHistory historique(UUID etudeId, UUID statutId, LocalDateTime date, UUID utilisateurId) {
+        StkFeasibilityStudyStatusHistory h = new StkFeasibilityStudyStatusHistory();
+        h.setId(UUID.randomUUID());
+        h.setFeasibilityStudyId(etudeId);
+        h.setStatusId(statutId);
+        h.setDocDate(date);
+        h.setAdmUserId(utilisateurId);
+        return h;
     }
 
     /** 404 inconnue / société inactive, 409 bloquée : toute écriture d'une étude ou de ses lignes. */
