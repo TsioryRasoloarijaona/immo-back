@@ -82,6 +82,8 @@ public class SecurityConfig {
                         // Chemins exacts, jamais /** : /actuator/metrics doit rester fermé. health reste muet tant que
                         // show-details=never ; info ne porte que tag d'image et commit, déjà publics (InfosBuild).
                         .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
+                        // Avant la liaison des paramètres : 403 avant tout 400 (FEATURE-patrimoine-import-export.md §0.1).
+                        .requestMatchers("/api/import-patrimoine/**").hasRole("Administrateur")
                         .anyRequest().authenticated())
                 // Clé d'API AVANT le JWT : une clé présente fait foi, le cookie n'est lu qu'en son absence (FEATURE-cle-api-n8n.md §5).
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

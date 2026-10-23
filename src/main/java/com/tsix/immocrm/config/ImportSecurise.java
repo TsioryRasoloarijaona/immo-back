@@ -12,7 +12,8 @@ import org.springframework.context.annotation.Configuration;
 public class ImportSecurise {
 
     static final double RATIO_INFLATION_MIN = 0.01;
-    static final long ENTREE_MAX = 100L * 1024 * 1024;
+    // Une feuille de 1 000 lignes tient en quelques Mo ; au-delà, XSSFWorkbook risquerait d'épuiser la mémoire.
+    static final long ENTREE_MAX = 20L * 1024 * 1024;
     static final long ENTREES_MAX = 1000;
     static final int TABLEAU_MAX = 150 * 1024 * 1024;
 
