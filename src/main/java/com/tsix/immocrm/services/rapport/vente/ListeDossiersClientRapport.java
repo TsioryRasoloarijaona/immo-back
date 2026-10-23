@@ -1,7 +1,6 @@
 package com.tsix.immocrm.services.rapport.vente;
 
 import com.tsix.immocrm.domain.ColonneDossier;
-import com.tsix.immocrm.domain.LignesListeDossiers;
 import com.tsix.immocrm.domain.rapport.*;
 import com.tsix.immocrm.domain.rapport.TypeColonne;
 import com.tsix.immocrm.dto.dossier.DossierListItemDto;
@@ -100,9 +99,7 @@ public class ListeDossiersClientRapport extends RapportVente {
         if (tranches.isEmpty()) {
             return List.of();
         }
-        FiltresListeDossiers filtres = new FiltresListeDossiers(null, null, null, tranches, null, null, null, null,
-                null, true, LignesListeDossiers.DOSSIERS);
-        return liste.toutes(filtres, true, null, SOURCES);
+        return liste.toutes(FiltresListeDossiers.tousStatuts(tranches), true, null, SOURCES);
     }
 
     private static Map<String, Object> ligne(DossierListItemDto dossier) {
