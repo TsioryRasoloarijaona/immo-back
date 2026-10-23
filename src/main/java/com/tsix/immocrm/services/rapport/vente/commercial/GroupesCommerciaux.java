@@ -13,6 +13,7 @@ import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComProspection;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Path;
@@ -49,10 +50,14 @@ public class GroupesCommerciaux {
         this.perimetreService = perimetreService;
     }
 
-    /** Prospections visibles datées dans [{@code debut} ; {@code fin}[, restreintes par {@code filtre}. */
+    /**
+     * Prospections visibles datées dans [{@code debut} ; {@code fin}[, restreintes par {@code filtre} ; hors
+     * pré-prospections comme l'écran (le modèle OMRAN les compte : écart voulu, égalité avec l'écran).
+     */
     public Map<Object, Long> prospections(ContexteRapport contexte, LocalDateTime debut, LocalDateTime fin,
                                           Specification<ComProspection> filtre, Chemin cle, Granularite granularite) {
-        Specification<ComProspection> base = perimetreService.filtreProspections().and(entre(debut, fin)).and(filtre);
+        Specification<ComProspection> base = perimetreService.filtreProspections().and(entre(debut, fin))
+                .and(DiscriminantPreProspection.nEstPasPreProspection()).and(filtre);
         return grouper(contexte, ComProspection.class, base, r -> r.join("stkHierarchy", JoinType.LEFT).get(ID),
                 cle, granularite);
     }
