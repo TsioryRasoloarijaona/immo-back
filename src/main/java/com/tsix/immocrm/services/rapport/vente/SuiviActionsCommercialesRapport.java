@@ -21,11 +21,13 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -124,16 +126,16 @@ public class SuiviActionsCommercialesRapport implements Rapport {
     @Override
     public List<ParametreRapport> parametres() {
         int annee = LocalDate.now(clock).getYear();
-        return List.of(ParametreRapport.date(DU, "Du", LocalDate.of(annee, 1, 1)),
-                ParametreRapport.date(AU, "Au", LocalDate.of(annee, 12, 31)), ParametreRapport.tranches(),
+        return List.of(ParametreRapport.date(DU, "Du", LocalDate.of(annee, Month.JANUARY, 1)),
+                ParametreRapport.date(AU, "Au", LocalDate.of(annee, Month.DECEMBER, 31)), ParametreRapport.tranches(),
                 new ParametreRapport(PREFIXE, "Code d'action commençant par", TypeParametre.TEXTE, false, false, null,
                         List.of(), null, null));
     }
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        LocalDateTime debut = contexte.date(DU).atStartOfDay();
-        LocalDateTime fin = contexte.date(AU).plusDays(1).atStartOfDay();
+        LocalDateTime debut = Objects.requireNonNull(contexte.date(DU)).atStartOfDay();
+        LocalDateTime fin = Objects.requireNonNull(contexte.date(AU)).plusDays(1).atStartOfDay();
         String prefixe = contexte.texte(PREFIXE);
         List<UUID> tranches = contexte.tranchesVisibles();
         Map<UUID, Action> actions = new LinkedHashMap<>();

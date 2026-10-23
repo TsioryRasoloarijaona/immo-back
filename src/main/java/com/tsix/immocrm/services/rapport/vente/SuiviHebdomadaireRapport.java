@@ -91,8 +91,8 @@ public class SuiviHebdomadaireRapport implements Rapport {
             + "AND COALESCE(st.settlementDate, st.echeanceDate) < :fin" + StlSettlementLineRepository.COMPTE
             + " GROUP BY pr.description, t.id, t.description, c.id";
 
-    private static final String SOUS_SURFACES = """
-            SELECT i.parent.id, SUM(i.area) FROM StkItem i WHERE i.parent.id IN :ids GROUP BY i.parent.id""";
+    private static final String SOUS_SURFACES =
+            "SELECT i.parent.id, SUM(i.area) FROM StkItem i WHERE i.parent.id IN :ids GROUP BY i.parent.id";
 
     private static final String A_REMBOURSER = """
             SELECT w.comFolder.id, SUM(w.reimburseAmount) FROM ComSaleWithdrawalCancellation w
@@ -140,7 +140,8 @@ public class SuiviHebdomadaireRapport implements Rapport {
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        Periode periode = new Periode(contexte.date(DU).atStartOfDay(), contexte.date(AU).plusDays(1).atStartOfDay());
+        Periode periode = new Periode(Objects.requireNonNull(contexte.date(DU)).atStartOfDay(),
+                Objects.requireNonNull(contexte.date(AU)).plusDays(1).atStartOfDay());
         Predicate<UUID> retenu = portee.retenus(contexte);
         List<ComFolder> dossiers = LotsTranches.lire(contexte.tranchesVisibles(), lot -> em
                 .createQuery(DOSSIERS, ComFolder.class).setParameter(PARAM_TRANCHES, lot)

@@ -130,7 +130,7 @@ class TransformationCommerciale {
                 long[] c = comptes.computeIfAbsent(cle, k -> new long[Effectif.values().length]);
                 long n = (Long) r[3];
                 c[Effectif.PROSPECTIONS.ordinal()] += n;
-                c[Effectif.ACTIONS.ordinal()] += r[2] != null && types.contains((UUID) r[2]) ? n : 0;
+                c[Effectif.ACTIONS.ordinal()] += r[2] != null && types.contains(r[2]) ? n : 0;
             }
         });
         Map<String, Integer> s = seuils.lire();
