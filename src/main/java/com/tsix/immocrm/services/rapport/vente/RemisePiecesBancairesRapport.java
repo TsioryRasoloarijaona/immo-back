@@ -54,7 +54,9 @@ public class RemisePiecesBancairesRapport extends RapportVente {
             + "JOIN StlSettlementLine l ON l.StlSettlementId = s.PKey JOIN ComDocument d ON d.PKey = l.ComDocumentId "
             + "JOIN ComFolder f ON f.PKey = d.ComFolderId JOIN StkItem i ON i.PKey = f.StkItemId "
             + "JOIN CfgTranche tr ON tr.PKey = i.StkHierarchyId "
-            + "WHERE i.StkHierarchyId IN (:tranches) AND s.IsCredit = 1 AND s.IsDcoumentDeliveredToCenter = 1 "
+            // Société directe du règlement, comme filtreEncaissements() (VisibiliteEntites.CLAUSE_JPQL en SQL).
+            + "LEFT JOIN CfgCompany soc ON soc.PKey = s.CfgCompanyId "
+            + "WHERE (soc.IsActive = 1 OR soc.PKey IS NULL) AND i.StkHierarchyId IN (:tranches) AND s.IsCredit = 1 AND s.IsDcoumentDeliveredToCenter = 1 "
             + "AND CAST(s.DeliveredToCenterDate AS date) >= :du AND CAST(s.DeliveredToCenterDate AS date) <= :au AND "
             + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX;
 
