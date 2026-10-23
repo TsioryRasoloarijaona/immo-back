@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,12 +54,12 @@ public class SuiviProspectionsRapport implements Rapport {
 
     @Override
     public List<ParametreRapport> parametres() {
-        return List.of(PeriodesRapport.annee(clock), ParametreRapport.tranches());
+        return List.of(PeriodesRapport.parametreAnnee(clock), ParametreRapport.tranches());
     }
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        LocalDateTime debut = LocalDateTime.of(contexte.annee(PeriodesRapport.ANNEE), 1, 1, 0, 0);
+        LocalDateTime debut = LocalDateTime.of(contexte.annee(PeriodesRapport.ANNEE), Month.JANUARY, 1, 0, 0);
         LocalDateTime fin = debut.plusYears(1);
         return new ResultatRapport(List.of(
                 prospections(contexte, debut, fin, "prospections-type", "Prospections par type",

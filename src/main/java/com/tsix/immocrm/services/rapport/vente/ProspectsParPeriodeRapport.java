@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,6 +34,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -88,17 +90,17 @@ public class ProspectsParPeriodeRapport implements Rapport {
     public List<ParametreRapport> parametres() {
         LocalDate lundi = LocalDate.now(clock).with(DayOfWeek.MONDAY);
         return List.of(ParametreRapport.date(PeriodesRapport.DU, "Du", lundi),
-                ParametreRapport.date(PeriodesRapport.AU, "Au", lundi.plusDays(6)), PeriodesRapport.annee(clock));
+                ParametreRapport.date(PeriodesRapport.AU, "Au", lundi.plusDays(6)), PeriodesRapport.parametreAnnee(clock));
     }
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        LocalDate du = contexte.date(PeriodesRapport.DU);
-        LocalDate au = contexte.date(PeriodesRapport.AU);
-        int annee = contexte.annee(PeriodesRapport.ANNEE);
+        LocalDate du = Objects.requireNonNull(contexte.date(PeriodesRapport.DU));
+        LocalDate au = Objects.requireNonNull(contexte.date(PeriodesRapport.AU));
+        int annee = Objects.requireNonNull(contexte.annee(PeriodesRapport.ANNEE));
         Predicate<UUID> visible = visibilite(contexte);
         List<Compte> periode = lire(du, au, visible);
-        List<Compte> annees = lire(LocalDate.of(annee - 4, 1, 1), LocalDate.of(annee, 12, 31), visible);
+        List<Compte> annees = lire(LocalDate.of(annee - 4, Month.JANUARY, 1), LocalDate.of(annee, Month.DECEMBER, 31), visible);
         Map<UUID, String> noms = noms(periode, annees);
 
         // Semaine ISO 8601 (« s11 ») ; suffixée de l'année ISO seulement si la période en couvre deux.
@@ -106,7 +108,7 @@ public class ProspectsParPeriodeRapport implements Rapport {
         Function<LocalDate, String> suffixe = j -> uneAnnee ? "" : " " + j.get(IsoFields.WEEK_BASED_YEAR);
         Function<LocalDate, String> libelleSemaine = j -> "S" + j.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
                 + suffixe.apply(j);
-        Function<String, String> nom = l -> l.toLowerCase(Locale.ROOT).replace(' ', '-');
+        UnaryOperator<String> nom =l -> l.toLowerCase(Locale.ROOT).replace(' ', '-');
         Function<Compte, String> semaine = c -> nom.apply(libelleSemaine.apply(c.jour()));
         Map<String, ColonneRapport> semaines = new LinkedHashMap<>();
         du.datesUntil(au.plusDays(1)).map(libelleSemaine).forEach(l -> semaines.computeIfAbsent(l,

@@ -37,12 +37,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Vue mois / année d'OMRAN (FEATURE-suivi-commerciaux.md R11, §7.5, §9.8) : prospections et ventes au commercial
@@ -55,6 +57,7 @@ public class SuiviCommerciauxMensuelService {
 
     private static final String ID = "id";
     private static final String CFG_COMMERCIAL = "cfgCommercial";
+    private static final String DOC_DATE = "docDate";
     private static final String STK_ITEM = "stkItem";
     private static final String STK_HIERARCHY = "stkHierarchy";
     private static final String COMMERCIAL_CLE = "commercialCle";
@@ -95,7 +98,7 @@ public class SuiviCommerciauxMensuelService {
         }
 
         Indicateurs divise(int n) {
-            Function<BigDecimal, BigDecimal> d = v -> v.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
+            UnaryOperator<BigDecimal> d = v -> v.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
             return new Indicateurs(d.apply(prospections), d.apply(visitesProspection), d.apply(visitesVente),
                     d.apply(ventes), d.apply(ventesIssues), d.apply(prix), d.apply(versements));
         }
@@ -118,11 +121,12 @@ public class SuiviCommerciauxMensuelService {
         List<MembreEquipe> retenus = commerciaux.retenus(commercialIds);
         boolean filtre = !CollectionUtils.isEmpty(commercialIds);
         // §9.8 : sans tranche demandée, les tranches habilitées de l'appelant ; aucune habilitation = toutes.
-        List<UUID> tranches = !CollectionUtils.isEmpty(trancheIds) ? trancheIds
-                : PerimetreCommercialService.admUserIdCourant()
-                        .map(habilitationRepository::findTrancheIdsByAdmUserId).orElse(List.of());
+        List<UUID> tranches = CollectionUtils.isEmpty(trancheIds)
+                ? PerimetreCommercialService.admUserIdCourant()
+                        .map(habilitationRepository::findTrancheIdsByAdmUserId).orElse(List.of())
+                : trancheIds;
         LocalDate debutMois = LocalDate.of(annee, mois, 1);
-        LocalDate debutAnnee = LocalDate.of(annee, 1, 1);
+        LocalDate debutAnnee = LocalDate.of(annee, Month.JANUARY, 1);
         return new MensuelSuiviCommerciauxDto(
                 bloc(retenus, filtre, debutMois.atStartOfDay(), debutMois.plusMonths(1).atStartOfDay(), tranches),
                 bloc(retenus, filtre, debutAnnee.atStartOfDay(), debutAnnee.plusYears(1).atStartOfDay(), tranches));
@@ -198,7 +202,7 @@ public class SuiviCommerciauxMensuelService {
         Root<ComProspection> p = cq.from(ComProspection.class);
         Path<UUID> commercial = p.get(CFG_COMMERCIAL).get(ID);
         List<Predicate> w = new ArrayList<>(List.of(perimetreService.filtreProspections().toPredicate(p, cq, cb),
-                cb.isNotNull(commercial), entre(cb, p.get("docDate"), debut, fin)));
+                cb.isNotNull(commercial), entre(cb, p.get(DOC_DATE), debut, fin)));
         dansLesTranches(w, p.get(STK_HIERARCHY).get(ID), tranches);
         cq.multiselect(commercial, cb.count(p)).where(w.toArray(new Predicate[0])).groupBy(commercial);
         cumuler(cq, parCle, t -> indicateurs(decimal(t, 1), BigDecimal.ZERO, BigDecimal.ZERO));
@@ -295,10 +299,10 @@ public class SuiviCommerciauxMensuelService {
         Subquery<UUID> attribuees = cq.subquery(UUID.class);
         attribuees.select(attribuees.from(ComActionMessageSuivi.class).get(ID));
         Path<String> auteur = m.get("userName");
-        LocalDateTime debut = LocalDate.of(annee, 1, 1).atStartOfDay();
+        LocalDateTime debut = LocalDate.of(annee, Month.JANUARY, 1).atStartOfDay();
         cq.select(cb.count(m)).where(perimetreService.filtreInteractions().toPredicate(m, cq, cb),
                 m.join("comActionMessageType").get("code").in(TYPES_COMPTES), tranche.in(tranches),
-                entre(cb, m.get("docDate"), debut, debut.plusYears(1)),
+                entre(cb, m.get(DOC_DATE),debut, debut.plusYears(1)),
                 cb.or(cb.isNull(auteur), cb.notEqual(auteur, SYSTEME)), cb.not(m.get(ID).in(attribuees)));
         return em.createQuery(cq).getSingleResult();
     }
@@ -342,7 +346,7 @@ public class SuiviCommerciauxMensuelService {
         List<Predicate> w = new ArrayList<>(List.of(cb.isTrue(reglement.get("isCredit")),
                 pasVrai(cb, type.get("isNotContabilized")), cb.isNotNull(commercial),
                 entre(cb, cb.coalesce(reglement.<LocalDateTime>get("echeanceDate"),
-                        reglement.<LocalDateTime>get("docDate")), debut, fin),
+                        reglement.<LocalDateTime>get(DOC_DATE)), debut, fin),
                 dossier.get(ID).in(visibles)));
         dansLesTranches(w, dossier.get(STK_ITEM).get(STK_HIERARCHY).get(ID), tranches);
         cq.multiselect(commercial, cb.sum(ligne.get("amount"))).where(w.toArray(new Predicate[0])).groupBy(commercial);

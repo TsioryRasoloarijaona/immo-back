@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -64,8 +65,8 @@ public class AnalyseActionsCommercialesRapport implements Rapport {
     public ResultatRapport executer(ContexteRapport contexte) {
         List<UUID> choisies = contexte.choix(ACTION_ID).stream().map(UUID::fromString).toList();
         return new ResultatRapport(List.of(SuiviProspectionsRapport.sources(groupes, contexte,
-                contexte.date(PeriodesRapport.DU).atStartOfDay(),
-                contexte.date(PeriodesRapport.AU).plusDays(1).atStartOfDay(), "sources",
+                Objects.requireNonNull(contexte.date(PeriodesRapport.DU)).atStartOfDay(),
+                Objects.requireNonNull(contexte.date(PeriodesRapport.AU)).plusDays(1).atStartOfDay(), "sources",
                 "Prospections par source de contact", choisies)), List.of());
     }
 }

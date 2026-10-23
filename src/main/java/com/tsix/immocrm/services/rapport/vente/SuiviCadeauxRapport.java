@@ -35,6 +35,8 @@ public class SuiviCadeauxRapport implements Rapport {
     static final String CODE = "ComTdbGift";
     static final String CADEAU_NON_PRECISE = "Cadeau non précisé";
 
+    private static final String LIBELLE_TRANCHE = "Tranche";
+    private static final String LIBELLE_CADEAU = "Cadeau";
     private static final String CADEAU_LIVRE = "cadeauLivre";
     private static final String BA_LIVRE = "baLivre";
     private static final String TOUS = "tous";
@@ -121,7 +123,7 @@ public class SuiviCadeauxRapport implements Rapport {
 
     private static Cadeau cadeau(ResultSet rs) throws SQLException {
         Map<String, Object> ligne = new LinkedHashMap<>();
-        ligne.put(TRANCHE, rs.getString("Tranche"));
+        ligne.put(TRANCHE, rs.getString(LIBELLE_TRANCHE));
         ligne.put(ARTICLE, rs.getString("Article"));
         ligne.put("statut", rs.getString("Statut"));
         ligne.put("client", TierNomFormatter.nom(rs.getString("SocialReason"), rs.getString("ClientDescription"),
@@ -129,7 +131,7 @@ public class SuiviCadeauxRapport implements Rapport {
         ligne.put("cin", rs.getString("IDNumber"));
         ligne.put("parrain", TierNomFormatter.nom(rs.getString("CoRaison"), rs.getString("CoDescription"),
                 rs.getString("CoPrenom"), rs.getString("CoNom")));
-        String cadeau = rs.getString("Cadeau");
+        String cadeau = rs.getString(LIBELLE_CADEAU);
         ligne.put(CADEAU, cadeau == null ? CADEAU_NON_PRECISE : cadeau);
         boolean livre = rs.getBoolean("CadeauLivre");
         boolean bonAchat = rs.getBoolean("BaLivre");
@@ -141,10 +143,10 @@ public class SuiviCadeauxRapport implements Rapport {
     }
 
     private static List<ColonneRapport> colonnes() {
-        return List.of(ColonneRapport.texte(TRANCHE, "Tranche"), ColonneRapport.texte(ARTICLE, "Article"),
+        return List.of(ColonneRapport.texte(TRANCHE, LIBELLE_TRANCHE), ColonneRapport.texte(ARTICLE, "Article"),
                 ColonneRapport.texte("statut", "Statut"), ColonneRapport.texte("client", "Client"),
                 ColonneRapport.texte("cin", "CIN"), ColonneRapport.texte("parrain", "Parrain"),
-                ColonneRapport.texte(CADEAU, "Cadeau"), booleen(CADEAU_LIVRE, "Cadeau livré"),
+                ColonneRapport.texte(CADEAU, LIBELLE_CADEAU), booleen(CADEAU_LIVRE, "Cadeau livré"),
                 ColonneRapport.texte("raison", "Raison"), booleen(BA_LIVRE, "B.A. livré"),
                 booleen("annule", "Annulé"));
     }
@@ -167,8 +169,8 @@ public class SuiviCadeauxRapport implements Rapport {
             ligne.put(NOMBRE, n);
             lignes.add(ligne);
         });
-        return new SectionRapport("non-livres", "Cadeaux non livrés", List.of(ColonneRapport.texte(CADEAU, "Cadeau"),
-                ColonneRapport.texte(TRANCHE, "Tranche"), ColonneRapport.effectif(NOMBRE, "Nombre", null)),
+        return new SectionRapport("non-livres", "Cadeaux non livrés", List.of(ColonneRapport.texte(CADEAU, LIBELLE_CADEAU),
+                ColonneRapport.texte(TRANCHE, LIBELLE_TRANCHE), ColonneRapport.effectif(NOMBRE, "Nombre", null)),
                 lignes, null, null, List.of());
     }
 }

@@ -23,7 +23,7 @@ public final class PeriodesRapport {
     }
 
     /** {@code annee}, défaut = année de l'horloge. */
-    public static ParametreRapport annee(Clock clock) {
+    public static ParametreRapport parametreAnnee(Clock clock) {
         return new ParametreRapport(ANNEE, "Année", TypeParametre.ANNEE, false, false,
                 String.valueOf(LocalDate.now(clock).getYear()), List.of(), null, null);
     }

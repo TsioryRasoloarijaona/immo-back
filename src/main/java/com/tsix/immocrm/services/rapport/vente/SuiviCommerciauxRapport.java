@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.ToLongFunction;
 
@@ -68,14 +69,14 @@ public class SuiviCommerciauxRapport implements Rapport {
 
     @Override
     public List<ParametreRapport> parametres() {
-        return List.of(PeriodesRapport.annee(clock), ParametreRapport.tranches(),
+        return List.of(PeriodesRapport.parametreAnnee(clock), ParametreRapport.tranches(),
                 new ParametreRapport("commercialId", "Commerciaux", TypeParametre.COMMERCIAUX, false, true, null,
                         List.of(), null, null));
     }
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        int annee = contexte.annee(PeriodesRapport.ANNEE);
+        int annee = Objects.requireNonNull(contexte.annee(PeriodesRapport.ANNEE));
         List<UUID> cles = contexte.commerciauxVisibles();
         Map<UUID, List<ActiviteMois>> parCle = new HashMap<>();
         LotsTranches.lire(contexte.tranchesVisibles(), lot -> mensuel.parMois(annee, lot, cles))
