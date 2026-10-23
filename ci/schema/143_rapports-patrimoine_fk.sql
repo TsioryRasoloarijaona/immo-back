@@ -1,0 +1,1 @@
+-- FEATURE-patrimoine-rapports.md : aucune clé étrangère nouvelle (celles de ComSaleWithdrawalProduct sont dans 020).
