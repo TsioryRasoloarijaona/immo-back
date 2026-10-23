@@ -172,6 +172,14 @@ public enum ColonneDossier implements Colonne {
     CLIENT_MOBILE_COMPLET("clientMobileComplet", "Mobile", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
     CLIENT_TELEPHONE("clientTelephone", "Tél.", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
     AUTRES_CLIENTS("autresClients", "Autres clients", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
+    CLIENT_EMAIL("clientEmail", "E-mail client", Groupe.CLIENT, TypeColonne.TEXTE, false,
+            Chemin.groupable("cfgCustomer.eMail")),
+    // Groupé sur la seule première ligne d'adresse ; la valeur affichée y joint Address2 et Address3.
+    CLIENT_ADRESSE("clientAdresse", "Adresse client", Groupe.CLIENT, TypeColonne.TEXTE, false,
+            Chemin.groupable("cfgCustomer.address")),
+    CLIENT_VILLE("clientVille", "Ville client", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
+    CLIENT_PAYS("clientPays", "Pays client", Groupe.CLIENT, TypeColonne.TEXTE, false,
+            Chemin.groupable("cfgCustomer.admCountry.description")),
 
     // Les dates renseignées sur moins de 1 % des dossiers ne sont plus des colonnes, seulement des
     // filtres de période (ChampDateDossier) : voir FEATURE-dossiers-liste-complete.md B5.
@@ -295,6 +303,10 @@ public enum ColonneDossier implements Colonne {
     FRAIS("frais", "Frais", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
     FRAIS_REGLES("fraisRegles", "Frais réglés", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
     FRAIS_RESTE("fraisReste", "Frais reste", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
+    FRAIS_SYNDIC("fraisSyndic", "Frais syndic", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
+    FRAIS_SYNDIC_REGLES("fraisSyndicRegles", "Frais syndic réglés", Groupe.FINANCIER, TypeColonne.MONTANT, false,
+            null),
+    FRAIS_SYNDIC_RESTE("fraisSyndicReste", "Reste syndic", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
     MODIFICATIONS("modifications", "Modifications", Groupe.FINANCIER, TypeColonne.MONTANT, false, null),
     MODIFICATIONS_REGLEES("modificationsReglees", "Modifications réglées", Groupe.FINANCIER, TypeColonne.MONTANT,
             false, null),

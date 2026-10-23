@@ -12,6 +12,7 @@ import com.tsix.immocrm.dto.referentiel.ResultatInteractionDto;
 import com.tsix.immocrm.dto.referentiel.TitreDto;
 import com.tsix.immocrm.dto.referentiel.TypeReglementDto;
 import com.tsix.immocrm.dto.referentiel.VilleDto;
+import com.tsix.immocrm.services.dossier.liste.ListeDossiersService;
 import com.tsix.immocrm.services.referentiel.ReferentielService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -330,8 +331,11 @@ public class ReferentielController {
     @Operation(summary = "Catalogue des colonnes de la liste des dossiers de vente")
     public List<ColonneDto> getColonnesDossiers() {
         return Arrays.stream(ColonneDossier.values())
-                .map(c -> ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
-                        c.parDefaut(), c.chemin()))
+                .map(c -> ListeDossiersService.sommeCalculee(c)
+                        ? ColonneDto.sommeCalculee(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                                c.parDefaut())
+                        : ColonneDto.de(c.nom(), c.libelle(), c.groupe().name(), c.type().name(),
+                                c.parDefaut(), c.chemin()))
                 .toList();
     }
 

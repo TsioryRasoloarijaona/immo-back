@@ -30,7 +30,8 @@ public class ColonnesCalculeesDossier {
             ColonneDossier.ALERTE, ColonneDossier.NOMBRE_ACTIONS, ColonneDossier.DERNIERE_COMMUNICATION_DATE,
             ColonneDossier.DERNIERE_COMMUNICATION_RESULTAT, ColonneDossier.DERNIERE_COMMUNICATION_MESSAGE,
             ColonneDossier.INSTRUCTION_NON_LUE, ColonneDossier.SOUS_ARTICLES_CODES,
-            ColonneDossier.SOUS_ARTICLES_LIBELLES, ColonneDossier.AUTRES_CLIENTS);
+            ColonneDossier.SOUS_ARTICLES_LIBELLES, ColonneDossier.AUTRES_CLIENTS, ColonneDossier.CLIENT_VILLE,
+            ColonneDossier.CLIENT_PAYS);
 
     /** Aucun compte n'a cet id : sans utilisateur connecté, aucune instruction ne le vise. */
     private static final UUID AUCUN_UTILISATEUR = new UUID(0L, 0L);
@@ -69,8 +70,12 @@ public class ColonnesCalculeesDossier {
                  FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, '')),
               LTRIM(STUFF((SELECT DISTINCT ', ' + t.Description FROM ComFolderCustomer fc
                  INNER JOIN CfgTier t ON fc.CfgTierId = t.PKey WHERE fc.ComFolderId = f.PKey
-                 FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, ''))
+                 FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, '')),
+              COALESCE(ci.Description, NULLIF(LTRIM(RTRIM(cl.City)), '')), co.Description
             FROM ComFolder f
+            LEFT JOIN CfgTier cl ON cl.PKey = f.CfgCustomerId
+            LEFT JOIN AdmCity ci ON ci.PKey = cl.AdmCityId
+            LEFT JOIN AdmCountry co ON co.PKey = cl.AdmCountryId
             OUTER APPLY (SELECT TOP (1) m.DocDate, sc.Description AS Resultat,
                            IIF(ISNULL(m.AlertMessage, '') = '', sc.Description, m.AlertMessage) AS Message
                          FROM ComActionMessage m
@@ -124,7 +129,7 @@ public class ColonnesCalculeesDossier {
             parDossier.put(uuid(l[0]), new ValeursCalculees(
                     entier(l[1]), entier(l[2]), decimal(l[3]), date(l[4]), entier(l[5]),
                     date(l[6]), (String) l[7], (String) l[8], entier(l[9]) == 1,
-                    vide(l[10]), vide(l[11]), vide(l[12])));
+                    vide(l[10]), vide(l[11]), vide(l[12]), vide(l[13]), vide(l[14])));
         }
     }
 

@@ -149,7 +149,7 @@ public class DossierListeController {
             @Parameter(example = "prix:AVG")
             @RequestParam(required = false) List<String> agregats,
             @ParameterObject @ModelAttribute FiltresListeDossiers filtres) {
-        return listeService.totauxColonnes(filtres, ColonneDossier.resoudreAgregats(agregats));
+        return listeService.totauxColonnes(filtres, agregats);
     }
 
     @GetMapping("/export")

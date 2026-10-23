@@ -34,6 +34,8 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.tsix.immocrm.domain.ColonneDossier.*;
 
@@ -115,11 +117,20 @@ public final class MappingListeDossier {
                 .met(CLIENT_NOM_FAMILLE, Champs.de(c, CfgTier::getLastName))
                 .met(CLIENT_MOBILE, Champs.de(c, CfgTier::getMobile))
                 .met(CLIENT_MOBILE_INDICATIF, Champs.de(c, CfgTier::getMobileIndicatif))
-                .met(CLIENT_CIN, Champs.de(c, CfgTier::getIDNumber));
+                .met(CLIENT_CIN, Champs.de(c, CfgTier::getIDNumber))
+                .met(CLIENT_EMAIL, Champs.de(c, CfgTier::getEMail));
         if (c != null) {
             l.met(CLIENT_MOBILE_COMPLET, numero(c.getMobileIndicatif(), c.getMobile()))
-                    .met(CLIENT_TELEPHONE, numero(c.getPhoneIndicatif(), c.getPhone()));
+                    .met(CLIENT_TELEPHONE, numero(c.getPhoneIndicatif(), c.getPhone()))
+                    .met(CLIENT_ADRESSE, adresse(c));
         }
+    }
+
+    /** Lignes d'adresse remplies, jointes par « , » ; aucune ⇒ {@code null}. */
+    static String adresse(CfgTier c) {
+        String jointe = Stream.of(c.getAddress(), c.getAddress2(), c.getAddress3())
+                .filter(StringUtils::hasText).map(String::trim).collect(Collectors.joining(", "));
+        return jointe.isEmpty() ? null : jointe;
     }
 
     /** « (indicatif) numéro » comme la vue ; sans numéro, rien. */
@@ -283,7 +294,9 @@ public final class MappingListeDossier {
                 .met(INSTRUCTION_NON_LUE, c.instructionNonLue())
                 .met(SOUS_ARTICLES_CODES, c.sousArticlesCodes())
                 .met(SOUS_ARTICLES_LIBELLES, c.sousArticlesLibelles())
-                .met(AUTRES_CLIENTS, c.autresClients());
+                .met(AUTRES_CLIENTS, c.autresClients())
+                .met(CLIENT_VILLE, c.clientVille())
+                .met(CLIENT_PAYS, c.clientPays());
     }
 
     /** Lu seulement si la colonne est demandée : une colonne absente vaut {@code null}. */
