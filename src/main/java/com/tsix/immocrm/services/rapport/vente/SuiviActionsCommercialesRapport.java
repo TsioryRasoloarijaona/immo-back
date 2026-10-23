@@ -68,9 +68,10 @@ public class SuiviActionsCommercialesRapport implements Rapport {
                 OR (a.endDate >= :debut AND a.endDate < :fin))
             GROUP BY a.id, a.code, a.budget""";
 
+    // Dossier borné par la tranche de son article (comme n° 20/26), pas par celle de sa prospection.
     private static final String CONCRETISES = """
             SELECT a.id, COUNT(f), SUM(f.price) FROM ComFolder f JOIN f.comProspection p JOIN p.comAction a
-            JOIN p.stkHierarchy t JOIN f.strStatus s
+            JOIN f.stkItem i JOIN i.stkHierarchy t JOIN f.strStatus s
             WHERE t.id IN :tranches AND s.sorting >= :seuil
               AND COALESCE(s.annulation, false) = false AND COALESCE(s.resiliation, false) = false
               AND ((a.startDate >= :debut AND a.startDate < :fin) OR (a.endDate >= :debut AND a.endDate < :fin))
@@ -78,7 +79,8 @@ public class SuiviActionsCommercialesRapport implements Rapport {
 
     // CA global : dossiers concrétisés nés de toutes les prospections datées de la période (décision R3b).
     private static final String CA_GLOBAL = """
-            SELECT SUM(f.price) FROM ComFolder f JOIN f.comProspection p JOIN p.stkHierarchy t JOIN f.strStatus s
+            SELECT SUM(f.price) FROM ComFolder f JOIN f.comProspection p JOIN f.stkItem i JOIN i.stkHierarchy t
+            JOIN f.strStatus s
             WHERE t.id IN :tranches AND s.sorting >= :seuil
               AND COALESCE(s.annulation, false) = false AND COALESCE(s.resiliation, false) = false
               AND p.docDate >= :debut AND p.docDate < :fin""";
