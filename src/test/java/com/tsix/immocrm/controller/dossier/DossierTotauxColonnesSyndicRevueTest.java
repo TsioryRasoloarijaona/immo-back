@@ -45,8 +45,11 @@ class DossierTotauxColonnesSyndicRevueTest {
 
     private static final String LISTE = "/api/dossiers";
     private static final String SEARCH = "search";
-    private static final List<String> NOMS = List.of("fraisSyndic", "fraisSyndicRegles", "fraisSyndicReste", "frais",
-            "credit", "avance");
+    private static final String SYNDIC = "fraisSyndic";
+    private static final String SYNDIC_RESTE = "fraisSyndicReste";
+    private static final String CREDIT = "credit";
+    private static final List<String> NOMS = List.of(SYNDIC, "fraisSyndicRegles", SYNDIC_RESTE, "frais", CREDIT,
+            "avance");
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureEtatVentes ev;
@@ -124,15 +127,14 @@ class DossierTotauxColonnesSyndicRevueTest {
     void totauxColonnes_egaleTotaux_toutesTranches() throws Exception {
         jeu();
 
-        comparer(null, Map.of("fraisSyndic", "23000", "fraisSyndicRegles", "5000", "fraisSyndicReste", "18000",
-                "frais", "26000", "credit", "50000"));
+        comparer(null, Map.of(SYNDIC, "23000", "fraisSyndicRegles", "5000", SYNDIC_RESTE, "18000",
+                "frais", "26000", CREDIT, "50000"));
     }
 
     @Test
     void totauxColonnes_egaleTotaux_filtreTranche() throws Exception {
         jeu();
 
-        comparer(trancheA.getId().toString(), Map.of("fraisSyndic", "16000", "fraisSyndicReste", "11000",
-                "credit", "0"));
+        comparer(trancheA.getId().toString(), Map.of(SYNDIC, "16000", SYNDIC_RESTE, "11000", CREDIT, "0"));
     }
 }
