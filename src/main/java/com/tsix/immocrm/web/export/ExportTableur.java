@@ -19,8 +19,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
@@ -87,14 +89,28 @@ public class ExportTableur {
 
     /** Une feuille par élément de {@code feuilles}, noms nettoyés et dédoublonnés ({@link #nomFeuille}). */
     public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre, List<FeuilleExport> feuilles) {
-        String nomFichier = liste + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
         String auteur = utilisateurAffiche.courant().nom();
         StreamingResponseBody corps = sortie -> ecrire(sortie, titre, auteur, feuilles);
+        return enTete(liste).body(corps);
+    }
+
+    /** Même classeur écrit en mémoire, pour un petit volume rendu d'un bloc (export d'une fiche). */
+    public ResponseEntity<byte[]> reponseEnMemoire(String liste, String titre, List<FeuilleExport> feuilles) {
+        ByteArrayOutputStream sortie = new ByteArrayOutputStream();
+        try {
+            ecrire(sortie, titre, utilisateurAffiche.courant().nom(), feuilles);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Écriture du classeur échouée", e);
+        }
+        return enTete(liste).body(sortie.toByteArray());
+    }
+
+    private ResponseEntity.BodyBuilder enTete(String liste) {
+        String nomFichier = liste + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment().filename(nomFichier).build().toString())
-                .body(corps);
+                        ContentDisposition.attachment().filename(nomFichier).build().toString());
     }
 
     /** Écrit le classeur dans {@code sortie} ; exposé pour les tests. */
