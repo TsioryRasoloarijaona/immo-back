@@ -52,6 +52,7 @@ import static com.tsix.immocrm.fixtures.FixtureRapportsDossiers.PARAM_CREDIT;
 import static com.tsix.immocrm.fixtures.FixtureRapportsDossiers.PARAM_STATUT_NOTAIRE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * N° 28 ÉTAT SUIVI NOTAIRES CRÉDITS (FEATURE-tdb-vente-rapports-dossiers.md §4, §9 « N° 28 », décisions 1–3 du manager).
@@ -366,10 +367,9 @@ class SuiviNotairesCreditsRapportTest {
     }
 
     @Test
-    void n28_notaireIdHorsListe_ignore_aucunDossier_pasTous() throws Exception {
-        Map<String, Object> section = mois(annee2022().param(NOTAIRE_ID, UUID.randomUUID().toString()));
-
-        assertThat(somme(lignes(section), NB)).isEqualByComparingTo("0");
+    void n28_notaireIdHorsListe_refuse400_jamaisTous() throws Exception {
+        mockMvc.perform(annee2022().param(NOTAIRE_ID, UUID.randomUUID().toString()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
