@@ -8,7 +8,8 @@ société inactive → 404.
 ## transitions
 
 Transitions dont le statut de départ est le statut courant et dont un rôle autorisé (`AdmRole.Code`) est un rôle du
-jeton de l'appelant ; une transition sans rôle n'est proposée à personne. Pour chacune : champs obligatoires de la
+jeton de l'appelant, parmi les rôles lecteurs (Administrateur, Direction Générale : un autre rôle listé est sans
+effet) ; une transition sans rôle n'est proposée à personne. Pour chacune : champs obligatoires de la
 transition (`renseigne` faux = texte vide ou date absente ; un nombre, même 0, est toujours renseigné, comme OMRAN) et
 documents exigés (`fourni` = une pièce jointe vivante de l'étude de ce type ; `IsMandatory` n'est pas lu : toute ligne
 est exigée). `possible` = étude non bloquée, champs renseignés, documents fournis.
@@ -17,7 +18,8 @@ est exigée). `possible` = étude non bloquée, champs renseignés, documents fo
 
 Contrôles dans l'ordre : étude bloquée → 409 « Étude bloquée » ; transition inconnue → 404 ; transition hors de celles
 de `GET …/transitions` (départ ≠ statut courant, aucun rôle commun) → 409 avec `transitionsAutorisees` (descriptions
-des transitions permises) ; champs vides de la transition et documents manquants → 400, tous les messages ; champs
+des transitions permises) ; champs vides de la transition et documents manquants → 400, tous les messages ; Verif de
+l'étude (surfaces des unités, poids et ventilation des tranches) → 400 ; champs
 obligatoires du nouveau statut vides → 400, rien n'est écrit. Sinon : statut écrit, ligne d'historique (date,
 statut, utilisateur), recalcul complet de l'étude (bilan, trésorerie) dans la même transaction. La note obligatoire,
 la notification et l'e-mail de la transition sont stockés sans effet (comme OMRAN).

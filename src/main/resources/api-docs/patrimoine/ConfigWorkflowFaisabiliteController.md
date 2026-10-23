@@ -32,7 +32,8 @@ statut, rôle ou type de document inconnu (detail nomme le champ), nom de champ 
 ## modifierTransition
 
 Un champ absent ou null reste inchangé ; `roles`, `documents` ou `champsObligatoires` reçus remplacent l'existant
-(rôles en double dédoublonnés). Une transition à 0 rôle est permise : personne ne peut alors l'emprunter.
+(rôles en double dédoublonnés). Une transition à 0 rôle est permise : personne ne peut alors l'emprunter. Seuls les
+rôles lecteurs de l'étude (Administrateur, Direction Générale) comptent : un autre rôle listé est stocké sans effet.
 
 ### reponse 400
 

@@ -49,8 +49,11 @@ import java.util.stream.Collectors;
 public class TransitionFaisabiliteService {
 
     private static final String PREFIXE_ROLE = "ROLE_";
+    /** Décision 3 (22/10) : seuls les lecteurs de l'étude empruntent une transition ; un autre rôle listé est sans effet. */
+    private static final Set<String> LECTEURS = Set.of("Administrateur", "Direction Générale");
 
     private final StkFeasibilityStudyRepository etudes;
+    private final GrillesEtude grilles;
     private final EtudeFaisabiliteService fiches;
     private final RecalculFaisabiliteService recalcul;
     private final PieceJointeSupport pieces;
@@ -58,10 +61,12 @@ public class TransitionFaisabiliteService {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
 
-    public TransitionFaisabiliteService(StkFeasibilityStudyRepository etudes, EtudeFaisabiliteService fiches,
-                                        RecalculFaisabiliteService recalcul, PieceJointeSupport pieces, TracePatrimoine trace,
-                                        UtilisateurAffiche utilisateur, EntityManager em) {
+    public TransitionFaisabiliteService(StkFeasibilityStudyRepository etudes, GrillesEtude grilles,
+                                        EtudeFaisabiliteService fiches, RecalculFaisabiliteService recalcul,
+                                        PieceJointeSupport pieces, TracePatrimoine trace, UtilisateurAffiche utilisateur,
+                                        EntityManager em) {
         this.etudes = etudes;
+        this.grilles = grilles;
         this.fiches = fiches;
         this.recalcul = recalcul;
         this.pieces = pieces;
@@ -98,6 +103,8 @@ public class TransitionFaisabiliteService {
                     permises.stream().map(StkFeasibilityStudyWorkFlow::getDescription).distinct().toList());
         }
         exigerChampsEtDocuments(e, w);
+        // statusBtn_Click puis Commit() : le Verif P8a de l'étude (surfaces, poids, ventilation) passe aussi.
+        GrillesEtude.exigerSansErreur(grilles.erreursEnBase(e.getId(), FicheEtude.valeurs(e)));
         StkFeasibilityStudyStatus cible = trouver(StkFeasibilityStudyStatus.class, w.getEndStatusId(), "Statut d'étude");
         FicheEtude.exigerChampsDuStatut(cible, e.getCode(), e.getDescription(), e.getDocDate());
         TracePatrimoine.Trace t = trace.maintenant();
@@ -145,7 +152,7 @@ public class TransitionFaisabiliteService {
         }
         return auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).filter(Objects::nonNull)
                 .filter(a -> a.startsWith(PREFIXE_ROLE)).map(a -> a.substring(PREFIXE_ROLE.length()))
-                .collect(Collectors.toSet());
+                .filter(LECTEURS::contains).collect(Collectors.toSet());
     }
 
     /** {@code VerifWorkflowMandatories} puis les documents ({@code statusBtn_Click}) : tous les messages, champs d'abord. */
