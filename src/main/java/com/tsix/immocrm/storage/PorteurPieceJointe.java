@@ -18,7 +18,9 @@ public enum PorteurPieceJointe {
 
     PROJET("projet", "Yes.Cfg.CfgProject", "ce programme"),
 
-    PROSPECTION_TERRAIN("prospection-terrain", "Yes.Lnd.Prospection", "cette prospection");
+    PROSPECTION_TERRAIN("prospection-terrain", "Yes.Lnd.Prospection", "cette prospection"),
+
+    ETUDE("etude", "Yes.Stk.StkFeasibilityStudy", "cette étude");
 
     private final String segmentCle;
     private final String categoryParDefaut;
