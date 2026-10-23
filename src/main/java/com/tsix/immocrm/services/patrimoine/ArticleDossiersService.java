@@ -46,8 +46,7 @@ import java.util.stream.Collectors;
 public class ArticleDossiersService {
 
     /** OMRAN n'exclut aucun statut ({@code ComFolderView} sans filtre) : sortis compris. */
-    private static final FiltresListeDossiers TOUS_STATUTS = new FiltresListeDossiers(null, null, null, null, null,
-            null, null, null, null, true, null);
+    private static final FiltresListeDossiers TOUS_STATUTS = FiltresListeDossiers.tousStatuts(null);
 
     // Sans entité RntFolder / SynFolder : lecture native, comme ComFolderRepository.
     private static final String HORS_VENTE = """

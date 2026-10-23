@@ -39,6 +39,9 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
     // Sans filtre de statut : la fiche article montre tous ses sous-articles.
     List<StkItem> findByParentId(UUID parentId);
 
+    /** Terrain issu d'une prospection terrain ({@code LndLandId}). */
+    Optional<StkItem> findFirstByLndLandId(UUID prospectionId);
+
     // Un dossier peut lier plusieurs articles (principal + annexe « TER »).
     List<StkItem> findByComFolderId(UUID comFolderId);
 

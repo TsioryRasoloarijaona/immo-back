@@ -27,5 +27,8 @@ public class StlSettlementRelation {
     @Column(name = "Description")
     private String description;
 
+    @Column(name = "StlCategoryId")
+    private UUID stlCategoryId;
+
 
 }

@@ -10,6 +10,8 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.stk.SpecificFunction;
 import com.tsix.immocrm.entities.stk.StkFSBaseUnit;
 import com.tsix.immocrm.entities.stk.StkFSBaseUnitStkFeasibilityStudy;
+import com.tsix.immocrm.entities.stk.StkFSPrevisionLine;
+import com.tsix.immocrm.entities.stk.StkFSPrevisionStkTranche;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyCfgTranche;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyCfgTrancheStkBaseUnit;
@@ -173,6 +175,7 @@ class GrillesEtude {
             return ligneProvisoire(s, s.id() != null ? s.id() : UUID.randomUUID());
         }).toList();
         Set<UUID> gardees = resultat.stream().map(StkFSBaseUnitStkFeasibilityStudy::getId).collect(Collectors.toSet());
+        exigerUnitesLibres(etude.getId(), existantes.keySet().stream().filter(i -> !gardees.contains(i)).toList());
         List<StkFeasibilityStudyCfgTrancheStkBaseUnit> ventilations = ventilations(etude.getId());
         exigerSansErreur(erreurs(v, resultat, tranches(etude.getId()).stream().map(StkFeasibilityStudyCfgTranche::getWeight)
                 .toList(), ventile(ventilations.stream()
@@ -234,8 +237,7 @@ class GrillesEtude {
         Set<UUID> gardees = saisies.stream().map(LigneTrancheEtudeDto::id).filter(Objects::nonNull).collect(Collectors.toSet());
         List<StkFeasibilityStudyCfgTranche> retirees = existantes.values().stream()
                 .filter(t -> !gardees.contains(t.getId())).toList();
-        exigerSansPrevision(retirees);
-
+        supprimerDerivees(etudeId);
         ventilations(etudeId).forEach(em::remove);
         retirees.forEach(em::remove);
         em.flush();
@@ -323,26 +325,30 @@ class GrillesEtude {
     // ------------------------------------------------------------------ suppression de l'étude
 
     /**
-     * {@code StkFSPrevisionStkTranche} et {@code StkFSPrevisionLine} suivent la tranche d'étude en CASCADE côté base :
-     * effacées sans entité, la collecte de rapatriement ne les verrait pas → 409 (prévisions = P8b).
+     * Lignes dérivées du recalcul (par tranche, trésorerie) : la base les efface en CASCADE avec la tranche d'étude,
+     * sans entité, ce que la collecte de rapatriement ne verrait pas ; on les supprime donc ici, entité par entité.
      */
-    private void exigerSansPrevision(List<StkFeasibilityStudyCfgTranche> tranches) {
-        if (tranches.isEmpty()) {
-            return;
-        }
-        List<UUID> ids = tranches.stream().map(StkFeasibilityStudyCfgTranche::getId).toList();
-        long n = ((Number) em.createNativeQuery("SELECT (SELECT COUNT(*) FROM StkFSPrevisionStkTranche WHERE StkTrancheId IN (:ids))"
-                + " + (SELECT COUNT(*) FROM StkFSPrevisionLine WHERE StkFeasibilityStudyCfgTrancheId IN (:ids))")
-                .setParameter("ids", ids).getSingleResult()).longValue();
-        if (n > 0) {
-            throw new ConflictException("Tranche non supprimable : elle porte encore %d ligne(s) de prévision.".formatted(n));
+    void supprimerDerivees(UUID etudeId) {
+        em.createQuery("SELECT l FROM StkFSPrevisionStkTranche l WHERE l.feasibilityStudyId = :etude",
+                StkFSPrevisionStkTranche.class).setParameter(ETUDE, etudeId).getResultList().forEach(em::remove);
+        em.createQuery("SELECT l FROM StkFSPrevisionLine l WHERE l.stkFeasibilityStudyId = :etude", StkFSPrevisionLine.class)
+                .setParameter(ETUDE, etudeId).getResultList().forEach(em::remove);
+        em.flush();
+    }
+
+    /** Retirer une ligne d'unité portée par une prévision → 409 ({@code CanDeleteBaseUnit}, l.3054). */
+    private void exigerUnitesLibres(UUID etudeId, List<UUID> retirees) {
+        if (!retirees.isEmpty() && !em.createQuery("SELECT p.id FROM FSPrevision p WHERE p.feasibilityStudyId = :etude "
+                        + "AND p.unityId IN :unites", UUID.class).setParameter(ETUDE, etudeId).setParameter("unites", retirees)
+                .setMaxResults(1).getResultList().isEmpty()) {
+            throw new ConflictException("Vous ne pouvez pas supprimer cette ligne!");
         }
     }
 
     /** Enfants d'abord : chaque ligne passe par une entité (audit et rapatriement), l'historique compris (§8 ter.8). */
     void supprimerTout(UUID etudeId) {
         List<StkFeasibilityStudyCfgTranche> tranches = tranches(etudeId);
-        exigerSansPrevision(tranches);
+        supprimerDerivees(etudeId);
         ventilations(etudeId).forEach(em::remove);
         tranches.forEach(em::remove);
         lignes(etudeId).forEach(em::remove);

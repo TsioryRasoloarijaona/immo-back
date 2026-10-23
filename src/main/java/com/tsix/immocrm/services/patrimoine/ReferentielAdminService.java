@@ -386,7 +386,7 @@ public class ReferentielAdminService {
         if (id != null) {
             conditions.add(cb.notEqual(racine.get(ID), id));
         }
-        verrouiller(r, cle.toString());
+        verrouiller(em, r.classe(), cle.toString(), r.libelle());
         q.select(cb.count(racine)).where(conditions.toArray(Predicate[]::new));
         if (em.createQuery(q).getSingleResult() > 0) {
             throw new ConflictException("%s : une autre ligne a déjà %s.".formatted(r.libelle(), String.join(", ", doublon)));
@@ -394,12 +394,12 @@ public class ReferentielAdminService {
     }
 
     /** Ressource hachée : 255 caractères au plus, et casse ignorée comme la collation des codes. */
-    private void verrouiller(ReferentielAdmin r, String cle) {
-        String ressource = "%s:%08x".formatted(r.classe().getSimpleName(), cle.toLowerCase(Locale.ROOT).hashCode());
+    public static void verrouiller(EntityManager em, Class<?> classe, String cle, String libelle) {
+        String ressource = "%s:%08x".formatted(classe.getSimpleName(), cle.toLowerCase(Locale.ROOT).hashCode());
         Number resultat = (Number) em.createNativeQuery(VERROU).setParameter("ressource", ressource).getSingleResult();
         if (resultat.intValue() < 0) {
             throw new ConflictException("%s : une autre saisie de la même ligne est en cours, réessayez."
-                    .formatted(r.libelle()));
+                    .formatted(libelle));
         }
     }
 

@@ -38,13 +38,13 @@ import java.util.UUID;
 public class EtudeFaisabiliteController {
 
     static final String LECTURE = "hasAnyRole('Administrateur', 'Direction Générale')";
-    private static final String ADMIN = "hasRole('Administrateur')";
-    private static final String ID_ETUDE = "Id de l'étude (StkFeasibilityStudy.PKey).";
+    static final String ADMIN = "hasRole('Administrateur')";
+    static final String ID_ETUDE = "Id de l'étude (StkFeasibilityStudy.PKey).";
     private static final String OK = "Étude enregistrée, fiche à jour.";
-    private static final String PAS_LECTEUR = "Rôle requis : Administrateur ou Direction Générale ; clé d'API : hors portée.";
-    private static final String PAS_ADMIN = "Rôle requis : Administrateur ; clé d'API : hors portée.";
-    private static final String INTROUVABLE = "Étude inconnue, ou de société inactive.";
-    private static final String BLOQUEE = "Étude bloquée (« Étude bloquée »).";
+    static final String PAS_LECTEUR = "Rôle requis : Administrateur ou Direction Générale ; clé d'API : hors portée.";
+    static final String PAS_ADMIN = "Rôle requis : Administrateur ; clé d'API : hors portée.";
+    static final String INTROUVABLE = "Étude inconnue, ou de société inactive.";
+    static final String BLOQUEE = "Étude bloquée (« Étude bloquée »).";
     private static final String VERIF = "Champ invalide, référence inconnue ou message Verif OMRAN (detail).";
 
     private final EtudeFaisabiliteService service;
@@ -152,7 +152,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "400", description = VERIF),
             @ApiResponse(responseCode = "403", description = PAS_ADMIN),
             @ApiResponse(responseCode = "404", description = INTROUVABLE),
-            @ApiResponse(responseCode = "409", description = BLOQUEE)
+            @ApiResponse(responseCode = "409", description = "Unité retirée utilisée par une prévision, ou " + BLOQUEE)
     })
     public List<LigneUniteEtudeDto> remplacerUnites(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                                     @RequestBody GrilleEtudeDto<LigneUniteEtudeDto> grille) {
@@ -167,7 +167,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "400", description = VERIF),
             @ApiResponse(responseCode = "403", description = PAS_ADMIN),
             @ApiResponse(responseCode = "404", description = INTROUVABLE),
-            @ApiResponse(responseCode = "409", description = "Code en double, tranche retirée avec prévisions, ou " + BLOQUEE)
+            @ApiResponse(responseCode = "409", description = "Code en double, ou " + BLOQUEE)
     })
     public List<LigneTrancheEtudeDto> remplacerTranches(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
                                                         @RequestBody GrilleEtudeDto<LigneTrancheEtudeDto> grille) {

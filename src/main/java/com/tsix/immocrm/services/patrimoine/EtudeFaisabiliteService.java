@@ -12,7 +12,6 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatus;
-import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatusHistory;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.exceptions.ConflictException;
@@ -35,7 +34,6 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.COURT;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.obligatoire;
-import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
 
 /**
@@ -65,17 +63,19 @@ public class EtudeFaisabiliteService {
     private final TracePatrimoine trace;
     private final SuppressionProjet suppression;
     private final UtilisateurAffiche utilisateurAffiche;
+    private final RecalculFaisabiliteService recalcul;
     private final EntityManager em;
 
     public EtudeFaisabiliteService(StkFeasibilityStudyRepository etudes, StkItemRepository articles, GrillesEtude grilles,
                                    TracePatrimoine trace, SuppressionProjet suppression,
-                                   UtilisateurAffiche utilisateurAffiche) {
+                                   UtilisateurAffiche utilisateurAffiche, RecalculFaisabiliteService recalcul) {
         this.etudes = etudes;
         this.articles = articles;
         this.grilles = grilles;
         this.trace = trace;
         this.suppression = suppression;
         this.utilisateurAffiche = utilisateurAffiche;
+        this.recalcul = recalcul;
         this.em = suppression.em();
     }
 
@@ -129,13 +129,20 @@ public class EtudeFaisabiliteService {
         appliquer(e, saisie, ChampsAVider.de(saisie, List.of(), OBLIGATOIRES));
         e.setDefaultVat(Objects.requireNonNullElse(e.getDefaultVat(), TVA_DEFAUT));
         e.setInterestVatRatio(Objects.requireNonNullElse(e.getInterestVatRatio(), TVA_INTERETS));
+        e.setPercentageConcretisation(Objects.requireNonNullElse(e.getPercentageConcretisation(), BigDecimal.ZERO));
+        e.setImpotRatio(Objects.requireNonNullElse(e.getImpotRatio(), BigDecimal.ZERO));
+        e.setUnitSalePrice(Objects.requireNonNullElse(e.getUnitSalePrice(), BigDecimal.ZERO));
+        e.setNumberOfItemForSale(0);
         StkFeasibilityStudyStatus initial = statutInitial();
+        FicheEtude.exigerChampsDuStatut(initial, e.getCode(), e.getDescription(), e.getDocDate());
         e.setStatus(initial);
         e.setStrEntityId(ENTITE_ETUDE);
         e.setIsLocked(false);
         tracer(e, true);
         em.persist(e);
-        em.persist(historique(e, initial));
+        em.persist(FicheEtude.historique(e.getId(), initial.getId(), e.getUserCreateDateTime(),
+                Champs.de(utilisateurAffiche.courant().compte(), AdmUser::getId)));
+        recalcul.recalculer(e);
         return dto(e);
     }
 
@@ -149,11 +156,17 @@ public class EtudeFaisabiliteService {
             throw new InvalidRequestException("societeId : l'étude a des tranches liées au patrimoine de sa société ; "
                     + "retirez-les avant de changer de société.");
         }
+        // Avant appliquer : un champ du statut vidé en base doit donner « Statuts : », pas « … est obligatoire ».
+        FicheEtude.exigerChampsDuStatut(e.getStatus(), SaisiePatrimoine.ou(saisie.code(), e.getCode()),
+                SaisiePatrimoine.ou(saisie.description(), e.getDescription()),
+                SaisiePatrimoine.ou(saisie.dateDocument(), e.getDocDate()));
         em.detach(e);
         appliquer(e, saisie, ChampsAVider.de(saisie, saisie.champsAVider(), OBLIGATOIRES));
         GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
         tracer(e, false);
-        return dto(em.merge(e));
+        StkFeasibilityStudy enregistree = em.merge(e);
+        recalcul.recalculer(enregistree);
+        return dto(enregistree);
     }
 
     /** 409 si bloquée ou porteuse de prévisions / financements (§8 bis.3) ; sinon ses lignes partent avec elle. */
@@ -177,6 +190,8 @@ public class EtudeFaisabiliteService {
         StkFeasibilityStudy e = bloquer ? modifiable(id) : etudes.exigerVisible(id);
         if (bloquer) {
             GrillesEtude.exigerSansErreur(grilles.erreursEnBase(id, FicheEtude.valeurs(e)));
+            FicheEtude.exigerChampsDuStatut(e.getStatus(), e.getCode(), e.getDescription(), e.getDocDate());
+            recalcul.recalculer(e);
         }
         e.setIsLocked(bloquer);
         tracer(e, false);
@@ -189,6 +204,7 @@ public class EtudeFaisabiliteService {
         grilles.remplacerUnites(e, Objects.requireNonNullElse(lignes, List.of()), FicheEtude.valeurs(e));
         tracer(e, false);
         em.flush();
+        recalcul.recalculer(e);
         return grilles.unitesDto(id);
     }
 
@@ -198,17 +214,14 @@ public class EtudeFaisabiliteService {
         grilles.remplacerTranches(e, Objects.requireNonNullElse(lignes, List.of()), FicheEtude.valeurs(e));
         tracer(e, false);
         em.flush();
+        recalcul.recalculer(e);
         return grilles.tranchesDto(id);
     }
 
     // ------------------------------------------------------------------ commun
 
     private StkFeasibilityStudy modifiable(UUID id) {
-        StkFeasibilityStudy e = etudes.exigerVisible(id);
-        if (Boolean.TRUE.equals(e.getIsLocked())) {
-            throw new ConflictException(BLOQUEE);
-        }
-        return e;
+        return FicheEtude.modifiable(etudes, id);
     }
 
     /** Identité, références et entrées, puis le calcul partagé ; 400 / 409 avant toute écriture. */
@@ -224,8 +237,6 @@ public class EtudeFaisabiliteService {
                 i -> ReferencesPatrimoine.trouver(this::terrain, i, TERRAIN_ID)));
         e.setLandDescription(texte(v.texte("descriptionTerrain", d.descriptionTerrain()), e.getLandDescription(), COURT,
                 "La description du terrain"));
-        e.setNumberOfItemForSale(v.ou("nombreArticlesAVendre", positif(d.nombreArticlesAVendre(), "nombreArticlesAVendre"),
-                e.getNumberOfItemForSale()));
         e.setUseLandProportionForTvaCalculation(v.ou("proportionTerrainPourTva", d.proportionTerrainPourTva(),
                 e.getUseLandProportionForTvaCalculation()));
         e.setDefaultVat(v.ou("tauxTvaDefaut", d.tauxTvaDefaut(), e.getDefaultVat()));
@@ -265,16 +276,6 @@ public class EtudeFaisabiliteService {
                 .orElseThrow(() -> new ConflictException("Aucun statut d'étude à l'état « Nouveau » n'est paramétré."));
     }
 
-    private StkFeasibilityStudyStatusHistory historique(StkFeasibilityStudy e, StkFeasibilityStudyStatus statut) {
-        StkFeasibilityStudyStatusHistory h = new StkFeasibilityStudyStatusHistory();
-        h.setId(UUID.randomUUID());
-        h.setFeasibilityStudyId(e.getId());
-        h.setStatusId(statut.getId());
-        h.setDocDate(e.getUserCreateDateTime());
-        h.setAdmUserId(Champs.de(utilisateurAffiche.courant().compte(), AdmUser::getId));
-        return h;
-    }
-
     private long compter(String sql, UUID id) {
         return ((Number) em.createNativeQuery(sql).setParameter(ID, id).getSingleResult()).longValue();
     }
@@ -299,9 +300,8 @@ public class EtudeFaisabiliteService {
                 Boolean.TRUE.equals(e.getIsLocked()), e.getNumberOfItemForSale(), e.getUseLandProportionForTvaCalculation(),
                 e.getDefaultVat(), e.getInterestVatRatio(), e.getEcartTypeExpenses(), e.getEcartTypeConcretisation(),
                 e.getEcartTypeFinalization(), e.getBackTimeOnDays(), e.getBackGuaranteeRate(),
-                e.getBackGuaranteeApplicationRate(), FicheEtude.valeurs(e), FicheEtude.bilan(e),
-                grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
-                compter(PREVISIONS, e.getId()) > 0,
+                e.getBackGuaranteeApplicationRate(), e.getPercentageConcretisation(), e.getImpotRatio(), e.getUnitSalePrice(),
+                FicheEtude.valeurs(e), FicheEtude.bilan(e), grilles.unitesDto(e.getId()), grilles.tranchesDto(e.getId()),
                 e.getUserCreate(), e.getUserCreateDateTime(), e.getUserUpdate(), e.getUserUpdateDateTime());
     }
 }

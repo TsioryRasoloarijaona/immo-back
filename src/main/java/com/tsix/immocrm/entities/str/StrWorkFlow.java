@@ -40,6 +40,15 @@ public class StrWorkFlow {
     @Column(name = "Description")
     private String description;
 
+    @Column(name = "WithComment")
+    private Boolean withComment;
+
+    @Column(name = "WithPassword")
+    private Boolean withPassword;
+
+    @Column(name = "WithUserDate")
+    private Boolean withUserDate;
+
     @Column(name = "WithAutomaticTransition")
     private Boolean withAutomaticTransition;
 

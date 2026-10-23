@@ -32,6 +32,7 @@ import java.util.UUID;
 public final class SpecificationsListeDossiers {
 
     private static final String STR_STATUS = "strStatus";
+    private static final String TOTAL_A_PAYER = "totalToPay";
     private static final String CFG_CUSTOMER = "cfgCustomer";
     private static final String CODE = "code";
     private static final String DESCRIPTION = "description";
@@ -43,7 +44,9 @@ public final class SpecificationsListeDossiers {
     private SpecificationsListeDossiers() {
     }
 
+    /** Valide les filtres dès l'appel (400 avant toute requête), pour les cinq routes de la liste. */
     public static Specification<ComFolder> de(FiltresListeDossiers filtres, Optional<Set<UUID>> statutsVisibles) {
+        filtres.exigerFourchetteTotal();
         return (root, query, cb) -> {
             List<Predicate> predicats = new ArrayList<>();
             ajouterStatuts(predicats, root, cb, filtres, statutsVisibles);
@@ -51,9 +54,16 @@ public final class SpecificationsListeDossiers {
                 predicats.add(cb.equal(root.get("cfgCommercial").get("id"), filtres.commercial()));
             }
             if (filtres.projet() != null) {
-                // Par la tranche de l'article principal, jamais StkItem.CfgProjectId, colonne morte.
-                predicats.add(cb.equal(
-                        root.get("stkItem").get("stkHierarchy").get("cfgProject").get("id"), filtres.projet()));
+                predicats.add(cb.equal(projet(root).get("id"), filtres.projet()));
+            }
+            if (filtres.societeId() != null) {
+                predicats.add(cb.equal(projet(root).get("cfgCompany").get("id"), filtres.societeId()));
+            }
+            if (filtres.totalMin() != null) {
+                predicats.add(cb.greaterThanOrEqualTo(root.get(TOTAL_A_PAYER), filtres.totalMin()));
+            }
+            if (filtres.totalMax() != null) {
+                predicats.add(cb.lessThanOrEqualTo(root.get(TOTAL_A_PAYER), filtres.totalMax()));
             }
             if (filtres.trancheId() != null && !filtres.trancheId().isEmpty()) {
                 predicats.add(AppartenanceTranche.dossier(root, query, cb, filtres.trancheId()));
@@ -66,16 +76,30 @@ public final class SpecificationsListeDossiers {
         };
     }
 
+    /** Projet par la tranche de l'article principal, jamais StkItem.CfgProjectId, colonne morte. */
+    private static Path<Object> projet(Root<ComFolder> root) {
+        return root.get("stkItem").get("stkHierarchy").get("cfgProject");
+    }
+
     /**
      * Sans filtre de statut, les sortis (annulation / résiliation) sont exclus comme chez OMRAN
-     * ({@code IsCancellation = 0}) ; un statut demandé explicitement est servi tel quel.
+     * ({@code IsCancellation = 0}) ; un statut demandé explicitement (ou « sans statut ») est servi tel quel.
      */
     private static void ajouterStatuts(List<Predicate> predicats, Root<ComFolder> root, CriteriaBuilder cb,
                                        FiltresListeDossiers filtres, Optional<Set<UUID>> statutsVisibles) {
-        boolean statutsDemandes = filtres.statut() != null && !filtres.statut().isEmpty();
+        boolean codesDemandes = filtres.statut() != null && !filtres.statut().isEmpty();
+        boolean statutsDemandes = codesDemandes || filtres.sansStatut();
         if (statutsDemandes) {
-            List<String> codes = filtres.statut().stream().map(s -> s.toLowerCase(Locale.ROOT)).toList();
-            predicats.add(cb.lower(root.get(STR_STATUS).get(CODE)).in(codes));
+            List<Predicate> ou = new ArrayList<>();
+            if (codesDemandes) {
+                List<String> codes = filtres.statut().stream().map(s -> s.toLowerCase(Locale.ROOT)).toList();
+                // Jointure externe : « sans statut » doit garder les dossiers à StrStatusId NULL.
+                ou.add(cb.lower(root.join(STR_STATUS, JoinType.LEFT).get(CODE)).in(codes));
+            }
+            if (filtres.sansStatut()) {
+                ou.add(cb.isNull(root.get(STR_STATUS)));
+            }
+            predicats.add(cb.or(ou.toArray(new Predicate[0])));
         }
         if (!statutsDemandes && !filtres.inclureSortis()) {
             Join<ComFolder, StrStatus> statut = root.join(STR_STATUS, JoinType.LEFT);

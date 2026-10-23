@@ -7,16 +7,14 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
-/** Statut d'étude de faisabilité, lu seulement (le workflow est un lot ultérieur). */
+/** Statut d'étude de faisabilité ; {@code MandatoryFields} au format OMRAN « ,Code,Area » (ChampsObligatoiresFaisabilite). */
 @Getter
 @Setter
 @Entity
-@Immutable
 @Table(name = "StkFeasibilityStudyStatus")
 public class StkFeasibilityStudyStatus extends AuditTrieOmran {
     @Size(max = 255)
@@ -26,4 +24,17 @@ public class StkFeasibilityStudyStatus extends AuditTrieOmran {
 
     @Column(name = "AdmWorkFlowStateTypeId")
     private UUID admWorkFlowStateTypeId;
+
+    @Column(name = "Delay")
+    private Integer delay;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "MandatoryFields")
+    private String mandatoryFields;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "Notes")
+    private String notes;
 }

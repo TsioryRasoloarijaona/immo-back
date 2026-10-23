@@ -1,10 +1,10 @@
 package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -18,31 +18,33 @@ import java.util.UUID;
 public class PorteursPatrimoine {
 
     public enum Porteur {
-        PROJET, TRANCHE, ARTICLE;
+        PROJET, TRANCHE, ARTICLE, PROSPECTION_TERRAIN;
 
-        /** Valeur du fil, en minuscules ({@code projet}, {@code tranche}, {@code article}) ; autre → 400. */
+        /** Valeur du fil, en minuscules ({@code projet}, …, {@code prospection-terrain}) ; autre → 400. */
         public static Porteur depuis(String valeur) {
             return Arrays.stream(values())
-                    .filter(p -> p.name().equalsIgnoreCase(valeur == null ? "" : valeur.trim()))
+                    .filter(p -> p.name().replace('_', '-').equalsIgnoreCase(valeur == null ? "" : valeur.trim()))
                     .findFirst()
                     .orElseThrow(() -> new InvalidRequestException(
-                            "porteur doit valoir projet, tranche ou article : '" + valeur + "'"));
+                            "porteur doit valoir projet, tranche, article ou prospection-terrain : '" + valeur + "'"));
         }
     }
 
     private final ProjetService projetService;
     private final TrancheService trancheService;
     private final ArticleService articleService;
+    private final ProspectionTerrainService prospectionTerrainService;
     private final CfgProjectRepository projectRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository itemRepository;
 
     public PorteursPatrimoine(ProjetService projetService, TrancheService trancheService, ArticleService articleService,
-                              CfgProjectRepository projectRepository, CfgTrancheRepository trancheRepository,
-                              StkItemRepository itemRepository) {
+                              ProspectionTerrainService prospectionTerrainService, CfgProjectRepository projectRepository,
+                              CfgTrancheRepository trancheRepository, StkItemRepository itemRepository) {
         this.projetService = projetService;
         this.trancheService = trancheService;
         this.articleService = articleService;
+        this.prospectionTerrainService = prospectionTerrainService;
         this.projectRepository = projectRepository;
         this.trancheRepository = trancheRepository;
         this.itemRepository = itemRepository;
@@ -54,6 +56,7 @@ public class PorteursPatrimoine {
             case PROJET -> projetService.findById(id);
             case TRANCHE -> trancheService.findById(id);
             case ARTICLE -> articleService.findById(id);
+            case PROSPECTION_TERRAIN -> prospectionTerrainService.exiger(id);
         }
     }
 
@@ -67,7 +70,7 @@ public class PorteursPatrimoine {
         } else if (itemRepository.existsById(id)) {
             porteur = Porteur.ARTICLE;
         } else {
-            throw new ResourceNotFoundException("Objet du patrimoine introuvable: " + id);
+            porteur = Porteur.PROSPECTION_TERRAIN;
         }
         exigerVisible(porteur, id);
         return porteur;

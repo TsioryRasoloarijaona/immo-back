@@ -17,7 +17,6 @@ public record SaisieEtudeDto(
         @Schema(description = "Société (CfgCompany) active, obligatoire à la création.") UUID societeId,
         @Schema(description = "Terrain : article de nature TER (liste /choix/terrains).") UUID terrainId,
         @Schema(description = "Description du terrain (texte libre, 255 caractères).") String descriptionTerrain,
-        @Schema(description = "Nombre d'articles à vendre.") Integer nombreArticlesAVendre,
         @Schema(description = "Utiliser la quote-part du terrain pour le calcul de la TVA.") Boolean proportionTerrainPourTva,
         @Schema(description = "TVA par défaut (fraction ; 0,20 à la création si absente).") BigDecimal tauxTvaDefaut,
         @Schema(description = "TVA sur intérêts (fraction ; 0,10 à la création si absente).") BigDecimal tauxTvaInterets,
@@ -60,6 +59,9 @@ public record SaisieEtudeDto(
         @Schema(description = "Taux de retenue de garantie (fraction).") BigDecimal tauxRetenueGarantie,
         @Schema(description = "Taux d'application de la retenue de garantie (fraction).")
         BigDecimal tauxApplicationRetenueGarantie,
+        @Schema(description = "Part de la concrétisation (fraction 0-1, 0 à la création).") BigDecimal pourcentageConcretisation,
+        @Schema(description = "Taux de l'IS (fraction 0-1, 0 à la création).") BigDecimal tauxIs,
+        @Schema(description = "Prix de vente du m² (UnitSalePrice, 0 à la création).") BigDecimal prixVenteM2,
         @Schema(description = "PATCH : champs à vider (terrainId, debutAchatTerrain → NULL ; nombre → 0 ; texte → \"\").")
         List<String> champsAVider,
         @Schema(description = "POST /calcul seulement (ignoré ailleurs) : unités de base à contrôler par Verif.")

@@ -105,6 +105,7 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJE
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -Q "IF OBJECT_ID('dbo.StlDocument', 'U') IS NULL CREATE TABLE dbo.StlDocument (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL, DocType nvarchar(255) NULL, DocDate datetime NULL)"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/060_interop_vente.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/120_terrains_tables.sql"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/138_prospections-terrain_tables.sql"
 ```
 
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
