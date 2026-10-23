@@ -39,10 +39,10 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * N° 31 ANALYSE DES ACTIONS COMMERCIALES (FEATURE-tdb-vente-rapports-commercial.md §9.2, décision 8, §10). Année 2091 :
+ * N° 31 ANALYSE DES ACTIONS COMMERCIALES (FEATURE-tdb-vente-rapports-commercial.md §9.2, décision 8, §10). Année 2077 :
  * <pre>
  *   T  : S1 6 (dont 4 de l'action A1) + 1 le 31/12 à 23:30 ; S2 3 (dont 1 de A1) ; S3 1 (action A2) ;
- *        S1 le 01/01/2092 à 00:30 (hors période)
+ *        S1 le 01/01/2078 à 00:30 (hors période)
  *   T2 : 3 S1 (projet hors périmètre du commercial U)   TI : 2 S1 (société inactive)   sans tranche : 1 S2
  * </pre>
  */
@@ -53,7 +53,7 @@ class AnalyseActionsCommercialesRapportTest {
 
     private static final String CODE = "ComSaleDashboardAnalyseActionCommerciale";
     private static final String CODE_19 = "ComTdbProspectionState";
-    private static final int ANNEE = 2091;
+    private static final int ANNEE = 2077;
     private static final String DU = "du";
     private static final String AU = "au";
     private static final String TRANCHE_ID = "trancheId";
