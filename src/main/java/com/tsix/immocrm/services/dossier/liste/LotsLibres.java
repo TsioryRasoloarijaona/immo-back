@@ -72,7 +72,7 @@ public class LotsLibres {
 
     /** La période ne filtre pas les lots libres : ils n'ont aucune date de dossier (FEATURE-vente-liste.md §2). */
     private static boolean exclutLesLibres(FiltresListeDossiers filtres) {
-        return !filtres.lignes().avecLibres() || filtres.commercial() != null;
+        return !filtres.lignes().avecLibres() || filtres.commercial() != null || filtres.filtreLeTotal();
     }
 
     private Predicate predicats(CriteriaBuilder cb, Root<StkItem> article, Jointures j,
@@ -90,6 +90,9 @@ public class LotsLibres {
         }
         if (filtres.trancheId() != null && !filtres.trancheId().isEmpty()) {
             p.add(j.tranche.get("id").in(filtres.trancheId()));
+        }
+        if (filtres.societeId() != null) {
+            p.add(cb.equal(j.societe.get("id"), filtres.societeId()));
         }
         if (StringUtils.hasText(filtres.search())) {
             String motif = "%" + filtres.search().replace(" ", "").toLowerCase(Locale.ROOT) + "%";
