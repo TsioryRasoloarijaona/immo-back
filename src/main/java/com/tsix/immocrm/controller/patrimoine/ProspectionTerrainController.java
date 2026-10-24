@@ -16,7 +16,15 @@ import com.tsix.immocrm.dto.patrimoine.prospectionterrain.ZoneTerrainDto;
 import com.tsix.immocrm.dto.patrimoine.prospectionterrain.ZonesTerrainEcritureDto;
 import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
 import com.tsix.immocrm.services.patrimoine.terrain.TransformationProspectionTerrain;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -45,7 +53,14 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.ADMINISTRATEUR;
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.REPONSE_403;
+import static com.tsix.immocrm.domain.TypeExport.BOOLEEN;
+import static com.tsix.immocrm.domain.TypeExport.DATE;
+import static com.tsix.immocrm.domain.TypeExport.MONTANT;
+import static com.tsix.immocrm.domain.TypeExport.NOMBRE;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
+import static com.tsix.immocrm.web.export.ColonneFixe.cachee;
+import static com.tsix.immocrm.web.export.ColonneFixe.de;
+import static com.tsix.immocrm.web.export.ColonneFixe.texte;
 
 @Tag(name = "Prospections terrain")
 @RestController
@@ -57,13 +72,40 @@ public class ProspectionTerrainController {
     private static final String SAISIE_INVALIDE = "Saisie refusée : detail nomme le champ (voir la description).";
     private static final String LECTURE_SEULE = "Statut courant en lecture seule.";
 
+    /** Colonnes de {@code lib/colonnesProspectionsTerrain.tsx}, même ordre. */
+    private static final List<ColonneFixe> COLONNES_EXPORT = ColonneFixe.suite(List.of(
+            texte("code", "Code"), de("date", "Date", DATE), texte("description", "Description"),
+            texte("categorie", "Catégorie"), texte("type", "Type"), texte("niveau", "Niveau"), texte("vocation", "Vocation"),
+            texte("ville", "Ville"), texte("statut", "Statut"), de("dateValiditeStatut", "Validité du statut", DATE),
+            de("superficie", "Superficie", NOMBRE), de("superficieNette", "Superficie nette", NOMBRE),
+            de("prixPropose", "Prix proposé", MONTANT), de("estArchivee", "Archivée", BOOLEEN),
+            de("estTransformee", "Transformée", BOOLEEN), de("nbEtudesFaisabilite", "Nbr. étude de fais.", NOMBRE),
+            cachee("pays", "Pays"), cachee("courtier", "Courtier"), cachee("adresse", "Adresse"),
+            cachee("proprietaires", "Propriétaires"), cachee("estAmenage", "Aménagé", BOOLEEN), cachee("notes", "Notes"),
+            cachee("anomalies", "Anomalies"), cachee("superficieEquipements", "Superficie des voies d'aménagement", NOMBRE),
+            cachee("coefEquipements", "Coefficient d'équipements", NOMBRE), cachee("cos", "COS", NOMBRE),
+            cachee("superficieCos", "Emprise au sol", NOMBRE), cachee("cuf", "CUF", NOMBRE),
+            cachee("superficieCuf", "Plancher couvert", NOMBRE), cachee("coefVendable", "Coefficient vendable", NOMBRE),
+            cachee("superficieVendable", "Plancher vendable", NOMBRE),
+            cachee("arreteAlignement", "Arrêté d'alignement", NOMBRE), cachee("hauteurMax", "Hauteur maximale", NOMBRE),
+            cachee("prixM2", "Prix du m² du propriétaire", MONTANT), cachee("prix", "Prix total du propriétaire", MONTANT),
+            cachee("dateEnregistrement", "Date d'enregistrement", DATE),
+            cachee("numeroEnregistrement", "Numéro d'enregistrement"), cachee("lieuEnregistrement", "Lieu d'enregistrement"),
+            cachee("cpfImmatriculation", "C.P.F. immatriculation"),
+            cachee("dateImmatriculation", "Date d'immatriculation", DATE)), ColonneFixe.AUDIT);
+
     private final ProspectionTerrainService service;
     private final TransformationProspectionTerrain transformation;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
 
     public ProspectionTerrainController(ProspectionTerrainService service,
-                                        TransformationProspectionTerrain transformation) {
+                                        TransformationProspectionTerrain transformation, ExportListe export,
+                                        FichePdf fichePdf) {
         this.service = service;
         this.transformation = transformation;
+        this.export = export;
+        this.fichePdf = fichePdf;
     }
 
     @GetMapping
@@ -73,6 +115,25 @@ public class ProspectionTerrainController {
             @ParameterObject @ModelAttribute FiltresProspectionsTerrain filtres,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "code", direction = Sort.Direction.ASC) Pageable pageable) {
         return PageDto.of(service.lister(filtres, pageable));
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des prospections terrain", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<byte[]> exporter(
+            @ParameterObject @ModelAttribute FiltresProspectionsTerrain filtres,
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {
+        return export.reponse(demande, "prospections-terrain", "Prospections terrain",
+                ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT),
+                () -> LignesExport.toutes(sort, page -> service.lister(filtres, page)));
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF de la prospection terrain (inline), mêmes droit et visibilité que le détail")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID) @PathVariable UUID id) {
+        return fichePdf.reponse(FichesPatrimoine.prospectionTerrain(service.lire(id)));
     }
 
     @GetMapping("/{id}")

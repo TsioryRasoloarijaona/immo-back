@@ -5,8 +5,18 @@ import com.tsix.immocrm.dto.patrimoine.FiltresTerrains;
 import com.tsix.immocrm.dto.patrimoine.TerrainDetailDto;
 import com.tsix.immocrm.dto.patrimoine.TerrainEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.TerrainListeDto;
+import com.tsix.immocrm.domain.TypeExport;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
 import com.tsix.immocrm.services.patrimoine.terrain.TerrainService;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
+import java.util.List;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -44,10 +54,23 @@ public class TerrainController {
     static final String INTROUVABLE = "Terrain inconnu, d'une autre nature, ou d'une société inactive.";
     private static final String SAISIE_INVALIDE = "Champ obligatoire absent, référence inconnue ou d'une autre nature.";
 
-    private final TerrainService terrains;
+    /** Colonnes de {@code TerrainsList.tsx} ; la colonne Tranche n'est que dans les lotissements. */
+    private static final List<ColonneFixe> COLONNES_TERRAINS = List.of(ColonneFixe.texte("code", "Code"),
+            ColonneFixe.texte("description", "Description"), ColonneFixe.texte("entite", "Société"),
+            ColonneFixe.texte("ville", "Ville"), ColonneFixe.texte("statut", "Statut"),
+            ColonneFixe.texte("vocation", "Vocation"), ColonneFixe.texte("tranche", "Tranche"),
+            ColonneFixe.de("surfaceDefinitive", "Surface définitive", TypeExport.NOMBRE),
+            ColonneFixe.de("prixDefinitifTTC", "Prix définitif TTC", TypeExport.MONTANT),
+            ColonneFixe.texte("titreFoncier", "Titre foncier"), ColonneFixe.de("occupe", "Occupé", TypeExport.BOOLEEN));
 
-    public TerrainController(TerrainService terrains) {
+    private final TerrainService terrains;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
+
+    public TerrainController(TerrainService terrains, ExportListe export, FichePdf fichePdf) {
         this.terrains = terrains;
+        this.export = export;
+        this.fichePdf = fichePdf;
     }
 
     @GetMapping
@@ -59,6 +82,26 @@ public class TerrainController {
         return PageDto.of(terrains.lister(filtres, false, pageable));
     }
 
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des terrains", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<byte[]> exporter(
+            @ParameterObject @ModelAttribute FiltresTerrains filtres,
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {
+        return exporter(export, terrains, filtres, demande, sort, false);
+    }
+
+    /** Export partagé avec {@code /api/lotissements/export} : même lecture que la liste. */
+    static ResponseEntity<byte[]> exporter(ExportListe export, TerrainService terrains, FiltresTerrains filtres,
+                                                          DemandeExport demande, Sort sort, boolean lotissements) {
+        List<ColonneFixe> catalogue = COLONNES_TERRAINS.stream()
+                .filter(c -> lotissements || !"tranche".equals(c.nom())).toList();
+        return export.reponse(demande, lotissements ? "lotissements" : "terrains",
+                lotissements ? "Lotissements" : "Terrains", ColonneFixe.choisir(demande.colonnes(), catalogue),
+                () -> LignesExport.toutes(sort, page -> terrains.lister(filtres, lotissements, page)));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Fiche terrain, coût total et coût unitaire final calculés à la lecture")
     @ApiResponses({
@@ -67,6 +110,13 @@ public class TerrainController {
     })
     public TerrainDetailDto lire(@Parameter(description = ID) @PathVariable UUID id) {
         return terrains.lire(id);
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF du terrain (inline), mêmes droit et visibilité que le détail")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID) @PathVariable UUID id) {
+        return fichePdf.reponse(FichesPatrimoine.terrain(terrains.lire(id)));
     }
 
     @PostMapping

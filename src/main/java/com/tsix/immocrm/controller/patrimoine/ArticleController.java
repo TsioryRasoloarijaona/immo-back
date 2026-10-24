@@ -10,7 +10,17 @@ import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
 import com.tsix.immocrm.dto.patrimoine.FiltresListeArticles;
 import com.tsix.immocrm.dto.patrimoine.LigneArticleDto;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
+import com.tsix.immocrm.services.patrimoine.FiltresArticle;
+import com.tsix.immocrm.services.patrimoine.TrancheService;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
+import java.util.Set;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,9 +63,44 @@ public class ArticleController {
     private static final String ID_SOUS_ARTICLE = "Id du sous-article (StkItem.PKey).";
 
     private final ArticleService articleService;
+    private final TrancheService trancheService;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
 
-    public ArticleController(ArticleService articleService) {
+    public ArticleController(ArticleService articleService, TrancheService trancheService, ExportListe export,
+                             FichePdf fichePdf) {
         this.articleService = articleService;
+        this.trancheService = trancheService;
+        this.export = export;
+        this.fichePdf = fichePdf;
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf du catalogue des articles, colonnes du catalogue", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<byte[]> exporter(
+            @ParameterObject @ModelAttribute FiltresListeArticles filtres,
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
+        return exporter(export, articleService, filtres.versFiltres(false), demande, sort, "articles", "Articles");
+    }
+
+    /** Export partagé avec {@code /api/sous-articles/export} : même lecture que la liste, filtres déjà traduits. */
+    static ResponseEntity<byte[]> exporter(ExportListe export, ArticleService articles, FiltresArticle filtres,
+                                                          DemandeExport demande, Sort sort, String liste, String titre) {
+        Set<ColonneArticle> selection = ColonneArticle.resoudre(demande.colonnes());
+        return export.reponse(demande, liste, titre, LignesExport.ordre(demande.colonnes(), selection),
+                () -> LignesExport.toutes(sort, page -> articles.lister(filtres, selection, page)));
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF d'un article ou sous-article (inline), visibilité du détail")
+    @ApiResponse(responseCode = "404", description = ARTICLE_INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID_ARTICLE) @PathVariable UUID id) {
+        ArticleDetailDto article = articleService.findById(id);
+        // Quelques articles OMRAN n'ont pas de tranche (le détail les sert) : pas d'en-tête société alors.
+        UUID societeId = article.trancheId() == null ? null : trancheService.findById(article.trancheId()).entiteId();
+        return fichePdf.reponse(FichesPatrimoine.article(article, societeId));
     }
 
     @GetMapping

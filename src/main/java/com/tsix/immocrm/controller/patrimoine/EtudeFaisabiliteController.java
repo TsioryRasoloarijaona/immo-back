@@ -9,9 +9,16 @@ import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneUniteEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.services.patrimoine.EtudeFaisabiliteService;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -31,6 +38,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import static com.tsix.immocrm.domain.TypeExport.BOOLEEN;
+import static com.tsix.immocrm.domain.TypeExport.DATE;
+import static com.tsix.immocrm.domain.TypeExport.MONTANT;
+import static com.tsix.immocrm.domain.TypeExport.NOMBRE;
+import static com.tsix.immocrm.web.export.ColonneFixe.de;
+import static com.tsix.immocrm.web.export.ColonneFixe.texte;
+
 @Tag(name = "Études de faisabilité")
 @RestController
 @RequestMapping("/api/etudes-faisabilite")
@@ -47,21 +61,57 @@ public class EtudeFaisabiliteController {
     static final String BLOQUEE = "Étude bloquée (« Étude bloquée »).";
     private static final String VERIF = "Champ invalide, référence inconnue ou message Verif OMRAN (detail).";
 
-    private final EtudeFaisabiliteService service;
+    private static final String SOCIETE = "Société (CfgCompany.PKey).";
+    private static final String STATUT = "Statut (StkFeasibilityStudyStatus.PKey).";
+    private static final String RECHERCHE = "Sous-chaîne du code ou du libellé, casse ignorée.";
 
-    public EtudeFaisabiliteController(EtudeFaisabiliteService service) {
+    /** Colonnes de {@code EtudesFaisabiliteList.tsx} ; taux en fraction, comme la liste. */
+    private static final List<ColonneFixe> COLONNES_EXPORT = List.of(texte("code", "Code"),
+            texte("description", "Description"), de("dateDocument", "Date", DATE), texte("societeLibelle", "Société"),
+            texte("terrainLibelle", "Terrain"), texte("statutLibelle", "Statut"), de("bloquee", "Bloquée", BOOLEEN),
+            de("superficie", "Superficie", NOMBRE), de("coutTotalTerrain", "Coût total du terrain", MONTANT),
+            de("coutTotal", "Charge TTC", MONTANT), de("chiffreAffaires", "Chiffre d'affaires TTC", MONTANT),
+            de("montantAutofinancement", "Fonds propres TTC", MONTANT), de("margeNette", "Marge bénéficiaire nette", MONTANT),
+            de("montantConcretisation", "Montant concrétisation TTC", MONTANT),
+            de("montantFinalisation", "Montant finalisation TTC", MONTANT),
+            de("pourcentageConcretisation", "Taux de concrétisation", NOMBRE),
+            de("rentabiliteCoutProjet", "Retour sur coût projet", NOMBRE),
+            de("rentabiliteChiffreAffaires", "Retour sur chiffre d'affaires", NOMBRE),
+            de("rentabiliteFondsPropres", "Retour sur fonds propres", NOMBRE));
+
+    private final EtudeFaisabiliteService service;
+    private final ExportListe export;
+
+    public EtudeFaisabiliteController(EtudeFaisabiliteService service, ExportListe export) {
         this.service = service;
+        this.export = export;
     }
 
     @GetMapping
     @Operation(summary = "Liste des études des sociétés actives, par code")
     @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
     public List<EtudeFaisabiliteListeDto> lister(
-            @Parameter(description = "Société (CfgCompany.PKey).") @RequestParam(required = false) UUID societeId,
-            @Parameter(description = "Statut (StkFeasibilityStudyStatus.PKey).") @RequestParam(required = false) UUID statutId,
-            @Parameter(description = "Sous-chaîne du code ou du libellé, casse ignorée.") @RequestParam(required = false)
+            @Parameter(description = SOCIETE) @RequestParam(required = false) UUID societeId,
+            @Parameter(description = STATUT) @RequestParam(required = false) UUID statutId,
+            @Parameter(description = RECHERCHE) @RequestParam(required = false)
             String search) {
         return service.lister(societeId, statutId, search);
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des études, mêmes droits que la liste", description = ExportListe.DESCRIPTION)
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content),
+            @ApiResponse(responseCode = "403", description = PAS_LECTEUR, content = @Content)
+    })
+    public ResponseEntity<byte[]> exporter(
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(description = SOCIETE) @RequestParam(required = false) UUID societeId,
+            @Parameter(description = STATUT) @RequestParam(required = false) UUID statutId,
+            @Parameter(description = RECHERCHE) @RequestParam(required = false) String search) {
+        return export.reponse(demande, "etudes-faisabilite", "Études de faisabilité",
+                ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT),
+                () -> service.lister(societeId, statutId, search));
     }
 
     @GetMapping("/{id}")
