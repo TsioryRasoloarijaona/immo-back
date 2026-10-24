@@ -8,5 +8,6 @@ public record ValeursCalculees(Integer nombreEtatsModification, Integer nombreCa
                                BigDecimal superficieAnnexes, LocalDateTime alerte, Integer nombreActions,
                                LocalDateTime derniereCommunicationDate, String derniereCommunicationResultat,
                                String derniereCommunicationMessage, boolean instructionNonLue,
-                               String sousArticlesCodes, String sousArticlesLibelles, String autresClients) {
+                               String sousArticlesCodes, String sousArticlesLibelles, String autresClients,
+                               String clientVille, String clientPays) {
 }

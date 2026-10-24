@@ -3,6 +3,8 @@ package com.tsix.immocrm.services.suivicommerciaux;
 import com.tsix.immocrm.dto.suivicommerciaux.MensuelSuiviCommerciauxDto.BlocMensuel;
 import com.tsix.immocrm.dto.suivicommerciaux.MensuelSuiviCommerciauxDto;
 import com.tsix.immocrm.dto.suivicommerciaux.MensuelSuiviCommerciauxDto.IndicateursCommercial;
+import com.tsix.immocrm.domain.InteractionKpi;
+import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComActionMessageSuivi;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComFolder;
@@ -35,12 +37,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Vue mois / année d'OMRAN (FEATURE-suivi-commerciaux.md R11, §7.5, §9.8) : prospections et ventes au commercial
@@ -53,8 +57,15 @@ public class SuiviCommerciauxMensuelService {
 
     private static final String ID = "id";
     private static final String CFG_COMMERCIAL = "cfgCommercial";
+    private static final String DOC_DATE = "docDate";
     private static final String STK_ITEM = "stkItem";
     private static final String STK_HIERARCHY = "stkHierarchy";
+    private static final String COMMERCIAL_CLE = "commercialCle";
+    private static final String SYSTEME = "Système";
+    private static final List<String> ENTRANTES = List.of(InteractionKpi.TYPE_APPEL_ENTRANT, "Mail entrant");
+    private static final List<String> SORTANTES = List.of(InteractionKpi.TYPE_APPEL_SORTANT, "Mail Sortant");
+    private static final List<String> TYPES_COMPTES = List.of(InteractionKpi.TYPE_VISITE, ENTRANTES.get(0),
+            ENTRANTES.get(1), SORTANTES.get(0), SORTANTES.get(1));
 
     private final SuiviCommerciauxService suiviService;
     private final PerimetreCommercialService perimetreService;
@@ -87,7 +98,7 @@ public class SuiviCommerciauxMensuelService {
         }
 
         Indicateurs divise(int n) {
-            Function<BigDecimal, BigDecimal> d = v -> v.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
+            UnaryOperator<BigDecimal> d = v -> v.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
             return new Indicateurs(d.apply(prospections), d.apply(visitesProspection), d.apply(visitesVente),
                     d.apply(ventes), d.apply(ventesIssues), d.apply(prix), d.apply(versements));
         }
@@ -110,11 +121,12 @@ public class SuiviCommerciauxMensuelService {
         List<MembreEquipe> retenus = commerciaux.retenus(commercialIds);
         boolean filtre = !CollectionUtils.isEmpty(commercialIds);
         // §9.8 : sans tranche demandée, les tranches habilitées de l'appelant ; aucune habilitation = toutes.
-        List<UUID> tranches = !CollectionUtils.isEmpty(trancheIds) ? trancheIds
-                : PerimetreCommercialService.admUserIdCourant()
-                        .map(habilitationRepository::findTrancheIdsByAdmUserId).orElse(List.of());
+        List<UUID> tranches = CollectionUtils.isEmpty(trancheIds)
+                ? PerimetreCommercialService.admUserIdCourant()
+                        .map(habilitationRepository::findTrancheIdsByAdmUserId).orElse(List.of())
+                : trancheIds;
         LocalDate debutMois = LocalDate.of(annee, mois, 1);
-        LocalDate debutAnnee = LocalDate.of(annee, 1, 1);
+        LocalDate debutAnnee = LocalDate.of(annee, Month.JANUARY, 1);
         return new MensuelSuiviCommerciauxDto(
                 bloc(retenus, filtre, debutMois.atStartOfDay(), debutMois.plusMonths(1).atStartOfDay(), tranches),
                 bloc(retenus, filtre, debutAnnee.atStartOfDay(), debutAnnee.plusYears(1).atStartOfDay(), tranches));
@@ -124,7 +136,7 @@ public class SuiviCommerciauxMensuelService {
                              List<UUID> tranches) {
         Map<UUID, Indicateurs> parCle = new HashMap<>();
         prospections(debut, fin, tranches, parCle);
-        visites(retenus, debut, fin, tranches, parCle);
+        visites(retenus.stream().map(CommerciauxVisibles::cle).toList(), debut, fin, tranches, parCle);
         ventes(debut, fin, tranches, parCle);
         versements(debut, fin, tranches, parCle);
 
@@ -190,27 +202,109 @@ public class SuiviCommerciauxMensuelService {
         Root<ComProspection> p = cq.from(ComProspection.class);
         Path<UUID> commercial = p.get(CFG_COMMERCIAL).get(ID);
         List<Predicate> w = new ArrayList<>(List.of(perimetreService.filtreProspections().toPredicate(p, cq, cb),
-                cb.isNotNull(commercial), entre(cb, p.get("docDate"), debut, fin)));
+                cb.isNotNull(commercial), entre(cb, p.get(DOC_DATE), debut, fin)));
         dansLesTranches(w, p.get(STK_HIERARCHY).get(ID), tranches);
         cq.multiselect(commercial, cb.count(p)).where(w.toArray(new Predicate[0])).groupBy(commercial);
         cumuler(cq, parCle, t -> indicateurs(decimal(t, 1), BigDecimal.ZERO, BigDecimal.ZERO));
     }
 
-    private void visites(List<MembreEquipe> retenus, LocalDateTime debut, LocalDateTime fin, List<UUID> tranches,
+    private void visites(List<UUID> cles, LocalDateTime debut, LocalDateTime fin, List<UUID> tranches,
                          Map<UUID, Indicateurs> parCle) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<ComActionMessageSuivi> r = cq.from(ComActionMessageSuivi.class);
-        Path<UUID> cle = r.get("commercialCle");
-        List<Predicate> w = new ArrayList<>(List.of(
-                suiviService.base(retenus.stream().map(CommerciauxVisibles::cle).toList()).toPredicate(r, cq, cb),
-                SuiviCommerciauxService.saisieEntre(r, cb, debut, fin)));
-        dansLesTranches(w, r.get("trancheId"), tranches);
-        cq.multiselect(cle,
+        cq.multiselect(r.get(COMMERCIAL_CLE),
                         SuiviCommerciauxService.compter(cb, SuiviCommerciauxService.visite(r, cb, ComActionMessageSuivi.PROSPECTION)),
                         SuiviCommerciauxService.compter(cb, SuiviCommerciauxService.visite(r, cb, ComActionMessageSuivi.VENTE)))
-                .where(w.toArray(new Predicate[0])).groupBy(cle);
+                .where(interactions(r, cq, cb, cles, debut, fin, tranches)).groupBy(r.get(COMMERCIAL_CLE));
         cumuler(cq, parCle, t -> indicateurs(BigDecimal.ZERO, decimal(t, 1), decimal(t, 2)));
+    }
+
+    /** Interactions visibles des commerciaux {@code cles} saisies sur la période, bornées aux tranches. */
+    private Predicate[] interactions(Root<ComActionMessageSuivi> r, CriteriaQuery<?> cq, CriteriaBuilder cb,
+                                     List<UUID> cles, LocalDateTime debut, LocalDateTime fin, List<UUID> tranches) {
+        List<Predicate> w = new ArrayList<>(List.of(suiviService.base(cles).toPredicate(r, cq, cb),
+                SuiviCommerciauxService.saisieEntre(r, cb, debut, fin)));
+        dansLesTranches(w, r.get("trancheId"), tranches);
+        return w.toArray(new Predicate[0]);
+    }
+
+    // ---------------------------------------------------------------- rapport n° 17 (FEATURE-tdb-vente-rapports-commercial.md §4)
+
+    /** Activité d'un commercial sur un mois de l'année ; communications = téléphone et mail. */
+    public record ActiviteMois(UUID cle, int mois, long prospections, long visites, long entrantes, long sortantes) {
+    }
+
+    /**
+     * Le mensuel rejoué mois par mois (mêmes requêtes que {@link #mensuel}), plus les communications. Aucune tranche
+     * ou aucun commercial ⇒ rien, jamais « tout » ; {@code tranches} ≤ 2 000 (lots à la charge de l'appelant).
+     */
+    public List<ActiviteMois> parMois(int annee, List<UUID> tranches, List<UUID> cles) {
+        List<ActiviteMois> activite = new ArrayList<>();
+        if (tranches.isEmpty() || cles.isEmpty()) {
+            return activite;
+        }
+        for (int mois = 1; mois <= 12; mois++) {
+            LocalDateTime debut = LocalDate.of(annee, mois, 1).atStartOfDay();
+            LocalDateTime fin = debut.plusMonths(1);
+            Map<UUID, Indicateurs> parCle = new HashMap<>();
+            prospections(debut, fin, tranches, parCle);
+            visites(cles, debut, fin, tranches, parCle);
+            Map<UUID, long[]> communications = communications(cles, debut, fin, tranches);
+            for (UUID cle : cles) {
+                Indicateurs i = parCle.getOrDefault(cle, Indicateurs.ZERO);
+                long[] c = communications.getOrDefault(cle, new long[2]);
+                ActiviteMois a = new ActiviteMois(cle, mois, i.prospections().longValue(),
+                        i.visitesProspection().add(i.visitesVente()).longValue(), c[0], c[1]);
+                if (a.prospections() + a.visites() + a.entrantes() + a.sortantes() > 0) {
+                    activite.add(a);
+                }
+            }
+        }
+        return activite;
+    }
+
+    private Map<UUID, long[]> communications(List<UUID> cles, LocalDateTime debut, LocalDateTime fin,
+                                             List<UUID> tranches) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<ComActionMessageSuivi> r = cq.from(ComActionMessageSuivi.class);
+        Path<String> type = r.get("type");
+        cq.multiselect(r.get(COMMERCIAL_CLE), SuiviCommerciauxService.compter(cb, type.in(ENTRANTES)),
+                        SuiviCommerciauxService.compter(cb, type.in(SORTANTES)))
+                .where(interactions(r, cq, cb, cles, debut, fin, tranches)).groupBy(r.get(COMMERCIAL_CLE));
+        Map<UUID, long[]> parCle = new HashMap<>();
+        for (Tuple t : em.createQuery(cq).getResultList()) {
+            parCle.put(t.get(0, UUID.class), new long[] {SuiviCommerciauxService.nombre(t, 1),
+                    SuiviCommerciauxService.nombre(t, 2)});
+        }
+        return parCle;
+    }
+
+    /**
+     * Visites et communications visibles de l'année que le suivi n'attribue à personne (auteur non résolu), donc
+     * absentes de {@link #parMois} ; « Système » exclu comme dans {@link ComActionMessageSuivi}.
+     */
+    public long interactionsSansAuteur(int annee, List<UUID> tranches) {
+        if (tranches.isEmpty()) {
+            return 0;
+        }
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> cq = cb.createQuery(Long.class);
+        Root<ComActionMessage> m = cq.from(ComActionMessage.class);
+        Expression<UUID> tranche = cb.coalesce(
+                m.join("comProspection", JoinType.LEFT).join(STK_HIERARCHY, JoinType.LEFT).<UUID>get(ID),
+                m.join("comFolder", JoinType.LEFT).join(STK_ITEM, JoinType.LEFT).join(STK_HIERARCHY, JoinType.LEFT)
+                        .<UUID>get(ID));
+        Subquery<UUID> attribuees = cq.subquery(UUID.class);
+        attribuees.select(attribuees.from(ComActionMessageSuivi.class).get(ID));
+        Path<String> auteur = m.get("userName");
+        LocalDateTime debut = LocalDate.of(annee, Month.JANUARY, 1).atStartOfDay();
+        cq.select(cb.count(m)).where(perimetreService.filtreInteractions().toPredicate(m, cq, cb),
+                m.join("comActionMessageType").get("code").in(TYPES_COMPTES), tranche.in(tranches),
+                entre(cb, m.get(DOC_DATE),debut, debut.plusYears(1)),
+                cb.or(cb.isNull(auteur), cb.notEqual(auteur, SYSTEME)), cb.not(m.get(ID).in(attribuees)));
+        return em.createQuery(cq).getSingleResult();
     }
 
     /** Ventes : dossiers accordés sur la période ({@code AgreementDate}, §7.5), annulés ou désistés exclus (§9.8). */
@@ -252,7 +346,7 @@ public class SuiviCommerciauxMensuelService {
         List<Predicate> w = new ArrayList<>(List.of(cb.isTrue(reglement.get("isCredit")),
                 pasVrai(cb, type.get("isNotContabilized")), cb.isNotNull(commercial),
                 entre(cb, cb.coalesce(reglement.<LocalDateTime>get("echeanceDate"),
-                        reglement.<LocalDateTime>get("docDate")), debut, fin),
+                        reglement.<LocalDateTime>get(DOC_DATE)), debut, fin),
                 dossier.get(ID).in(visibles)));
         dansLesTranches(w, dossier.get(STK_ITEM).get(STK_HIERARCHY).get(ID), tranches);
         cq.multiselect(commercial, cb.sum(ligne.get("amount"))).where(w.toArray(new Predicate[0])).groupBy(commercial);

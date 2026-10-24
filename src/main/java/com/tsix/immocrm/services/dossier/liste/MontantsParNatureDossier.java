@@ -1,10 +1,12 @@
 package com.tsix.immocrm.services.dossier.liste;
 
 import com.tsix.immocrm.domain.ColonneDossier;
+import com.tsix.immocrm.domain.RoleCategorieEcheance;
 import com.tsix.immocrm.domain.TropPercu;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.services.dossier.DossierSorti;
+import com.tsix.immocrm.services.dossier.ParametresVente;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
@@ -37,8 +39,8 @@ public class MontantsParNatureDossier {
             PRIX_CONTRACTUEL_REGLE, PRIX_CONTRACTUEL_RESTE, PRIX_REGLE, PRIX_RESTE, NET_A_PAYER, NET_A_PAYER_REGLE,
             NET_A_PAYER_RESTE, TAUX_AVANCE, TAUX_AVANCE_REEL, AVANCE, AVANCE_REGLEE, AVANCE_RESTE, AUTOFINANCEMENT,
             AUTOFINANCEMENT_REGLE, AUTOFINANCEMENT_RESTE, CREDIT, CREDIT_REGLE, CREDIT_RESTE, FRAIS, FRAIS_REGLES,
-            FRAIS_RESTE, MODIFICATIONS, MODIFICATIONS_REGLEES, MODIFICATIONS_RESTE, PENALITES, PENALITES_REGLES,
-            PENALITES_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE));
+            FRAIS_RESTE, FRAIS_SYNDIC, FRAIS_SYNDIC_REGLES, FRAIS_SYNDIC_RESTE, MODIFICATIONS, MODIFICATIONS_REGLEES,
+            MODIFICATIONS_RESTE, PENALITES, PENALITES_REGLES, PENALITES_RESTE, TROP_PERCU, TROP_PERCU_REGLE, TROP_PERCU_RESTE));
 
     /** Les colonnes que {@code GET /api/dossiers/totaux} additionne (les taux ne s'additionnent pas). */
     public static final Set<ColonneDossier> SOMMABLES = Collections.unmodifiableSet(sommables());
@@ -52,7 +54,8 @@ public class MontantsParNatureDossier {
     // Inner join sur la catégorie, comme ComSaleDocumentLocal : une échéance sans catégorie n'a pas de nature.
     private static final String ECHEANCES = """
             SELECT d.comFolder.id, d.id, d.amount, d.excludeFromPrice, c.isCredit, c.isSaleExpense, c.isSaleAdvance,
-                   c.isSaleAutoFinancment, c.isSaleCredit, c.isSaleModification, c.isSalePenality, c.isSaleResiliation
+                   c.isSaleAutoFinancment, c.isSaleCredit, c.isSaleModification, c.isSalePenality, c.isSaleResiliation,
+                   c.id
             FROM ComDocument d JOIN d.comSettlementCategory c
             WHERE d.comFolder.id IN :ids""";
 
@@ -62,13 +65,18 @@ public class MontantsParNatureDossier {
             + StlSettlementLineRepository.COMPTE + " GROUP BY l.comDocument.id";
 
     private final EntityManager em;
+    private final ParametresVente parametres;
 
-    public MontantsParNatureDossier(EntityManager em) {
+    public MontantsParNatureDossier(EntityManager em, ParametresVente parametres) {
         this.em = em;
+        this.parametres = parametres;
     }
 
-    /** Une échéance : sa ligne de trop-perçu et sa participation au prix contractuel ({@code ExcludeFromPrice = 0}). */
-    record Echeance(TropPercu.Ligne ligne, boolean auPrixContractuel) {
+    /**
+     * Une échéance : sa ligne de trop-perçu, sa participation au prix contractuel ({@code ExcludeFromPrice = 0}) et
+     * son appartenance à la catégorie frais syndic ({@code DefaultSyndicFeeDocumentType}).
+     */
+    record Echeance(TropPercu.Ligne ligne, boolean auPrixContractuel, boolean syndic) {
     }
 
     public static boolean requises(Set<ColonneDossier> colonnes) {
@@ -79,10 +87,12 @@ public class MontantsParNatureDossier {
     public Map<UUID, Map<ColonneDossier, BigDecimal>> pour(Collection<ComFolder> dossiers) {
         List<ComFolder> tous = List.copyOf(dossiers);
         Map<UUID, List<Echeance>> echeances = new HashMap<>();
+        UUID syndic = tous.isEmpty() ? null
+                : parametres.guid(RoleCategorieEcheance.FRAIS_SYNDIC.parametre()).orElse(null);
         for (int debut = 0; debut < tous.size(); debut += TAILLE_TRANCHE) {
             List<UUID> ids = tous.subList(debut, Math.min(debut + TAILLE_TRANCHE, tous.size())).stream()
                     .map(ComFolder::getId).toList();
-            lire(ids, echeances);
+            lire(ids, syndic, echeances);
         }
         Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = new HashMap<>();
         for (ComFolder f : tous) {
@@ -91,7 +101,7 @@ public class MontantsParNatureDossier {
         return parDossier;
     }
 
-    private void lire(List<UUID> ids, Map<UUID, List<Echeance>> parDossier) {
+    private void lire(List<UUID> ids, UUID syndic, Map<UUID, List<Echeance>> parDossier) {
         Map<UUID, BigDecimal> regleParEcheance = new HashMap<>();
         for (Object[] r : em.createQuery(REGLES, Object[].class).setParameter("ids", ids).getResultList()) {
             regleParEcheance.put((UUID) r[0], (BigDecimal) r[1]);
@@ -101,7 +111,7 @@ public class MontantsParNatureDossier {
             TropPercu.Ligne ligne = new TropPercu.Ligne((BigDecimal) e[2], regle, (Boolean) e[4], vrai(e[5]),
                     vrai(e[6]), vrai(e[7]), vrai(e[8]), vrai(e[9]), vrai(e[10]), vrai(e[11]));
             parDossier.computeIfAbsent((UUID) e[0], k -> new ArrayList<>())
-                    .add(new Echeance(ligne, Boolean.FALSE.equals(e[3])));
+                    .add(new Echeance(ligne, Boolean.FALSE.equals(e[3]), e[12].equals(syndic)));
         }
     }
 
@@ -113,6 +123,8 @@ public class MontantsParNatureDossier {
                 AUTOFINANCEMENT_RESTE);
         nature(m, lignes, TropPercu.Ligne::creditBancaire, CREDIT, CREDIT_REGLE, CREDIT_RESTE);
         nature(m, lignes, TropPercu.Ligne::frais, FRAIS, FRAIS_REGLES, FRAIS_RESTE);
+        nature(m, echeances.stream().filter(Echeance::syndic).map(Echeance::ligne).toList(), l -> true,
+                FRAIS_SYNDIC, FRAIS_SYNDIC_REGLES, FRAIS_SYNDIC_RESTE);
         // Montants de la vue : ComFolder.ModificationsAmount et Σ signée des pénalités, pas la règle « au crédit ».
         reglement(m, nonNul(f.getModificationsAmount()), lignes, TropPercu.Ligne::modification, MODIFICATIONS,
                 MODIFICATIONS_REGLEES, MODIFICATIONS_RESTE);

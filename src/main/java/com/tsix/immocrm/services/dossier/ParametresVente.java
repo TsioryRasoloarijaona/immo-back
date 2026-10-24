@@ -46,7 +46,12 @@ public class ParametresVente {
 
     /** {@code DefaultComPenaltyDocumentType} : la catégorie des échéances pénalités ; vide si non posé. */
     public Optional<UUID> categoriePenalite() {
-        return parametresGuid.findById(CATEGORIE_PENALITE).map(AdmParamsGuid::getCodeValue);
+        return guid(CATEGORIE_PENALITE);
+    }
+
+    /** Valeur d'un paramètre {@code AdmParamsGuid}, lu par son {@code Code} ; vide si non posé. */
+    public Optional<UUID> guid(String code) {
+        return parametresGuid.findById(code).map(AdmParamsGuid::getCodeValue);
     }
 
     /** {@code RecoveryAge}, en jours ; 90 si absent. */
