@@ -34,8 +34,8 @@ public class ActiviteParProjetRapport extends RapportFluxVente {
     static final String CODE = "ComTdbActiviteParProjet";
     static final String NOTE_VERSEMENTS = "(*) Versements sans les frais ni les pièces non comptabilisées.";
 
-    private static final String TRANCHES = """
-            SELECT t.id, p.description, t.description FROM CfgTranche t LEFT JOIN t.cfgProject p WHERE t.id IN :ids""";
+    private static final String TRANCHES =
+            "SELECT t.id, p.description, t.description FROM CfgTranche t LEFT JOIN t.cfgProject p WHERE t.id IN :ids";
 
     private static final String CONCRETISATIONS = "concretisations";
     private static final String LIVRAISONS = "livraisons";
