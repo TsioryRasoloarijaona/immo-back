@@ -39,7 +39,10 @@ import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ACTIVITE_P
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ACTIVITE_PAR_PROJET;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.CODES;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.COMPARAISON;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.DETAIL_CA;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ETAT_VENTES;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.SITUATION_GLOBALE;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.SUIVI_CA;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.TRANCHE_ID;
 import static com.tsix.immocrm.fixtures.FixtureDossierVente.connecte;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -88,7 +91,8 @@ class RapportsFluxDroitsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON})
+    @ValueSource(strings = {ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON, DETAIL_CA,
+            SITUATION_GLOBALE, SUIVI_CA})
     void r_v4_roleRestreintLieAAucunRapport_403SurDescripteurResultatExport(String code) throws Exception {
         RequestPostProcessor restreint = compteAvec(rapports.role("Restreint " + jeu.prefixe(), true));
 
@@ -103,7 +107,8 @@ class RapportsFluxDroitsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON})
+    @ValueSource(strings = {ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON, DETAIL_CA,
+            SITUATION_GLOBALE, SUIVI_CA})
     void r_v4_roleRestreintLieAuRapport_200SurLeResultat(String code) throws Exception {
         AdmRole role = rapports.role("Lie " + jeu.prefixe(), true);
         rapports.lier(ids.get(code), role);
@@ -129,8 +134,41 @@ class RapportsFluxDroitsTest {
         soft.assertAll();
     }
 
+    // ------------------------------------------------------------------ R1b : n° 7, 11, 15
+
     @Test
-    void r_v5_cleDApiAvecToutesLesPortees_403HorsPortee_surLesQuatreRapports() throws Exception {
+    void r_v4_commercialChef_200SurLesN7N11N15() throws Exception {
+        AdmRole chef = rapports.role("Commercial Chef " + jeu.prefixe(), true);
+        for (String code : List.of(DETAIL_CA, SITUATION_GLOBALE, SUIVI_CA)) {
+            rapports.lier(ids.get(code), chef);
+        }
+        RequestPostProcessor qui = compteAvec(chef);
+
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : List.of(DETAIL_CA, SITUATION_GLOBALE, SUIVI_CA)) {
+            soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, code))).with(qui))).as(code).isEqualTo(200);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v4_directionGenerale_403SurLeN15_200SurLesN7EtN11() throws Exception {
+        AdmRole dg = rapports.role("Direction Generale " + jeu.prefixe(), true);
+        rapports.lier(ids.get(DETAIL_CA), dg);
+        rapports.lier(ids.get(SITUATION_GLOBALE), dg);
+        RequestPostProcessor qui = compteAvec(dg);
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, SUIVI_CA))).with(qui))).as(SUIVI_CA)
+                .isEqualTo(403);
+        for (String code : List.of(DETAIL_CA, SITUATION_GLOBALE)) {
+            soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, code))).with(qui))).as(code).isEqualTo(200);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v5_cleDApiAvecToutesLesPortees_403HorsPortee_surLesSeptRapports() throws Exception {
         AdmUser compte = dossiers.compte("N8N-" + jeu.prefixe(), "Administrateur");
         String cle = cleApiService.genererCle();
         AppApiClient client = new AppApiClient();

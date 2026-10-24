@@ -8,6 +8,7 @@ import com.tsix.immocrm.services.rapport.vente.flux.CleFlux;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxVenteMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux;
+import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -43,6 +44,12 @@ class RapportsFluxPrevuRevueTest {
         return flux;
     }
 
+    private static ValorisationTranche stockVide() {
+        ValorisationTranche valorisation = mock(ValorisationTranche.class);
+        when(valorisation.pour(anyList())).thenReturn(new ValorisationTranche.Valorisations(List.of(), List.of()));
+        return valorisation;
+    }
+
     private static Map<String, Object> ligne(ResultatRapport r, String section, String cle, String valeur) {
         SectionRapport s = r.sections().stream().filter(x -> x.id().equals(section)).findFirst().orElseThrow();
         return s.lignes().stream().filter(l -> valeur.equals(l.get(cle))).findFirst().orElseThrow();
@@ -56,7 +63,8 @@ class RapportsFluxPrevuRevueTest {
         }
         cumul.ajouter(MesureFlux.PREVU_ENCAISSEMENT, new CleFlux(TRANCHE, 2026, 10), new BigDecimal("31000"));
         cumul.ajouter(MesureFlux.ENCAISSEMENTS, new CleFlux(TRANCHE, 2026, 2), new BigDecimal("11500"));
-        ActiviteParMoisRapport rapport = new ActiviteParMoisRapport(flux(cumul.flux(AnomaliesFlux.AUCUNE)), HORLOGE);
+        ActiviteParMoisRapport rapport = new ActiviteParMoisRapport(flux(cumul.flux(AnomaliesFlux.AUCUNE)), stockVide(),
+                HORLOGE);
 
         ResultatRapport r = rapport.executer(contexte("2026"));
 
@@ -72,7 +80,8 @@ class RapportsFluxPrevuRevueTest {
     void n5_aCeJour_autreAnnee_prevuDeLAnnee() {
         FluxMensuel.Cumul cumul = new FluxMensuel.Cumul();
         cumul.ajouter(MesureFlux.PREVU_ENCAISSEMENT, new CleFlux(TRANCHE, 2025, 12), new BigDecimal("1000"));
-        ActiviteParMoisRapport rapport = new ActiviteParMoisRapport(flux(cumul.flux(AnomaliesFlux.AUCUNE)), HORLOGE);
+        ActiviteParMoisRapport rapport = new ActiviteParMoisRapport(flux(cumul.flux(AnomaliesFlux.AUCUNE)), stockVide(),
+                HORLOGE);
 
         ResultatRapport r = rapport.executer(contexte("2025"));
 

@@ -33,8 +33,6 @@ public class ActiviteParProjetRapport extends RapportFluxVente {
 
     static final String CODE = "ComTdbActiviteParProjet";
     static final String NOTE_VERSEMENTS = "(*) Versements sans les frais ni les pièces non comptabilisées.";
-    private static final String PROGRAMME = "programme";
-    private static final String TRANCHE = "tranche";
 
     private static final String TRANCHES = """
             SELECT t.id, p.description, t.description FROM CfgTranche t LEFT JOIN t.cfgProject p WHERE t.id IN :ids""";
@@ -80,11 +78,12 @@ public class ActiviteParProjetRapport extends RapportFluxVente {
     }
 
     private static List<ColonneRapport> colonnes(int annee) {
-        return List.of(ColonneRapport.texte(PROGRAMME, "Programme"), ColonneRapport.texte(TRANCHE, "Tranche"),
-                ColonneRapport.effectif(CONCRETISATIONS, "Concrétisations (dont annulées)", null),
+        List<ColonneRapport> colonnes = new ArrayList<>(colonnesTranche());
+        colonnes.addAll(List.of(ColonneRapport.effectif(CONCRETISATIONS, "Concrétisations (dont annulées)", null),
                 ColonneRapport.effectif(LIVRAISONS, "Livraisons", null),
                 ColonneRapport.effectif(DESISTEMENTS, "Désistements", null),
                 ColonneRapport.montant(CA_TTC, "CA TTC " + annee, null),
-                ColonneRapport.montant(VERSEMENTS, "Versements (*)", null));
+                ColonneRapport.montant(VERSEMENTS, "Versements (*)", null)));
+        return colonnes;
     }
 }

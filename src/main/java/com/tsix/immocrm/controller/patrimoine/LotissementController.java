@@ -4,8 +4,14 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.patrimoine.FiltresTerrains;
 import com.tsix.immocrm.dto.patrimoine.TerrainListeDto;
 import com.tsix.immocrm.services.patrimoine.terrain.TerrainService;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
@@ -24,9 +30,21 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 public class LotissementController {
 
     private final TerrainService terrains;
+    private final ExportListe export;
 
-    public LotissementController(TerrainService terrains) {
+    public LotissementController(TerrainService terrains, ExportListe export) {
         this.terrains = terrains;
+        this.export = export;
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des lots de terrain", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<byte[]> exporter(
+            @ParameterObject @ModelAttribute FiltresTerrains filtres,
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {
+        return TerrainController.exporter(export, terrains, filtres, demande, sort, true);
     }
 
     @GetMapping
