@@ -7,7 +7,12 @@ import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.FiltresListeArticles;
 import com.tsix.immocrm.dto.patrimoine.LigneArticleDto;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -49,9 +54,22 @@ public class SousArticleController {
     private static final String ID = "Id du sous-article (StkItem.PKey).";
 
     private final ArticleService articleService;
+    private final ExportListe export;
 
-    public SousArticleController(ArticleService articleService) {
+    public SousArticleController(ArticleService articleService, ExportListe export) {
         this.articleService = articleService;
+        this.export = export;
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des sous-articles, colonnes du catalogue", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @ParameterObject @ModelAttribute FiltresListeArticles filtres,
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {
+        return ArticleController.exporter(export, articleService, filtres.versFiltres(true), demande, sort,
+                "sous-articles", "Sous-articles");
     }
 
     @GetMapping

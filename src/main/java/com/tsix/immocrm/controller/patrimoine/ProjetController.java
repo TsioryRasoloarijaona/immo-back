@@ -8,7 +8,18 @@ import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
 import com.tsix.immocrm.dto.patrimoine.ZoneProjetDto;
 import com.tsix.immocrm.dto.patrimoine.ZoneProjetEcritureDto;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,7 +44,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import static com.tsix.immocrm.domain.TypeExport.DATE;
 import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
+import static com.tsix.immocrm.web.export.ColonneFixe.cachee;
+import static com.tsix.immocrm.web.export.ColonneFixe.texte;
 
 @Tag(name = "Programmes", description = "Programmes immobiliers (CfgProject), en lecture et en écriture (Administrateur).")
 @RestController
@@ -48,19 +62,49 @@ public class ProjetController {
     private static final String ZONE_INTROUVABLE = "Programme ou zone introuvable.";
     private static final String CODE_ZONE_PRIS = "Code déjà pris sous le même parent du programme.";
 
-    private final ProjetService projetService;
+    private static final String RECHERCHE = "Recherche sans casse dans le code, le libellé, la ville et l'entité.";
+    /** Colonnes de {@code ProjetsList.tsx}, code en premier. */
+    private static final List<ColonneFixe> COLONNES_EXPORT = ColonneFixe.suite(List.of(
+            texte("code", "Code"), texte("description", "Description"), texte("entiteCode", "Entité"),
+            texte("ville", "Ville"), cachee("descriptionLongue", "Description détaillée"),
+            cachee("dateDebutTravaux", "Date lancement des travaux", DATE), cachee("dateFinTravaux", "Date fin des travaux", DATE),
+            cachee("dateDebutCommercialisation", "Date début de commercialisation", DATE),
+            cachee("dateFinCommercialisation", "Date fin de commercialisation", DATE), cachee("adresse", "Adresse")),
+            ColonneFixe.CONTACTS,
+            List.of(cachee("villeSignature", "Courrier fait à"), cachee("signataireLibelle", "Courrier signataire"),
+                    cachee("representantLegalLibelle", "Représentant légal"),
+                    cachee("responsableCommercialLibelle", "Représentant commercial"),
+                    cachee("responsableTechniqueLibelle", "Représentant technique")),
+            ColonneFixe.AUDIT);
 
-    public ProjetController(ProjetService projetService) {
+    private final ProjetService projetService;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
+
+    public ProjetController(ProjetService projetService, ExportListe export, FichePdf fichePdf) {
         this.projetService = projetService;
+        this.export = export;
+        this.fichePdf = fichePdf;
     }
 
     @GetMapping
     @Operation(summary = "Liste paginée des programmes des entités actives (colonnes de la liste OMRAN)")
     public PageDto<ProjetListItemDto> findAll(
-            @Parameter(description = "Recherche sans casse dans le code, le libellé, la ville et l'entité.")
+            @Parameter(description = RECHERCHE)
             @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
         return PageDto.of(projetService.findAll(search, pageable));
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des programmes", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(description = RECHERCHE) @RequestParam(required = false) String search,
+            @Parameter(hidden = true) @SortDefault(sort = "userCreateDateTime", direction = Sort.Direction.DESC) Sort sort) {
+        return export.reponse(demande, "projets", "Programmes", ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT),
+                () -> LignesExport.toutes(sort, page -> projetService.findAll(search, page)));
     }
 
     @GetMapping("/{id}")
@@ -68,6 +112,13 @@ public class ProjetController {
     @ApiResponse(responseCode = "404", description = INTROUVABLE)
     public ProjetDetailDto findById(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
         return projetService.findById(id);
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF du programme (inline), mêmes droit et visibilité que le détail")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID_PROGRAMME) @PathVariable UUID id) {
+        return fichePdf.reponse(FichesPatrimoine.projet(projetService.findById(id)));
     }
 
     @GetMapping("/defauts-entite/{entiteId}")

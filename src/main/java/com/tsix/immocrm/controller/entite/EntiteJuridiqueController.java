@@ -6,7 +6,16 @@ import com.tsix.immocrm.dto.entite.LigneRepartitionDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.services.patrimoine.EntiteJuridiqueService;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +44,14 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.List;
 import java.util.UUID;
 
+import static com.tsix.immocrm.domain.TypeExport.BOOLEEN;
+import static com.tsix.immocrm.domain.TypeExport.DATE;
+import static com.tsix.immocrm.domain.TypeExport.MONTANT;
+import static com.tsix.immocrm.domain.TypeExport.NOMBRE;
+import static com.tsix.immocrm.web.export.ColonneFixe.cachee;
+import static com.tsix.immocrm.web.export.ColonneFixe.de;
+import static com.tsix.immocrm.web.export.ColonneFixe.texte;
+
 @Tag(name = "Entités juridiques", description = "Écran OMRAN « ENTITES JURIDIQUE » (CfgCompany) et répartition des parts ; "
         + "écriture Administrateur.")
 @RestController
@@ -52,23 +69,68 @@ public class EntiteJuridiqueController {
     private static final TypeReference<List<LigneRepartitionDto>> LIGNES = new TypeReference<>() {
     };
 
+    private static final String ACTIF = "true, false (inactives et jamais renseignées) ou tous (défaut).";
+    private static final String RECHERCHE = "Code, libellé, matricule fiscal ou registre du commerce ; espaces et casse ignorés.";
+
+    /** Colonnes de {@code EntitesJuridiquesList.tsx}, même ordre. */
+    private static final List<ColonneFixe> COLONNES_EXPORT = ColonneFixe.suite(List.of(
+            texte("code", "Code"), texte("description", "Description"), de("isActive", "Active", BOOLEEN),
+            texte("identifiantFiscal", "Matricule fiscale"), texte("registreCommerce", "Registre de commerce"),
+            texte("ville", "Ville"), cachee("formeJuridique", "Forme juridique"), cachee("deviseCode", "Devise"),
+            cachee("dateCreation", "Date de création", DATE), cachee("capital", "Capital", MONTANT), cachee("cnss", "CNSS"),
+            cachee("patente", "Patente"), cachee("ice", "Identifiant commun de l'entreprise"),
+            cachee("dateLiquidation", "Date liquidation", DATE), cachee("partMaison", "Part maison", NOMBRE),
+            cachee("groupeActionnairesLibelle", "Groupe actionnaire"),
+            cachee("nombreActionnaires", "Nombre actionnaires", NOMBRE),
+            cachee("nombreParts", "Nombre de parts (actions)", NOMBRE), cachee("adresse", "Adresse"),
+            cachee("adresse2", "Adresse 2"), cachee("adresse3", "Adresse 3"), cachee("codePostal", "Code postal"),
+            cachee("paysLibelle", "Pays")), ColonneFixe.CONTACTS,
+            List.of(cachee("villeSignature", "Courrier fait à"), cachee("representantLegalLibelle", "Représentant légal"),
+                    cachee("signataireLibelle", "Courrier signataire"),
+                    cachee("responsableCommercialLibelle", "Responsable commercial"),
+                    cachee("responsableTechniqueLibelle", "Responsable technique"),
+                    cachee("descriptionLongue", "Description détaillée")), ColonneFixe.AUDIT);
+
     private final EntiteJuridiqueService service;
     private final JsonMapper json;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
 
-    public EntiteJuridiqueController(EntiteJuridiqueService service, JsonMapper json) {
+    public EntiteJuridiqueController(EntiteJuridiqueService service, JsonMapper json, ExportListe export,
+                                     FichePdf fichePdf) {
         this.service = service;
         this.json = json;
+        this.export = export;
+        this.fichePdf = fichePdf;
     }
 
     @GetMapping
     @Operation(summary = "Liste des entités, actives ou non (colonnes de la liste OMRAN)")
     @ApiResponse(responseCode = "400", description = "actif ne vaut ni true, ni false, ni tous.")
     public List<EntiteJuridiqueDto> lister(
-            @Parameter(description = "true, false (inactives et jamais renseignées) ou tous (défaut).")
+            @Parameter(description = ACTIF)
             @RequestParam(required = false) String actif,
-            @Parameter(description = "Code, libellé, matricule fiscal ou registre du commerce ; espaces et casse ignorés.")
+            @Parameter(description = RECHERCHE)
             @RequestParam(required = false) String search) {
         return service.lister(actif, search);
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des entités (même droit que la liste)", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(description = ACTIF) @RequestParam(required = false) String actif,
+            @Parameter(description = RECHERCHE) @RequestParam(required = false) String search) {
+        return export.reponse(demande, "entites-juridiques", "Entités juridiques",
+                ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT), () -> service.lister(actif, search));
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF de l'entité (inline), active ou non, avec sa répartition")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID_ENTITE) @PathVariable UUID id) {
+        return fichePdf.reponse(FichesPatrimoine.entite(service.findById(id)));
     }
 
     @GetMapping("/devises")

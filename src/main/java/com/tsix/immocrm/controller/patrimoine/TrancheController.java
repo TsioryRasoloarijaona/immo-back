@@ -9,7 +9,19 @@ import com.tsix.immocrm.dto.patrimoine.TrancheListItemDto;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
 import com.tsix.immocrm.services.patrimoine.TrancheService;
 import com.tsix.immocrm.dto.patrimoine.TrancheEcritureDto;
+import com.tsix.immocrm.services.patrimoine.OngletsTrancheService;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
+import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.web.SortDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import java.util.Set;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -42,12 +54,46 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/tranches")
 public class TrancheController {
 
+    private static final String PROJET = "Id du projet (Entité, CfgProject.id) pour ne renvoyer que ses tranches. Absent = toutes les tranches.";
+    private static final String RECHERCHE = "Recherche sans casse dans le code, le libellé, la ville et le code du programme.";
+    private static final String INTROUVABLE = "Tranche introuvable.";
+    private static final String ID_TRANCHE = "Id de la tranche (CfgTranche.PKey).";
+
     private final TrancheService trancheService;
     private final ArticleService articleService;
+    private final OngletsTrancheService onglets;
+    private final ExportListe export;
+    private final FichePdf fichePdf;
 
-    public TrancheController(TrancheService trancheService, ArticleService articleService) {
+    public TrancheController(TrancheService trancheService, ArticleService articleService,
+                             OngletsTrancheService onglets, ExportListe export, FichePdf fichePdf) {
         this.trancheService = trancheService;
         this.articleService = articleService;
+        this.onglets = onglets;
+        this.export = export;
+        this.fichePdf = fichePdf;
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Export xlsx ou pdf de la liste des tranches, colonnes du catalogue", description = ExportListe.DESCRIPTION)
+    @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
+    public ResponseEntity<StreamingResponseBody> exporter(
+            @ParameterObject @ModelAttribute DemandeExport demande,
+            @Parameter(description = PROJET) @RequestParam(required = false) UUID projetId,
+            @Parameter(description = RECHERCHE) @RequestParam(required = false) String search,
+            @Parameter(hidden = true) @SortDefault(sort = "userCreateDateTime", direction = Sort.Direction.DESC) Sort sort) {
+        Set<ColonneTranche> selection = ColonneTranche.resoudre(demande.colonnes());
+        return export.reponse(demande, "tranches", "Tranches", LignesExport.ordre(demande.colonnes(), selection),
+                () -> LignesExport.toutes(sort, page -> trancheService.findAll(projetId, search, selection, page)));
+    }
+
+    @GetMapping("/{id}/fiche.pdf")
+    @Operation(summary = "Fiche PDF de la tranche (inline), terrains et étages compris ; visibilité du détail")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
+        TrancheDetailDto tranche = trancheService.findById(id);
+        return fichePdf.reponse(FichesPatrimoine.tranche(tranche, onglets.terrains(id).lignes(),
+                onglets.etages(id).lignes()));
     }
 
     @GetMapping
@@ -58,10 +104,9 @@ public class TrancheController {
                     content = @Content)
     })
     public PageDto<TrancheListItemDto> findAll(
-            @Parameter(description = "Id du projet (Entité, CfgProject.id) pour ne renvoyer que "
-                    + "ses tranches. Absent = toutes les tranches.")
+            @Parameter(description = PROJET)
             @RequestParam(required = false) UUID projetId,
-            @Parameter(description = "Recherche sans casse dans le code, le libellé, la ville et le code du programme.")
+            @Parameter(description = RECHERCHE)
             @RequestParam(required = false) String search,
             @Parameter(description = "Colonnes du catalogue /api/referentiels/colonnes/tranches ; absent = colonnes par défaut.",
                     example = "code,description,standingLibelle,visibleSav")
