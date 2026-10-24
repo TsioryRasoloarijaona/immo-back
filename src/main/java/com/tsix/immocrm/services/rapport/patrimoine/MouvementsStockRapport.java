@@ -39,7 +39,19 @@ public class MouvementsStockRapport implements Rapport {
     private static final String STOCK_INITIAL = "stockInitial";
 
     // Un seuil AdmParamsGuid absent (ou sans statut) vide son bloc par jointure interne ; l'avertissement le signale.
+    // Concrétisation sur l'article tenu à cette date : ancien article du plus ancien transfert retenu (§3, décision 24/10).
     private static final String SQL_MOUVEMENTS = """
+            WITH Transferts AS (
+                SELECT w.PKey, w.ComSaleId, w.StkOldItemId, w.StkItemId, w.ValidityDate, f.Code AS Dossier
+                FROM ComSaleWithdrawalProduct w
+                JOIN ComFolder f ON f.PKey = w.ComSaleId AND f.AdvanceDate IS NOT NULL AND f.CancelDate IS NULL
+                WHERE w.ValidityDate IS NOT NULL
+                  AND EXISTS (SELECT 1 FROM StrFolderStatusHistory h
+                              JOIN StrStatus sh ON sh.PKey = h.StrFolderStatusId
+                              JOIN AdmParamsGuid p ON p.Code = 'DefaultComFolderStatusConcretisation'
+                              JOIN StrStatus sc ON sc.PKey = p.CodeValue
+                              WHERE h.ComSaleWithdrawalProductId = w.PKey AND sh.Sorting >= sc.Sorting)
+            )
             SELECT t.Description AS Tranche, m.Article, m.Dossier, m.Libelle, m.DateMouvement, m.Quantite
             FROM (
                 SELECT l.PKey AS TrancheId, CAST(NULL AS nvarchar(255)) AS Article,
@@ -51,7 +63,10 @@ public class MouvementsStockRapport implements Rapport {
                 WHERE l.MarketingStartDate IS NOT NULL
                 UNION ALL
                 SELECT i.StkHierarchyId, i.Code, f.Code, N'CONCRETISATION', CAST(f.AdvanceDate AS date), -1
-                FROM ComFolder f JOIN StkItem i ON i.PKey = f.StkItemId
+                FROM ComFolder f
+                OUTER APPLY (SELECT TOP 1 r.StkOldItemId FROM Transferts r WHERE r.ComSaleId = f.PKey
+                             ORDER BY r.ValidityDate ASC, r.PKey ASC) premier
+                JOIN StkItem i ON i.PKey = COALESCE(premier.StkOldItemId, f.StkItemId)
                 WHERE f.AdvanceDate IS NOT NULL
                 UNION ALL
                 SELECT i.StkHierarchyId, i.Code, f.Code, s.Libelle, CAST(f.CancelDate AS date), 1
@@ -62,19 +77,13 @@ public class MouvementsStockRapport implements Rapport {
                 JOIN AdmParamsGuid p ON p.Code = s.Seuil AND p.CodeValue = f.StrStatusId
                 WHERE f.AdvanceDate IS NOT NULL AND f.CancelDate IS NOT NULL
                 UNION ALL
-                SELECT x.TrancheId, x.Article, f.Code, x.Libelle, CAST(w.ValidityDate AS date), x.Quantite
-                FROM ComSaleWithdrawalProduct w
-                JOIN ComFolder f ON f.PKey = w.ComSaleId AND f.AdvanceDate IS NOT NULL AND f.CancelDate IS NULL
+                SELECT x.TrancheId, x.Article, w.Dossier, x.Libelle, CAST(w.ValidityDate AS date), x.Quantite
+                FROM Transferts w
                 JOIN StkItem io ON io.PKey = w.StkOldItemId
                 JOIN StkItem inv ON inv.PKey = w.StkItemId
                 CROSS APPLY (VALUES (io.StkHierarchyId, io.Code, N'TRANSFERT SORTIE', 1),
                                     (inv.StkHierarchyId, inv.Code, N'TRANSFERT ENTREE', -1)) x(TrancheId, Article, Libelle, Quantite)
-                WHERE w.ValidityDate IS NOT NULL AND io.StkHierarchyId <> inv.StkHierarchyId
-                  AND EXISTS (SELECT 1 FROM StrFolderStatusHistory h
-                              JOIN StrStatus sh ON sh.PKey = h.StrFolderStatusId
-                              JOIN AdmParamsGuid p ON p.Code = 'DefaultComFolderStatusConcretisation'
-                              JOIN StrStatus sc ON sc.PKey = p.CodeValue
-                              WHERE h.ComSaleWithdrawalProductId = w.PKey AND sh.Sorting >= sc.Sorting)
+                WHERE io.StkHierarchyId <> inv.StkHierarchyId
             ) m
             JOIN CfgTranche t ON t.PKey = m.TrancheId
             WHERE t.PKey IN (:tranches) AND t.IsForSale = 1""";
