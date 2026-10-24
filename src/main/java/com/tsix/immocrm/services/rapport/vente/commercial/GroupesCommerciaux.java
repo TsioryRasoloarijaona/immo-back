@@ -115,8 +115,8 @@ public class GroupesCommerciaux {
                 Predicate dans = t.in(lot);
                 return avecSansTranche ? cb.or(dans, cb.isNull(t)) : dans;
             };
-            return groupementService.grouper(racine, base.and(dansLot), cle, granularite, List.of(), TriGroupe.NOMBRE,
-                    true, TOUS_LES_GROUPES).groupes().getContent();
+            return groupementService.groupes(racine, base.and(dansLot), cle, granularite, TriGroupe.NOMBRE, true,
+                    TOUS_LES_GROUPES);
         }).forEach((GroupeDto g) -> groupes.merge(g.cle(), g.nombre(), Long::sum));
         return groupes;
     }

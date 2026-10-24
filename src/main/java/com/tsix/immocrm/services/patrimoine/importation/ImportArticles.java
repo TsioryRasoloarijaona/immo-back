@@ -16,6 +16,7 @@ import com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.ChampImpor
 import com.tsix.immocrm.services.patrimoine.importation.LectureClasseur.LigneLue;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.FlushModeType;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -263,8 +264,9 @@ class ImportArticles {
         return trouves.get(0);
     }
 
+    /** Lu avant toute écriture de la ligne (la précédente est déjà flushée) : pas d'auto-flush, coûteux sur un gros import. */
     private List<StkItem> parCode(Contexte ctx, String code) {
-        return em.createQuery(PAR_CODE, StkItem.class)
+        return em.createQuery(PAR_CODE, StkItem.class).setFlushMode(FlushModeType.COMMIT)
                 .setParameter("tranche", ctx.tranche().getId()).setParameter(CODE, code).getResultList();
     }
 
