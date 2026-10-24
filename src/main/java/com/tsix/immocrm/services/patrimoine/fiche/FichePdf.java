@@ -96,14 +96,14 @@ public class FichePdf {
             table = new PdfPTable(4);
             section.champs().forEach(c -> {
                 table.addCell(MiseEnPagePdf.entete(c.libelle()));
-                table.addCell(MiseEnPagePdf.cellule(MiseEnPagePdf.texte(c.valeur()), false, false));
+                table.addCell(MiseEnPagePdf.nouvelleCellule(MiseEnPagePdf.texte(c.valeur()), false, false));
             });
             table.completeRow();
         } else {
             table = new PdfPTable(section.entetes().size());
             table.setHeaderRows(section.lignes().isEmpty() ? 0 : 1);
             section.entetes().forEach(e -> table.addCell(MiseEnPagePdf.entete(e)));
-            section.lignes().forEach(l -> l.forEach(v -> table.addCell(MiseEnPagePdf.cellule(
+            section.lignes().forEach(l -> l.forEach(v -> table.addCell(MiseEnPagePdf.nouvelleCellule(
                     MiseEnPagePdf.texte(v), v instanceof Number, false))));
         }
         table.setWidthPercentage(100);

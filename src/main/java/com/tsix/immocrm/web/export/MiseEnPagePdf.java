@@ -93,7 +93,7 @@ public final class MiseEnPagePdf {
         return cellule;
     }
 
-    public static PdfPCell cellule(String texte, boolean aDroite, boolean gras) {
+    public static PdfPCell nouvelleCellule(String texte, boolean aDroite, boolean gras) {
         PdfPCell cellule = new PdfPCell(new Phrase(texte, gras ? GRAS : CELLULE));
         cellule.setPadding(3);
         if (aDroite) {

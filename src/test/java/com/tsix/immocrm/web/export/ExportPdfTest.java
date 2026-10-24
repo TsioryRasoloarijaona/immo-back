@@ -109,7 +109,7 @@ class ExportPdfTest {
 
         int total = pages.size();
         assertThat(total).isGreaterThan(1);
-        assertThat(IntStream.rangeClosed(1, total).boxed().toList()).allSatisfy(n ->
+        assertThat(IntStream.rangeClosed(1, total).boxed().toList()).isNotEmpty().allSatisfy(n ->
                 assertThat(pages.get(n - 1)).containsPattern(
                         Pattern.compile("(?i)page\\s*" + n + "\\s*/\\s*" + total)));
     }

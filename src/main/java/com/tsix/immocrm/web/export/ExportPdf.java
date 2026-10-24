@@ -95,7 +95,7 @@ public class ExportPdf {
             Object valeur = valeurs.get(colonne.nom());
             String texte = total && i == 0 && valeur == null ? TOTAL : MiseEnPagePdf.texte(valeur, colonne.typeExport());
             boolean chiffre = colonne.typeExport() == TypeExport.MONTANT || colonne.typeExport() == TypeExport.NOMBRE;
-            table.addCell(MiseEnPagePdf.cellule(texte, chiffre, total));
+            table.addCell(MiseEnPagePdf.nouvelleCellule(texte, chiffre, total));
         }
     }
 }

@@ -138,7 +138,7 @@ class FichesPdfTest {
         assertThat(resultat.getResponse().getStatus()).isEqualTo(404);
     }
 
-    // ------------------------------------------------------------------ même droit que GET /{id}
+    // Le droit d'accès à la fiche est le même que pour le détail.
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {PROJETS, TRANCHES, ARTICLES, TERRAINS, PROSPECTIONS_TERRAIN, ENTITES})
