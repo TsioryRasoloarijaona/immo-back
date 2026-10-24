@@ -29,7 +29,6 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.descripteur;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.export;
@@ -61,8 +60,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   TM (en vente, lancée le 10/01) : m1..m4 VENTE articles, ms sous-article de m1, mp article PROJET   ⇒ lancement +4
  *     m1 avancé 05/02 · ms avancé 10/02 · mp avancé 11/02                                          (statut concrétisation)
  *     m2 avancé 01/03 00:00, désisté 31/03 18:30 · m3 avancé 01/04 10:30, annulé 15/04
- *   TX, TY (en vente, non lancées) : dossier de y1 (TY) transféré depuis x1 (TX) le 01/06       ⇒ +1 x1, −1 y1
- *     dossier de x2 transféré depuis x3, même tranche TX                                          ⇒ rien
+ *   TX, TY (en vente, non lancées) : dossier de y1 (TY) transféré depuis x1 (TX) le 01/06  ⇒ conc. −1 x1, +1 x1, −1 y1
+ *     dossier de x2 transféré depuis x3, même tranche TX                         ⇒ conc. −1 sur x3, pas de transfert
  *     dossier de y2 transféré depuis x4, historique au statut RESA (Sorting sous le seuil)         ⇒ rien
  *   TN (PAS en vente) : n1 avancé 01/02
  * </pre>
@@ -77,6 +76,7 @@ class MouvementsStockPatrimoineTest {
     private static final String SYNTHESE = "synthese";
     private static final String MOUVEMENTS_SECTION = "mouvements";
     private static final String ARTICLE = "article";
+    private static final String TRANCHE = "tranche";
     private static final String LIBELLE = "libelle";
     private static final String MOUVEMENT = "mouvement";
     private static final String STOCK_INITIAL = "stockInitial";
@@ -318,30 +318,46 @@ class MouvementsStockPatrimoineTest {
 
     // ------------------------------------------------------------------ transferts (décision 3)
 
+    /** Décision 24/10 (option a) : concrétisation sur l'ancien article, +1 ancien, −1 nouveau ⇒ soldes 0 / −1. */
     @Test
-    void t5_transfertInterTranches_plusUnAncienArticle_moinsUnNouveau() throws Exception {
+    void t5_transfertInterTranches_concretisationSurAncien_plusUnAncien_moinsUnNouveau_soldesZeroEtMoinsUn()
+            throws Exception {
         transferts();
 
         List<Map<String, Object>> sections = appels.sections(annee(tx, ty));
+        List<Map<String, Object>> ancien = mouvementsDe(sections, x1);
+        List<Map<String, Object>> nouveau = mouvementsDe(sections, y1);
 
-        List<Map<String, Object>> sortie = lignesOu(section(sections, MOUVEMENTS_SECTION), LIBELLE, TRANSFERT_SORTIE)
-                .stream().filter(l -> Objects.equals(x1.getCode(), l.get(ARTICLE))).toList();
-        List<Map<String, Object>> entree = lignesOu(section(sections, MOUVEMENTS_SECTION), LIBELLE, TRANSFERT_ENTREE)
-                .stream().filter(l -> Objects.equals(y1.getCode(), l.get(ARTICLE))).toList();
-        assertThat(sortie).hasSize(1);
-        assertThat(entree).hasSize(1);
-        assertThat(nombre(sortie.get(0).get(MOUVEMENT))).isEqualByComparingTo("1");
-        assertThat(nombre(entree.get(0).get(MOUVEMENT))).isEqualByComparingTo("-1");
+        assertThat(ancien).extracting(l -> l.get(LIBELLE), l -> l.get(TRANCHE),
+                        l -> nombre(l.get(MOUVEMENT)).longValueExact())
+                .containsExactly(tuple(CONCRETISATION, tx.getDescription(), -1L),
+                        tuple(TRANSFERT_SORTIE, tx.getDescription(), 1L));
+        assertThat(nouveau).extracting(l -> l.get(LIBELLE), l -> l.get(TRANCHE),
+                        l -> nombre(l.get(MOUVEMENT)).longValueExact())
+                .containsExactly(tuple(TRANSFERT_ENTREE, ty.getDescription(), -1L));
+        assertThat(somme(ancien, MOUVEMENT)).isEqualByComparingTo("0");
+        assertThat(somme(nouveau, MOUVEMENT)).isEqualByComparingTo("-1");
     }
 
+    /** Décision 24/10 : même tranche ⇒ aucune ligne de transfert, concrétisation sur l'ancien article (x3). */
     @Test
-    void t5_transfertDansLaMemeTranche_aucunMouvementDeTransfert() throws Exception {
+    void t5_transfertDansLaMemeTranche_aucunMouvementDeTransfert_concretisationSurAncienArticle() throws Exception {
         transferts();
 
         List<Map<String, Object>> sections = appels.sections(annee(tx, ty));
 
-        assertThat(mouvementsDe(sections, x3)).isEmpty();
-        assertThat(mouvementsDe(sections, x2)).extracting(l -> l.get(LIBELLE)).containsExactly(CONCRETISATION);
+        assertThat(mouvementsDe(sections, x3)).extracting(l -> l.get(LIBELLE), l -> l.get(TRANCHE))
+                .containsExactly(tuple(CONCRETISATION, tx.getDescription()));
+        assertThat(mouvementsDe(sections, x2)).isEmpty();
+    }
+
+    /** Sans transfert : concrétisation sur {@code ComFolder.StkItemId}. */
+    @Test
+    void t5_concretisationSansTransfert_surArticleDuDossier() throws Exception {
+        List<Map<String, Object>> lignes = mouvementsDe(appels.sections(annee(tm)), m1);
+
+        assertThat(lignes).extracting(l -> l.get(LIBELLE), l -> l.get(TRANCHE))
+                .containsExactly(tuple(CONCRETISATION, tm.getDescription()));
     }
 
     @Test
