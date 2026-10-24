@@ -20,7 +20,6 @@ import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.web.SortDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import java.util.Set;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -79,7 +78,7 @@ public class ArticleController {
     @GetMapping("/export")
     @Operation(summary = "Export xlsx ou pdf du catalogue des articles, colonnes du catalogue", description = ExportListe.DESCRIPTION)
     @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute FiltresListeArticles filtres,
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(hidden = true) @SortDefault(sort = "docDate", direction = Sort.Direction.DESC) Sort sort) {
@@ -87,7 +86,7 @@ public class ArticleController {
     }
 
     /** Export partagé avec {@code /api/sous-articles/export} : même lecture que la liste, filtres déjà traduits. */
-    static ResponseEntity<StreamingResponseBody> exporter(ExportListe export, ArticleService articles, FiltresArticle filtres,
+    static ResponseEntity<byte[]> exporter(ExportListe export, ArticleService articles, FiltresArticle filtres,
                                                           DemandeExport demande, Sort sort, String liste, String titre) {
         Set<ColonneArticle> selection = ColonneArticle.resoudre(demande.colonnes());
         return export.reponse(demande, liste, titre, LignesExport.ordre(demande.colonnes(), selection),
@@ -99,7 +98,9 @@ public class ArticleController {
     @ApiResponse(responseCode = "404", description = ARTICLE_INTROUVABLE, content = @Content)
     public ResponseEntity<byte[]> fichePdf(@Parameter(description = ID_ARTICLE) @PathVariable UUID id) {
         ArticleDetailDto article = articleService.findById(id);
-        return fichePdf.reponse(FichesPatrimoine.article(article, trancheService.findById(article.trancheId()).entiteId()));
+        // Quelques articles OMRAN n'ont pas de tranche (le détail les sert) : pas d'en-tête société alors.
+        UUID societeId = article.trancheId() == null ? null : trancheService.findById(article.trancheId()).entiteId();
+        return fichePdf.reponse(FichesPatrimoine.article(article, societeId));
     }
 
     @GetMapping

@@ -19,7 +19,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -105,7 +104,7 @@ public class EtudeFaisabiliteController {
             @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content),
             @ApiResponse(responseCode = "403", description = PAS_LECTEUR, content = @Content)
     })
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(description = SOCIETE) @RequestParam(required = false) UUID societeId,
             @Parameter(description = STATUT) @RequestParam(required = false) UUID statutId,

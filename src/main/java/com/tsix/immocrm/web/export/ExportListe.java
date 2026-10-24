@@ -5,7 +5,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.Collection;
 import java.util.List;
@@ -35,7 +34,8 @@ public class ExportListe {
         this.pdf = pdf;
     }
 
-    public ResponseEntity<StreamingResponseBody> reponse(DemandeExport demande, String liste, String titre,
+    /** Rendu d'un bloc, xlsx comme pdf : pas de réponse asynchrone (les lignes sont déjà lues, ≤ 20 000). */
+    public ResponseEntity<byte[]> reponse(DemandeExport demande, String liste, String titre,
                                                          Collection<? extends Colonne> colonnes,
                                                          Supplier<List<?>> lecture) {
         FormatExport choisi = FormatExport.lire(demande.format());
@@ -43,7 +43,7 @@ public class ExportListe {
                 LignesAplaties.toutes(lecture.get()), null));
         return choisi == FormatExport.PDF
                 ? pdf.reponse(liste, titre, filtresDeLaRequete(), feuilles)
-                : tableur.reponse(liste, titre, feuilles);
+                : tableur.reponseEnMemoire(liste, titre, feuilles);
     }
 
     private static List<String> filtresDeLaRequete() {

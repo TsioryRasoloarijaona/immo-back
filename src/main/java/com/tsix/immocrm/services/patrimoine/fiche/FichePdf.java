@@ -101,7 +101,7 @@ public class FichePdf {
             table.completeRow();
         } else {
             table = new PdfPTable(section.entetes().size());
-            table.setHeaderRows(1);
+            table.setHeaderRows(section.lignes().isEmpty() ? 0 : 1);
             section.entetes().forEach(e -> table.addCell(MiseEnPagePdf.entete(e)));
             section.lignes().forEach(l -> l.forEach(v -> table.addCell(MiseEnPagePdf.cellule(
                     MiseEnPagePdf.texte(v), v instanceof Number, false))));

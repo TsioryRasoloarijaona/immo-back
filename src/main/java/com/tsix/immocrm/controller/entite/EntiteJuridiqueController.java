@@ -15,7 +15,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -118,7 +117,7 @@ public class EntiteJuridiqueController {
     @GetMapping("/export")
     @Operation(summary = "Export xlsx ou pdf de la liste des entités (même droit que la liste)", description = ExportListe.DESCRIPTION)
     @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(description = ACTIF) @RequestParam(required = false) String actif,
             @Parameter(description = RECHERCHE) @RequestParam(required = false) String search) {

@@ -20,7 +20,6 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.web.SortDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import java.util.Set;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -77,7 +76,7 @@ public class TrancheController {
     @GetMapping("/export")
     @Operation(summary = "Export xlsx ou pdf de la liste des tranches, colonnes du catalogue", description = ExportListe.DESCRIPTION)
     @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(description = PROJET) @RequestParam(required = false) UUID projetId,
             @Parameter(description = RECHERCHE) @RequestParam(required = false) String search,

@@ -25,7 +25,6 @@ import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.web.SortDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -121,7 +120,7 @@ public class ProspectionTerrainController {
     @GetMapping("/export")
     @Operation(summary = "Export xlsx ou pdf de la liste des prospections terrain", description = ExportListe.DESCRIPTION)
     @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute FiltresProspectionsTerrain filtres,
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {

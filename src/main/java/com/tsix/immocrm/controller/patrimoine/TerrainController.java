@@ -16,7 +16,6 @@ import com.tsix.immocrm.web.export.LignesExport;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.web.SortDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import java.util.List;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -86,7 +85,7 @@ public class TerrainController {
     @GetMapping("/export")
     @Operation(summary = "Export xlsx ou pdf de la liste des terrains", description = ExportListe.DESCRIPTION)
     @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content)
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @ParameterObject @ModelAttribute FiltresTerrains filtres,
             @ParameterObject @ModelAttribute DemandeExport demande,
             @Parameter(hidden = true) @SortDefault(sort = "code", direction = Sort.Direction.ASC) Sort sort) {
@@ -94,7 +93,7 @@ public class TerrainController {
     }
 
     /** Export partagé avec {@code /api/lotissements/export} : même lecture que la liste. */
-    static ResponseEntity<StreamingResponseBody> exporter(ExportListe export, TerrainService terrains, FiltresTerrains filtres,
+    static ResponseEntity<byte[]> exporter(ExportListe export, TerrainService terrains, FiltresTerrains filtres,
                                                           DemandeExport demande, Sort sort, boolean lotissements) {
         List<ColonneFixe> catalogue = COLONNES_TERRAINS.stream()
                 .filter(c -> lotissements || !"tranche".equals(c.nom())).toList();

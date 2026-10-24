@@ -12,7 +12,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -50,8 +49,7 @@ public class ExportPdf {
      * @param filtres filtres appliqués, une ligne « libellé : valeur » chacun, écrits sous le titre
      * @throws InvalidRequestException (400) au-delà de {@link #LIGNES_PDF_MAX} lignes
      */
-    public ResponseEntity<StreamingResponseBody> reponse(String liste, String titre, List<String> filtres,
-                                                         List<FeuilleExport> feuilles) {
+    public ResponseEntity<byte[]> reponse(String liste, String titre, List<String> filtres, List<FeuilleExport> feuilles) {
         if (feuilles.stream().mapToInt(f -> f.lignes().size()).sum() > LIGNES_PDF_MAX) {
             throw new InvalidRequestException(TROP_DE_LIGNES);
         }
@@ -60,7 +58,7 @@ public class ExportPdf {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(nomFichier).build().toString())
-                .body(sortie -> sortie.write(pdf));
+                .body(pdf);
     }
 
     public byte[] ecrire(String titre, String auteur, List<String> filtres, List<FeuilleExport> feuilles) {
@@ -81,7 +79,8 @@ public class ExportPdf {
         PdfPTable table = new PdfPTable(Math.max(colonnes.size(), 1));
         table.setWidthPercentage(100);
         table.setSpacingBefore(6);
-        table.setHeaderRows(1);
+        // OpenPDF n'imprime pas une table réduite à sa ligne d'en-tête : liste vide = en-tête ordinaire.
+        table.setHeaderRows(feuille.lignes().isEmpty() && feuille.totaux() == null ? 0 : 1);
         colonnes.forEach(c -> table.addCell(MiseEnPagePdf.entete(c.libelle())));
         feuille.lignes().forEach(l -> ligne(table, colonnes, LignesAplaties.de(l), false));
         if (feuille.totaux() != null) {
