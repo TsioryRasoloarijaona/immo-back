@@ -12,6 +12,9 @@ import com.tsix.immocrm.services.rapport.vente.flux.FluxMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxVenteMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux;
+import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche;
+import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche.Population;
+import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche.Valorisation;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -29,8 +32,8 @@ import java.util.UUID;
 import static com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles.MOIS;
 
 /**
- * N° 5 Objectifs (ENC, CONC, CH) PAR MOIS (FEATURE-tdb-vente-rapports-flux.md §4.1), modèle {@code ComTdbActiviteParMois},
- * sans la section {@code situation} (R1b). Les libellés reprennent les colonnes de la vue que le modèle affiche vraiment.
+ * N° 5 Objectifs (ENC, CONC, CH) PAR MOIS (FEATURE-tdb-vente-rapports-flux.md §4.1), modèle {@code ComTdbActiviteParMois}.
+ * Les libellés reprennent les colonnes de la vue que le modèle affiche vraiment.
  */
 @Component
 public class ActiviteParMoisRapport extends RapportFluxVente {
@@ -62,8 +65,30 @@ public class ActiviteParMoisRapport extends RapportFluxVente {
             FRAIS_TRANSFERT, MesureFlux.ENCAISSEMENTS_FRAIS_TRANSFERT, FRAIS_DESISTEMENT,
             MesureFlux.FRAIS_DESISTEMENT_DUS);
 
-    public ActiviteParMoisRapport(FluxVenteMensuel flux, Clock clock) {
+    private static final String BASE = "base";
+    private static final String REALISE_AVANT = "realiseAvant";
+    private static final String REALISE_ANNEE_MOINS_1 = "realiseAnneeMoins1";
+    private static final String REALISE_ANNEE = "realiseAnnee";
+    private static final String TOTAL_REALISE = "totalRealise";
+    private static final String RESTE = "reste";
+    private static final String TAUX_REALISE = "tauxRealise";
+    private static final String MESURE = "mesure";
+
+    /** Lignes « réalisé » de la section {@code situation} : base = articles (quantité) ou valorisation (montant). */
+    private record Realise(String libelle, MesureFlux mesure, boolean quantite) {
+    }
+
+    private static final List<Realise> REALISES = List.of(
+            new Realise("Concrétisations nettes", MesureFlux.CONCRETISATIONS_NETTES, true),
+            new Realise("Livraisons", MesureFlux.LIVRAISONS, true),
+            new Realise("CA TTC", MesureFlux.CA_TTC, false),
+            new Realise("Encaissements", MesureFlux.ENCAISSEMENTS, false));
+
+    private final ValorisationTranche valorisation;
+
+    public ActiviteParMoisRapport(FluxVenteMensuel flux, ValorisationTranche valorisation, Clock clock) {
         super(CODE, flux, clock);
+        this.valorisation = valorisation;
     }
 
     @Override
@@ -73,9 +98,58 @@ public class ActiviteParMoisRapport extends RapportFluxVente {
         GROUPES.forEach(g -> mesures.addAll(List.of(g.reel(), g.prevu())));
         FluxMensuel f = calculer(contexte, annee, annee, mesures);
         List<SectionRapport> sections = List.of(mensuel(f, annee), cumuls(f, annee),
-                aCeJour(f, annee, LocalDate.now(contexte.clock())), frais(f, annee),
+                aCeJour(f, annee, LocalDate.now(contexte.clock())), situation(contexte, f, annee), frais(f, annee),
                 remises(contexte.tranchesVisibles()));
         return new ResultatRapport(sections, LignesMensuelles.avertissements(f));
+    }
+
+    /** État du stock : réalisé avant N, en N−1 (Q8 : l'année N−1 seule) et en N ; reste = base − avant − N. */
+    private SectionRapport situation(ContexteRapport contexte, FluxMensuel f, int annee) {
+        List<Valorisation> stock = valorisation.pour(contexte.tranchesVisibles()).tranches();
+        BigDecimal articles = BigDecimal.valueOf(stock.stream().mapToLong(Valorisation::articles).sum());
+        BigDecimal valeur = stock.stream().map(Valorisation::prixTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        Set<MesureFlux> mesures = EnumSet.noneOf(MesureFlux.class);
+        REALISES.forEach(r -> mesures.add(r.mesure()));
+        FluxMensuel avant = calculer(contexte, null, annee - 1, mesures);
+        List<Map<String, Object>> lignes = new ArrayList<>();
+        for (Realise r : REALISES) {
+            BigDecimal base = r.quantite() ? articles : valeur;
+            BigDecimal anterieur = avant.total(r.mesure());
+            BigDecimal courant = f.annee(r.mesure(), annee);
+            BigDecimal total = anterieur.add(courant);
+            lignes.add(ligneSituation(r.libelle(), base, List.of(anterieur, avant.annee(r.mesure(), annee - 1), courant,
+                    total, base.subtract(total)), LignesMensuelles.taux(total, base)));
+        }
+        BigDecimal resteARegler = stock.stream().map(v -> v.de(Population.VIVANTS).reste())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Le reste à régler n'a pas de « réalisé » ; taux 0 si base nulle, comme les autres lignes.
+        lignes.add(ligneSituation("Reste à régler", resteARegler, null,
+                resteARegler.signum() == 0 ? BigDecimal.ZERO : null));
+        List<ColonneRapport> colonnes = new ArrayList<>(List.of(ColonneRapport.texte(MESURE, "Mesure"),
+                nombre(BASE, "Base (articles ou valorisation)")));
+        colonnes.addAll(List.of(nombre(REALISE_AVANT, "Réalisé avant " + annee),
+                nombre(REALISE_ANNEE_MOINS_1, "Réalisé " + (annee - 1)), nombre(REALISE_ANNEE, "Réalisé " + annee),
+                nombre(TOTAL_REALISE, "Total réalisé"), nombre(RESTE, "Reste"),
+                ColonneRapport.pourcentage(TAUX_REALISE, "Taux de réalisation", null)));
+        return new SectionRapport("situation", "Situation du stock", colonnes, lignes, null, null, List.of());
+    }
+
+    /** {@code realises} = avant, N−1, N, total, reste (ou {@code null} : colonnes vides). */
+    private static Map<String, Object> ligneSituation(String mesure, BigDecimal base, List<BigDecimal> realises,
+                                                      BigDecimal taux) {
+        Map<String, Object> ligne = new LinkedHashMap<>();
+        ligne.put(MESURE, mesure);
+        ligne.put(BASE, base);
+        List<String> noms = List.of(REALISE_AVANT, REALISE_ANNEE_MOINS_1, REALISE_ANNEE, TOTAL_REALISE, RESTE);
+        for (int i = 0; i < noms.size(); i++) {
+            ligne.put(noms.get(i), realises == null ? null : realises.get(i));
+        }
+        ligne.put(TAUX_REALISE, taux);
+        return ligne;
+    }
+
+    private static ColonneRapport nombre(String nom, String libelle) {
+        return new ColonneRapport(nom, libelle, TypeColonne.NOMBRE, null, FonctionTotal.AUCUNE, true, 2);
     }
 
     private static SectionRapport mensuel(FluxMensuel f, int annee) {
@@ -121,13 +195,13 @@ public class ActiviteParMoisRapport extends RapportFluxVente {
             BigDecimal prevu = prevuACeJour(f, g, annee, aujourdhui);
             BigDecimal reel = f.annee(g.reel(), annee);
             Map<String, Object> ligne = new LinkedHashMap<>();
-            ligne.put("mesure", g.libelle());
+            ligne.put(MESURE, g.libelle());
             ligne.put("prevuACeJour", prevu);
             ligne.put("reel", reel);
             ligne.put("taux", LignesMensuelles.taux(reel, prevu));
             lignes.add(ligne);
         }
-        List<ColonneRapport> colonnes = List.of(ColonneRapport.texte("mesure", "Mesure"),
+        List<ColonneRapport> colonnes = List.of(ColonneRapport.texte(MESURE, "Mesure"),
                 new ColonneRapport("prevuACeJour", "Prévu à ce jour", TypeColonne.NOMBRE, null, FonctionTotal.AUCUNE,
                         true, 2),
                 new ColonneRapport("reel", "Réel", TypeColonne.NOMBRE, null, FonctionTotal.AUCUNE, true, 2),

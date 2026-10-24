@@ -19,6 +19,7 @@ public class SeuilsStatutsVente {
     public static final String CONCRETISATION = "DefaultComFolderStatusConcretisation";
     public static final String FINALISATION = "DefaultComFolderStatusFinalisation";
     public static final String LIVRAISON = "DefaultComFolderStatusDelevery";
+    public static final String RESERVATION = "DefaultComFolderStatusReservation";
 
     private final AdmParamsGuidRepository parametres;
     private final StrStatusRepository statuts;

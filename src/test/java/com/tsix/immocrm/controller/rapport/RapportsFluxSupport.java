@@ -24,7 +24,11 @@ final class RapportsFluxSupport {
     static final String ACTIVITE_PAR_PROJET = "ComTdbActiviteParProjet";
     static final String ACTIVITE_PAR_MOIS = "ComTdbActiviteParMois";
     static final String COMPARAISON = "ComTdbSaleComparaison";
-    static final List<String> CODES = List.of(ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON);
+    static final String DETAIL_CA = "ComTdbDetailsChiffreAffaire";
+    static final String SITUATION_GLOBALE = "ComTdbSalesSituationGlobal";
+    static final String SUIVI_CA = "ComTdbChiffreAffaire";
+    static final List<String> CODES = List.of(ETAT_VENTES, ACTIVITE_PAR_PROJET, ACTIVITE_PAR_MOIS, COMPARAISON,
+            DETAIL_CA, SITUATION_GLOBALE, SUIVI_CA);
 
     static final String TRANCHE_ID = "trancheId";
     static final String ANNEE = "annee";
@@ -33,10 +37,14 @@ final class RapportsFluxSupport {
     private RapportsFluxSupport() {
     }
 
-    /** Lignes {@code AdmReportData} des quatre rapports (groupe et ordre de la prod, §4) ; sans rôle lié. */
+    /** Lignes {@code AdmReportData} des sept rapports (groupe et ordre de la prod, §4, §6.1) ; sans rôle lié. */
     static Map<String, UUID> installer(FixtureRapports fixture) {
         fixture.tables();
         return Map.of(
+                DETAIL_CA, fixture.rapportVente(DETAIL_CA, "DETAILS CHIFFRE D'AFFAIRE PAR PROJET et PAR ANNEE",
+                        "Suivi ANNUEL", 400),
+                SITUATION_GLOBALE, fixture.rapportVente(SITUATION_GLOBALE, "SITUATION GLOBALE DES VENTES", "TB", 800),
+                SUIVI_CA, fixture.rapportVente(SUIVI_CA, "CHIFFRE D'AFFAIRE", "", 1300),
                 ETAT_VENTES, fixture.rapportVente(ETAT_VENTES, "ETAT DES VENTE", "", 1200),
                 ACTIVITE_PAR_PROJET, fixture.rapportVente(ACTIVITE_PAR_PROJET,
                         "ACTIVITES COMMERCIALES PAR PROJET et PAR ANNEE", "Suivi ANNUEL", 300),
