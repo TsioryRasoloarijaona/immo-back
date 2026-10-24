@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -74,7 +75,26 @@ public class GroupementService {
                                           Granularite granularite, List<AgregatDemande> agregats,
                                           TriGroupe tri, boolean inclureSansValeur,
                                           Pageable pageable) {
+        Page<GroupeDto> page = new PageImpl<>(lireGroupes(racine, spec, cle, granularite, agregats,
+                new Affichage(tri, inclureSansValeur, pageable)), pageable, compterGroupes(racine, spec, cle, granularite, inclureSansValeur));
+        return totalGeneral(racine, spec, cle, granularite, agregats, inclureSansValeur, page);
+    }
 
+    /** Les groupes seuls (effectifs), sans le comptage des groupes ni le total général de {@link #grouper}. */
+    @Transactional(readOnly = true)
+    public <E> List<GroupeDto> groupes(Class<E> racine, Specification<E> spec, Chemin cle, Granularite granularite,
+                                       TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
+        return lireGroupes(racine, spec, cle, granularite, List.of(), new Affichage(tri, inclureSansValeur, pageable));
+    }
+
+    private record Affichage(TriGroupe tri, boolean inclureSansValeur, Pageable pageable) { }
+
+    private <E> List<GroupeDto> lireGroupes(Class<E> racine, Specification<E> spec, Chemin cle,
+                                            Granularite granularite, List<AgregatDemande> agregats,
+                                            Affichage affichage) {
+        TriGroupe tri = affichage.tri();
+        boolean inclureSansValeur = affichage.inclureSansValeur();
+        Pageable pageable = affichage.pageable();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<E> root = cq.from(racine);
@@ -109,13 +129,9 @@ public class GroupementService {
         requete.setMaxResults(pageable.getPageSize());
 
         int indexNombre = 1 + exprLibelle.size();
-        List<GroupeDto> contenu = requete.getResultList().stream()
+        return requete.getResultList().stream()
                 .map(t -> versGroupe(t, cle, granularite, indexNombre, plans))
                 .toList();
-
-        Page<GroupeDto> page = new PageImpl<>(contenu, pageable,
-                compterGroupes(racine, spec, cle, granularite, inclureSansValeur));
-        return totalGeneral(racine, spec, cle, granularite, agregats, inclureSansValeur, page);
     }
 
     /** {@code IS NOT NULL} sur l'expression de clé, pas la colonne brute : la requête de comptage compte des clés. */
@@ -347,6 +363,7 @@ public class GroupementService {
      */
     private static Expression<?> expressionCle(CriteriaBuilder cb, Jointures jointures,
                                                Chemin cle, Granularite granularite) {
+        Objects.requireNonNull(cle, "cle");
         if (cle.typeLibelle() == Chemin.TypeLibelle.REPLI) {
             return expressionRepli(cb, jointures, cle);
         }

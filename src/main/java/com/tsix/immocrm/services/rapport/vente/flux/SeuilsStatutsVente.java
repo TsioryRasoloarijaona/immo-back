@@ -29,18 +29,6 @@ public class SeuilsStatutsVente {
         this.statuts = statuts;
     }
 
-    public Optional<Integer> concretisation() {
-        return sorting(CONCRETISATION);
-    }
-
-    public Optional<Integer> finalisation() {
-        return sorting(FINALISATION);
-    }
-
-    public Optional<Integer> livraison() {
-        return sorting(LIVRAISON);
-    }
-
     /** {@code Sorting} du statut désigné par {@code parametre} ; vide si le paramètre, sa valeur ou le statut manque. */
     public Optional<Integer> sorting(String parametre) {
         return valeur(parametre).flatMap(statuts::findById).map(StrStatus::getSorting);
