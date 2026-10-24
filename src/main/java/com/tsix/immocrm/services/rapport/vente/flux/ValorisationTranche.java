@@ -24,7 +24,7 @@ import java.util.function.Function;
 
 /**
  * Stock d'une tranche en vente (FEATURE-tdb-vente-rapports-flux.md §4.6, §6) : valorisation Σ {@code StkItem.SalePrice} des
- * articles VENTE (sous-articles compris), articles racines et populations de leurs dossiers ({@code StkItem.ComFolderId}) ;
+ * articles VENTE (sous-articles compris), articles racines et populations de dossiers ;
  * reste à régler = {@code PRIX_RESTE} de {@link MontantsParNatureDossier}. Remplace les vues non mappées du modèle.
  */
 @Service
@@ -48,12 +48,19 @@ public class ValorisationTranche {
             GROUP BY t.PKey, p.Description, t.Description""";
 
     // Statut en jointure interne : un dossier sans statut n'est dans aucune population (R-F5).
-    private static final String DOSSIERS = """
-            SELECT i.stkHierarchy.id, f, s.id, s.sorting, s.annulation, s.resiliation
+    private static final String SELECT_DOSSIERS = "SELECT i.stkHierarchy.id, f, s.id, s.sorting, s.annulation, s.resiliation ";
+
+    // Nombres et prix : lien retour des articles racines, comme le modèle.
+    private static final String DOSSIERS_ARTICLES = SELECT_DOSSIERS + """
             FROM StkItem i JOIN ComFolder f ON f.id = i.comFolderId JOIN f.strStatus s
             WHERE i.stkHierarchy.id IN :tranches AND i.isUnderItem = false AND i.stkVocation.code = 'VENTE'""";
 
-    /** Dossiers ni annulés ni désistés d'un article racine, par état (§4.6). */
+    // Restes : article du dossier (ComFolder.StkItemId, §3.1) ; un article sans lien retour n'en perd aucun.
+    private static final String DOSSIERS_TRANCHE = SELECT_DOSSIERS + """
+            FROM ComFolder f JOIN f.stkItem i JOIN f.strStatus s
+            WHERE i.stkHierarchy.id IN :tranches AND i.stkVocation.code = 'VENTE'""";
+
+    /** Dossiers ni annulés ni désistés, par état (§4.6). */
     public enum Population {
         /** Au statut du paramètre {@code DefaultComFolderStatusReservation}. */
         RESERVES,
@@ -69,7 +76,7 @@ public class ValorisationTranche {
         VIVANTS
     }
 
-    /** Nombre de dossiers, Σ {@code ComFolder.Price}, Σ {@code PRIX_RESTE}. */
+    /** Nombre de dossiers et Σ {@code ComFolder.Price} (lien retour d'article), Σ {@code PRIX_RESTE} (article du dossier). */
     public record Cumul(long nombre, BigDecimal prix, BigDecimal reste) {
 
         public static final Cumul ZERO = new Cumul(0, BigDecimal.ZERO, BigDecimal.ZERO);
@@ -156,25 +163,32 @@ public class ValorisationTranche {
     }
 
     private Map<UUID, Map<Population, Cumul>> populations(List<UUID> tranches, Seuils s) {
-        List<Ligne> lignes = LotsTranches.lire(tranches, lot -> em.createQuery(DOSSIERS, Object[].class)
+        List<Ligne> parArticle = vivants(DOSSIERS_ARTICLES, tranches);
+        List<Ligne> parDossier = vivants(DOSSIERS_TRANCHE, tranches);
+        Map<UUID, Map<ColonneDossier, BigDecimal>> restes = montants.pour(parDossier.stream().map(Ligne::dossier).toList());
+        Map<UUID, Map<Population, Cumul>> parTranche = new HashMap<>();
+        parArticle.forEach(l -> cumuler(parTranche, l, s,
+                new Cumul(1, nonNul(l.dossier().getPrice()), BigDecimal.ZERO)));
+        parDossier.forEach(l -> cumuler(parTranche, l, s, new Cumul(0, BigDecimal.ZERO,
+                nonNul(restes.getOrDefault(l.dossier().getId(), Map.of()).get(ColonneDossier.PRIX_RESTE)))));
+        return parTranche;
+    }
+
+    private List<Ligne> vivants(String requete, List<UUID> tranches) {
+        return LotsTranches.lire(tranches, lot -> em.createQuery(requete, Object[].class)
                 .setParameter(TRANCHES, lot).getResultList()).stream()
                 .map(r -> new Ligne((UUID) r[0], (ComFolder) r[1], (UUID) r[2],
                         new Etat(true, (Integer) r[3], (Boolean) r[4], (Boolean) r[5])))
                 .filter(l -> l.etat().vivant()).toList();
-        Map<UUID, Map<ColonneDossier, BigDecimal>> restes = montants.pour(lignes.stream().map(Ligne::dossier).toList());
-        Map<UUID, Map<Population, Cumul>> parTranche = new HashMap<>();
-        for (Ligne l : lignes) {
-            ComFolder f = l.dossier();
-            Cumul un = new Cumul(1, nonNul(f.getPrice()),
-                    nonNul(restes.getOrDefault(f.getId(), Map.of()).get(ColonneDossier.PRIX_RESTE)));
-            Map<Population, Cumul> p = parTranche.computeIfAbsent(l.tranche(), k -> new EnumMap<>(Population.class));
-            for (Population population : Population.values()) {
-                if (s.contient(population, l.statut(), l.etat(), f)) {
-                    p.merge(population, un, Cumul::plus);
-                }
+    }
+
+    private static void cumuler(Map<UUID, Map<Population, Cumul>> parTranche, Ligne l, Seuils s, Cumul un) {
+        Map<Population, Cumul> p = parTranche.computeIfAbsent(l.tranche(), k -> new EnumMap<>(Population.class));
+        for (Population population : Population.values()) {
+            if (s.contient(population, l.statut(), l.etat(), l.dossier())) {
+                p.merge(population, un, Cumul::plus);
             }
         }
-        return parTranche;
     }
 
     private static BigDecimal nonNul(BigDecimal valeur) {
