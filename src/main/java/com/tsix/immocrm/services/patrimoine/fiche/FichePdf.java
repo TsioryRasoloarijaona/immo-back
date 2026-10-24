@@ -40,8 +40,8 @@ public class FichePdf {
     /** Section clé / valeur ({@code champs}) ou tableau ({@code entetes} + {@code lignes}). */
     public record Section(String titre, List<Champ> champs, List<String> entetes, List<List<Object>> lignes) {
 
-        public static Section champs(String titre, Champ... champs) {
-            return new Section(titre, List.of(champs), List.of(), List.of());
+        public static Section champs(String titre, List<Champ> champs) {
+            return new Section(titre, champs, List.of(), List.of());
         }
 
         /** {@code lignes} nul = tableau vide. */
@@ -55,10 +55,6 @@ public class FichePdf {
 
     /** @param nom préfixe du nom de fichier ; {@code societeId} nul = pas d'en-tête société */
     public record Fiche(String nom, String titre, UUID societeId, List<Section> sections) {
-    }
-
-    public static Champ champ(String libelle, Object valeur) {
-        return new Champ(libelle, valeur);
     }
 
     public ResponseEntity<byte[]> reponse(Fiche fiche) {

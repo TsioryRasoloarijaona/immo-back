@@ -40,8 +40,17 @@ public final class FichesPatrimoine {
     private static final String DESCRIPTION_LONGUE = "descriptionLongue";
     private static final String DESCRIPTION_DETAILLEE = "Description détaillée";
     private static final String SUPERFICIE = "Superficie";
+    private static final String AUDIT_TITRE = "Audit";
+    private static final String ADRESSE = "adresse";
+    private static final String LIBELLE_ADRESSE = "Adresse";
+    private static final String VOCATION = "Vocation";
+    private static final String PAYS = "Pays";
+    private static final String CATEGORIE = "Catégorie";
+    private static final String TYPE = "Type";
+    private static final String STATUT = "statut";
+    private static final String[] NOTES = {"notes", "Notes", "anomalies", "Anomalies"};
 
-    private static final String[] COORDONNEES = {"adresse", "Adresse", "adresse2", "Adresse 2", "adresse3", "Adresse 3",
+    private static final String[] COORDONNEES = {ADRESSE, LIBELLE_ADRESSE, "adresse2", "Adresse 2", "adresse3", "Adresse 3",
             "codePostal", "Code postal", "ville", "Ville", "telephone", "Tél.", "mobile", "Mobile", "fax", "Fax",
             "email", "Email", "siteWeb", "Site web"};
     private static final String[] AUDIT = {"creePar", "Créé par", "creeLe", "Créé le", "modifiePar", "Modifié par",
@@ -63,11 +72,11 @@ public final class FichesPatrimoine {
         Map<String, Object> v = LignesAplaties.de(d);
         return new Fiche("fiche-programme_" + d.code(), "Fiche programme " + d.code(), d.entiteId(), List.of(
                 section(v, IDENTIFICATION, CODE, LIBELLE_CODE, DESCRIPTION, LIBELLE_DESCRIPTION, "entiteLibelle", "Entité",
-                        "paysLibelle", "Pays", DESCRIPTION_LONGUE, DESCRIPTION_DETAILLEE),
+                        "paysLibelle", PAYS, DESCRIPTION_LONGUE, DESCRIPTION_DETAILLEE),
                 section(v, COORDONNEES_TITRE, COORDONNEES),
                 section(v, DELAIS, DATES_PROGRAMME),
                 section(v, "Programme", concat(new String[]{"villeSignature", "Courrier fait à"}, RESPONSABLES)),
-                section(v, "Audit", AUDIT)));
+                section(v, AUDIT_TITRE, AUDIT)));
     }
 
     public static Fiche tranche(TrancheDetailDto d, List<LigneTerrainDto> terrains, List<LigneEtageDto> etages) {
@@ -98,7 +107,7 @@ public final class FichesPatrimoine {
                         t -> new Object[]{t.terrainCode(), t.terrainDescription(), t.terrainSurface(), pourcentage(t.ratio())}),
                 Section.tableau("Étages", List.of(LIBELLE_CODE, LIBELLE_DESCRIPTION), etages,
                         e -> new Object[]{e.niveauCode(), e.niveauDescription()}),
-                section(v, "Audit", AUDIT)));
+                section(v, AUDIT_TITRE, AUDIT)));
     }
 
     /** @param societeId entité de la tranche de l'article (en-tête société) */
@@ -107,8 +116,8 @@ public final class FichesPatrimoine {
         return new Fiche("fiche-article_" + d.code(), "Fiche article " + d.code(), societeId, List.of(
                 section(v, IDENTIFICATION, CODE, LIBELLE_CODE, DESCRIPTION, LIBELLE_DESCRIPTION, "trancheCode", "Tranche",
                         "lotParentCode", "Article parent", "immeubleLibelle", "Immeuble", "etageLibelle", "Étage",
-                        "natureLibelle", "Nature", "vocationLibelle", "Vocation", "categorieLibelle", "Catégorie",
-                        "typeLibelle", "Type", "presentationTypeLibelle", "Type de présentation", "statut",
+                        "natureLibelle", "Nature", "vocationLibelle", VOCATION, "categorieLibelle", CATEGORIE,
+                        "typeLibelle", TYPE, "presentationTypeLibelle", "Type de présentation", STATUT,
                         "Disponibilité", "dossierCode", "Dossier", "clientNom", "Client"),
                 section(v, SUPERFICIES, "surfaceProvisoire", "Superficie provisoire", "area", "Superficie définitive",
                         "superficieSousArticles", "Superficie des sous-articles", "superficieNette", "Superficie nette",
@@ -124,13 +133,13 @@ public final class FichesPatrimoine {
                         "dateTitreFoncier", "Date du titre", "proprieteDite", "Propriété dite", "fractionDivise",
                         "Fraction divise", "partiesDivises", "Parties divises", "partiesIndivises", "Parties indivises"},
                         ENREGISTREMENT)),
-                section(v, AUTRES, "adresse", "Adresse", "contenanceLibre", "Contenance", "toujoursAffecte",
-                        "Toujours affecté", "loyerMensuelHT", "Loyer mensuel HT", "nombreCautions", "Nombre de cautions",
-                        "notes", "Notes", "anomalies", "Anomalies"),
+                section(v, AUTRES, concat(new String[]{ADRESSE, LIBELLE_ADRESSE, "contenanceLibre", "Contenance",
+                        "toujoursAffecte", "Toujours affecté", "loyerMensuelHT", "Loyer mensuel HT", "nombreCautions",
+                        "Nombre de cautions"}, NOTES)),
                 Section.tableau("Sous-articles", List.of(LIBELLE_CODE, LIBELLE_DESCRIPTION, SUPERFICIE,
                                 "Prix de vente TTC", "Disponibilité"), d.sousLots(),
                         s -> new Object[]{s.code(), s.description(), s.area(), s.comSalePrice(), s.statut()}),
-                section(v, "Audit", AUDIT)));
+                section(v, AUDIT_TITRE, AUDIT)));
     }
 
     public static Fiche terrain(TerrainDetailDto d) {
@@ -138,7 +147,7 @@ public final class FichesPatrimoine {
         UUID societeId = d.entite() == null ? null : d.entite().id();
         return new Fiche("fiche-terrain_" + d.code(), "Fiche terrain " + d.code(), societeId, List.of(
                 section(v, IDENTIFICATION, CODE, LIBELLE_CODE, DESCRIPTION, LIBELLE_DESCRIPTION, "entite", "Société",
-                        "nature", "Nature", "vocation", "Vocation", "categorie", "Catégorie", "type", "Type", "statut",
+                        "nature", "Nature", "vocation", VOCATION, "categorie", CATEGORIE, "type", TYPE, STATUT,
                         "Statut", "niveau", "Niveau", "vocationTerrain", "Vocation foncière", "orientation", "Orientation",
                         "parent", "Terrain parent", "fournisseur", "Propriétaire", "estTermine", "Terminé", "occupe",
                         "Occupé"),
@@ -149,13 +158,13 @@ public final class FichesPatrimoine {
                         "Prix d'achat", "dateAchat", "Date d'achat", "coutTotal", "Coût total", "coutUnitaireFinal",
                         "Coût unitaire final", "prixPropose", "Prix proposé"),
                 section(v, FONCIER, "titreFoncier", "Titre foncier", "intituleTitreFoncier", "Intitulé du titre",
-                        "dateTitreFoncier", "Date du titre", "datePermisConstruire", "Permis de construire", "adresse",
-                        "Adresse", "lienGoogle", "Lien Google Maps"),
-                section(v, AUTRES, "notes", "Notes", "anomalies", "Anomalies"),
+                        "dateTitreFoncier", "Date du titre", "datePermisConstruire", "Permis de construire", ADRESSE,
+                        LIBELLE_ADRESSE, "lienGoogle", "Lien Google Maps"),
+                section(v, AUTRES, NOTES),
                 Section.tableau("Sous-terrains", List.of(LIBELLE_CODE, LIBELLE_DESCRIPTION, "Surface définitive",
                                 "Prix définitif TTC"), d.sousTerrains(),
                         t -> new Object[]{t.code(), t.description(), t.surfaceDefinitive(), t.prixDefinitifTTC()}),
-                section(v, "Audit", "userCreate", "Créé par", "userCreateDateTime", "Créé le", "userUpdate",
+                section(v, AUDIT_TITRE, "userCreate", "Créé par", "userCreateDateTime", "Créé le", "userUpdate",
                         "Modifié par", "userUpdateDateTime", "Modifié le")));
     }
 
@@ -164,11 +173,11 @@ public final class FichesPatrimoine {
         String code = d.ligne().code();
         return new Fiche("fiche-prospection-terrain_" + code, "Fiche prospection terrain " + code, null, List.of(
                 section(v, IDENTIFICATION, CODE, LIBELLE_CODE, "date", "Date", DESCRIPTION, LIBELLE_DESCRIPTION,
-                        "categorie", "Catégorie", "type", "Type", "niveau", "Niveau", "vocation", "Vocation", "statut",
+                        "categorie", CATEGORIE, "type", TYPE, "niveau", "Niveau", "vocation", VOCATION, STATUT,
                         "Statut", "dateValiditeStatut", "Validité du statut", "courtier", "Courtier", "notaire",
                         "Notaire", "estArchivee", "Archivée", "estTransformee", "Transformée", "terrainCode",
                         "Terrain issu"),
-                section(v, "Situation", "pays", "Pays", "ville", "Ville", "adresse", "Adresse", "orientation",
+                section(v, "Situation", "pays", PAYS, "ville", "Ville", ADRESSE, LIBELLE_ADRESSE, "orientation",
                         "Orientation", "lienGoogle", "Lien Google Maps", "proprietaires", "Propriétaires"),
                 section(v, SUPERFICIES, "superficie", SUPERFICIE, "superficieNette", "Superficie nette",
                         "superficieCos", "Emprise au sol", "superficieCuf", "Plancher couvert", "superficieVendable",
@@ -176,8 +185,8 @@ public final class FichesPatrimoine {
                         "prixPropose", "Prix proposé"),
                 section(v, FONCIER, concat(ENREGISTREMENT, new String[]{"arreteAlignement", "Arrêté d'alignement",
                         "hauteurMax", "Hauteur maximale"})),
-                section(v, AUTRES, "notes", "Notes", "anomalies", "Anomalies"),
-                section(v, "Audit", AUDIT)));
+                section(v, AUTRES, NOTES),
+                section(v, AUDIT_TITRE, AUDIT)));
     }
 
     public static Fiche entite(EntiteJuridiqueDto d) {
@@ -189,7 +198,7 @@ public final class FichesPatrimoine {
                         "patente", "Patente", "ice", "Identifiant commun de l'entreprise", "deviseCode", "Devise",
                         "dateLiquidation", "Date de liquidation", "partMaison", "Part maison", DESCRIPTION_LONGUE,
                         DESCRIPTION_DETAILLEE),
-                section(v, COORDONNEES_TITRE, concat(COORDONNEES, new String[]{"paysLibelle", "Pays", "villeSignature",
+                section(v, COORDONNEES_TITRE, concat(COORDONNEES, new String[]{"paysLibelle", PAYS, "villeSignature",
                         "Courrier fait à"})),
                 section(v, "Représentants", concat(new String[]{"representantLegalLibelle", "Représentant légal"},
                         RESPONSABLES)),
@@ -198,7 +207,7 @@ public final class FichesPatrimoine {
                 Section.tableau("Répartition", List.of(LIBELLE_CODE, "Actionnaire", "Nombre de parts"),
                         d.repartition(),
                         r -> new Object[]{r.actionnaireCode(), r.actionnaireLibelle(), r.nombreParts()}),
-                section(v, "Audit", AUDIT)));
+                section(v, AUDIT_TITRE, AUDIT)));
     }
 
     /** {@code nomsEtLibelles} : paires (nom de la valeur, libellé imprimé). */
@@ -207,9 +216,9 @@ public final class FichesPatrimoine {
         for (int i = 0; i + 1 < nomsEtLibelles.length; i += 2) {
             String nom = nomsEtLibelles[i];
             Object valeur = nom.startsWith("%") ? pourcentage(valeurs.get(nom.substring(1))) : valeurs.get(nom);
-            champs.add(FichePdf.champ(nomsEtLibelles[i + 1], valeur));
+            champs.add(new Champ(nomsEtLibelles[i + 1], valeur));
         }
-        return Section.champs(titre, champs.toArray(Champ[]::new));
+        return Section.champs(titre, champs);
     }
 
     private static String pourcentage(Object fraction) {

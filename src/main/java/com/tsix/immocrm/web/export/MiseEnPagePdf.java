@@ -38,36 +38,37 @@ public final class MiseEnPagePdf {
     public static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static final Color GRIS = new Color(0xE4, 0xE4, 0xE7);
+    private static final String ECHEC = "Écriture du PDF échouée";
 
     private MiseEnPagePdf() {
     }
 
     /** Écrit le document (marges de 28 pt) puis numérote chaque page. */
     public static byte[] rendre(Rectangle page, Consumer<Document> contenu) {
-        Document document = new Document(page, 28, 28, 28, 36);
         ByteArrayOutputStream sortie = new ByteArrayOutputStream();
-        try {
+        try (Document document = new Document(page, 28, 28, 28, 36)) {
             PdfWriter.getInstance(document, sortie);
             document.open();
             contenu.accept(document);
-            document.close();
+        } catch (DocumentException e) {
+            throw new IllegalStateException(ECHEC, e);
+        }
+        try {
             return numeroter(sortie.toByteArray());
         } catch (DocumentException | IOException e) {
-            throw new IllegalStateException("Écriture du PDF échouée", e);
+            throw new IllegalStateException(ECHEC, e);
         }
     }
 
     private static byte[] numeroter(byte[] pdf) throws IOException, DocumentException {
         ByteArrayOutputStream sortie = new ByteArrayOutputStream();
-        try (PdfReader lecteur = new PdfReader(pdf)) {
-            PdfStamper tampon = new PdfStamper(lecteur, sortie);
+        try (PdfReader lecteur = new PdfReader(pdf); PdfStamper tampon = new PdfStamper(lecteur, sortie)) {
             int total = lecteur.getNumberOfPages();
             for (int n = 1; n <= total; n++) {
                 Rectangle page = lecteur.getPageSizeWithRotation(n);
                 ColumnText.showTextAligned(tampon.getOverContent(n), Element.ALIGN_RIGHT,
                         new Phrase("Page " + n + " / " + total, NORMAL), page.getRight() - 28, page.getBottom() + 16, 0);
             }
-            tampon.close();
         }
         return sortie.toByteArray();
     }
@@ -77,7 +78,7 @@ public final class MiseEnPagePdf {
         try {
             document.add(element);
         } catch (DocumentException e) {
-            throw new IllegalStateException("Écriture du PDF échouée", e);
+            throw new IllegalStateException(ECHEC, e);
         }
     }
 
