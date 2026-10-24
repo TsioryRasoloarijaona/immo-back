@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -74,8 +75,8 @@ public class GroupementService {
                                           Granularite granularite, List<AgregatDemande> agregats,
                                           TriGroupe tri, boolean inclureSansValeur,
                                           Pageable pageable) {
-        Page<GroupeDto> page = new PageImpl<>(lireGroupes(racine, spec, cle, granularite, agregats, tri,
-                inclureSansValeur, pageable), pageable, compterGroupes(racine, spec, cle, granularite, inclureSansValeur));
+        Page<GroupeDto> page = new PageImpl<>(lireGroupes(racine, spec, cle, granularite, agregats,
+                new Affichage(tri, inclureSansValeur, pageable)), pageable, compterGroupes(racine, spec, cle, granularite, inclureSansValeur));
         return totalGeneral(racine, spec, cle, granularite, agregats, inclureSansValeur, page);
     }
 
@@ -83,12 +84,17 @@ public class GroupementService {
     @Transactional(readOnly = true)
     public <E> List<GroupeDto> groupes(Class<E> racine, Specification<E> spec, Chemin cle, Granularite granularite,
                                        TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return lireGroupes(racine, spec, cle, granularite, List.of(), tri, inclureSansValeur, pageable);
+        return lireGroupes(racine, spec, cle, granularite, List.of(), new Affichage(tri, inclureSansValeur, pageable));
     }
+
+    private record Affichage(TriGroupe tri, boolean inclureSansValeur, Pageable pageable) { }
 
     private <E> List<GroupeDto> lireGroupes(Class<E> racine, Specification<E> spec, Chemin cle,
                                             Granularite granularite, List<AgregatDemande> agregats,
-                                            TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
+                                            Affichage affichage) {
+        TriGroupe tri = affichage.tri();
+        boolean inclureSansValeur = affichage.inclureSansValeur();
+        Pageable pageable = affichage.pageable();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<E> root = cq.from(racine);
@@ -357,6 +363,7 @@ public class GroupementService {
      */
     private static Expression<?> expressionCle(CriteriaBuilder cb, Jointures jointures,
                                                Chemin cle, Granularite granularite) {
+        Objects.requireNonNull(cle, "cle");
         if (cle.typeLibelle() == Chemin.TypeLibelle.REPLI) {
             return expressionRepli(cb, jointures, cle);
         }

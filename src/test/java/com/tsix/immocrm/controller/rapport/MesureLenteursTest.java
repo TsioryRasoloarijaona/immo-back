@@ -99,7 +99,7 @@ class MesureLenteursTest {
         long ms = (System.nanoTime() - debut) / 1_000_000;
         sondeur.interrupt();
         sondeur.join();
-        echantillons.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).limit(25)
+        echantillons.entrySet().stream().sorted((a, b) -> Integer.compare(b.getValue(), a.getValue())).limit(25)
                 .forEach(e -> journal.add("   [%d éch.] %s".formatted(e.getValue(), e.getKey())));
         long ordres = JDBC.values().stream().mapToLong(v -> v[0]).sum();
         long jdbcMs = JDBC.values().stream().mapToLong(v -> v[1]).sum() / 1_000_000;
