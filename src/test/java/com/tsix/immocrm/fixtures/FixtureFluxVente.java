@@ -39,6 +39,7 @@ public class FixtureFluxVente {
     public static final String SEUIL_CONCRETISATION = "DefaultComFolderStatusConcretisation";
     public static final String SEUIL_FINALISATION = "DefaultComFolderStatusFinalisation";
     public static final String SEUIL_LIVRAISON = "DefaultComFolderStatusDelevery";
+    public static final String SEUIL_RESERVATION = "DefaultComFolderStatusReservation";
     public static final String FRAIS_DOSSIER = "DefaultFeeDocumentType";
     public static final String FRAIS_AUTRES = "DefaultOtherFeeDocumentType";
     public static final String FRAIS_TRANSFERT_CLIENT = "DefaultCustomerTransfertDocumentType";
@@ -118,6 +119,7 @@ public class FixtureFluxVente {
             parametre(SEUIL_CONCRETISATION, statuts.concretisation().getId());
             parametre(SEUIL_FINALISATION, statuts.minute().getId());
             parametre(SEUIL_LIVRAISON, statuts.remiseClefs().getId());
+            parametre(SEUIL_RESERVATION, statuts.reservation().getId());
             this.categorieArticle = ev.categorie("CAT-" + prefixe);
             this.typeArticle = ev.type("TYP-" + prefixe);
             this.typeComptabilise = typeReglement(true);
@@ -196,6 +198,53 @@ public class FixtureFluxVente {
         public ComFolder remise(ComFolder dossier, BigDecimal montant) {
             dossier.setDiscountAmount(montant);
             return ev.enregistrer(dossier);
+        }
+
+        // -------------------------------------------------------------- R1b : stock, accords, délais
+
+        /** Article racine libre (vocation VENTE, {@code ComFolderId} NULL) de prix de vente {@code SalePrice}. */
+        public StkItem articleLibre(CfgTranche tranche, String prixVente) {
+            return prixVente(ev.article(code("ART"), tranche, categorieArticle, typeArticle), prixVente);
+        }
+
+        /** Sous-article libre ({@code IsUnderItem = 1}, {@code ParentId} = {@code parent}) de prix {@code SalePrice}. */
+        public StkItem sousArticleLibre(StkItem parent, String prixVente) {
+            return prixVente(ev.sousArticle(code("SOUS"), parent, categorieArticle, typeArticle), prixVente);
+        }
+
+        /** Article racine libre d'une autre vocation que VENTE (PROJET), de prix {@code SalePrice}. */
+        public StkItem articleHorsVente(CfgTranche tranche, String prixVente) {
+            return prixVente(ev.article(code("ART"), tranche, categorieArticle, typeArticle, ev.projetVocation()),
+                    prixVente);
+        }
+
+        /** {@link #dossier} dont l'article porte le prix de vente {@code SalePrice}. */
+        public ComFolder dossier(CfgTranche tranche, StrStatus statut, String prixVenteArticle) {
+            ComFolder d = dossier(tranche, statut);
+            d.setStkItem(prixVente(d.getStkItem(), prixVenteArticle));
+            return d;
+        }
+
+        private StkItem prixVente(StkItem article, String prix) {
+            return ev.catalogue(article, new BigDecimal(prix), article.getComSalePrice(), article.getVat(),
+                    article.getComSalePriceHT());
+        }
+
+        /** Envoi au notaire {@code AgreementDate}, date prévisionnelle {@code AgreementDatePrevisionel} et sa confirmation. */
+        public ComFolder accord(ComFolder dossier, LocalDate envoiNotaire, LocalDate previsionnelle, Boolean confirmee) {
+            dossier.setAgreementDate(instant(envoiNotaire));
+            dossier.setAgreementDatePrevisionel(instant(previsionnelle));
+            dossier.setIsConfirmedAgreementDate(confirmee);
+            return ev.enregistrer(dossier);
+        }
+
+        /** Délais de tranche en jours : {@code DelayLawyerMinute}, {@code DelayMinuteAllSettled} ; nuls permis. */
+        public CfgTranche delais(CfgTranche tranche, Integer notaire, Integer soldeApresActe) {
+            tranche.setDelayLawyerMinute(notaire);
+            tranche.setDelayMinuteAllSettled(soldeApresActe);
+            CfgTranche sauvee = entityManager.merge(tranche);
+            entityManager.flush();
+            return sauvee;
         }
 
         // -------------------------------------------------------------- échéances et règlements

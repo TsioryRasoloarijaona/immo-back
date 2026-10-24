@@ -5,6 +5,7 @@ import com.tsix.immocrm.entities.cfg.CfgProject;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
+import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.fixtures.FixtureFluxVente;
 import com.tsix.immocrm.fixtures.FixtureFluxVente.Genre;
 import com.tsix.immocrm.fixtures.FixtureFluxVente.Jeu;
@@ -12,6 +13,7 @@ import com.tsix.immocrm.fixtures.FixtureFluxVente.Statuts;
 import com.tsix.immocrm.fixtures.FixtureRapports;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -87,16 +90,18 @@ class ActiviteParMoisRapportTest {
 
     private AppelsRapports appels;
     private RequestPostProcessor libre;
+    private Jeu jeu;
+    private CfgProject projet;
     private CfgTranche t1;
 
     @BeforeEach
     void setUp() {
         appels = new AppelsRapports(mockMvc);
         RapportsFluxSupport.installer(rapports);
-        Jeu jeu = fixture.jeu("N05");
+        jeu = fixture.jeu("N05");
         libre = connecte(rapports.compte("n05." + jeu.prefixe(), rapports.role("Libre " + jeu.prefixe(), false)));
         Statuts st = jeu.statuts();
-        CfgProject projet = jeu.projet("P", true);
+        projet = jeu.projet("P", true);
         t1 = jeu.tranche("T1", projet);
         ComSettlementCategory fraisDossier = jeu.categorie(Genre.FRAIS, true);
         ComSettlementCategory transfert = jeu.categorie(Genre.FRAIS, true);
@@ -286,5 +291,155 @@ class ActiviteParMoisRapportTest {
                 .containsEntry("colonneCategorie", MOIS)
                 .extractingByKey("colonnesValeurs").asInstanceOf(InstanceOfAssertFactories.LIST).hasSize(2));
         assertThat(cumuls).hasSize(5).allSatisfy(g -> assertThat(g).containsEntry("type", "LIGNES"));
+    }
+
+    // ------------------------------------------------------------------ R1b : section situation (§4.1, §9 « N° 5 », Q8)
+
+    /**
+     * Tranche T2 (année N = 2025), articles de vocation VENTE sauf mention :
+     * <pre>
+     *   LIB libre 500 000 + son sous-article libre 50 000 ; un article PROJET 999 000 (exclu)
+     *   D1 CONC concrétisé 05/2023, article 1 000 000 ; encaissé 10 000 (2023), 20 000 (2024), 5 000 (2025)
+     *   D2 CLEFS concrétisé 02/2024, acte 03/2024 (1 200 000), livré 04/2024
+     *   D3 CLEFS concrétisé 01/2025, acte 02/2025 (800 000), livré 06/2025
+     *   D4, D5 CLEFS livrés 03/2022 et 09/2022 ;  D6 ANN concrétisé 07/2023, annulé 01/2024
+     * </pre>
+     * D2…D6 : articles à 1 000 000. 7 articles racines VENTE ; valorisation 6 550 000.
+     */
+    private CfgTranche trancheSituation() {
+        Statuts st = jeu.statuts();
+        CfgTranche t2 = jeu.tranche("T2", projet);
+        StkItem libre2 = jeu.articleLibre(t2, "500000");
+        jeu.sousArticleLibre(libre2, "50000");
+        jeu.articleHorsVente(t2, "999000");
+        ComFolder d1 = jeu.dater(jeu.dossier(t2, st.concretisation(), MILLION), LocalDate.of(2023, 5, 5), null, null,
+                null);
+        jeu.encaisser(d1, "10000", LocalDate.of(2023, 6, 6));
+        jeu.encaisser(d1, "20000", LocalDate.of(2024, 6, 6));
+        jeu.encaisser(d1, "5000", j(6, 6));
+        jeu.dater(jeu.dossier(t2, st.remiseClefs(), MILLION), LocalDate.of(2024, 2, 2), LocalDate.of(2024, 3, 3),
+                LocalDate.of(2024, 4, 4), null);
+        jeu.prix(jeu.dater(jeu.dossier(t2, st.remiseClefs(), MILLION), j(1, 10), j(2, 10), j(6, 6), null),
+                new BigDecimal("800000"), null);
+        jeu.dater(jeu.dossier(t2, st.remiseClefs(), MILLION), null, null, LocalDate.of(2022, 3, 3), null);
+        jeu.dater(jeu.dossier(t2, st.remiseClefs(), MILLION), null, null, LocalDate.of(2022, 9, 9), null);
+        jeu.dater(jeu.dossier(t2, st.annulation(), MILLION), LocalDate.of(2023, 7, 7), null, null,
+                LocalDate.of(2024, 1, 1));
+        fixture.relire();
+        return t2;
+    }
+
+    private static final String MILLION = "1000000";
+    private static final String SITUATION = "situation";
+    private static final String BASE = "base";
+    private static final String AVANT = "realiseAvant";
+    private static final String ANNEE_MOINS_1 = "realiseAnneeMoins1";
+    private static final String ANNEE_COL = "realiseAnnee";
+    private static final String TOTAL_REALISE = "totalRealise";
+    private static final String RESTE = "reste";
+    private static final String TAUX_REALISE = "tauxRealise";
+
+    private Map<String, Object> situation(CfgTranche tranche) throws Exception {
+        return section(appels.sections(demande(ACTIVITE_PAR_MOIS, libre, ANNEE, tranche)), SITUATION);
+    }
+
+    @Test
+    void n5_situation_cinqLignes_colonnesDuSpec_tauxEnPourcentage() throws Exception {
+        Map<String, Object> s = situation(trancheSituation());
+
+        assertThat(lignes(s)).hasSize(5);
+        assertThat(RapportsFluxSupport.noms(s)).containsExactly("mesure", BASE, AVANT, ANNEE_MOINS_1, ANNEE_COL,
+                TOTAL_REALISE, RESTE, TAUX_REALISE);
+        assertThat(colonne(s, TAUX_REALISE)).containsEntry("type", "POURCENTAGE");
+    }
+
+    @Test
+    void n5_situation_base_articlesRacinesVente_pourLesQuantites_valorisationSousArticlesComprisPourLesMontants()
+            throws Exception {
+        List<Map<String, Object>> l = lignes(situation(trancheSituation()));
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(nombre(l.get(0).get(BASE))).as("concrétisations nettes").isEqualByComparingTo("7");
+        soft.assertThat(nombre(l.get(1).get(BASE))).as("livraisons").isEqualByComparingTo("7");
+        soft.assertThat(nombre(l.get(2).get(BASE))).as("CA TTC").isEqualByComparingTo("6550000");
+        soft.assertThat(nombre(l.get(3).get(BASE))).as("encaissements").isEqualByComparingTo("6550000");
+        soft.assertAll();
+    }
+
+    @Test
+    void n5_situation_realiseAvant_anneeMoins1_annee_parMesure() throws Exception {
+        List<Map<String, Object>> l = lignes(situation(trancheSituation()));
+
+        SoftAssertions soft = new SoftAssertions();
+        attendu(soft, l.get(0), "concrétisations nettes (D6 annulé exclu)", "2", "1", "1");
+        attendu(soft, l.get(1), "livraisons", "3", "1", "1");
+        attendu(soft, l.get(2), "CA TTC", "1200000", "1200000", "800000");
+        attendu(soft, l.get(3), "encaissements", "30000", "20000", "5000");
+        soft.assertAll();
+    }
+
+    private static void attendu(SoftAssertions soft, Map<String, Object> ligne, String mesure, String avant,
+                                String anneeMoins1, String annee) {
+        soft.assertThat(nombre(ligne.get(AVANT))).as("%s avant", mesure).isEqualByComparingTo(avant);
+        soft.assertThat(nombre(ligne.get(ANNEE_MOINS_1))).as("%s N-1", mesure).isEqualByComparingTo(anneeMoins1);
+        soft.assertThat(nombre(ligne.get(ANNEE_COL))).as("%s N", mesure).isEqualByComparingTo(annee);
+    }
+
+    @Test
+    void n5_situation_q8_livraisonsAnneeMoins1_egalAnneeNMoins1_pasAnneesAnterieures() throws Exception {
+        Map<String, Object> livraisons = lignes(situation(trancheSituation())).get(1);
+
+        assertThat(nombre(livraisons.get(ANNEE_MOINS_1))).as("2024 seul, pas 2022 (faute Year < N-1 du modèle)")
+                .isEqualByComparingTo("1");
+    }
+
+    @Test
+    void n5_situation_reste_egalBaseMoinsAvantMoinsAnnee() throws Exception {
+        List<Map<String, Object>> l = lignes(situation(trancheSituation()));
+
+        SoftAssertions soft = new SoftAssertions();
+        List<String> restes = List.of("4", "3", "4550000", "6515000");
+        for (int i = 0; i < 4; i++) {
+            Map<String, Object> ligne = l.get(i);
+            soft.assertThat(nombre(ligne.get(RESTE))).as("ligne %d", i).isEqualByComparingTo(restes.get(i))
+                    .isEqualByComparingTo(nombre(ligne.get(BASE)).subtract(nombre(ligne.get(AVANT)))
+                            .subtract(nombre(ligne.get(ANNEE_COL))));
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void n5_situation_tauxRealise_egalTotalRealiseSurBase() throws Exception {
+        List<Map<String, Object>> l = lignes(situation(trancheSituation()));
+
+        SoftAssertions soft = new SoftAssertions();
+        for (int i = 0; i < 4; i++) {
+            Map<String, Object> ligne = l.get(i);
+            BigDecimal attendu = nombre(ligne.get(TOTAL_REALISE)).multiply(BigDecimal.valueOf(100))
+                    .divide(nombre(ligne.get(BASE)), 4, RoundingMode.HALF_UP);
+            soft.assertThat(nombre(ligne.get(TAUX_REALISE))).as("ligne %d", i)
+                    .isCloseTo(attendu, Offset.offset(new BigDecimal("0.01")));
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void n5_situation_baseNulle_tauxRealiseZero() throws Exception {
+        CfgTranche vide = jeu.tranche("T3", projet);
+        fixture.relire();
+
+        List<Map<String, Object>> l = lignes(situation(vide));
+
+        assertThat(l).isNotEmpty()
+                .allSatisfy(ligne -> assertThat(nombre(ligne.get(TAUX_REALISE))).isEqualByComparingTo("0"));
+    }
+
+    @Test
+    void n5_situation_trancheInvisible_baseNulle() throws Exception {
+        CfgTranche invisible = jeu.tranche("TI", jeu.projet("PI", false));
+        jeu.articleLibre(invisible, "700000");
+        fixture.relire();
+
+        assertThat(somme(lignes(situation(invisible)), BASE)).isEqualByComparingTo("0");
     }
 }

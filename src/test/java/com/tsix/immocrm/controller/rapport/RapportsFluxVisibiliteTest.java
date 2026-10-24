@@ -31,7 +31,10 @@ import static com.tsix.immocrm.controller.rapport.AppelsRapports.totaux;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ACTIVITE_PAR_MOIS;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ACTIVITE_PAR_PROJET;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.COMPARAISON;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.DETAIL_CA;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.ETAT_VENTES;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.SITUATION_GLOBALE;
+import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.SUIVI_CA;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.demande;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.encaissementsReel;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.sommeDesChiffres;
@@ -59,6 +62,10 @@ class RapportsFluxVisibiliteTest {
     private static final String PROJETS = "projets";
     private static final String TRANCHE = "tranche";
     private static final String VERSEMENTS = "versements";
+    private static final String SITUATION = "situation";
+    private static final String REEL = "reel";
+    private static final String CA_REEL = "caReel";
+    private static final String CA_NOTAIRE = "ca-notaire";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureRapports rapports;
@@ -141,7 +148,7 @@ class RapportsFluxVisibiliteTest {
     void r_v1_perimetreProjetA_n3_trancheA_encaissementsDeA() throws Exception {
         Map<String, Object> s = section(appels.sections(demande(COMPARAISON, commercialA(), null, ta)), ENCAISSEMENTS);
 
-        assertThat(nombre(totaux(s).get("reel"))).isEqualByComparingTo("1000");
+        assertThat(nombre(totaux(s).get(REEL))).isEqualByComparingTo("1000");
     }
 
     // ------------------------------------------------------------------ R-V2 : entité inactive
@@ -177,6 +184,78 @@ class RapportsFluxVisibiliteTest {
             for (Map<String, Object> s : sections) {
                 soft.assertThat(sommeDesChiffres(s)).as("%s.%s", code, s.get("id")).isEqualByComparingTo("0");
             }
+        }
+        soft.assertAll();
+    }
+
+    // ------------------------------------------------------------------ R1b : n° 7, 11, 15
+
+    private Map<String, Object> projetsN7(RequestPostProcessor qui, CfgTranche... tranches) throws Exception {
+        return section(appels.sections(demande(DETAIL_CA, qui, ANNEE, tranches)), PROJETS);
+    }
+
+    private Map<String, Object> situationN11(RequestPostProcessor qui, CfgTranche... tranches) throws Exception {
+        return section(appels.sections(demande(SITUATION_GLOBALE, qui, null, tranches)), SITUATION);
+    }
+
+    @Test
+    void r_v1_perimetreProjetA_n7_seuleLaTrancheA_caReelDeA() throws Exception {
+        Map<String, Object> s = projetsN7(commercialA());
+
+        assertThat(tranchesDuN6(s)).containsExactly(ta.getDescription());
+        assertThat(nombre(totaux(s).get(CA_REEL))).isEqualByComparingTo("1200000");
+    }
+
+    @Test
+    void r_v1_perimetreProjetA_n11_seuleLaTrancheA_versementsDeA() throws Exception {
+        Map<String, Object> s = situationN11(commercialA());
+
+        assertThat(tranchesDuN6(s)).containsExactly(ta.getDescription());
+        assertThat(nombre(totaux(s).get(VERSEMENTS))).isEqualByComparingTo("1000");
+    }
+
+    @Test
+    void r_v1_perimetreProjetA_n15_caNotaireReelDeA() throws Exception {
+        Map<String, Object> s = section(appels.sections(demande(SUIVI_CA, commercialA(), ANNEE)), CA_NOTAIRE);
+
+        assertThat(nombre(totaux(s).get(REEL))).as("1 200 000 en millions").isEqualByComparingTo("1.20");
+    }
+
+    @Test
+    void r_v2_entiteInactive_absenteDesLignesEtDesTotaux_n7EtN11() throws Exception {
+        RequestPostProcessor libre = libre();
+
+        Map<String, Object> n7 = projetsN7(libre);
+        Map<String, Object> n11 = situationN11(libre);
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(tranchesDuN6(n7)).contains(ta.getDescription(), tb.getDescription())
+                .doesNotContain(ti.getDescription());
+        soft.assertThat(nombre(totaux(n7).get(CA_REEL))).isEqualByComparingTo("2400000");
+        soft.assertThat(tranchesDuN6(n11)).contains(ta.getDescription(), tb.getDescription())
+                .doesNotContain(ti.getDescription());
+        soft.assertThat(nombre(totaux(n11).get(VERSEMENTS))).isEqualByComparingTo("8000");
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v2_entiteInactive_n15_caNotaireReelSansLaTrancheInactive() throws Exception {
+        Map<String, Object> s = section(appels.sections(demande(SUIVI_CA, libre(), ANNEE, ta, tb, ti)), CA_NOTAIRE);
+
+        assertThat(nombre(totaux(s).get(REEL))).isEqualByComparingTo("2.40");
+    }
+
+    @Test
+    void r_v3_trancheIdHorsPerimetre_n7N11N15_aucunChiffre_n7N11SansLigne() throws Exception {
+        RequestPostProcessor qui = commercialA();
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(lignes(projetsN7(qui, tb))).as(DETAIL_CA).isEmpty();
+        soft.assertThat(lignes(situationN11(qui, tb))).as(SITUATION_GLOBALE).isEmpty();
+        List<Map<String, Object>> n15 = appels.sections(demande(SUIVI_CA, qui, ANNEE, tb));
+        soft.assertThat(n15).as(SUIVI_CA).isNotEmpty();
+        for (Map<String, Object> s : n15) {
+            soft.assertThat(sommeDesChiffres(s)).as("%s.%s", SUIVI_CA, s.get("id")).isEqualByComparingTo("0");
         }
         soft.assertAll();
     }
