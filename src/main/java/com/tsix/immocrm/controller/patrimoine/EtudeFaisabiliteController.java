@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.faisabilite.ValeursFaisabilite;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteListeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.GrilleEtudeDto;
+import com.tsix.immocrm.dto.patrimoine.faisabilite.LierProspectionEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneTrancheEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneUniteEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
@@ -59,6 +60,7 @@ public class EtudeFaisabiliteController {
     static final String PAS_ADMIN = "Rôle requis : Administrateur ; clé d'API : hors portée.";
     static final String INTROUVABLE = "Étude inconnue, ou de société inactive.";
     static final String BLOQUEE = "Étude bloquée (« Étude bloquée »).";
+    private static final String INTROUVABLE_OU_PROSPECTION = "Étude inconnue ou de société inactive, ou prospection inconnue.";
     private static final String VERIF = "Champ invalide, référence inconnue ou message Verif OMRAN (detail).";
 
     private static final String SOCIETE = "Société (CfgCompany.PKey).";
@@ -140,6 +142,55 @@ public class EtudeFaisabiliteController {
     @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
     public List<ReferentielItemDto> terrains() {
         return service.terrains();
+    }
+
+    @GetMapping("/choix/prospections")
+    @Operation(summary = "Prospections terrain liables à une étude, archivées comprises, par code")
+    @ApiResponse(responseCode = "403", description = PAS_LECTEUR)
+    public List<ReferentielItemDto> prospections() {
+        return service.prospections();
+    }
+
+    @PutMapping("/{id}/prospection-terrain")
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Lie une prospection ; étude sans terrain : surfaces, coûts, code et libellé recopiés, puis recalcul")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = OK),
+            @ApiResponse(responseCode = "400", description = "prospectionTerrainId absent, ou message Verif OMRAN (detail)."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = INTROUVABLE_OU_PROSPECTION),
+            @ApiResponse(responseCode = "409", description = "Code de la prospection déjà pris par une autre étude, ou " + BLOQUEE)
+    })
+    public EtudeFaisabiliteDto lierProspection(@Parameter(description = ID_ETUDE) @PathVariable UUID id,
+                                               @RequestBody LierProspectionEtudeDto lien) {
+        return service.lierProspection(id, lien);
+    }
+
+    @PostMapping("/{id}/prospection-terrain/recopier")
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Recopie les valeurs de la prospection liée, puis détache le terrain (article TER) et recalcule")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = OK),
+            @ApiResponse(responseCode = "400", description = "Message Verif OMRAN (detail)."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = INTROUVABLE_OU_PROSPECTION),
+            @ApiResponse(responseCode = "409", description = "Aucune prospection liée, code déjà pris, ou " + BLOQUEE)
+    })
+    public EtudeFaisabiliteDto recopierProspection(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
+        return service.recopierProspection(id);
+    }
+
+    @DeleteMapping("/{id}/prospection-terrain")
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Délie la prospection terrain, sans rien changer d'autre ; sans lien, répond 200 quand même")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = OK),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = INTROUVABLE),
+            @ApiResponse(responseCode = "409", description = BLOQUEE)
+    })
+    public EtudeFaisabiliteDto delierProspection(@Parameter(description = ID_ETUDE) @PathVariable UUID id) {
+        return service.delierProspection(id);
     }
 
     @GetMapping("/choix/tranches")

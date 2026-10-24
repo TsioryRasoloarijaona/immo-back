@@ -19,7 +19,10 @@ public record EtudeFaisabiliteDto(
         @Schema(description = "Libellé de la société.") String societeLibelle,
         @Schema(description = "Terrain (article TER), null si aucun.") UUID terrainId,
         @Schema(description = "Libellé du terrain.") String terrainLibelle,
-        @Schema(description = "LndLandId : terrain foncier, lecture seule (écrit par le lot Terrains).") UUID terrainFoncierId,
+        @Schema(description = "Prospection terrain liée (LndLandId), null si aucune ; se pose par PUT …/prospection-terrain.")
+        UUID prospectionTerrainId,
+        @Schema(description = "Libellé de la prospection liée (LndLand.Description), null si aucune.")
+        String prospectionTerrainDescription,
         @Schema(description = "Description du terrain.") String descriptionTerrain,
         @Schema(description = "Statut, lecture seule (« En étude » à la création).") UUID statutId,
         @Schema(description = "Libellé du statut.") String statutLibelle,

@@ -11,6 +11,7 @@ import com.tsix.immocrm.dto.patrimoine.faisabilite.BilanEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteListeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.lnd.LndLand;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatus;
 import com.tsix.immocrm.entities.stk.StkItem;
@@ -252,11 +253,28 @@ final class FicheEtude {
                 e.getProfitRatioByProjectCost(), e.getProfitRatioByTurnover(), e.getProfitRatioByAutofinancementAmount());
     }
 
-    static EtudeFaisabiliteListeDto ligne(StkFeasibilityStudy e) {
+    /**
+     * {@code LienProspection_Click} / {@code landResetbutton_Click} (FeasibilityStudy.cs l.514-550, 1966-1986) : entrées du
+     * bloc A et terrain depuis la prospection ; prix de vente et coût bâti non copiés (aucune colonne LndLand, spec §1).
+     */
+    static void copierProspection(StkFeasibilityStudy e, LndLand p) {
+        e.setArea(p.getArea());
+        e.setOccupationSolRatio(p.getCos());
+        e.setCuf(p.getCuf());
+        e.setCoefSaleableArea(p.getCoefSaleableArea());
+        e.setPurchaseUnitCost(p.getProspectionUnitCost());
+        e.setEquipementsCoef(p.getEquipementsCoef());
+        e.setUnitCostConstructionNoBuilt(p.getUnitCostNonBuiltPrice());
+        e.setLandDescription(p.getDescription());
+        e.setDescription(ou(p.getDescription(), e.getDescription()));
+    }
+
+    static EtudeFaisabiliteListeDto ligne(StkFeasibilityStudy e, String prospectionTerrain) {
         StkFeasibilityStudyStatus s = e.getStatus();
         return new EtudeFaisabiliteListeDto(e.getId(), e.getCode(), e.getDescription(), e.getDocDate(),
                 Champs.de(e.getCfgCompany(), CfgCompany::getId), Champs.de(e.getCfgCompany(), CfgCompany::getDescription),
-                Champs.de(e.getStkItem(), StkItem::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getId),
+                Champs.de(e.getStkItem(), StkItem::getDescription), prospectionTerrain,
+                Champs.de(s, StkFeasibilityStudyStatus::getId),
                 Champs.de(s, StkFeasibilityStudyStatus::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getColorName),
                 Boolean.TRUE.equals(e.getIsLocked()), e.getArea(), e.getTotalCostLand(), e.getTotalCost(), e.getTurnover(),
                 e.getAutofinancementAmount(), e.getNetProfitMargin(), e.getConretisationAmount(), e.getFinalizationAmount(),

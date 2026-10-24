@@ -4,18 +4,21 @@ import com.tsix.immocrm.domain.faisabilite.CalculFaisabilite;
 import com.tsix.immocrm.domain.faisabilite.ValeursFaisabilite;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.EtudeFaisabiliteListeDto;
+import com.tsix.immocrm.dto.patrimoine.faisabilite.LierProspectionEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneTrancheEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.LigneUniteEtudeDto;
 import com.tsix.immocrm.dto.patrimoine.faisabilite.SaisieEtudeDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.lnd.LndLand;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudy;
 import com.tsix.immocrm.entities.stk.StkFeasibilityStudyStatus;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.stk.StkFeasibilityStudyRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
@@ -26,7 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -82,7 +87,14 @@ public class EtudeFaisabiliteService {
     // ------------------------------------------------------------------ lecture
 
     public List<EtudeFaisabiliteListeDto> lister(UUID societeId, UUID statutId, String search) {
-        return etudes.lister(societeId, statutId, SaisiePatrimoine.motif(search)).stream().map(FicheEtude::ligne).toList();
+        List<StkFeasibilityStudy> liste = etudes.lister(societeId, statutId, SaisiePatrimoine.motif(search));
+        List<UUID> liees = liste.stream().map(StkFeasibilityStudy::getLndLandId).filter(Objects::nonNull).distinct().toList();
+        Map<UUID, String> prospections = new HashMap<>();
+        if (!liees.isEmpty()) {
+            em.createQuery("SELECT l FROM LndLand l WHERE l.id IN :ids", LndLand.class).setParameter("ids", liees)
+                    .getResultList().forEach(l -> prospections.put(l.getId(), l.getDescription()));
+        }
+        return liste.stream().map(e -> FicheEtude.ligne(e, prospections.get(e.getLndLandId()))).toList();
     }
 
     public EtudeFaisabiliteDto fiche(UUID id) {
@@ -104,6 +116,12 @@ public class EtudeFaisabiliteService {
                         + " ORDER BY i.code", StkItem.class)
                 .setParameter("nature", NATURE_TERRAIN).getResultList().stream()
                 .map(i -> new ReferentielItemDto(i.getId(), i.getCode(), i.getDescription(), null)).toList();
+    }
+
+    /** Sans filtre d'archive, comme {@code ProspectionListForFS} d'OMRAN. */
+    public List<ReferentielItemDto> prospections() {
+        return em.createQuery("SELECT l FROM LndLand l ORDER BY l.code", LndLand.class).getResultList().stream()
+                .map(l -> new ReferentielItemDto(l.getId(), l.getCode(), l.getDescription(), null)).toList();
     }
 
     public List<ReferentielItemDto> tranches(UUID societeId) {
@@ -198,6 +216,42 @@ public class EtudeFaisabiliteService {
         return dto(e);
     }
 
+    /** Étude sans terrain : copie depuis la prospection (spec §1) ; avec terrain : seul le lien est écrit. */
+    @Transactional
+    public EtudeFaisabiliteDto lierProspection(UUID id, LierProspectionEtudeDto lien) {
+        UUID prospectionId = Champs.de(lien, LierProspectionEtudeDto::prospectionTerrainId);
+        if (prospectionId == null) {
+            throw new InvalidRequestException("prospectionTerrainId : obligatoire");
+        }
+        StkFeasibilityStudy e = modifiable(id);
+        LndLand p = prospection(prospectionId);
+        if (e.getStkItem() == null) {
+            return copier(e, p);
+        }
+        e.setLndLandId(p.getId());
+        tracer(e, false);
+        return dto(e);
+    }
+
+    /** {@code landResetbutton_Click} : mêmes copies qu'au lien, puis le terrain (article TER) est détaché. */
+    @Transactional
+    public EtudeFaisabiliteDto recopierProspection(UUID id) {
+        StkFeasibilityStudy e = modifiable(id);
+        if (e.getLndLandId() == null) {
+            throw new ConflictException("Aucune prospection liée à l'étude.");
+        }
+        return copier(e, prospection(e.getLndLandId()));
+    }
+
+    /** {@code prospectionResetButton_Click} : seul le lien est retiré. */
+    @Transactional
+    public EtudeFaisabiliteDto delierProspection(UUID id) {
+        StkFeasibilityStudy e = modifiable(id);
+        e.setLndLandId(null);
+        tracer(e, false);
+        return dto(e);
+    }
+
     @Transactional
     public List<LigneUniteEtudeDto> modifierUnites(UUID id, List<LigneUniteEtudeDto> lignes) {
         StkFeasibilityStudy e = modifiable(id);
@@ -250,7 +304,34 @@ public class EtudeFaisabiliteService {
         e.setBackGuaranteeApplicationRate(v.ou("tauxApplicationRetenueGarantie", d.tauxApplicationRetenueGarantie(),
                 e.getBackGuaranteeApplicationRate()));
         FicheEtude.appliquerEntrees(e, d, v);
+        calculer(e);
+    }
+
+    private void calculer(StkFeasibilityStudy e) {
         FicheEtude.ecrire(e, CalculFaisabilite.calculer(FicheEtude.valeurs(e), maroc()));
+    }
+
+    /** Code vérifié avant tout setter ; étude détachée jusqu'à Verif pour qu'un refus n'écrive rien (comme la modification). */
+    private EtudeFaisabiliteDto copier(StkFeasibilityStudy e, LndLand p) {
+        String code = ActionnairesService.codeLibre(SaisiePatrimoine.ou(p.getCode(), e.getCode()), e.getId(),
+                etudes::findFirstByCode, "l'étude");
+        em.detach(e);
+        e.setCode(code);
+        FicheEtude.copierProspection(e, p);
+        e.setLndLandId(p.getId());
+        e.setStkItem(null);
+        calculer(e);
+        GrillesEtude.exigerSansErreur(grilles.erreursEnBase(e.getId(), FicheEtude.valeurs(e)));
+        tracer(e, false);
+        StkFeasibilityStudy enregistree = em.merge(e);
+        recalcul.recalculer(enregistree);
+        return dto(enregistree);
+    }
+
+    /** LndLand n'a pas de société : pas de périmètre, comme {@code ProspectionTerrainService.exiger}. */
+    private LndLand prospection(UUID id) {
+        return Optional.ofNullable(em.find(LndLand.class, id))
+                .orElseThrow(() -> new ResourceNotFoundException("Prospection terrain introuvable: " + id));
     }
 
     private Optional<CfgCompany> societeActive(UUID id) {
@@ -295,7 +376,8 @@ public class EtudeFaisabiliteService {
         return new EtudeFaisabiliteDto(e.getId(), e.getCode(), e.getDescription(), e.getDocDate(),
                 Champs.de(e.getCfgCompany(), CfgCompany::getId), Champs.de(e.getCfgCompany(), CfgCompany::getDescription),
                 Champs.de(e.getStkItem(), StkItem::getId), Champs.de(e.getStkItem(), StkItem::getDescription),
-                e.getLndLandId(), e.getLandDescription(), Champs.de(s, StkFeasibilityStudyStatus::getId),
+                e.getLndLandId(), Champs.de(e.getLndLandId() == null ? null : em.find(LndLand.class, e.getLndLandId()),
+                        LndLand::getDescription), e.getLandDescription(), Champs.de(s, StkFeasibilityStudyStatus::getId),
                 Champs.de(s, StkFeasibilityStudyStatus::getDescription), Champs.de(s, StkFeasibilityStudyStatus::getColorName),
                 Boolean.TRUE.equals(e.getIsLocked()), e.getNumberOfItemForSale(), e.getUseLandProportionForTvaCalculation(),
                 e.getDefaultVat(), e.getInterestVatRatio(), e.getEcartTypeExpenses(), e.getEcartTypeConcretisation(),

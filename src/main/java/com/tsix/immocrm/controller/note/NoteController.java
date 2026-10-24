@@ -41,11 +41,11 @@ public class NoteController {
     @Operation(summary = "Notes d'un programme, d'une tranche ou d'un article, plus récentes d'abord")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Liste, éventuellement vide."),
-            @ApiResponse(responseCode = "400", description = "`porteur` absent ou hors projet, tranche, article, prospection-terrain."),
+            @ApiResponse(responseCode = "400", description = "`porteur` absent ou hors projet, tranche, article, prospection-terrain, etude."),
             @ApiResponse(responseCode = "404", description = "Aucun objet visible de ce type avec cet id.")
     })
     public List<NoteDto> lister(
-            @Parameter(description = "projet, tranche, article ou prospection-terrain.", example = "article") @RequestParam String porteur,
+            @Parameter(description = "projet, tranche, article, prospection-terrain ou etude (étude de faisabilité).", example = "article") @RequestParam String porteur,
             @Parameter(description = "PKey du porteur.") @RequestParam UUID id) {
         return noteService.lister(porteur, id);
     }
