@@ -177,7 +177,8 @@ class TransformationCommerciale {
         return jour != null && !jour.isBefore(du) && !jour.isAfter(au);
     }
 
-    private List<Object[]> prospections(List<UUID> tranches, LocalDate du, LocalDate au) {
+    /** Lignes (commercial, projet, type, nombre) des prospections de la période, tranche visible. */
+    List<Object[]> prospections(List<UUID> tranches, LocalDate du, LocalDate au) {
         LocalDateTime debut = du.atStartOfDay();
         LocalDateTime fin = au.plusDays(1).atStartOfDay();
         return LotsTranches.lire(tranches, lot -> em.createQuery(PROSPECTIONS, Object[].class)
@@ -281,7 +282,8 @@ class TransformationCommerciale {
         return lignes.stream().mapToLong(l -> (Long) l.get(nom)).sum();
     }
 
-    private Map<UUID, String> commerciaux(Collection<UUID> ids) {
+    /** Nom affiché de chaque commercial ({@code CfgTier}), code à défaut. */
+    Map<UUID, String> commerciaux(Collection<UUID> ids) {
         Map<UUID, String> noms = new HashMap<>();
         LotsTranches.lire(List.copyOf(ids), lot -> em.createQuery("SELECT t FROM CfgTier t WHERE t.id IN :ids",
                 CfgTier.class).setParameter(PARAM_IDS, lot).getResultList())

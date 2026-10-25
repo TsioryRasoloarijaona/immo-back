@@ -164,16 +164,16 @@ final class ChampsArticle {
                         Portee.ARTICLES, n));
     }
 
-    private static ChampImport champ(String entete, String champ, TypeCellule type, Function<StkItem, Object> valeur) {
+    static ChampImport champ(String entete, String champ, TypeCellule type, Function<StkItem, Object> valeur) {
         return new ChampImport(entete, champ, type, null, valeur, Portee.TOUS, 0);
     }
 
-    private static ChampImport code(String entete, String champ, Class<? extends CodeLibelleOmran> classe, boolean parLibelle,
-                                    Function<StkItem, Object> valeur) {
+    static ChampImport code(String entete, String champ, Class<? extends CodeLibelleOmran> classe, boolean parLibelle,
+                            Function<StkItem, Object> valeur) {
         return new ChampImport(entete, champ, TypeCellule.REFERENCE, new Reference(classe, parLibelle), valeur, Portee.TOUS, 0);
     }
 
-    private static ChampImport controle(String entete, Function<StkItem, Object> valeur, Portee portee) {
+    static ChampImport controle(String entete, Function<StkItem, Object> valeur, Portee portee) {
         return new ChampImport(entete, null, TEXTE, null, valeur, portee, 0);
     }
 

@@ -12,12 +12,17 @@ import com.tsix.immocrm.services.rapport.vente.flux.LignesMensuelles;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux;
 import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche;
 
+import com.tsix.immocrm.services.rapport.LotsTranches;
+import jakarta.persistence.EntityManager;
+
 import java.time.Clock;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /** Rapport Vente lu dans {@link FluxVenteMensuel}, sur les seules tranches visibles ; paramètres année + tranches. */
 abstract class RapportFluxVente implements Rapport {
@@ -62,6 +67,19 @@ abstract class RapportFluxVente implements Rapport {
     /** Colonnes {@code programme}, {@code tranche} d'une ligne par tranche (n° 7, 11). */
     static List<ColonneRapport> colonnesTranche() {
         return List.of(ColonneRapport.texte(PROGRAMME, "Programme"), ColonneRapport.texte(TRANCHE, "Tranche"));
+    }
+
+    /** Libellés d'une tranche et de son projet ({@code projet} nul si la tranche n'en a pas). */
+    record TrancheProjet(UUID tranche, String libelle, UUID projet, String libelleProjet) {
+    }
+
+    /** Tranches {@code ids} (visibles) avec leur projet, triées par libellé de tranche. */
+    static List<TrancheProjet> tranchesProjets(EntityManager em, List<UUID> ids) {
+        return LotsTranches.lire(ids, lot -> em.createQuery("SELECT t.id, t.description, p.id, p.description "
+                        + "FROM CfgTranche t LEFT JOIN t.cfgProject p WHERE t.id IN :ids", Object[].class)
+                .setParameter("ids", lot).getResultList()).stream()
+                .map(r -> new TrancheProjet((UUID) r[0], (String) r[1], (UUID) r[2], (String) r[3]))
+                .sorted(Comparator.comparing(t -> Objects.toString(t.libelle(), ""))).toList();
     }
 
     static Map<String, Object> ligneTranche(ValorisationTranche.Valorisation v) {

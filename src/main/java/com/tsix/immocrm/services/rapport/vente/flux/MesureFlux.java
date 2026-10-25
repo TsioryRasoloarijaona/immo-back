@@ -14,7 +14,9 @@ public enum MesureFlux {
     DESISTEMENTS_MONTANT(Famille.DOSSIER),
     ANNULATIONS(Famille.DOSSIER),
     ANNULATIONS_MONTANT(Famille.DOSSIER),
+    RESERVATIONS(Famille.DOSSIER),
     ENCAISSEMENTS(Famille.REGLEMENT),
+    ENCAISSEMENTS_VIVANTS(Famille.REGLEMENT),
     AVANCES_ENCAISSEES(Famille.REGLEMENT),
     ENCAISSEMENTS_APRES_ACTE(Famille.REGLEMENT),
     ENCAISSEMENTS_FRAIS_DOSSIER(Famille.REGLEMENT),
@@ -26,7 +28,8 @@ public enum MesureFlux {
     PREVU_CA_TTC(Famille.PREVU),
     PREVU_ENCAISSEMENT(Famille.PREVU),
     BASE_CA(Famille.PREVU),
-    BASE_ENCAISSEMENT(Famille.PREVU);
+    BASE_ENCAISSEMENT(Famille.PREVU),
+    BASE_CONCRETISATION_QUANTITE(Famille.PREVU);
 
     /** Source lue : une requête par famille demandée ; {@code PREVU} = {@link SourcePrevu}. */
     public enum Famille { DOSSIER, REGLEMENT, ECHEANCE, PREVU }

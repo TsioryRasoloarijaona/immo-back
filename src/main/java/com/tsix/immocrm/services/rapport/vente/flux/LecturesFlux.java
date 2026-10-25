@@ -23,6 +23,7 @@ class LecturesFlux {
 
     private static final String TRANCHES = "tranches";
     private static final String COL_TRANCHE = "Tranche";
+    private static final String COL_LIGNE = "Ligne";
 
     private static final String TRANCHE_EN_VENTE = """
             JOIN CfgTranche t ON t.PKey = i.StkHierarchyId AND t.IsForSale = 1
@@ -32,9 +33,12 @@ class LecturesFlux {
 
     private static final String ETAT = "st.PKey AS Statut, st.Sorting, st.BoolField002 AS Annule, st.BoolField003 AS Desiste";
 
+    private static final String ORIGINE = " f.PKey AS Dossier, f.CfgCommercialId AS Commercial, "
+            + "i.StkItemCategoryId AS CategorieArticle, i.IsUnderItem AS SousArticle, ";
+
     // Statut en jointure externe : un dossier sans statut est lu pour être compté en anomalie, jamais dans une mesure.
-    private static final String DOSSIERS = "SELECT f.PKey AS Dossier, i.StkHierarchyId AS Tranche, " + ETAT + """
-            , f.AdvanceDate, f.AgreementSavingDate, f.DeliveryDateReal, f.CancelDate, f.Price, f.PriceHT,
+    private static final String DOSSIERS = "SELECT" + ORIGINE + "i.StkHierarchyId AS Tranche, " + ETAT + """
+            , f.DocDate, f.AdvanceDate, f.AgreementSavingDate, f.DeliveryDateReal, f.CancelDate, f.Price, f.PriceHT,
               (SELECT SUM(e.Amount) FROM ComDocument e JOIN ComSettlementCategory q ON q.PKey = e.ComSettlementCategoryId
                WHERE e.ComFolderId = f.PKey AND q.IsSaleResiliation = 1 AND q.IsCredit = 0) AS DuResiliation
             FROM ComFolder f
@@ -44,7 +48,8 @@ class LecturesFlux {
             LEFT JOIN StrStatus st ON st.PKey = f.StrStatusId
             WHERE i.StkHierarchyId IN (:tranches)""";
 
-    private static final String REGLEMENTS = "SELECT i.StkHierarchyId AS Tranche, " + RegleEncaissement.MOUVEMENT
+    private static final String REGLEMENTS = "SELECT l.PKey AS Ligne," + ORIGINE + "i.StkHierarchyId AS Tranche, "
+            + RegleEncaissement.MOUVEMENT
             + " AS Mouvement, " + RegleEncaissement.MONTANT + " AS Montant, k.PKey AS Categorie, CASE WHEN"
             + RegleEncaissement.ENCAISSEMENT + "THEN 1 ELSE 0 END AS Encaissement, CASE WHEN" + RegleEncaissement.FRAIS
             + "THEN 1 ELSE 0 END AS Frais, "
@@ -52,8 +57,8 @@ class LecturesFlux {
             + ", f.AdvanceDate, f.AgreementSavingDate " + RegleEncaissement.LIGNES + TRANCHE_EN_VENTE
             + "WHERE i.StkHierarchyId IN (:tranches) AND" + RegleEncaissement.COMPTE;
 
-    private static final String ECHEANCES = """
-            SELECT i.StkHierarchyId AS Tranche, d.DocDate, d.Amount
+    private static final String ECHEANCES = "SELECT d.PKey AS Ligne," + ORIGINE + """
+            i.StkHierarchyId AS Tranche, d.DocDate, d.Amount
             FROM ComDocument d
             JOIN ComSettlementCategory k ON k.PKey = d.ComSettlementCategoryId
             JOIN ComFolder f ON f.PKey = d.ComFolderId
@@ -89,36 +94,53 @@ class LecturesFlux {
         }
     }
 
-    record Dossier(UUID id, UUID tranche, Etat etat, LocalDateTime avance, LocalDateTime acte, LocalDateTime livraison,
-                   LocalDateTime sortie, BigDecimal prix, BigDecimal prixHt, BigDecimal duResiliation) {
+    /** Dossier d'une ligne source et ce que {@link MouvementFlux} en reprend. */
+    record Origine(UUID dossier, UUID commercial, UUID categorieArticle, boolean sousArticle) {
     }
 
-    record Ligne(UUID tranche, LocalDateTime mouvement, BigDecimal montant, UUID categorie, boolean encaissement,
-                 boolean frais, boolean avanceAccord, Etat etat, LocalDateTime avance, LocalDateTime acte) {
+    record Dossier(Origine origine, UUID tranche, Etat etat, LocalDateTime saisie, LocalDateTime avance,
+                   LocalDateTime acte, LocalDateTime livraison, LocalDateTime sortie, BigDecimal prix, BigDecimal prixHt,
+                   BigDecimal duResiliation) {
+
+        UUID id() {
+            return origine.dossier();
+        }
     }
 
-    record Echeance(UUID tranche, LocalDateTime date, BigDecimal montant) {
+    record Ligne(UUID id, Origine origine, UUID tranche, LocalDateTime mouvement, BigDecimal montant, UUID categorie,
+                 boolean encaissement, boolean frais, boolean avanceAccord, Etat etat, LocalDateTime avance,
+                 LocalDateTime acte) {
+    }
+
+    record Echeance(UUID id, Origine origine, UUID tranche, LocalDateTime date, BigDecimal montant) {
     }
 
     List<Dossier> dossiers(List<UUID> tranches) {
         return LotsTranches.lire(tranches, lot -> jdbc.query(DOSSIERS, Map.of(TRANCHES, LotsTranches.textes(lot)),
-                (rs, n) -> new Dossier(uuid(rs, "Dossier"), uuid(rs, COL_TRANCHE), etat(rs), date(rs, "AdvanceDate"),
-                        date(rs, "AgreementSavingDate"), date(rs, "DeliveryDateReal"), date(rs, "CancelDate"),
-                        rs.getBigDecimal("Price"), rs.getBigDecimal("PriceHT"), rs.getBigDecimal("DuResiliation"))));
+                (rs, n) -> new Dossier(origine(rs), uuid(rs, COL_TRANCHE), etat(rs), date(rs, "DocDate"),
+                        date(rs, "AdvanceDate"), date(rs, "AgreementSavingDate"), date(rs, "DeliveryDateReal"),
+                        date(rs, "CancelDate"), rs.getBigDecimal("Price"), rs.getBigDecimal("PriceHT"),
+                        rs.getBigDecimal("DuResiliation"))));
     }
 
     List<Ligne> reglements(List<UUID> tranches) {
         return LotsTranches.lire(tranches, lot -> jdbc.query(REGLEMENTS, Map.of(TRANCHES, LotsTranches.textes(lot)),
-                (rs, n) -> new Ligne(uuid(rs, COL_TRANCHE), date(rs, "Mouvement"), rs.getBigDecimal("Montant"),
-                        uuid(rs, "Categorie"), rs.getInt("Encaissement") == 1, rs.getInt("Frais") == 1,
-                        rs.getInt("AvanceAccord") == 1, etat(rs), date(rs, "AdvanceDate"),
+                (rs, n) -> new Ligne(uuid(rs, COL_LIGNE), origine(rs), uuid(rs, COL_TRANCHE), date(rs, "Mouvement"),
+                        rs.getBigDecimal("Montant"), uuid(rs, "Categorie"), rs.getInt("Encaissement") == 1,
+                        rs.getInt("Frais") == 1, rs.getInt("AvanceAccord") == 1, etat(rs), date(rs, "AdvanceDate"),
                         date(rs, "AgreementSavingDate"))));
     }
 
     List<Echeance> echeances(List<UUID> tranches, UUID categorie) {
         return LotsTranches.lire(tranches, lot -> jdbc.query(ECHEANCES,
                 Map.of(TRANCHES, LotsTranches.textes(lot), "categorie", categorie.toString()),
-                (rs, n) -> new Echeance(uuid(rs, COL_TRANCHE), date(rs, "DocDate"), rs.getBigDecimal("Amount"))));
+                (rs, n) -> new Echeance(uuid(rs, COL_LIGNE), origine(rs), uuid(rs, COL_TRANCHE), date(rs, "DocDate"),
+                        rs.getBigDecimal("Amount"))));
+    }
+
+    private static Origine origine(ResultSet rs) throws SQLException {
+        return new Origine(uuid(rs, "Dossier"), uuid(rs, "Commercial"), uuid(rs, "CategorieArticle"),
+                rs.getBoolean("SousArticle"));
     }
 
     BigDecimal remises(List<UUID> tranches) {
