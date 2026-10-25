@@ -130,7 +130,7 @@ public class ActeReservationService {
         return montant.multiply(HUNDRED).divide(total, 2, RoundingMode.HALF_UP);
     }
 
-    private static String titre(CfgTier client) {
+    public static String titre(CfgTier client) {
         if (client == null || client.getAdmSexType() == null || client.getAdmSexType().getCode() == null) {
             return "";
         }
@@ -152,7 +152,7 @@ public class ActeReservationService {
         return client.getMobile() != null ? client.getMobile() : client.getPhone();
     }
 
-    private static String adresse(String a1, String a2, String a3, String ville) {
+    public static String adresse(String a1, String a2, String a3, String ville) {
         StringBuilder sb = new StringBuilder();
         for (String part : new String[]{a1, a2, a3, ville}) {
             if (part != null && !part.isBlank()) {

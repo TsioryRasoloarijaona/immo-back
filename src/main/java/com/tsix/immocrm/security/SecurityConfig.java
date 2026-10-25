@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -34,6 +35,8 @@ import org.springframework.web.cors.CorsUtils;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final String ADMINISTRATEUR = "Administrateur";
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
@@ -83,7 +86,11 @@ public class SecurityConfig {
                         // show-details=never ; info ne porte que tag d'image et commit, déjà publics (InfosBuild).
                         .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
                         // Avant la liaison des paramètres : 403 avant tout 400 (FEATURE-patrimoine-import-export.md §0.1).
-                        .requestMatchers("/api/import-patrimoine/**").hasRole("Administrateur")
+                        .requestMatchers("/api/import-patrimoine/**").hasRole(ADMINISTRATEUR)
+                        .requestMatchers("/api/tranches/*/premieres-relances", "/api/tranches/*/premieres-relances/**",
+                                "/api/tranches/*/premieres-relances.pdf", "/api/champs-specifiques/*/definitions/**")
+                        .hasRole(ADMINISTRATEUR)
+                        .requestMatchers(HttpMethod.PUT, "/api/champs-specifiques/**").hasRole(ADMINISTRATEUR)
                         .anyRequest().authenticated())
                 // Clé d'API AVANT le JWT : une clé présente fait foi, le cookie n'est lu qu'en son absence (FEATURE-cle-api-n8n.md §5).
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

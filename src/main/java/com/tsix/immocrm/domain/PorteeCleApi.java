@@ -40,6 +40,8 @@ public enum PorteeCleApi {
             List.of(route(HttpMethod.GET, "/api/tranches/*/plans"),
                     route(HttpMethod.GET, "/api/tranches/*/reajustement-superficies"),
                     route(HttpMethod.GET, "/api/tranches/*/mettre-a-jour-schemas/apercu"),
+                    route(HttpMethod.GET, "/api/tranches/*/premieres-relances/apercu"),
+                    route(HttpMethod.GET, "/api/tranches/*/premieres-relances.pdf"),
                     route(HttpMethod.GET, "/api/tranches/*/commissions"),
                     route(HttpMethod.GET, "/api/tranches/*/previsions-base"),
                     route(HttpMethod.GET, "/api/tranches/*/previsions-base/stock"),
