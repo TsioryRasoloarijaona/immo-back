@@ -30,17 +30,16 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComPaymentMethodRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSettlementCategoryRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteDocumentRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.dossier.ReferencesOmran;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
@@ -77,14 +76,12 @@ public class DevisService {
     private static final String CODE = "code";
     private static final String DESCRIPTION = "description";
     private static final String OFFRE_INTROUVABLE = "Offre introuvable: ";
-    private static final String TRANCHE_INTROUVABLE = "CfgTranche introuvable: ";
     private static final String FRAIS_SYNDIC = "FRAIS SYNDIC";
 
     private final ComProspectionRepository prospectionRepository;
     private final StlQuoteRepository quoteRepository;
     private final StlQuoteItemRepository quoteItemRepository;
-    private final CfgTrancheRepository trancheRepository;
-    private final StkItemRepository stkItemRepository;
+    private final ObjetsVisibles objetsVisibles;
     private final CfgTierRepository tierRepository;
     private final ComPaymentMethodRepository paymentMethodRepository;
     private final AdmSequenceRepository sequenceRepository;
@@ -97,17 +94,16 @@ public class DevisService {
     private final Clock clock;
 
     public DevisService(ComProspectionRepository prospectionRepository, DepotsDevis depots,
-                         PerimetreCommercialService perimetreService, ReferencesOmran referencesOmran,
-                         UtilisateurAffiche utilisateurAffiche, Clock clock) {
+                         PerimetreCommercialService perimetreService, ObjetsVisibles objetsVisibles,
+                         ReferencesOmran referencesOmran, UtilisateurAffiche utilisateurAffiche, Clock clock) {
         this.clock = clock;
+        this.objetsVisibles = objetsVisibles;
         this.perimetreService = perimetreService;
         this.referencesOmran = referencesOmran;
         this.utilisateurAffiche = utilisateurAffiche;
         this.prospectionRepository = prospectionRepository;
         this.quoteRepository = depots.offres();
         this.quoteItemRepository = depots.lignes();
-        this.trancheRepository = depots.tranches();
-        this.stkItemRepository = depots.articles();
         this.tierRepository = depots.tiers();
         this.paymentMethodRepository = depots.modesPaiement();
         this.sequenceRepository = depots.sequences();
@@ -224,8 +220,7 @@ public class DevisService {
                 .orElseThrow(() -> new ResourceNotFoundException("Prospection introuvable: " + prospectionId));
 
         Requis.champ(request.trancheId(), "trancheId est requis");
-        CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+        CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
         perimetreService.verifierEcritureSurTranche(tranche, "Création d'offre sur la tranche " + tranche.getCode());
 
         StkItem article = articleValide(request.articleId(), tranche);
@@ -299,14 +294,13 @@ public class DevisService {
         StlQuote quote = offreVisible(id);
         CfgTranche tranche = quote.getCfgTranche();
         if (request.trancheId() != null) {
-            tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            tranche = objetsVisibles.tranche(request.trancheId());
             perimetreService.verifierEcritureSurTranche(tranche, "Déplacement de l'offre vers la tranche " + tranche.getCode());
         }
         boolean changeArticle = changeDArticle(quote, request.articleId());
         StkItem article = changeArticle ? nouvelArticle(quote, request.articleId(), tranche) : quote.getStkItem();
         if (!changeArticle && article != null && tranche != null) {
-            verifierTranche(article, tranche);
+            ObjetsVisibles.verifierTranche(article, tranche);
         }
         ComPaymentMethod modePaiement = request.modePaiementId() != null
                 ? modePaiement(request.modePaiementId()) : quote.getComPaymentMethod();
@@ -533,20 +527,11 @@ public class DevisService {
         if (articleId == null) {
             return null;
         }
-        StkItem article = stkItemRepository.findById(articleId)
-                .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + articleId));
-        verifierTranche(article, tranche);
+        StkItem article = objetsVisibles.articleDeLaTranche(articleId, tranche);
         if (DisponibiliteArticle.estOccupe(article)) {
             throw new InvalidRequestException("L'article " + article.getCode() + " est déjà vendu (lié à un dossier)");
         }
         return article;
-    }
-
-    private static void verifierTranche(StkItem article, CfgTranche tranche) {
-        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-            throw new InvalidRequestException("L'article " + article.getCode() + " n'appartient pas à la tranche "
-                    + tranche.getCode());
-        }
     }
 
     /** Sous-articles demandés, tous enfants de l'article ({@code StkItem.ParentId}). */
@@ -554,10 +539,8 @@ public class DevisService {
         if (article == null || sousArticleIds == null || sousArticleIds.isEmpty()) {
             return List.of();
         }
-        List<StkItem> sousArticles = stkItemRepository.findAllById(sousArticleIds);
-        if (sousArticles.size() != sousArticleIds.size()) {
-            throw new InvalidRequestException("Un ou plusieurs sous-articles sont introuvables");
-        }
+        List<StkItem> sousArticles = objetsVisibles.articles(sousArticleIds.stream().distinct().toList(),
+                "sousArticleIds");
         for (StkItem sousArticle : sousArticles) {
             if (sousArticle.getParent() == null || !article.getId().equals(sousArticle.getParent().getId())) {
                 throw new InvalidRequestException("Le sous-article " + sousArticle.getCode()

@@ -10,7 +10,6 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.exceptions.ConflictException;
-import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -18,6 +17,7 @@ import com.tsix.immocrm.services.dossier.DossierSorti;
 import com.tsix.immocrm.services.dossier.HistoriqueDossier;
 import com.tsix.immocrm.services.dossier.TotauxDossierEcheancier;
 import com.tsix.immocrm.services.dossier.fiche.EcritureDossier;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import jakarta.persistence.EntityManager;
@@ -54,10 +54,13 @@ public class SousArticlesService {
     private final HistoriqueDossier historique;
     private final EntityManager entityManager;
     private final TotauxDossierEcheancier totaux;
+    private final ObjetsVisibles objetsVisibles;
 
     public SousArticlesService(EcritureDossier ecriture, ComFolderItemRepository folderItemRepository,
                                StkItemRepository stkItemRepository, HistoriqueDossier historique,
-                               EntityManager entityManager, TotauxDossierEcheancier totaux) {
+                               EntityManager entityManager, TotauxDossierEcheancier totaux,
+                               ObjetsVisibles objetsVisibles) {
+        this.objetsVisibles = objetsVisibles;
         this.ecriture = ecriture;
         this.folderItemRepository = folderItemRepository;
         this.stkItemRepository = stkItemRepository;
@@ -83,10 +86,9 @@ public class SousArticlesService {
         ComFolder dossier = ecriture.charger(dossierId);
         exigerDossierActif(dossier);
         Requis.champ(articleId, "articleId est requis");
-        StkItem stock = stkItemRepository.findById(articleId)
-                .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + articleId));
+        StkItem stock = objetsVisibles.article(articleId, ObjetsVisibles.ARTICLE_ID);
         if (!idsDisponibles(dossier).contains(articleId)) {
-            throw new ConflictException("L'article " + stock.getCode() + " n'est pas un sous-article libre de la "
+            throw new ConflictException(ObjetsVisibles.ARTICLE_ID + " : l'article n'est pas un sous-article libre de la "
                     + "tranche et de la vocation du dossier.");
         }
         folderItemRepository.save(nouvelleLigne(dossier, stock));

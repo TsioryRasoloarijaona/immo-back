@@ -12,6 +12,7 @@ import com.tsix.immocrm.repositories.com.ComActionMessageTypeRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionKindRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.LecteurCsvLeads.LigneLead;
 import com.tsix.immocrm.utils.PhoneNumberUtils;
@@ -65,9 +66,10 @@ public class ImportPreProspectionService {
     private final ComProspectionOriginRepository originRepository;
     private final ComActionMessageTypeRepository typeRepository;
     private final RepartitionLeadsService repartition;
+    private final ObjetsVisibles objetsVisibles;
 
     public ImportPreProspectionService(ProspectionService prospectionService,
-                                       CfgTrancheRepository trancheRepository,
+                                       CfgTrancheRepository trancheRepository, ObjetsVisibles objetsVisibles,
                                        ComProspectionKindRepository kindRepository,
                                        ComProspectionOriginRepository originRepository,
                                        ComActionMessageTypeRepository typeRepository,
@@ -75,6 +77,7 @@ public class ImportPreProspectionService {
         this.prospectionService = prospectionService;
         this.repartition = repartition;
         this.trancheRepository = trancheRepository;
+        this.objetsVisibles = objetsVisibles;
         this.kindRepository = kindRepository;
         this.originRepository = originRepository;
         this.typeRepository = typeRepository;
@@ -101,8 +104,7 @@ public class ImportPreProspectionService {
                                                     List<StatutLigneImport> statuts) {
         List<StatutLigneImport> selection = selection(statuts);
         Requis.champ(trancheId, "trancheId est requis : un fichier est importé sur une seule tranche");
-        CfgTranche tranche = trancheRepository.findById(trancheId)
-                .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + trancheId));
+        CfgTranche tranche = objetsVisibles.tranche(trancheId);
         List<LigneLead> lignes = LecteurCsvLeads.lire(octets(fichier));
         Rattachement rattachement = new Rattachement(
                 demande.etapeId() != null ? demande.etapeId()
