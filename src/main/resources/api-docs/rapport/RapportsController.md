@@ -40,10 +40,16 @@ Classeur `.xlsx` du même résultat, fichier `<code>_<aaaaMMjj_HHmmss>.xlsx` : u
 `[]:*?/\`, 31 caractères au plus, dédoublonné), en-tête en gras figé, colonnes reçues dans l'ordre, dernière ligne
 « Total » en gras quand la section a des totaux. Mêmes paramètres que `/resultat`.
 
+`format=pdf` : mêmes sections et mêmes totaux, `application/pdf`, fichier `<code>_<aaaaMMjj_HHmmss>.pdf`, A4 paysage, un
+tableau par section (sous-titre si plusieurs), en-tête de colonnes répété, pied « Page n / m ». Sous le titre : « Édité le
+jj/MM/aaaa par <utilisateur> », une ligne « libellé : valeurs » par paramètre appliqué (tranches et commerciaux réduits au
+visible, libellés lisibles), puis une ligne « Avertissement : … » par avertissement du résultat.
+
 ### param format
 
-Seule valeur acceptée : `xlsx` (défaut).
+`xlsx` (défaut) ou `pdf`. Contrôlé après le droit : un rapport non visible répond 403 quel que soit le format.
 
 ### reponse 400
 
-`format` autre que `xlsx`, ou un paramètre refusé comme sur `/resultat`.
+`format` autre que `xlsx` ou `pdf`, paramètre refusé comme sur `/resultat`, ou PDF de plus de 2 000 lignes (toutes
+sections cumulées) : exportez en `.xlsx`.
