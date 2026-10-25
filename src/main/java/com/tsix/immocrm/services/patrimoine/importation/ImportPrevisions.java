@@ -43,6 +43,7 @@ class ImportPrevisions implements ImportParType<ImportPrevisions.Contexte> {
     private static final int LIGNE = 0;
     private static final int EN_TETE = 1;
     private static final String NOMBRE_ARTICLES = "nombreArticles";
+    private static final int NOTES_MAX = 1000;
     /** Rang {@link #LIGNE} = colonnes d'une ligne mensuelle ; {@link #EN_TETE} = en-tête, lu sur la 1re ligne seule. */
     static final List<ChampImport> CHAMPS = List.of(
             champ("Année", "annee", ENTIER, LIGNE), champ("Mois", "mois", ENTIER, LIGNE),
@@ -108,6 +109,10 @@ class ImportPrevisions implements ImportParType<ImportPrevisions.Contexte> {
             LigneLue l = lignes.get(i);
             List<String> erreurs = new ArrayList<>();
             Map<Integer, Map<String, Object>> lus = LectureChamps.lire(CHAMPS, l, null, ctx.avertissements(), erreurs);
+            // CfgPrevision.Notes est borné par @Size : sans ce contrôle, le flush lèverait une validation hors bilan (500).
+            if (lus.getOrDefault(LIGNE, Map.of()).get("notes") instanceof String notes && notes.length() > NOTES_MAX) {
+                erreurs.add("Colonne Notes : " + NOTES_MAX + " caractères au plus");
+            }
             if (i == 0) {
                 enTete.putAll(lus.getOrDefault(EN_TETE, Map.of()));
             }

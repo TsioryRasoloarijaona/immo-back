@@ -12,7 +12,7 @@ En-têtes OMRAN exacts, une ligne par objet existant, puis une feuille d'aide pa
 contenance) des tranches visibles, feuille `PROJETS` ; sans `trancheId`. `terrains` : feuille `STOCK_TERRAINS`
 pré-remplie avec les terrains visibles (au-delà de 1 000, en-têtes seuls), nom `STOCK_TERRAINS_<horodatage>.xlsx` ; sans
 `trancheId`. `previsions` : feuille `PREVISIONS` pré-remplie avec les lignes de la tranche (`trancheId` obligatoire).
-Réimporter le modèle tel quel donne des lignes INCHANGEE.
+Réimporter le modèle tel quel donne des lignes INCHANGEE (prévisions : MISE_A_JOUR, les lignes étant toutes remplacées).
 
 ## importer
 
@@ -21,8 +21,9 @@ dans la tranche ; terrains : code du terrain dans l'entité de la ligne ; prése
 absente ou cellule vide = champ intact (l'import ne vide jamais un champ, sauf une contenance de présentation à 0 ou
 vide, retirée). Nombres en cellule numérique ou en texte (`1 234,56`, `1234.56`) ; dates en cellule date ou
 `jj/mm/aaaa` ; cases `Oui/Non`, `Vrai/Faux`, `1/0`, `X`. TVA ou % de concrétisation supérieur à 1 lu en pourcentage
-(÷ 100, avertissement). Référentiels par code **ou** libellé (casse ignorée) sauf Vocation, Type, Type présentation,
-Orientation, Entité de gestion du syndic des articles (code seul). En-tête inconnu = avertissement « colonne ignorée ».
+(÷ 100, avertissement). Référentiels par code **ou** libellé (casse ignorée) sauf Orientation (code seul) et, pour les
+articles, Vocation, Type, Type présentation, Entité de gestion du syndic (code seul). Entité inactive = introuvable.
+En-tête inconnu = avertissement « colonne ignorée ».
 
 `previsions` remplace toutes les lignes de la tranche en un seul appel (règles de `PUT /api/tranches/{id}/previsions-base`) :
 une ligne de bilan globale (pivot = code de la tranche) plus les erreurs de lecture par ligne ; l'en-tête existant est

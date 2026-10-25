@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.patrimoine.TerrainEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.TerrainListeDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto.ResultatImport;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
@@ -185,6 +186,10 @@ class ImportTerrains implements ImportParType<ImportTerrains.Contexte> {
     // ------------------------------------------------------------------ écriture (dans la transaction de l'import)
 
     private ResultatImport ecrireLigne(LigneTerrain l) {
+        // Une entité inactive est invisible (R4) : même refus que si son code n'existait pas.
+        if (l.entiteId() != null && !Boolean.TRUE.equals(em.find(CfgCompany.class, l.entiteId()).getIsActive())) {
+            throw new InvalidRequestException("L'entité saisie est introuvable dans notre référenciel");
+        }
         List<StkItem> trouves = l.entiteId() == null ? List.of()
                 : em.createQuery(PAR_CODE, StkItem.class).setFlushMode(FlushModeType.COMMIT)
                 .setParameter("entite", l.entiteId()).setParameter(CODE, l.pivot()).getResultList();
