@@ -25,11 +25,14 @@ import com.tsix.immocrm.services.equipe.CommerciauxVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.web.export.ExportTableur;
 import com.tsix.immocrm.web.export.FeuilleExport;
+import com.tsix.immocrm.web.export.FormatExport;
 import com.tsix.immocrm.web.export.LignesExport;
+import com.tsix.immocrm.web.export.MiseEnPagePdf;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -40,6 +43,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Socle des rapports (FEATURE-tdb-vente-rapports-socle.md §3–§4) : liste filtrée par droits, ouverture (404 → 403 →
@@ -50,6 +54,7 @@ import java.util.function.Predicate;
 public class ServiceRapports {
 
     static final String AUTRES_RAPPORTS = "Autres rapports";
+    private static final String FORMAT_PDF = "pdf";
 
     private final RegistreRapports registre;
     private final AdmReportDataRepository reportData;
@@ -68,8 +73,8 @@ public class ServiceRapports {
         this.clock = clock;
     }
 
-    /** Classeur d'un rapport : préfixe du fichier, titre, une feuille par section. */
-    public record Export(String code, String libelle, List<FeuilleExport> feuilles) {
+    /** Export d'un rapport : préfixe du fichier, titre, filtres appliqués lisibles, une feuille par section. */
+    public record Export(String code, String libelle, List<String> filtres, List<FeuilleExport> feuilles) {
     }
 
     private record Ouverture(ModuleRapport module, Rapport rapport, AdmReportData ligne) {
@@ -98,7 +103,7 @@ public class ServiceRapports {
         List<ParametreRapportDto> parametres = o.rapport().parametres().stream()
                 .map(p -> parametre(p, o.module())).toList();
         return new DescripteurRapportDto(o.rapport().code(), o.module().slug(), libelle(o.ligne()), groupe(o.ligne()),
-                parametres, List.of(ExportTableur.FORMAT_XLSX));
+                parametres, List.of(ExportTableur.FORMAT_XLSX, FORMAT_PDF));
     }
 
     public ResultatRapportDto resultat(String slug, String code, Map<String, List<String>> recus) {
@@ -112,14 +117,39 @@ public class ServiceRapports {
     /** Le format se contrôle après le droit : un rapport interdit répond 403 quel que soit le format. */
     public Export exporter(String slug, String code, String format, Map<String, List<String>> recus) {
         Ouverture o = ouvrir(slug, code);
-        ExportTableur.exigerXlsx(format);
-        List<FeuilleExport> feuilles = executer(o, recus).resultat().sections().stream()
+        FormatExport.lire(format);
+        Execution e = executer(o, recus);
+        List<FeuilleExport> feuilles = e.resultat().sections().stream()
                 .map(s -> {
                     Map<String, Object> totaux = TotauxRapport.totaux(s);
                     return new FeuilleExport(s.titre(), s.colonnes(), s.lignes(), totaux.isEmpty() ? null : totaux);
                 })
                 .toList();
-        return new Export(o.rapport().code(), libelle(o.ligne()), feuilles);
+        return new Export(o.rapport().code(), libelle(o.ligne()), filtres(o, e), feuilles);
+    }
+
+    /** Paramètres appliqués (donc réduits au visible), valeurs lisibles, puis les avertissements du résultat. */
+    private List<String> filtres(Ouverture o, Execution e) {
+        List<String> lignes = new ArrayList<>();
+        for (ParametreRapport p : o.rapport().parametres()) {
+            List<String> valeurs = e.parametres().getOrDefault(p.nom(), List.of());
+            if (!valeurs.isEmpty()) {
+                Map<String, String> options = parametre(p, o.module()).options().stream()
+                        .collect(Collectors.toMap(OptionRapportDto::valeur, OptionRapportDto::libelle, (a, b) -> a));
+                lignes.add(p.libelle() + " : " + valeurs.stream().map(v -> lisible(p.type(), v, options))
+                        .collect(Collectors.joining(", ")));
+            }
+        }
+        e.resultat().avertissements().forEach(a -> lignes.add("Avertissement : " + a));
+        return lignes;
+    }
+
+    private static String lisible(TypeParametre type, String valeur, Map<String, String> options) {
+        return switch (type) {
+            case BOOLEEN -> MiseEnPagePdf.texte(Boolean.valueOf(valeur));
+            case DATE -> MiseEnPagePdf.texte(LocalDate.parse(valeur));
+            default -> options.getOrDefault(valeur, valeur);
+        };
     }
 
     // ------------------------------------------------------------------ ouverture et exécution

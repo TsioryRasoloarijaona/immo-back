@@ -4,7 +4,9 @@ import com.tsix.immocrm.dto.rapport.DescripteurRapportDto;
 import com.tsix.immocrm.dto.rapport.GroupeRapportsDto;
 import com.tsix.immocrm.dto.rapport.ResultatRapportDto;
 import com.tsix.immocrm.services.rapport.ServiceRapports;
+import com.tsix.immocrm.web.export.ExportPdf;
 import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.FormatExport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,7 +22,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
 
@@ -33,10 +34,12 @@ public class RapportsController {
 
     private final ServiceRapports service;
     private final ExportTableur exportTableur;
+    private final ExportPdf exportPdf;
 
-    public RapportsController(ServiceRapports service, ExportTableur exportTableur) {
+    public RapportsController(ServiceRapports service, ExportTableur exportTableur, ExportPdf exportPdf) {
         this.service = service;
         this.exportTableur = exportTableur;
+        this.exportPdf = exportPdf;
     }
 
     @GetMapping
@@ -83,17 +86,20 @@ public class RapportsController {
     }
 
     @GetMapping("/{code}/export")
-    @Operation(summary = "Export Excel d'un rapport : une feuille par section")
+    @Operation(summary = "Export Excel ou PDF d'un rapport : une feuille ou un tableau par section")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx.",
-                    content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "200", description = "Classeur .xlsx ou document PDF selon format.",
+                    content = {
+                            @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    schema = @Schema(type = "string", format = "binary")),
+                            @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary"))
+                    }),
             @ApiResponse(responseCode = "400", content = @Content),
             @ApiResponse(responseCode = "403", description = "Rapport existant non visible par l'appelant.",
                     content = @Content),
             @ApiResponse(responseCode = "404", description = "Module ou rapport inconnu.", content = @Content)
     })
-    public ResponseEntity<StreamingResponseBody> exporter(
+    public ResponseEntity<byte[]> exporter(
             @Parameter(description = "Module : vente ou patrimoine.", example = "vente") @PathVariable String module,
             @Parameter(description = "Code du rapport.", example = "ComTdbSalesMonitoringGlobal")
             @PathVariable String code,
@@ -103,6 +109,8 @@ public class RapportsController {
         MultiValueMap<String, String> sansFormat = new LinkedMultiValueMap<>(parametres);
         sansFormat.remove(FORMAT);
         ServiceRapports.Export export = service.exporter(module, code, format, sansFormat);
-        return exportTableur.reponse(export.code(), export.libelle(), export.feuilles());
+        return FormatExport.lire(format) == FormatExport.PDF
+                ? exportPdf.reponse(export.code(), export.libelle(), export.filtres(), export.feuilles())
+                : exportTableur.reponseEnMemoire(export.code(), export.libelle(), export.feuilles());
     }
 }
