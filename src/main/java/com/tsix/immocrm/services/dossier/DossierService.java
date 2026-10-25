@@ -230,12 +230,13 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
+        List<StkItem> demandes = objetsVisibles.articles(request.articleIds(), ARTICLE_IDS);
         Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
                 request.articleIds().get(0));
         PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
 
         List<StkItem> articles = new ArrayList<>();
-        for (StkItem item : objetsVisibles.articles(request.articleIds(), ARTICLE_IDS)) {
+        for (StkItem item : demandes) {
             if (DisponibiliteArticle.estOccupe(item)) {
                 throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + item.getId());
             }

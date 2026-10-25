@@ -311,7 +311,8 @@ public class ImportPreProspectionService {
         if (mots.length == 0 || mots[0].isEmpty()) {
             return Optional.empty();
         }
-        return trancheRepository.findFirstByCode(mots[0].toUpperCase(Locale.ROOT));
+        return trancheRepository.findFirstByCode(mots[0].toUpperCase(Locale.ROOT))
+                .flatMap(t -> trancheRepository.trancheVisible(t.getId()));
     }
 
     /** « Téléphone », à défaut WhatsApp, à défaut le secondaire — tel qu'écrit dans le fichier. */
