@@ -6,6 +6,7 @@ import com.tsix.immocrm.services.dossier.liste.MontantsParNatureDossier;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Dossier;
 import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Ligne;
+import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Origine;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux.Famille;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
@@ -59,10 +60,42 @@ public class FluxVenteMensuel {
         this.em = em;
     }
 
-    /** Tranches vides ⇒ flux vide sans aucune requête. */
+    /** Tranches vides ⇒ flux vide sans aucune requête. Agrège {@link #mouvements} au mois, plus le prévu. */
     public FluxMensuel calculer(DemandeFlux demande) {
         if (demande.tranches().isEmpty()) {
             return FluxMensuel.vide(AnomaliesFlux.AUCUNE);
+        }
+        MouvementsFlux mouvements = lignes(demande);
+        FluxMensuel.Cumul cumul = new FluxMensuel.Cumul();
+        mouvements.lignes().forEach(l -> cumul.ajouter(l.mesure(),
+                new CleFlux(l.trancheId(), l.date().getYear(), l.date().getMonthValue()), l.valeur()));
+        boolean prevuNonSaisi = false;
+        Set<MesureFlux> prevues = demande.mesures().stream().filter(m -> m.famille() == Famille.PREVU)
+                .collect(Collectors.toSet());
+        if (!prevues.isEmpty()) {
+            FluxMensuel prevu = sourcePrevu.prevu(demande);
+            cumul.ajouter(prevu, prevues);
+            prevuNonSaisi = prevu.anomalies().prevuNonSaisi();
+        }
+        AnomaliesFlux a = mouvements.anomalies();
+        return cumul.flux(new AnomaliesFlux(a.dossiersSansStatut(), a.reglementsSansDate(), a.parametresAbsents(),
+                prevuNonSaisi));
+    }
+
+    /**
+     * Les lignes sources de {@link #calculer}, datées au jour, une par fait retenu (même population, même règle) ; une
+     * mesure {@code PREVU} est refusée (le prévu est mensuel).
+     */
+    public MouvementsFlux mouvements(DemandeFlux demande) {
+        if (demande.mesures().stream().anyMatch(m -> m.famille() == Famille.PREVU)) {
+            throw new IllegalArgumentException("Mesure prévue : lue par calculer seulement.");
+        }
+        return lignes(demande);
+    }
+
+    private MouvementsFlux lignes(DemandeFlux demande) {
+        if (demande.tranches().isEmpty()) {
+            return new MouvementsFlux(List.of(), AnomaliesFlux.AUCUNE);
         }
         Calcul calcul = new Calcul(demande, lireSeuils(demande.mesures()));
         if (calcul.demande(Famille.DOSSIER, Famille.REGLEMENT, Famille.ECHEANCE)) {
@@ -74,16 +107,9 @@ public class FluxVenteMensuel {
         if (demande.mesures().contains(FRAIS_DESISTEMENT_DUS)) {
             fraisDesistement(calcul);
         }
-        boolean prevuNonSaisi = false;
-        Set<MesureFlux> prevues = calcul.mesures(Famille.PREVU);
-        if (!prevues.isEmpty()) {
-            FluxMensuel prevu = sourcePrevu.prevu(demande);
-            calcul.cumul.ajouter(prevu, prevues);
-            prevuNonSaisi = prevu.anomalies().prevuNonSaisi();
-        }
-        return calcul.cumul.flux(new AnomaliesFlux(calcul.sansStatut,
+        return new MouvementsFlux(calcul.lignes, new AnomaliesFlux(calcul.sansStatut,
                 new AnomaliesFlux.ReglementsSansDate(calcul.sansDate, calcul.montantSansDate),
-                calcul.parametresAbsents, prevuNonSaisi));
+                calcul.parametresAbsents, false));
     }
 
     /**
@@ -124,7 +150,7 @@ public class FluxVenteMensuel {
             for (MesureFlux m : mesures) {
                 LocalDateTime date = date(m, d);
                 if (calcul.retient(date) && population(m, d.etat(), calcul.seuils)) {
-                    calcul.ajouter(m, d.tranche(), date, valeur(m, d, avances));
+                    calcul.ajouter(m, d.tranche(), date, valeur(m, d, avances), d.origine(), null);
                 }
             }
         }
@@ -146,11 +172,12 @@ public class FluxVenteMensuel {
             case CONCRETISATIONS, CONCRETISATIONS_NETTES, CONCRETISATIONS_MONTANT -> d.avance();
             case CA_QUANTITE, CA_TTC, CA_HT -> d.acte();
             case LIVRAISONS -> d.livraison();
+            case RESERVATIONS -> d.saisie();
             default -> d.sortie();
         };
     }
 
-    // Concrétisations et livraisons gardent annulés et désistés (la vue) ; nettes et CA les excluent.
+    // Concrétisations, livraisons et réservations gardent annulés et désistés (la vue, le n° 8) ; nettes et CA les excluent.
     private static boolean population(MesureFlux m, LecturesFlux.Etat etat, Map<String, Integer> seuils) {
         return switch (m) {
             case CONCRETISATIONS, CONCRETISATIONS_MONTANT, LIVRAISONS -> etat.atteint(seuils.get(seuilDe(m)));
@@ -158,6 +185,7 @@ public class FluxVenteMensuel {
                     etat.atteint(seuils.get(seuilDe(m))) && etat.vivant();
             case DESISTEMENTS, DESISTEMENTS_MONTANT -> Boolean.TRUE.equals(etat.desiste());
             case ANNULATIONS, ANNULATIONS_MONTANT -> Boolean.TRUE.equals(etat.annule());
+            case RESERVATIONS -> etat.avecStatut();
             default -> false;
         };
     }
@@ -182,7 +210,7 @@ public class FluxVenteMensuel {
             if (l.mouvement() == null) {
                 compterSansDate(calcul, l, retenues);
             } else if (calcul.retient(l.mouvement())) {
-                retenues.forEach(m -> calcul.ajouter(m, l.tranche(), l.mouvement(), l.montant()));
+                retenues.forEach(m -> calcul.ajouter(m, l.tranche(), l.mouvement(), l.montant(), l.origine(), l.id()));
             }
         }
     }
@@ -199,6 +227,7 @@ public class FluxVenteMensuel {
                                    Map<MesureFlux, Set<UUID>> categories) {
         return switch (m) {
             case ENCAISSEMENTS -> l.encaissement();
+            case ENCAISSEMENTS_VIVANTS -> l.encaissement() && l.etat().vivant();
             case AVANCES_ENCAISSEES -> l.encaissement() && l.avanceAccord() && l.avance() != null
                     && l.etat().atteint(seuils.get(seuilDe(m))) && l.etat().vivant();
             case ENCAISSEMENTS_APRES_ACTE -> l.encaissement() && l.etat().vivant() && l.acte() != null
@@ -229,16 +258,17 @@ public class FluxVenteMensuel {
     private void fraisDesistement(Calcul calcul) {
         seuils.valeur(FRAIS_ANNULATION).ifPresent(categorie -> lectures.echeances(calcul.demande.tranches(), categorie)
                 .stream().filter(e -> calcul.retient(e.date()))
-                .forEach(e -> calcul.ajouter(FRAIS_DESISTEMENT_DUS, e.tranche(), e.date(), e.montant())));
+                .forEach(e -> calcul.ajouter(FRAIS_DESISTEMENT_DUS, e.tranche(), e.date(), e.montant(), e.origine(),
+                        e.id())));
     }
 
-    /** État d'un calcul : demande, seuils lus, cellules et anomalies. */
+    /** État d'un calcul : demande, seuils lus, lignes retenues et anomalies. */
     private static final class Calcul {
 
         private final DemandeFlux demande;
         private final Map<String, Integer> seuils;
         private final List<String> parametresAbsents = new ArrayList<>();
-        private final FluxMensuel.Cumul cumul = new FluxMensuel.Cumul();
+        private final List<MouvementFlux> lignes = new ArrayList<>();
         private long sansStatut;
         private long sansDate;
         private BigDecimal montantSansDate = BigDecimal.ZERO;
@@ -262,8 +292,9 @@ public class FluxVenteMensuel {
             return date != null && demande.retient(date.getYear());
         }
 
-        void ajouter(MesureFlux m, UUID tranche, LocalDateTime date, BigDecimal valeur) {
-            cumul.ajouter(m, new CleFlux(tranche, date.getYear(), date.getMonthValue()), valeur);
+        void ajouter(MesureFlux m, UUID tranche, LocalDateTime date, BigDecimal valeur, Origine o, UUID ligne) {
+            lignes.add(new MouvementFlux(m, tranche, date.toLocalDate(), valeur == null ? BigDecimal.ZERO : valeur,
+                    o.dossier(), o.commercial(), o.categorieArticle(), o.sousArticle(), ligne));
         }
     }
 }

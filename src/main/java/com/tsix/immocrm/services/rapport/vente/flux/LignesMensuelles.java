@@ -52,7 +52,10 @@ public final class LignesMensuelles {
 
     /** Avertissements communs (spec §2 a–d) tirés des anomalies du flux. */
     public static List<String> avertissements(FluxMensuel flux) {
-        AnomaliesFlux a = flux.anomalies();
+        return avertissements(flux.anomalies());
+    }
+
+    public static List<String> avertissements(AnomaliesFlux a) {
         List<String> avertissements = new ArrayList<>();
         if (a.dossiersSansStatut() > 0) {
             avertissements.add("%d dossier(s) sans statut ne sont comptés dans aucune mesure."
