@@ -247,6 +247,39 @@ public class FixtureFluxVente {
             return sauvee;
         }
 
+        // -------------------------------------------------------------- R2b : catégories d'article, lancement
+
+        /** Catégorie d'article propre au test ({@code ForUnderItem = 0}), autre que celle du jeu. */
+        public StkItemCategory categorieArticle() {
+            return ev.categorie(code("CAT"));
+        }
+
+        /** {@link #dossier(CfgTranche, StrStatus)} sur un article racine de la catégorie {@code categorie}. */
+        public ComFolder dossier(CfgTranche tranche, StrStatus statut, StkItemCategory categorie) {
+            StkItem article = ev.article(code("ART"), tranche, categorie, typeArticle);
+            return ev.vendre(article, code("DOS"), statut, null, null);
+        }
+
+        /** {@link #dossierSousArticle(CfgTranche, StrStatus)}, parent et sous-article de la catégorie {@code categorie}. */
+        public ComFolder dossierSousArticle(CfgTranche tranche, StrStatus statut, StkItemCategory categorie) {
+            StkItem parent = ev.article(code("ART"), tranche, categorie, typeArticle);
+            StkItem sous = ev.sousArticle(code("SOUS"), parent, categorie, typeArticle);
+            return ev.vendre(sous, code("DOS"), statut, null, null);
+        }
+
+        /** {@link #articleLibre(CfgTranche, String)} de la catégorie {@code categorie}. */
+        public StkItem articleLibre(CfgTranche tranche, String prixVente, StkItemCategory categorie) {
+            return prixVente(ev.article(code("ART"), tranche, categorie, typeArticle), prixVente);
+        }
+
+        /** Lancement de la commercialisation : {@code CfgTranche.MarketingStartDate} ; nul permis. */
+        public CfgTranche lancer(CfgTranche tranche, LocalDate date) {
+            tranche.setMarketingStartDate(instant(date));
+            CfgTranche sauvee = entityManager.merge(tranche);
+            entityManager.flush();
+            return sauvee;
+        }
+
         // -------------------------------------------------------------- échéances et règlements
 
         /** Catégorie propre au test ; {@code IsInAgrementContext} vrai pour {@link Genre#AVANCE} seulement. */

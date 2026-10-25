@@ -45,6 +45,15 @@ import static com.tsix.immocrm.controller.rapport.AppelsRapports.totaux;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.noms;
 import static com.tsix.immocrm.controller.rapport.RapportsFluxSupport.sommeDesChiffres;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.ANNEE;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CODES_R2B;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CONCRET_LIBRES;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.ENSEMBLE;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.RYTHME_COMPARAISON;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.RYTHME_CONCRETISATIONS;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.TAUX_CONCRET_ANNEE;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.TAUX_VENTE_STOCK;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.colonneDe;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.colonnesTranches;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CONCRET_ENCAISSEMENT;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.DATE;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.NON_AFFECTE;
@@ -86,6 +95,7 @@ class RapportsRythmeVisibiliteTest {
     private static final String VISITES = "visites";
     private static final String CONCRETISATIONS = "concretisations";
     private static final String ENCAISSEMENTS = "encaissements";
+    private static final String TRANCHES = "tranches";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureRapports rapports;
@@ -316,6 +326,141 @@ class RapportsRythmeVisibiliteTest {
             }
         }
         return texte.toString();
+    }
+
+    // ------------------------------------------------------------------ R2b : n° 9, 10, 22, 24, 27
+
+    private static final String AN_24 = "2025";
+
+    /** Sections d'un rapport R2b ; le n° 24 reçoit {@code annee} = 2025. */
+    private List<Map<String, Object>> r2b(String code, AdmUser qui, CfgTranche... tranches) throws Exception {
+        if (TAUX_VENTE_STOCK.equals(code)) {
+            return appels.sections(demande(code, connecte(qui), List.of(tranches), ANNEE, AN_24));
+        }
+        return appels.sections(demande(code, connecte(qui), List.of(tranches)));
+    }
+
+    /** Σ |valeur| des colonnes chiffrées (NOMBRE, MONTANT, POURCENTAGE) hors colonnes d'axe {@code mois} / {@code annee}. */
+    private static BigDecimal chiffresHorsAxe(Map<String, Object> section) {
+        BigDecimal somme = BigDecimal.ZERO;
+        for (Map<String, Object> c : colonnes(section)) {
+            boolean chiffree = List.of("NOMBRE", "MONTANT", "POURCENTAGE").contains(String.valueOf(c.get("type")));
+            if (chiffree && !List.of("mois", ANNEE).contains(String.valueOf(c.get("nom")))) {
+                for (Map<String, Object> l : lignes(section)) {
+                    BigDecimal v = nombre(l.get(c.get("nom")));
+                    somme = v == null ? somme : somme.add(v.abs());
+                }
+            }
+        }
+        return somme;
+    }
+
+    private void assertAucunChiffreR2b(AdmUser qui, CfgTranche tranche) throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : List.of(RYTHME_CONCRETISATIONS, RYTHME_COMPARAISON)) {
+            List<Map<String, Object>> sections = r2b(code, qui, tranche);
+            soft.assertThat(sections).as(code).isNotEmpty();
+            for (Map<String, Object> s : sections) {
+                soft.assertThat(lignes(s)).as("%s %s lignes", code, s.get("id")).isEmpty();
+                soft.assertThat(colonnesTranches(s)).as("%s %s colonnes", code, s.get("id")).isEmpty();
+            }
+        }
+        soft.assertThat(lignes(section(r2b(CONCRET_LIBRES, qui, tranche), TRANCHES))).as(CONCRET_LIBRES).isEmpty();
+        for (Map<String, Object> s : r2b(TAUX_CONCRET_ANNEE, qui, tranche)) {
+            soft.assertThat(lignes(s)).as("n° 27 %s", s.get("id")).isEmpty();
+        }
+        List<Map<String, Object>> n24 = r2b(TAUX_VENTE_STOCK, qui, tranche);
+        soft.assertThat(lignes(section(n24, TRANCHES))).as("n° 24 tranches").isEmpty();
+        for (Map<String, Object> s : n24) {
+            soft.assertThat(chiffresHorsAxe(s)).as("n° 24 %s", s.get("id")).isEqualByComparingTo("0");
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v1_r2b_commercialAffecteAuProjetA_resultatEgalAuResultatDeTASeule_pourLesCinqCodes() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : CODES_R2B) {
+            soft.assertThat(r2b(code, a)).as(code).isEqualTo(r2b(code, direction, ta));
+        }
+        Map<String, Object> concretisations = section(r2b(RYTHME_CONCRETISATIONS, a), CONCRETISATIONS);
+        soft.assertThat(colonnesTranches(concretisations)).containsExactly(colonneDe(concretisations, ta));
+        soft.assertThat(lignes(section(r2b(CONCRET_LIBRES, a), TRANCHES))).singleElement()
+                .satisfies(l -> assertThat(l).containsEntry(TRANCHE, ta.getCode()));
+        soft.assertThat(lignes(section(r2b(TAUX_CONCRET_ANNEE, a), TRANCHES))).singleElement()
+                .satisfies(l -> assertThat(String.valueOf(l.get(TRANCHE))).contains(ta.getCode()));
+        Map<String, Object> stock = section(r2b(TAUX_VENTE_STOCK, a), TRANCHES);
+        soft.assertThat(lignes(stock)).singleElement()
+                .satisfies(l -> assertThat(String.valueOf(l.get(TRANCHE))).contains(ta.getCode()));
+        soft.assertThat(total(stock, "ventesAnnee")).as("3 concrétisations de TA en 2025").isEqualByComparingTo("3");
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v2_r2b_trancheDUneEntiteInactive_absenteDesLignesColonnesDenominateursEtTotaux() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+
+        Map<String, Object> concretisations = section(r2b(RYTHME_CONCRETISATIONS, direction, ta, tb, ti),
+                CONCRETISATIONS);
+        Map<String, Object> encaissements = section(r2b(RYTHME_CONCRETISATIONS, direction, ta, tb, ti), ENCAISSEMENTS);
+        Map<String, Object> comparaison = section(r2b(RYTHME_COMPARAISON, direction, ta, tb, ti), CONCRETISATIONS);
+        Map<String, Object> libres = section(r2b(CONCRET_LIBRES, direction, ta, tb, ti), TRANCHES);
+        Map<String, Object> stock = section(r2b(TAUX_VENTE_STOCK, direction, ta, tb, ti), TRANCHES);
+        Map<String, Object> annees = section(r2b(TAUX_CONCRET_ANNEE, direction, ta, tb, ti), TRANCHES);
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(colonnesTranches(concretisations)).containsExactly(colonneDe(concretisations, ta),
+                colonneDe(concretisations, tb));
+        soft.assertThat(colonnesTranches(comparaison)).hasSize(2);
+        soft.assertThat(total(encaissements, ENSEMBLE)).as("8 500 ÷ 4 800 000, pas 11 500 ÷ 6 000 000")
+                .isEqualByComparingTo("0.18");
+        soft.assertThat(lignes(libres)).extracting(l -> l.get(TRANCHE)).containsExactly(ta.getCode(), tb.getCode());
+        soft.assertThat(total(libres, "nbArticles")).isEqualByComparingTo("4");
+        soft.assertThat(lignesContenant(stock, TRANCHE, ti.getCode())).isEmpty();
+        soft.assertThat(total(stock, "ventesAnnee")).isEqualByComparingTo("4");
+        soft.assertThat(lignesContenant(annees, TRANCHE, ti.getCode())).isEmpty();
+        soft.assertThat(lignes(annees)).hasSize(2);
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v2_r2b_seuleTrancheDemandeeInactive_aucunChiffre_surLesCinqRapports() throws Exception {
+        assertAucunChiffreR2b(direction, ti);
+    }
+
+    @Test
+    void r_v3_r2b_trancheIdHorsPerimetre_200_aucunChiffre_surLesCinqRapports() throws Exception {
+        assertAucunChiffreR2b(a, tb);
+    }
+
+    /** R-V7 : une tranche invisible du même projet (hors vente) et une tranche non demandée ne pèsent sur aucun dénominateur. */
+    @Test
+    void r_v7_n9_denominateurs_neLisentQueLesTranchesRetenues() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+        Jeu jeu = fixture.jeu("VR7");
+        CfgTranche horsVente = ev.tranche("HV-" + jeu.prefixe(), projetA, false);
+        for (int i = 0; i < 10; i++) {
+            jeu.articleLibre(horsVente, "100000000");
+        }
+        jeu.encaisser(jeu.dater(jeu.dossier(horsVente, jeu.statuts().concretisation()), LocalDate.of(2025, 3, 3), null,
+                null, null), "9000000", LocalDate.of(2025, 4, 4));
+        rapports.relire();
+
+        List<Map<String, Object>> deA = r2b(RYTHME_CONCRETISATIONS, a);
+        List<Map<String, Object>> taSeule = r2b(RYTHME_CONCRETISATIONS, direction, ta);
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(colonnesTranches(section(deA, CONCRETISATIONS))).hasSize(1);
+        soft.assertThat(total(section(deA, CONCRETISATIONS), ENSEMBLE)).as("3 ÷ 3 articles de TA")
+                .isEqualByComparingTo("100");
+        soft.assertThat(total(section(deA, ENCAISSEMENTS), ENSEMBLE)).as("1 500 ÷ 3 600 000")
+                .isEqualByComparingTo("0.04");
+        soft.assertThat(total(section(taSeule, ENCAISSEMENTS), ENSEMBLE)).as("TB non demandée : pas 8 500 ÷ 4 800 000")
+                .isEqualByComparingTo("0.04");
+        soft.assertAll();
     }
 
     @Test

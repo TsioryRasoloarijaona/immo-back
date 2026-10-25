@@ -24,6 +24,16 @@ final class RapportsRythmeSupport {
     static final String CONCRET_ENCAISSEMENT = "ComTdbConcretAndSetlement";
     static final List<String> CODES_R2A = List.of(RYTHME_VENTES, PAR_COMMERCIAL, CONCRET_ENCAISSEMENT);
 
+    static final String RYTHME_CONCRETISATIONS = "ComTdbSalesRythmeConcretisation";
+    static final String RYTHME_COMPARAISON = "ComTdbSalesRythmeLivraison";
+    static final String CONCRET_LIBRES = "ComTdbConcretisationAndFree";
+    static final String TAUX_VENTE_STOCK = "ComTdbSaleStockRatio";
+    static final String TAUX_CONCRET_ANNEE = "ComSaleTauxConcretisationParAnnee";
+    static final List<String> CODES_R2B = List.of(RYTHME_CONCRETISATIONS, RYTHME_COMPARAISON, CONCRET_LIBRES,
+            TAUX_VENTE_STOCK, TAUX_CONCRET_ANNEE);
+    static final String ENSEMBLE = "ensemble";
+    static final String CATEGORIE = "categorie";
+
     static final String TRANCHE_ID = "trancheId";
     static final String ANNEE = "annee";
     static final String DATE = "date";
@@ -42,6 +52,41 @@ final class RapportsRythmeSupport {
                 PAR_COMMERCIAL, fixture.rapportVente(PAR_COMMERCIAL, "CONCRETISATIONS PAR PERIODES", "", 2010),
                 CONCRET_ENCAISSEMENT, fixture.rapportVente(CONCRET_ENCAISSEMENT, "CONCRETISATION ET ENCAISSEMENT*", "",
                         2030));
+    }
+
+    /** Lignes {@code AdmReportData} des cinq rapports R2b (libellé, groupe, ordre de la prod, §1) ; sans rôle lié. */
+    static Map<String, UUID> installerR2b(FixtureRapports fixture) {
+        fixture.tables();
+        String rythme = "RYTHME DES CONCRETISATIONS / LIVRAISON / ENCAISSEMENT / DECAISSEMENT ";
+        return Map.of(
+                RYTHME_CONCRETISATIONS, fixture.rapportVente(RYTHME_CONCRETISATIONS, rythme + "(Par mois)",
+                        "Suivi GLOBAL", 600),
+                RYTHME_COMPARAISON, fixture.rapportVente(RYTHME_COMPARAISON, rythme + "(Comparaison)", "Suivi GLOBAL",
+                        700),
+                CONCRET_LIBRES, fixture.rapportVente(CONCRET_LIBRES, "CONCRETISATIONS PAR RAPPORT AUX LIBRE*",
+                        "Conseil d'Admin", 2020),
+                TAUX_VENTE_STOCK, fixture.rapportVente(TAUX_VENTE_STOCK, "TAUX DE VENTE PAR RAPPORT AU STOCK*",
+                        "Conseil d'Admin", 2040),
+                TAUX_CONCRET_ANNEE, fixture.rapportVente(TAUX_CONCRET_ANNEE,
+                        "TAUX DE CONCRETISATION PAR ANNEE / TRANCHE *", "VENTE (Nouveau)", 2070));
+    }
+
+    /** Noms des colonnes dynamiques {@code trancheNN} (B5), dans l'ordre du résultat. */
+    static List<String> colonnesTranches(Map<String, Object> section) {
+        return colonnes(section).stream().map(c -> (String) c.get("nom")).filter(n -> n.matches("tranche\\d{2}"))
+                .toList();
+    }
+
+    /** Le nom de la seule colonne {@code trancheNN} dont le libellé contient le code de {@code tranche}. */
+    static String colonneDe(Map<String, Object> section, CfgTranche tranche) {
+        List<String> noms = colonnes(section).stream()
+                .filter(c -> String.valueOf(c.get("nom")).matches("tranche\\d{2}")
+                        && Objects.toString(c.get("libelle"), "").contains(tranche.getCode()))
+                .map(c -> (String) c.get("nom")).toList();
+        if (noms.size() != 1) {
+            throw new AssertionError("%s : colonnes de %s = %s".formatted(section.get("id"), tranche.getCode(), noms));
+        }
+        return noms.get(0);
     }
 
     /** {@code GET …/{code}/resultat} avec {@code trancheId} répétés et des paires nom / valeur. */

@@ -36,6 +36,7 @@ import static com.tsix.immocrm.controller.rapport.AppelsRapports.descripteur;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.export;
 import static com.tsix.immocrm.controller.rapport.AppelsRapports.resultat;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CODES_R2A;
+import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CODES_R2B;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.CONCRET_ENCAISSEMENT;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.PAR_COMMERCIAL;
 import static com.tsix.immocrm.controller.rapport.RapportsRythmeSupport.RYTHME_VENTES;
@@ -152,5 +153,99 @@ class RapportsRythmeDroitsTest {
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
         }
+    }
+
+    // ------------------------------------------------------------------ R2b : n° 9, 10, 22, 24, 27 (§7.1 R-V4, R-V5)
+
+    @Test
+    void r_v4_r2b_roleRestreintLieAAucunRapport_403SurDescripteurResultatExport_desCinqCodes() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+        RequestPostProcessor restreint = compteAvec(rapports.role("Restreint B " + jeu.prefixe(), true));
+
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : CODES_R2B) {
+            soft.assertThat(appels.statut(avecTranche(get(descripteur(VENTE, code))).with(restreint)))
+                    .as("%s descripteur", code).isEqualTo(403);
+            soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, code))).with(restreint)))
+                    .as("%s resultat", code).isEqualTo(403);
+            soft.assertThat(appels.exporter(avecTranche(get(export(VENTE, code))).param("format", "xlsx")
+                    .with(restreint)).getResponse().getStatus()).as("%s export", code).isEqualTo(403);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v4_r2b_quatreRolesDeLaProd_restreintsEtLies_200SurDescripteurEtResultat_desCinqCodes() throws Exception {
+        Map<String, UUID> r2b = RapportsRythmeSupport.installerR2b(rapports);
+        SoftAssertions soft = new SoftAssertions();
+        for (String nom : ROLES_DE_LA_PROD) {
+            AdmRole role = rapports.role(nom + " B " + jeu.prefixe(), true);
+            CODES_R2B.forEach(code -> rapports.lier(r2b.get(code), role));
+            RequestPostProcessor lie = compteAvec(role);
+            for (String code : CODES_R2B) {
+                soft.assertThat(appels.statut(avecTranche(get(descripteur(VENTE, code))).with(lie)))
+                        .as("%s %s descripteur", nom, code).isEqualTo(200);
+                soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, code))).with(lie)))
+                        .as("%s %s resultat", nom, code).isEqualTo(200);
+            }
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v4_r2b_roleLieAUnSeulRapport_403SurLesQuatreAutres() throws Exception {
+        Map<String, UUID> r2b = RapportsRythmeSupport.installerR2b(rapports);
+        AdmRole role = rapports.role("Direction Générale B1 " + jeu.prefixe(), true);
+        rapports.lier(r2b.get(RapportsRythmeSupport.TAUX_VENTE_STOCK), role);
+        RequestPostProcessor lie = compteAvec(role);
+
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : CODES_R2B) {
+            int attendu = RapportsRythmeSupport.TAUX_VENTE_STOCK.equals(code) ? 200 : 403;
+            soft.assertThat(appels.statut(avecTranche(get(resultat(VENTE, code))).with(lie))).as(code)
+                    .isEqualTo(attendu);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v4_r2b_roleLibre_200SurLExportXlsx_desCinqCodes() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+        RequestPostProcessor libre = compteAvec(rapports.role("Libre B " + jeu.prefixe(), false));
+
+        SoftAssertions soft = new SoftAssertions();
+        for (String code : CODES_R2B) {
+            soft.assertThat(appels.exporter(avecTranche(get(export(VENTE, code))).param("format", "xlsx").with(libre))
+                    .getResponse().getStatus()).as(code).isEqualTo(200);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void r_v5_r2b_cleDApiAvecToutesLesPortees_403HorsPortee_surLesCinqRapports() throws Exception {
+        RapportsRythmeSupport.installerR2b(rapports);
+        String cle = cleApiToutesPortees("rythme-b-");
+
+        for (String code : CODES_R2B) {
+            mockMvc.perform(avecTranche(get(resultat(VENTE, code))).header(ApiKeyAuthenticationFilter.EN_TETE, cle))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+        }
+    }
+
+    private String cleApiToutesPortees(String nom) {
+        AdmUser compte = dossiers.compte("DR2B-" + jeu.prefixe(), "Administrateur");
+        String cle = cleApiService.genererCle();
+        AppApiClient client = new AppApiClient();
+        client.setId(UUID.randomUUID());
+        client.setNom(nom + jeu.prefixe());
+        client.setCleHash(CleApiService.hacher(cle));
+        client.setClePrefixe(CleApiService.prefixeAffiche(cle));
+        client.setAdmUser(compte);
+        client.setPortees(PorteeCleApi.versColonne(EnumSet.allOf(PorteeCleApi.class)));
+        client.setActif(true);
+        client.setUserCreateDateTime(LocalDateTime.now());
+        clientRepository.save(client);
+        return cle;
     }
 }
