@@ -3,10 +3,11 @@ package com.tsix.immocrm.domain;
 import java.util.Arrays;
 import java.util.Optional;
 
-/** Type de fiche source d'un modèle de document (FEATURE-modeles-documents.md §2) ; lot 1 : dossier de vente. */
+/** Type de fiche source d'un modèle de document (FEATURE-modeles-documents.md §2). */
 public enum CategorieModele {
 
-    DOSSIER_VENTE("Dossier de vente");
+    DOSSIER_VENTE("Dossier de vente"),
+    RELANCE_TITRE_FONCIER("Relance titre foncier");
 
     private final String libelle;
 

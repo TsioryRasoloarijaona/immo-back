@@ -2,9 +2,11 @@ package com.tsix.immocrm.services.rapport.vente;
 
 import com.tsix.immocrm.domain.rapport.ColonneRapport;
 import com.tsix.immocrm.domain.rapport.ContexteRapport;
+import com.tsix.immocrm.domain.rapport.FonctionTotal;
 import com.tsix.immocrm.domain.rapport.ModuleRapport;
 import com.tsix.immocrm.domain.rapport.ParametreRapport;
 import com.tsix.immocrm.domain.rapport.Rapport;
+import com.tsix.immocrm.domain.rapport.TypeColonne;
 import com.tsix.immocrm.services.rapport.vente.flux.DemandeFlux;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxVenteMensuel;
@@ -80,6 +82,35 @@ abstract class RapportFluxVente implements Rapport {
                 .setParameter("ids", lot).getResultList()).stream()
                 .map(r -> new TrancheProjet((UUID) r[0], (String) r[1], (UUID) r[2], (String) r[3]))
                 .sorted(Comparator.comparing(t -> Objects.toString(t.libelle(), ""))).toList();
+    }
+
+    /** Codes et libellé d'une tranche en vente ; {@code projet} = code du programme ; {@code lancee} = date de lancement posée. */
+    record TrancheEnVente(UUID id, String code, String libelle, String projet, boolean lancee) {
+    }
+
+    /** Tranches en vente parmi {@code ids} (visibles), triées par code de programme puis code de tranche. */
+    static List<TrancheEnVente> tranchesEnVente(EntityManager em, List<UUID> ids) {
+        return LotsTranches.lire(ids, lot -> em.createQuery("SELECT t.id, t.code, t.description, p.code, "
+                        + "t.marketingStartDate FROM CfgTranche t LEFT JOIN t.cfgProject p "
+                        + "WHERE t.id IN :ids AND t.isForSale = true", Object[].class)
+                .setParameter("ids", lot).getResultList()).stream()
+                .map(r -> new TrancheEnVente((UUID) r[0], (String) r[1], (String) r[2], (String) r[3], r[4] != null))
+                .sorted(Comparator.comparing((TrancheEnVente t) -> Objects.toString(t.projet(), ""))
+                        .thenComparing(t -> Objects.toString(t.code(), ""))).toList();
+    }
+
+    /** Nombre entier sans total (axe, stock, cumul). */
+    static ColonneRapport compteur(String nom, String libelle) {
+        return new ColonneRapport(nom, libelle, TypeColonne.NOMBRE, null, FonctionTotal.AUCUNE, true, 0);
+    }
+
+    /** Ligne de section à partir de paires clé, valeur (valeurs nulles permises). */
+    static Map<String, Object> ligne(Object... clesValeurs) {
+        Map<String, Object> ligne = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < clesValeurs.length; i += 2) {
+            ligne.put((String) clesValeurs[i], clesValeurs[i + 1]);
+        }
+        return ligne;
     }
 
     static Map<String, Object> ligneTranche(ValorisationTranche.Valorisation v) {

@@ -3,17 +3,12 @@ package com.tsix.immocrm.services.patrimoine.importation;
 import com.tsix.immocrm.domain.ColonneLibre;
 import com.tsix.immocrm.domain.TypeExport;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
-import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.stk.StkItem;
-import com.tsix.immocrm.entities.stk.StkKind;
-import com.tsix.immocrm.utils.Champs;
-import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.ChampImport;
+import com.tsix.immocrm.services.patrimoine.importation.ImportParType.Modele;
 import com.tsix.immocrm.web.export.ExportTableur;
 import com.tsix.immocrm.web.export.FeuilleExport;
-import jakarta.persistence.EntityManager;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -26,8 +21,6 @@ import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,40 +29,34 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static com.tsix.immocrm.services.patrimoine.ArticleService.NATURE_BATIMENT;
-
 /**
- * Classeur modèle d'import (FEATURE-patrimoine-import-export.md §1.1) : en-têtes OMRAN, une ligne par objet de la
- * tranche (comme {@code ImportItems}), puis une feuille d'aide (Code, Libellé) par référentiel cité.
+ * Classeur modèle d'import (FEATURE-patrimoine-import-export.md §1.1) : feuille de données du type (en-têtes OMRAN, une
+ * ligne par objet existant), puis une feuille d'aide (Code, Libellé) par référentiel cité.
  */
 @Service
 @Transactional(readOnly = true)
 public class ModeleImport {
 
-    private static final String DE_LA_TRANCHE = "select i from StkItem i where i.stkHierarchy.id = :tranche order by i.code";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
-    private static final List<Colonne> AIDE = List.of(
-            new Colonne("Code", TypeExport.TEXTE), new Colonne("Libellé", TypeExport.TEXTE));
+    private static final String CODE = "Code";
+    private static final String LIBELLE = "Libellé";
+    private static final List<Colonne> AIDE = List.of(new Colonne(CODE, TypeExport.TEXTE), new Colonne(LIBELLE, TypeExport.TEXTE));
 
-    private final TrancheVisibleRepository tranches;
-    private final StkItemRepository items;
-    private final EntityManager em;
+    private final ImportPatrimoineService importation;
     private final ExportTableur export;
     private final UtilisateurAffiche utilisateur;
     private final Clock clock;
 
-    public ModeleImport(TrancheVisibleRepository tranches, StkItemRepository items, EntityManager em,
-                        ExportTableur export, UtilisateurAffiche utilisateur, Clock clock) {
-        this.tranches = tranches;
-        this.items = items;
-        this.em = em;
+    public ModeleImport(ImportPatrimoineService importation, ExportTableur export, UtilisateurAffiche utilisateur,
+                        Clock clock) {
+        this.importation = importation;
         this.export = export;
         this.utilisateur = utilisateur;
         this.clock = clock;
     }
 
     /** Colonne du modèle : nom = libellé = en-tête OMRAN. */
-    private record Colonne(String nom, TypeExport typeExport) implements ColonneLibre {
+    record Colonne(String nom, TypeExport typeExport) implements ColonneLibre {
         @Override
         public String libelle() {
             return nom;
@@ -82,41 +69,33 @@ public class ModeleImport {
     }
 
     public ResponseEntity<byte[]> classeur(String type, UUID trancheId) {
-        boolean sous = ImportPatrimoineService.sousArticles(type);
-        CfgTranche tranche = tranches.exigerVisible(ImportPatrimoineService.exigerTranche(trancheId));
-        List<ChampImport> champs = ChampsArticle.du(sous);
-        String nom = (sous ? "SOUS_ARTICLES" : "ARTICLES");
-        List<FeuilleExport> feuilles = new ArrayList<>();
-        feuilles.add(new FeuilleExport(nom, champs.stream().map(ModeleImport::colonne).toList(), lignes(tranche, sous, champs),
-                null));
-        ResolutionCodes codes = new ResolutionCodes(em, trancheId);
-        Set<Class<? extends CodeLibelleOmran>> referentiels = new LinkedHashSet<>();
-        champs.stream().filter(c -> c.reference() != null).forEach(c -> referentiels.add(c.reference().classe()));
-        referentiels.forEach(classe -> feuilles.add(new FeuilleExport(classe.getSimpleName(), AIDE,
-                codes.toutes(classe).stream().map(ModeleImport::aide).toList(), null)));
-        String fichier = tranche.getCode() + "_STOCK_" + nom + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
+        ImportParType<?> t = importation.parType(type);
+        Modele modele = t.modele(type, importation.tranche(t, trancheId));
+        String fichier = modele.prefixe() + "_" + LocalDateTime.now(clock).format(HORODATAGE) + ".xlsx";
         return ResponseEntity.ok()
                 .contentType(ExportTableur.XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(fichier).build().toString())
-                .body(octets(nom, feuilles));
+                .body(octets(modele.feuilles().get(0).nom(), modele.feuilles()));
     }
 
-    private List<Map<String, Object>> lignes(CfgTranche tranche, boolean sous, List<ChampImport> champs) {
-        return em.createQuery(DE_LA_TRANCHE, StkItem.class).setParameter("tranche", tranche.getId())
-                .getResultList().stream()
-                .filter(item -> Boolean.TRUE.equals(item.getIsUnderItem()) == sous
-                        && NATURE_BATIMENT.equals(Champs.de(item.getStkKind(), StkKind::getCode)))
-                .map(item -> ligne(item, sous ? List.of() : sousArticles(item), champs))
-                .toList();
+    /** Feuille de données : une colonne par en-tête, lignes = en-tête → valeur. */
+    static FeuilleExport donnees(String nom, List<ChampImport> champs, List<Map<String, Object>> lignes) {
+        return new FeuilleExport(nom, champs.stream().map(ModeleImport::colonne).toList(), lignes, null);
     }
 
-    private List<StkItem> sousArticles(StkItem article) {
-        return items.findByParentId(article.getId()).stream()
-                .sorted(Comparator.comparing(StkItem::getCode, Comparator.nullsLast(String::compareTo)))
-                .limit(ChampsArticle.SOUS_ARTICLES_PAR_LIGNE).toList();
+    /** Une feuille d'aide par référentiel des champs, nommée comme son entité. */
+    static List<FeuilleExport> aides(List<ChampImport> champs, ResolutionCodes codes) {
+        Set<Class<? extends CodeLibelleOmran>> referentiels = new LinkedHashSet<>();
+        champs.stream().filter(c -> c.reference() != null).forEach(c -> referentiels.add(c.reference().classe()));
+        return referentiels.stream().map(classe -> aide(classe.getSimpleName(), codes.toutes(classe))).toList();
     }
 
-    private static Map<String, Object> ligne(StkItem item, List<StkItem> sousArticles, List<ChampImport> champs) {
+    static FeuilleExport aide(String nom, List<? extends CodeLibelleOmran> lignes) {
+        return new FeuilleExport(nom, AIDE, lignes.stream().map(ModeleImport::aide).toList(), null);
+    }
+
+    /** Ligne d'un objet ; {@code sousArticles} remplit les colonnes de rang 1 à n. */
+    static Map<String, Object> ligne(StkItem item, List<StkItem> sousArticles, List<ChampImport> champs) {
         Map<String, Object> ligne = new HashMap<>();
         for (ChampImport c : champs) {
             StkItem objet = c.rang() == 0 ? item : rang(sousArticles, c.rang());
@@ -133,8 +112,8 @@ public class ModeleImport {
 
     private static Map<String, Object> aide(CodeLibelleOmran r) {
         Map<String, Object> ligne = new HashMap<>();
-        ligne.put("Code", r.getCode());
-        ligne.put("Libellé", r.getDescription());
+        ligne.put(CODE, r.getCode());
+        ligne.put(LIBELLE, r.getDescription());
         return ligne;
     }
 

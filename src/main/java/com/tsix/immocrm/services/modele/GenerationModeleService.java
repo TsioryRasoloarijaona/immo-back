@@ -9,7 +9,11 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.jsoup.nodes.Element;
+
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -72,6 +76,34 @@ public class GenerationModeleService {
         return lecture.actifParCode(categorie.name(), code)
                 .filter(m -> m.getVersionCouranteId() != null)
                 .map(m -> produire(m, ficheId, format));
+    }
+
+    /**
+     * Un PDF, une page par fiche déjà lue : modèle actif {@code code} de la catégorie, sinon {@code contenuParDefaut}.
+     * En-tête et pied de la première fiche.
+     */
+    public byte[] pdfParPage(CategorieModele categorie, String code, String contenuParDefaut, List<ValeursFiche> fiches) {
+        DescriptionChamps catalogue = catalogues.de(categorie.name()).catalogue();
+        Optional<AppModeleDocumentVersion> version = lecture.actifParCode(categorie.name(), code)
+                .flatMap(lecture::versionCourante);
+        ModelePrepare prepare = ModelePrepare.preparer(catalogue,
+                version.map(AppModeleDocumentVersion::getContenu).orElse(contenuParDefaut),
+                version.map(v -> miseEnPageModele.lire(v.getMiseEnPage())).orElseGet(() -> miseEnPageModele.normaliser(null)));
+        Map<UUID, String> sources = images.sourcesEnMemoire(prepare.images());
+        Element corps = new Element("div");
+        ModelePrepare premiere = null;
+        for (ValeursFiche valeurs : fiches) {
+            ModelePrepare rempli = prepare.remplir(catalogue, valeurs).avecImages(sources);
+            Element page = corps.appendElement("div");
+            if (premiere == null) {
+                premiere = rempli;
+            } else {
+                page.attr("style", "page-break-before: always");
+            }
+            page.appendChildren(rempli.corps().childNodesCopy());
+        }
+        ModelePrepare reference = premiere != null ? premiere : prepare;
+        return rendu.pdf(corps, reference.enTete(), reference.pied(), reference.miseEnPage());
     }
 
     /** Aperçu PDF d'un contenu non enregistré : mêmes règles que l'enregistrement. */

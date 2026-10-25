@@ -72,9 +72,20 @@ public class AlertesStatutDossier {
 
     /** L'action système et son alerte, posées quand la date de validité du statut a changé. */
     void alerteExpiration(ComFolder dossier, StrStatus statut, StatutDossier connu) {
+        alerteSysteme(dossier, statut.getId(), connu != null ? ActionsDossier.categoriePourStatut(connu) : null,
+                dossier.getStatusValidityDate(),
+                "l'état " + statut.getDescription() + " du dossier de vente N° " + dossier.getCode() + " est expiré");
+    }
+
+    /**
+     * Seul constructeur d'action système « Note » d'un dossier et de son {@code AdmAlertData}
+     * ({@code ActionMessage.GenerateActionWithAlertForComFolder}) ; catégorie inconnue = sans catégorie.
+     */
+    public void alerteSysteme(ComFolder dossier, UUID statutId, UUID categorieId, LocalDateTime echeance,
+                              String message) {
         LocalDateTime maintenant = LocalDateTime.now(clock);
-        ComActionMessageCategory categorie = connu != null
-                ? categoryRepository.findById(ActionsDossier.categoriePourStatut(connu)).orElse(null)
+        ComActionMessageCategory categorie = categorieId != null
+                ? categoryRepository.findById(categorieId).orElse(null)
                 : null;
         ComActionMessage action = new ComActionMessage();
         action.setId(UUID.randomUUID());
@@ -86,10 +97,9 @@ public class AlertesStatutDossier {
         action.setStkItem(dossier.getStkItem());
         action.setComActionMessageType(typeRepository.findById(TYPE_NOTE).orElse(null));
         action.setComActionMessageCategory(categorie);
-        action.setStrFolderStatusId(statut.getId());
-        action.setAlertValidityDate(dossier.getStatusValidityDate());
-        action.setAlertMessage("l'état " + statut.getDescription() + " du dossier de vente N° " + dossier.getCode()
-                + " est expiré");
+        action.setStrFolderStatusId(statutId);
+        action.setAlertValidityDate(echeance);
+        action.setAlertMessage(message);
         action.setIsSystem(true);
         action.setUserName(SYSTEME);
         action.setUserCreate(SYSTEME);

@@ -24,6 +24,7 @@ public class DemarrageModeles implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try {
             initialiseur.initialiserActeReservation();
+            initialiseur.initialiserPremiereRelance();
         } catch (RuntimeException e) {
             // Table absente (script 017 non appliqué) : l'acte reste servi par le rendu codé en dur.
             log.error("Initialisation des modèles de documents impossible.", e);

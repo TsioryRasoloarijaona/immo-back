@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -21,6 +22,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Stock d'une tranche en vente (FEATURE-tdb-vente-rapports-flux.md §4.6, §6) : valorisation Σ {@code StkItem.SalePrice} des
@@ -46,6 +48,17 @@ public class ValorisationTranche {
                 AND i.StkVocationId IN (SELECT v.PKey FROM StkVocation v WHERE v.Code = 'VENTE')
             WHERE t.IsForSale = 1 AND t.PKey IN (:tranches)
             GROUP BY t.PKey, p.Description, t.Description""";
+
+    private static final String ARTICLES = """
+            SELECT i.StkHierarchyId AS Tranche, COUNT(*) AS Articles
+            FROM StkItem i
+            JOIN StkVocation v ON v.PKey = i.StkVocationId AND v.Code = 'VENTE'
+            JOIN CfgTranche t ON t.PKey = i.StkHierarchyId AND t.IsForSale = 1
+            WHERE i.IsUnderItem = 0 AND i.StkHierarchyId IN (:tranches)""";
+    private static final String PAR_TRANCHE = " GROUP BY i.StkHierarchyId";
+    private static final String ARTICLES_TOUTES = ARTICLES + PAR_TRANCHE;
+    private static final String ARTICLES_FILTRES = ARTICLES + " AND i.StkItemCategoryId IN (:categories)" + PAR_TRANCHE;
+    private static final String CATEGORIES = "categories";
 
     // Statut en jointure interne : un dossier sans statut n'est dans aucune population (R-F5).
     private static final String SELECT_DOSSIERS = "SELECT i.stkHierarchy.id, f, s.id, s.sorting, s.annulation, s.resiliation ";
@@ -92,6 +105,11 @@ public class ValorisationTranche {
 
         public Cumul de(Population p) {
             return populations.getOrDefault(p, Cumul.ZERO);
+        }
+
+        /** CA potentiel (rythme n° 9) : Σ {@code ComFolder.Price} des dossiers vivants + {@link #prixLibres}. */
+        public BigDecimal caPotentiel() {
+            return de(Population.VIVANTS).prix().add(prixLibres);
         }
     }
 
@@ -151,6 +169,19 @@ public class ValorisationTranche {
         return new Valorisations(lignes.stream().sorted(Comparator
                 .comparing((Valorisation v) -> Objects.toString(v.programme(), ""))
                 .thenComparing(v -> Objects.toString(v.libelle(), ""))).toList(), List.copyOf(absents));
+    }
+
+    /**
+     * Articles racines VENTE par tranche en vente (même définition que {@link Valorisation#articles()}), limités aux
+     * catégories {@code categories} (vide = toutes) ; une tranche sans article n'a pas d'entrée.
+     */
+    public Map<UUID, Long> articlesParCategorie(List<UUID> tranches, Collection<UUID> categories) {
+        String requete = categories.isEmpty() ? ARTICLES_TOUTES : ARTICLES_FILTRES;
+        List<String> filtre = LotsTranches.textes(List.copyOf(categories));
+        return LotsTranches.lire(tranches, lot -> jdbc.query(requete,
+                        Map.of(TRANCHES, LotsTranches.textes(lot), CATEGORIES, filtre),
+                        (rs, n) -> Map.entry(UUID.fromString(rs.getString("Tranche")), rs.getLong("Articles"))))
+                .stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private static <T> T lire(String parametre, Function<String, Optional<T>> lecture,
