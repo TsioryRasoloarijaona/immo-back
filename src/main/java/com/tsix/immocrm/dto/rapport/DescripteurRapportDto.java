@@ -11,6 +11,6 @@ public record DescripteurRapportDto(
         @Schema(description = "Libellé du rapport.", example = "REPARTITION DES CLIENTS") String libelle,
         @Schema(description = "Groupe de la liste.", example = "Autres rapports") String groupe,
         @Schema(description = "Paramètres acceptés, dans l'ordre d'affichage.") List<ParametreRapportDto> parametres,
-        @Schema(description = "Formats d'export acceptés par /export.", example = "[\"xlsx\"]")
+        @Schema(description = "Formats d'export acceptés par /export.", example = "[\"xlsx\",\"pdf\"]")
         List<String> formatsExport) {
 }

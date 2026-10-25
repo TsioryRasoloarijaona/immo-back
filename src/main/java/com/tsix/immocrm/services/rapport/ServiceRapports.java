@@ -36,10 +36,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -114,11 +116,11 @@ public class ServiceRapports {
                 LocalDateTime.now(clock), e.resultat().avertissements(), sections);
     }
 
-    /** Le format se contrôle après le droit : un rapport interdit répond 403 quel que soit le format. */
+    /** Le format se contrôle après le droit et les paramètres : un rapport interdit répond 403 quel que soit le format. */
     public Export exporter(String slug, String code, String format, Map<String, List<String>> recus) {
         Ouverture o = ouvrir(slug, code);
-        FormatExport.lire(format);
         Execution e = executer(o, recus);
+        FormatExport.lire(format);
         List<FeuilleExport> feuilles = e.resultat().sections().stream()
                 .map(s -> {
                     Map<String, Object> totaux = TotauxRapport.totaux(s);
@@ -134,8 +136,8 @@ public class ServiceRapports {
         for (ParametreRapport p : o.rapport().parametres()) {
             List<String> valeurs = e.parametres().getOrDefault(p.nom(), List.of());
             if (!valeurs.isEmpty()) {
-                Map<String, String> options = parametre(p, o.module()).options().stream()
-                        .collect(Collectors.toMap(OptionRapportDto::valeur, OptionRapportDto::libelle, (a, b) -> a));
+                Map<String, String> options = new HashMap<>();
+                parametre(p, o.module()).options().forEach(op -> options.putIfAbsent(op.valeur(), op.libelle()));
                 lignes.add(p.libelle() + " : " + valeurs.stream().map(v -> lisible(p.type(), v, options))
                         .collect(Collectors.joining(", ")));
             }
@@ -148,7 +150,7 @@ public class ServiceRapports {
         return switch (type) {
             case BOOLEEN -> MiseEnPagePdf.texte(Boolean.valueOf(valeur));
             case DATE -> MiseEnPagePdf.texte(LocalDate.parse(valeur));
-            default -> options.getOrDefault(valeur, valeur);
+            default -> Objects.requireNonNullElse(options.get(valeur), valeur);
         };
     }
 
