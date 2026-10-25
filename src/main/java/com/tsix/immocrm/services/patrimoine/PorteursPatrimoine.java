@@ -1,13 +1,19 @@
 package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.repositories.stk.StkFeasibilityStudyRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -18,17 +24,19 @@ import java.util.UUID;
 public class PorteursPatrimoine {
 
     public enum Porteur {
-        PROJET, TRANCHE, ARTICLE, PROSPECTION_TERRAIN;
+        PROJET, TRANCHE, ARTICLE, PROSPECTION_TERRAIN, ETUDE;
 
-        /** Valeur du fil, en minuscules ({@code projet}, …, {@code prospection-terrain}) ; autre → 400. */
+        /** Valeur du fil, en minuscules ({@code projet}, …, {@code prospection-terrain}, {@code etude}) ; autre → 400. */
         public static Porteur depuis(String valeur) {
             return Arrays.stream(values())
                     .filter(p -> p.name().replace('_', '-').equalsIgnoreCase(valeur == null ? "" : valeur.trim()))
                     .findFirst()
                     .orElseThrow(() -> new InvalidRequestException(
-                            "porteur doit valoir projet, tranche, article ou prospection-terrain : '" + valeur + "'"));
+                            "porteur doit valoir projet, tranche, article, prospection-terrain ou etude : '" + valeur + "'"));
         }
     }
+
+    private static final Set<String> ROLES_ETUDE = Set.of("ROLE_Administrateur", "ROLE_Direction Générale");
 
     private final ProjetService projetService;
     private final TrancheService trancheService;
@@ -37,17 +45,24 @@ public class PorteursPatrimoine {
     private final CfgProjectRepository projectRepository;
     private final CfgTrancheRepository trancheRepository;
     private final StkItemRepository itemRepository;
+    private final StkFeasibilityStudyRepository etudes;
 
     public PorteursPatrimoine(ProjetService projetService, TrancheService trancheService, ArticleService articleService,
-                              ProspectionTerrainService prospectionTerrainService, CfgProjectRepository projectRepository,
-                              CfgTrancheRepository trancheRepository, StkItemRepository itemRepository) {
+                              ProspectionTerrainService prospectionTerrainService, ReferentielsPorteurs referentiels) {
         this.projetService = projetService;
         this.trancheService = trancheService;
         this.articleService = articleService;
         this.prospectionTerrainService = prospectionTerrainService;
-        this.projectRepository = projectRepository;
-        this.trancheRepository = trancheRepository;
-        this.itemRepository = itemRepository;
+        this.projectRepository = referentiels.projets();
+        this.trancheRepository = referentiels.tranches();
+        this.itemRepository = referentiels.articles();
+        this.etudes = referentiels.etudes();
+    }
+
+    /** Dépôts lus pour reconnaître le type d'un id (record {@code @Component} : constructeur sous S107). */
+    @Component
+    record ReferentielsPorteurs(CfgProjectRepository projets, CfgTrancheRepository tranches, StkItemRepository articles,
+                                StkFeasibilityStudyRepository etudes) {
     }
 
     /** 404 si {@code id} n'est pas un objet de ce type visible par l'appelant. */
@@ -57,7 +72,18 @@ public class PorteursPatrimoine {
             case TRANCHE -> trancheService.findById(id);
             case ARTICLE -> articleService.findById(id);
             case PROSPECTION_TERRAIN -> prospectionTerrainService.exiger(id);
+            case ETUDE -> exigerLecteurEtude(id);
         }
+    }
+
+    /** Rôles de {@code EtudeFaisabiliteController.LECTURE} : notes et audit ne rouvrent pas l'étude aux autres (404). */
+    private void exigerLecteurEtude(UUID id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+                .noneMatch(ROLES_ETUDE::contains)) {
+            throw new ResourceNotFoundException("Étude de faisabilité introuvable: " + id);
+        }
+        etudes.exigerVisible(id);
     }
 
     /** Type de l'objet {@code id}, après la même vérification ; 404 s'il n'est pas du patrimoine. */
@@ -69,6 +95,8 @@ public class PorteursPatrimoine {
             porteur = Porteur.TRANCHE;
         } else if (itemRepository.existsById(id)) {
             porteur = Porteur.ARTICLE;
+        } else if (etudes.existsById(id)) {
+            porteur = Porteur.ETUDE;
         } else {
             porteur = Porteur.PROSPECTION_TERRAIN;
         }

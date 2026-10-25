@@ -7,9 +7,9 @@ import java.util.UUID;
 
 @Schema(description = "Saisie d'une note en texte simple ; le serveur l'échappe en HTML pour OMRAN.")
 public record CreerNoteRequest(
-        @Schema(description = "Type du porteur.", allowableValues = {"projet", "tranche", "article", "prospection-terrain"},
+        @Schema(description = "Type du porteur.", allowableValues = {"projet", "tranche", "article", "prospection-terrain", "etude"},
                 requiredMode = Schema.RequiredMode.REQUIRED) String porteur,
-        @Schema(description = "PKey du programme, de la tranche, de l'article ou de la prospection terrain.",
+        @Schema(description = "PKey du programme, de la tranche, de l'article, de la prospection terrain ou de l'étude.",
                 requiredMode = Schema.RequiredMode.REQUIRED) UUID id,
         @Schema(description = "Texte de la note (sauts de ligne conservés). Vide → 400.",
                 requiredMode = Schema.RequiredMode.REQUIRED) String texte,

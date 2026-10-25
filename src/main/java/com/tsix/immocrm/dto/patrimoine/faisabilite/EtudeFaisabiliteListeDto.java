@@ -15,6 +15,8 @@ public record EtudeFaisabiliteListeDto(
         @Schema(description = "Société (CfgCompany).") UUID societeId,
         @Schema(description = "Libellé de la société.") String societeLibelle,
         @Schema(description = "Libellé du terrain (article TER), null si aucun.") String terrainLibelle,
+        @Schema(description = "Libellé de la prospection terrain liée (LndLand.Description), null si aucune.")
+        String prospectionTerrainDescription,
         @Schema(description = "Statut (StkFeasibilityStudyStatus).") UUID statutId,
         @Schema(description = "Libellé du statut.") String statutLibelle,
         @Schema(description = "Couleur du statut (nom .NET, ex. Green), null si aucune.") String statutCouleur,

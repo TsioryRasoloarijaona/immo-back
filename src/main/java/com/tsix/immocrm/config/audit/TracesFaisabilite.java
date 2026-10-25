@@ -16,6 +16,14 @@ import static com.tsix.immocrm.config.audit.RegistreAuditOmran.LIBELLE_TRANCHE;
 /** FEATURE-patrimoine-faisabilite.md §2.6 : sans parent ; les deux derniers types, non mesurés en prod, = classe OMRAN. */
 public class TracesFaisabilite implements TracesAudit {
 
+    private static final String ETUDE = "Yes.Stk.StkFeasibilityStudy";
+
+    /** Lignes sans parent : seul le type de l'étude elle-même sort de {@code /api/audit?objetId=<étude>}. */
+    @Override
+    public List<String> types() {
+        return List.of(ETUDE);
+    }
+
     @Override
     public List<Class<?>> classes() {
         return List.of(StkFeasibilityStudy.class, StkFSBaseUnitStkFeasibilityStudy.class,
@@ -26,7 +34,7 @@ public class TracesFaisabilite implements TracesAudit {
     @Override
     public Trace tracer(Object entite) {
         return switch (entite) {
-            case StkFeasibilityStudy e -> new Trace("Yes.Stk.StkFeasibilityStudy", "Etude de faisabilité",
+            case StkFeasibilityStudy e -> new Trace(ETUDE, "Etude de faisabilité",
                     e.getDescription(), null, null);
             case StkFSBaseUnitStkFeasibilityStudy l -> new Trace("Yes.Stk.BalanceSheet.FSBaseUnitStkFeasibilityStudy",
                     "Prévision", Champs.de(l.getStkFSBaseUnit(), StkFSBaseUnit::getCode), null, null);

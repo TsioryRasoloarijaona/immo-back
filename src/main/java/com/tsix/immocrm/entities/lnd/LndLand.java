@@ -97,6 +97,9 @@ public class LndLand extends SurfacesFoncieresOmran {
     @Column(name = "ProspectionUnitCost", precision = 26, scale = 6)
     private BigDecimal prospectionUnitCost;
 
+    @Column(name = "UnitCostNonBuiltPrice", precision = 26, scale = 6)
+    private BigDecimal unitCostNonBuiltPrice;
+
     @Column(name = "ProspectionPrice", precision = 26, scale = 6)
     private BigDecimal prospectionPrice;
 
