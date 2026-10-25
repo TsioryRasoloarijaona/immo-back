@@ -34,8 +34,11 @@ import java.util.UUID;
 public class ImportPatrimoineService {
 
     private static final Logger log = LoggerFactory.getLogger(ImportPatrimoineService.class);
-    static final String ARTICLES = "articles";
-    static final String SOUS_ARTICLES = "sous-articles";
+    public static final String ARTICLES = "articles";
+    public static final String SOUS_ARTICLES = "sous-articles";
+    public static final String PRESENTATIONS = "presentations";
+    public static final String TERRAINS = "terrains";
+    public static final String PREVISIONS = "previsions";
 
     private final TrancheVisibleRepository tranches;
     private final ImportArticles importArticles;

@@ -12,11 +12,16 @@ import com.tsix.immocrm.services.patrimoine.CommissionsTrancheService;
 import com.tsix.immocrm.services.patrimoine.FinalisationsTrancheService;
 import com.tsix.immocrm.services.patrimoine.MiseAJourSchemasService;
 import com.tsix.immocrm.services.patrimoine.PrevisionsBaseService;
+import com.tsix.immocrm.services.patrimoine.TrancheService;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
+import com.tsix.immocrm.services.patrimoine.fiche.FichePrevisionsBasePdf;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,13 +53,18 @@ public class TrancheReglesController {
     private final CommissionsTrancheService commissions;
     private final PrevisionsBaseService previsions;
     private final MiseAJourSchemasService schemas;
+    private final TrancheService trancheService;
+    private final FichePdf fichePdf;
 
     public TrancheReglesController(FinalisationsTrancheService finalisations, CommissionsTrancheService commissions,
-                                   PrevisionsBaseService previsions, MiseAJourSchemasService schemas) {
+                                   PrevisionsBaseService previsions, MiseAJourSchemasService schemas,
+                                   TrancheService trancheService, FichePdf fichePdf) {
         this.finalisations = finalisations;
         this.commissions = commissions;
         this.previsions = previsions;
         this.schemas = schemas;
+        this.trancheService = trancheService;
+        this.fichePdf = fichePdf;
     }
 
     // ------------------------------------------------------------------ finalisations (§1)
@@ -117,6 +127,14 @@ public class TrancheReglesController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE)})
     public PrevisionsBaseDto previsionsBase(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
         return previsions.previsions(id);
+    }
+
+    @GetMapping("/{id}/previsions-base/fiche.pdf")
+    @Operation(summary = "Fiche prévision (PDF inline) : hypothèses et lignes mensuelles, visibilité des prévisions")
+    @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+    public ResponseEntity<byte[]> fichePrevisionsBase(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
+        PrevisionsBaseDto lues = previsions.previsions(id);
+        return fichePdf.reponse(FichePrevisionsBasePdf.fiche(trancheService.findById(id), lues));
     }
 
     @GetMapping("/{id}/previsions-base/stock")
