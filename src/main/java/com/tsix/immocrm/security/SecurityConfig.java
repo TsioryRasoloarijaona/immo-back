@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -84,6 +85,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
                         // Avant la liaison des paramètres : 403 avant tout 400 (FEATURE-patrimoine-import-export.md §0.1).
                         .requestMatchers("/api/import-patrimoine/**").hasRole("Administrateur")
+                        .requestMatchers("/api/tranches/*/premieres-relances", "/api/tranches/*/premieres-relances/**",
+                                "/api/tranches/*/premieres-relances.pdf", "/api/champs-specifiques/*/definitions/**")
+                        .hasRole("Administrateur")
+                        .requestMatchers(HttpMethod.PUT, "/api/champs-specifiques/**").hasRole("Administrateur")
                         .anyRequest().authenticated())
                 // Clé d'API AVANT le JWT : une clé présente fait foi, le cookie n'est lu qu'en son absence (FEATURE-cle-api-n8n.md §5).
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
