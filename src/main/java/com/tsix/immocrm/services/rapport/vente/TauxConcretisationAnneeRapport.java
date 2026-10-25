@@ -44,7 +44,6 @@ public class TauxConcretisationAnneeRapport extends RapportFluxVente {
     private static final String TOTAL_ARTICLES = "totalArticles";
     private static final String NB_ARTICLES = "nbArticles";
     private static final String TAUX = "taux";
-    private static final BigDecimal CENT = BigDecimal.valueOf(100);
 
     private final ValorisationTranche valorisation;
 
@@ -96,27 +95,25 @@ public class TauxConcretisationAnneeRapport extends RapportFluxVente {
                                 List.of(NB_ARTICLES))))), avertissements);
     }
 
-    /** Lignes d'une tranche : une par année puis « Reste » (taux = 100 − Σ des années) ; rend Σ des nombres. */
+    /** Lignes d'une tranche : une par année puis « Reste », taux ÷ total d'articles ; rend Σ des nombres. */
     private static long taux(Valorisation v, List<LocalDate> dates, List<Map<String, Object>> lignes,
                              List<String> avertissements) {
         BigDecimal total = BigDecimal.valueOf(v.articles());
         Map<Integer, Long> parAnnee = dates.stream().collect(Collectors.groupingBy(LocalDate::getYear, TreeMap::new,
                 Collectors.counting()));
         long concretisees = 0;
-        BigDecimal tauxAnnees = BigDecimal.ZERO;
         for (Map.Entry<Integer, Long> e : parAnnee.entrySet()) {
-            BigDecimal t = LignesMensuelles.taux(BigDecimal.valueOf(e.getValue()), total);
-            lignes.add(ligne(TRANCHE, v.libelle(), ANNEE, String.valueOf(e.getKey()), NB_ARTICLES, e.getValue(), TAUX, t));
+            lignes.add(ligne(TRANCHE, v.libelle(), ANNEE, String.valueOf(e.getKey()), NB_ARTICLES, e.getValue(), TAUX,
+                    LignesMensuelles.taux(BigDecimal.valueOf(e.getValue()), total)));
             concretisees += e.getValue();
-            tauxAnnees = tauxAnnees.add(t);
         }
-        long reste = v.articles() - concretisees;
-        if (reste < 0) {
+        long reste = Math.max(v.articles() - concretisees, 0);
+        if (concretisees > v.articles()) {
             avertissements.add("Tranche %s : plus de concrétisations (%d) que d'articles (%d), reste ramené à 0."
                     .formatted(v.libelle(), concretisees, v.articles()));
         }
-        BigDecimal tauxReste = reste > 0 ? CENT.subtract(tauxAnnees) : BigDecimal.ZERO;
-        lignes.add(ligne(TRANCHE, v.libelle(), ANNEE, RESTE, NB_ARTICLES, Math.max(reste, 0), TAUX, tauxReste));
-        return concretisees + Math.max(reste, 0);
+        lignes.add(ligne(TRANCHE, v.libelle(), ANNEE, RESTE, NB_ARTICLES, reste, TAUX,
+                LignesMensuelles.taux(BigDecimal.valueOf(reste), total)));
+        return concretisees + reste;
     }
 }
