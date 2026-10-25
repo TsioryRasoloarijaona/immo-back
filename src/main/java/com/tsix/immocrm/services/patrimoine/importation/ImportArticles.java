@@ -4,29 +4,34 @@ import com.tsix.immocrm.config.audit.EtatAudite;
 import com.tsix.immocrm.dto.patrimoine.ArticleDetailDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleEcritureDto;
 import com.tsix.immocrm.dto.patrimoine.ArticleListItemDto;
+import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto.ResultatImport;
-import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.services.patrimoine.ArticleService;
 import com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.ChampImport;
+import com.tsix.immocrm.services.patrimoine.importation.EcritureParLigne.Libelles;
+import com.tsix.immocrm.services.patrimoine.importation.EcritureParLigne.LigneImport;
 import com.tsix.immocrm.services.patrimoine.importation.LectureClasseur.LigneLue;
 import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.web.export.FeuilleExport;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.FlushModeType;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 import static com.tsix.immocrm.services.patrimoine.ArticleService.NATURE_BATIMENT;
 import static com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.ARTICLE_PARENT;
@@ -34,26 +39,37 @@ import static com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.NAT
 import static com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.PIVOT;
 import static com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.TRANCHE;
 import static com.tsix.immocrm.services.patrimoine.importation.ChampsArticle.VOCATION;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.ARTICLES;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.SOUS_ARTICLES;
+import static com.tsix.immocrm.services.patrimoine.importation.LectureChamps.texte;
 
 /**
  * Traduction (en-têtes → {@link ArticleEcritureDto}, codes → ids) et écriture d'une ligne d'import d'articles ou de
  * sous-articles par les méthodes de l'écran (FEATURE-patrimoine-import-export.md §1.4, §1.5) : aucune règle métier ici.
  */
 @Component
-class ImportArticles {
+class ImportArticles implements ImportParType<ImportArticles.Contexte> {
 
     private static final String PAR_CODE = "select i from StkItem i where i.stkHierarchy.id = :tranche and i.code = :code";
+    private static final String DE_LA_TRANCHE = "select i from StkItem i where i.stkHierarchy.id = :tranche order by i.code";
     private static final String CODE = "code";
     private static final String VOCATION_ID = "vocationId";
     private static final String PARENT_ID = "parentId";
+    private static final Libelles ARTICLE = new Libelles("Création de l'article : %s", "Mise à jour de l'article : %s",
+            "l'article : %s n'a pas été modifié", "Problèmes d'import de l'article : %s");
+    private static final Libelles SOUS_ARTICLE = new Libelles("Création du sous-article : %s",
+            "Mise à jour du sous-article : %s", "le sous-article : %s n'a pas été modifié",
+            "Problèmes d'import du sous-article : %s");
 
     private final ArticleService articles;
+    private final StkItemRepository items;
     private final EntityManager em;
     private final EtatAudite etat;
     private final JsonMapper json;
 
-    ImportArticles(ArticleService articles, EntityManager em, EtatAudite etat, JsonMapper json) {
+    ImportArticles(ArticleService articles, StkItemRepository items, EntityManager em, EtatAudite etat, JsonMapper json) {
         this.articles = articles;
+        this.items = items;
         this.em = em;
         this.etat = etat;
         this.json = json;
@@ -70,12 +86,65 @@ class ImportArticles {
 
     /** Ligne traduite ; {@code sous} = colonnes « Sous article n » ayant un code ; {@code erreurs} de traduction. */
     record LigneTraduite(int numero, String pivot, Map<String, Object> champs, List<Map<String, Object>> sous,
-                         String parent, boolean natureLue, List<String> erreurs) {
+                         String parent, boolean natureLue, List<String> erreurs) implements LigneImport {
 
-        String code() {
+        @Override
+        public String code() {
             Object code = champs.get(CODE);
             return code == null ? pivot : code.toString();
         }
+    }
+
+    // ------------------------------------------------------------------ ImportParType
+
+    @Override
+    public Set<String> types() {
+        return Set.of(ARTICLES, SOUS_ARTICLES);
+    }
+
+    @Override
+    public boolean trancheExigee() {
+        return true;
+    }
+
+    @Override
+    public Contexte contexte(String type, CfgTranche tranche, Set<String> entetes, List<String> avertissements) {
+        return new Contexte(SOUS_ARTICLES.equals(type), tranche, new ResolutionCodes(em, tranche.getId()), entetes,
+                avertissements);
+    }
+
+    @Override
+    public Set<String> entetesConnus(Contexte ctx) {
+        return ctx.champs().stream().map(ChampImport::entete).collect(Collectors.toSet());
+    }
+
+    @Override
+    public List<LigneBilanDto> ecrire(List<LigneLue> lignes, Contexte ctx) {
+        return EcritureParLigne.ecrire(em, lignes.stream().map(l -> traduire(l, ctx)).toList(), l -> ecrire(l, ctx),
+                ctx.sousArticles() ? SOUS_ARTICLE : ARTICLE);
+    }
+
+    @Override
+    public Modele modele(String type, CfgTranche tranche) {
+        boolean sous = SOUS_ARTICLES.equals(type);
+        List<ChampImport> champs = ChampsArticle.du(sous);
+        String nom = sous ? "SOUS_ARTICLES" : "ARTICLES";
+        List<Map<String, Object>> lignes = em.createQuery(DE_LA_TRANCHE, StkItem.class)
+                .setParameter("tranche", tranche.getId()).getResultList().stream()
+                .filter(item -> Boolean.TRUE.equals(item.getIsUnderItem()) == sous
+                        && NATURE_BATIMENT.equals(Champs.de(item.getStkKind(), StkKind::getCode)))
+                .map(item -> ModeleImport.ligne(item, sous ? List.of() : sousArticles(item), champs))
+                .toList();
+        List<FeuilleExport> feuilles = new ArrayList<>();
+        feuilles.add(ModeleImport.donnees(nom, champs, lignes));
+        feuilles.addAll(ModeleImport.aides(champs, new ResolutionCodes(em, tranche.getId())));
+        return new Modele(tranche.getCode() + "_STOCK_" + nom, feuilles);
+    }
+
+    private List<StkItem> sousArticles(StkItem article) {
+        return items.findByParentId(article.getId()).stream()
+                .sorted(Comparator.comparing(StkItem::getCode, Comparator.nullsLast(String::compareTo)))
+                .limit(ChampsArticle.SOUS_ARTICLES_PAR_LIGNE).toList();
     }
 
     // ------------------------------------------------------------------ traduction
@@ -83,47 +152,18 @@ class ImportArticles {
     LigneTraduite traduire(LigneLue l, Contexte ctx) {
         Map<String, Object> v = l.valeurs();
         List<String> erreurs = new ArrayList<>();
-        Map<String, Object> champs = new HashMap<>();
-        Map<Integer, Map<String, Object>> sous = new TreeMap<>();
-        for (ChampImport c : ctx.champs()) {
-            Object brut = v.get(c.entete());
-            if (brut != null && c.champ() != null) {
-                try {
-                    Object valeur = valeur(c, brut, ctx, l.numero());
-                    (c.rang() == 0 ? champs : sous.computeIfAbsent(c.rang(), n -> new HashMap<>())).put(c.champ(), valeur);
-                } catch (TypeCellule.Illisible e) {
-                    erreurs.add("Colonne %s : valeur %s illisible".formatted(c.entete(), TypeCellule.texte(brut)));
-                } catch (InvalidRequestException e) {
-                    erreurs.add(e.getMessage());
-                }
-            }
-        }
+        Map<Integer, Map<String, Object>> lus = LectureChamps.lire(ctx.champs(), l, ctx.codes(), ctx.avertissements(),
+                erreurs);
+        Map<String, Object> champs = Objects.requireNonNullElseGet(lus.remove(0), HashMap::new);
         String pivot = texte(v.get(PIVOT));
         if (pivot == null) {
             erreurs.add("Manque le pivot");
         }
         controlerTranche(v, ctx, erreurs);
-        boolean natureLue = controlerNature(v.get(NATURE), ctx, erreurs);
-        List<Map<String, Object>> sousArticles = sous.values().stream().filter(s -> s.get(CODE) != null).toList();
+        boolean natureLue = !ctx.sousArticles()
+                && LectureChamps.controlerNature(v.get(NATURE), ctx.codes(), NATURE_BATIMENT, "Bâtiment", erreurs);
+        List<Map<String, Object>> sousArticles = lus.values().stream().filter(s -> s.get(CODE) != null).toList();
         return new LigneTraduite(l.numero(), pivot, champs, sousArticles, texte(v.get(ARTICLE_PARENT)), natureLue, erreurs);
-    }
-
-    private static Object valeur(ChampImport c, Object brut, Contexte ctx, int numero) {
-        Object valeur = c.type().lire(brut);
-        if (c.reference() != null) {
-            return trouver(ctx, c.reference().classe(), valeur.toString(), c.reference().parLibelle()).getId();
-        }
-        if (c.type() == TypeCellule.TVA && TypeCellule.NOMBRE.lire(brut) instanceof BigDecimal saisi
-                && saisi.compareTo(BigDecimal.ONE) > 0) {
-            ctx.avertissements().add("Ligne %d : %s %s lue comme un pourcentage (%s)."
-                    .formatted(numero, c.entete(), saisi.toPlainString(), ((BigDecimal) valeur).toPlainString()));
-        }
-        return valeur;
-    }
-
-    private static <T extends CodeLibelleOmran> T trouver(Contexte ctx, Class<T> classe, String code, boolean parLibelle) {
-        return ctx.codes().trouver(classe, code, parLibelle).orElseThrow(() -> new InvalidRequestException(
-                "Le code " + code + " saisi est introuvable dans notre référenciel"));
     }
 
     private static void controlerTranche(Map<String, Object> v, Contexte ctx, List<String> erreurs) {
@@ -138,32 +178,9 @@ class ImportArticles {
         }
     }
 
-    /** OMRAN n'importe que des bâtiments ; rend vrai si la nature est lue. */
-    private static boolean controlerNature(Object brut, Contexte ctx, List<String> erreurs) {
-        if (brut == null || ctx.sousArticles()) {
-            return false;
-        }
-        String nature = TypeCellule.texte(brut);
-        ctx.codes().trouver(StkKind.class, nature, true).ifPresentOrElse(
-                k -> {
-                    if (!NATURE_BATIMENT.equalsIgnoreCase(k.getCode())) {
-                        erreurs.add("La nature " + nature + " n'est pas Bâtiment : seuls les bâtiments s'importent ici.");
-                    }
-                },
-                () -> erreurs.add("Le code " + nature + " saisi est introuvable dans notre référenciel"));
-        return true;
-    }
-
-    private static String texte(Object brut) {
-        return brut == null ? null : TypeCellule.texte(brut);
-    }
-
     // ------------------------------------------------------------------ écriture (dans la transaction de l'import)
 
     ResultatImport ecrire(LigneTraduite l, Contexte ctx) {
-        if (!l.erreurs().isEmpty()) {
-            throw new InvalidRequestException(String.join(" ; ", l.erreurs()));
-        }
         List<StkItem> trouves = parCode(ctx, l.pivot());
         if (trouves.size() > 1) {
             throw new InvalidRequestException("Il existe plusieurs article avec le même code");

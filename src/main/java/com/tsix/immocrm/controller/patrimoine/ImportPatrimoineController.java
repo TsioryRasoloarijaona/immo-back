@@ -29,6 +29,11 @@ import java.util.UUID;
 
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.ADMINISTRATEUR;
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.REPONSE_403;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.ARTICLES;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.PRESENTATIONS;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.PREVISIONS;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.SOUS_ARTICLES;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.TERRAINS;
 
 @Tag(name = "Import du patrimoine")
 @RestController
@@ -36,9 +41,9 @@ import static com.tsix.immocrm.controller.patrimoine.ArticleController.REPONSE_4
 public class ImportPatrimoineController {
 
     private static final String TYPE = "Type importé.";
-    private static final String TRANCHE = "Tranche visée (CfgTranche.PKey), obligatoire pour articles et sous-articles.";
+    private static final String TRANCHE = "Tranche visée (CfgTranche.PKey) : articles, sous-articles, prévisions ; ignorée sinon.";
     private static final String REPONSE_404 = "Type inconnu, ou tranche inconnue ou d'une entité inactive.";
-    private static final String REPONSE_400_TRANCHE = "« Vous devez sélectionner une Tranche ! » (trancheId absent).";
+    private static final String REPONSE_400_TRANCHE = "« Vous devez sélectionner une Tranche ! » (trancheId absent, type à tranche).";
 
     private final ImportPatrimoineService importation;
     private final ModeleImport modele;
@@ -50,7 +55,7 @@ public class ImportPatrimoineController {
 
     @GetMapping("/modele")
     @PreAuthorize(ADMINISTRATEUR)
-    @Operation(summary = "Classeur modèle pré-rempli avec les lignes de la tranche")
+    @Operation(summary = "Classeur modèle pré-rempli (lignes de la tranche, terrains visibles ou présentations)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Classeur .xlsx : feuille de données puis feuilles d'aide."),
             @ApiResponse(responseCode = "400", description = REPONSE_400_TRANCHE, content = @Content),
@@ -58,7 +63,8 @@ public class ImportPatrimoineController {
             @ApiResponse(responseCode = "404", description = REPONSE_404, content = @Content)
     })
     public ResponseEntity<byte[]> modele(
-            @Parameter(description = TYPE, schema = @Schema(allowableValues = {"articles", "sous-articles"}))
+            @Parameter(description = TYPE, schema = @Schema(allowableValues = {ARTICLES, SOUS_ARTICLES, PRESENTATIONS,
+                    TERRAINS, PREVISIONS}))
             @PathVariable String type,
             @Parameter(description = TRANCHE) @RequestParam(required = false) UUID trancheId) {
         return modele.classeur(type, trancheId);
@@ -76,7 +82,8 @@ public class ImportPatrimoineController {
             @ApiResponse(responseCode = "413", description = "Fichier de plus de 10 Mo.", content = @Content)
     })
     public BilanImportDto importer(
-            @Parameter(description = TYPE, schema = @Schema(allowableValues = {"articles", "sous-articles"}))
+            @Parameter(description = TYPE, schema = @Schema(allowableValues = {ARTICLES, SOUS_ARTICLES, PRESENTATIONS,
+                    TERRAINS, PREVISIONS}))
             @PathVariable String type,
             @Parameter(description = TRANCHE) @RequestParam(required = false) UUID trancheId,
             @Parameter(description = "Vrai (défaut) = « Vérifier les données » : même exécution, puis tout est annulé.")
