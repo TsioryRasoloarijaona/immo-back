@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Schema(description = "Note d'un programme, d'une tranche, d'un article ou d'une prospection terrain (AdmMessage).")
+@Schema(description = "Note d'un programme, d'une tranche, d'un article, d'une prospection terrain ou d'une étude (AdmMessage).")
 public record NoteDto(
         @Schema(description = "AdmMessage.PKey.") UUID id,
         @Schema(description = "DocDate : date de saisie.") LocalDateTime date,

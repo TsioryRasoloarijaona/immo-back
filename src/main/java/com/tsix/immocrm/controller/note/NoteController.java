@@ -38,7 +38,7 @@ public class NoteController {
     }
 
     @GetMapping
-    @Operation(summary = "Notes d'un programme, d'une tranche ou d'un article, plus récentes d'abord")
+    @Operation(summary = "Notes d'un objet du patrimoine, d'une prospection terrain ou d'une étude, plus récentes d'abord")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Liste, éventuellement vide."),
             @ApiResponse(responseCode = "400", description = "`porteur` absent ou hors projet, tranche, article, prospection-terrain, etude."),

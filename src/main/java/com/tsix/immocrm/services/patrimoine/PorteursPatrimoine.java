@@ -1,14 +1,19 @@
 package com.tsix.immocrm.services.patrimoine;
 
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.stk.StkFeasibilityStudyRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -30,6 +35,8 @@ public class PorteursPatrimoine {
                             "porteur doit valoir projet, tranche, article, prospection-terrain ou etude : '" + valeur + "'"));
         }
     }
+
+    private static final Set<String> ROLES_ETUDE = Set.of("ROLE_Administrateur", "ROLE_Direction Générale");
 
     private final ProjetService projetService;
     private final TrancheService trancheService;
@@ -65,8 +72,18 @@ public class PorteursPatrimoine {
             case TRANCHE -> trancheService.findById(id);
             case ARTICLE -> articleService.findById(id);
             case PROSPECTION_TERRAIN -> prospectionTerrainService.exiger(id);
-            case ETUDE -> etudes.exigerVisible(id);
+            case ETUDE -> exigerLecteurEtude(id);
         }
+    }
+
+    /** Rôles de {@code EtudeFaisabiliteController.LECTURE} : notes et audit ne rouvrent pas l'étude aux autres (404). */
+    private void exigerLecteurEtude(UUID id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+                .noneMatch(ROLES_ETUDE::contains)) {
+            throw new ResourceNotFoundException("Étude de faisabilité introuvable: " + id);
+        }
+        etudes.exigerVisible(id);
     }
 
     /** Type de l'objet {@code id}, après la même vérification ; 404 s'il n'est pas du patrimoine. */
