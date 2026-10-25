@@ -280,8 +280,7 @@ public class EtudeFaisabiliteService {
 
     /** Identité, références et entrées, puis le calcul partagé ; 400 / 409 avant toute écriture. */
     private void appliquer(StkFeasibilityStudy e, SaisieEtudeDto d, ChampsAVider v) {
-        e.setCode(ActionnairesService.codeLibre(obligatoire(d.code(), e.getCode(), "Le code"), e.getId(),
-                etudes::findFirstByCode, "l'étude"));
+        e.setCode(codeLibre(obligatoire(d.code(), e.getCode(), "Le code"), e));
         e.setDescription(obligatoire(d.description(), e.getDescription(), "La description"));
         e.setDocDate(SaisiePatrimoine.ou(d.dateDocument(), e.getDocDate()));
         if (d.societeId() != null) {
@@ -307,14 +306,17 @@ public class EtudeFaisabiliteService {
         calculer(e);
     }
 
+    private String codeLibre(String code, StkFeasibilityStudy e) {
+        return ActionnairesService.codeLibre(code, e.getId(), etudes::findFirstByCode, "l'étude");
+    }
+
     private void calculer(StkFeasibilityStudy e) {
         FicheEtude.ecrire(e, CalculFaisabilite.calculer(FicheEtude.valeurs(e), maroc()));
     }
 
     /** Code vérifié avant tout setter ; étude détachée jusqu'à Verif pour qu'un refus n'écrive rien (comme la modification). */
     private EtudeFaisabiliteDto copier(StkFeasibilityStudy e, LndLand p) {
-        String code = ActionnairesService.codeLibre(SaisiePatrimoine.ou(p.getCode(), e.getCode()), e.getId(),
-                etudes::findFirstByCode, "l'étude");
+        String code = codeLibre(SaisiePatrimoine.ou(p.getCode(), e.getCode()), e);
         em.detach(e);
         e.setCode(code);
         FicheEtude.copierProspection(e, p);
