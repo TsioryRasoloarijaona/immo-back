@@ -8,6 +8,10 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.tsix.immocrm.services.patrimoine.relances.PremieresRelancesService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +33,12 @@ public class PremieresRelancesController {
     private static final String INTROUVABLE = "Tranche inconnue ou d'une entité inactive.";
     private static final String NON_ADMIN = "L'appelant n'a pas le rôle Administrateur.";
 
+    private final PremieresRelancesService service;
+
+    public PremieresRelancesController(PremieresRelancesService service) {
+        this.service = service;
+    }
+
     @GetMapping("/{id}/premieres-relances/apercu")
     @Operation(summary = "Aperçu des premières relances : dossiers retenus, nouvelle échéance, alertes à créer")
     @ApiResponses({
@@ -37,7 +47,7 @@ public class PremieresRelancesController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
     })
     public ApercuPremieresRelancesDto apercu(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.apercu(id);
     }
 
     @PostMapping("/{id}/premieres-relances")
@@ -48,7 +58,7 @@ public class PremieresRelancesController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
     })
     public ResultatPremieresRelancesDto executer(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.executer(id);
     }
 
     @GetMapping("/{id}/premieres-relances.pdf")
@@ -61,6 +71,10 @@ public class PremieresRelancesController {
             @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
     })
     public ResponseEntity<byte[]> lettres(@Parameter(description = ID_TRANCHE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename("premieres-relances.pdf").build().toString())
+                .body(service.lettres(id));
     }
 }

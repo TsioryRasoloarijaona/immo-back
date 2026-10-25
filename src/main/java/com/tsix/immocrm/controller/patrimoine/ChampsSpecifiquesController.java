@@ -3,6 +3,8 @@ package com.tsix.immocrm.controller.patrimoine;
 import com.tsix.immocrm.dto.patrimoine.champs.ChampSpecifiqueDto;
 import com.tsix.immocrm.dto.patrimoine.champs.DefinitionChampDto;
 import com.tsix.immocrm.dto.patrimoine.champs.EcritureValeursChampsDto;
+import com.tsix.immocrm.services.patrimoine.champs.ChampsSpecifiquesService;
+import com.tsix.immocrm.services.patrimoine.champs.DefinitionsChampsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -39,10 +41,18 @@ public class ChampsSpecifiquesController {
     private static final String CHAMP_INCONNU = "Définition inconnue pour ce porteur.";
     private static final String DEFINITION_REFUSEE = "Porteur inconnu, libellé vide, type inconnu, liste sans choix ou choix avec « ; ».";
 
+    private final ChampsSpecifiquesService service;
+    private final DefinitionsChampsService definitions;
+
+    public ChampsSpecifiquesController(ChampsSpecifiquesService service, DefinitionsChampsService definitions) {
+        this.service = service;
+        this.definitions = definitions;
+    }
+
     @GetMapping("/types")
     @Operation(summary = "Types de données d'un champ (AdmSpecificFieldDataType.Code), dans l'ordre OMRAN")
     public List<String> types() {
-        throw new UnsupportedOperationException();
+        return service.types();
     }
 
     @GetMapping("/{porteur}/{id}")
@@ -53,7 +63,7 @@ public class ChampsSpecifiquesController {
     })
     public List<ChampSpecifiqueDto> lire(@Parameter(description = PORTEUR) @PathVariable String porteur,
                                          @Parameter(description = ID_OBJET) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        return service.lire(porteur, id);
     }
 
     @PutMapping("/{porteur}/{id}")
@@ -68,7 +78,7 @@ public class ChampsSpecifiquesController {
     public List<ChampSpecifiqueDto> enregistrerValeurs(@Parameter(description = PORTEUR) @PathVariable String porteur,
                                                        @Parameter(description = ID_OBJET) @PathVariable UUID id,
                                                        @RequestBody EcritureValeursChampsDto corps) {
-        throw new UnsupportedOperationException();
+        return service.enregistrerValeurs(porteur, id, corps);
     }
 
     @PostMapping("/{porteur}/definitions")
@@ -82,7 +92,7 @@ public class ChampsSpecifiquesController {
     })
     public ChampSpecifiqueDto creerDefinition(@Parameter(description = PORTEUR) @PathVariable String porteur,
                                               @RequestBody DefinitionChampDto corps) {
-        throw new UnsupportedOperationException();
+        return definitions.creerDefinition(porteur, corps);
     }
 
     @PatchMapping("/{porteur}/definitions/{champId}")
@@ -96,7 +106,7 @@ public class ChampsSpecifiquesController {
     public ChampSpecifiqueDto modifierDefinition(@Parameter(description = PORTEUR) @PathVariable String porteur,
                                                  @Parameter(description = ID_CHAMP) @PathVariable UUID champId,
                                                  @RequestBody DefinitionChampDto corps) {
-        throw new UnsupportedOperationException();
+        return definitions.modifierDefinition(porteur, champId, corps);
     }
 
     @DeleteMapping("/{porteur}/definitions/{champId}")
@@ -110,6 +120,6 @@ public class ChampsSpecifiquesController {
     })
     public void supprimerDefinition(@Parameter(description = PORTEUR) @PathVariable String porteur,
                                     @Parameter(description = ID_CHAMP) @PathVariable UUID champId) {
-        throw new UnsupportedOperationException();
+        definitions.supprimerDefinition(porteur, champId);
     }
 }
