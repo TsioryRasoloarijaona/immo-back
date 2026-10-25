@@ -1,6 +1,9 @@
 package com.tsix.immocrm.services.rapport.vente.flux;
 
-/** Mesures de {@link FluxVenteMensuel} : définitions dans FEATURE-tdb-vente-rapports-flux.md §3.2. */
+/**
+ * Mesures de {@link FluxVenteMensuel} : définitions dans FEATURE-tdb-vente-rapports-flux.md §3.2 et
+ * FEATURE-tdb-vente-previsions.md §3.1.
+ */
 public enum MesureFlux {
 
     CONCRETISATIONS(Famille.DOSSIER),
@@ -29,7 +32,17 @@ public enum MesureFlux {
     PREVU_ENCAISSEMENT(Famille.PREVU),
     BASE_CA(Famille.PREVU),
     BASE_ENCAISSEMENT(Famille.PREVU),
-    BASE_CONCRETISATION_QUANTITE(Famille.PREVU);
+    BASE_CONCRETISATION_QUANTITE(Famille.PREVU),
+    ENCAISSEMENTS_FRAIS(Famille.REGLEMENT),
+    ECHEANCES_DUES(Famille.ECHEANCE),
+    ECHEANCES_DUES_FRAIS(Famille.ECHEANCE),
+    BASE_CONCRETISATION_MONTANT(Famille.PREVU),
+    BASE_CA_QUANTITE(Famille.PREVU),
+    ANCIEN_PREVU_CONCRETISATION_QUANTITE(Famille.PREVU),
+    ANCIEN_PREVU_CONCRETISATION_MONTANT(Famille.PREVU),
+    ANCIEN_PREVU_CA_QUANTITE(Famille.PREVU),
+    ANCIEN_PREVU_CA_TTC(Famille.PREVU),
+    ANCIEN_PREVU_ENCAISSEMENT(Famille.PREVU);
 
     /** Source lue : une requête par famille demandée ; {@code PREVU} = {@link SourcePrevu}. */
     public enum Famille { DOSSIER, REGLEMENT, ECHEANCE, PREVU }
