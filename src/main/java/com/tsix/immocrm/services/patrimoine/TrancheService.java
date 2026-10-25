@@ -408,8 +408,7 @@ public class TrancheService {
         trancheRepository.findFirstByCode(code)
                 .filter(existante -> !existante.getId().equals(id))
                 .ifPresent(existante -> {
-                    throw new ConflictException("Le code %s est déjà pris par la tranche %s — %s."
-                            .formatted(code, existante.getCode(), existante.getDescription()));
+                    throw new ConflictException("Le code %s est déjà pris.".formatted(code));
                 });
         return code;
     }
