@@ -15,9 +15,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # La suite est coupee en 4 morceaux paralleles, chacun avec son propre SQL Server : les depots
+  # publics ont les runners standard gratuits (20 jobs simultanes), la CI passe de ~5 a ~2 min.
   tests:
-    name: Suite complete sur SQL Server ephemere
+    name: Morceau ${{ matrix.morceau }}/4
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        morceau: [1, 2, 3, 4]
 
     env:
       # Mot de passe d'un conteneur jetable, lie a localhost d'un runner ephemere et detruit
@@ -82,6 +88,17 @@ jobs:
               -d "$DB_TEST" -i "/schema/$f"
           done
 
+      # Une classe sur 4 dans l'ordre des chemins : chaque morceau recoit des tests de tous les
+      # paquets, donc des durees voisines. Memes motifs que les inclusions par defaut de Surefire.
+      - name: Choisir les classes du morceau
+        run: |
+          export LC_ALL=C
+          CLASSES=$(find src/test/java -type f \( -name '*Test.java' -o -name '*Tests.java' -o -name 'Test*.java' -o -name '*TestCase.java' \) \
+            | sort | awk -v n=${{ matrix.morceau }} '(NR - 1) % 4 == n - 1' \
+            | xargs -n1 basename | sed 's/\.java$//' | paste -sd, -)
+          echo "$(echo "$CLASSES" | tr ',' '\n' | wc -l) classes dans ce morceau"
+          echo "CLASSES=$CLASSES" >> "$GITHUB_ENV"
+
       # mvnw est versionne en 100644 : sans ce chmod, ./mvnw sort en "Permission denied".
       # Le Dockerfile fait exactement la meme chose pour la meme raison.
       - name: Executer la suite
@@ -94,16 +111,48 @@ jobs:
           SPRING_DATASOURCE_PASSWORD: Ci-Ephemere-Passw0rd!
         run: |
           chmod +x ./mvnw
-          ./mvnw --batch-mode test
+          ./mvnw --batch-mode test -Dtest="$CLASSES" -Dsurefire.failIfNoSpecifiedTests=false
 
-      - name: Publier les rapports Surefire en cas d'echec
-        if: failure()
+      # Toujours publies (quelques centaines de Ko) : le bilan additionne les 4 morceaux et
+      # ci-echecs.mjs les telecharge tous (motif surefire-reports-*).
+      - name: Publier les rapports Surefire
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: target/surefire-reports/
+          name: surefire-reports-${{ matrix.morceau }}
+          path: target/surefire-reports/*.xml
           retention-days: 7
 
       - name: Journal SQL Server en cas d'echec
         if: failure()
         run: docker logs --tail=100 sqlserver
+
+  # Un seul check a lire et a exiger, quel que soit le nombre de morceaux ; il additionne les
+  # comptes des 4 rapports pour qu'un morceau vide ou perdu se voie au total.
+  bilan:
+    name: Suite complete sur SQL Server ephemere
+    runs-on: ubuntu-latest
+    needs: tests
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: surefire-reports-*
+          path: rapports
+      - name: Additionner les morceaux
+        run: |
+          python3 - <<'PY'
+          import glob, re
+          t = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          fichiers = glob.glob("rapports/**/TEST-*.xml", recursive=True)
+          for f in fichiers:
+              tete = re.search(r"<testsuite[^>]*>", open(f, encoding="utf-8").read())
+              for k in t:
+                  m = re.search(rf'\b{k}="(\d+)"', tete.group(0)) if tete else None
+                  t[k] += int(m.group(1)) if m else 0
+          print(f"{len(fichiers)} classes, Tests run: {t['tests']}, Failures: {t['failures']}, Errors: {t['errors']}, Skipped: {t['skipped']}")
+          PY
+      - name: Resultat
+        run: |
+          echo "morceaux : ${{ needs.tests.result }}"
+          test "${{ needs.tests.result }}" = "success"
