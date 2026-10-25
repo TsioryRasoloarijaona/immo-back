@@ -55,6 +55,7 @@ import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
 import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
 import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
 import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.AlerteRelanceService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
@@ -89,7 +90,7 @@ public class DossierService {
     public static final String TEXTE_CLOTURE_VENTE = "Création dossier de vente";
 
     private static final String DOSSIER_INTROUVABLE = "Dossier introuvable: ";
-    private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
+    private static final String ARTICLE_IDS = "articleIds";
     private static final String CAUSE_OBLIGATOIRE = "La cause est obligatoire pour une annulation ou un désistement";
     static final String DOSSIER_SANS_STATUT =
             "Dossier sans statut : reprise nécessaire (script instructions/sql/VENTE-reprise-interop.sql)";
@@ -119,6 +120,7 @@ public class DossierService {
     private final OffreOrigineDossier offreOrigine;
     private final ArchivageProspectionsVente archivage;
     private final AlertesImpayes alertesImpayes;
+    private final ObjetsVisibles objetsVisibles;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -155,6 +157,7 @@ public class DossierService {
         this.offreOrigine = ecrituresOmran.offreOrigine();
         this.archivage = ecrituresOmran.archivage();
         this.alertesImpayes = ecrituresOmran.alertes();
+        this.objetsVisibles = ecrituresOmran.visibles();
     }
 
     /**
@@ -227,16 +230,15 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
+        List<StkItem> demandes = objetsVisibles.articles(request.articleIds(), ARTICLE_IDS);
         Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
                 request.articleIds().get(0));
         PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
 
         List<StkItem> articles = new ArrayList<>();
-        for (UUID articleId : request.articleIds()) {
-            StkItem item = stkItemRepository.findById(articleId)
-                    .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId));
+        for (StkItem item : demandes) {
             if (DisponibiliteArticle.estOccupe(item)) {
-                throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + articleId);
+                throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + item.getId());
             }
             articles.add(item);
         }
@@ -556,13 +558,10 @@ public class DossierService {
         Requis.champ(request.prix(), "prix est requis");
         validerRemisePercent(request.remisePercent());
 
-        StkItem premierArticle = stkItemRepository.findById(request.articleIds().get(0))
-                .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + request.articleIds().get(0)));
+        List<StkItem> demandes = objetsVisibles.articles(request.articleIds(), ARTICLE_IDS);
+        StkItem premierArticle = demandes.get(0);
         // Les articles suivants, puis les sous-articles libres du lot : mêmes annexes qu'à la création.
-        List<StkItem> saisies = request.articleIds().subList(1, request.articleIds().size()).stream()
-                .map(articleId -> stkItemRepository.findById(articleId)
-                        .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId)))
-                .toList();
+        List<StkItem> saisies = demandes.subList(1, demandes.size());
         List<StkItem> annexes = annexesDuDossier(premierArticle, saisies);
 
         UUID vocationId = premierArticle.getStkVocation().getId();

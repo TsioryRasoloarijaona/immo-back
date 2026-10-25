@@ -15,6 +15,7 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteDocumentRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Component;
 
@@ -42,10 +43,12 @@ public class OffreOrigineDossier {
     private final StlQuoteDocumentRepository schemaRepository;
     private final ComFolderRepository folderRepository;
     private final PerimetreCommercialService perimetreService;
+    private final ObjetsVisibles objetsVisibles;
 
     public OffreOrigineDossier(StlQuoteRepository quoteRepository, StlQuoteItemRepository quoteItemRepository,
                                StlQuoteDocumentRepository schemaRepository, ComFolderRepository folderRepository,
-                               PerimetreCommercialService perimetreService) {
+                               PerimetreCommercialService perimetreService, ObjetsVisibles objetsVisibles) {
+        this.objetsVisibles = objetsVisibles;
         this.quoteRepository = quoteRepository;
         this.quoteItemRepository = quoteItemRepository;
         this.schemaRepository = schemaRepository;
@@ -75,10 +78,10 @@ public class OffreOrigineDossier {
         if (offre.getComProspection() == null || !prospection.getId().equals(offre.getComProspection().getId())) {
             throw new InvalidRequestException("L'offre " + offre.getCode() + " n'appartient pas à cette prospection");
         }
-        StkItem article = offre.getStkItem();
-        if (article == null) {
+        if (offre.getStkItem() == null) {
             throw new InvalidRequestException(SANS_ARTICLE);
         }
+        StkItem article = objetsVisibles.article(offre.getStkItem().getId(), "offreId");
         // Avant tout message qui nomme l'article ou un dossier : hors périmètre, l'appelant n'en apprend rien.
         perimetreService.verifierEcritureSurTranche(article.getStkHierarchy(),
                 "Création de dossier depuis l'offre " + offre.getCode());

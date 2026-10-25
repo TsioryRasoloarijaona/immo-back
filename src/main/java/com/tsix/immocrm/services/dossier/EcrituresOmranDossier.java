@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import org.springframework.stereotype.Component;
 
 /** Composants des écritures compatibles OMRAN d'un dossier, regroupés pour l'injection dans {@link DossierService}. */
@@ -9,5 +10,5 @@ public record EcrituresOmranDossier(CreationDossierOmran creation, HistoriqueDos
                                     LigneEcheancierOmran ligneEcheancier, ControleSortieDossier controleSortie,
                                     MontantsDossier montants, WorkflowDossier workflow,
                                     OffreOrigineDossier offreOrigine, ArchivageProspectionsVente archivage,
-                                    AlertesImpayes alertes) {
+                                    AlertesImpayes alertes, ObjetsVisibles visibles) {
 }

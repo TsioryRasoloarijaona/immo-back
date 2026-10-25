@@ -59,7 +59,6 @@ import com.tsix.immocrm.mail.VisiteEffectuee;
 import com.tsix.immocrm.mail.VisitePlanifiee;
 import com.tsix.immocrm.repositories.adm.AdmEventRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository.DerniereAlerteProjection;
 import com.tsix.immocrm.repositories.com.ComActionMessageCategoryRepository;
@@ -72,7 +71,6 @@ import com.tsix.immocrm.repositories.com.ComProspectionOriginRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionOriginSupportRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComSaleProspectionViewRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
 import com.tsix.immocrm.repositories.str.StrEntityRepository;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
@@ -82,6 +80,7 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
@@ -143,8 +142,6 @@ public class ProspectionService {
     private static final String TYPE_CONTACT_INTROUVABLE = "ComActionMessageType introuvable: ";
     private static final String ACTION_INTROUVABLE = "ComAction introuvable: ";
     private static final String ETAPE_INTROUVABLE = "ComProspectionKind introuvable: ";
-    private static final String TRANCHE_INTROUVABLE = "CfgTranche introuvable: ";
-    private static final String ARTICLE_INTROUVABLE = "Article introuvable: ";
 
     private final ComProspectionRepository prospectionRepository;
     // Vue légataire du bloc « activité » : une ligne à la fois, jamais pour une liste
@@ -176,8 +173,7 @@ public class ProspectionService {
             UUID.fromString("E7C73F70-1111-40D9-AA78-A2825C42B601");
     private final AdmEventRepository admEventRepository;
     private final ComActionRepository actionRepository;
-    private final CfgTrancheRepository trancheRepository;
-    private final StkItemRepository stkItemRepository;
+    private final ObjetsVisibles objetsVisibles;
     private final StrHistoryRepository historyRepository;
     private final GenerateurCodeSequence generateurCode;
     private final PerimetreCommercialService perimetreService;
@@ -205,8 +201,7 @@ public class ProspectionService {
                                ComActionMessageCategoryRepository actionMessageCategoryRepository,
                                AdmEventRepository admEventRepository,
                                ComActionRepository actionRepository,
-                               CfgTrancheRepository trancheRepository,
-                               StkItemRepository stkItemRepository,
+                               ObjetsVisibles objetsVisibles,
                                StrHistoryRepository historyRepository,
                                GenerateurCodeSequence generateurCode,
                                PerimetreCommercialService perimetreService,
@@ -243,8 +238,7 @@ public class ProspectionService {
         this.actionMessageCategoryRepository = actionMessageCategoryRepository;
         this.admEventRepository = admEventRepository;
         this.actionRepository = actionRepository;
-        this.trancheRepository = trancheRepository;
-        this.stkItemRepository = stkItemRepository;
+        this.objetsVisibles = objetsVisibles;
         this.historyRepository = historyRepository;
         this.generateurCode = generateurCode;
     }
@@ -761,13 +755,12 @@ public class ProspectionService {
     private void rattacherTrancheALaCreation(ComProspection prospection, CfgTier prospect,
                                              CreerProspectionRequest request) {
         if (request.trancheId() != null) {
-            CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de prospection sur la tranche " + tranche.getCode());
             verifierUniciteProspectProjet(prospect, tranche, null);
             if (request.articleId() != null) {
-                prospection.setStkItem(articleDeLaTranche(request.articleId(), tranche));
+                prospection.setStkItem(objetsVisibles.articleDeLaTranche(request.articleId(), tranche));
             }
             prospection.setStkHierarchy(tranche);
         } else if (request.articleId() != null) {
@@ -787,16 +780,6 @@ public class ProspectionService {
         if (request.ancienClient() != null) prospection.setIsOldCustomer(request.ancienClient());
     }
 
-    /** L'article demandé, à condition qu'il appartienne à la tranche (400 sinon). */
-    private StkItem articleDeLaTranche(UUID articleId, CfgTranche tranche) {
-        StkItem article = stkItemRepository.findById(articleId)
-                .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + articleId));
-        if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-            throw new InvalidRequestException(
-                    "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-        }
-        return article;
-    }
 
     /** Vrai si la prospection porte un article qui n'est pas de {@code tranche}. */
     private static boolean articleHorsTranche(ComProspection prospection, CfgTranche tranche) {
@@ -914,12 +897,11 @@ public class ProspectionService {
         p.setUserCreateDateTime(maintenant);
 
         if (request.trancheId() != null) {
-            CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Création de pré-prospection sur la tranche " + tranche.getCode());
             if (request.articleId() != null) {
-                p.setStkItem(articleDeLaTranche(request.articleId(), tranche));
+                p.setStkItem(objetsVisibles.articleDeLaTranche(request.articleId(), tranche));
             }
             p.setStkHierarchy(tranche);
         } else if (request.articleId() != null) {
@@ -1102,12 +1084,11 @@ public class ProspectionService {
 
     private void rattacherTrancheALaTransformation(ComProspection prospection, TransformerProspectionRequest request) {
         if (request.trancheId() != null) {
-            CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                    .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+            CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
             perimetreService.verifierEcritureSurTranche(tranche,
                     "Transformation de prospection sur la tranche " + tranche.getCode());
             if (request.articleId() != null) {
-                prospection.setStkItem(articleDeLaTranche(request.articleId(), tranche));
+                prospection.setStkItem(objetsVisibles.articleDeLaTranche(request.articleId(), tranche));
             } else if (articleHorsTranche(prospection, tranche)) {
                 // Article de l'ancienne tranche : désassigné plutôt que laissé incohérent.
                 prospection.setStkItem(null);
@@ -1216,8 +1197,7 @@ public class ProspectionService {
                 .orElseThrow(() -> new ResourceNotFoundException(PROSPECTION_INTROUVABLE + id));
 
         Requis.champ(request.trancheId(), "trancheId est requis");
-        CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                .orElseThrow(() -> new InvalidRequestException(TRANCHE_INTROUVABLE + request.trancheId()));
+        CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
         // Sinon le périmètre se contournerait en déplaçant la prospection vers un autre projet.
         perimetreService.verifierEcritureSurTranche(tranche,
                 "Rattachement de prospection à la tranche " + tranche.getCode());
@@ -1227,13 +1207,7 @@ public class ProspectionService {
         }
 
         if (request.articleId() != null) {
-            StkItem article = stkItemRepository.findById(request.articleId())
-                    .orElseThrow(() -> new InvalidRequestException(ARTICLE_INTROUVABLE + request.articleId()));
-            if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-                throw new InvalidRequestException(
-                        "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-            }
-            prospection.setStkItem(article);
+            prospection.setStkItem(objetsVisibles.articleDeLaTranche(request.articleId(), tranche));
         } else if (prospection.getStkItem() != null
                 && (prospection.getStkItem().getStkHierarchy() == null
                     || !tranche.getId().equals(prospection.getStkItem().getStkHierarchy().getId()))) {

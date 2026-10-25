@@ -242,8 +242,10 @@ public class ProjetService {
         projectRepository.findFirstByCode(code)
                 .filter(existant -> !existant.getId().equals(id))
                 .ifPresent(existant -> {
-                    throw new ConflictException("Le code %s est déjà pris par le programme %s — %s."
-                            .formatted(code, existant.getCode(), existant.getDescription()));
+                    boolean visible = projectRepository.findVisible(existant.getId()).isPresent();
+                    throw new ConflictException(visible
+                            ? "Le code %s est déjà pris par le programme %s.".formatted(code, existant.getDescription())
+                            : "Le code %s est déjà pris.".formatted(code));
                 });
         return code;
     }

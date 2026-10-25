@@ -19,13 +19,11 @@ import com.tsix.immocrm.entities.com.ComProspectionProfile;
 import com.tsix.immocrm.entities.com.ComProspectionProject;
 import com.tsix.immocrm.entities.com.ComProspectionSelectedProfile;
 import com.tsix.immocrm.entities.com.ComProspectionType;
-import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmCityRepository;
-import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionCategoryRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionCityRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionProfileRepository;
@@ -34,8 +32,8 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionSelectedProfileRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
+import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.Requis;
 import org.springframework.stereotype.Service;
@@ -64,8 +62,7 @@ public class ProspectionQualificationService {
     private final ComProspectionSelectedProfileRepository profileLinkRepository;
     private final ComProspectionProfileRepository profileRepository;
     private final ComProspectionProjectRepository projectLinkRepository;
-    private final CfgTrancheRepository trancheRepository;
-    private final StkItemRepository stkItemRepository;
+    private final ObjetsVisibles objetsVisibles;
     private final Clock clock;
 
     public ProspectionQualificationService(ComProspectionRepository prospectionRepository,
@@ -78,8 +75,7 @@ public class ProspectionQualificationService {
                                             ComProspectionSelectedProfileRepository profileLinkRepository,
                                             ComProspectionProfileRepository profileRepository,
                                             ComProspectionProjectRepository projectLinkRepository,
-                                            CfgTrancheRepository trancheRepository,
-                                            StkItemRepository stkItemRepository,
+                                            ObjetsVisibles objetsVisibles,
                                             Clock clock) {
         this.clock = clock;
         this.prospectionRepository = prospectionRepository;
@@ -92,8 +88,7 @@ public class ProspectionQualificationService {
         this.profileLinkRepository = profileLinkRepository;
         this.profileRepository = profileRepository;
         this.projectLinkRepository = projectLinkRepository;
-        this.trancheRepository = trancheRepository;
-        this.stkItemRepository = stkItemRepository;
+        this.objetsVisibles = objetsVisibles;
     }
 
     private ComProspection findProspection(UUID id) {
@@ -263,8 +258,7 @@ public class ProspectionQualificationService {
     public ProspectionAutreTrancheDto ajouterAutreTranche(UUID prospectionId, AjouterAutreTrancheRequest request) {
         ComProspection prospection = findProspection(prospectionId);
         Requis.champ(request.trancheId(), "trancheId est requis");
-        CfgTranche tranche = trancheRepository.findById(request.trancheId())
-                .orElseThrow(() -> new InvalidRequestException("CfgTranche introuvable: " + request.trancheId()));
+        CfgTranche tranche = objetsVisibles.tranche(request.trancheId());
 
         ComProspectionProject link = new ComProspectionProject();
         link.setId(UUID.randomUUID());
@@ -272,13 +266,7 @@ public class ProspectionQualificationService {
         link.setStkHierarchy(tranche);
         link.setUserCreateDateTime(LocalDateTime.now(clock));
         if (request.articleId() != null) {
-            StkItem article = stkItemRepository.findById(request.articleId())
-                    .orElseThrow(() -> new InvalidRequestException("Article introuvable: " + request.articleId()));
-            if (article.getStkHierarchy() == null || !tranche.getId().equals(article.getStkHierarchy().getId())) {
-                throw new InvalidRequestException(
-                        "L'article " + article.getCode() + " n'appartient pas à la tranche " + tranche.getCode());
-            }
-            link.setStkItem(article);
+            link.setStkItem(objetsVisibles.articleDeLaTranche(request.articleId(), tranche));
         }
         return toAutreTrancheDto(projectLinkRepository.save(link));
     }

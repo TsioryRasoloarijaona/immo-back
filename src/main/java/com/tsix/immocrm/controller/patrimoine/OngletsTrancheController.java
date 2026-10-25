@@ -5,7 +5,9 @@ import com.tsix.immocrm.dto.patrimoine.LigneFraisDto;
 import com.tsix.immocrm.dto.patrimoine.LignePlancherDto;
 import com.tsix.immocrm.dto.patrimoine.LigneTerrainDto;
 import com.tsix.immocrm.dto.patrimoine.LignesTrancheDto;
+import com.tsix.immocrm.dto.patrimoine.TrancheDetailDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import com.tsix.immocrm.services.patrimoine.ChargementTrancheService;
 import com.tsix.immocrm.services.patrimoine.OngletsTrancheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,9 +44,11 @@ public class OngletsTrancheController {
     private static final String INTROUVABLE = "Tranche introuvable ou de son entité inactive.";
 
     private final OngletsTrancheService service;
+    private final ChargementTrancheService chargement;
 
-    public OngletsTrancheController(OngletsTrancheService service) {
+    public OngletsTrancheController(OngletsTrancheService service, ChargementTrancheService chargement) {
         this.service = service;
+        this.chargement = chargement;
     }
 
     @GetMapping("/{id}/terrains")
@@ -124,6 +129,21 @@ public class OngletsTrancheController {
     public LignesTrancheDto<LigneFraisDto> enregistrerFrais(
             @Parameter(description = ID_TRANCHE) @PathVariable UUID id, @RequestBody LignesTrancheDto<LigneFraisDto> corps) {
         return service.enregistrerFrais(id, corps);
+    }
+
+    @PostMapping("/{id}/charger-depuis/{sourceId}")
+    @PreAuthorize(ADMIN)
+    @Tag(name = "Tranches")
+    @Operation(summary = "Charge les paramètres et les listes d'une autre tranche dans la tranche (action OMRAN)")
+    @ApiResponses({@ApiResponse(responseCode = "200", description = "Fiche de la tranche cible, relue."),
+            @ApiResponse(responseCode = "400", description = "La source est la tranche elle-même ; rien n'est écrit."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN),
+            @ApiResponse(responseCode = "404", description = "Tranche cible ou source introuvable ou de son entité inactive.")})
+    public TrancheDetailDto chargerDepuis(@Parameter(description = "Id de la tranche cible, qui reçoit les valeurs.")
+                                          @PathVariable UUID id,
+                                          @Parameter(description = "Id de la tranche source, lue seulement.")
+                                          @PathVariable UUID sourceId) {
+        return chargement.charger(id, sourceId);
     }
 
     @GetMapping("/terrains-disponibles")

@@ -145,9 +145,14 @@ public class OngletsTrancheService {
                             p.champ("categorieId")));
                     e.setArea(ou(positif(l.surface(), p.champ("surface")), BigDecimal.ZERO));
                 });
-        tranche.setCoveredFloorArea(gardees.stream().map(CfgTrancheCoveredFloor::getArea)
-                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(6, RoundingMode.HALF_UP));
+        tranche.setCoveredFloorArea(sommeSurfaces(gardees));
         return lire(tranche, PLANCHERS, CfgTrancheCoveredFloor.class, OngletsTrancheService::plancher);
+    }
+
+    /** {@code CfgTranche.CoveredFloorArea} = Σ des surfaces de ses lignes de plancher (seul calcul, P1b). */
+    static BigDecimal sommeSurfaces(List<CfgTrancheCoveredFloor> lignes) {
+        return lignes.stream().map(l -> ou(l.getArea(), BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(6, RoundingMode.HALF_UP);
     }
 
     /** Le montant saisi (HT, ou TTC si {@code saisiEnTTC}) donne l'autre par {@link CalculPrixArticle} (§2.4). */
