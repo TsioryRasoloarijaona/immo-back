@@ -62,13 +62,13 @@ public class SuiviPrevisionsVente {
     }
 
     public ResultatRapportDto resultat(Map<String, List<String>> recus) {
-        return socle.executerEcran(ecran(), recus);
+        return socle.resultatEcran(ecran(), recus);
     }
 
     public ResultatRapportDto detail(Map<String, List<String>> recus) {
         List<ParametreRapport> parametres = new ArrayList<>(parametresEcran());
         parametres.add(DetailPrevisionsVente.MOIS_PARAMETRE);
-        return socle.executerEcran(new ServiceRapports.Ecran(ModuleRapport.VENTE, CODE + "Mois",
+        return socle.resultatEcran(new ServiceRapports.Ecran(ModuleRapport.VENTE, CODE + "Mois",
                 LIBELLE + " — détail du mois", parametres, detail::executer), recus);
     }
 

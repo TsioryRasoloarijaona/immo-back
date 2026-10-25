@@ -122,7 +122,7 @@ public class ServiceRapports {
     }
 
     public ResultatRapportDto resultat(String slug, String code, Map<String, List<String>> recus) {
-        return executerEcran(ouvrir(slug, code).ecran(), recus);
+        return resultatEcran(ouvrir(slug, code).ecran(), recus);
     }
 
     /** Le format se contrôle après le droit et les paramètres : un rapport interdit répond 403 quel que soit le format. */
@@ -134,7 +134,7 @@ public class ServiceRapports {
         return ecran.parametres().stream().map(p -> parametre(p, ecran.module())).toList();
     }
 
-    public ResultatRapportDto executerEcran(Ecran ecran, Map<String, List<String>> recus) {
+    public ResultatRapportDto resultatEcran(Ecran ecran, Map<String, List<String>> recus) {
         Execution e = executer(ecran, recus);
         List<SectionRapportDto> sections = e.resultat().sections().stream().map(ServiceRapports::section).toList();
         return new ResultatRapportDto(ecran.code(), ecran.libelle(), ecran.module().slug(), e.parametres(),
