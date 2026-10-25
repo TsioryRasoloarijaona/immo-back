@@ -1,6 +1,8 @@
 package com.tsix.immocrm.services.patrimoine.importation;
 
+import com.tsix.immocrm.dto.patrimoine.importation.AnalyseImportDto;
 import com.tsix.immocrm.dto.patrimoine.importation.BilanImportDto;
+import com.tsix.immocrm.dto.patrimoine.importation.ColonneImportDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto.ResultatImport;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -31,6 +33,10 @@ public class ImportPatrimoineService {
     public static final String PRESENTATIONS = "presentations";
     public static final String TERRAINS = "terrains";
     public static final String PREVISIONS = "previsions";
+    public static final String ENTITES_JURIDIQUES = "entites-juridiques";
+    public static final String PROJETS = "projets";
+    public static final String TRANCHES = "tranches";
+    public static final String PROSPECTIONS_TERRAIN = "prospections-terrain";
 
     private final TrancheVisibleRepository tranches;
     private final List<ImportParType<?>> imports;
@@ -60,11 +66,20 @@ public class ImportPatrimoineService {
         return tranches.exigerVisible(trancheId);
     }
 
-    public BilanImportDto importer(String type, UUID trancheId, MultipartFile fichier, String feuille, boolean simulation) {
+    public BilanImportDto importer(String type, UUID trancheId, MultipartFile fichier, String feuille, boolean simulation,
+                                   String mapping) {
         ImportParType<?> t = parType(type);
         tranche(t, trancheId);
         Feuille lue = LectureClasseur.lire(fichier, feuille);
         return transaction.execute(statut -> executer(type, t, trancheId, lue, simulation, statut));
+    }
+
+    public List<ColonneImportDto> colonnes(String type) {
+        throw new UnsupportedOperationException(type);
+    }
+
+    public AnalyseImportDto analyser(String type, MultipartFile fichier, String feuille) {
+        throw new UnsupportedOperationException(type);
     }
 
     private <C> BilanImportDto executer(String type, ImportParType<C> t, UUID trancheId, Feuille lue, boolean simulation,
