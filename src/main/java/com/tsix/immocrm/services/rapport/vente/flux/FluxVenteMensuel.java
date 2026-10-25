@@ -5,6 +5,8 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.services.dossier.liste.MontantsParNatureDossier;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Dossier;
+import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Echeance;
+import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.EcheanceDue;
 import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Ligne;
 import com.tsix.immocrm.services.rapport.vente.flux.LecturesFlux.Origine;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux.Famille;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -93,6 +96,21 @@ public class FluxVenteMensuel {
         return lignes(demande);
     }
 
+    /**
+     * Σ des {@code ENCAISSEMENTS} par tranche dont le mouvement tombe dans [{@code du} ; {@code au}], bornes incluses
+     * (FEATURE-tdb-vente-previsions.md §3.3) ; tranche sans ligne absente de la map.
+     */
+    public Map<UUID, BigDecimal> encaissements(List<UUID> tranches, LocalDate du, LocalDate au) {
+        if (au.isBefore(du)) {
+            throw new IllegalArgumentException("Période inversée : %s après %s.".formatted(du, au));
+        }
+        Map<UUID, BigDecimal> parTranche = new HashMap<>();
+        lignes(new DemandeFlux(tranches, du.getYear(), au.getYear(), Set.of(ENCAISSEMENTS))).lignes().stream()
+                .filter(l -> !l.date().isBefore(du) && !l.date().isAfter(au))
+                .forEach(l -> parTranche.merge(l.trancheId(), l.valeur(), BigDecimal::add));
+        return Map.copyOf(parTranche);
+    }
+
     private MouvementsFlux lignes(DemandeFlux demande) {
         if (demande.tranches().isEmpty()) {
             return new MouvementsFlux(List.of(), AnomaliesFlux.AUCUNE);
@@ -106,6 +124,9 @@ public class FluxVenteMensuel {
         }
         if (demande.mesures().contains(FRAIS_DESISTEMENT_DUS)) {
             fraisDesistement(calcul);
+        }
+        if (demande.mesures().contains(ECHEANCES_DUES) || demande.mesures().contains(ECHEANCES_DUES_FRAIS)) {
+            echeancesDues(calcul);
         }
         return new MouvementsFlux(calcul.lignes, new AnomaliesFlux(calcul.sansStatut,
                 new AnomaliesFlux.ReglementsSansDate(calcul.sansDate, calcul.montantSansDate),
@@ -123,8 +144,8 @@ public class FluxVenteMensuel {
     /** Paramètre de seuil d'une mesure « statut », {@code null} si la mesure n'en dépend pas. */
     private static String seuilDe(MesureFlux m) {
         return switch (m) {
-            case CONCRETISATIONS, CONCRETISATIONS_NETTES, CONCRETISATIONS_MONTANT, AVANCES_ENCAISSEES ->
-                    SeuilsStatutsVente.CONCRETISATION;
+            case CONCRETISATIONS, CONCRETISATIONS_NETTES, CONCRETISATIONS_MONTANT, AVANCES_ENCAISSEES, ECHEANCES_DUES,
+                 ECHEANCES_DUES_FRAIS -> SeuilsStatutsVente.CONCRETISATION;
             case CA_QUANTITE, CA_TTC, CA_HT -> SeuilsStatutsVente.FINALISATION;
             case LIVRAISONS -> SeuilsStatutsVente.LIVRAISON;
             default -> null;
@@ -181,7 +202,7 @@ public class FluxVenteMensuel {
     private static boolean population(MesureFlux m, LecturesFlux.Etat etat, Map<String, Integer> seuils) {
         return switch (m) {
             case CONCRETISATIONS, CONCRETISATIONS_MONTANT, LIVRAISONS -> etat.atteint(seuils.get(seuilDe(m)));
-            case CONCRETISATIONS_NETTES, CA_QUANTITE, CA_TTC, CA_HT ->
+            case CONCRETISATIONS_NETTES, CA_QUANTITE, CA_TTC, CA_HT, ECHEANCES_DUES, ECHEANCES_DUES_FRAIS ->
                     etat.atteint(seuils.get(seuilDe(m))) && etat.vivant();
             case DESISTEMENTS, DESISTEMENTS_MONTANT -> Boolean.TRUE.equals(etat.desiste());
             case ANNULATIONS, ANNULATIONS_MONTANT -> Boolean.TRUE.equals(etat.annule());
@@ -232,6 +253,7 @@ public class FluxVenteMensuel {
                     && l.etat().atteint(seuils.get(seuilDe(m))) && l.etat().vivant();
             case ENCAISSEMENTS_APRES_ACTE -> l.encaissement() && l.etat().vivant() && l.acte() != null
                     && l.mouvement() != null && !l.mouvement().toLocalDate().isBefore(l.acte().toLocalDate());
+            case ENCAISSEMENTS_FRAIS -> l.frais();
             case ENCAISSEMENTS_FRAIS_DOSSIER, ENCAISSEMENTS_FRAIS_TRANSFERT ->
                     l.frais() && categories.getOrDefault(m, Set.of()).contains(l.categorie());
             default -> false;
@@ -260,6 +282,17 @@ public class FluxVenteMensuel {
                 .stream().filter(e -> calcul.retient(e.date()))
                 .forEach(e -> calcul.ajouter(FRAIS_DESISTEMENT_DUS, e.tranche(), e.date(), e.montant(), e.origine(),
                         e.id())));
+    }
+
+    private void echeancesDues(Calcul calcul) {
+        for (EcheanceDue due : lectures.echeancesDues(calcul.demande.tranches())) {
+            MesureFlux m = due.fraisSeuls() ? ECHEANCES_DUES_FRAIS : ECHEANCES_DUES;
+            Echeance e = due.echeance();
+            if (calcul.demande.mesures().contains(m) && calcul.retient(e.date())
+                    && population(m, due.etat(), calcul.seuils)) {
+                calcul.ajouter(m, e.tranche(), e.date(), e.montant(), e.origine(), e.id());
+            }
+        }
     }
 
     /** État d'un calcul : demande, seuils lus, lignes retenues et anomalies. */

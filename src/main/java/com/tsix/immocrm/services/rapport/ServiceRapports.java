@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -79,7 +80,19 @@ public class ServiceRapports {
     public record Export(String code, String libelle, List<String> filtres, List<FeuilleExport> feuilles) {
     }
 
+    /**
+     * Écran hors hub (FEATURE-tdb-vente-previsions.md §4.1) : validation, tranches visibles, totaux et export du socle,
+     * sans {@code AdmReportData} ni droits par rôle.
+     */
+    public record Ecran(ModuleRapport module, String code, String libelle, List<ParametreRapport> parametres,
+                        Function<ContexteRapport, ResultatRapport> executer) {
+    }
+
     private record Ouverture(ModuleRapport module, Rapport rapport, AdmReportData ligne) {
+
+        Ecran ecran() {
+            return new Ecran(module, rapport.code(), libelle(ligne), rapport.parametres(), rapport::executer);
+        }
     }
 
     private record Execution(Map<String, List<String>> parametres, ResultatRapport resultat) {
@@ -109,17 +122,27 @@ public class ServiceRapports {
     }
 
     public ResultatRapportDto resultat(String slug, String code, Map<String, List<String>> recus) {
-        Ouverture o = ouvrir(slug, code);
-        Execution e = executer(o, recus);
-        List<SectionRapportDto> sections = e.resultat().sections().stream().map(ServiceRapports::section).toList();
-        return new ResultatRapportDto(o.rapport().code(), libelle(o.ligne()), o.module().slug(), e.parametres(),
-                LocalDateTime.now(clock), e.resultat().avertissements(), sections);
+        return resultatEcran(ouvrir(slug, code).ecran(), recus);
     }
 
     /** Le format se contrôle après le droit et les paramètres : un rapport interdit répond 403 quel que soit le format. */
     public Export exporter(String slug, String code, String format, Map<String, List<String>> recus) {
-        Ouverture o = ouvrir(slug, code);
-        Execution e = executer(o, recus);
+        return exporterEcran(ouvrir(slug, code).ecran(), format, recus);
+    }
+
+    public List<ParametreRapportDto> parametresEcran(Ecran ecran) {
+        return ecran.parametres().stream().map(p -> parametre(p, ecran.module())).toList();
+    }
+
+    public ResultatRapportDto resultatEcran(Ecran ecran, Map<String, List<String>> recus) {
+        Execution e = executer(ecran, recus);
+        List<SectionRapportDto> sections = e.resultat().sections().stream().map(ServiceRapports::section).toList();
+        return new ResultatRapportDto(ecran.code(), ecran.libelle(), ecran.module().slug(), e.parametres(),
+                LocalDateTime.now(clock), e.resultat().avertissements(), sections);
+    }
+
+    public Export exporterEcran(Ecran ecran, String format, Map<String, List<String>> recus) {
+        Execution e = executer(ecran, recus);
         FormatExport.lire(format);
         List<FeuilleExport> feuilles = e.resultat().sections().stream()
                 .map(s -> {
@@ -127,17 +150,17 @@ public class ServiceRapports {
                     return new FeuilleExport(s.titre(), s.colonnes(), s.lignes(), totaux.isEmpty() ? null : totaux);
                 })
                 .toList();
-        return new Export(o.rapport().code(), libelle(o.ligne()), filtres(o, e), feuilles);
+        return new Export(ecran.code(), ecran.libelle(), filtres(ecran, e), feuilles);
     }
 
     /** Paramètres appliqués (donc réduits au visible), valeurs lisibles, puis les avertissements du résultat. */
-    private List<String> filtres(Ouverture o, Execution e) {
+    private List<String> filtres(Ecran ecran, Execution e) {
         List<String> lignes = new ArrayList<>();
-        for (ParametreRapport p : o.rapport().parametres()) {
+        for (ParametreRapport p : ecran.parametres()) {
             List<String> valeurs = e.parametres().getOrDefault(p.nom(), List.of());
             if (!valeurs.isEmpty()) {
                 Map<String, String> options = new HashMap<>();
-                parametre(p, o.module()).options().forEach(op -> options.putIfAbsent(op.valeur(), op.libelle()));
+                parametre(p, ecran.module()).options().forEach(op -> options.putIfAbsent(op.valeur(), op.libelle()));
                 lignes.add(p.libelle() + " : " + valeurs.stream().map(v -> lisible(p.type(), v, options))
                         .collect(Collectors.joining(", ")));
             }
@@ -171,15 +194,15 @@ public class ServiceRapports {
         return new ResourceNotFoundException("Rapport introuvable : " + code);
     }
 
-    private Execution executer(Ouverture o, Map<String, List<String>> recus) {
-        List<ParametreRapport> parametres = o.rapport().parametres();
+    private Execution executer(Ecran ecran, Map<String, List<String>> recus) {
+        List<ParametreRapport> parametres = ecran.parametres();
         Map<String, List<String>> valeurs = ParametresRapport.valider(parametres, recus);
-        List<UUID> tranchesRetenues = tranches.retenues(o.module(), ids(parametres, valeurs, TypeParametre.TRANCHES));
+        List<UUID> tranchesRetenues = tranches.retenues(ecran.module(), ids(parametres, valeurs, TypeParametre.TRANCHES));
         List<UUID> commerciauxDemandes = ids(parametres, valeurs, TypeParametre.COMMERCIAUX);
         ContexteRapport contexte = new ContexteRapport(PerimetreCommercialService.admUserIdCourant().orElse(null),
                 clock, valeurs, tranchesRetenues, () -> commerciauxRetenus(commerciauxDemandes));
-        ResultatRapport resultat = o.rapport().executer(contexte);
-        verifier(o.rapport(), resultat);
+        ResultatRapport resultat = ecran.executer().apply(contexte);
+        verifier(ecran.code(), resultat);
         return new Execution(appliques(parametres, valeurs, contexte), resultat);
     }
 
@@ -217,11 +240,11 @@ public class ServiceRapports {
         return demandes.isEmpty() ? portee : portee.stream().filter(Set.copyOf(demandes)::contains).toList();
     }
 
-    private static void verifier(Rapport rapport, ResultatRapport resultat) {
+    private static void verifier(String code, ResultatRapport resultat) {
         Set<String> ids = new HashSet<>();
         for (SectionRapport s : resultat.sections()) {
             if (!ids.add(s.id())) {
-                throw new IllegalStateException("Section %s en double dans %s".formatted(s.id(), rapport.code()));
+                throw new IllegalStateException("Section %s en double dans %s".formatted(s.id(), code));
             }
             if (s.lignes().size() > LignesExport.LIGNES_EXPORT_MAX) {
                 throw new InvalidRequestException("La section « %s » dépasse %d lignes : affinez les filtres."

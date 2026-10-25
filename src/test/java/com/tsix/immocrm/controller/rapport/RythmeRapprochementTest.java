@@ -4,6 +4,7 @@ import com.tsix.immocrm.services.rapport.vente.flux.DemandeFlux;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.FluxVenteMensuel;
 import com.tsix.immocrm.services.rapport.vente.flux.MesureFlux;
+import com.tsix.immocrm.services.rapport.vente.flux.ValorisationTranche;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ import java.util.UUID;
 /**
  * Rapprochement manuel du n° 8 avec la logique du modèle OMRAN {@code ComTdbSalesRythme} (FEATURE-tdb-vente-rapports-rythme.md
  * §1, §9.2) sur yesRemsProd ({@code DB_NAME=yesRemsProd}, retirer {@code @Disabled}) : réservations identiques ; le modèle
- * compte 1 concrétisation de plus en 2025 (sous le seuil) et 1 contrat de plus en 2024 (annulé ou sous MINUTE).
+ * compte 1 concrétisation de plus en 2025 (sous le seuil) et 1 contrat de plus en 2024 (annulé ou sous MINUTE) ; n° 22 identique.
  */
 @Disabled("Manuel : données réelles de yesRemsProd, absentes de yesRemsTest et de la CI")
 @SpringBootTest
@@ -42,7 +43,22 @@ class RythmeRapprochementTest {
             CROSS APPLY (VALUES ('R', f.DocDate), ('C', f.AdvanceDate), ('A', f.AgreementSavingDate)) x(k, d)
             WHERE x.d IS NOT NULL GROUP BY x.k, YEAR(x.d)""";
 
+    // N° 22 : articles racines VENTE et concrétisations nettes (lien ComFolder.StkItemId, seuil CONCRETISATION) par tranche.
+    private static final String MODELE_22 = """
+            SELECT t.PKey AS tranche,
+                   (SELECT COUNT(*) FROM StkItem i JOIN StkVocation v ON v.PKey = i.StkVocationId AND v.Code = 'VENTE'
+                    WHERE i.StkHierarchyId = t.PKey AND i.IsUnderItem = 0) AS articles,
+                   (SELECT COUNT(*) FROM ComFolder f JOIN StkItem i ON i.PKey = f.StkItemId
+                    JOIN StrStatus st ON st.PKey = f.StrStatusId
+                    JOIN AdmParamsGuid g ON g.Code = 'DefaultComFolderStatusConcretisation'
+                    JOIN StrStatus sc ON sc.PKey = g.CodeValue
+                    WHERE i.StkHierarchyId = t.PKey AND f.AdvanceDate IS NOT NULL AND st.BoolField002 = 0
+                      AND st.BoolField003 = 0 AND st.Sorting >= sc.Sorting) AS concretisations
+            FROM CfgTranche t JOIN CfgProject p ON p.PKey = t.CfgProjectId
+            JOIN CfgCompany c ON c.PKey = p.CfgCompanyId AND c.IsActive = 1 WHERE t.IsForSale = 1""";
+
     @Autowired private FluxVenteMensuel flux;
+    @Autowired private ValorisationTranche valorisation;
     @Autowired private JdbcTemplate jdbc;
 
     /** {@code "R|2024"} → nombre de dossiers du modèle (R réservation, C concrétisation, A acte). */
@@ -72,6 +88,26 @@ class RythmeRapprochementTest {
                     .as("concrétisations %d", a).isEqualTo(a == 2025 ? 1L : 0L);
             soft.assertThat(modele.getOrDefault("A|" + a, 0L) - f.annee(MesureFlux.CA_QUANTITE, a).longValue())
                     .as("contrats %d", a).isEqualTo(a == 2024 ? 1L : 0L);
+        }
+        soft.assertAll();
+    }
+
+    @Test
+    void n22_articlesEtConcretisationsNettesParTranche_identiquesAuModele() {
+        List<Map<String, Object>> modele = jdbc.queryForList(MODELE_22);
+        List<UUID> tranches = modele.stream().map(l -> UUID.fromString(String.valueOf(l.get("tranche")))).toList();
+        Map<UUID, Long> articles = valorisation.articlesParCategorie(tranches, Set.of());
+        Map<UUID, Long> concretisations = new HashMap<>();
+        flux.mouvements(new DemandeFlux(tranches, null, null, Set.of(MesureFlux.CONCRETISATIONS_NETTES))).lignes()
+                .forEach(l -> concretisations.merge(l.trancheId(), l.valeur().longValue(), Long::sum));
+
+        SoftAssertions soft = new SoftAssertions();
+        for (Map<String, Object> l : modele) {
+            UUID t = UUID.fromString(String.valueOf(l.get("tranche")));
+            soft.assertThat(articles.getOrDefault(t, 0L)).as("articles %s", t)
+                    .isEqualTo(((Number) l.get("articles")).longValue());
+            soft.assertThat(concretisations.getOrDefault(t, 0L)).as("concrétisations %s", t)
+                    .isEqualTo(((Number) l.get("concretisations")).longValue());
         }
         soft.assertAll();
     }

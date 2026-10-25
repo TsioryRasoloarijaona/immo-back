@@ -57,15 +57,30 @@ class LecturesFlux {
             + ", f.AdvanceDate, f.AgreementSavingDate " + RegleEncaissement.LIGNES + TRANCHE_EN_VENTE
             + "WHERE i.StkHierarchyId IN (:tranches) AND" + RegleEncaissement.COMPTE;
 
-    private static final String ECHEANCES = "SELECT d.PKey AS Ligne," + ORIGINE + """
-            i.StkHierarchyId AS Tranche, d.DocDate, d.Amount
+    private static final String ECHEANCE = "SELECT d.PKey AS Ligne," + ORIGINE + "i.StkHierarchyId AS Tranche, "
+            + "d.DocDate, d.Amount";
+
+    private static final String ECHEANCES_DE = """
+
             FROM ComDocument d
             JOIN ComSettlementCategory k ON k.PKey = d.ComSettlementCategoryId
             JOIN ComFolder f ON f.PKey = d.ComFolderId
             JOIN StrStatus st ON st.PKey = f.StrStatusId
             JOIN StkItem i ON i.PKey = f.StkItemId
-            """ + TRANCHE_EN_VENTE + "WHERE" + RegleEncaissement.FRAIS
+            """ + TRANCHE_EN_VENTE;
+
+    private static final String ECHEANCES = ECHEANCE + ECHEANCES_DE + "WHERE" + RegleEncaissement.FRAIS
             + "AND d.ComSettlementCategoryId = :categorie AND i.StkHierarchyId IN (:tranches)";
+
+    // Échéances dues (FEATURE-tdb-vente-previsions.md §3.1) : avance / crédit / autofinancement hors frais, ou frais seuls ;
+    // aucun filtre d'article. Statut et seuil appliqués par le calcul ; drapeaux NULL = 0.
+    private static final String ECHEANCES_DUES = ECHEANCE + ", " + ETAT
+            + ", CASE WHEN k.IsSaleExpense = 1 THEN 1 ELSE 0 END AS FraisSeuls" + ECHEANCES_DE + """
+            JOIN StkVocation v ON v.PKey = f.StkVocationId AND v.Code = 'VENTE'
+            CROSS APPLY (SELECT CASE WHEN k.IsSaleAdvance = 1 OR k.IsSaleCredit = 1 OR k.IsSaleAutoFinancment = 1
+                         THEN 1 ELSE 0 END AS Principale) g
+            WHERE i.StkHierarchyId IN (:tranches)
+              AND (g.Principale = 1 AND COALESCE(k.IsSaleExpense, 0) = 0 OR g.Principale = 0 AND k.IsSaleExpense = 1)""";
 
     private static final String REMISES = """
             SELECT SUM(f.DiscountAmount)
@@ -131,11 +146,24 @@ class LecturesFlux {
                         date(rs, "AgreementSavingDate"))));
     }
 
+    /** Échéance due et l'état de son dossier ; {@code fraisSeuls} = catégorie de frais sans autre drapeau. */
+    record EcheanceDue(Echeance echeance, Etat etat, boolean fraisSeuls) {
+    }
+
     List<Echeance> echeances(List<UUID> tranches, UUID categorie) {
         return LotsTranches.lire(tranches, lot -> jdbc.query(ECHEANCES,
                 Map.of(TRANCHES, LotsTranches.textes(lot), "categorie", categorie.toString()),
-                (rs, n) -> new Echeance(uuid(rs, COL_LIGNE), origine(rs), uuid(rs, COL_TRANCHE), date(rs, "DocDate"),
-                        rs.getBigDecimal("Amount"))));
+                (rs, n) -> echeance(rs)));
+    }
+
+    List<EcheanceDue> echeancesDues(List<UUID> tranches) {
+        return LotsTranches.lire(tranches, lot -> jdbc.query(ECHEANCES_DUES, Map.of(TRANCHES, LotsTranches.textes(lot)),
+                (rs, n) -> new EcheanceDue(echeance(rs), etat(rs), rs.getInt("FraisSeuls") == 1)));
+    }
+
+    private static Echeance echeance(ResultSet rs) throws SQLException {
+        return new Echeance(uuid(rs, COL_LIGNE), origine(rs), uuid(rs, COL_TRANCHE), date(rs, "DocDate"),
+                rs.getBigDecimal("Amount"));
     }
 
     private static Origine origine(ResultSet rs) throws SQLException {
