@@ -104,6 +104,8 @@ class ImportGeneriqueRevueTest {
         byte[] classeur = fichier(List.of(
                 colonnes(CODE, existant, DESCRIPTION, "Renommee", ACTIVE, "Non"),
                 colonnes(CODE, nouveau, DESCRIPTION, "Nouvelle", ACTIVE, "Oui")));
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_ENTITE);
+        int modificationsAvant = fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE);
 
         mockMvc.perform(importer(ENTITES, simulation, classeur, null, connecte(g.admin())))
                 .andExpect(status().isBadRequest())
@@ -113,8 +115,8 @@ class ImportGeneriqueRevueTest {
                 () -> assertThat(entite(existant)).containsEntry("IsActive", 1).containsEntry("Description",
                         "Entite " + existant),
                 () -> assertThat(fixture.entites(nouveau)).isEmpty(),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE)).isZero(),
-                () -> assertThat(fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE) - ajoutsAvant).isZero(),
+                () -> assertThat(fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE) - modificationsAvant).isZero());
     }
 
     @Test
@@ -170,6 +172,7 @@ class ImportGeneriqueRevueTest {
     void v13_programmeSurUneEntiteInactive_erreurDeLigne_rienEcrit() throws Exception {
         CfgCompany inactive = fixture.entite(g, g.code("ENTI"), false);
         String code = g.code("PINA");
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_PROGRAMME);
 
         String bilan = bilan(PROJETS, List.of(colonnes(ENTITE, inactive.getCode(), CODE, code, DESCRIPTION, "Programme")));
 
@@ -177,7 +180,7 @@ class ImportGeneriqueRevueTest {
                 () -> assertThat(resultat(bilan, 2)).as(bilan).isEqualTo(ERREUR),
                 () -> assertThat(ecrit(bilan)).isFalse(),
                 () -> assertThat(fixture.projets(code)).isEmpty(),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_PROGRAMME)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_PROGRAMME) - ajoutsAvant).isZero());
     }
 
     @Test
@@ -216,13 +219,14 @@ class ImportGeneriqueRevueTest {
         CfgCompany inactive = fixture.entite(g, g.code("ENTT"), false);
         CfgProject projet = fixture.projet(g, g.code("PRJT"), inactive);
         String code = g.code("TINA");
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_TRANCHE);
 
         String bilan = bilan(TRANCHES, List.of(colonnes(PROGRAMME, projet.getCode(), CODE, code, DESCRIPTION, "Tranche")));
 
         assertAll(
                 () -> assertThat(resultat(bilan, 2)).as(bilan).isEqualTo(ERREUR),
                 () -> assertThat(fixture.tranches(code)).isEmpty(),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_TRANCHE)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_TRANCHE) - ajoutsAvant).isZero());
     }
 
     @Test

@@ -106,6 +106,7 @@ class ImportEntitesJuridiquesTest {
     @Test
     void v4_cinqEntitesJustes_simulation_cinqCreations_rienEnBase_aucuneTrace() throws Exception {
         List<String> codes = cinqCodes();
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_ENTITE);
 
         String bilan = executer(true,cinqLignes(codes));
 
@@ -113,12 +114,13 @@ class ImportEntitesJuridiquesTest {
                 () -> assertThat(entier(bilan, "creations")).as(bilan).isEqualTo(5),
                 () -> assertThat(ecrit(bilan)).isFalse(),
                 () -> assertThat(codes.stream().mapToInt(c -> fixture.entites(c).size()).sum()).isZero(),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE) - ajoutsAvant).isZero());
     }
 
     @Test
     void v5_cinqEntitesJustes_reel_creeesActives_uneTraceAddedChacune_messageOmran() throws Exception {
         List<String> codes = cinqCodes();
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_ENTITE);
 
         String bilan = executer(false,cinqLignes(codes));
 
@@ -132,7 +134,8 @@ class ImportEntitesJuridiquesTest {
                         .containsEntry("LegalForm", "SARL")),
                 () -> assertThat(codes).hasSize(5).allSatisfy(c -> assertThat(
                         fixture.audit(id(enBase(c)), ADDED, TYPE_ENTITE)).isEqualTo(1)),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE)).as("témoin de V4").isEqualTo(5));
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE) - ajoutsAvant).as("témoin de V4")
+                        .isEqualTo(5));
     }
 
     @Test
@@ -156,6 +159,7 @@ class ImportEntitesJuridiquesTest {
         Map<String, Object> fautive = valide(codes.get(2));
         fautive.put(DESCRIPTION, null);
         lignes.set(2, fautive);
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_ENTITE);
 
         String bilan = executer(false,lignes);
 
@@ -164,7 +168,7 @@ class ImportEntitesJuridiquesTest {
                 () -> assertThat(resultat(bilan, 4)).isEqualTo(ERREUR),
                 () -> assertThat(ecrit(bilan)).isFalse(),
                 () -> assertThat(codes.stream().mapToInt(c -> fixture.entites(c).size()).sum()).isZero(),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE) - ajoutsAvant).isZero());
     }
 
     // ------------------------------------------------------------------ V7 réimport
@@ -173,9 +177,11 @@ class ImportEntitesJuridiquesTest {
     void v7_memeFichierReimporte_cinqInchangees_aucuneTraceModified() throws Exception {
         List<String> codes = cinqCodes();
         byte[] classeur = fichier(cinqLignes(codes));
+        int ajoutsAvant = fixture.auditDuTest(g, ADDED, TYPE_ENTITE);
         String premier = corps(mockMvc.perform(importer(ENTITES, false, classeur, null, connecte(g.admin())))
                 .andExpect(status().isOk()).andReturn());
         assertThat(ecrit(premier)).as("témoin : premier import écrit — " + premier).isTrue();
+        int modificationsAvant = fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE);
 
         String bilan = corps(mockMvc.perform(importer(ENTITES, false, classeur, null, connecte(g.admin())))
                 .andExpect(status().isOk()).andReturn());
@@ -183,8 +189,8 @@ class ImportEntitesJuridiquesTest {
         assertAll(
                 () -> assertThat(entier(bilan, "inchangees")).as(bilan).isEqualTo(5),
                 () -> assertThat(resultat(bilan, 2)).isEqualTo(INCHANGEE),
-                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE)).as("témoin").isEqualTo(5),
-                () -> assertThat(fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE)).isZero());
+                () -> assertThat(fixture.auditDuTest(g, ADDED, TYPE_ENTITE) - ajoutsAvant).as("témoin").isEqualTo(5),
+                () -> assertThat(fixture.auditDuTest(g, MODIFIED, TYPE_ENTITE) - modificationsAvant).isZero());
     }
 
     // ------------------------------------------------------------------ V8 cellule vide, colonne absente
