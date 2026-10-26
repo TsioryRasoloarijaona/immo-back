@@ -1,6 +1,8 @@
 package com.tsix.immocrm.services.patrimoine.importation;
 
+import com.tsix.immocrm.dto.patrimoine.importation.AnalyseImportDto;
 import com.tsix.immocrm.dto.patrimoine.importation.BilanImportDto;
+import com.tsix.immocrm.dto.patrimoine.importation.ColonneImportDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto;
 import com.tsix.immocrm.dto.patrimoine.importation.LigneBilanDto.ResultatImport;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
@@ -31,6 +33,10 @@ public class ImportPatrimoineService {
     public static final String PRESENTATIONS = "presentations";
     public static final String TERRAINS = "terrains";
     public static final String PREVISIONS = "previsions";
+    public static final String ENTITES_JURIDIQUES = "entites-juridiques";
+    public static final String PROJETS = "projets";
+    public static final String TRANCHES = "tranches";
+    public static final String PROSPECTIONS_TERRAIN = "prospections-terrain";
 
     private final TrancheVisibleRepository tranches;
     private final List<ImportParType<?>> imports;
@@ -60,11 +66,40 @@ public class ImportPatrimoineService {
         return tranches.exigerVisible(trancheId);
     }
 
-    public BilanImportDto importer(String type, UUID trancheId, MultipartFile fichier, String feuille, boolean simulation) {
+    public BilanImportDto importer(String type, UUID trancheId, MultipartFile fichier, String feuille, boolean simulation,
+                                   String mapping) {
         ImportParType<?> t = parType(type);
         tranche(t, trancheId);
-        Feuille lue = LectureClasseur.lire(fichier, feuille);
+        Feuille lue = mappee(t, LectureClasseur.lire(fichier, feuille), mapping);
         return transaction.execute(statut -> executer(type, t, trancheId, lue, simulation, statut));
+    }
+
+    public List<ColonneImportDto> colonnes(String type) {
+        return generique(type).colonnes();
+    }
+
+    public AnalyseImportDto analyser(String type, MultipartFile fichier, String feuille) {
+        ImportGenerique<?> g = generique(type);
+        return MappingImport.analyser(g.catalogue(), LectureClasseur.lire(fichier, feuille));
+    }
+
+    /** Types à mapping seulement (FEATURE-patrimoine-import-generique.md) ; les autres → 404. */
+    private ImportGenerique<?> generique(String type) {
+        if (parType(type) instanceof ImportGenerique<?> g) {
+            return g;
+        }
+        throw new ResourceNotFoundException("Type d'import sans mapping : " + type);
+    }
+
+    private static Feuille mappee(ImportParType<?> t, Feuille lue, String mapping) {
+        if (t instanceof ImportGenerique<?> g) {
+            return MappingImport.appliquer(g.catalogue(), lue, mapping);
+        }
+        if (mapping != null && !mapping.isBlank()) {
+            throw new InvalidRequestException("Le mapping ne s'applique qu'aux entités juridiques, programmes, tranches et "
+                    + "prospections terrain.");
+        }
+        return lue;
     }
 
     private <C> BilanImportDto executer(String type, ImportParType<C> t, UUID trancheId, Feuille lue, boolean simulation,

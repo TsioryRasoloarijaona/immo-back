@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.PorteeCleApi;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.app.AppApiClient;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
+import com.tsix.immocrm.fixtures.AppelsImportGenerique;
 import com.tsix.immocrm.fixtures.FixturePatrimoine;
 import com.tsix.immocrm.repositories.app.AppApiClientRepository;
 import com.tsix.immocrm.security.ApiKeyAuthenticationFilter;
@@ -35,6 +36,10 @@ import static com.tsix.immocrm.fixtures.AppelsImportPatrimoine.IMPORT;
 import static com.tsix.immocrm.fixtures.AppelsImportPatrimoine.MODELE;
 import static com.tsix.immocrm.fixtures.AppelsImportPatrimoine.SOUS_ARTICLES;
 import static com.tsix.immocrm.fixtures.AppelsImportPatrimoine.requete;
+import static com.tsix.immocrm.fixtures.FixtureImportGenerique.ENTITES;
+import static com.tsix.immocrm.fixtures.FixtureImportGenerique.PROJETS;
+import static com.tsix.immocrm.fixtures.FixtureImportGenerique.PROSPECTIONS;
+import static com.tsix.immocrm.fixtures.FixtureImportGenerique.TRANCHES;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -121,6 +126,55 @@ class ImportPatrimoineSecuriteTest {
     void r0_1_cleApi_import_403_horsPortee() throws Exception {
         mockMvc.perform(multipart(IMPORT, ARTICLES).file(new MockMultipartFile(FICHIER, "import.xlsx", null, ILLISIBLE))
                         .param(TRANCHE_ID, tranche.getId().toString())
+                        .header(ApiKeyAuthenticationFilter.EN_TETE, cleToutesPortees()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+    }
+
+    // ------------------------------------------------------------------ P9e (FEATURE-patrimoine-import-generique.md §4 V1)
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ENTITES, PROJETS, TRANCHES, PROSPECTIONS})
+    void v1_commercial_importGenerique_403_avantTout400(String type) throws Exception {
+        mockMvc.perform(AppelsImportGenerique.importer(type, false, ILLISIBLE, "{pas du json",
+                        commercial(compte("commercial.p9e"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ENTITES, PROJETS, TRANCHES, PROSPECTIONS})
+    void v1_commercial_analyse_403(String type) throws Exception {
+        mockMvc.perform(AppelsImportGenerique.analyse(type, ILLISIBLE, null, commercial(compte("commercial.p9e.an"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ENTITES, PROJETS, TRANCHES, PROSPECTIONS})
+    void v1_commercial_colonnes_403(String type) throws Exception {
+        mockMvc.perform(AppelsImportGenerique.lireColonnes(type, commercial(compte("commercial.p9e.col"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ENTITES, PROJETS, TRANCHES, PROSPECTIONS})
+    void v1_commercial_modele_403(String type) throws Exception {
+        mockMvc.perform(get(MODELE, type).with(commercial(compte("commercial.p9e.mod"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {ENTITES, PROJETS, TRANCHES, PROSPECTIONS})
+    void v1_cleApi_importGenerique_403_horsPortee(String type) throws Exception {
+        mockMvc.perform(multipart(IMPORT, type).file(new MockMultipartFile(FICHIER, "import.xlsx", null, ILLISIBLE))
+                        .header(ApiKeyAuthenticationFilter.EN_TETE, cleToutesPortees()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
+    }
+
+    @Test
+    void v1_cleApi_analyse_403_horsPortee() throws Exception {
+        mockMvc.perform(multipart(AppelsImportGenerique.ANALYSE, ENTITES)
+                        .file(new MockMultipartFile(FICHIER, "import.xlsx", null, ILLISIBLE))
                         .header(ApiKeyAuthenticationFilter.EN_TETE, cleToutesPortees()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(ApiKeyAuthenticationFilter.CODE_HORS_PORTEE));
