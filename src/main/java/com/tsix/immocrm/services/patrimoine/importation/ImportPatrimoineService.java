@@ -70,16 +70,36 @@ public class ImportPatrimoineService {
                                    String mapping) {
         ImportParType<?> t = parType(type);
         tranche(t, trancheId);
-        Feuille lue = LectureClasseur.lire(fichier, feuille);
+        Feuille lue = mappee(t, LectureClasseur.lire(fichier, feuille), mapping);
         return transaction.execute(statut -> executer(type, t, trancheId, lue, simulation, statut));
     }
 
     public List<ColonneImportDto> colonnes(String type) {
-        throw new UnsupportedOperationException(type);
+        return generique(type).colonnes();
     }
 
     public AnalyseImportDto analyser(String type, MultipartFile fichier, String feuille) {
-        throw new UnsupportedOperationException(type);
+        ImportGenerique<?> g = generique(type);
+        return MappingImport.analyser(g.catalogue(), LectureClasseur.lire(fichier, feuille));
+    }
+
+    /** Types à mapping seulement (FEATURE-patrimoine-import-generique.md) ; les autres → 404. */
+    private ImportGenerique<?> generique(String type) {
+        if (parType(type) instanceof ImportGenerique<?> g) {
+            return g;
+        }
+        throw new ResourceNotFoundException("Type d'import sans mapping : " + type);
+    }
+
+    private static Feuille mappee(ImportParType<?> t, Feuille lue, String mapping) {
+        if (t instanceof ImportGenerique<?> g) {
+            return MappingImport.appliquer(g.catalogue(), lue, mapping);
+        }
+        if (mapping != null && !mapping.isBlank()) {
+            throw new InvalidRequestException("Le mapping ne s'applique qu'aux entités juridiques, programmes, tranches et "
+                    + "prospections terrain.");
+        }
+        return lue;
     }
 
     private <C> BilanImportDto executer(String type, ImportParType<C> t, UUID trancheId, Feuille lue, boolean simulation,

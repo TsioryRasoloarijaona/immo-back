@@ -33,9 +33,9 @@ public record ReferencesPatrimoine(CfgTierRepository tiers, CfgTrancheStandingRe
                                    ActAccountRepository comptes, PrjProjectRepository projets) {
 
     /** PKey de {@code CfgTierType} EMP (constante OMRAN {@code CfgTierType.Employee}). */
-    static final UUID TYPE_EMPLOYE = UUID.fromString("EEB3FCFF-15BE-484D-B785-923D7587E649");
+    public static final UUID TYPE_EMPLOYE = UUID.fromString("EEB3FCFF-15BE-484D-B785-923D7587E649");
     /** PKey de {@code CfgTierType} FOU : le sélecteur « Tiers autrui » est {@code IsSupplier}. */
-    static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
+    public static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
 
     private static final Sort PAR_CODE = Sort.by("code");
 

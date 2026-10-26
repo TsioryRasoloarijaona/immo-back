@@ -29,7 +29,8 @@ catalogue mais est **refusée** à l'import (400) : elle masque ou rend visible 
 
 Lit le classeur comme l'import (mêmes refus 400 / 413), sans rien écrire et sans garder d'état : feuilles, en-têtes,
 mapping proposé (en-tête = libellé cible après trim, sans casse), cinq premières lignes et avertissements (colonnes
-ignorées, en-têtes inconnus). « Active » d'une entité n'est jamais proposée (indexColonne -1, avertissement).
+ignorées, en-têtes inconnus). « Active » d'une entité n'est jamais proposée (indexColonne -1, avertissement) : le
+fichier qui la porte sera refusé à l'import, il faut retirer la colonne.
 
 ## importer
 
@@ -63,5 +64,5 @@ visibles (une entité inactive, un programme d'entité inactive sont « inexiste
 seconde ligne en erreur ; une entité existante inactive n'est pas modifiée. Le programme d'une tranche existante ne
 change pas (avertissement) ; une prospection terrain garde son statut et son archivage. 400 en plus : mapping illisible,
 pivot non mappé (« Il faut définir les pivots et effectuer leurs mapping ! »), cible ou colonne inconnue, cible mappée
-deux fois, plus de 100 colonnes mappées, colonne « Active » d'une entité mappée (ou présente dans le fichier sans
-mapping), `mapping` envoyé pour un type sans mapping.
+deux fois, plus de 100 colonnes mappées, colonne « Active » d'une entité mappée ou simplement présente dans le fichier
+(même vide, même non mappée), `mapping` envoyé pour un type sans mapping.

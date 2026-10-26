@@ -17,7 +17,7 @@ public record ColonneImportDto(
         @Schema(description = "Vrai : colonne OMRAN acceptée dans le fichier mais non gérée par l'écran (avertissement).")
         boolean ignoree,
         @Schema(description = "Référentiel d'une colonne REFERENCE (valeur lue par code ou libellé, sans casse) ; null sinon.",
-                example = "Pays")
+                example = "PAYS")
         String reference
 ) {
 }

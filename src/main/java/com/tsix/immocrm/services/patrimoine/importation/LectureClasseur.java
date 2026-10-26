@@ -40,7 +40,8 @@ final class LectureClasseur {
     record LigneLue(int numero, Map<String, Object> valeurs) {
     }
 
-    record Feuille(Set<String> entetes, List<LigneLue> lignes) {
+    /** {@code nom} = feuille lue, {@code feuilles} = toutes celles du classeur (analyse de l'import générique). */
+    record Feuille(String nom, List<String> feuilles, Set<String> entetes, List<LigneLue> lignes) {
     }
 
     static Feuille lire(MultipartFile fichier, String nomFeuille) {
@@ -53,7 +54,9 @@ final class LectureClasseur {
             throw illisible();
         }
         try (InputStream flux = fichier.getInputStream(); Workbook classeur = new XSSFWorkbook(flux)) {
-            return feuille(choisir(classeur, nomFeuille));
+            List<String> feuilles = new ArrayList<>();
+            classeur.forEach(f -> feuilles.add(f.getSheetName()));
+            return feuille(choisir(classeur, nomFeuille), List.copyOf(feuilles));
         } catch (InvalidRequestException refus) {
             throw refus;
         } catch (IOException | RuntimeException e) {
@@ -88,7 +91,7 @@ final class LectureClasseur {
         return feuille;
     }
 
-    private static Feuille feuille(Sheet feuille) {
+    private static Feuille feuille(Sheet feuille, List<String> feuilles) {
         Row ligneEntetes = feuille.getRow(feuille.getFirstRowNum());
         if (ligneEntetes == null) {
             throw new InvalidRequestException(SANS_DONNEES);
@@ -109,7 +112,8 @@ final class LectureClasseur {
         if (lignes.isEmpty()) {
             throw new InvalidRequestException(SANS_DONNEES);
         }
-        return new Feuille(new LinkedHashSet<>(entetes.stream().filter(e -> !e.isEmpty()).toList()), lignes);
+        return new Feuille(feuille.getSheetName(), feuilles,
+                new LinkedHashSet<>(entetes.stream().filter(e -> !e.isEmpty()).toList()), lignes);
     }
 
     /** Index = n° de colonne ; en-tête vide gardé en place (colonne ignorée). */

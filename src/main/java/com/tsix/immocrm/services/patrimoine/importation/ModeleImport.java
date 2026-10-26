@@ -91,7 +91,12 @@ public class ModeleImport {
     }
 
     static FeuilleExport aide(String nom, List<? extends CodeLibelleOmran> lignes) {
-        return new FeuilleExport(nom, AIDE, lignes.stream().map(ModeleImport::aide).toList(), null);
+        return aideDe(nom, lignes.stream().map(r -> new String[]{r.getCode(), r.getDescription()}).toList());
+    }
+
+    /** Feuille d'aide depuis des paires {@code [code, libellé]}. */
+    static FeuilleExport aideDe(String nom, List<String[]> codesLibelles) {
+        return new FeuilleExport(nom, AIDE, codesLibelles.stream().map(ModeleImport::aide).toList(), null);
     }
 
     /** Ligne d'un objet ; {@code sousArticles} remplit les colonnes de rang 1 à n. */
@@ -110,10 +115,10 @@ public class ModeleImport {
         return rang <= sousArticles.size() ? sousArticles.get(rang - 1) : null;
     }
 
-    private static Map<String, Object> aide(CodeLibelleOmran r) {
+    private static Map<String, Object> aide(String[] codeLibelle) {
         Map<String, Object> ligne = new HashMap<>();
-        ligne.put(CODE, r.getCode());
-        ligne.put(LIBELLE, r.getDescription());
+        ligne.put(CODE, codeLibelle[0]);
+        ligne.put(LIBELLE, codeLibelle[1]);
         return ligne;
     }
 
