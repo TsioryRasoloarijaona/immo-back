@@ -32,6 +32,7 @@ public class ImportPatrimoineService {
     public static final String SOUS_ARTICLES = "sous-articles";
     public static final String PRESENTATIONS = "presentations";
     public static final String TERRAINS = "terrains";
+    public static final String LOTISSEMENTS = "lotissements";
     public static final String PREVISIONS = "previsions";
     public static final String ENTITES_JURIDIQUES = "entites-juridiques";
     public static final String PROJETS = "projets";

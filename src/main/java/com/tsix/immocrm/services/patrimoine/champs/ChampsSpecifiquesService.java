@@ -14,6 +14,7 @@ import com.tsix.immocrm.repositories.adm.AdmSpecificFieldValueRepository;
 import com.tsix.immocrm.services.patrimoine.EntiteJuridiqueService;
 import com.tsix.immocrm.services.patrimoine.PorteursPatrimoine;
 import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
+import com.tsix.immocrm.services.patrimoine.terrain.LotissementsVisibles;
 import com.tsix.immocrm.services.patrimoine.terrain.TerrainsVisibles;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.stereotype.Component;
@@ -50,7 +51,8 @@ public class ChampsSpecifiquesService {
 
     /** Recherches par id existantes de chaque porteur (record {@code @Component} : constructeur sous S107). */
     @Component
-    record Porteurs(PorteursPatrimoine patrimoine, EntiteJuridiqueService entites, TerrainsVisibles terrains) {
+    record Porteurs(PorteursPatrimoine patrimoine, EntiteJuridiqueService entites, TerrainsVisibles terrains,
+                    LotissementsVisibles lotissements) {
 
         /** 404 si l'objet n'est pas visible par l'appelant, comme sa fiche (étude : Administrateur, Direction Générale). */
         PorteurChamps exigerVisible(String porteur, UUID id) {
@@ -58,6 +60,7 @@ public class ChampsSpecifiquesService {
             switch (p) {
                 case ENTITE -> entites.findById(id);
                 case TERRAIN -> terrains.exiger(id);
+                case LOTISSEMENT -> lotissements.exiger(id);
                 default -> patrimoine.exigerVisible(PorteursPatrimoine.Porteur.valueOf(p.name()), id);
             }
             return p;

@@ -97,6 +97,9 @@ public final class RegistreAuditOmran {
         if (Boolean.TRUE.equals(item.getIsUnderItem())) {
             return new Trace(SOUS_ARTICLE, "Sous article", item.getDescription(), null, null);
         }
+        if ("TER".equalsIgnoreCase(Champs.de(item.getStkKind(), StkKind::getCode)) && item.getStkHierarchy() != null) {
+            return new Trace(TracesLotissements.LOT, "Lot de terrain", item.getDescription(), null, null);
+        }
         if ("TER".equalsIgnoreCase(Champs.de(item.getStkKind(), StkKind::getCode))) {
             return new Trace(TERRAIN, "Terrain", item.getDescription(), null, null);
         }

@@ -20,6 +20,7 @@ import com.tsix.immocrm.entities.stk.StkItemType;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stk.StkOrientation;
 import com.tsix.immocrm.entities.stk.StkVocation;
+import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.repositories.stk.StkExpenseRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
@@ -32,6 +33,8 @@ import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -86,7 +89,12 @@ public class TerrainService {
             if (lotissements) {
                 p.add(cb.isNotNull(tranche.get(ID)));
                 p.add(cb.notEqual(root.join("stkVocation").get("code"), VOCATION_PROJET));
+                Subquery<UUID> entiteArticle = query.subquery(UUID.class);
+                Root<StrEntity> entite = entiteArticle.from(StrEntity.class);
+                p.add(root.get("strEntityId").in(entiteArticle.select(entite.get(ID))
+                        .where(cb.equal(entite.get("code"), LotissementsVisibles.ENTITE_ARTICLE))));
             }
+            egal(p, cb, tranche.get(ID), f.trancheId());
             egal(p, cb, societe.get(ID), f.entiteId());
             egal(p, cb, root.get("strStatus").get(ID), f.statutId());
             egal(p, cb, root.get("stkVocation").get(ID), f.vocationId());

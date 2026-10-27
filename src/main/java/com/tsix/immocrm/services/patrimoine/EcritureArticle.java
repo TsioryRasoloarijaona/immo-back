@@ -102,7 +102,7 @@ public class EcritureArticle {
         }
     }
 
-    private CfgTranche trancheSaisie(ArticleEcritureDto d) {
+    CfgTranche trancheSaisie(ArticleEcritureDto d) {
         if (d.trancheId() == null) {
             throw new InvalidRequestException("La tranche est obligatoire.");
         }
@@ -278,7 +278,7 @@ public class EcritureArticle {
         return recalcules;
     }
 
-    private boolean appliquerPrix(StkItem a, ArticleEcritureDto d, boolean creation) {
+    static boolean appliquerPrix(StkItem a, ArticleEcritureDto d, boolean creation) {
         BigDecimal surfaceProvisoire = surface(d.surfaceProvisoire(), ou(a.getAreaFloor(), BigDecimal.ONE), "provisoire");
         BigDecimal surfaceDefinitive = surface(d.surfaceDefinitive(), creation ? surfaceProvisoire : a.getArea(), "définitive");
         BigDecimal tva = ou(fraction(d.tauxTva(), "Le taux de TVA"), a.getVat());
@@ -371,7 +371,7 @@ public class EcritureArticle {
         return ou(saisie, actuelle);
     }
 
-    private static boolean modifieUnChampProtege(StkItem a, ArticleEcritureDto d) {
+    static boolean modifieUnChampProtege(StkItem a, ArticleEcritureDto d) {
         return change(d.code(), a.getCode())
                 || change(d.titreFoncier(), a.getTitleNumber())
                 || change(d.categorieId(), Champs.de(a.getStkItemCategory(), StkItemCategory::getId))
@@ -403,7 +403,7 @@ public class EcritureArticle {
 
     // ------------------------------------------------------------------ règles
 
-    private String codeLibre(String code, UUID trancheId, UUID id) {
+    String codeLibre(String code, UUID trancheId, UUID id) {
         items.findFirstByStkHierarchyIdAndCode(trancheId, code)
                 .filter(existant -> !existant.getId().equals(id))
                 .ifPresent(existant -> {
@@ -445,7 +445,7 @@ public class EcritureArticle {
     }
 
     /** Prix de vente = prix de l'article + ceux de ses sous-articles rattachés (sous-article : les siens seuls). */
-    private void recalculerPrixDeVente(StkItem article) {
+    void recalculerPrixDeVente(StkItem article) {
         List<StkItem> sousArticles = items.findByParentId(article.getId());
         PrixLot definitif = CalculPrixArticle.avecSousArticles(definitif(article),
                 sousArticles.stream().map(EcritureArticle::definitif).toList());
@@ -471,7 +471,7 @@ public class EcritureArticle {
         return ou(valeur, BigDecimal.ZERO);
     }
 
-    private void enregistrer(StkItem article, boolean creation) {
+    void enregistrer(StkItem article, boolean creation) {
         TracePatrimoine.Trace t = trace.maintenant();
         if (creation) {
             article.setUserCreate(t.auteur());
