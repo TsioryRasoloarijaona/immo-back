@@ -89,7 +89,7 @@ public class SuiviHebdoPrevisionsRapport extends RapportFluxVente {
         }
     }
 
-    /** Chiffres d'une tranche ; réalisation = stock au début de la période − stock au lendemain de sa fin. */
+    /** Chiffres d'une tranche ; réalisation = −Σ mouvements hors lancement de la période. */
     private record LigneSuivi(TrancheEnVente tranche, long stock, long cumulLancement, BigDecimal prevuMois,
                               long realisationSemaine, long realisationMois, long visitesSemaine, long visitesMois,
                               BigDecimal versementsSemaine, BigDecimal versementsMois) {
@@ -126,8 +126,8 @@ public class SuiviHebdoPrevisionsRapport extends RapportFluxVente {
             List<LocalDate> jours = visites.getOrDefault(id, List.of());
             return new LigneSuivi(t, stockJ, lancesAvant(mouvements, id, p.jour()) - stockJ,
                     prevus.valeur(MesureFlux.PREVU_CONCRETISATION_QUANTITE, id, annee, p.jour().getMonthValue()),
-                    stockJ - stock.stockAvant(mouvements, id, p.finSemaine()),
-                    stock.stockAvant(mouvements, id, p.debutMois()) - stock.stockAvant(mouvements, id, p.finMois()),
+                    sorties(mouvements, id, p.jour(), p.finSemaine()),
+                    sorties(mouvements, id, p.debutMois(), p.finMois()),
                     compter(jours, p.jour(), p.finSemaine()), compter(jours, p.debutMois(), p.finMois()),
                     versementsSemaine.getOrDefault(id, BigDecimal.ZERO), versementsMois.getOrDefault(id, BigDecimal.ZERO));
         }).toList();
@@ -183,6 +183,12 @@ public class SuiviHebdoPrevisionsRapport extends RapportFluxVente {
     private static long lancesAvant(List<MouvementStock> mouvements, UUID tranche, LocalDate jour) {
         return mouvements.stream().filter(m -> m.lancement() && tranche.equals(m.tranche()) && m.date().isBefore(jour))
                 .mapToLong(MouvementStock::quantite).sum();
+    }
+
+    /** Réalisation de [debut ; fin[ : sorties nettes hors lancement (un lancement n'est pas une réalisation). */
+    private static long sorties(List<MouvementStock> mouvements, UUID tranche, LocalDate debut, LocalDate finExclue) {
+        return -mouvements.stream().filter(m -> !m.lancement() && tranche.equals(m.tranche())
+                && !m.date().isBefore(debut) && m.date().isBefore(finExclue)).mapToLong(MouvementStock::quantite).sum();
     }
 
     private static long compter(List<LocalDate> jours, LocalDate debut, LocalDate finExclue) {
