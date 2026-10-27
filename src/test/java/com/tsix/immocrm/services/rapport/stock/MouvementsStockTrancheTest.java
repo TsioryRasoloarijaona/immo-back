@@ -24,10 +24,14 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static com.tsix.immocrm.fixtures.FixtureDossierVente.connecte;
 import static com.tsix.immocrm.fixtures.FixtureRapportsPatrimoine.SEUIL_ANNULATION;
@@ -190,5 +194,69 @@ class MouvementsStockTrancheTest {
                 "CONCRETISATION -1", "DÉSISTEMENT 1", "ANNULATION 1",
                 "CONCRETISATION -1", "TRANSFERT SORTIE 1", "TRANSFERT ENTREE -1");
         assertThat(rapport).extracting(l -> l.get("article")).filteredOn(Objects::nonNull).isNotEmpty();
+    }
+
+    // ------------------------------------------------------------------ stockAvant (FEATURE-tdb-vente-previsions.md, carte Pb 27/10)
+
+    private static final LocalDate JOUR = LocalDate.of(2074, 4, 6);
+    private static final UUID TRANCHE_A = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+    private static final UUID TRANCHE_B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+
+    private static MouvementStock mouvement(UUID tranche, String libelle, LocalDate date, long quantite) {
+        return new MouvementStock(tranche, null, null, libelle, date, quantite, "Tranche " + tranche);
+    }
+
+    /** {@code long stockAvant(List<MouvementStock>, UUID, LocalDate)}, par réflexion tant que la méthode n'existe pas. */
+    private long stockAvant(List<MouvementStock> mouvements, UUID tranche, LocalDate jour) {
+        Object composant = contexte.getBean(MouvementsStockTranche.class);
+        try {
+            Method methode = MouvementsStockTranche.class.getMethod("stockAvant", List.class, UUID.class,
+                    LocalDate.class);
+            return ((Number) methode.invoke(composant, mouvements, tranche, jour)).longValue();
+        } catch (NoSuchMethodException absent) {
+            throw new IllegalStateException("contrat absent : MouvementsStockTranche.stockAvant(List, UUID, LocalDate)",
+                    absent);
+        } catch (InvocationTargetException e) {
+            throw new IllegalStateException(e.getCause());
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("stockAvant", e);
+        }
+    }
+
+    private static List<MouvementStock> jeuStockAvant() {
+        return List.of(
+                mouvement(TRANCHE_A, MouvementStock.LANCEMENT, JOUR.minusDays(1), 10),
+                mouvement(TRANCHE_A, "CONCRETISATION", JOUR, -1),
+                mouvement(TRANCHE_A, "CONCRETISATION", JOUR.plusDays(3), -1),
+                mouvement(TRANCHE_B, MouvementStock.LANCEMENT, JOUR.minusDays(30), 50));
+    }
+
+    @Test
+    void stockAvant_mouvementDuJourExclu_veillePresente() {
+        long stock = stockAvant(jeuStockAvant(), TRANCHE_A, JOUR);
+
+        assertThat(stock).as("lancement de la veille seul ; la sortie datée du jour n'est pas « avant »").isEqualTo(10L);
+    }
+
+    @Test
+    void stockAvant_lendemain_compteLaSortieDuJour_seulementLaTranche() {
+        long stock = stockAvant(jeuStockAvant(), TRANCHE_A, JOUR.plusDays(1));
+
+        assertThat(stock).as("10 − 1, sans le lancement de B ni la sortie du J+3").isEqualTo(9L);
+    }
+
+    @Test
+    void stockAvant_trancheSansMouvement_zero() {
+        long stock = stockAvant(jeuStockAvant(), UUID.fromString("00000000-0000-0000-0000-00000000000c"), JOUR);
+
+        assertThat(stock).isZero();
+    }
+
+    @Test
+    void stockAvant_sansLancement_negatif() {
+        List<MouvementStock> sansLancement = List.of(mouvement(TRANCHE_A, "CONCRETISATION", JOUR.minusDays(5), -1),
+                mouvement(TRANCHE_A, "CONCRETISATION", JOUR.minusDays(2), -1));
+
+        assertThat(stockAvant(sansLancement, TRANCHE_A, JOUR)).isEqualTo(-2L);
     }
 }
