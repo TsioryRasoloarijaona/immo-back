@@ -102,7 +102,7 @@ class ImportLotissements implements ImportParType<ImportLotissements.Contexte> {
     @Override
     public Modele modele(String type, CfgTranche tranche) {
         List<Map<String, Object>> lignes = em.createQuery(DE_LA_TRANCHE + " order by i.code", StkItem.class)
-                .setParameter(TRANCHE, tranche.getId()).getResultList().stream().filter(lots::estLot)
+                .setParameter(TRANCHE, tranche.getId()).getResultList().stream().filter(lots.lots())
                 .map(i -> ModeleImport.ligne(i, List.of(), ChampsLotissement.CHAMPS)).toList();
         String nom = tranche.getCode() + "_LOTISSEMENTS";
         List<FeuilleExport> feuilles = new ArrayList<>();

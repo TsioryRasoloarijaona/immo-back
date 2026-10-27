@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import static com.tsix.immocrm.services.patrimoine.ArticleService.VOCATION_PROJET;
 
@@ -29,10 +30,15 @@ public record LotissementsVisibles(StkItemRepository items, StrEntityRepository 
     }
 
     public boolean estLot(StkItem item) {
-        return TerrainsVisibles.estTerrain(item) && item.getStkHierarchy() != null
+        return lots().test(item);
+    }
+
+    /** Entité « article » lue une fois : à réutiliser sur une liste. */
+    public Predicate<StkItem> lots() {
+        List<UUID> article = entites.findByCodeIn(List.of(ENTITE_ARTICLE)).stream().map(StrEntity::getId).toList();
+        return item -> TerrainsVisibles.estTerrain(item) && item.getStkHierarchy() != null
                 && !Boolean.TRUE.equals(item.getIsUnderItem())
                 && !VOCATION_PROJET.equals(Champs.de(item.getStkVocation(), StkVocation::getCode))
-                && entites.findByCodeIn(List.of(ENTITE_ARTICLE)).stream().map(StrEntity::getId)
-                .anyMatch(e -> e.equals(item.getStrEntityId()));
+                && article.contains(item.getStrEntityId());
     }
 }
