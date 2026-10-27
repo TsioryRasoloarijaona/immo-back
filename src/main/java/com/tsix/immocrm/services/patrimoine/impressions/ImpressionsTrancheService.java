@@ -27,6 +27,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,20 @@ public class ImpressionsTrancheService {
     }
 
     public record Lettres(String nomFichier, byte[] pdf) {
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Lettres l && nomFichier.equals(l.nomFichier) && Arrays.equals(pdf, l.pdf);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * nomFichier.hashCode() + Arrays.hashCode(pdf);
+        }
+
+        @Override
+        public String toString() {
+            return "Lettres[nomFichier=" + nomFichier + ", pdf=" + pdf.length + " octets]";
+        }
     }
 
     public ApercuRelance2Dto apercu(UUID trancheId, List<String> statuts) {

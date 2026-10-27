@@ -33,7 +33,7 @@ public final class OrdreNaturel {
         if (Character.isDigit(x.charAt(0)) && Character.isDigit(y.charAt(0))) {
             String nx = x.replaceFirst("^0+(?=\\d)", "");
             String ny = y.replaceFirst("^0+(?=\\d)", "");
-            return nx.length() != ny.length() ? Integer.compare(nx.length(), ny.length()) : nx.compareTo(ny);
+            return nx.length() == ny.length() ? nx.compareTo(ny) : Integer.compare(nx.length(), ny.length());
         }
         return String.CASE_INSENSITIVE_ORDER.compare(x, y);
     }
