@@ -279,7 +279,10 @@ class ExportPatrimoineListesTest {
     private Cas lotissements() {
         FixtureTerrains.Contexte c = terrains.contexte("P9C");
         UUID vente = fixture.vocationVente().getId();
-        terrains.terrain(c, "LOT-A-" + jeton, trancheActive.getId(), vente);
+        UUID present = terrains.terrain(c, "LOT-A-" + jeton, trancheActive.getId(), vente);
+        // FEATURE-patrimoine-lotissements §1.1 : un lot porte l'entité « article », pas LandProject.
+        fixture.entiteStkItem();
+        terrains.definir(present, "StrEntityId", FixturePatrimoine.ENTITE_STK_ITEM);
         terrains.terrain(inactif(c), "LOT-I-" + jeton, trancheInactive.getId(), vente);
         return new Cas(LOTISSEMENTS, filtres(SEARCH, jeton), "LOT-A-" + jeton, "LOT-I-" + jeton);
     }
