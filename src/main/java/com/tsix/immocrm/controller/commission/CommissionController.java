@@ -178,7 +178,7 @@ public class CommissionController {
     })
     public ResultatGenerationDto genererLignes(@Parameter(description = TRANCHE) @PathVariable UUID trancheId,
                                          @Valid @RequestBody GenererCommissionsRequest demande) {
-        droits.exiger(Droit.ECRITURE);
+        droits.exigerAvantEcriture(Droit.ECRITURE);
         return generation.generer(trancheId, demande.type(), demande.dossierIds());
     }
 
@@ -193,7 +193,7 @@ public class CommissionController {
     })
     public LigneCommissionCalculeeDto modifierMontant(@Parameter(description = LIGNE) @PathVariable UUID ligneId,
                                                       @Valid @RequestBody ModifierMontantCommissionRequest demande) {
-        droits.exiger(Droit.ECRITURE);
+        droits.exigerAvantEcriture(Droit.ECRITURE);
         return lignes.modifierMontant(ligneId, demande.montant());
     }
 
@@ -208,7 +208,7 @@ public class CommissionController {
             @ApiResponse(responseCode = "409", content = @Content)
     })
     public void supprimerLignes(@Valid @RequestBody LignesCommissionRequest demande) {
-        droits.exiger(Droit.SUPPRESSION);
+        droits.exigerAvantEcriture(Droit.SUPPRESSION);
         lignes.supprimer(demande.ligneIds());
     }
 
@@ -223,7 +223,7 @@ public class CommissionController {
             @ApiResponse(responseCode = "409", content = @Content)
     })
     public DocumentCommissionDto genererDocument(@Valid @RequestBody LignesCommissionRequest demande) {
-        droits.exiger(Droit.ECRITURE);
+        droits.exigerAvantEcriture(Droit.ECRITURE);
         return documents.generer(demande.ligneIds());
     }
 
