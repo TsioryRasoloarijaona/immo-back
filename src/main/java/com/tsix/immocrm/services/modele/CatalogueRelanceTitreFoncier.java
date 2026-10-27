@@ -10,6 +10,7 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
+import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.services.dossier.ActeReservationService;
@@ -26,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static com.tsix.immocrm.domain.TypeChamp.BOOLEEN;
 import static com.tsix.immocrm.domain.TypeChamp.DATE;
 import static com.tsix.immocrm.domain.TypeChamp.MONTANT;
 import static com.tsix.immocrm.domain.TypeChamp.NOMBRE;
@@ -43,7 +45,9 @@ public class CatalogueRelanceTitreFoncier implements CatalogueFiche {
                                  String projetAdresse, String societeNom, String societeAdresse, String signataireNom,
                                  String signataireQualite, String villeSignature, Integer premierDelai,
                                  Integer secondDelai, BigDecimal penalitePct, String droitAnnulation, Integer delaiSolde,
-                                 BigDecimal restePrix, BigDecimal resteFrais, BigDecimal resteTotal) {
+                                 BigDecimal restePrix, BigDecimal resteFrais, BigDecimal resteTotal,
+                                 String statut, LocalDate dateRelance2, LocalDate dateLettre, BigDecimal prixVente,
+                                 BigDecimal prixRegle, Boolean estCoAcquereur) {
     }
 
     static final Catalogue<DonneesRelance> CATALOGUE = new Catalogue<>(List.of(
@@ -52,8 +56,18 @@ public class CatalogueRelanceTitreFoncier implements CatalogueFiche {
                     new Champ<>("dossier.dateEdition", "Date d'édition", DATE, "16/10/2026", DonneesRelance::dateEdition),
                     new Champ<>("relance.date", "Date de 1re relance", DATE, "01/03/2026", DonneesRelance::dateRelance),
                     new Champ<>("relance.echeance", "Échéance de la relance", DATE, "30/04/2026",
-                            DonneesRelance::echeance))),
+                            DonneesRelance::echeance),
+                    new Champ<>("dossier.statut", "Statut du dossier", TEXTE, "CONCRETISATION", DonneesRelance::statut),
+                    new Champ<>("dossier.dateRelance2", "Date de 2e relance", DATE, "01/06/2026",
+                            DonneesRelance::dateRelance2),
+                    new Champ<>("lettre.date", "Date de la lettre (2e relance, sinon aujourd'hui)", DATE, "01/06/2026",
+                            DonneesRelance::dateLettre),
+                    new Champ<>("dossier.prixVente", "Prix de vente", MONTANT, "1 200 000.00 DH",
+                            DonneesRelance::prixVente),
+                    new Champ<>("dossier.prixRegle", "Réglé sur le prix", MONTANT, "217 300.00 DH",
+                            DonneesRelance::prixRegle))),
             new GroupeChamps<>("Client", List.of(
+                    new Champ<>("client.estCoAcquereur", "Co-acquéreur", BOOLEEN, "Non", DonneesRelance::estCoAcquereur),
                     new Champ<>("client.titre", "Civilité", TEXTE, "Monsieur", DonneesRelance::clientTitre),
                     new Champ<>("client.nom", "Nom du client", TEXTE, "Nor CHEMAOU", DonneesRelance::clientNom),
                     new Champ<>("client.adresse", "Adresse", TEXTE, "20 BIS CADI BEN HAMMADI", DonneesRelance::clientAdresse),
@@ -121,16 +135,21 @@ public class CatalogueRelanceTitreFoncier implements CatalogueFiche {
     }
 
     public DonneesRelance donnees(ComFolder d) {
-        MontantsDossierDto m = montants.calculer(d);
+        return donnees(d, d.getCfgCustomer(), false, montants.calculer(d));
+    }
+
+    /** Lettre adressée à {@code client} (principal ou co-acquéreur) ; {@code m} = montants du dossier. */
+    public DonneesRelance donnees(ComFolder d, CfgTier client, boolean coAcquereur, MontantsDossierDto m) {
         BigDecimal prix = m.prixVente().reste();
         BigDecimal total = m.netAPayer().reste();
-        CfgTier client = d.getCfgCustomer();
+        LocalDate aujourdhui = LocalDate.now(clock);
+        LocalDate relance2 = jour(d.getRevival2());
         StkItem article = d.getStkItem();
         CfgTranche tranche = Champs.de(article, StkItem::getStkHierarchy);
         CfgProject projet = Champs.de(tranche, CfgTranche::getCfgProject);
         CfgCompany societe = Champs.de(projet, CfgProject::getCfgCompany);
         CfgTier signataire = Champs.de(societe, CfgCompany::getAdmSignatory);
-        return new DonneesRelance(d.getCode(), LocalDate.now(clock), jour(d.getRevival1()),
+        return new DonneesRelance(d.getCode(), aujourdhui, jour(d.getRevival1()),
                 jour(d.getRevival1ValidityDate()), ActeReservationService.titre(client),
                 Champs.de(client, TierNomFormatter::nom),
                 Champs.de(client, c -> ActeReservationService.adresse(c.getAddress(), c.getAddress2(), c.getAddress3(), null)),
@@ -149,7 +168,9 @@ public class CatalogueRelanceTitreFoncier implements CatalogueFiche {
                 Champs.de(tranche, CfgTranche::getAgreementFirstPenaltyPercent),
                 Champs.de(tranche, CfgTranche::getCancellationRightCode),
                 Champs.de(tranche, CfgTranche::getPaymentBalanceDelay),
-                prix, total.subtract(prix), total);
+                prix, total.subtract(prix), total,
+                Champs.de(d.getStrStatus(), StrStatus::getDescription), relance2,
+                relance2 != null ? relance2 : aujourdhui, m.prixVente().montant(), m.prixVente().regle(), coAcquereur);
     }
 
     private static LocalDate jour(LocalDateTime date) {

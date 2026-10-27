@@ -16,6 +16,11 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID>,
     // Non paginée : les montants somment toutes les lignes, pas une page.
     List<ComDocument> findByComFolderIdOrderByDocDateAsc(UUID comFolderId);
 
+    /** Échéances de plusieurs dossiers (≤ 2 000 ids), catégorie chargée, dans l'ordre de {@link #findByComFolderIdOrderByDocDateAsc}. */
+    @Query("SELECT d FROM ComDocument d LEFT JOIN FETCH d.comSettlementCategory "
+            + "WHERE d.comFolder.id IN :dossierIds ORDER BY d.docDate ASC")
+    List<ComDocument> echeancesDesDossiers(List<UUID> dossierIds);
+
     Optional<ComDocument> findFirstByComSaleWithdrawalCancellationIdAndComSettlementCategoryIsSaleResiliationTrue(
             UUID desistementId);
 
