@@ -239,8 +239,8 @@ class CommissionsParCommercialRapportTest {
         String entete = mockMvc.perform(ApiCommissions.tranche(c.tranche().getId()).with(gestionnaire))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
-        BigDecimal genere = new BigDecimal(String.valueOf(com.jayway.jsonpath.JsonPath.read(entete, "$.montantGenere")));
-        BigDecimal regle = new BigDecimal(String.valueOf(com.jayway.jsonpath.JsonPath.read(entete, "$.montantRegle")));
+        BigDecimal genere = new BigDecimal(String.valueOf((Object) com.jayway.jsonpath.JsonPath.read(entete, "$.montantGenere")));
+        BigDecimal regle = new BigDecimal(String.valueOf((Object) com.jayway.jsonpath.JsonPath.read(entete, "$.montantRegle")));
         assertAll(
                 () -> assertThat(nombre(totaux(s).get(MONTANT))).isEqualByComparingTo(genere),
                 () -> assertThat(nombre(totaux(s).get("regle"))).isEqualByComparingTo(regle));
