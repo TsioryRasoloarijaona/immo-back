@@ -280,7 +280,11 @@ public class DocumentCommission {
 
     private DocumentCommissionDto dto(UUID documentId) {
         BuyDocument d = em.find(BuyDocument.class, documentId);
-        List<ComCommissionLine> duDocument = lignes.findByBuyDocumentIdIn(List.of(documentId));
+        // Un document peut couvrir plusieurs tranches : seules les lignes des tranches visibles de l'appelant sortent (C8).
+        Map<UUID, Boolean> visibilite = new HashMap<>();
+        List<ComCommissionLine> duDocument = lignes.findByBuyDocumentIdIn(List.of(documentId)).stream()
+                .filter(l -> visibilite.computeIfAbsent(l.getCfgTrancheId(), t -> t != null && visibles.visible(t).isPresent()))
+                .toList();
         Map<UUID, String> codes = codesDossiers(duDocument);
         BigDecimal montant = SoldesCommission.nonNul(d.getAmountTTC());
         BigDecimal regle = soldes.reglesParDocument(List.of(documentId)).getOrDefault(documentId, BigDecimal.ZERO);

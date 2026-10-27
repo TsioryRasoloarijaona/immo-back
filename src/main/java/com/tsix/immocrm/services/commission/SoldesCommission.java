@@ -11,9 +11,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,6 +30,11 @@ public class SoldesCommission {
             + ")) AS Regle FROM StlSettlementLine l JOIN StlSettlement s ON s.PKey = l.StlSettlementId "
             + "WHERE l.BuyDocumentId IN (:documents) AND " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX
             + " GROUP BY l.BuyDocumentId";
+
+    private static final String MONTANTS_IDENTIQUES = "SELECT d.CfgTierId AS Personne FROM StlSettlementLine l "
+            + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId JOIN BuyDocument d ON d.PKey = l.BuyDocumentId "
+            + "WHERE l.BuyDocumentId IN (:documents) AND d.CfgTierId IS NOT NULL AND "
+            + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + " GROUP BY d.CfgTierId, l.Amount HAVING COUNT(*) > 1";
 
     public record Solde(BigDecimal genere, BigDecimal regle) {
 
@@ -53,6 +60,13 @@ public class SoldesCommission {
                         (rs, n) -> Map.entry(UUID.fromString(rs.getString("Document")), rs.getBigDecimal("Regle"))))
                 .forEach(e -> regles.put(e.getKey(), nonNul(e.getValue())));
         return regles;
+    }
+
+    /** Tiers dont deux règlements non annulés de ces documents ont le même montant (le modèle OMRAN n'en compte qu'un). */
+    public Set<UUID> reglementsDeMontantsIdentiques(Collection<UUID> documents) {
+        List<UUID> ids = documents.stream().filter(Objects::nonNull).distinct().toList();
+        return new HashSet<>(LotsTranches.lire(ids, lot -> jdbc.query(MONTANTS_IDENTIQUES,
+                Map.of("documents", LotsTranches.textes(lot)), (rs, n) -> UUID.fromString(rs.getString("Personne")))));
     }
 
     /** Réglé de chaque ligne : réglé du document × montant de la ligne / Σ des lignes du document. */

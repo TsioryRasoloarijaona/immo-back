@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -41,14 +42,16 @@ public class CommissionsVisibles {
     }
 
     public CfgTranche tranche(UUID id) {
-        CfgTranche t = tranches.exigerVisible(id);
-        UUID projet = Champs.de(t.getCfgProject(), CfgProject::getId);
-        perimetre.perimetreCourant().ifPresent(projets -> {
-            if (projet != null && !projets.contains(projet)) {
-                throw new ResourceNotFoundException("Tranche introuvable: " + id);
-            }
+        return visible(id).orElseThrow(() -> new ResourceNotFoundException("Tranche introuvable: " + id));
+    }
+
+    /** Vide si la tranche est inconnue, d'une entité inactive ou hors du périmètre commercial (projet NULL visible). */
+    public Optional<CfgTranche> visible(UUID id) {
+        Optional<List<UUID>> projets = perimetre.perimetreCourant();
+        return tranches.trancheVisible(id).filter(t -> {
+            UUID projet = Champs.de(t.getCfgProject(), CfgProject::getId);
+            return projets.isEmpty() || projet == null || projets.get().contains(projet);
         });
-        return t;
     }
 
     public ComCommissionLine ligne(UUID id) {

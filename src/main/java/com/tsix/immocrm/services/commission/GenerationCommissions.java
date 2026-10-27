@@ -28,10 +28,12 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -167,21 +169,34 @@ public class GenerationCommissions {
         if (origines.isEmpty()) {
             return Issue.ignore(RaisonIgnoree.SANS_COMMISSION_A_REPRENDRE);
         }
-        Map<UUID, Long> dejaReprises = new HashMap<>();
-        existantes.stream().filter(l -> TypeCommission.negatif(l.getCommissionType()))
-                .forEach(l -> dejaReprises.merge(l.getCfgEmployeeId(), 1L, Long::sum));
-        List<ComCommissionLine> reprises = new ArrayList<>();
-        for (ComCommissionLine o : origines) {
-            if (dejaReprises.getOrDefault(o.getCfgEmployeeId(), 0L) > 0) {
-                dejaReprises.merge(o.getCfgEmployeeId(), -1L, Long::sum);
-            } else {
-                String type = o.getCommissionType() != null && o.getCommissionType().endsWith("(support)")
-                        ? TypeCommission.DESISTEMENT.libelle() + " (support)" : TypeCommission.DESISTEMENT.libelle();
-                reprises.add(ligne(f, ctx, type, o.getCfgEmployeeId(), o.getCommissionAmount().negate(),
-                        f.getCancelDate(), o.getCalculationMethod()));
-            }
-        }
+        List<ComCommissionLine> dejaReprises = new ArrayList<>(existantes.stream()
+                .filter(l -> TypeCommission.negatif(l.getCommissionType())).toList());
+        List<ComCommissionLine> nonReprises = new ArrayList<>(origines);
+        // Une reprise se rattache d'abord à l'origine de même personne et de montant opposé ; une reprise au montant
+        // modifié couvre ensuite la plus ancienne origine restante de sa personne (jamais deux reprises pour une origine).
+        apparier(nonReprises, dejaReprises, (o, r) -> SoldesCommission.montant(o).compareTo(SoldesCommission.montant(r)
+                .negate()) == 0);
+        apparier(nonReprises, dejaReprises, (o, r) -> true);
+        List<ComCommissionLine> reprises = nonReprises.stream().map(o -> ligne(f, ctx,
+                o.getCommissionType() != null && o.getCommissionType().endsWith("(support)")
+                        ? TypeCommission.DESISTEMENT.libelle() + " (support)" : TypeCommission.DESISTEMENT.libelle(),
+                o.getCfgEmployeeId(), o.getCommissionAmount().negate(), f.getCancelDate(), o.getCalculationMethod()))
+                .toList();
         return reprises.isEmpty() ? Issue.ignore(RaisonIgnoree.DEJA_GENERE) : new Issue(reprises, null);
+    }
+
+    /** Retire de {@code origines} et de {@code reprises} chaque paire de même personne qui vérifie {@code critere}. */
+    private static void apparier(List<ComCommissionLine> origines, List<ComCommissionLine> reprises,
+                                 BiPredicate<ComCommissionLine, ComCommissionLine> critere) {
+        Iterator<ComCommissionLine> it = origines.iterator();
+        while (it.hasNext()) {
+            ComCommissionLine o = it.next();
+            reprises.stream().filter(r -> Objects.equals(r.getCfgEmployeeId(), o.getCfgEmployeeId()) && critere.test(o, r))
+                    .findFirst().ifPresent(r -> {
+                        reprises.remove(r);
+                        it.remove();
+                    });
+        }
     }
 
     private static CfgTier personne(ComFolder f, TypeCommission type) {

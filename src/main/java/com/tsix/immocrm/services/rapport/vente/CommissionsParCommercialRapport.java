@@ -15,7 +15,9 @@ import com.tsix.immocrm.domain.rapport.TypeParametre;
 import com.tsix.immocrm.dto.commission.LigneCommissionCalculeeDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComCommissionLine;
+import com.tsix.immocrm.services.commission.SoldesCommission;
 import com.tsix.immocrm.services.commission.VueLignesCommission;
+import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
@@ -33,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -58,18 +61,22 @@ public class CommissionsParCommercialRapport implements Rapport {
     private static final String LIBELLE_COMMERCIAL = "Commercial/Gestionnaire";
     private static final String LIGNES = """
             SELECT l FROM ComCommissionLine l WHERE l.cfgTrancheId IN :tranches AND l.docDate >= :du AND l.docDate < :lendemain""";
-    private static final String PERSONNES = """
-            SELECT DISTINCT e FROM ComCommissionLine l, CfgTier e WHERE e.id = l.cfgEmployeeId""";
+    private static final String PERSONNES = "SELECT DISTINCT e FROM ComCommissionLine l, CfgTier e, CfgTranche t "
+            + "LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc WHERE e.id = l.cfgEmployeeId AND t.id = l.cfgTrancheId AND "
+            + VisibiliteEntites.CLAUSE_JPQL;
     private static final String DATES = """
             SELECT f.id, f.cancelDate, f.advanceDate, f.agreementDate, f.agreementSavingDate FROM ComFolder f WHERE f.id IN :ids""";
 
     private final EntityManager em;
     private final VueLignesCommission vue;
+    private final SoldesCommission soldes;
     private final Clock clock;
 
-    public CommissionsParCommercialRapport(EntityManager em, VueLignesCommission vue, Clock clock) {
+    public CommissionsParCommercialRapport(EntityManager em, VueLignesCommission vue, SoldesCommission soldes,
+                                           Clock clock) {
         this.em = em;
         this.vue = vue;
+        this.soldes = soldes;
         this.clock = clock;
     }
 
@@ -125,7 +132,17 @@ public class CommissionsParCommercialRapport implements Rapport {
                 .sorted(Comparator.comparing((LigneCommissionCalculeeDto l) -> Objects.toString(l.commercial(), ""))
                         .thenComparing(LigneCommissionCalculeeDto::date, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
-        return new ResultatRapport(List.of(commerciaux(lignes), detail(lignes)), List.of());
+        return new ResultatRapport(List.of(commerciaux(lignes), detail(lignes)), avertissements(lignes));
+    }
+
+    /** Écart voulu au modèle (§6) : son {@code SUM(DISTINCT …)} ne compte qu'une fois deux règlements de même montant. */
+    private List<String> avertissements(List<LigneCommissionCalculeeDto> lignes) {
+        Set<UUID> concernes = soldes.reglementsDeMontantsIdentiques(
+                lignes.stream().map(LigneCommissionCalculeeDto::documentId).toList());
+        List<String> noms = lignes.stream().filter(l -> concernes.contains(l.commercialId()))
+                .map(l -> Objects.toString(l.commercial(), "")).distinct().toList();
+        return noms.isEmpty() ? List.of() : List.of(("Réglé de %s : chaque règlement est compté, alors que le modèle OMRAN "
+                + "ne compte qu'une fois les règlements de même montant.").formatted(String.join(", ", noms)));
     }
 
     /** Une ligne par personne commissionnée : montant, réglé, reste. */
