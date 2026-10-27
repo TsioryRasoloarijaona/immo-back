@@ -13,7 +13,13 @@ import com.tsix.immocrm.dto.commission.ResultatGenerationDto;
 import com.tsix.immocrm.services.commission.CommissionService;
 import com.tsix.immocrm.services.commission.DocumentCommission;
 import com.tsix.immocrm.services.commission.DroitsCommission;
+import com.tsix.immocrm.services.commission.DossiersCommission;
 import com.tsix.immocrm.services.commission.DroitsCommission.Droit;
+import com.tsix.immocrm.domain.TypeExport;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.FeuilleExport;
+import com.tsix.immocrm.web.export.LignesExport;
 import com.tsix.immocrm.services.commission.GenerationCommissions;
 import com.tsix.immocrm.services.commission.LignesCommission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,19 +58,41 @@ public class CommissionController {
     private static final String INTROUVABLE = "Tranche, dossier ou ligne inconnu ou hors périmètre.";
     private static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    private static final List<ColonneFixe> COLONNES_LIGNES = List.of(ColonneFixe.texte("commercial", "Commercial/Gestionnaire"),
+            ColonneFixe.texte("tranche", "Tranche"), ColonneFixe.texte("categorie", "Catégorie"),
+            ColonneFixe.texte("dossierCode", "Dossier de vente"), ColonneFixe.texte("type", "Type"),
+            ColonneFixe.de("date", "Date", TypeExport.DATE), ColonneFixe.de("montant", "Montant", TypeExport.MONTANT),
+            ColonneFixe.texte("modeCalcul", "Mode de calcul"), ColonneFixe.texte("articleCode", "Article"),
+            ColonneFixe.texte("statut", "Statut"), ColonneFixe.texte("documentCode", "Code facture"),
+            ColonneFixe.de("regle", "Réglé", TypeExport.MONTANT), ColonneFixe.de("reste", "Reste", TypeExport.MONTANT));
+    private static final List<ColonneFixe> COLONNES_TRANCHES = List.of(ColonneFixe.texte("code", "Code"),
+            ColonneFixe.texte("description", "Description"), ColonneFixe.de("vendus", "Vendu nombre", TypeExport.NOMBRE),
+            ColonneFixe.de("restants", "Reste nombre", TypeExport.NOMBRE),
+            ColonneFixe.de("montantGenere", "Commission générée", TypeExport.MONTANT),
+            ColonneFixe.de("montantRegle", "Commission réglée", TypeExport.MONTANT),
+            ColonneFixe.de("montantReste", "Commission reste à régler", TypeExport.MONTANT),
+            ColonneFixe.de("caStock", "C.A. Stock", TypeExport.MONTANT),
+            ColonneFixe.de("caRealise", "C.A. Réalisé", TypeExport.MONTANT),
+            ColonneFixe.de("caReste", "C.A. Reste", TypeExport.MONTANT));
+
     private final DroitsCommission droits;
     private final CommissionService service;
+    private final DossiersCommission dossiers;
     private final GenerationCommissions generation;
     private final LignesCommission lignes;
     private final DocumentCommission documents;
+    private final ExportTableur export;
 
-    public CommissionController(DroitsCommission droits, CommissionService service, GenerationCommissions generation,
-                                LignesCommission lignes, DocumentCommission documents) {
+    public CommissionController(DroitsCommission droits, CommissionService service, DossiersCommission dossiers,
+                                GenerationCommissions generation, LignesCommission lignes, DocumentCommission documents,
+                                ExportTableur export) {
         this.droits = droits;
         this.service = service;
+        this.dossiers = dossiers;
         this.generation = generation;
         this.lignes = lignes;
         this.documents = documents;
+        this.export = export;
     }
 
     @GetMapping("/droits")
@@ -112,7 +140,7 @@ public class CommissionController {
     public List<DossierCommissionDto> dossiersDeLaTranche(@Parameter(description = TRANCHE) @PathVariable UUID trancheId,
                                                @ParameterObject @ModelAttribute FiltresCommission filtres) {
         droits.exiger(Droit.LECTURE);
-        return service.dossiers(trancheId, filtres);
+        return dossiers.lister(trancheId, filtres);
     }
 
     @GetMapping("/tranches/{trancheId}/lignes")
@@ -222,7 +250,8 @@ public class CommissionController {
     public ResponseEntity<byte[]> exporterLignes(@Parameter(description = TRANCHE) @PathVariable UUID trancheId,
                                                  @ParameterObject @ModelAttribute FiltresCommission filtres) {
         droits.exiger(Droit.IMPRESSION);
-        return service.exporterLignes(trancheId, filtres);
+        return export.reponseEnMemoire("commissions", "Commissions", List.of(new FeuilleExport(ExportTableur.FEUILLE,
+                COLONNES_LIGNES, plafond(service.lignes(trancheId, filtres)), null)));
     }
 
     @GetMapping("/tranches/export")
@@ -236,6 +265,12 @@ public class CommissionController {
             @Parameter(description = "Recherche multi-critère, comme la liste.") @RequestParam(required = false)
             String recherche) {
         droits.exiger(Droit.IMPRESSION);
-        return service.exporterTranches(recherche);
+        return export.reponseEnMemoire("commissions-tranches", "Commissions par tranche", List.of(new FeuilleExport(
+                ExportTableur.FEUILLE, COLONNES_TRANCHES, plafond(service.tranches(recherche)), null)));
+    }
+
+    private static List<?> plafond(List<?> lignesExport) {
+        return lignesExport.size() > LignesExport.LIGNES_EXPORT_MAX
+                ? lignesExport.subList(0, LignesExport.LIGNES_EXPORT_MAX) : lignesExport;
     }
 }

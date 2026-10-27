@@ -47,7 +47,7 @@ public class ConcretisationsLibresRapport extends RapportFluxVente {
     private static final String TAUX_CONCRETISATION = "tauxConcretisation";
     private static final String TAUX_LIBRES = "tauxLibres";
 
-    private static final String CATEGORIES = "SELECT DISTINCT c.id, c.description FROM StkItem i JOIN i.stkItemCategory c "
+    static final String CATEGORIES ="SELECT DISTINCT c.id, c.description FROM StkItem i JOIN i.stkItemCategory c "
             + "JOIN i.stkHierarchy t LEFT JOIN t.cfgProject p LEFT JOIN p.cfgCompany soc "
             + "WHERE i.stkVocation.code = 'VENTE' AND c.forUnderItem = false AND t.isForSale = true AND "
             + VisibiliteEntites.CLAUSE_JPQL + " ORDER BY c.description";
