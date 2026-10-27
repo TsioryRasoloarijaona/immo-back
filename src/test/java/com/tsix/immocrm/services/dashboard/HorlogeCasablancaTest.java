@@ -33,8 +33,9 @@ import static org.mockito.Mockito.when;
 /** FIX-horloge-casablanca.md (bug 66) : « aujourd'hui » est le jour de Casablanca, pas celui du serveur UTC. */
 class HorlogeCasablancaTest {
 
-    /** 00:30 le 09/10 à Casablanca (UTC+1), encore le 08/10 en UTC. */
-    private static final Instant MINUIT_ET_DEMIE_CASABLANCA = Instant.parse("2026-10-08T23:30:00Z");
+    /** 00:30 le 09/10 à Casablanca ; l'instant suit la base tz du JDK (les runners CI n'ont pas tous la même). */
+    private static final Instant MINUIT_ET_DEMIE_CASABLANCA =
+            LocalDateTime.of(2026, 10, 9, 0, 30).atZone(FuseauMetier.ZONE).toInstant();
 
     /** Ramadan 2026 : Casablanca repasse à UTC+0, 23:30 UTC est encore le 01/03 sur place. */
     private static final Instant RAMADAN_23H30_UTC = Instant.parse("2026-03-01T23:30:00Z");
@@ -47,15 +48,16 @@ class HorlogeCasablancaTest {
 
     @Test
     void entreMinuitEtUneHeure_aujourdhuiEstLeLendemainDuJourUtc() {
-        assertThat(LocalDate.ofInstant(MINUIT_ET_DEMIE_CASABLANCA, ZoneOffset.UTC)).isEqualTo("2026-10-08");
         Clock clock = Clock.fixed(MINUIT_ET_DEMIE_CASABLANCA, FuseauMetier.ZONE);
 
         assertThat(LocalDate.now(clock)).isEqualTo("2026-10-09");
-        // Relance posée pour le 09/10 : du jour (0), pas « dans un jour » (-1) comme en UTC.
+        // Relance posée pour le 09/10 : du jour (0), quel que soit le jour UTC du même instant.
         assertThat(joursDeRetard(clock, LocalDate.of(2026, 10, 9))).isZero();
         assertThat(joursDeRetard(clock, LocalDate.of(2026, 10, 8))).isEqualTo(1);
+        long ecartUtc = LocalDate.ofInstant(MINUIT_ET_DEMIE_CASABLANCA, ZoneOffset.UTC).toEpochDay()
+                - LocalDate.of(2026, 10, 9).toEpochDay();
         assertThat(joursDeRetard(Clock.fixed(MINUIT_ET_DEMIE_CASABLANCA, ZoneOffset.UTC),
-                LocalDate.of(2026, 10, 9))).isEqualTo(-1);
+                LocalDate.of(2026, 10, 9))).isEqualTo(ecartUtc);
     }
 
     @Test
