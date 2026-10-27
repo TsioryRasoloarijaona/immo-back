@@ -88,6 +88,7 @@ public class TerrainService {
                             cb.isNull(societe.get(ID)))));
             if (lotissements) {
                 p.add(cb.isNotNull(tranche.get(ID)));
+                p.add(cb.or(cb.isNull(root.get("isUnderItem")), cb.isFalse(root.get("isUnderItem"))));
                 p.add(cb.notEqual(root.join("stkVocation").get("code"), VOCATION_PROJET));
                 Subquery<UUID> entiteArticle = query.subquery(UUID.class);
                 Root<StrEntity> entite = entiteArticle.from(StrEntity.class);
