@@ -92,6 +92,12 @@ public class MouvementsStockTranche {
                         rs.getString("LibelleTranche"))));
     }
 
+    /** Stock de {@code tranche} au matin de {@code jour} : Σ des quantités de ses mouvements datés strictement avant. */
+    public long stockAvant(List<MouvementStock> mouvements, UUID tranche, LocalDate jour) {
+        return mouvements.stream().filter(m -> tranche.equals(m.tranche()) && m.date().isBefore(jour))
+                .mapToLong(MouvementStock::quantite).sum();
+    }
+
     /** Un avertissement par paramètre de statut absent (son bloc de mouvements est vide). */
     public List<String> avertissements() {
         List<String> poses = jdbc.queryForList(SEUILS_POSES, Map.of(), String.class);

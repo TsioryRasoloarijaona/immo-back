@@ -84,17 +84,18 @@ abstract class RapportFluxVente implements Rapport {
                 .sorted(Comparator.comparing(t -> Objects.toString(t.libelle(), ""))).toList();
     }
 
-    /** Codes et libellé d'une tranche en vente ; {@code projet} = code du programme ; {@code lancee} = date de lancement posée. */
-    record TrancheEnVente(UUID id, String code, String libelle, String projet, boolean lancee) {
+    /** Codes et libellés d'une tranche en vente ; {@code projet} = code du programme ; {@code lancee} = date de lancement posée. */
+    record TrancheEnVente(UUID id, String code, String libelle, String projet, String libelleProjet, boolean lancee) {
     }
 
     /** Tranches en vente parmi {@code ids} (visibles), triées par code de programme puis code de tranche. */
     static List<TrancheEnVente> tranchesEnVente(EntityManager em, List<UUID> ids) {
         return LotsTranches.lire(ids, lot -> em.createQuery("SELECT t.id, t.code, t.description, p.code, "
-                        + "t.marketingStartDate FROM CfgTranche t LEFT JOIN t.cfgProject p "
+                        + "p.description, t.marketingStartDate FROM CfgTranche t LEFT JOIN t.cfgProject p "
                         + "WHERE t.id IN :ids AND t.isForSale = true", Object[].class)
                 .setParameter("ids", lot).getResultList()).stream()
-                .map(r -> new TrancheEnVente((UUID) r[0], (String) r[1], (String) r[2], (String) r[3], r[4] != null))
+                .map(r -> new TrancheEnVente((UUID) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4],
+                        r[5] != null))
                 .sorted(Comparator.comparing((TrancheEnVente t) -> Objects.toString(t.projet(), ""))
                         .thenComparing(t -> Objects.toString(t.code(), ""))).toList();
     }
