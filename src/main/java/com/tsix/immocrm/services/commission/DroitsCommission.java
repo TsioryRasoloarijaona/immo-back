@@ -51,6 +51,17 @@ public class DroitsCommission {
     /** 403 sans l'écran ou sans l'outil. */
     @Transactional(readOnly = true)
     public void exiger(Droit droit) {
+        verifier(droit);
+    }
+
+    // Avant une écriture, jamais exiger() : open-in-view garde la connexion du 1er accès de la requête, une transaction
+    // readOnly la prendrait sur la copie et l'écriture suivante y partirait, effacée par la remontée.
+    @Transactional
+    public void exigerAvantEcriture(Droit droit) {
+        verifier(droit);
+    }
+
+    private void verifier(Droit droit) {
         if (!codesExigeantLEcran().contains(droit.code)) {
             throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action sur les commissions.");
         }
