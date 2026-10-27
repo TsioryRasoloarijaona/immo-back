@@ -14,11 +14,13 @@ public record DocumentCommissionDto(
         LocalDate date,
         @Schema(description = "Tiers du document : la personne commissionnée.") UUID commercialId,
         String commercial,
-        @Schema(description = "Montant TTC du document.") BigDecimal montant,
-        @Schema(description = "Σ des règlements du document, annulés exclus.") BigDecimal regle,
+        @Schema(description = "Montant TTC du document ; Σ des lignes visibles si une ligne est d'une tranche invisible.")
+        BigDecimal montant,
+        @Schema(description = "Réglé du document (annulés exclus) ; au prorata des lignes visibles si le document est partiel.")
+        BigDecimal regle,
         @Schema(description = "montant − regle.") BigDecimal reste,
         @Schema(description = "Statut du document.") String statut,
-        @Schema(description = "Lignes de commission du document.") List<LigneDocumentCommissionDto> lignes) {
+        @Schema(description = "Lignes de commission du document visibles de l'appelant.") List<LigneDocumentCommissionDto> lignes) {
 
     @Schema(description = "Ligne de commission portée par le document.")
     public record LigneDocumentCommissionDto(UUID ligneId,

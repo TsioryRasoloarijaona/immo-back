@@ -282,12 +282,22 @@ public class DocumentCommission {
         BuyDocument d = em.find(BuyDocument.class, documentId);
         // Un document peut couvrir plusieurs tranches : seules les lignes des tranches visibles de l'appelant sortent (C8).
         Map<UUID, Boolean> visibilite = new HashMap<>();
-        List<ComCommissionLine> duDocument = lignes.findByBuyDocumentIdIn(List.of(documentId)).stream()
+        List<ComCommissionLine> toutes = lignes.findByBuyDocumentIdIn(List.of(documentId));
+        List<ComCommissionLine> duDocument = toutes.stream()
                 .filter(l -> visibilite.computeIfAbsent(l.getCfgTrancheId(), t -> t != null && visibles.visible(t).isPresent()))
                 .toList();
         Map<UUID, String> codes = codesDossiers(duDocument);
-        BigDecimal montant = SoldesCommission.nonNul(d.getAmountTTC());
-        BigDecimal regle = soldes.reglesParDocument(List.of(documentId)).getOrDefault(documentId, BigDecimal.ZERO);
+        BigDecimal montant;
+        BigDecimal regle;
+        if (duDocument.size() == toutes.size()) {
+            montant = SoldesCommission.nonNul(d.getAmountTTC());
+            regle = soldes.reglesParDocument(List.of(documentId)).getOrDefault(documentId, BigDecimal.ZERO);
+        } else {
+            // Document partiellement visible : part des lignes visibles seulement, réglé au prorata (C8, Q5).
+            SoldesCommission.Solde part = SoldesCommission.solde(duDocument, soldes.reglesParLigne(duDocument));
+            montant = part.genere();
+            regle = part.regle();
+        }
         CfgTier tiers = d.getCfgTierId() == null ? null : em.find(CfgTier.class, d.getCfgTierId());
         List<?> statuts = d.getBuyDocumentStatusId() == null ? List.of()
                 : em.createNativeQuery(STATUT).setParameter("id", d.getBuyDocumentStatusId()).getResultList();
