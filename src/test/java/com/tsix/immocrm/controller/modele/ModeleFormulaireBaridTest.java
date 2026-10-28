@@ -85,8 +85,9 @@ class ModeleFormulaireBaridTest {
                 .map(b -> cm(b, "data-x").toPlainString() + ";" + cm(b, "data-y").toPlainString() + ";"
                         + cm(b, "data-l").toPlainString() + ";" + cm(b, "data-h").toPlainString())
                 .toList();
-        assertThat(positions).containsExactlyInAnyOrder("0.2;10.8;8.8;3.2", "0.2;13.4;8;1", "9;10.8;10.2;3.4",
-                "8.6;13.4;10;1", "5.2;21.8;10.2;1.6");
+        // Positions absolues sur la feuille = zones du §2 + (0,5 ; 0,9) cm (amendement 28/10).
+        assertThat(positions).containsExactlyInAnyOrder("0.7;11.7;8.8;3.2", "0.7;14.3;8;1", "9.5;11.7;10.2;3.4",
+                "9.1;14.3;10;1", "5.7;22.7;10.2;1.6");
     }
 
     @Test
@@ -108,7 +109,7 @@ class ModeleFormulaireBaridTest {
 
         assertThat(blocs).hasSize(5);
         for (Element bloc : blocs) {
-            boolean basDePage = cm(bloc, "data-y").compareTo(new BigDecimal("21.8")) == 0;
+            boolean basDePage = cm(bloc, "data-y").compareTo(new BigDecimal("22.7")) == 0;
             assertThat(cm(bloc, "data-taille")).as("taille du bloc y=%s", bloc.attr("data-y"))
                     .isEqualByComparingTo(basDePage ? "9" : "15.75");
             assertThat(bloc.attr("data-gras")).as("gras du bloc y=%s", bloc.attr("data-y")).isEqualTo("true");

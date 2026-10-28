@@ -2,7 +2,6 @@ package com.tsix.immocrm.services.modele;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -19,7 +18,6 @@ class FormulaireBaridPositionsOmranTest {
     private static final BigDecimal DECALAGE_X = new BigDecimal("0.5");
     private static final BigDecimal DECALAGE_Y = new BigDecimal("0.9");
 
-    @Disabled("Contredit ModeleFormulaireBaridTest (verrouillé) : décision du manager attendue, voir RAPPORT-vente-formulaire-barid.md")
     @Test
     void blocsSemes_tombentAuxPositionsAbsoluesDuFormulaireOmran() {
         List<Element> blocs = Jsoup.parseBodyFragment(
