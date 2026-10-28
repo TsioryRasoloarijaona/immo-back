@@ -115,13 +115,14 @@ class EtatVentesSyntheseTest {
 
     @Test
     void r1_parkingAutonome_sansParent_estCompte() throws Exception {
-        fixture.parkingAutonome(prefixe + "-PK", tranche, parking, type);
+        // Vendu : un parking racine libre n'est plus compté (FEATURE-etat-ventes-omran.md §1.1).
+        vendre(fixture.parkingAutonome(prefixe + "-PK", tranche, parking, type), StatutDossier.RESERVATION);
         fixture.relire();
 
         mockMvc.perform(get(URL).param(TRANCHE_ID, tranche.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(ligne(tranche, parking) + ".total").value(1))
-                .andExpect(jsonPath(ligne(tranche, parking) + ".parStatut." + LIBRE).value(1));
+                .andExpect(jsonPath(ligne(tranche, parking) + ".parStatut." + RESERVATION).value(1));
     }
 
     /** R1 + R3 : le sous-article rattaché n'ouvre pas de ligne sous sa propre catégorie, même si le parent est vendu. */
