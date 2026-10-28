@@ -217,12 +217,11 @@ class DossierListeColonnesOmranTest {
                 .andExpect(jsonPath(PREMIER + "banqueCredit").value("BANQUE POPULAIRE"));
     }
 
-    /** Colonnes vides à plus de 99 % en base réelle : retirées du catalogue (FEATURE-dossiers-liste-complete.md B5). */
+    /** Colonnes vides à plus de 99 % en base réelle : retirées du catalogue (FEATURE-dossiers-liste-complete.md B5).
+     *  `numeroTitre` y revient (FEATURE-dossiers-colonnes-omran.md §2.1). */
     @Test
     void colonneRetireeDuCatalogue_400() throws Exception {
         mockMvc.perform(get("/api/dossiers").param("colonnes", "code,gestionnaire2Nom"))
-                .andExpect(status().isBadRequest());
-        mockMvc.perform(get("/api/dossiers").param("colonnes", "numeroTitre"))
                 .andExpect(status().isBadRequest());
     }
 

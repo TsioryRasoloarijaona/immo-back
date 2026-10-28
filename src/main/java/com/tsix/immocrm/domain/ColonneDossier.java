@@ -14,7 +14,7 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("id")),
     CODE("code", "Code", Groupe.IDENTITE, TypeColonne.TEXTE, true,
             Chemin.groupable("code")),
-    DATE_DOCUMENT("dateDocument", "Date", Groupe.IDENTITE, TypeColonne.DATE, true,
+    DATE_DOCUMENT("dateDocument", "Date Réservation", Groupe.IDENTITE, TypeColonne.DATE, true,
             Chemin.date("docDate")),
     STATUT("statut", "Statut", Groupe.IDENTITE, TypeColonne.TEXTE, true,
             Chemin.groupable("strStatus.code")),
@@ -26,7 +26,7 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("cfgCommercial.id")),
     COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true,
             Chemin.tier("cfgCommercial")),
-    PRIX("prix", "Prix", Groupe.FINANCIER, TypeColonne.MONTANT, true,
+    PRIX("prix", "Prix de vente", Groupe.FINANCIER, TypeColonne.MONTANT, true,
             Chemin.groupableEtAgregeable("price")),
     TOTAL_A_PAYER("totalAPayer", "Total à payer", Groupe.FINANCIER, TypeColonne.MONTANT, true,
             Chemin.groupableEtAgregeable("totalToPay")),
@@ -58,15 +58,15 @@ public enum ColonneDossier implements Colonne {
     //    doit le joindre en LEFT explicite, sinon INNER JOIN implicite et groupes perdus.
     PROJET_ID("projetId", "Id projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.cfgProject.id")),
-    PROJET_CODE("projetCode", "Projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+    PROJET_CODE("projetCode", "Code projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.cfgProject.code")),
-    PROJET_LIBELLE("projetLibelle", "Libellé projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+    PROJET_LIBELLE("projetLibelle", "Projet", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.cfgProject.description")),
     TRANCHE_ID("trancheId", "Id tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.id")),
-    TRANCHE_CODE("trancheCode", "Tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+    TRANCHE_CODE("trancheCode", "Code tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.code")),
-    TRANCHE_LIBELLE("trancheLibelle", "Libellé tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
+    TRANCHE_LIBELLE("trancheLibelle", "Tranche", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.description")),
     SOCIETE_ID("societeId", "Id société", Groupe.PATRIMOINE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.stkHierarchy.cfgProject.cfgCompany.id")),
@@ -90,7 +90,7 @@ public enum ColonneDossier implements Colonne {
     // -- Origine, depuis la prospection. `etapeProspection` lit ComProspectionKind, comme le mappeur de liste.
     ETAPE_PROSPECTION("etapeProspection", "Étape prospection", Groupe.ORIGINE, TypeColonne.TEXTE, false,
             Chemin.groupable("comProspection.comProspectionKind.description")),
-    ORIGINE_PROSPECTION("origineProspection", "Origine", Groupe.ORIGINE, TypeColonne.TEXTE, false,
+    ORIGINE_PROSPECTION("origineProspection", "Source de contact", Groupe.ORIGINE, TypeColonne.TEXTE, false,
             Chemin.groupable("comProspection.comProspectionOrigin.description")),
     DATE_PROSPECTION("dateProspection", "Date prospection", Groupe.ORIGINE, TypeColonne.DATE, false,
             Chemin.date("comProspection.docDate")),
@@ -112,7 +112,7 @@ public enum ColonneDossier implements Colonne {
     /** La clé de tri par défaut de l'écran légataire. */
     ARTICLE_CODE("articleCode", "Article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.code")),
-    ARTICLE_LIBELLE("articleLibelle", "Libellé article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
+    ARTICLE_LIBELLE("articleLibelle", "Description article", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.description")),
     ARTICLE_TITRE_FONCIER("articleTitreFoncier", "Titre foncier", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             Chemin.groupable("stkItem.titleNumber")),
@@ -136,22 +136,27 @@ public enum ColonneDossier implements Colonne {
     // -- Jalons et délais. Les délais sont des @Formula (FEATURE-colonnes-dossier-ecran-legataire.md §3) ;
     //    les deux dates en sont les entrées, sans elles un nombre de jours est invérifiable à l'écran.
     // OMRAN : le compromis est CreditApprovalDate ; AgreementDate = « Date Envoi Notaire / Avocat ».
-    DATE_COMPROMIS("dateCompromis", "Compromis", Groupe.IDENTITE, TypeColonne.DATE, false,
+    DATE_COMPROMIS("dateCompromis", "Date Compromis / Approbation Crédit", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("creditApprovalDate")),
     DATE_ENVOI_NOTAIRE("dateEnvoiNotaire", "Envoi notaire / avocat", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("agreementDate")),
-    DATE_LIVRAISON_REELLE("dateLivraisonReelle", "Livraison réelle", Groupe.IDENTITE, TypeColonne.DATE, false,
+    DATE_LIVRAISON_REELLE("dateLivraisonReelle", "Date Remise de Clés", Groupe.IDENTITE, TypeColonne.DATE, false,
             Chemin.date("deliveryDateReal")),
     /**
      * Non groupable : sa formule contient une sous-requête corrélée, que SQL Server refuse dans un
      * GROUP BY (SQLGrammarException en 500). Les deux autres délais n'en ont pas.
      */
-    DELAI_CONCRETISATION("delaiConcretisation", "Délai de concrétisation (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
-            Chemin.agregeable("delaiConcretisation")),
-    DELAI_NOTAIRE("delaiNotaire", "Délai notaire (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
+    DELAI_CONCRETISATION("delaiConcretisation", "Délais Prospection-Concrétisation", Groupe.DELAIS, TypeColonne.NOMBRE,
+            false, Chemin.agregeable("delaiConcretisation")),
+    DELAI_NOTAIRE("delaiNotaire", "Délais Concrétisation-Envoi Notaire", Groupe.DELAIS, TypeColonne.NOMBRE, false,
             Chemin.groupableEtAgregeable("delaiNotaire")),
-    DELAI_LIVRAISON("delaiLivraison", "Délai de livraison (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
-            Chemin.groupableEtAgregeable("delaiLivraison")),
+    DELAI_LIVRAISON("delaiLivraison", "Délais Envoi au Notaire-Remise des Clés", Groupe.DELAIS, TypeColonne.NOMBRE,
+            false, Chemin.groupableEtAgregeable("delaiLivraison")),
+    // Calculés en Java (chemin null) comme le DATEDIFF de ComFolderView ; une borne nulle rend null.
+    DELAI_NOTAIRE_CREDIT("delaiNotaireCredit", "Délais Envoi au Notaire-Crédit Accordé", Groupe.DELAIS,
+            TypeColonne.NOMBRE, false, null),
+    DELAI_CREDIT_CLES("delaiCreditCles", "Délais Crédit Accordé - Remise des Clés", Groupe.DELAIS, TypeColonne.NOMBRE,
+            false, null),
 
     // -- Parité avec la grille OMRAN (SaleMonitoringList), voir FEATURE-vente-liste.md §1.
     //    Chemin null = valeur calculée (Java ou requête native par page) : ni groupable ni agrégeable.
@@ -171,7 +176,7 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("cfgCustomer.iDNumber")),
     CLIENT_MOBILE_COMPLET("clientMobileComplet", "Mobile", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
     CLIENT_TELEPHONE("clientTelephone", "Tél.", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
-    AUTRES_CLIENTS("autresClients", "Autres clients", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
+    AUTRES_CLIENTS("autresClients", "Autre clients", Groupe.CLIENT, TypeColonne.TEXTE, false, null),
     CLIENT_EMAIL("clientEmail", "E-mail client", Groupe.CLIENT, TypeColonne.TEXTE, false,
             Chemin.groupable("cfgCustomer.eMail")),
     // Groupé sur la seule première ligne d'adresse ; la valeur affichée y joint Address2 et Address3.
@@ -181,13 +186,12 @@ public enum ColonneDossier implements Colonne {
     CLIENT_PAYS("clientPays", "Pays client", Groupe.CLIENT, TypeColonne.TEXTE, false,
             Chemin.groupable("cfgCustomer.admCountry.description")),
 
-    // Les dates renseignées sur moins de 1 % des dossiers ne sont plus des colonnes, seulement des
-    // filtres de période (ChampDateDossier) : voir FEATURE-dossiers-liste-complete.md B5.
+    // Toutes les dates de la grille OMRAN, même peu remplies : voir FEATURE-dossiers-colonnes-omran.md §2.1.
     DATE_FICHE_BANCAIRE("dateFicheBancaire", "Fiche bancaire", Groupe.DATES, TypeColonne.DATE, false,
             Chemin.date("bankRecordDate")),
     DATE_PERMIS_HABITER("datePermisHabiter", "Permis d'habiter", Groupe.DATES, TypeColonne.DATE, false,
             Chemin.date("stkItem.stkHierarchy.occupancyPermitsDate")),
-    DATE_MINUTE("dateMinute", "Minute / enregistrement contrat", Groupe.DATES, TypeColonne.DATE, false,
+    DATE_MINUTE("dateMinute", "Date minute / Signature contrat", Groupe.DATES, TypeColonne.DATE, false,
             Chemin.date("agreementSavingDate")),
     DATE_REMISE_CLES_PREVUE("dateRemiseClesPrevue", "Remise de clés prévisionnelle", Groupe.DATES,
             TypeColonne.DATE, false, Chemin.date("stkItem.stkHierarchy.deliveryDate")),
@@ -201,10 +205,35 @@ public enum ColonneDossier implements Colonne {
             TypeColonne.DATE, false, Chemin.date("agreementDatePrevisionel")),
     ENVOI_NOTAIRE_CONFIRME("envoiNotaireConfirme", "Envoi notaire confirmé", Groupe.DATES, TypeColonne.BOOLEEN,
             false, Chemin.groupable("isConfirmedAgreementDate")),
-    DATE_DECISION_MEILLEUR_TAUX("dateDecisionMeilleurTaux", "Décision MEILLEURTAUX", Groupe.DATES,
+    DATE_DECISION_MEILLEUR_TAUX("dateDecisionMeilleurTaux", "Date Décision MEILLEURTAUX", Groupe.DATES,
             TypeColonne.DATE, false, Chemin.date("loanCompanyDecisionDate")),
     DATE_IMPRESSION_CONTRAT("dateImpressionContrat", "Impression contrat rés./prom.", Groupe.DATES,
             TypeColonne.DATE, false, Chemin.date("contractPrintDate")),
+    DATE_REMISE_CONTRAT_LEGALISATION("dateRemiseContratLegalisation", "Date remise contrat pour légalisation",
+            Groupe.DATES, TypeColonne.DATE, false, Chemin.date("agreementSavingDateForLegalization")),
+    DATE_LEGALISATION_CONTRAT("dateLegalisationContrat", "Date légalisation contrat", Groupe.DATES,
+            TypeColonne.DATE, false, Chemin.date("agreementSavingDateLegalization")),
+    DATE_REMISE_CERTIFICAT_PROPRIETE("dateRemiseCertificatPropriete",
+            "Date remise du certificat de propriété au client", Groupe.DATES, TypeColonne.DATE, false,
+            Chemin.date("finalTitleDate")),
+    NUMERO_TITRE("numeroTitre", "N° titre", Groupe.DATES, TypeColonne.TEXTE, false,
+            Chemin.groupable("finalTitleNumber")),
+    DATE_PROMESSE_VENTE("datePromesseVente", "Date Promesse de Vente", Groupe.DATES, TypeColonne.DATE, false,
+            Chemin.date("reservationDate")),
+    DATE_FICHE_INTERVENTION("dateFicheIntervention", "Date Fiche Intervention", Groupe.DATES, TypeColonne.DATE,
+            false, Chemin.date("interventionDate")),
+    DATE_OCTROI_CREDIT("dateOctroiCredit", "Date Attestation de Consignation / Octroi Crédit", Groupe.DATES,
+            TypeColonne.DATE, false, Chemin.date("creditPossessionDate")),
+    DATE_VISITE_TECHNIQUE("dateVisiteTechnique", "Date Visite Technique / Réception", Groupe.DATES,
+            TypeColonne.DATE, false, Chemin.date("receptionDate")),
+    DATE_EXPEDITION("dateExpedition", "Date Expédition", Groupe.DATES, TypeColonne.DATE, false,
+            Chemin.date("ownershipCertificateDate")),
+    ECHEANCE_RELANCE_1("echeanceRelance1", "Échéance de la relance 1", Groupe.DATES, TypeColonne.DATE, false,
+            Chemin.date("revival1ValidityDate")),
+    ECHEANCE_RELANCE_2("echeanceRelance2", "Échéance de la relance 2", Groupe.DATES, TypeColonne.DATE, false,
+            Chemin.date("revival2ValidityDate")),
+    DATE_ENVOI_MEILLEUR_TAUX("dateEnvoiMeilleurTaux", "Date Envoi MEILLEURTAUX", Groupe.DATES, TypeColonne.DATE,
+            false, Chemin.date("loanCompanySendDate")),
 
     BANQUE_CREDIT("banqueCredit", "Banque crédit / leasing", Groupe.ACTEURS, TypeColonne.TEXTE, false,
             Chemin.tier("creditBank")),
@@ -213,9 +242,9 @@ public enum ColonneDossier implements Colonne {
     ACTION_COMMERCIALE("actionCommerciale", "Action commerciale", Groupe.ORIGINE, TypeColonne.TEXTE, false,
             Chemin.groupable("comProspection.comAction.description")),
 
-    SUPERFICIE("superficie", "Superficie (m²)", Groupe.ARTICLE, TypeColonne.NOMBRE, false,
+    SUPERFICIE("superficie", "Sup.(m²)", Groupe.ARTICLE, TypeColonne.NOMBRE, false,
             Chemin.groupableEtAgregeable("area")),
-    SUPERFICIE_GLOBALE("superficieGlobale", "Superficie globale (m²)", Groupe.ARTICLE, TypeColonne.NOMBRE, false,
+    SUPERFICIE_GLOBALE("superficieGlobale", "Sup.Globale (m²)", Groupe.ARTICLE, TypeColonne.NOMBRE, false,
             Chemin.groupableEtAgregeable("globalArea")),
     SOUS_ARTICLES_CODES("sousArticlesCodes", "Sous-articles (codes)", Groupe.ARTICLE, TypeColonne.TEXTE, false,
             null),
@@ -272,6 +301,9 @@ public enum ColonneDossier implements Colonne {
     NOMBRE_ACTIONS("nombreActions", "Nombre d'actions", Groupe.SUIVI, TypeColonne.NOMBRE, false, null),
 
     DELAI_MEILLEUR_TAUX("delaiMeilleurTaux", "Délai MEILLEURTAUX (j)", Groupe.DELAIS, TypeColonne.NOMBRE, false,
+            null),
+    // ComLoanCompanyDecision.Description, lu par page avec les colonnes calculées (pas d'entité).
+    DECISION_MEILLEUR_TAUX("decisionMeilleurTaux", "Décision MEILLEURTAUX", Groupe.DELAIS, TypeColonne.TEXTE, false,
             null),
 
     // -- Montants par nature de la grille OMRAN (ComSaleFolderView), lus par MontantsParNatureDossier.

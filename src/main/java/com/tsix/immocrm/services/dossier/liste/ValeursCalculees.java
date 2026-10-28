@@ -9,5 +9,5 @@ public record ValeursCalculees(Integer nombreEtatsModification, Integer nombreCa
                                LocalDateTime derniereCommunicationDate, String derniereCommunicationResultat,
                                String derniereCommunicationMessage, boolean instructionNonLue,
                                String sousArticlesCodes, String sousArticlesLibelles, String autresClients,
-                               String clientVille, String clientPays) {
+                               String clientVille, String clientPays, String decisionMeilleurTaux) {
 }

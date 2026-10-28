@@ -328,7 +328,8 @@ class DossierListeFiltresOmranTest {
             Row ligne = feuille.getRow(1);
             assertThat(feuille.getLastRowNum()).isEqualTo(1);
             assertThat(entete.getCell(0).getStringCellValue()).isEqualTo("Code");
-            assertThat(entete.getCell(1).getStringCellValue()).isEqualTo("Prix");
+            // Libellé OMRAN (FEATURE-dossiers-colonnes-omran.md §2.3).
+            assertThat(entete.getCell(1).getStringCellValue()).isEqualTo("Prix de vente");
             assertThat(entete.getCell(2).getStringCellValue()).isEqualTo("Fiche bancaire");
             assertThat(ligne.getCell(0).getStringCellValue()).isEqualTo(f.getCode());
             assertThat(ligne.getCell(1).getNumericCellValue()).isEqualTo(700000.0);

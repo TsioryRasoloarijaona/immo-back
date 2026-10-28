@@ -212,15 +212,29 @@ public final class MappingListeDossier {
                 .met(ENVOI_NOTAIRE_CONFIRME, f.getIsConfirmedAgreementDate())
                 .met(DATE_DECISION_MEILLEUR_TAUX, f.getLoanCompanyDecisionDate())
                 .met(DATE_IMPRESSION_CONTRAT, f.getContractPrintDate())
-                .met(CADEAU_PLUS_TARD, f.getIsWithGiftChoiceLater());
+                .met(CADEAU_PLUS_TARD, f.getIsWithGiftChoiceLater())
+                .met(DATE_REMISE_CONTRAT_LEGALISATION, f.getAgreementSavingDateForLegalization())
+                .met(DATE_LEGALISATION_CONTRAT, f.getAgreementSavingDateLegalization())
+                .met(DATE_REMISE_CERTIFICAT_PROPRIETE, f.getFinalTitleDate())
+                .met(NUMERO_TITRE, f.getFinalTitleNumber())
+                .met(DATE_PROMESSE_VENTE, f.getReservationDate())
+                .met(DATE_FICHE_INTERVENTION, f.getInterventionDate())
+                .met(DATE_OCTROI_CREDIT, f.getCreditPossessionDate())
+                .met(DATE_VISITE_TECHNIQUE, f.getReceptionDate())
+                .met(DATE_EXPEDITION, f.getOwnershipCertificateDate())
+                .met(ECHEANCE_RELANCE_1, f.getRevival1ValidityDate())
+                .met(ECHEANCE_RELANCE_2, f.getRevival2ValidityDate())
+                .met(DATE_ENVOI_MEILLEUR_TAUX, f.getLoanCompanySendDate());
     }
 
-    /** Les trois premiers sont des {@code @Formula} ; le dernier, le {@code DATEDIFF(d, …)} de la vue en Java. */
+    /** Les trois premiers sont des {@code @Formula} ; les suivants, le {@code DATEDIFF(d, …)} de la vue en Java. */
     private static void delais(LigneDossier l, ComFolder f) {
         Integer meilleurTaux = jours(f.getLoanCompanySendDate(), f.getLoanCompanyDecisionDate());
         l.met(DELAI_CONCRETISATION, f.getDelaiConcretisation())
                 .met(DELAI_NOTAIRE, f.getDelaiNotaire())
                 .met(DELAI_LIVRAISON, f.getDelaiLivraison())
+                .met(DELAI_NOTAIRE_CREDIT, jours(f.getAgreementDate(), f.getCreditPossessionDate()))
+                .met(DELAI_CREDIT_CLES, jours(f.getCreditPossessionDate(), f.getDeliveryDateReal()))
                 // ISNULL(…, 0) dans la vue : zéro, pas null, quand une des deux dates manque.
                 .met(DELAI_MEILLEUR_TAUX, meilleurTaux != null ? meilleurTaux : 0);
     }
@@ -296,7 +310,8 @@ public final class MappingListeDossier {
                 .met(SOUS_ARTICLES_LIBELLES, c.sousArticlesLibelles())
                 .met(AUTRES_CLIENTS, c.autresClients())
                 .met(CLIENT_VILLE, c.clientVille())
-                .met(CLIENT_PAYS, c.clientPays());
+                .met(CLIENT_PAYS, c.clientPays())
+                .met(DECISION_MEILLEUR_TAUX, c.decisionMeilleurTaux());
     }
 
     /** Lu seulement si la colonne est demandée : une colonne absente vaut {@code null}. */
