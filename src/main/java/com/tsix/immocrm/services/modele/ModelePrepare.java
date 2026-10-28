@@ -14,6 +14,8 @@ import java.util.UUID;
  */
 record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto miseEnPage, Set<UUID> images) {
 
+    static final String FOND = "data-fond";
+
     /** {@code miseEnPage} déjà normalisée ({@link MiseEnPageModele#normaliser}). */
     static ModelePrepare preparer(DescriptionChamps catalogue, String contenu, MiseEnPageDto miseEnPage) {
         ContenuModele.verifierTailleTexte(longueur(contenu) + longueur(miseEnPage.enTete()) + longueur(miseEnPage.piedDePage()));
@@ -27,6 +29,9 @@ record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto 
         if (pied != null) {
             images.addAll(pied.images());
         }
+        if (miseEnPage.fondImageId() != null) {
+            images.add(miseEnPage.fondImageId());
+        }
         return new ModelePrepare(corps.corps(), corps(enTete), corps(pied), miseEnPage, Set.copyOf(images));
     }
 
@@ -38,8 +43,18 @@ record ModelePrepare(Element corps, Element enTete, Element pied, MiseEnPageDto 
                 miseEnPage, images);
     }
 
-    /** Pour le rendu seulement : chaque {@code img[data-image]} reçoit ses octets en data URI, en mémoire. */
+    /**
+     * Pour le rendu seulement : chaque {@code img[data-image]} reçoit ses octets en data URI, en mémoire ; le fond de page
+     * devient un {@code img[data-fond]} fixe, répété sur chaque page derrière le texte (retiré en Word).
+     */
     ModelePrepare avecImages(Map<UUID, String> sources) {
+        UUID fond = miseEnPage.fondImageId();
+        if (fond != null) {
+            String taille = Boolean.FALSE.equals(miseEnPage.fondPleinePage()) ? "" : " width: 210mm; height: 297mm;";
+            corps.prependElement("img").attr(FOND, "").attr("src", sources.get(fond)).attr("style",
+                    "position: fixed; z-index: -1; left: -%dmm; top: -%dmm; max-width: none;%s"
+                            .formatted(miseEnPage.margeGauche(), miseEnPage.margeHaut(), taille));
+        }
         for (Element zone : new Element[]{corps, enTete, pied}) {
             if (zone != null) {
                 zone.select("img[" + ContenuModele.IMAGE + "]").forEach(img -> {

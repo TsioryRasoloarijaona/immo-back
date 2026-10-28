@@ -29,7 +29,7 @@ class RemplissageModeleTest {
                 "AYAD PRIVATE", null, "MAYLINE", terrain, "APPARTEMENT", "APF-0-12", "IMM01", "1er étage",
                 new BigDecimal("60.00"), List.of(new SousArticle("TERRASSE", null)), new BigDecimal("1200000"),
                 new BigDecimal("120000"), new BigDecimal("10.00"), lignes, new BigDecimal("15"), null, null,
-                new BigDecimal("2.5"), 12, null, 24, "Casablanca", "Karim", LocalDate.of(2026, 10, 16));
+                new BigDecimal("2.5"), 12, null, 24, "Casablanca", "Karim", LocalDate.of(2026, 10, 16), List.of());
     }
 
     private static Element remplir(String html, ActeReservationData data) {

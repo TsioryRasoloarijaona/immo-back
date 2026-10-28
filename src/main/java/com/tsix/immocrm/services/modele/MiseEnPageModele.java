@@ -30,7 +30,8 @@ public class MiseEnPageModele {
         return new MiseEnPageDto(format,
                 marge("margeHaut", source.margeHaut()), marge("margeBas", source.margeBas()),
                 marge("margeGauche", source.margeGauche()), marge("margeDroite", source.margeDroite()),
-                vide(source.enTete()), vide(source.piedDePage()));
+                vide(source.enTete()), vide(source.piedDePage()), source.fondImageId(),
+                source.fondImageId() == null ? null : !Boolean.FALSE.equals(source.fondPleinePage()));
     }
 
     /** Taille bornée en amont : en-tête et pied passent par {@link ModelePrepare} (liste blanche, poids des images). */

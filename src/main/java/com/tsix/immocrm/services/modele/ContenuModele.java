@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Map.entry;
 
@@ -43,7 +45,8 @@ public final class ContenuModele {
             entry("h1", Set.of(STYLE)),
             entry("h2", Set.of(STYLE, NUMERO)),
             entry("h3", Set.of(STYLE)),
-            entry("div", Set.of(STYLE, SI, VALEUR, SAUT_PAGE)),
+            entry("div", Stream.concat(Stream.of(STYLE, SI, VALEUR, SAUT_PAGE, REPETER),
+                    BlocsPositionnes.ATTRIBUTS.stream()).collect(Collectors.toUnmodifiableSet())),
             entry("span", Set.of(CHAMP, REPETER, SI, VALEUR)),
             entry("tr", Set.of(REPETER)),
             entry("td", CELLULE),
@@ -105,6 +108,8 @@ public final class ContenuModele {
         }
         if ("img".equals(balise)) {
             verifierImage(element);
+        } else if ("div".equals(balise)) {
+            BlocsPositionnes.verifier(element);
         }
         String listeEnfants = verifierRepetition(element, liste);
         verifierChamp(element, listeEnfants);

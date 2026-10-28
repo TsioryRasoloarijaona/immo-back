@@ -69,8 +69,14 @@ final class RemplissageModele {
         String cle = modele.attr(REPETER);
         modele.removeAttr(REPETER);
         List<Map<String, Object>> elements = valeurs.listes().getOrDefault(cle, List.of());
+        boolean premier = true;
         for (Map<String, Object> element : elements) {
             Element copie = modele.clone();
+            if (premier) {
+                // Page répétée : saut entre deux éléments, jamais avant le premier.
+                copie.removeAttr(SAUT_PAGE);
+                premier = false;
+            }
             modele.before(copie);
             traiter(copie, element, cle);
         }
