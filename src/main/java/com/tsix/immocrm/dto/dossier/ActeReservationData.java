@@ -38,11 +38,19 @@ public record ActeReservationData(
         Integer syndicDureeMois,
         String tribunalCompetent,
         String signataireNom,
-        LocalDate dateEdition
+        LocalDate dateEdition,
+        /** Acquéreur principal puis co-acquéreurs, une page chacun du formulaire Barid ; vide si le dossier est sorti. */
+        List<Destinataire> destinataires
 ) {
     public record SousArticle(String typeLabel, BigDecimal superficie) {
     }
 
     public record LignePaiement(BigDecimal montant, BigDecimal pct, LocalDate date) {
+    }
+
+    /** Destinataire d'un formulaire Barid Al-Maghrib (FEATURE-vente-formulaire-barid.md §3) ; valeur absente = null. */
+    public record Destinataire(String titre, String nom, String adresse, String adresseSansCodePostal, String codePostal,
+                               String societe, String societeAdresseSansCodePostal, String societeCodePostal,
+                               String dossier, String tranche, String statut, String role) {
     }
 }

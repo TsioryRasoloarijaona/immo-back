@@ -24,6 +24,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
+import org.jsoup.select.Elements;
 import org.jsoup.select.NodeTraversor;
 import org.springframework.stereotype.Component;
 
@@ -65,6 +66,12 @@ public class RenduModele {
             document.body().appendElement("div").attr("id", PIED).appendChildren(pied.childNodesCopy());
         }
         document.body().appendChildren(corps.childNodesCopy());
+        Elements blocs = document.body().select("div[" + BlocsPositionnes.BLOC + "]");
+        if (!blocs.isEmpty()) {
+            // La marge par défaut du <body> (8px) décalerait les blocs : origine = coin de la page.
+            document.body().attr("style", "margin: 0");
+            blocs.forEach(b -> BlocsPositionnes.positionner(b, miseEnPage));
+        }
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
@@ -84,6 +91,7 @@ public class RenduModele {
     }
 
     public byte[] docx(Element corps, Element enTete, Element pied, MiseEnPageDto miseEnPage) {
+        corps.select("img[" + ModelePrepare.FOND + "]").remove();
         try {
             WordprocessingMLPackage paquet = WordprocessingMLPackage.createPackage(PageSizePaper.A4, false);
             SectPr section = paquet.getDocumentModel().getSections().get(0).getSectPr();

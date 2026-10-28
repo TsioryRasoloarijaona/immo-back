@@ -193,7 +193,9 @@ class ModeleDocumentControllerTest {
         mockMvc.perform(get(BASE + "/categories/{c}/champs", DOSSIER_VENTE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.groupes[0].champs[0].cle").value("dossier.code"))
-                .andExpect(jsonPath("$.listes[*].cle").value(org.hamcrest.Matchers.contains("sousArticles", "echeancesSolde")));
+                // Lot BAM (FEATURE-vente-formulaire-barid.md §3) : + liste destinataires.
+                .andExpect(jsonPath("$.listes[*].cle").value(org.hamcrest.Matchers.containsInAnyOrder("sousArticles",
+                        "echeancesSolde", "destinataires")));
 
         mockMvc.perform(get(BASE + "/categories/{c}/champs", "INCONNUE"))
                 .andExpect(status().isNotFound());

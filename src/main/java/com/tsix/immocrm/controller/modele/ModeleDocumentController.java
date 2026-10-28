@@ -229,8 +229,9 @@ public class ModeleDocumentController {
     @Operation(summary = "Génère le document d'une fiche depuis un modèle actif")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document généré."),
-            @ApiResponse(responseCode = "400", description = "`format` autre que `pdf` ou `docx`."),
-            @ApiResponse(responseCode = "404", description = "Modèle introuvable ou inactif, ou fiche hors périmètre.")
+            @ApiResponse(responseCode = "400", description = "`format` autre que `pdf` ou `docx`, ou `docx` d'un modèle PDF seul."),
+            @ApiResponse(responseCode = "403", description = "Modèle à droits propres (FORMULAIRE_BARID) non permis à l'appelant."),
+            @ApiResponse(responseCode = "404", description = "Modèle introuvable ou inactif, fiche hors périmètre, ou aucune page.")
     })
     public ResponseEntity<byte[]> generer(
             @Parameter(description = ID_MODELE) @PathVariable UUID id,
@@ -248,6 +249,7 @@ public class ModeleDocumentController {
         MediaType type = format.type();
         return ResponseEntity.ok()
                 .contentType(type)
+                .cacheControl(CacheControl.noStore().cachePrivate())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(contenu);
     }

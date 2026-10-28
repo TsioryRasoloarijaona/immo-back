@@ -27,6 +27,9 @@ public class InitialiseurModeles {
     public static final String CODE_PREMIERE_RELANCE = "PREMIERE_RELANCE";
     /** Marges de l'acte codé en dur (45 pt côtés, 35 pt haut et bas), arrondies au mm. */
     static final MiseEnPageDto MISE_EN_PAGE_ACTE = new MiseEnPageDto("A4", 12, 12, 16, 16, null, null);
+    static final String RESSOURCE_FORMULAIRE_BARID = "modeles/dossier-vente/formulaire-barid.html";
+    /** Sans fond : le scan du formulaire est déposé par l'éditeur (FEATURE-vente-formulaire-barid.md, mise en service). */
+    static final MiseEnPageDto MISE_EN_PAGE_BARID = new MiseEnPageDto("A4", 5, 5, 5, 5, null, null);
 
     private static final Logger log = LoggerFactory.getLogger(InitialiseurModeles.class);
 
@@ -47,6 +50,12 @@ public class InitialiseurModeles {
     public void initialiserPremiereRelance() {
         initialiser(new CreerModeleDocumentRequest(CategorieModele.RELANCE_TITRE_FONCIER.name(), CODE_PREMIERE_RELANCE,
                 "Lettre de 1re relance", 10, contenu(RESSOURCE_RELANCE), null));
+    }
+
+    public void initialiserFormulaireBarid() {
+        initialiser(new CreerModeleDocumentRequest(CategorieModele.DOSSIER_VENTE.name(),
+                ControleAccesFormulaireBarid.CODE_MODELE, "Formulaire Barid Al-Maghrib", 20,
+                contenu(RESSOURCE_FORMULAIRE_BARID), MISE_EN_PAGE_BARID));
     }
 
     private void initialiser(CreerModeleDocumentRequest modele) {

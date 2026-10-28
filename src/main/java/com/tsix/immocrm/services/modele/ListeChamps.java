@@ -10,7 +10,11 @@ public record ListeChamps<T, E>(String cle, String libelle, Function<T, List<E>>
 
     /** {@link HashMap} et non {@code Map.of} : une valeur absente reste une entrée nulle. */
     List<Map<String, Object>> extraire(T source) {
-        List<E> liste = elements.apply(source);
+        return valeursDe(elements.apply(source));
+    }
+
+    /** Valeurs d'éléments lus hors d'une fiche (lot de plusieurs fiches). */
+    List<Map<String, Object>> valeursDe(List<E> liste) {
         if (liste == null) {
             return List.of();
         }

@@ -17,6 +17,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.modele.DestinatairesBarid;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
@@ -41,13 +42,16 @@ public class ActeReservationService {
     private final ComFolderRepository folderRepository;
     private final StkItemRepository itemRepository;
     private final ComDocumentRepository documentRepository;
+    private final DestinatairesBarid destinataires;
     private final Clock clock;
 
     public ActeReservationService(ComFolderRepository folderRepository, StkItemRepository itemRepository,
-                                   ComDocumentRepository documentRepository, Clock clock) {
+                                   ComDocumentRepository documentRepository, DestinatairesBarid destinataires,
+                                   Clock clock) {
         this.folderRepository = folderRepository;
         this.itemRepository = itemRepository;
         this.documentRepository = documentRepository;
+        this.destinataires = destinataires;
         this.clock = clock;
     }
 
@@ -115,7 +119,8 @@ public class ActeReservationService {
                 Champs.de(tranche, CfgTranche::getSyndicPeriod),
                 requireNonNullElse(Champs.de(tranche, CfgTranche::getCommerceTribunal), "Casablanca"),
                 TierNomFormatter.nom(folder.getCfgCommercial()),
-                LocalDate.now(clock)
+                LocalDate.now(clock),
+                destinataires.duDossier(dossierId)
         );
     }
 

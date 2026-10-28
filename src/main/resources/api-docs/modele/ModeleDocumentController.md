@@ -6,7 +6,10 @@ Modèles de documents modifiables par un administrateur (FEATURE-modeles-documen
 `src`**, l'id venant de `POST /api/modeles-documents/images`) où les valeurs de la fiche s'écrivent
 `<span data-champ="cle">libellé</span>`, les lignes répétées `data-repeter="liste"` (sur `tr`, `li`, `p`, `span`), les
 blocs conditionnels `data-si="cle"` (+ `data-valeur` pour un booléen), les titres numérotés `<h2 data-numero>` et les
-sauts de page `<div data-saut-page></div>`. Tout autre élément, attribut ou style → 400 qui nomme l'élément fautif ;
+sauts de page `<div data-saut-page></div>`, les pages répétées `<div data-repeter="liste" data-saut-page>` (une page par
+élément) et les blocs positionnés `<div data-bloc data-x data-y data-l data-h [data-taille] [data-gras] [data-align]>`
+(centimètres décimaux depuis le coin haut gauche de la page A4, x + l ≤ 21 et y + h ≤ 29,7 ; taille 6 à 72 pt, Helvetica,
+gras si `data-gras="true"` ; `data-align` left, center ou right ; texte et champs seulement, ni tableau ni image). Tout autre élément, attribut ou style → 400 qui nomme l'élément fautif ;
 texte de la version (contenu, en-tête et pied) : 1 Mo au plus. Chaque enregistrement crée une version, jamais
 d'écrasement ; pas de suppression : `actif = false`. Concevoir = rôle `Administrateur` ; imprimer = accès à la fiche
 (404 hors périmètre).
@@ -23,6 +26,16 @@ Document du modèle **actif** rempli avec la fiche `ficheId` (pour `DOSSIER_VENT
 404 hors périmètre). PDF affiché en ligne, DOCX en pièce jointe ; nom de fichier `<code-modele>-<code-fiche>` en
 minuscules (`_` → `-`). Le contenu est revalidé avant chaque génération ; chaque image citée est lue dans le stockage
 S3 ; une image absente du stockage → 500 « Image <id> introuvable dans le stockage », aucun document partiel.
+Réponse `Cache-Control: private, no-store`.
+
+Modèle à droits propres : `FORMULAIRE_BARID` ne s'imprime que pour les profils qui voient le rapport n° 35
+(`ComSaleFormulaireBaridMaroc`, rôle libre ou lié dans `AdmReportDataRole`) — 403 sinon, contrôlé avant l'état actif et
+avant la fiche — et en PDF seulement (`format=docx` → 400 « Ce formulaire n'existe qu'en PDF. »). Il est absent de la
+liste des modèles actifs pour les autres profils.
+
+Pages répétées (`<div data-repeter="liste" data-saut-page>`) : une page par élément ; une liste vide qui laisse le
+document sans aucune page → 404 « Aucun destinataire ». Fond de page (`miseEnPage.fondImageId`) : PDF seulement,
+ignoré en Word.
 
 ## deposerImage
 

@@ -46,13 +46,14 @@ public class ModeleDocumentService {
     private final CataloguesModeles catalogues;
     private final MiseEnPageModele miseEnPageModele;
     private final ImagesModeleService images;
+    private final List<ControleAccesModele> controles;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
 
     /** Regroupe les composants du module lus par ce service (S107). */
     @Component
     public record Composants(LectureModeles lecture, CataloguesModeles catalogues, MiseEnPageModele miseEnPage,
-                             ImagesModeleService images) {
+                             ImagesModeleService images, List<ControleAccesModele> controles) {
     }
 
     public ModeleDocumentService(AppModeleDocumentRepository modeleRepository,
@@ -64,6 +65,7 @@ public class ModeleDocumentService {
         this.catalogues = composants.catalogues();
         this.miseEnPageModele = composants.miseEnPage();
         this.images = composants.images();
+        this.controles = composants.controles();
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
     }
@@ -83,6 +85,7 @@ public class ModeleDocumentService {
     public List<ModeleDocumentResumeDto> listerActifs(String categorie) {
         catalogues.de(categorie);
         return modeleRepository.findByCategorieAndActifTrueOrderByOrdreAscLibelleAsc(categorie).stream()
+                .filter(m -> controles.stream().allMatch(c -> c.autoriser(m.getCode())))
                 .map(m -> new ModeleDocumentResumeDto(m.getId(), m.getCode(), m.getLibelle()))
                 .toList();
     }
