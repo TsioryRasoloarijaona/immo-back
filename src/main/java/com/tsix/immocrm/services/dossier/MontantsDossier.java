@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,8 @@ import static java.util.Objects.requireNonNullElse;
 public class MontantsDossier {
 
     private static final String SANS_CATEGORIE = "SANS_CATEGORIE";
+    /** SQL Server refuse plus de 2 100 paramètres. */
+    private static final int LOT = 2_000;
 
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
@@ -46,7 +49,29 @@ public class MontantsDossier {
         for (Object[] row : settlementLineRepository.sumAmountByComFolderIdGroupedByComDocument(folder.getId())) {
             regleParEcheance.put((UUID) row[0], (BigDecimal) row[1]);
         }
+        return calculer(folder, lignes, regleParEcheance);
+    }
 
+    /** Même calcul que {@link #calculer(ComFolder)} pour un lot de dossiers, en un nombre de requêtes fixe. */
+    public Map<UUID, MontantsDossierDto> calculer(List<ComFolder> dossiers) {
+        List<UUID> ids = dossiers.stream().map(ComFolder::getId).toList();
+        Map<UUID, List<ComDocument>> lignesParDossier = new HashMap<>();
+        for (int i = 0; i < ids.size(); i += LOT) {
+            documentRepository.echeancesDesDossiers(ids.subList(i, Math.min(i + LOT, ids.size())))
+                    .forEach(d -> lignesParDossier.computeIfAbsent(d.getComFolder().getId(), k -> new ArrayList<>()).add(d));
+        }
+        Map<UUID, BigDecimal> regleParEcheance = settlementLineRepository.reglesParEcheance(
+                lignesParDossier.values().stream().flatMap(List::stream).map(ComDocument::getId).toList());
+        Map<UUID, MontantsDossierDto> resultat = new HashMap<>();
+        for (ComFolder dossier : dossiers) {
+            resultat.put(dossier.getId(),
+                    calculer(dossier, lignesParDossier.getOrDefault(dossier.getId(), List.of()), regleParEcheance));
+        }
+        return resultat;
+    }
+
+    private static MontantsDossierDto calculer(ComFolder folder, List<ComDocument> lignes,
+                                               Map<UUID, BigDecimal> regleParEcheance) {
         Map<String, BigDecimal> montantParCategorie = new LinkedHashMap<>();
         Map<String, Integer> nombreParCategorie = new LinkedHashMap<>();
         Map<String, BigDecimal> regleParCategorie = new LinkedHashMap<>();
@@ -57,7 +82,7 @@ public class MontantsDossier {
             ComSettlementCategory categorie = ligne.getComSettlementCategory();
             String code = categorie != null ? categorie.getCode() : SANS_CATEGORIE;
             BigDecimal montant = montantSigne(ligne);
-            BigDecimal regle = regleParEcheance.getOrDefault(ligne.getId(), BigDecimal.ZERO);
+            BigDecimal regle = requireNonNullElse(regleParEcheance.get(ligne.getId()), BigDecimal.ZERO);
 
             montantParCategorie.merge(code, montant, BigDecimal::add);
             nombreParCategorie.merge(code, 1, Integer::sum);
