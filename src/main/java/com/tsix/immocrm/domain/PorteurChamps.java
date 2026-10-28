@@ -14,6 +14,7 @@ public enum PorteurChamps {
     ARTICLE("article", "Yes.Stk.Building.Item", "Article"),
     // Classe de la parcelle ; Yes.Stk.Land.Land est celle du lot de lotissement.
     TERRAIN("terrain", "Yes.Stk.Land.LandProject", "Terrain"),
+    LOTISSEMENT("lotissement", "Yes.Stk.Land.Land", "Lot de terrain"),
     PROSPECTION_TERRAIN("prospection-terrain", "Yes.Lnd.Prospection", "Prospection terrain"),
     ETUDE("etude", "Yes.Stk.StkFeasibilityStudy", "Étude de faisabilité");
 
@@ -39,6 +40,6 @@ public enum PorteurChamps {
     public static PorteurChamps depuis(String valeur) {
         return Arrays.stream(values()).filter(p -> p.fil.equals(valeur)).findFirst()
                 .orElseThrow(() -> new InvalidRequestException("porteur doit valoir projet, tranche, entite, article, "
-                        + "terrain, prospection-terrain ou etude : '" + valeur + "'"));
+                        + "terrain, lotissement, prospection-terrain ou etude : '" + valeur + "'"));
     }
 }

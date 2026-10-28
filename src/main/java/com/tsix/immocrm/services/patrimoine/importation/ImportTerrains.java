@@ -138,7 +138,7 @@ class ImportTerrains implements ImportParType<ImportTerrains.Contexte> {
     /** Terrains visibles de la liste « terrains » ; au-delà de 1 000, en-têtes seuls (le fichier ne serait pas réimportable). */
     @Override
     public Modele modele(String type, CfgTranche tranche) {
-        Page<TerrainListeDto> visibles = terrains.lister(new FiltresTerrains(null, null, null, null), false,
+        Page<TerrainListeDto> visibles = terrains.lister(new FiltresTerrains(null, null, null, null, null), false,
                 PageRequest.of(0, MODELE_MAX + 1, Sort.by(CODE)));
         List<UUID> ids = visibles.getTotalElements() > MODELE_MAX ? List.of()
                 : visibles.stream().map(TerrainListeDto::id).toList();

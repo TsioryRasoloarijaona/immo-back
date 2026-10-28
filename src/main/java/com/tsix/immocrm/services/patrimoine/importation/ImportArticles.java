@@ -159,21 +159,21 @@ class ImportArticles implements ImportParType<ImportArticles.Contexte> {
         if (pivot == null) {
             erreurs.add("Manque le pivot");
         }
-        controlerTranche(v, ctx, erreurs);
+        controlerTranche(v, ctx.tranche(), ctx.entetes(), erreurs);
         boolean natureLue = !ctx.sousArticles()
                 && LectureChamps.controlerNature(v.get(NATURE), ctx.codes(), NATURE_BATIMENT, "Bâtiment", erreurs);
         List<Map<String, Object>> sousArticles = lus.values().stream().filter(s -> s.get(CODE) != null).toList();
         return new LigneTraduite(l.numero(), pivot, champs, sousArticles, texte(v.get(ARTICLE_PARENT)), natureLue, erreurs);
     }
 
-    private static void controlerTranche(Map<String, Object> v, Contexte ctx, List<String> erreurs) {
+    /** Colonne Tranche facultative ; renseignée, elle doit désigner la tranche choisie (code ou libellé). */
+    static void controlerTranche(Map<String, Object> v, CfgTranche choisie, Set<String> entetes, List<String> erreurs) {
         String tranche = texte(v.get(TRANCHE));
         if (tranche == null) {
-            if (ctx.entetes().contains(TRANCHE)) {
+            if (entetes.contains(TRANCHE)) {
                 erreurs.add("Manque le code de la tranche");
             }
-        } else if (!tranche.equalsIgnoreCase(ctx.tranche().getCode())
-                && !tranche.equalsIgnoreCase(ctx.tranche().getDescription())) {
+        } else if (!tranche.equalsIgnoreCase(choisie.getCode()) && !tranche.equalsIgnoreCase(choisie.getDescription())) {
             erreurs.add("Le code tranche saisi est introuvable dans notre référenciel");
         }
     }

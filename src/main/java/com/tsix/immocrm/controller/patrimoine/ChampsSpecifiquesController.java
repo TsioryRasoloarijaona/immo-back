@@ -33,7 +33,7 @@ import java.util.UUID;
 public class ChampsSpecifiquesController {
 
     private static final String ADMIN = "hasRole('Administrateur')";
-    private static final String PORTEUR = "projet, tranche, entite, article (sous-articles compris), terrain, prospection-terrain ou etude.";
+    private static final String PORTEUR = "projet, tranche, entite, article (sous-articles compris), terrain, lotissement, prospection-terrain ou etude.";
     private static final String ID_OBJET = "Id de l'objet porteur (PKey de sa table).";
     private static final String ID_CHAMP = "Id de la définition (AdmSpecificField.PKey).";
     private static final String NON_ADMIN = "L'appelant n'a pas le rôle Administrateur.";

@@ -86,7 +86,11 @@ class PatrimoineSecuriteTest {
                 Arguments.of(HttpMethod.DELETE, "/api/terrains/" + ID),
                 Arguments.of(HttpMethod.POST, "/api/terrains/" + ID + "/sous-terrains"),
                 Arguments.of(HttpMethod.PUT, "/api/terrains/" + ID + "/frais"),
-                Arguments.of(HttpMethod.POST, "/api/terrains/" + ID + "/frais/" + SOUS_ID + "/valider"));
+                Arguments.of(HttpMethod.POST, "/api/terrains/" + ID + "/frais/" + SOUS_ID + "/valider"),
+                // FEATURE-patrimoine-lotissements.md §2, L1 : écritures Administrateur du lot P7c (403 avant 400).
+                Arguments.of(HttpMethod.POST, "/api/lotissements"),
+                Arguments.of(HttpMethod.PATCH, "/api/lotissements/" + ID),
+                Arguments.of(HttpMethod.DELETE, "/api/lotissements/" + ID));
     }
 
     private AdmUser compte(String code) {
