@@ -141,7 +141,8 @@ class ColonnesArticleTest {
         second.setSalePrice(new BigDecimal("30000"));
         sousArticles.enregistrer(second);
 
-        String valeur = valeurDansLaListe(ARTICLES, parent, nomDuLibelle("Prix Sous Article TTC"));
+        // Nom wire, pas le libellé : FEATURE-articles-colonnes-omran.md §1 bis le renomme « Defi. Prix Sous Articles TTC ».
+        String valeur = valeurDansLaListe(ARTICLES, parent, "prixSousArticlesTTC");
 
         assertThat(new BigDecimal(valeur)).isEqualByComparingTo("90000");
     }

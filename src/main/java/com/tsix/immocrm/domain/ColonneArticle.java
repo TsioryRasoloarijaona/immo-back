@@ -57,6 +57,8 @@ public enum ColonneArticle implements Colonne {
     PRESENTATION("presentationTypeLibelle", "Type Présentation", Groupe.IDENTIFICATION, TypeColonne.TEXTE, true),
     ORIENTATION_CODE("orientationCode", "Orientation Code", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
     ORIENTATION("orientationLibelle", "Orientation", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
+    FACADE("facade", "Façade", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
+    VUES("vues", "Vues", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
     CHARGE_CODE("categorieChargeCode", "Catégorie de Charge Code", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
     CHARGE("categorieChargeLibelle", "Catégorie de Charge", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
     ADRESSE("adresse", "Adresse", Groupe.IDENTIFICATION, TypeColonne.TEXTE),
@@ -73,13 +75,17 @@ public enum ColonneArticle implements Colonne {
     DOSSIER_STATUT("dossierStatut", "Code statut du dossier", Groupe.ETAT, TypeColonne.TEXTE, true),
     CLIENT_ID("clientId", "Id client", Groupe.ETAT, TypeColonne.TEXTE, true),
     CLIENT("clientNom", "Client", Groupe.ETAT, TypeColonne.TEXTE, true),
+    RESTE_A_REGLER("resteARegler", "Reste à régler", Groupe.ETAT, TypeColonne.MONTANT),
+    PARKING_CHOISI("parkingChoisi", "Parking choisi", Groupe.ETAT, TypeColonne.TEXTE),
 
     // -- Superficies, taux, avance, loyer.
-    SURFACE("area", "Superficie (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE, true),
+    SURFACE("area", "Defi. Superficie (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE, true),
     SURFACE_PROVISOIRE("surfaceProvisoire", "Superficie Prov. (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE),
     SURFACE_NETTE("superficieNette", "Superficie Nette (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE),
-    SURFACE_SOUS_ARTICLES("superficieSousArticles", "Superficie Sous Article (m²)", Groupe.SUPERFICIES,
+    SURFACE_SOUS_ARTICLES("superficieSousArticles", "Defi. Superficie Sous Articles (m²)", Groupe.SUPERFICIES,
             TypeColonne.NOMBRE, true),
+    SURFACE_TITREE("superficieTitree", "Superficie Titrée (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE),
+    SURFACE_TERRASSE("superficieTerrasse", "Superficie terrasse (m²)", Groupe.SUPERFICIES, TypeColonne.NOMBRE),
     TVA("tauxTVA", "TVA", Groupe.SUPERFICIES, TypeColonne.POURCENTAGE, true),
     REMISE_MAX("remiseMax1", "Remise max", Groupe.SUPERFICIES, TypeColonne.POURCENTAGE),
     REMISE_MAX_2("remiseMax2", "Niveau de remise 2", Groupe.SUPERFICIES, TypeColonne.POURCENTAGE),
@@ -90,20 +96,20 @@ public enum ColonneArticle implements Colonne {
 
     // -- Prix.
     PRIX_M2_HT("prixM2DefinitifHT", "Prix du m² HT", Groupe.PRIX, TypeColonne.MONTANT),
-    PRIX_M2_TTC("prixM2DefinitifTTC", "Prix du m² TTC", Groupe.PRIX, TypeColonne.MONTANT),
+    PRIX_M2_TTC("prixM2DefinitifTTC", "Defi. Prix du m² TTC", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_M2_PROV_HT("prixM2ProvisoireHT", "Prix du m² Prov.HT", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_M2_PROV_TTC("prixM2ProvisoireTTC", "Prix du m² Prov.TTC", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_ARTICLE_HT("prixArticleDefinitifHT", "Prix Article HT", Groupe.PRIX, TypeColonne.MONTANT),
-    PRIX_ARTICLE_TTC("salePrice", "Prix Article TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
+    PRIX_ARTICLE_TTC("salePrice", "Defi. Prix de Vente TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
     PRIX_ARTICLE_PROV_HT("prixArticleProvisoireHT", "Prix Article Prov.HT", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_ARTICLE_PROV_TTC("salePriceFloor", "Prix Article Prov.TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
     PRIX_SOUS_HT("prixSousArticlesHT", "Prix Sous Article HT", Groupe.PRIX, TypeColonne.MONTANT),
-    PRIX_SOUS_TTC("prixSousArticlesTTC", "Prix Sous Article TTC", Groupe.PRIX, TypeColonne.MONTANT),
+    PRIX_SOUS_TTC("prixSousArticlesTTC", "Defi. Prix Sous Articles TTC", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_SOUS_PROV_HT("prixSousArticlesProvisoireHT", "Prix Sous Article Prov.HT", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_SOUS_PROV_TTC("prixSousArticlesProvisoireTTC", "Prix Sous Article Prov.TTC", Groupe.PRIX,
             TypeColonne.MONTANT),
     PRIX_VENTE_HT("prixVenteDefinitifHT", "Prix de Ventes HT", Groupe.PRIX, TypeColonne.MONTANT),
-    PRIX_VENTE_TTC("comSalePrice", "Prix de Ventes TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
+    PRIX_VENTE_TTC("comSalePrice", "Defi. Prix Article TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
     PRIX_VENTE_PROV_HT("prixVenteProvisoireHT", "Prix de Ventes Prov.HT", Groupe.PRIX, TypeColonne.MONTANT),
     PRIX_VENTE_PROV_TTC("comSalePriceFloor", "Prix de Ventes Prov.TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
     PRIX_REFERENCE("prixSuggere", "Prix de référence TTC", Groupe.PRIX, TypeColonne.MONTANT, true),
@@ -125,6 +131,7 @@ public enum ColonneArticle implements Colonne {
     FRACTION_TERRAIN("fractionDiviseTerrain", "Fraction Divise Terrain", Groupe.FONCIER, TypeColonne.TEXTE),
     PARTIES_DIVISES("partiesDivises", "Parties divise", Groupe.FONCIER, TypeColonne.NOMBRE),
     PARTIES_INDIVISES("partiesIndivises", "Parties indivise", Groupe.FONCIER, TypeColonne.NOMBRE),
+    QUOTA_TERRAIN("quotaTerrain", "Quota terrain groupe", Groupe.FONCIER, TypeColonne.TEXTE),
 
     // -- Compteurs.
     REF_ELEC("referenceElectricite", "Ref.compt.électricité", Groupe.COMPTEURS, TypeColonne.TEXTE),
@@ -158,6 +165,9 @@ public enum ColonneArticle implements Colonne {
     /** Colonnes calculées par lot (sommes des sous-articles) : la requête ne part que si l'une est demandée. */
     public static final Set<ColonneArticle> SOMMES_SOUS_ARTICLES =
             Set.of(PRIX_SOUS_HT, PRIX_SOUS_TTC, PRIX_SOUS_PROV_HT, PRIX_SOUS_PROV_TTC);
+
+    /** Superficies des sous-articles par catégorie ou titre : une requête groupée si l'une est demandée. */
+    public static final Set<ColonneArticle> SUPERFICIES_SOUS_ARTICLES = Set.of(SURFACE_TITREE, SURFACE_TERRASSE);
 
     private final String nom;
     private final String libelle;

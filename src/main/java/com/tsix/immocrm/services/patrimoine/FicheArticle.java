@@ -30,6 +30,7 @@ import java.util.UUID;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.COURT;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
+import static com.tsix.immocrm.services.patrimoine.SuperficiesArticle.zero;
 
 /**
  * Champs de la fiche article (FEATURE-patrimoine-article-fiche.md §1, §2, §9) : références, montants, foncier,
@@ -258,15 +259,11 @@ class FicheArticle {
     }
 
     private static BigDecimal superficieTitree(StkItem a, List<StkItem> sousArticles) {
-        BigDecimal propre = Boolean.TRUE.equals(a.getIsTitled()) ? zero(a.getArea()) : BigDecimal.ZERO;
-        return propre.add(somme(sousArticles.stream().filter(s -> Boolean.TRUE.equals(s.getIsTitled())).toList()));
+        return SuperficiesArticle.titree(a,
+                somme(sousArticles.stream().filter(s -> Boolean.TRUE.equals(s.getIsTitled())).toList()));
     }
 
     private static BigDecimal somme(List<StkItem> items) {
         return items.stream().map(i -> zero(i.getArea())).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private static BigDecimal zero(BigDecimal valeur) {
-        return valeur != null ? valeur : BigDecimal.ZERO;
     }
 }
