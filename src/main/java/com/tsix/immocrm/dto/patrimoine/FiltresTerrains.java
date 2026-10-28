@@ -10,5 +10,6 @@ public record FiltresTerrains(
                 example = "TER-01") String search,
         @Parameter(description = "Société (CfgCompanyId).") UUID entiteId,
         @Parameter(description = "Statut (StrStatus).") UUID statutId,
-        @Parameter(description = "Vocation (StkVocation).") UUID vocationId) {
+        @Parameter(description = "Vocation (StkVocation).") UUID vocationId,
+        @Parameter(description = "Tranche (StkHierarchyId) : lots de cette tranche.") UUID trancheId) {
 }
