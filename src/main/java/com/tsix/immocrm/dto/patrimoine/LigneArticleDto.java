@@ -55,6 +55,9 @@ public record LigneArticleDto(
         @Schema(description = "Libellé du type de présentation.") String presentationTypeLibelle,
         @Schema(description = "Code de l'orientation (StkOrientation).") String orientationCode,
         @Schema(description = "Libellé de l'orientation.") String orientationLibelle,
+        @Schema(description = "Libellé de la façade (StkItem.StkFacadeId → StkFacade).", nullable = true) String facade,
+        @Schema(description = "Libellés des vues (StkItemVue → StkVue), séparés par « , » ; null si aucune.",
+                nullable = true) String vues,
         @Schema(description = "Code de la catégorie de charge (StkCostCategory).") String categorieChargeCode,
         @Schema(description = "Libellé de la catégorie de charge.") String categorieChargeLibelle,
         @Schema(description = "StkItem.Address.") String adresse,
@@ -73,6 +76,10 @@ public record LigneArticleDto(
         @Schema(description = "StrStatus.Code brut du dossier de vente.") String dossierStatut,
         @Schema(description = "Client du dossier de vente (CfgTier.PKey).") UUID clientId,
         @Schema(description = "Nom affiché du client du dossier de vente.") String clientNom,
+        @Schema(description = "prixReste du dossier dossierCode ; null sans dossier, ou dossier non visible, annulé ou désisté.",
+                nullable = true) BigDecimal resteARegler,
+        @Schema(description = "Codes PAR du dossier et des sous-articles rattachés, séparés par « , » ; null si aucun.",
+                nullable = true) String parkingChoisi,
 
         // -- Superficies, taux, avance, loyer.
         @Schema(description = "StkItem.Area : superficie définitive, m².") BigDecimal area,
@@ -81,6 +88,10 @@ public record LigneArticleDto(
         BigDecimal superficieNette,
         @Schema(description = "Somme des superficies des sous-articles rattachés, 0 si aucun.")
         BigDecimal superficieSousArticles,
+        @Schema(description = "Surface si titré + surfaces des sous-articles rattachés titrés (calcul de la fiche).")
+        BigDecimal superficieTitree,
+        @Schema(description = "Somme des superficies des sous-articles rattachés de catégorie TER, 0 si aucun.")
+        BigDecimal superficieTerrasse,
         @Schema(description = "StkItem.Vat, fraction (0,2 = 20 %).") BigDecimal tauxTVA,
         @Schema(description = "StkItem.DiscountMax, fraction.") BigDecimal remiseMax1,
         @Schema(description = "StkItem.DiscountMax2, fraction.") BigDecimal remiseMax2,
@@ -128,6 +139,7 @@ public record LigneArticleDto(
         @Schema(description = "StkItem.FractionDividedLand.") String fractionDiviseTerrain,
         @Schema(description = "StkItem.DividedPart.") BigDecimal partiesDivises,
         @Schema(description = "StkItem.UndividedPart.") BigDecimal partiesIndivises,
+        @Schema(description = "StkItem.GroupLandQuota.") String quotaTerrain,
 
         // -- Compteurs.
         @Schema(description = "StkItem.ElectricityRef.") String referenceElectricite,

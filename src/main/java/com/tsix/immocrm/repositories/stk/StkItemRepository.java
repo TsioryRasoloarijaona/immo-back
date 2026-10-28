@@ -60,6 +60,22 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
     @Query("SELECT i.parent.id, i.code FROM StkItem i WHERE i.parent.id IN :parentIds ORDER BY i.code ASC")
     List<Object[]> codesByParentIdIn(List<UUID> parentIds);
 
+    /** Superficies titrée et d'une catégorie des sous-articles par lot de parents. Tuple : [parentId, Σtitrés, Σcatégorie]. */
+    @Query("SELECT i.parent.id, COALESCE(SUM(CASE WHEN i.isTitled = true THEN i.area END), 0), "
+            + "COALESCE(SUM(CASE WHEN c.code = :categorie THEN i.area END), 0) FROM StkItem i "
+            + "LEFT JOIN i.stkItemCategory c WHERE i.parent.id IN :parentIds GROUP BY i.parent.id")
+    List<Object[]> sumAreaTitreeEtCategorieGroupedByParentIdIn(List<UUID> parentIds, String categorie);
+
+    /** Codes des sous-articles d'une catégorie par lot de parents. Tuple : [parentId, code]. */
+    @Query("SELECT i.parent.id, i.code FROM StkItem i WHERE i.parent.id IN :parentIds "
+            + "AND i.stkItemCategory.code = :categorie")
+    List<Object[]> codesByParentIdInAndCategorie(List<UUID> parentIds, String categorie);
+
+    /** Libellés des vues par lot d'articles. Tuple : [articleId, libellé]. */
+    @Query("SELECT v.stkItem.id, v.stkVue.description FROM StkItemVue v WHERE v.stkItem.id IN :ids "
+            + "ORDER BY v.stkVue.description ASC")
+    List<Object[]> vuesByStkItemIdIn(List<UUID> ids);
+
     /** Unicité Code + société d'un terrain ({@code nature} = TER). */
     boolean existsByCfgCompany_IdAndCodeAndStkKind_CodeAndIdNot(UUID societeId, String code, String nature, UUID id);
 
