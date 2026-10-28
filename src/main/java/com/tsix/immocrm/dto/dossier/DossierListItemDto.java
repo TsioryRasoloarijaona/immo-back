@@ -219,7 +219,7 @@ public record DossierListItemDto(
         @Schema(description = "Permis d'habiter de la tranche de l'article principal (CfgTranche.OccupancyPermitsDate).")
         LocalDateTime datePermisHabiter,
 
-        @Schema(description = "Minute / enregistrement contrat (ComFolder.AgreementSavingDate).")
+        @Schema(description = "Date minute / signature du contrat (ComFolder.AgreementSavingDate).")
         LocalDateTime dateMinute,
 
         @Schema(description = "Remise des clés prévisionnelle, celle de la tranche (CfgTranche.DeliveryDate).")
@@ -240,7 +240,7 @@ public record DossierListItemDto(
         @Schema(description = "Date d'envoi au notaire confirmée (ComFolder.IsConfirmedAgreementDate).")
         Boolean envoiNotaireConfirme,
 
-        @Schema(description = "Décision de MEILLEURTAUX (ComFolder.LoanCompanyDecisionDate).")
+        @Schema(description = "Date de la décision MEILLEURTAUX (ComFolder.LoanCompanyDecisionDate).")
         LocalDateTime dateDecisionMeilleurTaux,
 
         @Schema(description = "Impression du contrat de réservation / promesse (ComFolder.ContractPrintDate).")
@@ -347,6 +347,55 @@ public record DossierListItemDto(
 
         @Schema(description = "Jours entre l'envoi et la décision MEILLEURTAUX ; 0 si l'une manque, comme OMRAN.")
         Integer delaiMeilleurTaux,
+
+        // Colonnes de la grille OMRAN « Dossiers de vente » (FEATURE-dossiers-colonnes-omran.md §2.1).
+
+        @Schema(description = "Date de remise du contrat pour légalisation (ComFolder.AgreementSavingDateForLegalization).")
+        LocalDateTime dateRemiseContratLegalisation,
+
+        @Schema(description = "Date de légalisation du contrat (ComFolder.AgreementSavingDateLegalization).")
+        LocalDateTime dateLegalisationContrat,
+
+        @Schema(description = "Date de remise du certificat de propriété au client (ComFolder.FinalTitleDate).")
+        LocalDateTime dateRemiseCertificatPropriete,
+
+        @Schema(description = "Numéro du titre de propriété (ComFolder.FinalTitleNumber).")
+        String numeroTitre,
+
+        @Schema(description = "Libellé de la décision MEILLEURTAUX (ComLoanCompanyDecision.Description), null sans décision.")
+        String decisionMeilleurTaux,
+
+        @Schema(description = "Date de la promesse de vente (ComFolder.ReservationDate).")
+        LocalDateTime datePromesseVente,
+
+        @Schema(description = "Date de la fiche d'intervention (ComFolder.InterventionDate).")
+        LocalDateTime dateFicheIntervention,
+
+        @Schema(description = "Date d'attestation de consignation / d'octroi du crédit (ComFolder.CreditPossessionDate).")
+        LocalDateTime dateOctroiCredit,
+
+        @Schema(description = "Date de visite technique / réception (ComFolder.ReceptionDate).")
+        LocalDateTime dateVisiteTechnique,
+
+        @Schema(description = "Date d'expédition (ComFolder.OwnershipCertificateDate).")
+        LocalDateTime dateExpedition,
+
+        @Schema(description = "Échéance de la relance 1 (ComFolder.Revival1ValidityDate).")
+        LocalDateTime echeanceRelance1,
+
+        @Schema(description = "Échéance de la relance 2 (ComFolder.Revival2ValidityDate).")
+        LocalDateTime echeanceRelance2,
+
+        @Schema(description = "Date d'envoi à MEILLEURTAUX (ComFolder.loanCompanySendDate).")
+        LocalDateTime dateEnvoiMeilleurTaux,
+
+        @Schema(description = "Jours entre l'envoi au notaire et l'octroi du crédit ; null si l'une des dates manque.",
+                example = "40")
+        Integer delaiNotaireCredit,
+
+        @Schema(description = "Jours entre l'octroi du crédit et la remise des clés ; null si l'une des dates manque.",
+                example = "20")
+        Integer delaiCreditCles,
 
         // Montants par nature (FEATURE-dossiers-liste-complete.md) : descriptions dans api-docs/schemas.
         BigDecimal prixContractuel,
