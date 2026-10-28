@@ -67,11 +67,16 @@ class ArticlesColonnesOmranRevueTest {
     }
 
     private Map<String, Object> ligneArticle(Vente v, RequestPostProcessor connexion) throws Exception {
-        String corps = mockMvc.perform(get("/api/articles").param("trancheId", v.c().tranche().getId().toString())
+        return ligne("/api/articles", v, v.article(), connexion);
+    }
+
+    private Map<String, Object> ligne(String route, Vente v, StkItem article, RequestPostProcessor connexion)
+            throws Exception {
+        String corps = mockMvc.perform(get(route).param("trancheId", v.c().tranche().getId().toString())
                         .param("colonnes", "code,dossierCode," + RESTE_A_REGLER).param("size", "1000")
                         .with(connexion))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        List<Map<String, Object>> lignes = JsonPath.read(corps, "$.content[?(@.id == '" + v.article().getId() + "')]");
+        List<Map<String, Object>> lignes = JsonPath.read(corps, "$.content[?(@.id == '" + article.getId() + "')]");
         assertThat(lignes).hasSize(1);
         return lignes.getFirst();
     }
@@ -158,5 +163,58 @@ class ArticlesColonnesOmranRevueTest {
         assertThat(ligneArticle(v, connexion))
                 .as("dossier %s invisible dans la liste des dossiers", v.dossier().getCode())
                 .containsEntry(RESTE_A_REGLER, null);
+    }
+
+    private Map<String, Object> ligneSousArticle(Vente v, StkItem sousArticle, RequestPostProcessor connexion)
+            throws Exception {
+        return ligne("/api/sous-articles", v, sousArticle, connexion);
+    }
+
+    /** Revue 3 : /api/sous-articles, même règle que /api/articles (sous-article retenu par le dossier). */
+    @Test
+    void r6_resteARegler_sousArticles_horsPerimetreNull_libreVoitLeReste() throws Exception {
+        Vente v = vente("D6R");
+        StkItem sous = ventes.rattacher(sousArticles.sousArticle(v.c(), "SA-" + v.c().jeton(), v.article()), v.dossier());
+        AdmUser restreint = dossiers.compte("d6r.hp." + v.c().jeton());
+        ventes.affecter(restreint, ventes.projet("PRJ-SA-" + v.c().jeton(), true));
+        AdmUser libre = dossiers.compte("d6r.np." + v.c().jeton());
+        ventes.relire();
+
+        assertThat(nombre(ligneSousArticle(v, sous, FixtureDossierVente.connecte(libre)).get(RESTE_A_REGLER)))
+                .isNotNull().isEqualByComparingTo(RESTE_ATTENDU);
+        assertThat(ligneSousArticle(v, sous, FixtureDossierVente.connecte(restreint)))
+                .containsEntry(RESTE_A_REGLER, null);
+    }
+
+    /**
+     * Revue 3 : dossier sans statut (StrStatusId NULL). /api/dossiers le montre sans restriction de statut et le cache
+     * dès qu'une restriction s'applique (IN sur l'id) ; la colonne doit suivre les deux cas.
+     */
+    @Test
+    void r6_resteARegler_dossierSansStatut_suitLaListeDesDossiers() throws Exception {
+        Contexte c = sousArticles.contexte("D7R");
+        StkItem a = sousArticles.principal(c, "HP-" + c.jeton(), c.tranche());
+        ComFolder d = ventes.vendre(a, "DOS-HP-" + c.jeton(), null, ventes.client("D7R" + c.jeton()), null);
+        ventes.regler(ventes.echeance(d, Nature.AVANCE, true, new BigDecimal("200000")), new BigDecimal("150000"),
+                true, "POINTED");
+        Vente v = new Vente(c, a, d, null);
+        AdmUser libre = dossiers.compte("d7r.np." + c.jeton());
+        ventes.relire();
+        RequestPostProcessor sansRestriction = FixtureDossierVente.connecte(libre);
+
+        assertThat(lignesDossier(v, sansRestriction)).as("visible sans restriction de statut").hasSize(1);
+        assertThat(nombre(ligneArticle(v, sansRestriction).get(RESTE_A_REGLER)))
+                .isNotNull().isEqualByComparingTo(RESTE_ATTENDU);
+
+        AdmUser appelant = dossiers.compte("d7r.co." + c.jeton(), "AIDE-" + c.jeton());
+        AdmUser autre = dossiers.compte("d7r.ch." + c.jeton(), "CHEF-" + c.jeton());
+        StrStatus enCours = ventes.statutEnCours("EC-" + c.jeton());
+        rapports.statutVisiblePar(enCours, roleDe(appelant));
+        rapports.statutVisiblePar(enCours, roleDe(autre));
+        ventes.relire();
+        RequestPostProcessor restreint = FixtureDossierVente.connecte(appelant);
+
+        assertThat(lignesDossier(v, restreint)).as("masqué dès qu'une restriction de statut s'applique").isEmpty();
+        assertThat(ligneArticle(v, restreint)).containsEntry(RESTE_A_REGLER, null);
     }
 }
