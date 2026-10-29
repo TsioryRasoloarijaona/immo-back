@@ -66,6 +66,9 @@ public record LigneEtatVentesDto(
         BigDecimal frais,
         BigDecimal fraisRegles,
         BigDecimal fraisReste,
+        BigDecimal fraisSyndic,
+        BigDecimal fraisSyndicRegles,
+        BigDecimal fraisSyndicReste,
         BigDecimal modifications,
         BigDecimal modificationsReglees,
         BigDecimal modificationsReste,
@@ -78,5 +81,7 @@ public record LigneEtatVentesDto(
         BigDecimal prixContractuelRegle,
         BigDecimal prixContractuelReste,
         BigDecimal tauxAvance,
-        BigDecimal tauxAvanceReel) {
+        BigDecimal tauxAvanceReel,
+        LocalDateTime alerte,
+        String sousArticles) {
 }

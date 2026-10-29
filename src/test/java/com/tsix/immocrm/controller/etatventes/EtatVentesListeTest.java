@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * FEATURE-etat-des-ventes.md §2, §3.2, §6. Jeu commun d'une tranche propre au test :
  * <pre>
  *   A1 APP libre          A2 APP RESERVATION (mars 2025)   A3 APP CONCRETISATION (mai 2025)
- *   A4 APP dossier annulé (→ Libre)   A5 APP dossier sans statut   P1 PAR parking autonome (libre)
+ *   A4 APP dossier annulé (→ Libre)   A5 APP dossier sans statut   P1 PAR parking autonome (vendu, statut propre)
  *   A2-PK sous-article rattaché à A2 (exclu)
  * </pre>
  */
@@ -108,6 +108,8 @@ class EtatVentesListeTest {
         sansStatut = fixture.article(prefixe + "-A5", tranche, appartement, typeAppartement);
         fixture.vendre(sansStatut, "DOS-" + prefixe + "-A5", null, null, null);
         parkingAutonome = fixture.parkingAutonome(prefixe + "-P1", tranche, parking, typeParking);
+        // Vendu : un parking racine libre n'est plus listé (FEATURE-etat-ventes-omran.md §1.1).
+        fixture.vendre(parkingAutonome, "DOS-" + prefixe + "-P1", fixture.statutEnCours("PKV-" + prefixe), null, null);
         sousArticle = fixture.sousArticle(prefixe + "-A2-PK", reserve, parking, typeParking);
         fixture.relire();
     }
@@ -170,10 +172,10 @@ class EtatVentesListeTest {
     void filtreStatutLibre_rendLibresEtAnnule() throws Exception {
         mockMvc.perform(liste().param(STATUT, LIBRE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(TOTAL_ELEMENTS).value(3))
+                .andExpect(jsonPath(TOTAL_ELEMENTS).value(2))
                 .andExpect(jsonPath(article(libre)).exists())
                 .andExpect(jsonPath(article(annule)).exists())
-                .andExpect(jsonPath(article(parkingAutonome)).exists());
+                .andExpect(jsonPath(article(parkingAutonome)).doesNotExist());
     }
 
     @Test

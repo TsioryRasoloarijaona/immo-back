@@ -240,25 +240,33 @@ public class EtatVentesService {
         }
         Pageable trie = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), tri(pageable.getSort()));
         Page<StkItemEtatVentes> page = repository.findAll(spec, trie);
-        Map<UUID, Map<ColonneDossier, BigDecimal>> montants = montantsDuDossier(
+        Map<UUID, ValeursDossier> valeurs = valeursDuDossier(
                 page.stream().map(StkItemEtatVentes::getDossier).filter(Objects::nonNull).distinct().toList(),
                 colonnes.stream().map(ColonneEtatVentes::source).filter(Objects::nonNull).collect(Collectors.toSet()));
-        return page.map(l -> versDto(l, l.getDossier() != null ? montants.get(l.getDossier().getId()) : null));
+        return page.map(l -> versDto(l, l.getDossier() != null ? valeurs.get(l.getDossier().getId()) : null));
     }
 
-    /** Montants des colonnes {@code sources}, par les calculs de la liste des dossiers ; aucune requête sans source. */
-    private Map<UUID, Map<ColonneDossier, BigDecimal>> montantsDuDossier(List<ComFolder> dossiers,
-                                                                         Set<ColonneDossier> sources) {
-        Map<UUID, Map<ColonneDossier, BigDecimal>> parDossier = MontantsParNatureDossier.requises(sources)
+    /** Montants et valeurs calculées d'un dossier, lus par les calculs de la liste des dossiers. */
+    private record ValeursDossier(Map<ColonneDossier, BigDecimal> montants, ValeursCalculees calculees) {
+    }
+
+    /** Valeurs des colonnes {@code sources}, par les calculs de la liste des dossiers ; aucune requête sans source. */
+    private Map<UUID, ValeursDossier> valeursDuDossier(List<ComFolder> dossiers, Set<ColonneDossier> sources) {
+        Map<UUID, Map<ColonneDossier, BigDecimal>> montants = MontantsParNatureDossier.requises(sources)
                 ? calculs.montants().pour(dossiers)
                 : new HashMap<>();
-        if (ColonnesCalculeesDossier.requises(sources)) {
-            Map<UUID, ValeursCalculees> valeurs = calculs.colonnes().pour(
-                    dossiers.stream().map(ComFolder::getId).toList(), null);
-            for (ComFolder f : dossiers) {
-                parDossier.computeIfAbsent(f.getId(), k -> new EnumMap<>(ColonneDossier.class))
-                        .putAll(MappingListeDossier.prixVenteAuM2(f, valeurs.get(f.getId())));
+        Map<UUID, ValeursCalculees> calculees = ColonnesCalculeesDossier.requises(sources)
+                ? calculs.colonnes().pour(dossiers.stream().map(ComFolder::getId).toList(), null)
+                : Map.of();
+        Map<UUID, ValeursDossier> parDossier = new HashMap<>();
+        for (ComFolder f : dossiers) {
+            Map<ColonneDossier, BigDecimal> m = montants.computeIfAbsent(f.getId(),
+                    k -> new EnumMap<>(ColonneDossier.class));
+            ValeursCalculees c = calculees.get(f.getId());
+            if (c != null) {
+                m.putAll(MappingListeDossier.prixVenteAuM2(f, c));
             }
+            parDossier.put(f.getId(), new ValeursDossier(m, c));
         }
         return parDossier;
     }
@@ -347,6 +355,7 @@ public class EtatVentesService {
     private static List<Predicate> predicats(Root<StkItemEtatVentes> root, CriteriaBuilder cb,
                                              FiltresEtatVentes f, Set<String> statuts) {
         List<Predicate> p = new ArrayList<>();
+        dansLaListe(p, root.get(TRANCHE).get("cfgProject").get("cfgCompany").get(ID), f.entiteId());
         dansLaListe(p, root.get(TRANCHE).get(ID), f.trancheId());
         dansLaListe(p, root.get(CATEGORIE).get(ID), f.categorieId());
         dansLaListe(p, root.get("type").get(ID), f.typeId());
@@ -430,9 +439,10 @@ public class EtatVentesService {
 
     // ---------------------------------------------------------------- restitution
 
-    private static LigneEtatVentesDto versDto(StkItemEtatVentes l, Map<ColonneDossier, BigDecimal> montants) {
+    private static LigneEtatVentesDto versDto(StkItemEtatVentes l, ValeursDossier valeurs) {
         ComFolder d = l.getDossier();
-        Function<ColonneEtatVentes, BigDecimal> m = c -> montants != null ? montants.get(c.source()) : null;
+        Function<ColonneEtatVentes, BigDecimal> m = c -> valeurs != null ? valeurs.montants().get(c.source()) : null;
+        ValeursCalculees calculees = valeurs != null ? valeurs.calculees() : null;
         return new LigneEtatVentesDto(l.getArticleId(), l.getArticleCode(), l.getArticleLibelle(),
                 Champs.de(l.getTranche(), CfgTranche::getCode),
                 Champs.de(l.getCategorie(), StkItemCategory::getCode),
@@ -454,11 +464,13 @@ public class EtatVentesService {
                 m.apply(AUTOFINANCEMENT), m.apply(AUTOFINANCEMENT_REGLE), m.apply(AUTOFINANCEMENT_RESTE),
                 m.apply(CREDIT), m.apply(CREDIT_REGLE), m.apply(CREDIT_RESTE),
                 m.apply(FRAIS), m.apply(FRAIS_REGLES), m.apply(FRAIS_RESTE),
+                m.apply(FRAIS_SYNDIC), m.apply(FRAIS_SYNDIC_REGLES), m.apply(FRAIS_SYNDIC_RESTE),
                 m.apply(MODIFICATIONS), m.apply(MODIFICATIONS_REGLEES), m.apply(MODIFICATIONS_RESTE),
                 m.apply(TROP_PERCU), m.apply(TROP_PERCU_REGLE), m.apply(TROP_PERCU_RESTE),
                 m.apply(PENALITES), m.apply(PENALITES_REGLES), m.apply(PENALITES_RESTE),
                 m.apply(PRIX_CONTRACTUEL_REGLE), m.apply(PRIX_CONTRACTUEL_RESTE),
-                m.apply(TAUX_AVANCE), m.apply(TAUX_AVANCE_REEL));
+                m.apply(TAUX_AVANCE), m.apply(TAUX_AVANCE_REEL),
+                Champs.de(calculees, ValeursCalculees::alerte), Champs.de(calculees, ValeursCalculees::sousArticlesCodes));
     }
 
     private static String libelleStatut(StkItemEtatVentes l) {

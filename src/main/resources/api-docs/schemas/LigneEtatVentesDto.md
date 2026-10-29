@@ -68,6 +68,18 @@ Réglé des échéances de frais. Null sur une ligne libre.
 
 `frais − fraisRegles`. Null sur une ligne libre.
 
+## fraisSyndic
+
+Σ des échéances de la catégorie syndic (`AdmParamsGuid.DefaultSyndicFeeDocumentType`) : même valeur que `fraisSyndic` de `GET /api/dossiers`. 0 sans échéance syndic ; null sur une ligne libre. Aussi compris dans `frais`.
+
+## fraisSyndicRegles
+
+Réglé de l'échéance syndic, comme `fraisSyndicRegles` de `GET /api/dossiers`. Null sur une ligne libre.
+
+## fraisSyndicReste
+
+`fraisSyndic − fraisSyndicRegles`, comme `fraisSyndicReste` de `GET /api/dossiers`. Null sur une ligne libre.
+
 ## modifications
 
 `ComFolder.ModificationsAmount` (0 si absent). Null sur une ligne libre.
@@ -119,3 +131,11 @@ Avance en % du prix après remise (40 = 40 %), 0 si ce prix est nul. Null sur un
 ## tauxAvanceReel
 
 Avance réglée en % de l'avance, 0 sans avance. Null sur une ligne libre. Jamais sommé.
+
+## alerte
+
+Date de l'alerte active du dossier (`AdmAlertData` liée à sa prospection) : même valeur que `alerte` de `GET /api/dossiers`, même requête. Null sur une ligne libre ou sans alerte active. Ni triable, ni groupable.
+
+## sousArticles
+
+Codes des articles du dossier (`ComFolderItem.Code`, séparés par des virgules) : même valeur que `sousArticlesCodes` de `GET /api/dossiers`. Null sur une ligne libre. Ni triable, ni groupable.

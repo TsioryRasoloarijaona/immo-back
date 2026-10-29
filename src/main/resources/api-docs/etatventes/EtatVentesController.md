@@ -1,6 +1,6 @@
 # EtatVentesController
 
-État des ventes (écran OMRAN « Suivi des dossiers de vente ») : une ligne par article racine en vente — `StkItem.ParentId` vide, vocation `VENTE`, tranche `IsForSale = 1` ; les parkings autonomes (`IsUnderItem = 1` sans parent) comptent, les sous-articles rattachés non. Synthèse, liste, groupes, totaux et export partagent exactement les mêmes filtres et la même visibilité (entités actives et périmètre commercial) : la somme des lignes de la liste filtrée égale la cellule de la synthèse.
+État des ventes (écran OMRAN « Suivi des dossiers de vente ») : une ligne par article racine en vente — `StkItem.ParentId` vide, vocation `VENTE`, tranche `IsForSale = 1` ; les parkings autonomes (`IsUnderItem = 1` sans parent) comptent s'ils portent un dossier non annulé ni désisté (libres : absents de toutes les sorties), les sous-articles rattachés non. `entiteId` (société du projet) ne fait que restreindre le périmètre du compte. Synthèse, liste, groupes, totaux et export partagent exactement les mêmes filtres et la même visibilité (entités actives et périmètre commercial) : la somme des lignes de la liste filtrée égale la cellule de la synthèse.
 
 ## synthese
 
@@ -10,7 +10,7 @@ Compte les articles par tranche × catégorie × statut. Statut `LIBRE` : articl
 
 Filtres partagés avec la synthèse, plus `statut`, `typeId`, `nature`, `search` et la période `champDate` + `du` / `au` (jours inclus, sur une date du dossier : un article libre n'en a aucune). Article libre : prix du catalogue `StkItem` (formules de la branche libre de la vue OMRAN `ComSaleMonitoringView`), aucune donnée de dossier (même un dossier annulé). Tri sur les noms du catalogue `GET /api/referentiels/colonnes/etat-des-ventes` ; les colonnes sans chemin (`statutLibelle`, `clientNom`, `commercial`, `dossierId` et les montants du dossier : `montantRegle`, `avance`, `netAPayer`, `tropPercu`, taux, prix au m²…) ne sont ni triables ni groupables (400).
 
-Montants du dossier : même calcul que `GET /api/dossiers` (une seule formule) ; null sur une ligne libre. En demander un coûte deux requêtes par page, un prix au m² une de plus ; aucune si aucun n'est demandé. Un dossier qui retient deux articles racines apparaît sur deux lignes avec les mêmes montants, comme OMRAN.
+Montants du dossier (frais syndic compris), `alerte` et `sousArticles` : même calcul que `GET /api/dossiers` (une seule formule) ; null sur une ligne libre. En demander un coûte deux requêtes par page, un prix au m² une de plus ; aucune si aucun n'est demandé. Un dossier qui retient deux articles racines apparaît sur deux lignes avec les mêmes montants, comme OMRAN.
 
 ## totauxColonnes
 
