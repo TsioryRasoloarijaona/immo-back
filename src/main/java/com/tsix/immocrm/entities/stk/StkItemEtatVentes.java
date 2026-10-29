@@ -17,8 +17,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Une ligne de l'état des ventes = un article racine en vente (FEATURE-etat-des-ventes.md R1–R3), base unique de la
- * synthèse, de la liste, des groupes et des totaux (R5). Dossier annulé ou désisté : {@code dossier} NULL, donc Libre.
+ * Un article racine en vente (FEATURE-etat-des-ventes.md R1–R5), base unique de toutes les sorties. Dossier annulé ou
+ * désisté : {@code dossier} NULL, donc Libre ; racine {@code IsUnderItem = 1} libre absente (FEATURE-etat-ventes-omran.md §1.1).
  * Prix : colonne du dossier, ou formule de la branche libre de {@code ComSaleMonitoringView} (FEATURE-etat-des-ventes-parite.md §3.2).
  */
 @Entity
@@ -45,7 +45,8 @@ import java.util.UUID;
         + "JOIN StkVocation v ON v.PKey = i.StkVocationId "
         + "LEFT JOIN (ComFolder f LEFT JOIN StrStatus s ON s.PKey = f.StrStatusId) ON f.PKey = i.ComFolderId "
         + "AND ISNULL(s.BoolField002, 0) = 0 AND ISNULL(s.BoolField003, 0) = 0 "
-        + "WHERE i.ParentId IS NULL AND v.Code = 'VENTE' AND t.IsForSale = 1")
+        + "WHERE i.ParentId IS NULL AND v.Code = 'VENTE' AND t.IsForSale = 1 "
+        + "AND (ISNULL(i.IsUnderItem, 0) = 0 OR f.PKey IS NOT NULL)")
 @Getter
 public class StkItemEtatVentes {
 

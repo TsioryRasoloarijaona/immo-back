@@ -65,13 +65,15 @@ public class EtatVentesController {
             @ApiResponse(responseCode = "400", description = "Id mal formé.", content = @Content)
     })
     public SyntheseEtatVentesDto synthese(
+            @Parameter(description = "Id(s) d'entité (société du projet, CfgCompany.id), répétable.")
+            @RequestParam(required = false) List<UUID> entiteId,
             @Parameter(description = "Id(s) de tranche (CfgTranche.id), répétable.")
             @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Id du projet (CfgProject.id) de la tranche.")
             @RequestParam(required = false) UUID projetId,
             @Parameter(description = "Id(s) de catégorie d'article (StkItemCategory.id), répétable.")
             @RequestParam(required = false) List<UUID> categorieId) {
-        return service.synthese(FiltresEtatVentes.synthese(trancheId, projetId, categorieId));
+        return service.synthese(FiltresEtatVentes.synthese(entiteId, trancheId, projetId, categorieId));
     }
 
     @GetMapping(BASE)

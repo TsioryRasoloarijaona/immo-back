@@ -10,6 +10,7 @@ import java.util.UUID;
 
 /** Filtres communs à la synthèse, à la liste, aux groupes, aux totaux et à l'export de l'état des ventes. */
 public record FiltresEtatVentes(
+        @Parameter(description = "Id(s) d'entité (société du projet, CfgCompany.id), répétable.") List<UUID> entiteId,
         @Parameter(description = "Id(s) de tranche (CfgTranche.id), répétable.") List<UUID> trancheId,
         @Parameter(description = "Id du projet (CfgProject.id) de la tranche.") UUID projetId,
         @Parameter(description = "Code(s) de statut : LIBRE, SANS_STATUT ou StrStatus.Code ; inconnu = 400.",
@@ -34,7 +35,9 @@ public record FiltresEtatVentes(
         champDate = champDate != null ? champDate : ChampDateDossier.RESERVATION;
     }
 
-    public static FiltresEtatVentes synthese(List<UUID> trancheId, UUID projetId, List<UUID> categorieId) {
-        return new FiltresEtatVentes(trancheId, projetId, null, categorieId, null, null, null, null, null, null);
+    public static FiltresEtatVentes synthese(List<UUID> entiteId, List<UUID> trancheId, UUID projetId,
+                                             List<UUID> categorieId) {
+        return new FiltresEtatVentes(entiteId, trancheId, projetId, null, categorieId, null, null, null, null, null,
+                null);
     }
 }

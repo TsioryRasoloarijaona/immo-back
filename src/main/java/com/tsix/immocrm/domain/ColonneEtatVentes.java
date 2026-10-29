@@ -67,6 +67,9 @@ public enum ColonneEtatVentes implements Colonne {
     FRAIS(ColonneDossier.FRAIS),
     FRAIS_REGLES(ColonneDossier.FRAIS_REGLES),
     FRAIS_RESTE(ColonneDossier.FRAIS_RESTE),
+    FRAIS_SYNDIC(ColonneDossier.FRAIS_SYNDIC),
+    FRAIS_SYNDIC_REGLES(ColonneDossier.FRAIS_SYNDIC_REGLES),
+    FRAIS_SYNDIC_RESTE(ColonneDossier.FRAIS_SYNDIC_RESTE),
     MODIFICATIONS(ColonneDossier.MODIFICATIONS),
     MODIFICATIONS_REGLEES(ColonneDossier.MODIFICATIONS_REGLEES),
     MODIFICATIONS_RESTE(ColonneDossier.MODIFICATIONS_RESTE),
@@ -79,7 +82,12 @@ public enum ColonneEtatVentes implements Colonne {
     PRIX_CONTRACTUEL_REGLE(ColonneDossier.PRIX_CONTRACTUEL_REGLE),
     PRIX_CONTRACTUEL_RESTE(ColonneDossier.PRIX_CONTRACTUEL_RESTE),
     TAUX_AVANCE(ColonneDossier.TAUX_AVANCE),
-    TAUX_AVANCE_REEL(ColonneDossier.TAUX_AVANCE_REEL);
+    TAUX_AVANCE_REEL(ColonneDossier.TAUX_AVANCE_REEL),
+
+    // -- Valeurs calculées du dossier (ColonnesCalculeesDossier) : null sur une ligne libre.
+    ALERTE(ColonneDossier.ALERTE),
+    SOUS_ARTICLES("sousArticles", "Sous-articles", Groupe.VENTE, TypeColonne.TEXTE, null,
+            ColonneDossier.SOUS_ARTICLES_CODES, false);
 
     public enum Groupe { ARTICLE, VENTE, PRIX, FINANCIER }
 
