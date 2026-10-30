@@ -25,8 +25,9 @@ public interface AdmUserRepository extends JpaRepository<AdmUser, UUID>, JpaSpec
     @Query("SELECT u FROM AdmUser u WHERE u.id = :id")
     Optional<AdmUser> findPourEcriture(@Param("id") UUID id);
 
-    /** {@code Code} est sensible à la casse selon la collation, OMRAN connecte par UPPER. */
-    @Query("SELECT COUNT(u) FROM AdmUser u WHERE u.codeMajuscule = UPPER(:code)")
+    /** OMRAN connecte par UPPER ; le CONVERT aligne le paramètre nvarchar sur la colonne : UPPER diffère sur ƒ. */
+    @Query(value = "SELECT COUNT(*) FROM AdmUser WHERE UPPER(Code) = UPPER(CONVERT(varchar(max), :code))",
+            nativeQuery = true)
     long compterParCode(@Param("code") String code);
 
     /** {@code Pass} n'est pas mappé : l'INSERT laisse jouer le DEFAULT N'' de la base, OMRAN attend NULL (R6). */
