@@ -31,7 +31,7 @@ public class FixtureTachesAdmin {
     private static final String TRACE = """
                 Notes nvarchar(1000) NULL, UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL,
                 UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL""";
-    /** Exécutables hors transaction : les deux tables restent alors dans la base, sans gêner aucun autre lot. */
+    /** Exécutables hors transaction : les trois tables restent alors dans la base, sans gêner aucun autre lot. */
     public static final List<String> TABLES_REFERENTIELS = List.of("""
             IF OBJECT_ID('dbo.AdmTaskType', 'U') IS NULL
             CREATE TABLE dbo.AdmTaskType (
@@ -41,14 +41,21 @@ public class FixtureTachesAdmin {
             CREATE TABLE dbo.AdmTaskPriority (
                 PKey uniqueidentifier NOT NULL PRIMARY KEY, Sorting int NULL, Code nvarchar(255) NULL,
                 Description nvarchar(255) NULL,
-            """ + TRACE + ")");
-    // Toujours dans la transaction du test : une AdmTask réduite à trois colonnes ne doit pas survivre (lots 1.2, 1.3).
-    private static final String TABLE_TACHES = """
+            """ + TRACE + ")", """
             IF OBJECT_ID('dbo.AdmTask', 'U') IS NULL
             CREATE TABLE dbo.AdmTask (
-                PKey uniqueidentifier NOT NULL PRIMARY KEY,
+                PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL, Description nvarchar(255) NULL,
                 AdmTaskTypeId uniqueidentifier NULL REFERENCES dbo.AdmTaskType (PKey),
-                AdmTaskPriorityId uniqueidentifier NULL REFERENCES dbo.AdmTaskPriority (PKey))""";
+                CfgTierTriggerId uniqueidentifier NULL, StartDatePrev datetime NULL, DelayPrev int NULL,
+                DueDatePrev datetime NULL, StartDate datetime NULL, Delay int NULL, EndDate datetime NULL,
+                AdmModuleId uniqueidentifier NULL, StrEntityId uniqueidentifier NULL, StrStatusId uniqueidentifier NULL,
+                AdmTaskPriorityId uniqueidentifier NULL REFERENCES dbo.AdmTaskPriority (PKey),
+                CfgTierManagerId uniqueidentifier NULL, CfgTierAssignmentId uniqueidentifier NULL,
+                CfgCompanyId uniqueidentifier NULL, PrjProjectId uniqueidentifier NULL,
+            """ + TRACE + """
+            ,
+                ObjectId uniqueidentifier NULL, ObjectLabel nvarchar(1000) NULL, ObjectStrEntityId uniqueidentifier NULL,
+                CfgProspectId uniqueidentifier NULL)""");
 
     private static final String P_ID = "id";
 
@@ -84,7 +91,6 @@ public class FixtureTachesAdmin {
     /** À appeler dans la transaction du test. */
     public void assurerTables() {
         TABLES_REFERENTIELS.forEach(ddl -> entityManager.createNativeQuery(ddl).executeUpdate());
-        entityManager.createNativeQuery(TABLE_TACHES).executeUpdate();
     }
 
     /** Ligne déjà en base, écrite par OMRAN : créée, jamais modifiée. */
