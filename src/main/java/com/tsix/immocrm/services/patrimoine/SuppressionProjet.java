@@ -110,6 +110,7 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         try {
             em.flush();
         } catch (ConstraintViolationException e) {
+            em.clear();
             throw refus(objet, e.getConstraintName());
         } catch (IllegalStateException e) {
             // Une entité chargée dans la session cite encore la ligne : Hibernate refuse avant la base, et rejouerait
