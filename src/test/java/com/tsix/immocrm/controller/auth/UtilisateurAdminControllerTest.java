@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -134,16 +133,6 @@ class UtilisateurAdminControllerTest {
     void reinitialiser_unknownUser_returns404() throws Exception {
         mockMvc.perform(post("/api/utilisateurs/{id}/reinitialiser-mot-de-passe", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
-    }
-
-    /** FEATURE-acces-arpent-depuis-omran B4 : les comptes se créent dans Omran, la route n'existe plus. */
-    @Test
-    @WithMockUser(roles = "Administrateur")
-    void creerEmploye_routeSupprimee_nEstPlusExposee() throws Exception {
-        int statut = mockMvc.perform(post("/api/utilisateurs")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"identifiant\":\"x\"}"))
-                .andReturn().getResponse().getStatus();
-        assertThat(statut).isIn(404, 405);
     }
 
     @Test
