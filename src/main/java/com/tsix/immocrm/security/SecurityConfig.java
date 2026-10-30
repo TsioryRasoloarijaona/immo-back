@@ -86,7 +86,7 @@ public class SecurityConfig {
                         // show-details=never ; info ne porte que tag d'image et commit, déjà publics (InfosBuild).
                         .requestMatchers("/actuator/health", "/actuator/prometheus", "/actuator/info").permitAll()
                         // Avant la liaison des paramètres : 403 avant tout 400 (FEATURE-patrimoine-import-export.md §0.1).
-                        .requestMatchers("/api/import-patrimoine/**", "/api/administration/**").hasRole(ADMINISTRATEUR)
+                        .requestMatchers("/api/import-patrimoine/**", "/api/administration/**", "/api/utilisateurs/**").hasRole(ADMINISTRATEUR)
                         .requestMatchers("/api/tranches/*/premieres-relances", "/api/tranches/*/premieres-relances/**",
                                 "/api/tranches/*/premieres-relances.pdf", "/api/champs-specifiques/*/definitions/**")
                         .hasRole(ADMINISTRATEUR)

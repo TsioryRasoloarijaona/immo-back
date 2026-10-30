@@ -1,8 +1,10 @@
 package com.tsix.immocrm.services.auth;
 
+import com.tsix.immocrm.dto.auth.FiltresUtilisateurs;
 import com.tsix.immocrm.dto.auth.ReinitialiserMotDePasseResponse;
 import com.tsix.immocrm.dto.auth.UtilisateurListItemDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.entities.adm.AdmUserRole;
 import com.tsix.immocrm.entities.app.AppUserCredential;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
@@ -16,10 +18,16 @@ import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.web.export.LignesAplaties;
+import com.tsix.immocrm.web.export.LignesExport;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,11 +39,12 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** Les comptes se créent dans Omran, jamais ici ({@code FEATURE-acces-arpent-depuis-omran.md}). */
+/** Liste des comptes et mot de passe Arpent ; création et fiche : {@link UtilisateursService}. */
 @Service
 @Transactional(readOnly = true)
 public class UtilisateurAdminService {
@@ -68,26 +77,8 @@ public class UtilisateurAdminService {
         this.envoiEmail = envoiEmail;
     }
 
-    public Page<UtilisateurListItemDto> findAll(String search, Boolean disabled, Pageable pageable) {
-        Specification<AdmUser> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (StringUtils.hasText(search)) {
-                // code/email sont des @Lob : lower() refuse les CLOB, la collation insensible à la
-                // casse de SQL Server fait le travail.
-                String pattern = "%" + search + "%";
-                predicates.add(cb.or(
-                        cb.like(root.get("code"), pattern),
-                        cb.like(cb.lower(root.get("description")), pattern.toLowerCase()),
-                        cb.like(root.get("email"), pattern)
-                ));
-            }
-            if (disabled != null) {
-                predicates.add(cb.equal(cb.coalesce(root.get("disabled"), false), disabled));
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
-
-        Page<AdmUser> page = userRepository.findAll(spec, pageable);
+    public Page<UtilisateurListItemDto> findAll(FiltresUtilisateurs filtres, Pageable pageable) {
+        Page<AdmUser> page = userRepository.findAll(specification(filtres), pageable);
         List<UUID> userIds = page.getContent().stream().map(AdmUser::getId).toList();
 
         Map<UUID, List<String>> rolesByUserId = userRoleRepository.findByAdmUserIdIn(userIds).stream()
@@ -104,6 +95,36 @@ public class UtilisateurAdminService {
                 rolesByUserId.getOrDefault(user.getId(), List.of()),
                 credentialByUserId.get(user.getId()),
                 projetsByUserId.getOrDefault(user.getId(), 0)));
+    }
+
+    public List<Map<String, Object>> lignesExport(FiltresUtilisateurs filtres) {
+        return findAll(filtres, PageRequest.of(0, LignesExport.LIGNES_EXPORT_MAX, Sort.by("description"))).stream()
+                .map(LignesAplaties::de).toList();
+    }
+
+    private static Specification<AdmUser> specification(FiltresUtilisateurs f) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(f.search())) {
+                String motif = "%" + f.search().trim().toUpperCase(Locale.ROOT) + "%";
+                predicates.add(cb.or(cb.like(root.get("codeMajuscule"), motif), cb.like(root.get("emailMajuscule"), motif),
+                        cb.like(cb.upper(root.get("description")), motif)));
+            }
+            if (f.disabled() != null) {
+                predicates.add(cb.equal(cb.coalesce(root.get("disabled"), false), f.disabled()));
+            }
+            if (f.personnelId() != null) {
+                predicates.add(cb.equal(root.get("cfgEmployee").get("id"), f.personnelId()));
+            }
+            if (f.roleId() != null) {
+                Subquery<UUID> lien = query.subquery(UUID.class);
+                Root<AdmUserRole> ligne = lien.from(AdmUserRole.class);
+                lien.select(ligne.get("id")).where(cb.equal(ligne.get("admUser"), root),
+                        cb.equal(ligne.get("admRole").get("id"), f.roleId()));
+                predicates.add(cb.exists(lien));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     private static UtilisateurListItemDto toListItem(AdmUser user, List<String> roles, AppUserCredential credential,
@@ -128,14 +149,19 @@ public class UtilisateurAdminService {
                 credential != null && Boolean.TRUE.equals(credential.getMustChangePassword()),
                 credential != null && Boolean.TRUE.equals(credential.getProfileCompleted()),
                 user.getUserCreateDateTime(),
-                nombreProjets
+                nombreProjets,
+                Boolean.TRUE.equals(user.getMobileUser()),
+                Boolean.TRUE.equals(user.getVisibleForChat()),
+                user.getUserCreate(),
+                user.getUserUpdate(),
+                user.getUserUpdateDateTime()
         );
     }
 
     /**
      * Voir {@code FEATURE-acces-arpent-depuis-omran.md} B1. Adresse invalide ⇒ 400 avant toute écriture ;
      * sans destinataire, pas de mail et le mot de passe n'existe que dans la réponse. Adresse du
-     * corps jamais enregistrée : Omran reste la source des comptes.
+     * corps jamais enregistrée.
      */
     @Transactional
     public ReinitialiserMotDePasseResponse reinitialiserMotDePasse(UUID admUserId, String emailCorps) {

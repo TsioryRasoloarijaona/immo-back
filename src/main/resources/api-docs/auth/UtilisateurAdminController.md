@@ -1,19 +1,17 @@
 # UtilisateurAdminController
 
-Actions administratives sur les comptes AdmUser — réservées au rôle Administrateur : liste des comptes, réinitialisation du mot de passe Arpent, et affectation des projets qui composent le périmètre commercial d'un utilisateur. Les comptes eux-mêmes se créent dans Omran, jamais ici.
+Comptes AdmUser — réservé au rôle Administrateur : liste, fiche, création, désactivation, rôles, comptes de dépôt, habilitations, réinitialisation du mot de passe Arpent et affectation des projets du périmètre commercial. Un compte créé ici n'ouvre pas OMRAN tant qu'un mot de passe n'y est pas défini. Aucune suppression : on désactive.
 
 ## findAll
 
 Tous les comptes (AdmUser) avec leurs informations (identifiant, coordonnées, statut
 activé/désactivé), la fiche employé (CfgTier) liée et les rôles (AdmRole) assignés — écran
-d'administration des comptes. `search` filtre (insensible à la casse, sous-chaîne) sur
-identifiant/description/email. `disabled` filtre sur le statut activé/désactivé ; absent = tous les
-comptes. Réservé au rôle Administrateur.
+d'administration des comptes. Les filtres se cumulent, et `/export` applique les mêmes. Réservé au
+rôle Administrateur.
 
 ## reinitialiserMotDePasse
 
-Les comptes se créent dans Omran (AdmUser, fiche employé, rôles) ; ce geste est le seul qui ouvre ou
-rouvre l'accès web. Génère **toujours** un nouveau mot de passe Arpent pour le login Omran
+Ce geste est le seul qui ouvre ou rouvre l'accès web d'un compte. Génère **toujours** un nouveau mot de passe Arpent pour le login Omran
 (`AdmUser.Code`), le renvoie une seule fois dans la réponse, et rend le compte **utilisable
 immédiatement** : aucun changement de mot de passe ni formulaire de profil n'est demandé à la
 connexion (mustChangePassword=false, profileCompleted=true). Invalide tous les tokens déjà émis pour

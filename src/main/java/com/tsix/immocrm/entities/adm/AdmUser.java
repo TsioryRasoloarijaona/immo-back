@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDateTime;
@@ -34,11 +35,12 @@ public class AdmUser {
     @Column(name = "Code", nullable = false)
     private String code;
 
-    /** Chiffré par un algorithme que seul le logiciel de bureau connaît : jamais utilisé pour authentifier. */
-    @Nationalized
-    @Lob
-    @Column(name = "Pass")
-    private String pass;
+    // Code et Email sont des CLOB pour Hibernate : upper() les refuse, la recherche passe par ces colonnes calculées.
+    @Formula("UPPER(Code)")
+    private String codeMajuscule;
+
+    @Formula("UPPER(Email)")
+    private String emailMajuscule;
 
     @Size(max = 255)
     @Nationalized
@@ -66,6 +68,42 @@ public class AdmUser {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgEmployeeId")
     private CfgTier cfgEmployee;
+
+    @Column(name = "LinesPerPage")
+    private Integer linesPerPage;
+
+    @Column(name = "ConfirmDelete")
+    private Boolean confirmDelete;
+
+    @Column(name = "LockDelay")
+    private Integer lockDelay;
+
+    /** Ne donne aucun droit : seuls les {@code AdmUserRole} comptent. */
+    @Column(name = "WebRoleId")
+    private UUID webRoleId;
+
+    @Column(name = "WebCultureId")
+    private UUID webCultureId;
+
+    @Column(name = "IsVisibleForChat")
+    private Boolean visibleForChat;
+
+    @Column(name = "CanDisapearNotification")
+    private Boolean canDisapearNotification;
+
+    @Column(name = "IsMobileUser")
+    private Boolean mobileUser;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "EmailSMTPServer")
+    private String emailSmtpServer;
+
+    @Column(name = "EmailPortNumber")
+    private Integer emailPortNumber;
+
+    @Column(name = "EmailSSLActive")
+    private Boolean emailSslActive;
 
     @Size(max = 255)
     @Nationalized
