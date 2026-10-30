@@ -7,6 +7,7 @@ import com.tsix.immocrm.dto.auth.UtilisateurReferencesDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmRoleRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.Charset;
 import java.util.UUID;
 
 /** Sans readOnly, lectures comprises : la fiche se relit sur la source, {@code StlDepositUser} n'étant pas sur la copie. */
@@ -30,6 +32,7 @@ public class UtilisateursService {
     private static final int CODE_MAX = 100;
     private static final Sort PAR_CODE = Sort.by("code");
     private static final String CODE = "code";
+    private static final Charset CP1252 = Charset.forName("windows-1252");
 
     /** Listes de choix : un record les regroupe pour rester sous S107. */
     @Component
@@ -80,6 +83,10 @@ public class UtilisateursService {
         String code = SaisiePatrimoine.texte(
                 SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(corps.code()), null, CODE),
                 null, CODE_MAX, CODE);
+        // Code est un varchar CP1252 : un caractère hors page serait remplacé à l'écriture, après le contrôle d'unicité.
+        if (!CP1252.newEncoder().canEncode(code)) {
+            throw new InvalidRequestException("Le code contient un caractère non pris en charge.");
+        }
         ReferentielAdminService.verrouiller(em, AdmUser.class, code, "Utilisateur");
         if (comptes.compterParCode(code) > 0) {
             throw new ConflictException("Le code utilisateur %s existe déjà.".formatted(code));
@@ -88,6 +95,8 @@ public class UtilisateursService {
         compte.setId(UUID.randomUUID());
         ecriture.creer(compte, code, corps);
         em.persist(compte);
+        comptes.flush();
+        comptes.retirerDefautPass(compte.getId());
         return fiche.dto(compte);
     }
 

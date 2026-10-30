@@ -45,7 +45,7 @@ record EcritureUtilisateur(TracePatrimoine trace, AdmUserRepository comptes, Adm
     }
 
     void creer(AdmUser u, String code, UtilisateurEcritureDto d) {
-        SaisiePatrimoine.obligatoire(d.description(), null, "description");
+        description(d);
         Saisie s = apres(DEFAUTS, d);
         CfgTier personnel = verifier(s, DEFAUTS, null);
         u.setCode(code);
@@ -93,8 +93,7 @@ record EcritureUtilisateur(TracePatrimoine trace, AdmUserRepository comptes, Adm
 
     private static Saisie apres(Saisie a, UtilisateurEcritureDto d) {
         boolean inactif = ou(d.inactif(), a.inactif());
-        String description = d.description() == null ? a.description()
-                : SaisiePatrimoine.obligatoire(d.description(), null, "description");
+        String description = d.description() == null ? a.description() : description(d);
         String smtp = d.smtpServeur() == null ? a.smtp()
                 : vide(SaisiePatrimoine.texte(d.smtpServeur(), null, SaisiePatrimoine.COURT, "smtpServeur"));
         return new Saisie(description, texte(d.email(), a.email()), texte(d.telephone(), a.telephone()),
@@ -103,6 +102,10 @@ record EcritureUtilisateur(TracePatrimoine trace, AdmUserRepository comptes, Adm
                 acces(d.accesMobile(), a.accesMobile(), inactif, d.inactif()), smtp, ou(d.smtpPort(), a.port()),
                 ou(d.smtpSsl(), a.ssl()), ou(d.cultureWebId(), a.culture()),
                 lien(d.viderRoleWeb(), d.roleWebId(), a.roleWeb()));
+    }
+
+    private static String description(UtilisateurEcritureDto d) {
+        return SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.description()), null, "description");
     }
 
     private static UUID lien(Boolean vider, UUID saisie, UUID actuel) {
