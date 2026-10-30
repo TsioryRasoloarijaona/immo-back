@@ -148,21 +148,32 @@ public class EcouteurAuditOmran implements PostInsertEventListener, PostUpdateEv
         return details.modification(c.persister, c.ancien, c.nouveau);
     }
 
+    /** Modification sans colonne auditée (lignes enfants non tracées) : une ligne de résumé, à persister par l'appelant. */
+    public AdmWebHistorics resume(Object entite, UUID id, String resume) {
+        Trace trace = RegistreAuditOmran.tracer(entite).orElseThrow();
+        AdmWebHistorics h = ligne(trace, id, MODIFICATION, List.of(List.of(trace.nomCourt(), "", resume)),
+                utilisateurAffiche.courant().nom(), LocalDateTime.now(clock));
+        h.setDescription(resume);
+        return h;
+    }
+
     private AdmWebHistorics ligne(Changement c, String auteur, LocalDateTime maintenant) {
         Trace trace = RegistreAuditOmran.tracer(c.entite).orElse(null);
         if (trace == null) {
             return null;
         }
         List<List<String>> lignes = changements(c, trace);
-        if (lignes.isEmpty()) {
-            return null;
-        }
+        return lignes.isEmpty() ? null : ligne(trace, c.id, c.action, lignes, auteur, maintenant);
+    }
+
+    private AdmWebHistorics ligne(Trace trace, UUID id, String action, List<List<String>> lignes, String auteur,
+                                  LocalDateTime maintenant) {
         AdmWebHistorics h = new AdmWebHistorics();
         h.setId(UUID.randomUUID());
         h.setUserDescription(auteur);
         h.setActionDateTime(maintenant);
-        h.setObjectId(c.id);
-        h.setAction(c.action);
+        h.setObjectId(id);
+        h.setAction(action);
         h.setObjectType(trace.type());
         h.setObjectTypeLabel(trace.libelleType());
         h.setObjectLabel(trace.libelleObjet());

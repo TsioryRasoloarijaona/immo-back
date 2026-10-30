@@ -51,4 +51,31 @@ public class AdmRole {
     /** 0 = rôle libre : ses comptes voient tous les rapports ; NULL vaut 1 (FEATURE-tdb-vente-rapports-socle.md §2). */
     @Column(name = "WithReportRestriction")
     private Boolean withReportRestriction;
+
+    @Column(name = "WithAddAttachementRestriction")
+    private Boolean withAddAttachementRestriction;
+
+    @Column(name = "WithEditAttachementRestriction")
+    private Boolean withEditAttachementRestriction;
+
+    @Column(name = "WithDeleteAttachementRestriction")
+    private Boolean withDeleteAttachementRestriction;
+
+    @Column(name = "WithAddActionMessageRestriction")
+    private Boolean withAddActionMessageRestriction;
+
+    @Column(name = "WithEditActionMessageRestriction")
+    private Boolean withEditActionMessageRestriction;
+
+    @Column(name = "WithDeleteActionMessageRestriction")
+    private Boolean withDeleteActionMessageRestriction;
+
+    @Column(name = "WithAuditRestriction")
+    private Boolean withAuditRestriction;
+
+    @Column(name = "WithSpecificFieldsRestriction")
+    private Boolean withSpecificFieldsRestriction;
+
+    @Column(name = "WithSequenceFreeRestriction")
+    private Boolean withSequenceFreeRestriction;
 }

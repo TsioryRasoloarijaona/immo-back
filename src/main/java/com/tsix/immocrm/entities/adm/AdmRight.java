@@ -26,6 +26,11 @@ public class AdmRight {
     @Column(name = "Code")
     private String code;
 
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Description")
+    private String description;
+
     @Column(name = "AdmRoleId")
     private UUID admRoleId;
 }
