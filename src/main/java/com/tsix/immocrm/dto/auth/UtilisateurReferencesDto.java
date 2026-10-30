@@ -13,7 +13,7 @@ public record UtilisateurReferencesDto(
         List<ReferentielItemDto> cultures,
 
         @Schema(description = "Tiers de type Employé.")
-        List<ReferentielItemDto> personnels,
+        List<PersonnelReferenceDto> personnels,
 
         @Schema(description = "StlDeposit.")
         List<ReferentielItemDto> comptesDepot

@@ -3,6 +3,7 @@ package com.tsix.immocrm.repositories.adm;
 import com.tsix.immocrm.entities.adm.AdmUserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.UUID;
@@ -17,4 +18,12 @@ public interface AdmUserRoleRepository extends JpaRepository<AdmUserRole, UUID> 
     /** Toutes les attributions, compte et rôle chargés : table de quelques dizaines de lignes (équipe commerciale). */
     @Query("SELECT ur FROM AdmUserRole ur JOIN FETCH ur.admUser JOIN FETCH ur.admRole")
     List<AdmUserRole> findAllAvecCompteEtRole();
+
+    boolean existsByAdmUserIdAndAdmRole_Code(UUID admUserId, String code);
+
+    /** Comptes actifs portant ce rôle, celui-ci mis à part. */
+    @Query("""
+            SELECT COUNT(DISTINCT ur.admUser.id) FROM AdmUserRole ur
+            WHERE ur.admRole.code = :code AND ur.admUser.id <> :compte AND COALESCE(ur.admUser.disabled, false) = false""")
+    long compterAutresActifs(@Param("code") String code, @Param("compte") UUID compte);
 }

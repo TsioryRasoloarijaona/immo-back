@@ -8,12 +8,24 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpecificationExecutor<CfgTier> {
 
     /** Tiers d'un type (CfgTierView.GetEmployeeList : {@code CfgTierTypeId = Employee}). */
     List<CfgTier> findByCfgTierType_IdOrderByDescriptionAsc(UUID typeId);
+
+    /** Type direct ou type du genre : certains employés ne portent que l'un des deux. */
+    String EMPLOYE = """
+            SELECT t FROM CfgTier t LEFT JOIN t.cfgTierType tt LEFT JOIN t.cfgTierKind k LEFT JOIN k.cfgTierType kt
+            WHERE (tt.code = 'EMP' OR kt.code = 'EMP')""";
+
+    @Query(EMPLOYE + " ORDER BY t.description ASC")
+    List<CfgTier> findEmployes();
+
+    @Query(EMPLOYE + " AND t.id = :id")
+    Optional<CfgTier> findEmploye(@Param("id") UUID id);
 
     /**
      * Les quatre colonnes téléphone, saisies sans format homogène (avec ou sans +212, espaces) : les deux

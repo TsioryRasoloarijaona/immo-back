@@ -44,6 +44,12 @@ public record UtilisateurEcritureDto(
         UUID cultureWebId,
 
         @Schema(description = "AdmRole (voir /references). Ne donne aucun droit.")
-        UUID roleWebId
+        UUID roleWebId,
+
+        @Schema(description = "PATCH : true remet CfgEmployeeId à NULL et prime sur personnelId. Sans effet au POST.")
+        Boolean viderPersonnel,
+
+        @Schema(description = "PATCH : true remet WebRoleId à NULL et prime sur roleWebId. Sans effet au POST.")
+        Boolean viderRoleWeb
 ) {
 }

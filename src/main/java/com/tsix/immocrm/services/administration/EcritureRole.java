@@ -7,6 +7,7 @@ import com.tsix.immocrm.services.patrimoine.SaisiePatrimoine;
 import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.ou;
@@ -21,6 +22,19 @@ record EcritureRole(TracePatrimoine trace) {
     /** NULL en base = restreint, comme l'accès aux rapports. */
     static RestrictionsRoleDto lues(AdmRole r) {
         return fusion(enBase(r), TOUTES);
+    }
+
+    static RestrictionsRoleDto cumul(List<AdmRole> roles) {
+        return roles.stream().map(EcritureRole::lues).reduce(TOUTES, EcritureRole::et);
+    }
+
+    private static RestrictionsRoleDto et(RestrictionsRoleDto a, RestrictionsRoleDto b) {
+        return new RestrictionsRoleDto(a.ajoutPiecesJointes() && b.ajoutPiecesJointes(),
+                a.modificationPiecesJointes() && b.modificationPiecesJointes(),
+                a.suppressionPiecesJointes() && b.suppressionPiecesJointes(), a.ajoutActions() && b.ajoutActions(),
+                a.modificationActions() && b.modificationActions(), a.suppressionActions() && b.suppressionActions(),
+                a.rapports() && b.rapports(), a.audits() && b.audits(),
+                a.champsSpecifiques() && b.champsSpecifiques(), a.sequences() && b.sequences());
     }
 
     void creer(AdmRole r, String code, RoleEcritureDto d) {

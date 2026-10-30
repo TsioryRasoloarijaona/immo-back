@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.administration;
 import com.tsix.immocrm.dto.administration.DroitsRoleEcritureDto;
 import com.tsix.immocrm.dto.administration.FiltresRoles;
 import com.tsix.immocrm.dto.administration.NoeudDroitDto;
+import com.tsix.immocrm.dto.administration.RestrictionsRoleDto;
 import com.tsix.immocrm.dto.administration.RoleDto;
 import com.tsix.immocrm.dto.administration.RoleEcritureDto;
 import com.tsix.immocrm.dto.administration.RoleLigneDto;
@@ -71,7 +72,7 @@ public class RolesService {
 
     @Transactional
     public RoleDto creer(RoleEcritureDto corps) {
-        String code = SaisiePatrimoine.obligatoire(sansBlancsAuxBords(corps.code()), null, "code");
+        String code = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(corps.code()), null, "code");
         ReferentielAdminService.verrouiller(em, AdmRole.class, code, LIBELLE);
         if (roles.existsByCodeIgnoreCase(code)) {
             throw new ConflictException("Le code de rôle %s existe déjà.".formatted(code));
@@ -83,24 +84,9 @@ public class RolesService {
         return dto(role);
     }
 
-    // trim() ignore U+00A0, U+2003, U+202F : un sosie visuel passerait la garde d'unicité.
-    private static String sansBlancsAuxBords(String valeur) {
-        if (valeur == null) {
-            return null;
-        }
-        int debut = 0;
-        int fin = valeur.length();
-        while (debut < fin && estBlanc(valeur.charAt(debut))) {
-            debut++;
-        }
-        while (fin > debut && estBlanc(valeur.charAt(fin - 1))) {
-            fin--;
-        }
-        return valeur.substring(debut, fin);
-    }
-
-    private static boolean estBlanc(char c) {
-        return Character.isWhitespace(c) || Character.isSpaceChar(c);
+    /** Une restriction est levée dès qu'un rôle la lève ; aucun rôle = tout restreint. */
+    public static RestrictionsRoleDto restrictionsCumulees(List<AdmRole> roles) {
+        return EcritureRole.cumul(roles);
     }
 
     @Transactional
