@@ -1,6 +1,8 @@
 package com.tsix.immocrm.domain;
 
 import com.tsix.immocrm.domain.ChampReferentiel.Type;
+import com.tsix.immocrm.entities.adm.AdmTaskPriority;
+import com.tsix.immocrm.entities.adm.AdmTaskType;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStanding;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStatus;
 import com.tsix.immocrm.entities.lnd.LndLevel;
@@ -168,10 +170,14 @@ public enum ReferentielAdmin {
             return List.of(new Bloquant("SELECT COUNT(u) FROM StkFSBaseUnit u WHERE u.specificFunction.id = :id",
                     "StkFSBaseUnit (unités de base)"));
         }
-    };
+    },
+    TYPES_TACHE("types-tache", "Types de tâche", Famille.TACHES, AdmTaskType.class,
+            new Audit("Yes.Adm.Config.AdmTaskType", "Type tâche"), Colonnes.TYPE_TACHE, Colonnes.CLE_CODE),
+    PRIORITES_TACHE("priorites-tache", "Priorités de tâche", Famille.TACHES, AdmTaskPriority.class,
+            new Audit("Yes.Adm.Config.AdmTaskPriority", "Priorité tâche"), Colonnes.PRIORITE_TACHE, Colonnes.CLE_CODE);
 
     public enum Famille {
-        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES
+        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES
     }
 
     /** {@code ObjectType} et {@code ObjectTypeLabel} écrits dans {@code AdmWebHistorics}. */
@@ -325,6 +331,9 @@ public enum ReferentielAdmin {
                 de("surfaceNette", "Surface nette", Type.BOOLEEN, "areaNet"),
                 de("surfaceBrute", "Surface brute", Type.BOOLEEN, "areaBrut"),
                 de("empriseAuSol", "Emprise au sol", Type.BOOLEEN, "areaCos"));
+        private static final ChampReferentiel NOTES_TACHE = texte("notes", "Notes", "notes", 1000);
+        static final List<ChampReferentiel> TYPE_TACHE = List.of(CODE, DESCRIPTION, NOTES_TACHE);
+        static final List<ChampReferentiel> PRIORITE_TACHE = List.of(SORTING.requis(), CODE, DESCRIPTION, NOTES_TACHE);
 
         /** Trois options (texte) et leur case, numérotées 1 à 3 dans les trois motifs. */
         private static Stream<ChampReferentiel> options(String nomCase, String proprieteCase, String libelleCase) {

@@ -10,7 +10,8 @@ public record DescripteurReferentielDto(
         String slug,
         @Schema(description = "Libellé OMRAN du référentiel.", example = "Orientations")
         String libelle,
-        @Schema(description = "Menu OMRAN où il se range.", allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES"})
+        @Schema(description = "Menu OMRAN où il se range.",
+                allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES", "TACHES"})
         String famille,
         @Schema(description = "Vrai si chaque ligne porte une tranche : la liste accepte trancheId (et global).")
         boolean parTranche,
