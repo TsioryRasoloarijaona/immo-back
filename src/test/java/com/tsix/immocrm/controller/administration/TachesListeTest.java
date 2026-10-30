@@ -314,7 +314,8 @@ class TachesListeTest {
         String ligne = JsonPath.read(json, "$[?(@.id=='" + statut.fil() + "')]").toString();
 
         List<Statut> permis = permis(statut);
-        assertThat(ligne).contains(permis.stream().map(Statut::fil).toList());
+        // AssertJ refuse contains(liste vide) ; statut final : aucun autre statut dans sa ligne, donc aucune transition.
+        permis.forEach(s -> assertThat(ligne).contains(s.fil()));
         assertThat(STATUTS_TACHE.stream().filter(s -> !s.equals(statut) && !permis.contains(s)).map(Statut::fil).toList())
                 .isNotEmpty().allSatisfy(id -> assertThat(ligne).doesNotContain(id));
     }
