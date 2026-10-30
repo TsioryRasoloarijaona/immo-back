@@ -1,6 +1,5 @@
 package com.tsix.immocrm.controller.administration;
 
-import com.tsix.immocrm.domain.TypeExport;
 import com.tsix.immocrm.dto.administration.FiltresHistorique;
 import com.tsix.immocrm.dto.administration.LigneHistoriqueDto;
 import com.tsix.immocrm.dto.common.PageDto;
@@ -44,7 +43,7 @@ public class HistoriqueController {
     private static final List<ColonneFixe> COLONNES = List.of(ColonneFixe.texte("dateAction", "Date d'action"),
             ColonneFixe.texte("utilisateur", "Utilisateur"), ColonneFixe.texte("entite", "Entité"),
             ColonneFixe.texte("libelleEntite", "Libellé entité"), ColonneFixe.texte("action", "Action"),
-            ColonneFixe.de("objetId", "Id de l'objet", TypeExport.TEXTE));
+            ColonneFixe.texte("objetId", "Id de l'objet"));
 
     private final HistoriqueService service;
     private final ExportTableur export;
