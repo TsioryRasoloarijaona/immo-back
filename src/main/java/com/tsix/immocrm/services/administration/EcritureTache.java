@@ -26,7 +26,7 @@ record EcritureTache(EntityManager em, TracePatrimoine trace) {
 
     void appliquer(AdmTask t, TacheEcritureDto d) {
         String description = SaisiePatrimoine.obligatoire(d.description(), t.getDescription(), "description");
-        String notes = d.notes() == null ? t.getNotes() : SaisiePatrimoine.texte(d.notes(), null, NOTES_MAX, "notes");
+        String notes = SaisiePatrimoine.texte(d.notes(), t.getNotes(), NOTES_MAX, "notes");
         AdmTaskType type = reference(AdmTaskType.class, d.typeId(), t.getType(), "typeId");
         AdmTaskPriority priorite = reference(AdmTaskPriority.class, d.prioriteId(), t.getPriorite(), "prioriteId");
         CfgTier declencheur = reference(CfgTier.class, d.declencheurId(), t.getDeclencheur(), "declencheurId");
