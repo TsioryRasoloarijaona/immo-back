@@ -63,14 +63,15 @@ public class RolesService {
         return droits.arbre();
     }
 
-    @Transactional(readOnly = true)
+    // Sans readOnly : lu sur la source, AdmRight n'est pas sous Change Tracking (FEATURE-admin-roles.md, décisions du manager).
+    @Transactional
     public RoleDto detail(UUID id) {
         return dto(roles.findById(id).orElseThrow(() -> introuvable(id)));
     }
 
     @Transactional
     public RoleDto creer(RoleEcritureDto corps) {
-        String code = SaisiePatrimoine.obligatoire(corps.code(), null, "code");
+        String code = SaisiePatrimoine.obligatoire(sansBlancsAuxBords(corps.code()), null, "code");
         ReferentielAdminService.verrouiller(em, AdmRole.class, code, LIBELLE);
         if (roles.existsByCodeIgnoreCase(code)) {
             throw new ConflictException("Le code de rôle %s existe déjà.".formatted(code));
@@ -80,6 +81,26 @@ public class RolesService {
         ecriture.creer(role, code, corps);
         em.persist(role);
         return dto(role);
+    }
+
+    // trim() ignore U+00A0, U+2003, U+202F : un sosie visuel passerait la garde d'unicité.
+    private static String sansBlancsAuxBords(String valeur) {
+        if (valeur == null) {
+            return null;
+        }
+        int debut = 0;
+        int fin = valeur.length();
+        while (debut < fin && estBlanc(valeur.charAt(debut))) {
+            debut++;
+        }
+        while (fin > debut && estBlanc(valeur.charAt(fin - 1))) {
+            fin--;
+        }
+        return valeur.substring(debut, fin);
+    }
+
+    private static boolean estBlanc(char c) {
+        return Character.isWhitespace(c) || Character.isSpaceChar(c);
     }
 
     @Transactional
