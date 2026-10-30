@@ -171,7 +171,7 @@ public enum ReferentielAdmin {
     };
 
     public enum Famille {
-        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES
+        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES
     }
 
     /** {@code ObjectType} et {@code ObjectTypeLabel} écrits dans {@code AdmWebHistorics}. */
