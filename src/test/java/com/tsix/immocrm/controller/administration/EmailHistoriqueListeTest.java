@@ -239,7 +239,7 @@ class EmailHistoriqueListeTest {
 
     @Test
     void decision_filtresCumules() throws Exception {
-        String nom = "Karim " + jeton;
+        String nom = "Karim Filtres";
         UUID retenu = fixture.email(DATE).avec(UTILISATEUR, nom).avec(OBJET, jeton).avec(ENVOYE, false).inserer();
         fixture.email(DATE).avec(UTILISATEUR, nom).avec(OBJET, jeton).inserer();
         fixture.email(DATE.minusDays(1)).avec(UTILISATEUR, nom).avec(OBJET, jeton).avec(ENVOYE, false).inserer();
