@@ -13,6 +13,6 @@ public class EcrituresTaches implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("AdmTaskType", "AdmTaskPriority");
+        return List.of("AdmTaskType", "AdmTaskPriority", "AdmTask");
     }
 }

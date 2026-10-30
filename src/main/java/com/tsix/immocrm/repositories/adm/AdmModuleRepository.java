@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface AdmModuleRepository extends Repository<AdmModule, UUID> {
 
     List<AdmModule> findByCode(String code);
+
+    List<AdmModule> findAllByOrderByCodeAsc();
 }
