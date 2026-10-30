@@ -26,6 +26,9 @@ import java.util.UUID;
 @Table(name = "AdmTask")
 public class AdmTask extends AuditOmran {
 
+    /** {@code StrEntity} « AdmAppointment » : PKey identique entre les bases. */
+    public static final UUID ENTITE_RENDEZ_VOUS = UUID.fromString("613B1F65-8119-4E86-A826-68602388AE98");
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmTaskTypeId")
     private AdmTaskType type;

@@ -22,7 +22,7 @@ import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.ou;
 @Component
 record EcritureTache(EntityManager em, TracePatrimoine trace) {
 
-    private static final int NOTES_MAX = 1000;
+    static final int NOTES_MAX = 1000;
 
     void appliquer(AdmTask t, TacheEcritureDto d) {
         String description = SaisiePatrimoine.obligatoire(d.description(), t.getDescription(), "description");
@@ -66,7 +66,7 @@ record EcritureTache(EntityManager em, TracePatrimoine trace) {
         t.setUserUpdateDateTime(maintenant.le());
     }
 
-    private <E> E reference(Class<E> classe, UUID id, E actuelle, String champ) {
+    <E> E reference(Class<E> classe, UUID id, E actuelle, String champ) {
         if (id == null) {
             return actuelle;
         }

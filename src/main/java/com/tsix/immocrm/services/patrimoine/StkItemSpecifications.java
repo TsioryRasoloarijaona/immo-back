@@ -39,7 +39,7 @@ public final class StkItemSpecifications {
         return "%" + saisie.replace(" ", "").toLowerCase(Locale.ROOT) + "%";
     }
 
-    private static Expression<String> sansEspaces(CriteriaBuilder cb, Expression<String> champ) {
+    public static Expression<String> sansEspaces(CriteriaBuilder cb, Expression<String> champ) {
         return cb.lower(cb.function("replace", String.class, champ, cb.literal(" "), cb.literal("")));
     }
 

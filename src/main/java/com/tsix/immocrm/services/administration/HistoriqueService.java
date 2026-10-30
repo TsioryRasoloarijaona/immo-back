@@ -63,7 +63,7 @@ public class HistoriqueService {
     }
 
     /** Texte saisi pris littéralement dans le {@code LIKE} : {@code %}, {@code _} et {@code [} échappés. */
-    private static String motif(String texte) {
+    static String motif(String texte) {
         if (!StringUtils.hasLength(texte)) {
             return null;
         }

@@ -4,13 +4,17 @@ import com.tsix.immocrm.config.audit.RegistreAuditOmran;
 import com.tsix.immocrm.dto.audit.ChangementAuditDto;
 import com.tsix.immocrm.dto.audit.LigneAuditDto;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.entities.adm.AdmTask;
 import com.tsix.immocrm.entities.adm.AdmWebHistorics;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.repositories.adm.AdmTaskRepository;
 import com.tsix.immocrm.repositories.adm.AdmWebHistoricsRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.services.patrimoine.PorteursPatrimoine;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -30,13 +34,15 @@ public class AuditService {
     private final AdmWebHistoricsRepository repository;
     private final PorteursPatrimoine porteurs;
     private final CfgCompanyRepository entites;
+    private final AdmTaskRepository taches;
     private final JsonMapper json;
 
     public AuditService(AdmWebHistoricsRepository repository, PorteursPatrimoine porteurs, CfgCompanyRepository entites,
-                        JsonMapper json) {
+                        AdmTaskRepository taches, JsonMapper json) {
         this.repository = repository;
         this.porteurs = porteurs;
         this.entites = entites;
+        this.taches = taches;
         this.json = json;
     }
 
@@ -46,12 +52,19 @@ public class AuditService {
             throw new InvalidRequestException("page doit être ≥ 0 et size entre 1 et " + TAILLE_MAX);
         }
         // Porteur ENTITE : l'écran des entités montre aussi les inactives, leur journal reste lisible (§7.11.3).
-        if (!entites.existsById(objetId)) {
+        if (!entites.existsById(objetId) && !rendezVousDeLAdministrateur(objetId)) {
             porteurs.exigerVisible(objetId);
         }
         PageRequest demande = PageRequest.of(page, size,
                 Sort.by(Sort.Order.desc("actionDateTime"), Sort.Order.desc("id")));
         return PageDto.of(repository.journal(objetId, RegistreAuditOmran.TYPES, demande).map(this::versDto));
+    }
+
+    /** Hors {@code PorteursPatrimoine}, qui ouvrirait aussi les notes ; rôle de l'écran, sinon 404 comme un objet inconnu. */
+    private boolean rendezVousDeLAdministrateur(UUID id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> "ROLE_Administrateur".equals(a.getAuthority()))
+                && taches.findByIdAndStrEntityId(id, AdmTask.ENTITE_RENDEZ_VOUS).isPresent();
     }
 
     private LigneAuditDto versDto(AdmWebHistorics h) {
