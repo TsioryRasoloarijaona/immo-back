@@ -151,7 +151,10 @@ public class CleApiAdminService {
         compte.setDisabled(false);
         compte.setUserCreate(utilisateurAffiche.courant().nom());
         compte.setUserCreateDateTime(LocalDateTime.now(clock));
-        return userRepository.save(compte);
+        AdmUser cree = userRepository.save(compte);
+        userRepository.flush();
+        userRepository.retirerDefautPass(cree.getId());
+        return cree;
     }
 
     private static CleApiDto toDto(AppApiClient c) {

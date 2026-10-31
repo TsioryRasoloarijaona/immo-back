@@ -52,6 +52,21 @@ public record UtilisateurListItemDto(
         LocalDateTime dateCreation,
 
         @Schema(example = "2")
-        int nombreProjets
+        int nombreProjets,
+
+        @Schema(description = "AdmUser.IsMobileUser.")
+        boolean accesMobile,
+
+        @Schema(description = "AdmUser.IsVisibleForChat.")
+        boolean accesMessagerie,
+
+        @Schema(description = "AdmUser.UserCreate.")
+        String creePar,
+
+        @Schema(description = "AdmUser.UserUpdate.")
+        String modifiePar,
+
+        @Schema(description = "AdmUser.UserUpdateDateTime.")
+        LocalDateTime modifieLe
 ) {
 }

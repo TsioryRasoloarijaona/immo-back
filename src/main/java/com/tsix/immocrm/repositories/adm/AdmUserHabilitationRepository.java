@@ -43,4 +43,23 @@ public interface AdmUserHabilitationRepository extends JpaRepository<AdmUserHabi
     @Query("SELECT h.admUser.id, COUNT(h) FROM AdmUserHabilitation h "
             + "WHERE h.admUser.id IN :admUserIds AND h.cfgProject IS NOT NULL GROUP BY h.admUser.id")
     List<Object[]> countProjetsGroupedByAdmUserId(@Param("admUserIds") List<UUID> admUserIds);
+
+    List<AdmUserHabilitation> findByAdmUserId(UUID admUserId);
+
+    /** Arbre de l'écran : tuples [id, libellé, parent], sans filtre d'activité ; une société est son propre parent. */
+    @Query(value = "SELECT PKey, COALESCE(NULLIF(Description, ''), Code), PKey FROM CfgCompany ORDER BY Code ASC",
+            nativeQuery = true)
+    List<Object[]> noeudsSocietes();
+
+    @Query(value = "SELECT PKey, COALESCE(NULLIF(Description, ''), Code), CfgCompanyId FROM CfgProject "
+            + "WHERE CfgCompanyId IS NOT NULL ORDER BY Code ASC", nativeQuery = true)
+    List<Object[]> noeudsProjets();
+
+    @Query(value = "SELECT PKey, COALESCE(NULLIF(Description, ''), Code), CfgProjectId FROM CfgTranche "
+            + "WHERE CfgProjectId IS NOT NULL ORDER BY Code ASC", nativeQuery = true)
+    List<Object[]> noeudsTranches();
+
+    @Query(value = "SELECT PKey, COALESCE(NULLIF(Description, ''), Code), CfgCompanyId FROM PrjProject "
+            + "WHERE CfgCompanyId IS NOT NULL ORDER BY Code ASC", nativeQuery = true)
+    List<Object[]> noeudsProjetsTravaux();
 }
