@@ -53,7 +53,7 @@ public class UtilisateursFicheController {
     private static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String INTROUVABLE = "Compte inconnu.";
     private static final String GARDE = "Soi-même, ou dernier Administrateur actif : rien n'est écrit, message à afficher tel quel.";
-    private static final String HABILITATIONS = FICHE + "/habilitations";
+    private static final String CHEMIN_HABILITATIONS = FICHE + "/habilitations";
 
     private static final List<ColonneFixe> COLONNES = List.of(ColonneFixe.texte("username", "Code"),
             ColonneFixe.texte("description", "Description"), ColonneFixe.texte("email", "Email"),
@@ -155,7 +155,7 @@ public class UtilisateursFicheController {
         return roles.remplacerComptesDepot(id, corps);
     }
 
-    @GetMapping(HABILITATIONS)
+    @GetMapping(CHEMIN_HABILITATIONS)
     @Operation(summary = "Arbre des habilitations du compte")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Les sociétés et leurs descendants."),
@@ -165,7 +165,7 @@ public class UtilisateursFicheController {
         return habilitations.arbre(id);
     }
 
-    @PutMapping(HABILITATIONS)
+    @PutMapping(CHEMIN_HABILITATIONS)
     @Operation(summary = "Remplace les habilitations à une cible ; les lignes à plusieurs cibles restent")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Arbre relu."),
