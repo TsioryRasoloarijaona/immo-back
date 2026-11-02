@@ -49,8 +49,8 @@ public class SessionsController {
     })
     public PageDto<LigneSessionDto> lister(
             @ParameterObject @ModelAttribute FiltresSessions filtres,
-            @RequestParam(defaultValue = "0") @Min(0)
-            @Parameter(description = "Numéro de page, à partir de 0.") int page,
+            @RequestParam(defaultValue = "0") @Min(0) @Max(1_000_000)
+            @Parameter(description = "Numéro de page, de 0 à 1 000 000.") int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200)
             @Parameter(description = "Lignes par page, de 1 à 200.") int size) {
         return service.lister(filtres, page, size);
