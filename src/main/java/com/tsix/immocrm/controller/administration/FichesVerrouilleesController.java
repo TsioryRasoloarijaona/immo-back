@@ -16,7 +16,6 @@ import jakarta.validation.constraints.Min;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,11 +47,11 @@ public class FichesVerrouilleesController {
             @ApiResponse(responseCode = "403", description = PAS_ADMIN, content = @Content)
     })
     public PageDto<LigneFicheVerrouilleeDto> lister(
-            @ParameterObject @ModelAttribute FiltresFichesVerrouillees filtres,
+            @ParameterObject FiltresFichesVerrouillees filtres,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1_000_000)
-            @Parameter(description = "Numéro de page, de 0 à 1 000 000.") int page,
+            @Parameter(description = "Page demandée, de 0 à 1 000 000.") int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200)
-            @Parameter(description = "Lignes par page, de 1 à 200.") int size) {
+            @Parameter(description = "Taille de la page, de 1 à 200.") int size) {
         return service.lister(filtres, page, size);
     }
 
