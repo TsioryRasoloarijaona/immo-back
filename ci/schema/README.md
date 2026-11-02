@@ -112,6 +112,7 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/148_taches-referentiels_tables.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/155_email-historique_tables.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/156_roles_tables.sql"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/159_sessions_tables.sql"
 ```
 
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
