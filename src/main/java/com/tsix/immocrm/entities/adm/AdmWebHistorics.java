@@ -75,7 +75,7 @@ public class AdmWebHistorics {
     @Column(name = "SystemVersion")
     private String systemVersion;
 
-    /** {@code AdmWebSessions} n'est pas mappée : le CRM laisse NULL, comme une partie des lignes OMRAN. */
+    /** Le CRM laisse NULL, comme une partie des lignes OMRAN. */
     @Column(name = "AdmWebSessionsId")
     private UUID admWebSessionsId;
 }
