@@ -298,8 +298,7 @@ class PersonnelsImportTest {
     void r2_bilanEnErreur_sansPaie() throws Exception {
         employe(j, "E3").inserer();
         Map<String, Object> ligne = avecPaie(ligneValide(j.code("E3"), nom("J")));
-        ligne.put(MOBILE, null);
-        ligne.put("EMail", null);
+        ligne.put("Titre", "INCONNU-" + j.jeton());
 
         String bilan = executer(false, List.of(ligne));
 
