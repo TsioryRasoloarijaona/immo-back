@@ -34,7 +34,14 @@ enum Referentiel {
     CATEGORIE("Catégories", "select x.id, x.code, x.description from StkItemCategory x where x.stkKind.code = 'PROS TER' "
             + "order by x.code"),
     TYPE_TERRAIN("Types", "select x.id, x.code, x.description from StkItemType x where x.stkKind.code = 'TER' "
-            + "order by x.code");
+            + "order by x.code"),
+    TITRE("Titres", "select x.id, x.code, x.description from AdmTierTitle x order by x.code"),
+    SEXE("Sexes", "select x.id, x.code, x.description from AdmSexType x order by x.code"),
+    FORME_SOCIALE("Formes sociales", "select x.id, x.code, x.description from AdmSocialForm x order by x.code"),
+    NATURE_FOURNISSEUR("Natures", "select x.id, x.code, x.description from CfgTierKind x "
+            + "where x.cfgTierType.code = 'FOU' order by x.code"),
+    NATURE_CONTACT("Natures", "select x.id, x.code, x.description from CfgTierKind x "
+            + "where x.cfgTierType.code = 'CNT' order by x.code");
 
     private static final String TIERS_DU_TYPE = "select x.id, x.code, x.description from CfgTier x "
             + "where x.cfgTierType.id = :type order by x.code";

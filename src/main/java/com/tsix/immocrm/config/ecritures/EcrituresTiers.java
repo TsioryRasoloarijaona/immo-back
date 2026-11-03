@@ -13,6 +13,6 @@ public class EcrituresTiers implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("CfgTier", "ComAction");
+        return List.of("CfgTier", "CfgTierContact", "ComAction");
     }
 }

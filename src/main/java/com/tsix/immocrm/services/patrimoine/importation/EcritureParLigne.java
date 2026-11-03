@@ -14,6 +14,7 @@ import org.springframework.dao.DataAccessException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -50,7 +51,7 @@ final class EcritureParLigne {
                 case INCHANGEE -> inchangee;
                 default -> erreur;
             };
-            return format.formatted(code);
+            return format.formatted(Objects.toString(code, "sans pivot"));
         }
     }
 

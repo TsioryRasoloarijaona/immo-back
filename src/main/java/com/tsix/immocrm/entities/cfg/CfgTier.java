@@ -3,13 +3,17 @@ package com.tsix.immocrm.entities.cfg;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmFamilySituation;
 import com.tsix.immocrm.entities.adm.AdmIdentityDocumentType;
+import com.tsix.immocrm.entities.adm.AdmLiability;
 import com.tsix.immocrm.entities.adm.AdmMatrimonialRegime;
 import com.tsix.immocrm.entities.adm.AdmNationality;
 import com.tsix.immocrm.entities.adm.AdmProfession;
+import com.tsix.immocrm.entities.adm.AdmRank;
 import com.tsix.immocrm.entities.adm.AdmResidenceType;
 import com.tsix.immocrm.entities.adm.AdmSalary;
 import com.tsix.immocrm.entities.adm.AdmSexType;
+import com.tsix.immocrm.entities.adm.AdmSocialForm;
 import com.tsix.immocrm.entities.adm.AdmTierTitle;
+import com.tsix.immocrm.entities.stl.StlCurrency;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -248,9 +252,8 @@ public class CfgTier {
     @Column(name = "City")
     private String city;
 
-    // Lecture seule : la ville saisie par référentiel prime sur City (vue ComSaleProspectionView,
-    // CfgTierCity). Sert à la recherche des listes de prospection ; jamais écrite par l'API.
-    @Column(name = "AdmCityId", insertable = false, updatable = false)
+    // La ville saisie par référentiel prime sur City (vue ComSaleProspectionView, CfgTierCity).
+    @Column(name = "AdmCityId")
     private UUID admCityId;
 
     @Column(name = "Antiquity")
@@ -389,4 +392,20 @@ public class CfgTier {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "AdmIdentityDocumentTypeId")
     private AdmIdentityDocumentType admIdentityDocumentType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmSocialFormId")
+    private AdmSocialForm admSocialForm;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmLiabilityId")
+    private AdmLiability admLiability;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AdmRankId")
+    private AdmRank admRank;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "StlCurrencyId")
+    private StlCurrency stlCurrency;
 }
