@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.administration.tiers;
 
 import com.tsix.immocrm.domain.FamilleTiers;
+import com.tsix.immocrm.domain.FamilleTiers.Fiche;
 import com.tsix.immocrm.dto.administration.tiers.EcritureTiersRequest;
 import com.tsix.immocrm.entities.act.ActAccount;
 import com.tsix.immocrm.entities.act.ActJournal;
@@ -41,9 +42,13 @@ record EcritureTiers(EntityManager em, Validator validator) {
     // CfgTier.BirthDate est un smalldatetime.
     private static final int ANNEE_MAX = 2078;
 
-    /** Tout écrase, un champ omis est vidé. Refus possible après des setters : l'appelant détache l'entité. */
+    /**
+     * Un champ omis est vidé ; fiche PHYSIQUE : colonnes fiscales, comptables et taux jamais touchées.
+     * Refus possible après des setters : l'appelant détache l'entité.
+     */
     void appliquer(CfgTier t, FamilleTiers famille, EcritureTiersRequest c) {
-        controler(c);
+        Fiche fiche = famille.fiche();
+        controler(c, fiche);
         String libelle = libelle(c);
         t.setSocialReason(libelle);
         t.setDescription(libelle);
@@ -54,23 +59,33 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setCfgBank(banque(c.banqueId()));
         poserReferences(t, c);
         poserCoordonnees(t, c);
-        poserFiscalEtBanque(t, c);
-        t.setIsExtern(Boolean.TRUE.equals(c.estPrestataire()));
+        t.setBankAgency(texte(c.agence()));
+        t.setRib(texte(c.rib()));
+        t.setIban(texte(c.iban()));
         t.setBirthDate(c.dateNaissance() == null ? null : c.dateNaissance().atStartOfDay());
         t.setBirthPlace(texte(c.lieuNaissance()));
         t.setIDNumber(texte(c.numeroPiece()));
+        if (fiche == Fiche.COMPLETE) {
+            poserFiscal(t, c);
+        } else if (t.getId() == null) {
+            t.setIsExtern(false);
+        }
     }
 
     void controlerTailles(EcritureTiersRequest c) {
         validator.validate(c).stream().findFirst().ifPresent(EcritureTiers::refuser);
     }
 
-    private void controler(EcritureTiersRequest c) {
+    private void controler(EcritureTiersRequest c, Fiche fiche) {
         controlerTailles(c);
         if (c.personneMorale() == null) {
             throw new InvalidRequestException("personneMorale : obligatoire.");
         }
-        if (Boolean.TRUE.equals(c.personneMorale())) {
+        boolean morale = Boolean.TRUE.equals(c.personneMorale());
+        if (morale && fiche == Fiche.PHYSIQUE) {
+            throw new InvalidRequestException("personneMorale : personne physique obligatoire pour cette famille.");
+        }
+        if (morale) {
             exigerTexte(c.raisonSociale(), "raisonSociale", "pour une personne morale");
         } else {
             exigerTexte(c.prenom(), "prenom", "pour une personne physique");
@@ -82,8 +97,10 @@ record EcritureTiers(EntityManager em, Validator validator) {
             throw new InvalidRequestException("mobile, email : l'un des deux est obligatoire.");
         }
         exiger(c.paysResidenceId(), "paysResidenceId");
-        exiger(c.deviseId(), "deviseId");
-        exiger(c.formeSocialeId(), "formeSocialeId");
+        if (fiche == Fiche.COMPLETE) {
+            exiger(c.deviseId(), "deviseId");
+            exiger(c.formeSocialeId(), "formeSocialeId");
+        }
         controlerDateNaissance(c.dateNaissance());
     }
 
@@ -146,7 +163,6 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setAdmSexType(ref(AdmSexType.class, c.sexeId(), "sexeId"));
         t.setAdmSocialForm(ref(AdmSocialForm.class, c.formeSocialeId(), "formeSocialeId"));
         t.setStlCurrency(ref(StlCurrency.class, c.deviseId(), "deviseId"));
-        t.setAdmLiability(ref(AdmLiability.class, c.assujettissementId(), "assujettissementId"));
         t.setAdmCountry(ref(AdmCountry.class, c.paysId(), "paysId"));
         t.setAdmCountryResidence(ref(AdmCountry.class, c.paysResidenceId(), "paysResidenceId"));
         t.setAdmRank(ref(AdmRank.class, c.noteId(), "noteId"));
@@ -198,16 +214,15 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setNotes(texte(c.notes()));
     }
 
-    private static void poserFiscalEtBanque(CfgTier t, EcritureTiersRequest c) {
+    private void poserFiscal(CfgTier t, EcritureTiersRequest c) {
+        t.setAdmLiability(ref(AdmLiability.class, c.assujettissementId(), "assujettissementId"));
+        t.setIsExtern(Boolean.TRUE.equals(c.estPrestataire()));
         t.setIce(texte(c.ice()));
         t.setFiscalCode(texte(c.matriculeFiscal()));
         t.setFiscalRegistry(texte(c.registreCommerce()));
         t.setFiscalDouane(texte(c.douane()));
         t.setCodeCountable(texte(c.codeComptable()));
         t.setCodeCountableCollective(texte(c.codeComptableCollectif()));
-        t.setBankAgency(texte(c.agence()));
-        t.setRib(texte(c.rib()));
-        t.setIban(texte(c.iban()));
         t.setRsRatio(c.tauxRetenue());
         t.setVATRatio(c.tauxTva());
         t.setPaymentDelay(c.delaiPaiement());

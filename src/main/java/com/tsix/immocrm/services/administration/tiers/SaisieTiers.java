@@ -7,11 +7,11 @@ import org.springframework.stereotype.Component;
 
 /** Aiguille l'écriture d'une fiche selon sa forme : l'API et l'import passent ici. */
 @Component
-record SaisieTiers(EcritureTiers complete, FicheReduiteTiers reduite) {
+record SaisieTiers(EcritureTiers complete, FicheReduiteTiers reduite, GardesPersonnel gardes) {
 
     void appliquer(CfgTier t, FamilleTiers famille, EcritureTiersRequest c) {
         switch (famille.fiche()) {
-            case COMPLETE -> complete.appliquer(t, famille, c);
+            case COMPLETE, PHYSIQUE -> complete.appliquer(t, famille, c);
             case REDUITE -> reduite.appliquer(t, famille, c);
         }
     }

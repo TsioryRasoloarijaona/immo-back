@@ -41,7 +41,8 @@ enum Referentiel {
     NATURE_FOURNISSEUR(Tri.NATURES, Tri.natures("FOU")),
     NATURE_CONTACT(Tri.NATURES, Tri.natures("CNT")),
     NATURE_BANQUE(Tri.NATURES, Tri.natures("BAN")),
-    NATURE_ORGANISME(Tri.NATURES, Tri.natures("ORG"));
+    NATURE_ORGANISME(Tri.NATURES, Tri.natures("ORG")),
+    NATURE_PERSONNEL(Tri.NATURES, Tri.natures("EMP"));
 
     private static final class Tri {
         static final String PAR_CODE = "order by x.code";

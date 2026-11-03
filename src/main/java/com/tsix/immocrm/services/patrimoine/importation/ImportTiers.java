@@ -28,6 +28,8 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
     private static final String PRENOM = "prenom";
     private static final String NOM = "nom";
+    private static final String PAYS_RESIDENCE = "paysResidenceId";
+    private static final Set<String> HORS_FICHE_PHYSIQUE = Set.of("raisonSociale", "ice");
 
     private final FamilleTiers famille;
     private final TiersService service;
@@ -43,13 +45,16 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
         return switch (famille.fiche()) {
             case COMPLETE -> colonnesCompletes(nature);
             case REDUITE -> colonnesReduites(nature);
+            case PHYSIQUE -> colonnesCompletes(nature).stream()
+                    .filter(c -> !HORS_FICHE_PHYSIQUE.contains(c.propriete())).toList();
         };
     }
 
     private static Set<String> obligatoires(FamilleTiers famille) {
         return switch (famille.fiche()) {
-            case COMPLETE -> Set.of("formeSocialeId", "paysResidenceId", "deviseId");
+            case COMPLETE -> Set.of("formeSocialeId", PAYS_RESIDENCE, "deviseId");
             case REDUITE -> Set.of("description", "paysId");
+            case PHYSIQUE -> Set.of(PRENOM, NOM, "titreId", "sexeId", PAYS_RESIDENCE);
         };
     }
 
@@ -64,7 +69,7 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
         return List.of(champ("Pivot", CODE), ref("Forme sociale", "formeSocialeId", Referentiel.FORME_SOCIALE),
                 champ("Raison sociale", "raisonSociale"), champ("Prénom", PRENOM), champ("Nom", NOM),
                 ref("Titre", "titreId", Referentiel.TITRE), ref("Sexe", "sexeId", Referentiel.SEXE),
-                ref("Pays de résidence", "paysResidenceId", Referentiel.PAYS),
+                ref("Pays de résidence", PAYS_RESIDENCE, Referentiel.PAYS),
                 ref("Devise", "deviseId", Referentiel.DEVISE), champ("Mobile", "mobile"), champ("EMail", "email"),
                 ref("Nature", "natureId", nature), champ("Téléphone", "telephone"), champ("Adresse", "adresse"),
                 champ("Notes", "notes"), champ("ICE", "ice"));
