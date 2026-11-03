@@ -31,6 +31,7 @@ import java.util.List;
 public class RapportsController {
 
     private static final String FORMAT = "format";
+    private static final String MODULE = "Module : vente, patrimoine ou administration (Administrateur seul).";
 
     private final ServiceRapports service;
     private final ExportTableur exportTableur;
@@ -45,11 +46,14 @@ public class RapportsController {
     @GetMapping
     @Operation(summary = "Rapports du module visibles par l'appelant, groupés")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Groupes triés ; [] si aucun rapport n'est visible."),
+            @ApiResponse(responseCode = "200", description = "Groupes triés ; [] si aucun rapport n'est visible. "
+                    + "Administration : aussi les rapports non implémentés (disponible faux)."),
+            @ApiResponse(responseCode = "403", description = "Module administration sans le rôle Administrateur.",
+                    content = @Content),
             @ApiResponse(responseCode = "404", description = "Module inconnu.", content = @Content)
     })
     public List<GroupeRapportsDto> lister(
-            @Parameter(description = "Module : vente ou patrimoine.", example = "vente") @PathVariable String module) {
+            @Parameter(description = MODULE, example = "vente") @PathVariable String module) {
         return service.lister(module);
     }
 
@@ -62,7 +66,7 @@ public class RapportsController {
             @ApiResponse(responseCode = "404", description = "Module ou rapport inconnu.", content = @Content)
     })
     public DescripteurRapportDto descripteur(
-            @Parameter(description = "Module : vente ou patrimoine.", example = "vente") @PathVariable String module,
+            @Parameter(description = MODULE, example = "vente") @PathVariable String module,
             @Parameter(description = "Code du rapport.", example = "ComTdbSalesMonitoringGlobal")
             @PathVariable String code) {
         return service.descripteur(module, code);
@@ -78,7 +82,7 @@ public class RapportsController {
             @ApiResponse(responseCode = "404", description = "Module ou rapport inconnu.", content = @Content)
     })
     public ResultatRapportDto resultat(
-            @Parameter(description = "Module : vente ou patrimoine.", example = "vente") @PathVariable String module,
+            @Parameter(description = MODULE, example = "vente") @PathVariable String module,
             @Parameter(description = "Code du rapport.", example = "ComTdbSalesMonitoringGlobal")
             @PathVariable String code,
             @Parameter(hidden = true) @RequestParam MultiValueMap<String, String> parametres) {
@@ -100,7 +104,7 @@ public class RapportsController {
             @ApiResponse(responseCode = "404", description = "Module ou rapport inconnu.", content = @Content)
     })
     public ResponseEntity<byte[]> exporter(
-            @Parameter(description = "Module : vente ou patrimoine.", example = "vente") @PathVariable String module,
+            @Parameter(description = MODULE, example = "vente") @PathVariable String module,
             @Parameter(description = "Code du rapport.", example = "ComTdbSalesMonitoringGlobal")
             @PathVariable String code,
             @Parameter(example = ExportTableur.FORMAT_XLSX)

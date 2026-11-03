@@ -65,6 +65,19 @@ public class AdmAttachedFileSummary {
     @Column(name = "UserCreate")
     private String userCreate;
 
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "CategoryDescription")
+    private String categoryDescription;
+
+    @Column(name = "UserUpdateDateTime")
+    private LocalDateTime userUpdateDateTime;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "UserUpdate")
+    private String userUpdate;
+
     /**
      * Faux pour les cases de checklist {@code IsCheckedButNotAttached = 1} (requis, jamais déposé).
      * Ne jamais y nommer {@code AttachedFile} : colonne supprimée par 004_drop_attachedfile_filestream.sql,

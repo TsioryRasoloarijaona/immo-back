@@ -2,12 +2,14 @@ package com.tsix.immocrm.repositories.adm;
 
 import com.tsix.immocrm.entities.adm.AdmAttachedFileSummary;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.UUID;
 
-public interface AdmAttachedFileSummaryRepository extends JpaRepository<AdmAttachedFileSummary, UUID> {
+public interface AdmAttachedFileSummaryRepository extends JpaRepository<AdmAttachedFileSummary, UUID>,
+        JpaSpecificationExecutor<AdmAttachedFileSummary> {
 
     /**
      * Pièces d'un porteur quelconque (dossier, article, règlement) par {@code CategoryId} seul. Pas de
@@ -21,6 +23,9 @@ public interface AdmAttachedFileSummaryRepository extends JpaRepository<AdmAttac
     @Query("SELECT DISTINCT TRIM(a.groupe) FROM AdmAttachedFileSummary a WHERE TRIM(a.groupe) <> '' "
             + "ORDER BY TRIM(a.groupe) ASC")
     List<String> groupes();
+
+    @Query("SELECT COUNT(a) FROM AdmAttachedFileSummary a WHERE a.groupe IS NULL OR TRIM(a.groupe) = ''")
+    long nombreSansGroupe();
 
     default List<AdmAttachedFileSummary> findByDossierId(UUID dossierId) {
         return findByCategoryId(dossierId);

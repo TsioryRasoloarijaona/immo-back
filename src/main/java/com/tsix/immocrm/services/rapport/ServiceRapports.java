@@ -105,7 +105,8 @@ public class ServiceRapports {
         Map<String, List<AdmReportData>> parGroupe = new LinkedHashMap<>();
         Set<String> vus = new HashSet<>();
         reportData.findByTypeIn(module.types()).stream()
-                .filter(l -> implementes.containsKey(l.getCode()) && visible.test(l.getId()) && vus.add(l.getCode()))
+                .filter(l -> (module.listeNonImplementes() || implementes.containsKey(l.getCode()))
+                        && visible.test(l.getId()) && vus.add(l.getCode()))
                 .forEach(l -> parGroupe.computeIfAbsent(groupe(l), g -> new ArrayList<>()).add(l));
         return parGroupe.entrySet().stream()
                 .map(e -> groupe(e.getKey(), e.getValue(), implementes))
@@ -257,8 +258,11 @@ public class ServiceRapports {
 
     private static GroupeRapportsDto groupe(String nom, List<AdmReportData> lignes, Map<String, Rapport> implementes) {
         List<RapportResumeDto> rapports = lignes.stream()
-                .map(l -> new RapportResumeDto(l.getCode(), libelle(l), ordre(l),
-                        !implementes.get(l.getCode()).parametres().isEmpty()))
+                .map(l -> {
+                    Rapport rapport = implementes.get(l.getCode());
+                    return new RapportResumeDto(l.getCode(), libelle(l), ordre(l),
+                            rapport != null && !rapport.parametres().isEmpty(), rapport != null);
+                })
                 .sorted(Comparator.comparingInt(RapportResumeDto::ordre).thenComparing(RapportResumeDto::libelle))
                 .toList();
         return new GroupeRapportsDto(nom, rapports.get(0).ordre(), rapports);

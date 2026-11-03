@@ -139,9 +139,18 @@ public class PieceJointeSupport {
      * pendant sa validité, d'où le contrôle d'appartenance avant et sa durée courte.
      */
     public URI urlTelechargement(UUID porteurId, UUID pieceId, String libellePorteur) {
-        AdmAttachedFile piece = fileRepository.findByIdAndCategoryId(pieceId, porteurId)
-                .orElseThrow(() -> new ResourceNotFoundException(PIECE_INTROUVABLE.formatted(libellePorteur, pieceId)));
+        return urlTelechargement(fileRepository.findByIdAndCategoryId(pieceId, porteurId)
+                .orElseThrow(() -> new ResourceNotFoundException(PIECE_INTROUVABLE.formatted(libellePorteur, pieceId))));
+    }
 
+    /** Par le seul id, sans porteur : réservé à la liste globale d'administration (Administrateur). */
+    public URI urlTelechargement(UUID pieceId) {
+        return urlTelechargement(fileRepository.findById(pieceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pièce jointe introuvable : " + pieceId)));
+    }
+
+    private URI urlTelechargement(AdmAttachedFile piece) {
+        UUID pieceId = piece.getId();
         AppFileObject objet = fileObjectRepository
                 .findByAdmAttachedFileIdAndDeletedAtIsNull(pieceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
