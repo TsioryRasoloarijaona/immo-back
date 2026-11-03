@@ -2,6 +2,8 @@ package com.tsix.immocrm.services.administration.tiers;
 
 import com.tsix.immocrm.domain.FamilleTiers;
 import com.tsix.immocrm.dto.administration.tiers.EcritureTiersRequest;
+import com.tsix.immocrm.entities.act.ActAccount;
+import com.tsix.immocrm.entities.act.ActJournal;
 import com.tsix.immocrm.entities.adm.AdmCity;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmFamilySituation;
@@ -224,7 +226,8 @@ record EcritureTiers(EntityManager em, Validator validator) {
                 t.getBirthDate() == null ? null : t.getBirthDate().toLocalDate(), t.getBirthPlace(),
                 id(t.getAdmFamilySituation(), AdmFamilySituation::getId), id(t.getAdmNationality(), AdmNationality::getId),
                 id(t.getAdmProfession(), AdmProfession::getId),
-                id(t.getAdmIdentityDocumentType(), AdmIdentityDocumentType::getId), t.getIDNumber());
+                id(t.getAdmIdentityDocumentType(), AdmIdentityDocumentType::getId), t.getIDNumber(), t.getCode(),
+                t.getDescription(), id(t.getActAccount(), ActAccount::getId), id(t.getActJournal(), ActJournal::getId));
     }
 
     private static <T> UUID id(T objet, Function<T, UUID> lecture) {

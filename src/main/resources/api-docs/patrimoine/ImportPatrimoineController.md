@@ -8,6 +8,9 @@ règles, même audit) ; Administrateur seul.
 `fournisseurs` et `contacts` : import générique sans tranche ; `Pivot` se compare au code dans le type, vide ou inconnu =
 création avec un code du compteur, trouvé une fois = mise à jour (cellule vide = valeur gardée), plusieurs fois = erreur.
 
+`banques` et `organismes` : même import, colonne `Code` obligatoire : vide = erreur de ligne, inconnu dans le type = création
+avec ce code, deux fois dans le fichier = erreur de ligne.
+
 ## modele
 
 En-têtes OMRAN exacts, une ligne par objet existant, puis une feuille d'aide par référentiel (Code, Libellé).

@@ -53,6 +53,7 @@ public class TiersController {
     private static final String INTROUVABLE = "Famille inconnue, ou tiers inconnu ou d'un autre type.";
     private static final String TIERS_INCONNU = "Tiers inconnu.";
     private static final String INVALIDE = "Champ requis manquant ou trop long, ou identifiant inconnu ; detail nomme le champ.";
+    private static final String CODE_PRIS = "Banques et organismes : code déjà pris dans le type, sans casse.";
 
     private final TiersService service;
     private final LiensTiersService liens;
@@ -70,7 +71,8 @@ public class TiersController {
             @ApiResponse(responseCode = "404", description = FAMILLE_INCONNUE, content = @Content)
     })
     public PageDto<LigneTiersDto> lister(
-            @Parameter(description = "Famille.", schema = @Schema(allowableValues = {"fournisseurs", "contacts"}))
+            @Parameter(description = "Famille.", schema = @Schema(allowableValues = {"fournisseurs", "contacts", "banques",
+                    "organismes"}))
             @PathVariable String famille,
             @ParameterObject @ModelAttribute FiltresTiers filtres,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1_000_000)
@@ -98,7 +100,7 @@ public class TiersController {
     })
     public List<ReferentielItemDto> referentiel(
             @Parameter(description = "Liste.", schema = @Schema(allowableValues = {"formes-sociales", "assujettissements",
-                    "notes"}))
+                    "notes", "journaux"}))
             @PathVariable String liste) {
         return service.referentiel(liste);
     }
@@ -115,11 +117,12 @@ public class TiersController {
 
     @PostMapping(LISTE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Crée un tiers, code issu du compteur partagé")
+    @Operation(summary = "Crée un tiers ; code au compteur partagé, saisi pour banques et organismes")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Tiers créé."),
             @ApiResponse(responseCode = "400", description = INVALIDE, content = @Content),
-            @ApiResponse(responseCode = "404", description = FAMILLE_INCONNUE, content = @Content)
+            @ApiResponse(responseCode = "404", description = FAMILLE_INCONNUE, content = @Content),
+            @ApiResponse(responseCode = "409", description = CODE_PRIS, content = @Content)
     })
     public FicheTiersDto creer(@PathVariable String famille, @RequestBody EcritureTiersRequest corps) {
         return service.creer(famille, corps);
@@ -128,9 +131,10 @@ public class TiersController {
     @PutMapping(FICHE)
     @Operation(summary = "Remplace les champs de la fiche (champ omis = vidé)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Tiers modifié ; code, type et auteur de création inchangés."),
+            @ApiResponse(responseCode = "200", description = "Tiers modifié ; type et auteur de création inchangés."),
             @ApiResponse(responseCode = "400", description = INVALIDE, content = @Content),
-            @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content)
+            @ApiResponse(responseCode = "404", description = INTROUVABLE, content = @Content),
+            @ApiResponse(responseCode = "409", description = CODE_PRIS, content = @Content)
     })
     public FicheTiersDto modifier(@PathVariable String famille, @Parameter(description = ID) @PathVariable UUID id,
                                   @RequestBody EcritureTiersRequest corps) {

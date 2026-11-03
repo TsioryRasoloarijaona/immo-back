@@ -8,10 +8,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/** Champs saisis d'une fiche ; tout champ omis d'un PUT est vidé. Les {@code @Size} suivent les colonnes de {@code CfgTier}. */
-@Schema(description = "Fiche de tiers à écrire ; code, type et auteur ne se saisissent pas.")
+/** Champs saisis d'une fiche ; un champ de la famille omis d'un PUT est vidé. Les {@code @Size} suivent les colonnes de {@code CfgTier}. */
+@Schema(description = "Fiche de tiers à écrire ; type et auteur ne se saisissent pas.")
 public record EcritureTiersRequest(
-        @Schema(description = "Vrai = personne morale, faux = personne physique.", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Vrai = personne morale, faux = physique. Requis, sauf banques et organismes (ignoré).")
         Boolean personneMorale,
         @Schema(description = "Requise pour une personne morale ; ignorée pour une personne physique.")
         @Size(max = 255) String raisonSociale,
@@ -22,11 +22,11 @@ public record EcritureTiersRequest(
         @Schema(description = "Titre (AdmTierTitle), requis pour une personne physique.") UUID titreId,
         @Schema(description = "Sexe (AdmSexType), requis pour une personne physique.") UUID sexeId,
         @Schema(description = "Nature (CfgTierKind) du type de la famille.") UUID natureId,
-        @Schema(description = "Forme sociale (AdmSocialForm).", requiredMode = Schema.RequiredMode.REQUIRED) UUID formeSocialeId,
-        @Schema(description = "Devise (StlCurrency).", requiredMode = Schema.RequiredMode.REQUIRED) UUID deviseId,
+        @Schema(description = "Forme sociale (AdmSocialForm). Requise, sauf banques et organismes (ignorée).") UUID formeSocialeId,
+        @Schema(description = "Devise (StlCurrency). Requise, sauf banques et organismes (ignorée).") UUID deviseId,
         @Schema(description = "Assujettissement (AdmLiability).") UUID assujettissementId,
-        @Schema(description = "Pays (AdmCountry).") UUID paysId,
-        @Schema(description = "Pays de résidence (AdmCountry).", requiredMode = Schema.RequiredMode.REQUIRED) UUID paysResidenceId,
+        @Schema(description = "Pays (AdmCountry). Requis pour banques et organismes.") UUID paysId,
+        @Schema(description = "Pays de résidence (AdmCountry). Requis ; banques et organismes : ignoré, égal à paysId.") UUID paysResidenceId,
         @Schema(description = "Ville du référentiel (AdmCity).") UUID villeId,
         @Schema(description = "Ville en clair.") @Size(max = 255) String ville,
         @Schema(description = "Code postal.") @Size(max = 255) String codePostal,
@@ -34,7 +34,7 @@ public record EcritureTiersRequest(
         @Schema(description = "Adresse, ligne 2.") @Size(max = 255) String adresse2,
         @Schema(description = "Adresse, ligne 3.") @Size(max = 255) String adresse3,
         @Schema(description = "Indicatif du mobile.") @Size(max = 10) String mobileIndicatif,
-        @Schema(description = "Mobile ; mobile ou email est requis.") @Size(max = 30) String mobile,
+        @Schema(description = "Mobile ; mobile ou email requis, sauf banques et organismes.") @Size(max = 30) String mobile,
         @Schema(description = "Indicatif du téléphone.") @Size(max = 10) String telephoneIndicatif,
         @Schema(description = "Téléphone.") @Size(max = 30) String telephone,
         @Schema(description = "Indicatif du téléphone 1.") @Size(max = 10) String telephone1Indicatif,
@@ -43,7 +43,7 @@ public record EcritureTiersRequest(
         @Schema(description = "Téléphone 2.") @Size(max = 30) String telephone2,
         @Schema(description = "Indicatif du fax.") @Size(max = 10) String faxIndicatif,
         @Schema(description = "Fax.") @Size(max = 30) String fax,
-        @Schema(description = "E-mail ; mobile ou email est requis.") @Size(max = 100) String email,
+        @Schema(description = "E-mail ; mobile ou email requis, sauf banques et organismes.") @Size(max = 100) String email,
         @Schema(description = "Site web.") @Size(max = 100) String siteWeb,
         @Schema(description = "Notes.") @Size(max = 1000) String notes,
         @Schema(description = "Identifiant commun de l'entreprise.") @Size(max = 255) String ice,
@@ -67,5 +67,11 @@ public record EcritureTiersRequest(
         @Schema(description = "Nationalité (AdmNationality).") UUID nationaliteId,
         @Schema(description = "Profession (AdmProfession).") UUID professionId,
         @Schema(description = "Type de pièce d'identité (AdmIdentityDocumentType).") UUID typePieceId,
-        @Schema(description = "Numéro de la pièce d'identité.") @Size(max = 255) String numeroPiece) {
+        @Schema(description = "Numéro de la pièce d'identité.") @Size(max = 255) String numeroPiece,
+        @Schema(description = "Banques, organismes : saisi, requis, unique dans le type. Ailleurs : compteur, ignoré en écriture.")
+        @Size(max = 255) String code,
+        @Schema(description = "Banques, organismes : requise, mise en majuscules. Ailleurs : suit la raison sociale, ignorée en écriture.")
+        @Size(max = 255) String description,
+        @Schema(description = "Compte comptable (ActAccount) ; banques et organismes seulement.") UUID compteComptableId,
+        @Schema(description = "Journal (ActJournal) ; banques et organismes seulement.") UUID journalId) {
 }

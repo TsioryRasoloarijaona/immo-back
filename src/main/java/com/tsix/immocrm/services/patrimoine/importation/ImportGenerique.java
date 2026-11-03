@@ -78,10 +78,8 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
     protected ImportGenerique(Definition<E> d, Outils o) {
         this.d = d;
         this.o = o;
-        this.classes = new HashMap<>(Arrays.stream(d.dto().getRecordComponents())
-                .collect(Collectors.toMap(RecordComponent::getName, RecordComponent::getType)));
-        // Les tiers n'ont pas de code dans leur DTO d'écriture : le compteur le donne, le pivot ne sert qu'à chercher.
-        this.classes.putIfAbsent(CODE, String.class);
+        this.classes = Arrays.stream(d.dto().getRecordComponents())
+                .collect(Collectors.toMap(RecordComponent::getName, RecordComponent::getType));
         d.colonnes().stream().filter(c -> !c.estIgnoree()).forEach(this::type);
     }
 

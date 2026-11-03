@@ -40,6 +40,8 @@ public class ImportPatrimoineService {
     public static final String PROSPECTIONS_TERRAIN = "prospections-terrain";
     public static final String FOURNISSEURS = "fournisseurs";
     public static final String CONTACTS = "contacts";
+    public static final String BANQUES = "banques";
+    public static final String ORGANISMES = "organismes";
 
     private final TrancheVisibleRepository tranchesVisibles;
     private final List<ImportParType<?>> imports;
