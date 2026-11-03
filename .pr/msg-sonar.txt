@@ -1,3 +1,0 @@
-fix(tiers): corrections Sonar (S2259, S5411, S1192, S1172, S1845, S1452) (FEATURE-admin-tiers.md)
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
