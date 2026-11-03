@@ -1,8 +1,24 @@
 package com.tsix.immocrm.domain;
 
 import com.tsix.immocrm.domain.ChampReferentiel.Type;
+import com.tsix.immocrm.entities.adm.AdmCity;
+import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.adm.AdmFamilySituation;
+import com.tsix.immocrm.entities.adm.AdmIdentityDocumentType;
+import com.tsix.immocrm.entities.adm.AdmLiability;
+import com.tsix.immocrm.entities.adm.AdmMatrimonialRegime;
+import com.tsix.immocrm.entities.adm.AdmNationality;
+import com.tsix.immocrm.entities.adm.AdmProfession;
+import com.tsix.immocrm.entities.adm.AdmResidenceType;
+import com.tsix.immocrm.entities.adm.AdmSalary;
+import com.tsix.immocrm.entities.adm.AdmSexType;
+import com.tsix.immocrm.entities.adm.AdmSocialForm;
 import com.tsix.immocrm.entities.adm.AdmTaskPriority;
 import com.tsix.immocrm.entities.adm.AdmTaskType;
+import com.tsix.immocrm.entities.adm.AdmTierTitle;
+import com.tsix.immocrm.entities.cfg.CfgRelationType;
+import com.tsix.immocrm.entities.cfg.CfgTierKind;
+import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStanding;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStatus;
 import com.tsix.immocrm.entities.lnd.LndLevel;
@@ -35,6 +51,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static com.tsix.immocrm.domain.ChampReferentiel.CODE;
+import static com.tsix.immocrm.domain.ChampReferentiel.CODE_FIXE;
 import static com.tsix.immocrm.domain.ChampReferentiel.COURT;
 import static com.tsix.immocrm.domain.ChampReferentiel.DESCRIPTION;
 import static com.tsix.immocrm.domain.ChampReferentiel.LONG;
@@ -174,10 +191,73 @@ public enum ReferentielAdmin {
     TYPES_TACHE("types-tache", "Types de tâche", Famille.TACHES, AdmTaskType.class,
             new Audit("Yes.Adm.Config.AdmTaskType", "Type tâche"), Colonnes.TYPE_TACHE, Colonnes.CLE_CODE),
     PRIORITES_TACHE("priorites-tache", "Priorités de tâche", Famille.TACHES, AdmTaskPriority.class,
-            new Audit("Yes.Adm.Config.AdmTaskPriority", "Priorité tâche"), Colonnes.PRIORITE_TACHE, Colonnes.CLE_CODE);
+            new Audit("Yes.Adm.Config.AdmTaskPriority", "Priorité tâche"), Colonnes.PRIORITE_TACHE, Colonnes.CLE_CODE),
+    // Listes des tiers (FEATURE-admin-referentiels-tiers.md) : code et champs OMRAN figés après création.
+    PAYS("pays", "Pays", Famille.TIERS, AdmCountry.class, new Audit("Yes.Adm.Config.AdmCountry", "Pay"),
+            Colonnes.PAYS, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(c) FROM AdmCity c WHERE c.admCountry.id = :id", "AdmCity (villes)"),
+                    Colonnes.PARAMETRE);
+        }
+    },
+    VILLES("villes", "Villes", Famille.TIERS, AdmCity.class, new Audit("Yes.Adm.Config.AdmCity", "Ville"),
+            Colonnes.VILLE, Colonnes.CLE_VILLE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(c) FROM ComProspectionCity c WHERE c.admCity.id = :id",
+                    "ComProspectionCity (villes de prospection)"));
+        }
+    },
+    SEXES("sexes", "Sexes", Famille.TIERS, AdmSexType.class, new Audit("Yes.Adm.Config.AdmSexType", "Sexe"),
+            Colonnes.TRI_CODE_FIXE, Colonnes.CLE_CODE),
+    TITRES("titres", "Titres", Famille.TIERS, AdmTierTitle.class,
+            new Audit("Yes.Adm.Config.AdmTierTitle", "Titre du tier"), Colonnes.TITRE, Colonnes.CLE_CODE),
+    FORMES_SOCIALES("formes-sociales", "Formes sociales", Famille.TIERS, AdmSocialForm.class,
+            new Audit("Yes.Adm.Config.AdmSocialForm", "Forme sociale"), Colonnes.FORME_SOCIALE, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(Colonnes.PARAMETRE);
+        }
+    },
+    TYPES_TIERS("types-tiers", "Types de tiers", Famille.TIERS, CfgTierType.class,
+            new Audit("Yes.Adm.Config.CfgTierType", "Type tier"), Colonnes.TRI_CODE_FIXE, Colonnes.CLE_CODE) {
+        @Override
+        public boolean lectureSeule() {
+            return true;
+        }
+    },
+    NATURES_TIERS("natures-tiers", "Natures", Famille.TIERS, CfgTierKind.class,
+            new Audit("Yes.Adm.Config.CfgTierKind", "Nature tier"), Colonnes.NATURE_TIERS, Colonnes.CLE_NATURE_TIERS),
+    ASSUJETTISSEMENTS("assujettissements", "Assujettissements", Famille.TIERS, AdmLiability.class,
+            new Audit("Yes.Adm.Config.AdmLiability", "Assujétissement"), Colonnes.ASSUJETTISSEMENT, Colonnes.CLE_CODE),
+    SITUATIONS_FAMILIALES("situations-familiales", "Situations familiales", Famille.TIERS, AdmFamilySituation.class,
+            new Audit("Yes.Adm.Config.AdmFamilySituation", "Situation familiale"), Colonnes.SITUATION, Colonnes.CLE_CODE),
+    TYPES_RESIDENCE("types-residence", "Types de résidence", Famille.TIERS, AdmResidenceType.class,
+            new Audit("Yes.Adm.Config.AdmResidenceType", "Type résidence"), Colonnes.TRI_CODE_FIXE, Colonnes.CLE_CODE),
+    REGIMES_MATRIMONIAUX("regimes-matrimoniaux", "Régimes matrimoniaux", Famille.TIERS, AdmMatrimonialRegime.class,
+            new Audit("Yes.Adm.Config.AdmMatrimonialRegime", "Régime matrimonial"), Colonnes.TRI_CODE_FIXE,
+            Colonnes.CLE_CODE),
+    TYPES_PIECE_IDENTITE("types-piece-identite", "Types de pièce d'identité", Famille.TIERS,
+            AdmIdentityDocumentType.class, new Audit("Yes.Adm.Config.AdmIdentityDocumentType", "Type pièce identité"),
+            Colonnes.PIECE_IDENTITE, Colonnes.CLE_CODE),
+    NATIONALITES("nationalites", "Nationalités", Famille.TIERS, AdmNationality.class,
+            new Audit("Yes.Adm.Config.AdmNationality", "Nationalité"), Colonnes.CODE_FIXE_LIBELLE, Colonnes.CLE_CODE),
+    PROFESSIONS("professions", "Professions", Famille.TIERS, AdmProfession.class,
+            new Audit("Yes.Adm.Config.AdmProfession", "Profession"), Colonnes.PROFESSION, Colonnes.CLE_CODE),
+    SALAIRES("salaires", "Salaires", Famille.TIERS, AdmSalary.class, new Audit("Yes.Adm.Config.AdmSalary", "Salaire"),
+            Colonnes.TRI_CODE_FIXE, Colonnes.CLE_CODE),
+    TYPES_RELATION("types-relation", "Types de relation", Famille.TIERS, CfgRelationType.class,
+            new Audit("Yes.Cfg.RelationType", "Type de relation"), Colonnes.CODE_FIXE_LIBELLE, Colonnes.CLE_CODE) {
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(c) FROM CfgTierContact c WHERE c.cfgRelationType.id = :id",
+                    "CfgTierContact (contacts de tiers)"));
+        }
+    };
 
     public enum Famille {
-        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES
+        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES, TIERS
     }
 
     /** {@code ObjectType} et {@code ObjectTypeLabel} écrits dans {@code AdmWebHistorics}. */
@@ -259,6 +339,16 @@ public enum ReferentielAdmin {
         return Optional.empty();
     }
 
+    /** Ni création, ni modification, ni suppression : OMRAN lit ses codes en dur. */
+    public boolean lectureSeule() {
+        return false;
+    }
+
+    /** Ligne OMRAN incomplète (ville sans pays) : la modifier exige ses champs obligatoires (R5). */
+    public boolean obligatoiresAChaqueEcriture() {
+        return famille == Famille.TIERS;
+    }
+
     /** Valeurs imposées à la création et seules lignes visibles (propriété → valeur). */
     public Map<String, Object> portee() {
         return Map.of();
@@ -282,7 +372,9 @@ public enum ReferentielAdmin {
     private static final class Colonnes {
         static final String CFG_TRANCHE = "cfgTranche";
         static final List<String> CLE_CODE = List.of("code");
-        static final List<String> CLE_NATURE = List.of("stkKind", "code");
+        static final List<String> CLE_NATURE = List.of("stkKind", CLE_CODE.getFirst());
+        static final List<String> CLE_VILLE = List.of(CLE_CODE.getFirst(), "admCountry");
+        static final List<String> CLE_NATURE_TIERS = List.of(CLE_CODE.getFirst(), "cfgTierType");
         static final List<ChampReferentiel> CODE_LIBELLE = List.of(CODE, DESCRIPTION);
         static final List<ChampReferentiel> TRI_CODE_LIBELLE = List.of(SORTING.requis(), CODE, DESCRIPTION);
         static final ChampReferentiel TRANCHE = reference("trancheId", "Tranche", CFG_TRANCHE, ReferenceAdmin.TRANCHE);
@@ -334,6 +426,40 @@ public enum ReferentielAdmin {
         private static final ChampReferentiel NOTES_TACHE = texte("notes", "Notes", "notes", 1000);
         static final List<ChampReferentiel> TYPE_TACHE = List.of(CODE, DESCRIPTION, NOTES_TACHE);
         static final List<ChampReferentiel> PRIORITE_TACHE = List.of(SORTING.requis(), CODE, DESCRIPTION, NOTES_TACHE);
+        static final Bloquant PARAMETRE = new Bloquant("SELECT COUNT(p) FROM AdmParamsGuid p WHERE p.codeValue = :id",
+                "AdmParamsGuid (valeurs par défaut)");
+        static final List<ChampReferentiel> CODE_FIXE_LIBELLE = List.of(CODE_FIXE, DESCRIPTION);
+        static final List<ChampReferentiel> TRI_CODE_FIXE = List.of(SORTING, CODE_FIXE, DESCRIPTION);
+        private static final ChampReferentiel PERSONNE = caseFixe("personnePhysique", "Personne physique", "isPerson");
+        static final List<ChampReferentiel> PAYS = List.of(CODE_FIXE, texteFixe("isoAlpha3", "ISO alpha 3", "isoAlpha3"),
+                texte("description", "Nom français", "description", COURT).requis(),
+                texteFixe("nomAnglais", "Nom anglais", "descriptionAn"), texteFixe("nomIso", "Nom ISO", "isoName"),
+                texteFixe("codePays", "Code pays", "nationCode"), texteFixe("indicatif", "Indicatif tél.", "phoneCode"),
+                texteFixe("formatTelephone", "Format tél.", "phoneFormat"),
+                texteFixe("expressionTelephone", "Exp. régulière", "webPhoneFormat"));
+        static final List<ChampReferentiel> VILLE = List.of(CODE_FIXE, DESCRIPTION,
+                reference("paysId", "Pays", "admCountry", ReferenceAdmin.PAYS).requis());
+        static final List<ChampReferentiel> TITRE = List.of(SORTING, CODE_FIXE, DESCRIPTION,
+                reference("sexeId", "Sexe", "admSexType", ReferenceAdmin.SEXE).fixe());
+        static final List<ChampReferentiel> FORME_SOCIALE = List.of(CODE_FIXE, DESCRIPTION, PERSONNE);
+        static final List<ChampReferentiel> NATURE_TIERS = List.of(SORTING, CODE_FIXE, DESCRIPTION,
+                reference("typeTiersId", "Type", "cfgTierType", ReferenceAdmin.TYPE_TIERS).requis().fixe());
+        static final List<ChampReferentiel> ASSUJETTISSEMENT = List.of(SORTING, CODE_FIXE, DESCRIPTION,
+                caseFixe("exonere", "Exonéré", "isExonarated"), caseFixe("majore", "Majoré", "isMajorated"),
+                de("majoration", "Majoration", Type.DECIMAL, "majorationValue").fixe());
+        static final List<ChampReferentiel> SITUATION = List.of(SORTING, CODE_FIXE, DESCRIPTION,
+                caseFixe("chefDeFamille", "Chef de famille", "isHouseHolder"));
+        static final List<ChampReferentiel> PIECE_IDENTITE = List.of(SORTING, CODE_FIXE, DESCRIPTION, PERSONNE);
+        static final List<ChampReferentiel> PROFESSION = List.of(CODE_FIXE, DESCRIPTION,
+                caseFixe("avecSalaire", "Avec salaire", "isWithSalary"));
+
+        private static ChampReferentiel texteFixe(String nom, String libelle, String propriete) {
+            return texte(nom, libelle, propriete, COURT).fixe();
+        }
+
+        private static ChampReferentiel caseFixe(String nom, String libelle, String propriete) {
+            return de(nom, libelle, Type.BOOLEEN, propriete).fixe();
+        }
 
         /** Trois options (texte) et leur case, numérotées 1 à 3 dans les trois motifs. */
         private static Stream<ChampReferentiel> options(String nomCase, String proprieteCase, String libelleCase) {
