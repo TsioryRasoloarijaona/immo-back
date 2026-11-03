@@ -11,13 +11,15 @@ public record DescripteurReferentielDto(
         @Schema(description = "Libellé OMRAN du référentiel.", example = "Orientations")
         String libelle,
         @Schema(description = "Menu OMRAN où il se range.",
-                allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES", "TACHES"})
+                allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES", "TACHES", "TIERS"})
         String famille,
         @Schema(description = "Vrai si chaque ligne porte une tranche : la liste accepte trancheId (et global).")
         boolean parTranche,
         @Schema(description = "Codes protégés (ni supprimés ni recodés), vide si aucun.", example = "[\"VENTE\", \"PROJET\"]")
         List<String> codesProteges,
         @Schema(description = "Champs, dans l'ordre d'affichage.")
-        List<ChampReferentielDto> champs
+        List<ChampReferentielDto> champs,
+        @Schema(description = "Vrai si le référentiel se lit seulement : POST, PATCH et DELETE répondent 409.")
+        boolean lectureSeule
 ) {
 }

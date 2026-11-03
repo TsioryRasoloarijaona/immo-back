@@ -37,8 +37,8 @@ public class ReferentielAdminController {
     private static final String ID = "PKey de la ligne.";
     private static final String PAS_ADMIN = "L'appelant n'a pas le rôle Administrateur.";
     private static final String INTROUVABLE = "Slug inconnu, ligne inconnue, hors écran ou d'une tranche non visible.";
-    private static final String INVALIDE = "Champ inconnu, obligatoire manquant, valeur ou référence invalide.";
-    private static final String CONFLIT = "Doublon de la clé d'unicité, ou code d'une ligne protégée modifié.";
+    private static final String INVALIDE = "Champ inconnu ou non modifiable, obligatoire manquant, valeur ou référence invalide.";
+    private static final String CONFLIT = "Doublon de la clé d'unicité, code d'une ligne protégée modifié, ou référentiel en lecture seule.";
 
     private final ReferentielAdminService service;
 
@@ -132,7 +132,7 @@ public class ReferentielAdminController {
             @ApiResponse(responseCode = "204", description = "Ligne supprimée (et ses lignes enfants propres)."),
             @ApiResponse(responseCode = "403", description = PAS_ADMIN),
             @ApiResponse(responseCode = "404", description = INTROUVABLE),
-            @ApiResponse(responseCode = "409", description = "Ligne protégée, référencée ailleurs, ou porteuse de lignes en cascade.")
+            @ApiResponse(responseCode = "409", description = "Lecture seule, ligne protégée, référencée ailleurs, ou porteuse de lignes en cascade.")
     })
     public void supprimerLigne(@Parameter(description = SLUG) @PathVariable String table,
                           @Parameter(description = ID) @PathVariable UUID id) {

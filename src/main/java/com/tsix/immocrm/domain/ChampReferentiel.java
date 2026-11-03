@@ -4,10 +4,11 @@ import java.util.List;
 
 /**
  * Champ d'un référentiel administrable : {@code nom} sur le fil, {@code propriete} de l'entité (lue et écrite par
- * réflexion), règle O, longueur maximale d'un texte, table visée par une clé étrangère (FEATURE-patrimoine-referentiels.md §1).
+ * réflexion), règle O, longueur maximale d'un texte, table visée par une clé étrangère (FEATURE-patrimoine-referentiels.md §1),
+ * et {@code verrouille} : saisi à la création, jamais modifié ensuite (FEATURE-admin-referentiels-tiers.md R7).
  */
 public record ChampReferentiel(String nom, String libelle, Type type, String propriete, boolean obligatoire,
-                               Integer longueurMax, ReferenceAdmin reference) {
+                               Integer longueurMax, ReferenceAdmin reference, boolean verrouille) {
 
     public enum Type {
         TEXTE, ENTIER, DECIMAL, FRACTION, BOOLEEN, COULEUR, REFERENCE, OPERATEUR, LIGNES
@@ -20,12 +21,13 @@ public record ChampReferentiel(String nom, String libelle, Type type, String pro
     public static final int LONG = 500;
 
     public static final ChampReferentiel CODE = texte("code", "Code", "code", COURT).requis();
+    public static final ChampReferentiel CODE_FIXE = CODE.fixe();
     public static final ChampReferentiel DESCRIPTION = texte("description", "Description", "description", COURT).requis();
     public static final ChampReferentiel SORTING = entier("sorting", "Ordre", "sorting");
     public static final ChampReferentiel NOTES = texte("notes", "Notes", "notes", LONG);
 
     public static ChampReferentiel texte(String nom, String libelle, String propriete, int longueurMax) {
-        return new ChampReferentiel(nom, libelle, Type.TEXTE, propriete, false, longueurMax, null);
+        return new ChampReferentiel(nom, libelle, Type.TEXTE, propriete, false, longueurMax, null, false);
     }
 
     public static ChampReferentiel entier(String nom, String libelle, String propriete) {
@@ -33,14 +35,18 @@ public record ChampReferentiel(String nom, String libelle, Type type, String pro
     }
 
     public static ChampReferentiel de(String nom, String libelle, Type type, String propriete) {
-        return new ChampReferentiel(nom, libelle, type, propriete, false, null, null);
+        return new ChampReferentiel(nom, libelle, type, propriete, false, null, null, false);
     }
 
     public static ChampReferentiel reference(String nom, String libelle, String propriete, ReferenceAdmin cible) {
-        return new ChampReferentiel(nom, libelle, Type.REFERENCE, propriete, false, null, cible);
+        return new ChampReferentiel(nom, libelle, Type.REFERENCE, propriete, false, null, cible, false);
     }
 
     public ChampReferentiel requis() {
-        return new ChampReferentiel(nom, libelle, type, propriete, true, longueurMax, reference);
+        return new ChampReferentiel(nom, libelle, type, propriete, true, longueurMax, reference, verrouille);
+    }
+
+    public ChampReferentiel fixe() {
+        return new ChampReferentiel(nom, libelle, type, propriete, obligatoire, longueurMax, reference, true);
     }
 }
