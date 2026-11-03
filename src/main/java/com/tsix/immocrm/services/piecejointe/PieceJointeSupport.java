@@ -84,8 +84,8 @@ public class PieceJointeSupport {
     private record Contenu(byte[] octets, String extension, String legende) {
         @Override
         public boolean equals(Object autre) {
-            return autre instanceof Contenu c && Arrays.equals(octets, c.octets)
-                    && Objects.equals(extension, c.extension) && Objects.equals(legende, c.legende);
+            return autre instanceof Contenu(byte[] o, String e, String l) && Arrays.equals(octets, o)
+                    && Objects.equals(extension, e) && Objects.equals(legende, l);
         }
 
         @Override

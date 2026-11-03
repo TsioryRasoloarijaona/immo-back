@@ -8,7 +8,7 @@ import java.util.List;
  * et écran Arpent de l'objet rattaché. Voir FEATURE-admin-fichiers-attaches.md « Base ».
  */
 public enum CategorieFichierAttache {
-    DOSSIER("Dossier de vente", "dossier", "Yes.Com.Sales.Sale"),
+    DOSSIER(Constantes.PREFIXE_DOSSIER, "dossier", "Yes.Com.Sales.Sale"),
     ARTICLE("Article", "article", "Yes.Stk.Building.Item"),
     ENCAISSEMENT("Encaissement", "reglement", "Yes.Stl.Credit.Settlement"),
     DECAISSEMENT("Décaissement", null, "Yes.Stl.Debit.Settlement"),
@@ -21,7 +21,12 @@ public enum CategorieFichierAttache {
     AUTRE("Autre", null);
 
     /** OMRAN range aussi des pièces de dossier sous le libellé « Dossier de vente N° … du … » au lieu de la classe. */
-    public static final String PREFIXE_DOSSIER = "Dossier de vente";
+    public static final String PREFIXE_DOSSIER = Constantes.PREFIXE_DOSSIER;
+
+    /** Un enum ne peut pas lire ses propres constantes dans ses arguments : la valeur vit ici. */
+    private static final class Constantes {
+        static final String PREFIXE_DOSSIER = "Dossier de vente";
+    }
 
     private final String libelle;
     private final String objetCle;
