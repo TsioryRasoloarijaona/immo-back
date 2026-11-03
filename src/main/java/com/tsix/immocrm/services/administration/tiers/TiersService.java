@@ -165,6 +165,11 @@ public class TiersService {
         }
     }
 
+    @Transactional
+    public FicheTiersDto transformerEnContact(UUID id) {
+        throw new UnsupportedOperationException();
+    }
+
     private static FamilleTiers famille(String segment) {
         return FamilleTiers.depuis(segment)
                 .orElseThrow(() -> new ResourceNotFoundException("Famille de tiers inconnue : " + segment));
@@ -218,7 +223,7 @@ public class TiersService {
                 libelle(t.getAdmCountryResidence(), AdmCountry::getDescription), t.getBankAgency(), t.getRib(), t.getIban(),
                 t.getFiscalCode(), t.getFiscalRegistry(), t.getFiscalDouane(), t.getCodeCountable(),
                 t.getCodeCountableCollective(), libelle(t.getAdmLiability(), CodeLibelleOmran::getDescription),
-                t.getPhone1(), t.getPhone2());
+                t.getPhone1(), t.getPhone2(), null, null);
     }
 
     private static FicheTiersDto fiche(CfgTier t) {
