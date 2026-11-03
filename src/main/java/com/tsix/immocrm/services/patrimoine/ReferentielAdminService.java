@@ -86,7 +86,7 @@ public class ReferentielAdminService {
         return Arrays.stream(ReferentielAdmin.values())
                 .map(r -> new DescripteurReferentielDto(r.slug(), r.libelle(), r.famille().name(),
                         r.proprieteTranche().isPresent(), r.codesProteges().stream().sorted().toList(),
-                        champs(r.champs(), r.cle(), r.sousLignes().orElse(null))))
+                        champs(r.champs(), r.cle(), r.sousLignes().orElse(null)), r.lectureSeule()))
                 .toList();
     }
 
@@ -127,7 +127,7 @@ public class ReferentielAdminService {
 
     @Transactional
     public Map<String, Object> creer(String slug, Map<String, Object> corps) {
-        ReferentielAdmin r = referentiel(slug);
+        ReferentielAdmin r = ecrivable(slug);
         Map<String, Object> valeurs = new HashMap<>(r.portee());
         valeurs.putAll(valeurs(r.champs(), r.classe(), corps, true));
         unicite(r, valeurs, null, null);
@@ -144,9 +144,10 @@ public class ReferentielAdminService {
 
     @Transactional
     public Map<String, Object> modifier(String slug, UUID id, Map<String, Object> corps) {
-        ReferentielAdmin r = referentiel(slug);
+        ReferentielAdmin r = ecrivable(slug);
         BeanWrapper bw = trouver(r, id);
         Map<String, Object> valeurs = valeurs(r.champs(), r.classe(), corps, false);
+        verifierSaisieSurLigne(r, bw, valeurs);
         Object code = bw.isReadableProperty(CODE) ? bw.getPropertyValue(CODE) : null;
         if (valeurs.containsKey(CODE) && !Objects.equals(valeurs.get(CODE), code) && protegee(r, bw)) {
             throw new ConflictException("Le code %s est protégé : le CRM le lit en dur.".formatted(code));
@@ -165,7 +166,7 @@ public class ReferentielAdminService {
     /** §0 et §8.1 : ligne protégée, enfant en CASCADE ou FK NO_ACTION → 409 ; les enfants propres partent avec elle. */
     @Transactional
     public void supprimer(String slug, UUID id) {
-        ReferentielAdmin r = referentiel(slug);
+        ReferentielAdmin r = ecrivable(slug);
         BeanWrapper bw = trouver(r, id);
         if (protegee(r, bw)) {
             throw new ConflictException("Suppression impossible : le code %s est protégé.".formatted(bw.getPropertyValue(CODE)));
@@ -191,7 +192,8 @@ public class ReferentielAdminService {
                 c.propriete() != null && cle.contains(c.propriete()), c.longueurMax(),
                 c.reference() != null ? c.reference().choix() : null,
                 c.type() == Type.OPERATEUR ? OPERATEURS : null,
-                c.type() == Type.LIGNES && sousLignes != null ? champs(sousLignes.champs(), List.of(), null) : null))
+                c.type() == Type.LIGNES && sousLignes != null ? champs(sousLignes.champs(), List.of(), null) : null,
+                !c.verrouille()))
                 .toList();
     }
 
@@ -223,6 +225,15 @@ public class ReferentielAdminService {
 
     private static ReferentielAdmin referentiel(String slug) {
         return ReferentielAdmin.parSlug(slug).orElseThrow(() -> new ResourceNotFoundException("Référentiel inconnu : " + slug));
+    }
+
+    /** Avant toute lecture du corps : un référentiel en lecture seule refuse toute écriture (409). */
+    private static ReferentielAdmin ecrivable(String slug) {
+        ReferentielAdmin r = referentiel(slug);
+        if (r.lectureSeule()) {
+            throw new ConflictException("Ce référentiel est en lecture seule.");
+        }
+        return r;
     }
 
     /** Lecture par id : inconnue, hors portée (seuil d'une autre entité) ou d'une tranche non visible → 404. */
@@ -357,6 +368,30 @@ public class ReferentielAdminService {
         }
         return ReferencesPatrimoine.trouver(i -> Optional.ofNullable(em.find(cible.classe(), i)).filter(cible.accepte()),
                 id, c.nom());
+    }
+
+    /** Champ verrouillé envoyé avec une autre valeur → 400 (identique accepté) ; obligatoire resté vide → 400 (R5). */
+    private void verifierSaisieSurLigne(ReferentielAdmin r, BeanWrapper bw, Map<String, Object> valeurs) {
+        r.champs().stream().filter(c -> c.type() != Type.LIGNES).forEach(c -> {
+            boolean saisi = valeurs.containsKey(c.propriete());
+            Object actuelle = bw.getPropertyValue(c.propriete());
+            if (c.verrouille() && saisi && !memeValeur(c, valeurs.get(c.propriete()), actuelle)) {
+                throw new InvalidRequestException(c.nom() + " : non modifiable.");
+            }
+            if (r.obligatoiresAChaqueEcriture() && c.obligatoire() && !saisi && actuelle == null) {
+                throw obligatoire(c);
+            }
+        });
+    }
+
+    private boolean memeValeur(ChampReferentiel c, Object saisie, Object actuelle) {
+        if (c.type() == Type.REFERENCE) {
+            return Objects.equals(idDe(saisie), idDe(actuelle));
+        }
+        if (saisie instanceof BigDecimal a && actuelle instanceof BigDecimal b) {
+            return a.compareTo(b) == 0;
+        }
+        return Objects.equals(saisie, actuelle);
     }
 
     private static InvalidRequestException obligatoire(ChampReferentiel c) {

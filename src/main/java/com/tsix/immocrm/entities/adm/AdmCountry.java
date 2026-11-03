@@ -1,40 +1,23 @@
 package com.tsix.immocrm.entities.adm;
 
+import com.tsix.immocrm.entities.AuditOmran;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 @Getter
 @Setter
 @Entity
 @Table(name = "AdmCountry")
-public class AdmCountry {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Code")
-    private String code;
-
+public class AdmCountry extends AuditOmran {
     @Size(max = 255)
     @Nationalized
     @Column(name = "ISOAlpha3")
     private String isoAlpha3;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "Description")
-    private String description;
 
     @Size(max = 255)
     @Nationalized
@@ -66,20 +49,4 @@ public class AdmCountry {
     @Nationalized
     @Column(name = "WebPhoneFormat")
     private String webPhoneFormat;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserCreate")
-    private String userCreate;
-
-    @Column(name = "UserCreateDateTime")
-    private LocalDateTime userCreateDateTime;
-
-    @Size(max = 255)
-    @Nationalized
-    @Column(name = "UserUpdate")
-    private String userUpdate;
-
-    @Column(name = "UserUpdateDateTime")
-    private LocalDateTime userUpdateDateTime;
 }

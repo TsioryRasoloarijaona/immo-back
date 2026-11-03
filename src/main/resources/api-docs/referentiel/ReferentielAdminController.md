@@ -7,9 +7,11 @@ des champs, plus `id`. Hors portée des clés d'API (403). Voir `FEATURE-patrimo
 
 ## descripteurs
 
-Les 19 référentiels, dans l'ordre des menus OMRAN. Pour chacun : ses champs (type, obligatoire, appartenance à la clé
-d'unicité, longueur maximale), la route de la liste de choix de chaque référence, les valeurs d'un opérateur, les
-champs des lignes enfants (`LIGNES`), et les codes protégés.
+Les référentiels, dans l'ordre des menus OMRAN. Pour chacun : ses champs (type, obligatoire, appartenance à la clé
+d'unicité, longueur maximale, modifiable après création), la route de la liste de choix de chaque référence, les
+valeurs d'un opérateur, les champs des lignes enfants (`LIGNES`), les codes protégés, et s'il est en lecture seule.
+Famille `TIERS` : pays, villes et listes des fiches tiers (`FEATURE-admin-referentiels-tiers.md`) ; leur code et les
+champs propres à OMRAN se saisissent à la création seulement, les types de tiers sont en lecture seule.
 
 ## lignes
 
@@ -38,11 +40,16 @@ et son statut doit être un statut de dossier de vente (sinon 400).
 Seuls les champs présents changent ; `null` vide un champ facultatif et un obligatoire refuse d'être vidé (400). Mêmes
 contrôles qu'à la création, sur la ligne résultante. Le code d'une ligne protégée (vocations `VENTE`, `PROJET` ; natures
 `BAT`, `TER`, `PROS TER`, `LOT DE TERRAIN`, reconnues par PKey comme par code) ne change pas → 409 ; sa description
-reste modifiable. `contenances` présent remplace toutes les lignes de contenance de la présentation.
+reste modifiable. `contenances` présent remplace toutes les lignes de contenance de la présentation. Un champ
+`modifiable: false` envoyé avec une autre valeur → 400 nommant le champ (la même valeur est acceptée). Famille `TIERS` :
+un champ obligatoire vide en base (ville sans pays) doit être envoyé → 400 sinon. Référentiel en lecture seule → 409
+avant toute lecture du corps (aussi pour la création et la suppression).
 
 ## supprimerLigne
 
 Refusée (409) pour une ligne protégée, pour une ligne encore citée par une autre table (le `detail` nomme la
 contrainte), et quand la base effacerait en cascade des données d'article : tracés de plan d'un étage, vues ou
 contenances d'article, catégories et types d'une nature (le `detail` nomme la table enfant et le nombre de lignes).
-Seule exception : les contenances d'un type de présentation partent avec lui.
+Seule exception : les contenances d'un type de présentation partent avec lui. Tiers : refusée aussi pour un pays qui
+a des villes, une ville d'une prospection, un type de relation d'un contact, et un pays ou une forme sociale valeur
+par défaut (`AdmParamsGuid`).

@@ -27,7 +27,9 @@ public record ChampReferentielDto(
         List<OptionDto> options,
         @ArraySchema(arraySchema = @Schema(description = "LIGNES : champs de chaque ligne enfant, null sinon."),
                 schema = @Schema(implementation = ChampReferentielDto.class))
-        List<ChampReferentielDto> champs
+        List<ChampReferentielDto> champs,
+        @Schema(description = "Faux si le champ se saisit à la création seulement (PATCH d'une autre valeur → 400).")
+        boolean modifiable
 ) {
 
     @Schema(description = "Valeur permise d'un champ OPERATEUR.")
