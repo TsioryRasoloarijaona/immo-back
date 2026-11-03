@@ -1,0 +1,1 @@
+-- Lot admin-onglets-tiers : lecture seule, aucune cle etrangere ajoutee (les tables de 162 restent sans FK, comme yesRemsTest).

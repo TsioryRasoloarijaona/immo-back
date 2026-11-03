@@ -33,6 +33,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -64,6 +65,7 @@ public class TiersService {
             "notes", SELECT_DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code",
             "journaux", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from ActJournal x order by x.code");
+    private static final Sort TRI = Sort.by("code", "id");
     private static final List<String> LIBELLES_LISTE =
             List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
 
@@ -90,10 +92,29 @@ public class TiersService {
     @Transactional(readOnly = true)
     public PageDto<LigneTiersDto> lister(String famille, FiltresTiers filtres, int page, int size) {
         FamilleTiers f = famille(famille);
-        Page<CfgTier> lignes = tiers.findAll(specification(f, filtres), PageRequest.of(page, size, Sort.by("code", "id")));
-        Map<UUID, String> contacts = contacts(lignes.getContent());
+        Page<CfgTier> lignes = tiers.findAll(specification(f, filtres), PageRequest.of(page, size, TRI));
+        return PageDto.of(new PageImpl<>(lignes(f, lignes.getContent()), lignes.getPageable(), lignes.getTotalElements()));
+    }
+
+    /** Toutes les lignes de la liste filtrée, même ordre : export xlsx / pdf. */
+    @Transactional(readOnly = true)
+    public List<LigneTiersDto> lignesExport(String famille, FiltresTiers filtres) {
+        FamilleTiers f = famille(famille);
+        return lignes(f, tiers.findAll(specification(f, filtres), TRI));
+    }
+
+    /** Famille du tiers ; 404 si la famille, le tiers ou son type ne concordent pas. */
+    @Transactional(readOnly = true)
+    public FamilleTiers verifier(String famille, UUID id) {
+        FamilleTiers f = famille(famille);
+        trouver(f, id);
+        return f;
+    }
+
+    private List<LigneTiersDto> lignes(FamilleTiers f, List<CfgTier> lignes) {
+        Map<UUID, String> contacts = contacts(lignes);
         boolean banqueEnListe = f.fiche() != FamilleTiers.Fiche.PHYSIQUE;
-        return PageDto.of(lignes.map(t -> ligne(t, contacts.get(t.getId()), banqueEnListe)));
+        return lignes.stream().map(t -> ligne(t, contacts.get(t.getId()), banqueEnListe)).toList();
     }
 
     @Transactional(readOnly = true)
