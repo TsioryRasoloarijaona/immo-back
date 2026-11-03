@@ -18,8 +18,10 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.FlushModeType;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.reflect.RecordComponent;
@@ -76,8 +78,10 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
     protected ImportGenerique(Definition<E> d, Outils o) {
         this.d = d;
         this.o = o;
-        this.classes = Arrays.stream(d.dto().getRecordComponents())
-                .collect(Collectors.toMap(RecordComponent::getName, RecordComponent::getType));
+        this.classes = new HashMap<>(Arrays.stream(d.dto().getRecordComponents())
+                .collect(Collectors.toMap(RecordComponent::getName, RecordComponent::getType)));
+        // Les tiers n'ont pas de code dans leur DTO d'écriture : le compteur le donne, le pivot ne sert qu'à chercher.
+        this.classes.putIfAbsent(CODE, String.class);
         d.colonnes().stream().filter(c -> !c.estIgnoree()).forEach(this::type);
     }
 
@@ -90,8 +94,22 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
         // rien par défaut : programmes et prospections terrain s'en remettent au service
     }
 
+    /** Faux = pivot vide accepté : création sans recherche, et un même pivot peut revenir dans le fichier. */
+    protected boolean pivotExige() {
+        return true;
+    }
+
+    /** Restreint la recherche du pivot, par défaut à toute la table. */
+    protected Predicate portee(CriteriaBuilder cb, Root<E> racine) {
+        return cb.isNotNull(racine.get("id"));
+    }
+
     protected <D> D dto(Map<String, Object> champs, Class<D> classe) {
         return o.json().convertValue(champs, classe);
+    }
+
+    protected Map<String, Object> champsDe(Record dto) {
+        return o.json().convertValue(dto, new TypeReference<Map<String, Object>>() { });
     }
 
     List<ColonneGenerique> catalogue() {
@@ -174,15 +192,19 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
             }
         }
         String pivot = (String) champs.get(CODE);
-        if (pivot == null) {
-            erreurs.add("Manque le pivot");
-        } else {
-            Integer premiere = ctx.codes().putIfAbsent(pivot.toLowerCase(Locale.ROOT), l.numero());
-            if (premiere != null) {
-                erreurs.add("Le code %s apparaît déjà à la ligne %d du fichier.".formatted(pivot, premiere));
-            }
+        if (pivotExige()) {
+            controlerPivot(pivot, l.numero(), ctx).ifPresent(erreurs::add);
         }
         return new LigneGenerique(l.numero(), pivot, champs, erreurs);
+    }
+
+    private static Optional<String> controlerPivot(String pivot, int numero, Contexte ctx) {
+        if (pivot == null) {
+            return Optional.of("Manque le pivot");
+        }
+        Integer premiere = ctx.codes().putIfAbsent(pivot.toLowerCase(Locale.ROOT), numero);
+        return Optional.ofNullable(premiere)
+                .map(p -> "Le code %s apparaît déjà à la ligne %d du fichier.".formatted(pivot, p));
     }
 
     private Object valeur(ColonneGenerique c, Object brut, Contexte ctx) {
@@ -215,12 +237,19 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
 
     // ------------------------------------------------------------------ écriture (dans la transaction de l'import)
 
-    private ResultatImport ecrireLigne(LigneGenerique l, Contexte ctx) {
+    private List<E> chercher(String pivot) {
+        if (pivot == null) {
+            return List.of();
+        }
         CriteriaBuilder cb = o.em().getCriteriaBuilder();
         CriteriaQuery<E> requete = cb.createQuery(d.entite());
         Root<E> racine = requete.from(d.entite());
-        requete.where(cb.equal(racine.get(CODE), l.pivot()));
-        List<E> trouves = o.em().createQuery(requete).setFlushMode(FlushModeType.COMMIT).getResultList();
+        requete.where(cb.equal(racine.get(CODE), pivot), portee(cb, racine));
+        return o.em().createQuery(requete).setFlushMode(FlushModeType.COMMIT).getResultList();
+    }
+
+    private ResultatImport ecrireLigne(LigneGenerique l, Contexte ctx) {
+        List<E> trouves = chercher(l.pivot());
         if (trouves.size() > 1) {
             throw new InvalidRequestException("Cet enregistrement existe plusieurs fois");
         }

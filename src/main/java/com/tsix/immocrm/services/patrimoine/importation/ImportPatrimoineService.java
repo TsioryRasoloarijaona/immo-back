@@ -38,21 +38,24 @@ public class ImportPatrimoineService {
     public static final String PROJETS = "projets";
     public static final String TRANCHES = "tranches";
     public static final String PROSPECTIONS_TERRAIN = "prospections-terrain";
+    public static final String FOURNISSEURS = "fournisseurs";
+    public static final String CONTACTS = "contacts";
 
-    private final TrancheVisibleRepository tranches;
+    private final TrancheVisibleRepository tranchesVisibles;
     private final List<ImportParType<?>> imports;
     private final TransactionTemplate transaction;
 
     public ImportPatrimoineService(TrancheVisibleRepository tranches, List<ImportParType<?>> imports,
                                    PlatformTransactionManager transactions) {
-        this.tranches = tranches;
+        this.tranchesVisibles = tranches;
         this.imports = imports;
         this.transaction = new TransactionTemplate(transactions);
     }
 
     /** Type inconnu → 404. */
-    ImportParType<?> parType(String type) {
-        return imports.stream().filter(i -> i.types().contains(type)).findFirst()
+    @SuppressWarnings("unchecked")
+    <C> ImportParType<C> parType(String type) {
+        return (ImportParType<C>) imports.stream().filter(i -> i.types().contains(type)).findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Type d'import inconnu : " + type));
     }
 
@@ -64,7 +67,7 @@ public class ImportPatrimoineService {
         if (trancheId == null) {
             throw new InvalidRequestException("Vous devez sélectionner une Tranche !");
         }
-        return tranches.exigerVisible(trancheId);
+        return tranchesVisibles.exigerVisible(trancheId);
     }
 
     public BilanImportDto importer(String type, UUID trancheId, MultipartFile fichier, String feuille, boolean simulation,
@@ -86,7 +89,8 @@ public class ImportPatrimoineService {
 
     /** Types à mapping seulement (FEATURE-patrimoine-import-generique.md) ; les autres → 404. */
     private ImportGenerique<?> generique(String type) {
-        if (parType(type) instanceof ImportGenerique<?> g) {
+        Object importation = parType(type);
+        if (importation instanceof ImportGenerique<?> g) {
             return g;
         }
         throw new ResourceNotFoundException("Type d'import sans mapping : " + type);

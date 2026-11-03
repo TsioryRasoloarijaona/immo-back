@@ -5,6 +5,9 @@ présentation, terrains et prévisions de base de la tranche (P9b), et import g�
 juridiques, programmes, tranches et prospections terrain. Chaque ligne passe par le service de l'écran (mêmes
 règles, même audit) ; Administrateur seul.
 
+`fournisseurs` et `contacts` : import générique sans tranche ; `Pivot` se compare au code dans le type, vide ou inconnu =
+création avec un code du compteur, trouvé une fois = mise à jour (cellule vide = valeur gardée), plusieurs fois = erreur.
+
 ## modele
 
 En-têtes OMRAN exacts, une ligne par objet existant, puis une feuille d'aide par référentiel (Code, Libellé).
