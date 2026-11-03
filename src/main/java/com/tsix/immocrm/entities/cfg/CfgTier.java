@@ -1,5 +1,7 @@
 package com.tsix.immocrm.entities.cfg;
 
+import com.tsix.immocrm.entities.act.ActAccount;
+import com.tsix.immocrm.entities.act.ActJournal;
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmFamilySituation;
 import com.tsix.immocrm.entities.adm.AdmIdentityDocumentType;
@@ -174,6 +176,14 @@ public class CfgTier {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgBankId")
     private CfgTier cfgBank;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ActAccountId")
+    private ActAccount actAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ActJournalId")
+    private ActJournal actJournal;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgCommercialId")

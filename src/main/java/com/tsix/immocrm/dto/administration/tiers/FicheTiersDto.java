@@ -6,11 +6,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Schema(description = "Fiche d'un tiers : champs de EcritureTiersRequest à plat, plus code, trace et libellés.")
+@Schema(description = "Fiche d'un tiers : champs de EcritureTiersRequest à plat, plus trace et libellés.")
 public record FicheTiersDto(
         @Schema(description = "PKey du tiers.") UUID id,
-        @Schema(description = "Code issu du compteur des tiers, jamais modifié.") String code,
-        @Schema(description = "Description, égale à la raison sociale à chaque écriture.") String description,
         @Schema(description = "Auteur de la création.") String creePar,
         @Schema(description = "Date de création.") LocalDateTime creeLe,
         @Schema(description = "Auteur de la dernière modification.") String modifiePar,
