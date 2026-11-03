@@ -33,7 +33,9 @@ import java.util.UUID;
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.ADMINISTRATEUR;
 import static com.tsix.immocrm.controller.patrimoine.ArticleController.REPONSE_403;
 import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.ARTICLES;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.CONTACTS;
 import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.ENTITES_JURIDIQUES;
+import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.FOURNISSEURS;
 import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.LOTISSEMENTS;
 import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.PRESENTATIONS;
 import static com.tsix.immocrm.services.patrimoine.importation.ImportPatrimoineService.PREVISIONS;
@@ -76,7 +78,8 @@ public class ImportPatrimoineController {
     })
     public ResponseEntity<byte[]> modele(
             @Parameter(description = TYPE, schema = @Schema(allowableValues = {ARTICLES, SOUS_ARTICLES, PRESENTATIONS,
-                    TERRAINS, LOTISSEMENTS, PREVISIONS, ENTITES_JURIDIQUES, PROJETS, TRANCHES, PROSPECTIONS_TERRAIN}))
+                    TERRAINS, LOTISSEMENTS, PREVISIONS, ENTITES_JURIDIQUES, PROJETS, TRANCHES, PROSPECTIONS_TERRAIN,
+                    FOURNISSEURS, CONTACTS}))
             @PathVariable String type,
             @Parameter(description = TRANCHE) @RequestParam(required = false) UUID trancheId) {
         return modele.classeur(type, trancheId);
@@ -95,7 +98,8 @@ public class ImportPatrimoineController {
     })
     public BilanImportDto importer(
             @Parameter(description = TYPE, schema = @Schema(allowableValues = {ARTICLES, SOUS_ARTICLES, PRESENTATIONS,
-                    TERRAINS, LOTISSEMENTS, PREVISIONS, ENTITES_JURIDIQUES, PROJETS, TRANCHES, PROSPECTIONS_TERRAIN}))
+                    TERRAINS, LOTISSEMENTS, PREVISIONS, ENTITES_JURIDIQUES, PROJETS, TRANCHES, PROSPECTIONS_TERRAIN,
+                    FOURNISSEURS, CONTACTS}))
             @PathVariable String type,
             @Parameter(description = TRANCHE) @RequestParam(required = false) UUID trancheId,
             @Parameter(description = "Vrai (défaut) = « Vérifier les données » : même exécution, puis tout est annulé.")
@@ -119,7 +123,7 @@ public class ImportPatrimoineController {
     })
     public List<ColonneImportDto> colonnes(
             @Parameter(description = TYPE, schema = @Schema(allowableValues = {ENTITES_JURIDIQUES, PROJETS, TRANCHES,
-                    PROSPECTIONS_TERRAIN}))
+                    PROSPECTIONS_TERRAIN, FOURNISSEURS, CONTACTS}))
             @PathVariable String type) {
         return importation.colonnes(type);
     }
@@ -137,7 +141,7 @@ public class ImportPatrimoineController {
     })
     public AnalyseImportDto analyser(
             @Parameter(description = TYPE, schema = @Schema(allowableValues = {ENTITES_JURIDIQUES, PROJETS, TRANCHES,
-                    PROSPECTIONS_TERRAIN}))
+                    PROSPECTIONS_TERRAIN, FOURNISSEURS, CONTACTS}))
             @PathVariable String type,
             @Parameter(description = FICHIER) @RequestParam("fichier") MultipartFile fichier,
             @Parameter(description = FEUILLE) @RequestParam(required = false) String feuille) {
