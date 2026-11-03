@@ -9,5 +9,7 @@ public record RapportResumeDto(
         @Schema(description = "Libellé (AdmReportData.Description), sans espaces de bord.",
                 example = "SUIVI GLOBAL DE VENTE*") String libelle,
         @Schema(description = "Ordre (AdmReportData.Sorting), 0 si absent.", example = "810") int ordre,
-        @Schema(description = "Vrai si le rapport accepte au moins un paramètre.") boolean avecParametres) {
+        @Schema(description = "Vrai si le rapport accepte au moins un paramètre.") boolean avecParametres,
+        @Schema(description = "Vrai si Arpent sait exécuter le rapport ; faux = listé d'OMRAN, non disponible.")
+        boolean disponible) {
 }

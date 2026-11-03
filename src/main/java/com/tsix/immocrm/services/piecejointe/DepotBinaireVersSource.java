@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -13,8 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.sql.DataSource;
 import java.util.UUID;
 
-/** Mode deux-bases : écrit le binaire sur la source de vérité. */
+/** Mode deux-bases : écrit le binaire sur la source de vérité. {@code @Primary} : beans exclusifs, Sonar ne voit pas les conditions. */
 @Service
+@Primary
 @ConditionalOnExpression("'${app.source-de-verite.host:}'.trim() != ''")
 public class DepotBinaireVersSource implements DepotBinaireSource {
 

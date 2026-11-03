@@ -91,6 +91,8 @@ public class SecurityConfig {
                                 "/api/tranches/*/premieres-relances.pdf", "/api/champs-specifiques/*/definitions/**")
                         .hasRole(ADMINISTRATEUR)
                         .requestMatchers(HttpMethod.PUT, "/api/champs-specifiques/**").hasRole(ADMINISTRATEUR)
+                        .requestMatchers("/api/rapports/administration", "/api/rapports/administration/**")
+                        .hasRole(ADMINISTRATEUR)
                         .anyRequest().authenticated())
                 // Clé d'API AVANT le JWT : une clé présente fait foi, le cookie n'est lu qu'en son absence (FEATURE-cle-api-n8n.md §5).
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
