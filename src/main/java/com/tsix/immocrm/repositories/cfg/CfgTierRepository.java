@@ -61,6 +61,10 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
      */
     List<CfgTier> findByCode(String code);
 
+    /** Tiers du type portant ce code, sans casse ni espaces autour ; {@code code} attendu en minuscules. */
+    @Query("select t.id from CfgTier t where t.cfgTierType.code = :type and lower(trim(t.code)) = :code")
+    List<UUID> idsDuCode(@Param("type") String type, @Param("code") String code);
+
     /**
      * Contrôle d'OMRAN rendu disjonctif (nom ou téléphone ou email ; OMRAN exige nom et email, jamais
      * vrai sans email) — FEATURE-doublons-prospect-projet.md §2. Paramètres normalisés, {@code ""} si

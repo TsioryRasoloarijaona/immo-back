@@ -31,5 +31,7 @@ public record LigneTiersDto(
         @Schema(description = "Douane.") String douane,
         @Schema(description = "Code comptable.") String codeComptable,
         @Schema(description = "Code comptable collectif.") String codeComptableCollectif,
-        @Schema(description = "Libellé de l'assujettissement.") String assujettissement) {
+        @Schema(description = "Libellé de l'assujettissement.") String assujettissement,
+        @Schema(description = "Téléphone 1.") String telephone1,
+        @Schema(description = "Téléphone 2.") String telephone2) {
 }

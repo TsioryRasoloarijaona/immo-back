@@ -21,7 +21,8 @@ import static com.tsix.immocrm.services.patrimoine.importation.ColonneGenerique.
 
 /**
  * Règle 13 de FEATURE-admin-tiers.md : « Pivot » se compare au code dans le type, jamais écrit ; vide ou inconnu =
- * création au compteur. Chaque ligne repasse par {@link TiersService}, cellule vide = valeur gardée.
+ * création au compteur. Code saisi (règle 10 de FEATURE-admin-banques-organismes.md) : pivot exigé, nouveau code écrit.
+ * Chaque ligne repasse par {@link TiersService}, cellule vide = valeur gardée. Le catalogue suit la forme de la fiche.
  */
 abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
@@ -33,12 +34,33 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
     protected ImportTiers(FamilleTiers famille, Referentiel nature, Libelles libelles, TiersService service, Outils outils) {
         super(new Definition<>(famille.segment(), EcritureTiersRequest.class, CfgTier.class, CfgTier::getId,
-                colonnes(nature), Set.of("formeSocialeId", "paysResidenceId", "deviseId"), libelles), outils);
+                colonnes(famille, nature), obligatoires(famille), libelles), outils);
         this.famille = famille;
         this.service = service;
     }
 
-    private static List<ColonneGenerique> colonnes(Referentiel nature) {
+    private static List<ColonneGenerique> colonnes(FamilleTiers famille, Referentiel nature) {
+        return switch (famille.fiche()) {
+            case COMPLETE -> colonnesCompletes(nature);
+            case REDUITE -> colonnesReduites(nature);
+        };
+    }
+
+    private static Set<String> obligatoires(FamilleTiers famille) {
+        return switch (famille.fiche()) {
+            case COMPLETE -> Set.of("formeSocialeId", "paysResidenceId", "deviseId");
+            case REDUITE -> Set.of("description", "paysId");
+        };
+    }
+
+    private static List<ColonneGenerique> colonnesReduites(Referentiel nature) {
+        return List.of(champ("Code", CODE), champ("Description", "description"), ref("Pays", "paysId", Referentiel.PAYS),
+                ref("Nature", "natureId", nature), champ("Matricule fiscal", "matriculeFiscal"),
+                champ("Registre de commerce", "registreCommerce"), champ("ICE", "ice"), champ("Mobile", "mobile"),
+                champ("EMail", "email"), champ("Adresse", "adresse"), champ("Code postal", "codePostal"));
+    }
+
+    private static List<ColonneGenerique> colonnesCompletes(Referentiel nature) {
         return List.of(champ("Pivot", CODE), ref("Forme sociale", "formeSocialeId", Referentiel.FORME_SOCIALE),
                 champ("Raison sociale", "raisonSociale"), champ("Prénom", PRENOM), champ("Nom", NOM),
                 ref("Titre", "titreId", Referentiel.TITRE), ref("Sexe", "sexeId", Referentiel.SEXE),
@@ -50,7 +72,7 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
     @Override
     protected boolean pivotExige() {
-        return false;
+        return famille.fiche().codeSaisi();
     }
 
     @Override
@@ -60,7 +82,6 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
     @Override
     protected void creer(Map<String, Object> champs) {
-        champs.remove(CODE);
         service.creer(famille.segment(), requete(champs));
     }
 
