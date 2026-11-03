@@ -9,13 +9,15 @@ public enum FamilleTiers {
     FOURNISSEURS("fournisseurs", "FOU", true),
     CONTACTS("contacts", "CNT", false),
     BANQUES("banques", "BAN", false, Fiche.REDUITE, "DefaultSocialFormForBANK"),
-    ORGANISMES("organismes", "ORG", false, Fiche.REDUITE, "DefaultSocialFormForORGANISM");
+    ORGANISMES("organismes", "ORG", false, Fiche.REDUITE, "DefaultSocialFormForORGANISM"),
+    PERSONNELS("personnels", "EMP", false, Fiche.PHYSIQUE, null);
 
     /** Forme de saisie : champs écrits (service), catalogue d'import, colonnes cherchées, origine du code. */
     public enum Fiche {
         COMPLETE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail", "ice")),
         REDUITE(true, List.of("code", "description", "mobile", "phone", "phone1", "phone2", "fax", "eMail", "webSite",
-                "notes", "address"));
+                "notes", "address")),
+        PHYSIQUE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail"));
 
         private final boolean codeSaisi;
         private final List<String> colonnesCherchees;

@@ -42,6 +42,7 @@ public class ImportPatrimoineService {
     public static final String CONTACTS = "contacts";
     public static final String BANQUES = "banques";
     public static final String ORGANISMES = "organismes";
+    public static final String PERSONNELS = "personnels";
 
     private final TrancheVisibleRepository tranchesVisibles;
     private final List<ImportParType<?>> imports;

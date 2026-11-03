@@ -24,8 +24,8 @@ public record LigneTiersDto(
         @Schema(description = "Libellé du pays.") String pays,
         @Schema(description = "Libellé du pays de résidence.") String paysResidence,
         @Schema(description = "Agence bancaire.") String agence,
-        @Schema(description = "RIB.") String rib,
-        @Schema(description = "IBAN.") String iban,
+        @Schema(description = "RIB ; toujours null pour personnels.") String rib,
+        @Schema(description = "IBAN ; toujours null pour personnels.") String iban,
         @Schema(description = "Matricule fiscal.") String matriculeFiscal,
         @Schema(description = "Registre de commerce.") String registreCommerce,
         @Schema(description = "Douane.") String douane,
@@ -33,5 +33,7 @@ public record LigneTiersDto(
         @Schema(description = "Code comptable collectif.") String codeComptableCollectif,
         @Schema(description = "Libellé de l'assujettissement.") String assujettissement,
         @Schema(description = "Téléphone 1.") String telephone1,
-        @Schema(description = "Téléphone 2.") String telephone2) {
+        @Schema(description = "Téléphone 2.") String telephone2,
+        @Schema(description = "Libellé de la nationalité.") String nationalite,
+        @Schema(description = "Libellé de la profession.") String profession) {
 }

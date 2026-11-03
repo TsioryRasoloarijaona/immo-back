@@ -72,7 +72,7 @@ public class TiersController {
     })
     public PageDto<LigneTiersDto> lister(
             @Parameter(description = "Famille.", schema = @Schema(allowableValues = {"fournisseurs", "contacts", "banques",
-                    "organismes"}))
+                    "organismes", "personnels"}))
             @PathVariable String famille,
             @ParameterObject @ModelAttribute FiltresTiers filtres,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1_000_000)
@@ -151,6 +151,18 @@ public class TiersController {
     })
     public void supprimer(@PathVariable String famille, @Parameter(description = ID) @PathVariable UUID id) {
         service.supprimer(famille, id);
+    }
+
+    @PostMapping("/personnels/{id}/transformer-en-contact")
+    @Operation(summary = "Transforme un employé en contact")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Fiche du tiers, désormais contact."),
+            @ApiResponse(responseCode = "404", description = "Tiers inconnu ou qui n'est pas un employé.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Employé lié à un compte, ou commercial d'un dossier actif.",
+                    content = @Content)
+    })
+    public FicheTiersDto transformerEnContact(@Parameter(description = ID) @PathVariable UUID id) {
+        return service.transformerEnContact(id);
     }
 
     @GetMapping(CHEMIN_LIENS)

@@ -10,6 +10,8 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.adm.AdmCountry;
+import com.tsix.immocrm.entities.adm.AdmNationality;
+import com.tsix.immocrm.entities.adm.AdmProfession;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
@@ -63,7 +65,7 @@ public class TiersService {
             "journaux", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from ActJournal x order by x.code");
     private static final List<String> LIBELLES_LISTE =
-            List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability");
+            List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
 
     private final EntityManager em;
     private final CfgTierRepository tiers;
@@ -87,10 +89,11 @@ public class TiersService {
 
     @Transactional(readOnly = true)
     public PageDto<LigneTiersDto> lister(String famille, FiltresTiers filtres, int page, int size) {
-        Page<CfgTier> lignes = tiers.findAll(specification(famille(famille), filtres),
-                PageRequest.of(page, size, Sort.by("code", "id")));
+        FamilleTiers f = famille(famille);
+        Page<CfgTier> lignes = tiers.findAll(specification(f, filtres), PageRequest.of(page, size, Sort.by("code", "id")));
         Map<UUID, String> contacts = contacts(lignes.getContent());
-        return PageDto.of(lignes.map(t -> ligne(t, contacts.get(t.getId()))));
+        boolean banqueEnListe = f.fiche() != FamilleTiers.Fiche.PHYSIQUE;
+        return PageDto.of(lignes.map(t -> ligne(t, contacts.get(t.getId()), banqueEnListe)));
     }
 
     @Transactional(readOnly = true)
@@ -118,8 +121,7 @@ public class TiersService {
         FamilleTiers f = famille(famille);
         CfgTier t = new CfgTier();
         ecriture.appliquer(t, f, corps);
-        CfgTierType type = types.findByCode(f.codeType())
-                .orElseThrow(() -> new ConfigurationManquanteException("Type de tiers absent : " + f.codeType()));
+        CfgTierType type = type(f);
         TracePatrimoine.Trace trace = traces.maintenant();
         t.setId(UUID.randomUUID());
         if (!f.fiche().codeSaisi()) {
@@ -147,22 +149,46 @@ public class TiersService {
             em.detach(t);
             throw e;
         }
-        TracePatrimoine.Trace trace = traces.maintenant();
-        t.setUserUpdate(trace.auteur());
-        t.setUserUpdateDateTime(trace.le());
+        tracerModification(t);
         return fiche(t);
     }
 
     /** Les CASCADE de la base partent avec le tiers ; une FK NO_ACTION le bloque, sans purge (décision du spec). */
     @Transactional
     public void supprimer(String famille, UUID id) {
-        em.remove(trouver(famille(famille), id));
+        FamilleTiers f = famille(famille);
+        CfgTier t = trouver(f, id);
+        if (f == FamilleTiers.PERSONNELS) {
+            ecriture.gardes().refuserCompteLie(t);
+        }
+        em.remove(t);
         try {
             em.flush();
         } catch (ConstraintViolationException e) {
             em.clear();
             throw new ConflictException("Suppression impossible : ce tiers est encore référencé ailleurs.");
         }
+    }
+
+    @Transactional
+    public FicheTiersDto transformerEnContact(UUID id) {
+        CfgTier t = trouver(FamilleTiers.PERSONNELS, id);
+        ecriture.gardes().refuserTransformation(t);
+        t.setCfgTierType(type(FamilleTiers.CONTACTS));
+        t.setCfgTierKind(null);
+        tracerModification(t);
+        return fiche(t);
+    }
+
+    private CfgTierType type(FamilleTiers famille) {
+        return types.findByCode(famille.codeType())
+                .orElseThrow(() -> new ConfigurationManquanteException("Type de tiers absent : " + famille.codeType()));
+    }
+
+    private void tracerModification(CfgTier t) {
+        TracePatrimoine.Trace trace = traces.maintenant();
+        t.setUserUpdate(trace.auteur());
+        t.setUserUpdateDateTime(trace.le());
     }
 
     private static FamilleTiers famille(String segment) {
@@ -210,15 +236,17 @@ public class TiersService {
                 .collect(Collectors.groupingBy(l -> (UUID) l[0], Collectors.mapping(l -> (String) l[1], Collectors.joining(", "))));
     }
 
-    private static LigneTiersDto ligne(CfgTier t, String contacts) {
+    private static LigneTiersDto ligne(CfgTier t, String contacts, boolean banqueEnListe) {
         return new LigneTiersDto(t.getId(), t.getCode(), t.getDescription(), t.getSocialReason(), contacts, t.getPhone(),
                 t.getFax(), t.getMobile(), t.getEMail(), t.getWebSite(), t.getAddress(), t.getNotes(), t.getIsExtern(),
                 t.getIce(), libelle(t.getCfgTierKind(), CfgTierKind::getDescription),
                 libelle(t.getAdmCountry(), AdmCountry::getDescription),
-                libelle(t.getAdmCountryResidence(), AdmCountry::getDescription), t.getBankAgency(), t.getRib(), t.getIban(),
-                t.getFiscalCode(), t.getFiscalRegistry(), t.getFiscalDouane(), t.getCodeCountable(),
+                libelle(t.getAdmCountryResidence(), AdmCountry::getDescription), t.getBankAgency(),
+                banqueEnListe ? t.getRib() : null, banqueEnListe ? t.getIban() : null, t.getFiscalCode(),
+                t.getFiscalRegistry(), t.getFiscalDouane(), t.getCodeCountable(),
                 t.getCodeCountableCollective(), libelle(t.getAdmLiability(), CodeLibelleOmran::getDescription),
-                t.getPhone1(), t.getPhone2());
+                t.getPhone1(), t.getPhone2(), libelle(t.getAdmNationality(), AdmNationality::getDescription),
+                libelle(t.getAdmProfession(), AdmProfession::getDescription));
     }
 
     private static FicheTiersDto fiche(CfgTier t) {

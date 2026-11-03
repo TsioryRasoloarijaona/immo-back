@@ -11,7 +11,7 @@ import java.util.UUID;
 /** Champs saisis d'une fiche ; un champ de la famille omis d'un PUT est vidé. Les {@code @Size} suivent les colonnes de {@code CfgTier}. */
 @Schema(description = "Fiche de tiers à écrire ; type et auteur ne se saisissent pas.")
 public record EcritureTiersRequest(
-        @Schema(description = "Vrai = personne morale, faux = physique. Requis, sauf banques et organismes (ignoré).")
+        @Schema(description = "Vrai = morale, faux = physique. Requis, faux pour personnels ; banques et organismes : ignoré.")
         Boolean personneMorale,
         @Schema(description = "Requise pour une personne morale ; ignorée pour une personne physique.")
         @Size(max = 255) String raisonSociale,
@@ -22,8 +22,9 @@ public record EcritureTiersRequest(
         @Schema(description = "Titre (AdmTierTitle), requis pour une personne physique.") UUID titreId,
         @Schema(description = "Sexe (AdmSexType), requis pour une personne physique.") UUID sexeId,
         @Schema(description = "Nature (CfgTierKind) du type de la famille.") UUID natureId,
-        @Schema(description = "Forme sociale (AdmSocialForm). Requise, sauf banques et organismes (ignorée).") UUID formeSocialeId,
-        @Schema(description = "Devise (StlCurrency). Requise, sauf banques et organismes (ignorée).") UUID deviseId,
+        @Schema(description = "Forme sociale (AdmSocialForm). Requise ; personnels : facultative ; banques, organismes : ignorée.")
+        UUID formeSocialeId,
+        @Schema(description = "Devise (StlCurrency). Requise ; personnels : facultative ; banques, organismes : ignorée.") UUID deviseId,
         @Schema(description = "Assujettissement (AdmLiability).") UUID assujettissementId,
         @Schema(description = "Pays (AdmCountry). Requis pour banques et organismes.") UUID paysId,
         @Schema(description = "Pays de résidence (AdmCountry). Requis ; banques et organismes : ignoré, égal à paysId.") UUID paysResidenceId,

@@ -11,6 +11,9 @@ création avec un code du compteur, trouvé une fois = mise à jour (cellule vid
 `banques` et `organismes` : même import, colonne `Code` obligatoire : vide = erreur de ligne, inconnu dans le type = création
 avec ce code, deux fois dans le fichier = erreur de ligne.
 
+`personnels` : même import que `contacts`, personnes physiques seules : `Prénom` et `Nom` requis, ligne sans eux = erreur de
+ligne. Forme sociale et devise facultatives. Aucune colonne de paie : un tel en-tête est ignoré comme tout en-tête inconnu.
+
 ## modele
 
 En-têtes OMRAN exacts, une ligne par objet existant, puis une feuille d'aide par référentiel (Code, Libellé).
