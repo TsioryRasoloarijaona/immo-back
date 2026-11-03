@@ -38,13 +38,19 @@ enum Referentiel {
     TITRE("Titres", "select x.id, x.code, x.description from AdmTierTitle x order by x.code"),
     SEXE("Sexes", "select x.id, x.code, x.description from AdmSexType x order by x.code"),
     FORME_SOCIALE("Formes sociales", "select x.id, x.code, x.description from AdmSocialForm x order by x.code"),
-    NATURE_FOURNISSEUR("Natures", "select x.id, x.code, x.description from CfgTierKind x "
-            + "where x.cfgTierType.code = 'FOU' order by x.code"),
-    NATURE_CONTACT("Natures", "select x.id, x.code, x.description from CfgTierKind x "
-            + "where x.cfgTierType.code = 'CNT' order by x.code");
+    NATURE_FOURNISSEUR(Tri.NATURES, Tri.natures("FOU")),
+    NATURE_CONTACT(Tri.NATURES, Tri.natures("CNT")),
+    NATURE_BANQUE(Tri.NATURES, Tri.natures("BAN")),
+    NATURE_ORGANISME(Tri.NATURES, Tri.natures("ORG"));
 
     private static final class Tri {
         static final String PAR_CODE = "order by x.code";
+        static final String NATURES = "Natures";
+
+        static String natures(String typeTiers) {
+            return "select x.id, x.code, x.description from CfgTierKind x where x.cfgTierType.code = '%s' %s"
+                    .formatted(typeTiers, PAR_CODE);
+        }
     }
 
     private static final String TIERS_DU_TYPE = "select x.id, x.code, x.description from CfgTier x "

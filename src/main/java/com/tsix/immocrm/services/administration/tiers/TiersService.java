@@ -62,8 +62,6 @@ public class TiersService {
             "notes", SELECT_DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code",
             "journaux", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from ActJournal x order by x.code");
-    private static final List<String> COLONNES_CHERCHEES =
-            List.of("code", "description", "socialReason", "mobile", "phone", "eMail", "ice");
     private static final List<String> LIBELLES_LISTE =
             List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability");
 
@@ -71,12 +69,12 @@ public class TiersService {
     private final CfgTierRepository tiers;
     private final CfgTierTypeRepository types;
     private final CfgTierKindRepository natures;
-    private final EcritureTiers ecriture;
+    private final SaisieTiers ecriture;
     private final GenerateurCodeSequence codes;
     private final TracePatrimoine traces;
 
     public TiersService(EntityManager em, CfgTierRepository tiers, CfgTierTypeRepository types,
-                        CfgTierKindRepository natures, EcritureTiers ecriture, GenerateurCodeSequence codes,
+                        CfgTierKindRepository natures, SaisieTiers ecriture, GenerateurCodeSequence codes,
                         TracePatrimoine traces) {
         this.em = em;
         this.tiers = tiers;
@@ -124,7 +122,9 @@ public class TiersService {
                 .orElseThrow(() -> new ConfigurationManquanteException("Type de tiers absent : " + f.codeType()));
         TracePatrimoine.Trace trace = traces.maintenant();
         t.setId(UUID.randomUUID());
-        t.setCode(codes.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
+        if (!f.fiche().codeSaisi()) {
+            t.setCode(codes.suivant(GenerateurCodeSequence.SEQUENCE_TIER, 2, 5));
+        }
         t.setCfgTierType(type);
         t.setIsProspect(false);
         t.setIsOldCustomer(false);
@@ -184,7 +184,7 @@ public class TiersService {
             List<Predicate> conditions = new ArrayList<>();
             conditions.add(cb.equal(racine.get("cfgTierType").get("code"), famille.codeType()));
             if (StringUtils.hasText(filtres.recherche())) {
-                conditions.add(recherche(racine, cb, filtres.recherche()));
+                conditions.add(recherche(racine, cb, famille, filtres.recherche()));
             }
             if (famille.filtreNature() && filtres.natureId() != null) {
                 conditions.add(cb.equal(racine.get("cfgTierKind").get("id"), filtres.natureId()));
@@ -193,9 +193,10 @@ public class TiersService {
         };
     }
 
-    private static Predicate recherche(Root<CfgTier> racine, CriteriaBuilder cb, String recherche) {
+    private static Predicate recherche(Root<CfgTier> racine, CriteriaBuilder cb, FamilleTiers famille, String recherche) {
         String motif = Objects.requireNonNull(HistoriqueService.motif(recherche.strip())).toLowerCase(Locale.ROOT);
-        return cb.or(COLONNES_CHERCHEES.stream().map(c -> cb.like(cb.lower(racine.get(c)), motif)).toArray(Predicate[]::new));
+        return cb.or(famille.fiche().colonnesCherchees().stream().map(c -> cb.like(cb.lower(racine.get(c)), motif))
+                .toArray(Predicate[]::new));
     }
 
     private Map<UUID, String> contacts(List<CfgTier> lignes) {

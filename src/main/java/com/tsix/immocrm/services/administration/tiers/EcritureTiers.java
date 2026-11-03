@@ -61,8 +61,12 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setIDNumber(texte(c.numeroPiece()));
     }
 
-    private void controler(EcritureTiersRequest c) {
+    void controlerTailles(EcritureTiersRequest c) {
         validator.validate(c).stream().findFirst().ifPresent(EcritureTiers::refuser);
+    }
+
+    private void controler(EcritureTiersRequest c) {
+        controlerTailles(c);
         if (c.personneMorale() == null) {
             throw new InvalidRequestException("personneMorale : obligatoire.");
         }
@@ -87,13 +91,14 @@ record EcritureTiers(EntityManager em, Validator validator) {
         throw new InvalidRequestException(v.getPropertyPath() + " : " + v.getMessage());
     }
 
-    private static void exigerTexte(String valeur, String champ, String contexte) {
+    static String exigerTexte(String valeur, String champ, String contexte) {
         if (!StringUtils.hasText(valeur)) {
             throw new InvalidRequestException("%s : obligatoire %s.".formatted(champ, contexte));
         }
+        return valeur.strip();
     }
 
-    private static void exiger(UUID valeur, String champ) {
+    static void exiger(UUID valeur, String champ) {
         if (valeur == null) {
             throw new InvalidRequestException(champ + " : obligatoire.");
         }
@@ -116,7 +121,7 @@ record EcritureTiers(EntityManager em, Validator validator) {
         return libelle;
     }
 
-    private CfgTierKind nature(UUID id, FamilleTiers famille) {
+    CfgTierKind nature(UUID id, FamilleTiers famille) {
         CfgTierKind nature = ref(CfgTierKind.class, id, "natureId");
         if (nature != null && !estDuType(nature.getCfgTierType(), famille.codeType())) {
             throw inconnue("natureId");
@@ -149,11 +154,15 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setAdmNationality(ref(AdmNationality.class, c.nationaliteId(), "nationaliteId"));
         t.setAdmProfession(ref(AdmProfession.class, c.professionId(), "professionId"));
         t.setAdmIdentityDocumentType(ref(AdmIdentityDocumentType.class, c.typePieceId(), "typePieceId"));
+        poserVille(t, c);
+    }
+
+    void poserVille(CfgTier t, EcritureTiersRequest c) {
         ref(AdmCity.class, c.villeId(), "villeId");
         t.setAdmCityId(c.villeId());
     }
 
-    private <T> T ref(Class<T> classe, UUID id, String champ) {
+    <T> T ref(Class<T> classe, UUID id, String champ) {
         if (id == null) {
             return null;
         }
@@ -168,7 +177,7 @@ record EcritureTiers(EntityManager em, Validator validator) {
         return new InvalidRequestException(champ + " : référence inconnue.");
     }
 
-    private static void poserCoordonnees(CfgTier t, EcritureTiersRequest c) {
+    static void poserCoordonnees(CfgTier t, EcritureTiersRequest c) {
         t.setCity(texte(c.ville()));
         t.setZipCode(texte(c.codePostal()));
         t.setAddress(texte(c.adresse()));
@@ -204,7 +213,7 @@ record EcritureTiers(EntityManager em, Validator validator) {
         t.setPaymentDelay(c.delaiPaiement());
     }
 
-    private static String texte(String valeur) {
+    static String texte(String valeur) {
         return StringUtils.hasText(valeur) ? valeur.strip() : null;
     }
 
