@@ -101,7 +101,7 @@ abstract class ImportGenerique<E> implements ImportParType<ImportGenerique.Conte
 
     /** Restreint la recherche du pivot, par défaut à toute la table. */
     protected Predicate portee(CriteriaBuilder cb, Root<E> racine) {
-        return cb.conjunction();
+        return cb.isNotNull(racine.get("id"));
     }
 
     protected <D> D dto(Map<String, Object> champs, Class<D> classe) {

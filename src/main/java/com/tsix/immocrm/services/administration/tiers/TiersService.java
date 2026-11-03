@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -52,13 +53,13 @@ import java.util.stream.Stream;
 @Service
 public class TiersService {
 
-    private static final String DTO = "new com.tsix.immocrm.dto.referentiel.ReferentielItemDto";
+    private static final String SELECT_DTO = "select new com.tsix.immocrm.dto.referentiel.ReferentielItemDto";
     private static final Map<String, String> REFERENTIELS = Map.of(
-            "formes-sociales", "select " + DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
+            "formes-sociales", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from AdmSocialForm x order by x.code",
-            "assujettissements", "select " + DTO + "(x.id, x.code, x.description, x.sorting) "
+            "assujettissements", SELECT_DTO + "(x.id, x.code, x.description, x.sorting) "
                     + "from AdmLiability x order by x.sorting, x.code",
-            "notes", "select " + DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code");
+            "notes", SELECT_DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code");
     private static final List<String> COLONNES_CHERCHEES =
             List.of("code", "description", "socialReason", "mobile", "phone", "eMail", "ice");
     private static final List<String> LIBELLES_LISTE =
@@ -191,7 +192,7 @@ public class TiersService {
     }
 
     private static Predicate recherche(Root<CfgTier> racine, CriteriaBuilder cb, String recherche) {
-        String motif = HistoriqueService.motif(recherche.strip()).toLowerCase(Locale.ROOT);
+        String motif = Objects.requireNonNull(HistoriqueService.motif(recherche.strip())).toLowerCase(Locale.ROOT);
         return cb.or(COLONNES_CHERCHEES.stream().map(c -> cb.like(cb.lower(racine.get(c)), motif)).toArray(Predicate[]::new));
     }
 

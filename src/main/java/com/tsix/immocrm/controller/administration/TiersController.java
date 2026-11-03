@@ -47,7 +47,7 @@ public class TiersController {
 
     private static final String LISTE = "/{famille}";
     private static final String FICHE = LISTE + "/{id}";
-    private static final String LIENS = "/{id}/liens";
+    private static final String CHEMIN_LIENS = "/{id}/liens";
     private static final String ID = "PKey du tiers.";
     private static final String FAMILLE_INCONNUE = "Famille inconnue.";
     private static final String INTROUVABLE = "Famille inconnue, ou tiers inconnu ou d'un autre type.";
@@ -149,7 +149,7 @@ public class TiersController {
         service.supprimer(famille, id);
     }
 
-    @GetMapping(LIENS)
+    @GetMapping(CHEMIN_LIENS)
     @Operation(summary = "Contacts liés à un tiers, de toute famille")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Liens, du plus récent au plus ancien."),
@@ -159,7 +159,7 @@ public class TiersController {
         return liens.lister(id);
     }
 
-    @PostMapping(LIENS)
+    @PostMapping(CHEMIN_LIENS)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Lie un contact à un tiers")
     @ApiResponses({
@@ -172,7 +172,7 @@ public class TiersController {
         return liens.creer(id, corps);
     }
 
-    @DeleteMapping(LIENS + "/{lienId}")
+    @DeleteMapping(CHEMIN_LIENS +"/{lienId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Retire un lien, le contact reste")
     @ApiResponses({

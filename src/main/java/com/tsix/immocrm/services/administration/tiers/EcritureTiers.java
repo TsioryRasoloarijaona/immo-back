@@ -64,7 +64,7 @@ record EcritureTiers(EntityManager em, Validator validator) {
         if (c.personneMorale() == null) {
             throw new InvalidRequestException("personneMorale : obligatoire.");
         }
-        if (c.personneMorale()) {
+        if (Boolean.TRUE.equals(c.personneMorale())) {
             exigerTexte(c.raisonSociale(), "raisonSociale", "pour une personne morale");
         } else {
             exigerTexte(c.prenom(), "prenom", "pour une personne physique");
@@ -104,7 +104,7 @@ record EcritureTiers(EntityManager em, Validator validator) {
     }
 
     private static String libelle(EcritureTiersRequest c) {
-        if (c.personneMorale()) {
+        if (Boolean.TRUE.equals(c.personneMorale())) {
             return texte(c.raisonSociale());
         }
         String libelle = c.prenom().strip() + " " + c.nom().strip();
