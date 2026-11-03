@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.administration;
 
+import com.tsix.immocrm.domain.TypeExport;
 import com.tsix.immocrm.dto.administration.tiers.EcritureTiersRequest;
 import com.tsix.immocrm.dto.administration.tiers.FicheTiersDto;
 import com.tsix.immocrm.dto.administration.tiers.FiltresTiers;
@@ -11,6 +12,9 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.services.administration.tiers.LiensTiersService;
 import com.tsix.immocrm.services.administration.tiers.TiersService;
+import com.tsix.immocrm.web.export.ColonneFixe;
+import com.tsix.immocrm.web.export.DemandeExport;
+import com.tsix.immocrm.web.export.ExportListe;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -22,6 +26,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +42,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
+
+import static com.tsix.immocrm.web.export.ColonneFixe.cachee;
+import static com.tsix.immocrm.web.export.ColonneFixe.texte;
 
 @Tag(name = "Tiers (administration)")
 @ApiResponse(responseCode = "403", description = "L'appelant n'a pas le rôle Administrateur.", content = @Content)
@@ -55,12 +63,29 @@ public class TiersController {
     private static final String INVALIDE = "Champ requis manquant ou trop long, ou identifiant inconnu ; detail nomme le champ.";
     private static final String CODE_PRIS = "Banques et organismes : code déjà pris dans le type, sans casse.";
 
+    /** Champs de {@link LigneTiersDto}, ceux de la grille par défaut en tête. */
+    private static final List<ColonneFixe> COLONNES_EXPORT = List.of(texte("code", "Code"),
+            texte("description", "Description"), texte("contacts", "Contacts"), texte("telephone", "Téléphone"),
+            texte("mobile", "Mobile"), texte("email", "E-mail"), texte("adresse", "Adresse"),
+            cachee("raisonSociale", "Raison sociale"), cachee("fax", "Fax"), cachee("siteWeb", "Site web"),
+            cachee("notes", "Notes"), cachee("estPrestataire", "Est un prestataire", TypeExport.BOOLEEN),
+            cachee("ice", "ICE"), cachee("nature", "Nature"), cachee("pays", "Pays"),
+            cachee("paysResidence", "Pays de résidence"), cachee("agence", "Agence"), cachee("rib", "RIB"),
+            cachee("iban", "IBAN"), cachee("matriculeFiscal", "Matricule fiscal"),
+            cachee("registreCommerce", "Registre de commerce"), cachee("douane", "Douane"),
+            cachee("codeComptable", "Code comptable"), cachee("codeComptableCollectif", "Code comptable collectif"),
+            cachee("assujettissement", "Assujettissement"), cachee("telephone1", "Téléphone 1"),
+            cachee("telephone2", "Téléphone 2"), cachee("nationalite", "Nationalité"),
+            cachee("profession", "Profession"));
+
     private final TiersService service;
     private final LiensTiersService liens;
+    private final ExportListe export;
 
-    public TiersController(TiersService service, LiensTiersService liens) {
+    public TiersController(TiersService service, LiensTiersService liens, ExportListe export) {
         this.service = service;
         this.liens = liens;
+        this.export = export;
     }
 
     @GetMapping(LISTE)
@@ -80,6 +105,18 @@ public class TiersController {
             @RequestParam(defaultValue = "50") @Min(1) @Max(200)
             @Parameter(description = "Lignes par page, de 1 à 200.") int size) {
         return service.lister(famille, filtres, page, size);
+    }
+
+    @GetMapping(LISTE + "/export")
+    @Operation(summary = "Imprimer (pdf) ou exporter (xlsx) la liste filtrée, par code", description = ExportListe.DESCRIPTION)
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", description = ExportListe.REFUS, content = @Content),
+            @ApiResponse(responseCode = "404", description = FAMILLE_INCONNUE, content = @Content)
+    })
+    public ResponseEntity<byte[]> exporter(@PathVariable String famille, @ParameterObject @ModelAttribute DemandeExport demande,
+                                           @ParameterObject @ModelAttribute FiltresTiers filtres) {
+        return export.reponse(demande, "tiers", "Tiers", ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT),
+                () -> service.lignesExport(famille, filtres));
     }
 
     @GetMapping(LISTE + "/natures")
