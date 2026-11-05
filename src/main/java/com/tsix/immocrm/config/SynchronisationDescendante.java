@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Rapatrie dans la copie ce qu'OMRAN écrit sur la source, par le Change Tracking (FEATURE-source-de-verite-115.md,
@@ -169,22 +171,33 @@ public class SynchronisationDescendante {
         }
 
         String cle = RemonteeLecture.CLES_PRIMAIRES.getOrDefault(table, "PKey");
-        int fusionnees = 0;
-        for (Map<String, Object> changement : surSource.queryForList(
-                "SELECT ct.[" + cle + "] AS cle FROM CHANGETABLE(CHANGES dbo."
-                        + "[" + table + "], ?) AS ct", filigrane)) {
-            // Le pilote mssql-jdbc livre un uniqueidentifier en String, pas en UUID.
-            Object brut = changement.get("cle");
-            LigneEcrite ligne = new LigneEcrite(table,
-                    brut instanceof UUID u ? u : UUID.fromString(brut.toString()));
-            // L'opération I/U/D n'est pas consultée : la relecture décide (une insertion resupprimée depuis se supprime).
-            if (remontee.fusionner(ligne)) {
-                fusionnees++;
+        List<LigneEcrite> changements = surSource.queryForList(
+                        "SELECT ct.[" + cle + "] AS cle FROM CHANGETABLE(CHANGES dbo."
+                                + "[" + table + "], ?) AS ct", filigrane).stream()
+                // Le pilote mssql-jdbc livre un uniqueidentifier en String, pas en UUID.
+                .map(c -> c.get("cle"))
+                .map(brut -> new LigneEcrite(table, brut instanceof UUID u ? u : UUID.fromString(brut.toString())))
+                .toList();
+        return fusionnerChangements(changements, remontee::fusionner, suppressions);
+    }
+
+    /**
+     * Rejoue les refusées tant qu'un tour progresse : une ligne qui cite une ligne de la même table plus loin dans le
+     * delta (commande → sa facture) bloquait sinon la table à chaque cycle (FIX-synchro-delta-meme-table.md).
+     * L'opération I/U/D n'est pas consultée : la relecture décide (une insertion resupprimée depuis se supprime).
+     */
+    static int fusionnerChangements(List<LigneEcrite> changements, Predicate<LigneEcrite> fusion,
+                                    List<LigneEcrite> suppressions) {
+        int[] fusionnees = {0};
+        Consumer<LigneEcrite> uneLigne = ligne -> {
+            if (fusion.test(ligne)) {
+                fusionnees[0]++;
             } else {
                 suppressions.add(ligne);
             }
-        }
-        return fusionnees;
+        };
+        RemonteeLecture.fusionnerJusquaStabilite(changements, 1, lot -> uneLigne.accept(lot.getFirst()), uneLigne);
+        return fusionnees[0];
     }
 
     /** Baseline si aucun filigrane ou s'il a dépassé la rétention du Change Tracking. */
