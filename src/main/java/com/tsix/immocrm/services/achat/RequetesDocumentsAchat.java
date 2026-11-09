@@ -74,7 +74,8 @@ class RequetesDocumentsAchat {
             + "WHERE v.BuyDocumentId = :id ORDER BY c.Code";
 
     private static final String HISTORIQUE = "SELECT h.DocDate, st.Code, st.Description, "
-            + "COALESCE(NULLIF(u.Description, ''), u.Code) AS Utilisateur, h.Notes FROM BuyDocumentStatusHistory h "
+            // Piège : Description et Code n'ont pas la même collation en CI.
+            + "COALESCE(NULLIF(u.Description, '') COLLATE DATABASE_DEFAULT, u.Code COLLATE DATABASE_DEFAULT) AS Utilisateur, h.Notes FROM BuyDocumentStatusHistory h "
             + "LEFT JOIN BuyDocumentStatus st ON st.PKey = h.BuyDocumentStatusId "
             + "LEFT JOIN AdmUser u ON u.PKey = h.AdmUserId WHERE h.BuyDocumentId = :id ORDER BY h.DocDate";
 
