@@ -16,8 +16,9 @@ public record ProjetConfigRequest(
         @Schema(description = "Société (CfgCompany.PKey), obligatoire.", requiredMode = Schema.RequiredMode.REQUIRED)
         UUID societeId,
         @Schema(description = "Gestionnaire (CfgTier.PKey d'un membre du personnel), facultatif.") UUID gestionnaireId,
-        @Schema(description = "Projet ventilé ; absent = faux.") Boolean ventile,
-        @Schema(description = "Taux de ventilation par défaut, positif ou nul ; absent = 0.") BigDecimal tauxVentilationDefaut,
-        @Schema(description = "Parties communes ; absent = faux.") Boolean partiesCommunes
+        @Schema(description = "Projet ventilé ; absent = faux à la création, inchangé en modification.") Boolean ventile,
+        @Schema(description = "Taux de ventilation par défaut, positif ou nul ; absent = 0 à la création, inchangé en modification.")
+        BigDecimal tauxVentilationDefaut,
+        @Schema(description = "Parties communes ; absent = faux à la création, inchangé en modification.") Boolean partiesCommunes
 ) {
 }

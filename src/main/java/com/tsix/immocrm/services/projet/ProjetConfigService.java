@@ -22,6 +22,7 @@ import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.obligatoire;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.ou;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.positif;
+import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.sansBlancsAuxBords;
 import static com.tsix.immocrm.services.patrimoine.SaisiePatrimoine.texte;
 
 /** Configuration Projet (FEATURE-projet-config.md) : écran d'administration, tous les projets hors périmètre. */
@@ -55,13 +57,13 @@ public class ProjetConfigService {
                 (SELECT COUNT(*) FROM BuyDocument d WHERE d.PrjProjectId = p.PKey)
             FROM PrjProject p""";
     private static final String COMPTEURS_DU_PROJET = COMPTEURS + " WHERE p.PKey = :id";
-    // Genres de lot à statuts : PrjMarket (Entrepreneurs), PrjMarketMultiSupplier, PrjMarketStudies (§8.2).
+    // Les 3 genres retenus (réponse 3) : Administrative et Dealers ont aussi des statuts en prod, sans aucun lot.
     private static final String STATUTS_LOT = """
             SELECT CONVERT(varchar(36), s.PKey), s.Code, s.Description, s.Sorting, s.ColorName,
                 CONVERT(varchar(36), e.PKey), e.Code, e.Description, t.Description
             FROM StrStatus s JOIN StrEntity e ON e.PKey = s.StrConfigEntityId
                 LEFT JOIN StrStatusType t ON t.PKey = s.StrStatusTypeId
-            WHERE e.Code LIKE 'PrjMarket%'
+            WHERE e.Code IN ('PrjMarket', 'PrjMarketMultiSupplier', 'PrjMarketStudies')
             ORDER BY e.Code, s.Sorting""";
 
     /** Une ligne qui référence le projet bloque sa suppression ; habilitations exceptées (§8.4, réponse 4). */
@@ -173,7 +175,7 @@ public class ProjetConfigService {
 
     public ReferentielsProjetConfigDto referentiels() {
         return new ReferentielsProjetConfigDto(
-                societes.findActivesOrderByDescriptionAsc().stream()
+                societes.findAll(Sort.by("code")).stream()
                         .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList(),
                 statutsDuProjet().stream()
                         .map(s -> new ReferentielItemDto(s.getId(), s.getCode(), s.getDescription(), s.getSorting())).toList(),
@@ -191,8 +193,8 @@ public class ProjetConfigService {
     /** PUT : remplacement complet, code, libellé et société obligatoires ; booléens et taux absents = inchangés. */
     private void appliquer(PrjProject p, ProjetConfigRequest s) {
         // Avant tout setter : les requêtes du contrôle flushent l'entité.
-        p.setCode(codeLibre(obligatoire(s.code(), null, "Le code"), p.getId()));
-        p.setDescription(obligatoire(s.description(), null, "La description"));
+        p.setCode(codeLibre(obligatoire(sansBlancsAuxBords(s.code()), null, "Le code"), p.getId()));
+        p.setDescription(obligatoire(sansBlancsAuxBords(s.description()), null, "La description"));
         p.setDescriptionLong(texte(s.descriptionLongue(), null, 500, "La description longue"));
         p.setAddress(texte(s.adresse(), null, 500, "L'adresse"));
         p.setNotes(texte(s.notes(), null, 1000, "Les notes"));
