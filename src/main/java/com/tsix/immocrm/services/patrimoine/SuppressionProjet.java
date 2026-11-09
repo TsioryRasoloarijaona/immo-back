@@ -75,7 +75,14 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
     }
 
     void ajouterSiPresent(List<String> bloquants, String jpql, UUID id, String libelle) {
-        long n = compter(jpql, id);
+        ajouterSiPresent(bloquants, jpql, false, id, libelle);
+    }
+
+    /** {@code natif} : {@code requete} est du SQL (table sans entité), {@code :id} lié. */
+    public void ajouterSiPresent(List<String> bloquants, String requete, boolean natif, UUID id, String libelle) {
+        long n = natif
+                ? ((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).longValue()
+                : compter(requete, id);
         if (n > 0) {
             bloquants.add(n + " " + libelle);
         }
@@ -101,12 +108,12 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         return em.createQuery(jpql, Long.class).setParameter(ID, id).getSingleResult();
     }
 
-    void supprimerTout(String jpql, UUID id) {
+    public void supprimerTout(String jpql, UUID id) {
         em.createQuery(jpql, Object.class).setParameter(ID, id).getResultList().forEach(em::remove);
     }
 
     /** Toute autre clé étrangère NO_ACTION (SavClaim, StlItemPricing…) bloque en base : 409 nommant la contrainte. */
-    void flushOuConflit(String objet) {
+    public void flushOuConflit(String objet) {
         try {
             em.flush();
         } catch (ConstraintViolationException e) {
