@@ -172,7 +172,8 @@ public class ReferentielAdminService {
             throw new ConflictException("Suppression impossible : le code %s est protégé.".formatted(bw.getPropertyValue(CODE)));
         }
         List<String> presents = new ArrayList<>();
-        r.bloquants().forEach(b -> suppression.ajouterSiPresent(presents, b.jpql(), id, "ligne(s) de " + b.table()));
+        r.bloquants().forEach(b -> suppression.ajouterSiPresent(presents, b.jpql(), b.natif(), id,
+                "ligne(s) de " + b.table()));
         if (!presents.isEmpty()) {
             throw new ConflictException("Suppression impossible : la ligne porte encore " + String.join(", ", presents) + ".");
         }

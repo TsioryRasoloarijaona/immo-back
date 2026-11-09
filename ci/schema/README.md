@@ -117,6 +117,8 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/161_actions_view.sql"
 ```
 
+`165_projet-config.sql` : en local, seulement ses `CREATE TABLE` (une commande `-Q` par table), sans ses clés étrangères.
+
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
 d'un terrain portant un frais facturé) sont codés explicitement.
 
