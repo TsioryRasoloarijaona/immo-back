@@ -1,0 +1,51 @@
+package com.tsix.immocrm.domain.projet;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+/** Montants d'un lot : marché / estimation (bordereau ou forfait), avancement, taux. Voir FEATURE-projet-chantier-lecture.md §5.2. */
+public final class MontantsLot {
+
+    private static final BigDecimal CENT = BigDecimal.valueOf(100);
+
+    private MontantsLot() {
+    }
+
+    /** HT / TVA / TTC arrondis à 2 décimales ; {@code depuisBordereau} = faux si repli sur le forfait. */
+    public record Trio(BigDecimal ht, BigDecimal tva, BigDecimal ttc, boolean depuisBordereau) {
+    }
+
+    /** Σ du bordereau si le lot a des lignes ({@code bordereau} non null), sinon le forfait saisi. */
+    public static Trio choisir(Trio bordereau, BigDecimal forfaitHT, BigDecimal forfaitTVA, BigDecimal forfaitTTC) {
+        if (bordereau != null) {
+            return new Trio(arrondi(bordereau.ht()), arrondi(bordereau.tva()), arrondi(bordereau.ttc()), true);
+        }
+        return new Trio(arrondi(forfaitHT), arrondi(forfaitTVA), arrondi(forfaitTTC), false);
+    }
+
+    /** Cumul TTC / marché TTC × 100, 2 décimales, non plafonné ; null si le marché est nul. */
+    public static BigDecimal avancementPct(BigDecimal cumulTTC, BigDecimal marcheTTC) {
+        if (marcheTTC == null || marcheTTC.signum() == 0) {
+            return null;
+        }
+        return z(cumulTTC).multiply(CENT).divide(marcheTTC, 2, RoundingMode.HALF_UP);
+    }
+
+    /** Montant × taux (fraction 0–1), 2 décimales. */
+    public static BigDecimal applique(BigDecimal montant, BigDecimal ratio) {
+        return arrondi(z(montant).multiply(z(ratio)));
+    }
+
+    /** Fraction 0–1 de la base → pourcentage 0–100 ; null reste null. */
+    public static BigDecimal pourcentage(BigDecimal ratio) {
+        return ratio == null ? null : ratio.multiply(CENT).stripTrailingZeros();
+    }
+
+    public static BigDecimal arrondi(BigDecimal v) {
+        return z(v).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal z(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
+    }
+}
