@@ -108,12 +108,12 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         return em.createQuery(jpql, Long.class).setParameter(ID, id).getSingleResult();
     }
 
-    void supprimerTout(String jpql, UUID id) {
+    public void supprimerTout(String jpql, UUID id) {
         em.createQuery(jpql, Object.class).setParameter(ID, id).getResultList().forEach(em::remove);
     }
 
     /** Toute autre clé étrangère NO_ACTION (SavClaim, StlItemPricing…) bloque en base : 409 nommant la contrainte. */
-    void flushOuConflit(String objet) {
+    public void flushOuConflit(String objet) {
         try {
             em.flush();
         } catch (ConstraintViolationException e) {
