@@ -75,7 +75,14 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
     }
 
     void ajouterSiPresent(List<String> bloquants, String jpql, UUID id, String libelle) {
-        long n = compter(jpql, id);
+        ajouterSiPresent(bloquants, jpql, false, id, libelle);
+    }
+
+    /** {@code natif} : {@code requete} est du SQL (table sans entité), {@code :id} lié. */
+    public void ajouterSiPresent(List<String> bloquants, String requete, boolean natif, UUID id, String libelle) {
+        long n = natif
+                ? ((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).longValue()
+                : compter(requete, id);
         if (n > 0) {
             bloquants.add(n + " " + libelle);
         }

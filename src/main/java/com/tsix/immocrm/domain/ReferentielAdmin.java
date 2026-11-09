@@ -23,6 +23,7 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheStanding;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStatus;
 import com.tsix.immocrm.entities.lnd.LndLevel;
 import com.tsix.immocrm.entities.lnd.LndVocation;
+import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkContenance;
 import com.tsix.immocrm.entities.stk.StkCostCategory;
@@ -254,18 +255,41 @@ public enum ReferentielAdmin {
             return List.of(new Bloquant("SELECT COUNT(c) FROM CfgTierContact c WHERE c.cfgRelationType.id = :id",
                     "CfgTierContact (contacts de tiers)"));
         }
+    },
+    TYPES_LOT("types-lot", "Types de lot", Famille.PROJET, PrjMarketType.class,
+            new Audit("Yes.Prj.Config.MarketType", "Type lot"), Colonnes.CODE_LIBELLE, Colonnes.CLE_CODE) {
+        /** Tables sans entité Arpent, et sans FK dans yesRemsTest : comptées en SQL. */
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(
+                    new Bloquant("SELECT COUNT(*) FROM PrjMarket WHERE PrjMarketTypeId = :id", "PrjMarket (lots)", true),
+                    new Bloquant("SELECT COUNT(*) FROM BuyDocument WHERE PrjMarketTypeId = :id",
+                            "BuyDocument (pièces d'achat)", true),
+                    new Bloquant("SELECT COUNT(*) FROM BuySelection WHERE PrjMarketTypeId = :id",
+                            "BuySelection (sélections d'achat)", true),
+                    new Bloquant("SELECT COUNT(*) FROM StkExpenseType WHERE PrjMarketTypeId = :id",
+                            "StkExpenseType (types de frais)", true),
+                    new Bloquant("SELECT COUNT(*) FROM BuyDocumentWorkFlowDocumentToAttach WHERE PrjMarketTypeId = :id",
+                            "BuyDocumentWorkFlowDocumentToAttach (pièces à joindre)", true));
+        }
     };
 
     public enum Famille {
-        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES, TIERS
+        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES, TIERS, PROJET
     }
 
     /** {@code ObjectType} et {@code ObjectTypeLabel} écrits dans {@code AdmWebHistorics}. */
     public record Audit(String type, String libelle) {
     }
 
-    /** Table enfant en CASCADE qu'on refuse de vider en silence (§8.1) : {@code jpql} compte les lignes de {@code :id}. */
-    public record Bloquant(String jpql, String table) {
+    /**
+     * Table enfant en CASCADE qu'on refuse de vider en silence (§8.1) : {@code jpql} compte les lignes de {@code :id} ;
+     * {@code natif} = SQL, pour une table sans entité.
+     */
+    public record Bloquant(String jpql, String table, boolean natif) {
+        public Bloquant(String jpql, String table) {
+            this(jpql, table, false);
+        }
     }
 
     /** Lignes enfants saisies dans le corps du parent ({@code nom}) et remplacées en entier à chaque écriture. */
