@@ -161,7 +161,7 @@ class DocumentsAchatVisibiliteTest {
         List<String> textes = AppelsAchat.textesExport(mockMvc,
                 get(AppelsAchat.EXPORT).param("format", "xlsx").with(connecte(admin, ADMINISTRATEUR)));
 
-        assertThat(textes).doesNotContain(codeA, codeB);
+        assertThat(textes).isNotEmpty().doesNotContain(codeA, codeB);
     }
 
     @Test
