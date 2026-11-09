@@ -66,6 +66,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -92,6 +93,9 @@ public class DossierController {
     /** Partagé avec {@link DossierEcheancierController} : même règle, même texte. */
     static final String SCHEMA_CREUSE =
             "Statut qui vérifie le schéma : l'écriture crée ou creuse l'écart au prix (message OMRAN, montant à ajuster).";
+
+    /** Droit OMRAN « Réceptionner les pièces de règlements » (CanAcceptDocument) : FEATURE-pointage-reglement-role.md. */
+    private static final String POINTAGE = "hasAnyRole('Administrateur', 'Commercial Chef', 'Direction Générale')";
 
     private final DossierService dossierService;
     private final EcheancierService echeancierService;
@@ -394,9 +398,11 @@ public class DossierController {
     // -- Règlements : statut et preuves de paiement --
 
     @PatchMapping("/{id}/reglements/{reglementId}/statut")
+    @PreAuthorize(POINTAGE)
     @Operation(summary = "Change le statut d'un règlement (pointage / annulation)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Statut modifié ; le règlement à jour est renvoyé."),
+            @ApiResponse(responseCode = "403", description = "Réservé à Administrateur, Commercial Chef, Direction Générale."),
             @ApiResponse(responseCode = "400", description = "`statut` absent ou inconnu ; pour `POINTED`, "
                     + "`dateReglement` ou `compteId` absent, compte inconnu ou d'une autre société."),
             @ApiResponse(responseCode = "404", description = "Dossier ou règlement introuvable, ou "

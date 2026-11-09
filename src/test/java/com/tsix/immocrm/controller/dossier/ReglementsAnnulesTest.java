@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -149,6 +150,7 @@ class ReglementsAnnulesTest {
                 .andExpect(jsonPath(RESTE_ECHEANCE).value(40000.0));
 
         mockMvc.perform(patch("/api/dossiers/{id}/reglements/{reglementId}/statut", folder.getId(), reglementId)
+                        .with(user("pointeur").roles("Commercial Chef"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"statut\":\"CANCELED\"}"))
                 .andExpect(status().isOk());
 
