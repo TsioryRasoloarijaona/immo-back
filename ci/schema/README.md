@@ -120,6 +120,9 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
 d'un terrain portant un frais facturé) sont codés explicitement.
 
+`164_projet_lots_decomptes.sql` (lignes de lot et de décompte du module Projet) ne sert qu'au CI : ses six tables existent déjà
+dans `yesRemsTest`, et ses FK n'y sont pas posées.
+
 ## Reproduire l'environnement du CI en local
 
 ```powershell
