@@ -94,7 +94,7 @@ public class LotsProjetService {
     public ReferentielsProjetDto referentiels() {
         Set<UUID> projets = perimetre.projetsVisibles();
         return new ReferentielsProjetDto(projets(projets), elements("select t from PrjMarketType t order by t.code"),
-                statutsLot(), elements("select s from BuyDocumentStatus s order by s.code"), categories(projets));
+                statutsLot(), statutsFacture(), categories(projets));
     }
 
     public Page<LotListItemDto> lots(FiltresLots filtres, Pageable pageable) {
@@ -226,6 +226,16 @@ public class LotsProjetService {
     private List<ElementReferentielProjetDto> elements(String jpql) {
         return em.createQuery(jpql, CodeLibelleOmran.class).getResultList().stream()
                 .map(e -> new ElementReferentielProjetDto(e.getId(), e.getCode(), e.getDescription(), null))
+                .toList();
+    }
+
+    // Sorting (ordre du circuit) n'est pas mappé sur l'entité BuyDocumentStatus, partagée avec le module Achat.
+    private List<ElementReferentielProjetDto> statutsFacture() {
+        List<?> lignes = em.createNativeQuery("SELECT PKey, Code, Description, Sorting FROM BuyDocumentStatus"
+                + " ORDER BY Sorting ASC, Code ASC").getResultList();
+        return lignes.stream().map(Object[].class::cast)
+                .map(r -> new ElementReferentielProjetDto(UUID.fromString(String.valueOf(r[0])), (String) r[1], (String) r[2],
+                        r[3] instanceof Number n ? n.intValue() : null))
                 .toList();
     }
 

@@ -58,6 +58,7 @@ public class LotsProjetController {
 
     @GetMapping("/lots/{id}")
     @Operation(summary = "Fiche d'un lot")
+    @ApiResponse(responseCode = "200", description = "Fiche du lot.")
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public LotDetailDto lot(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.lot(id);
@@ -65,6 +66,7 @@ public class LotsProjetController {
 
     @GetMapping("/lots/{id}/bordereau")
     @Operation(summary = "Bordereau définitif d'un lot")
+    @ApiResponse(responseCode = "200", description = "Lignes du bordereau et leurs totaux.")
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public BordereauDto bordereau(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.bordereau(id);
@@ -72,6 +74,7 @@ public class LotsProjetController {
 
     @GetMapping("/lots/{id}/decomptes")
     @Operation(summary = "Décomptes d'un lot, par numéro croissant")
+    @ApiResponse(responseCode = "200", description = "Décomptes du lot (éventuellement vide).")
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public List<DecompteListItemDto> decomptesDuLot(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.decomptesDuLot(id);

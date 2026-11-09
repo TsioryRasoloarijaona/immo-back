@@ -18,6 +18,8 @@ public record FactureDecompteDto(
         BigDecimal montantAPayer,
         @Schema(description = "Régularisation (AmountRegul).") BigDecimal regularisation,
         @Schema(description = "Code du statut de la facture.", example = "VALIDÉ DG") String statutCode,
-        @Schema(description = "Libellé du statut de la facture.") String statutDescription
+        @Schema(description = "Libellé du statut de la facture.") String statutDescription,
+        @Schema(description = "Vrai si le statut de la facture autorise le paiement (BuyDocumentStatus.IsOkForPayement).")
+        boolean okPourPaiement
 ) {
 }

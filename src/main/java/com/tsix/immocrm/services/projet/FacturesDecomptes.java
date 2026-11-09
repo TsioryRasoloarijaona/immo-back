@@ -27,11 +27,12 @@ class FacturesDecomptes {
 
     /** Facture du décompte {@code decompteId}, du lot {@code lotId}. */
     record Facture(UUID decompteId, UUID lotId, UUID id, String code, String statutCode, String statutDescription,
-                   SoldeDocumentAchat solde) {
+                   boolean okPourPaiement, SoldeDocumentAchat solde) {
     }
 
     private static final String FACTURES = """
             SELECT wo.PKey, wo.PrjMarketId, b.PKey, b.Code, st.Code, st.Description, b.AmountToPay,
+                   CASE WHEN st.IsOkForPayement = 1 THEN 1 ELSE 0 END,
                    (SELECT SUM(l.Amount) FROM StlSettlementLine l LEFT JOIN StlSettlement s ON s.PKey = l.StlSettlementId
                     WHERE l.BuyDocumentId = b.PKey AND """ + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + """
             )
@@ -89,7 +90,8 @@ class FacturesDecomptes {
         }
         List<?> lignes = em.createNativeQuery(sql).setParameter("ids", ids).getResultList();
         return lignes.stream().map(Object[].class::cast).map(r -> new Facture(uuid(r[0]), uuid(r[1]), uuid(r[2]),
-                (String) r[3], (String) r[4], (String) r[5], SoldeDocumentAchat.de(montant(r[6]), montant(r[7]))))
+                (String) r[3], (String) r[4], (String) r[5], ((Number) r[7]).intValue() == 1,
+                SoldeDocumentAchat.de(montant(r[6]), montant(r[8]))))
                 .toList();
     }
 

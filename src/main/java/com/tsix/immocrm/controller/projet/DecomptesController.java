@@ -46,6 +46,7 @@ public class DecomptesController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Fiche d'un décompte")
+    @ApiResponse(responseCode = "200", description = "Fiche du décompte.")
     @ApiResponse(responseCode = "404", description = "Décompte introuvable : id inconnu ou lot hors périmètre.",
             content = @Content)
     public DecompteDetailDto decompte(

@@ -49,7 +49,7 @@ public class DecomptesProjetService {
 
     static final String DECOMPTE_INTROUVABLE = "Décompte introuvable";
     private static final FacturesDecomptes.Facture SANS_FACTURE =
-            new FacturesDecomptes.Facture(null, null, null, null, null, null, SoldeDocumentAchat.de(null, null));
+            new FacturesDecomptes.Facture(null, null, null, null, null, null, false, SoldeDocumentAchat.de(null, null));
     private static final String DESCRIPTION = "description";
     private static final String CODE = "code";
     private static final String ID = "id";
@@ -119,7 +119,8 @@ public class DecomptesProjetService {
             return null;
         }
         return new FactureDecompteDto(b.getId(), b.getCode(), jour(b.getDocDate()), jour(b.getMaturityDate()),
-                b.getAmountHT(), b.getAmountTTC(), b.getAmountToPay(), b.getAmountRegul(), f.statutCode(), f.statutDescription());
+                b.getAmountHT(), b.getAmountTTC(), b.getAmountToPay(), b.getAmountRegul(), f.statutCode(), f.statutDescription(),
+                f.okPourPaiement());
     }
 
     private BigDecimal cumulTTC(PrjWorkingOut w) {
