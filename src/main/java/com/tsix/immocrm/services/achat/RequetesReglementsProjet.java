@@ -39,7 +39,9 @@ class RequetesReglementsProjet {
             + "LEFT JOIN CfgTier t ON t.PKey = d.CfgTierId LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId "
             + "LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId " + DECOMPTE
             + "WHERE d.DocType = 'INVOICE' AND d.PrjProjectId IN (:projets) "
-            + "AND (:lot IS NULL OR d.PrjMarketId = :lot) AND (:facture IS NULL OR d.PKey = :facture) "
+            // Une facture d'un projet visible peut porter le lot d'un autre projet : le lot filtré doit être visible aussi.
+            + "AND (:lot IS NULL OR (d.PrjMarketId = :lot AND m.PrjProjectId IN (:projets))) "
+            + "AND (:facture IS NULL OR d.PKey = :facture) "
             + "AND (:du IS NULL OR CAST(s.DocDate AS date) >= :du) AND (:au IS NULL OR CAST(s.DocDate AS date) <= :au) "
             + "AND (:annules = 1 OR " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + ") "
             + "ORDER BY s.DocDate DESC, s.Code DESC, l.PKey";
