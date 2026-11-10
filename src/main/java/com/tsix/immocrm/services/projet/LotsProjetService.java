@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.projet.ProjetFiltreDto;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
 import com.tsix.immocrm.dto.projet.StatutLotProjetDto;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
+import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.entities.prj.PrjMarketLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -34,6 +35,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +96,7 @@ public class LotsProjetService {
     public ReferentielsProjetDto referentiels() {
         Set<UUID> projets = perimetre.projetsVisibles();
         return new ReferentielsProjetDto(projets(projets), elements("select t from PrjMarketType t order by t.code"),
-                statutsLot(), statutsFacture(), categories(projets));
+                statutsLot(), statutsFacture(), categories(projets), fournisseurs(projets));
     }
 
     public Page<LotListItemDto> lots(FiltresLots filtres, Pageable pageable) {
@@ -248,6 +250,24 @@ public class LotsProjetService {
                 .setParameter("projets", projets)
                 .getResultList().stream()
                 .map(r -> new ElementReferentielProjetDto((UUID) r[0], (String) r[1], (String) r[2], (Integer) r[3]))
+                .toList();
+    }
+
+    // Un décompte peut porter son propre tiers quand le lot n'a pas de fournisseur : les deux sources comptent.
+    private List<ElementReferentielProjetDto> fournisseurs(Set<UUID> projets) {
+        if (projets.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, CfgTier> parId = new HashMap<>();
+        for (String jpql : List.of("select distinct t from PrjMarket m join m.cfgSupplier t where m.prjProject.id in :projets",
+                "select distinct t from PrjWorkingOut w join w.cfgTier t where w.prjMarket.prjProject.id in :projets")) {
+            em.createQuery(jpql, CfgTier.class).setParameter("projets", projets).getResultList()
+                    .forEach(t -> parId.putIfAbsent(t.getId(), t));
+        }
+        return parId.values().stream()
+                .map(t -> new ElementReferentielProjetDto(t.getId(), t.getCode(), TierNomFormatter.nom(t), null))
+                .sorted(Comparator.comparing(ElementReferentielProjetDto::description,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
     }
 

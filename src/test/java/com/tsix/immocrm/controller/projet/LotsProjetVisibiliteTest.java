@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -47,6 +48,7 @@ class LotsProjetVisibiliteTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureProjetLots fixture;
+    @Autowired private JdbcTemplate jdbc;
 
     private AppelsProjet appels;
     private String jeton;
@@ -188,6 +190,43 @@ class LotsProjetVisibiliteTest {
     }
 
     @Test
+    void r1_referentiels_fournisseurs_seulementCeuxDesLotsVisibles() throws Exception {
+        UUID fournisseurB = fixture.fournisseur("FOB-" + jeton);
+        fixture.lot(projetB, "LB2-" + jeton, fournisseurB);
+
+        Reponse r = appels.lire(a, REFERENTIELS);
+
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(r.statut()).isEqualTo(200);
+            s.assertThat(r.ids("$.fournisseurs[*].id")).containsExactly(fournisseur.toString());
+            s.assertThat(r.ids("$.fournisseurs[*].id")).doesNotContain(fournisseurB.toString());
+        });
+    }
+
+    @Test
+    void r1_referentiels_fournisseurs_tiersDeDecompte_seulementDecomptesVisibles() throws Exception {
+        UUID tiersA = fixture.fournisseur("TDA-" + jeton);
+        UUID tiersB = fixture.fournisseur("TDB-" + jeton);
+        UUID tiersSansProjet = fixture.fournisseur("TDS-" + jeton);
+        UUID decompteSansProjet = fixture.decompte(lotSansProjet, "DS-" + jeton, 2, montants());
+        String maj = "UPDATE PrjWorkingOut SET CfgTierId = ? WHERE PKey = ?";
+        jdbc.update(maj, tiersA.toString(), decompteA.toString());
+        jdbc.update(maj, tiersB.toString(), decompteB.toString());
+        jdbc.update(maj, tiersSansProjet.toString(), decompteSansProjet.toString());
+
+        Reponse r = appels.lire(a, REFERENTIELS);
+        Reponse filtre = appels.lire(a, DECOMPTES, "fournisseurId", tiersA.toString(), SIZE, TAILLE);
+
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(r.statut()).isEqualTo(200);
+            s.assertThat(r.ids("$.fournisseurs[*].id"))
+                    .containsExactlyInAnyOrder(fournisseur.toString(), tiersA.toString());
+            s.assertThat(filtre.statut()).isEqualTo(200);
+            s.assertThat(filtre.ids(CONTENU_IDS)).containsExactly(decompteA.toString());
+        });
+    }
+
+    @Test
     void lotSansProjet_invisible_404() throws Exception {
         Reponse visible = appels.lire(a, LOTS + "/" + lotA1);
         Reponse sansProjet = appels.lire(a, LOTS + "/" + lotSansProjet);
@@ -216,6 +255,7 @@ class LotsProjetVisibiliteTest {
             s.assertThat(decomptes.nombre(TOTAL)).isEqualByComparingTo("0");
             s.assertThat(referentiels.statut()).isEqualTo(200);
             s.assertThat(referentiels.ids("$.projets[*].id")).isEmpty();
+            s.assertThat(referentiels.ids("$.fournisseurs[*].id")).isEmpty();
         });
     }
 
