@@ -35,5 +35,8 @@ public record DocumentAchatListItemDto(
         @Schema(description = "Σ des lignes de règlement de la pièce, règlements annulés exclus.") BigDecimal montantRegle,
         @Schema(description = "Montant à payer − réglé ; négatif si la pièce est trop réglée.") BigDecimal resteARegler,
         @Schema(description = "Vrai si |reste| ≤ 0,05.") boolean solde,
-        @Schema(description = "Vrai si le reste est inférieur à −0,05 (pièce trop réglée).") boolean tropRegle) {
+        @Schema(description = "Vrai si le réglé dépasse de plus de 0,05 un à-payer positif ; faux pour une pièce négative.")
+        boolean tropRegle,
+        @Schema(description = "Vrai si le montant à payer est inférieur à −0,05 (récupération d'avance à déduire).")
+        boolean aDeduire) {
 }
