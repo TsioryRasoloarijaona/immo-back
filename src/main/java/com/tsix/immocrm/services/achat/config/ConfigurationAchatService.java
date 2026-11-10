@@ -47,7 +47,7 @@ public class ConfigurationAchatService {
                      w.Sorting ASC, w.Description ASC""";
     private static final String ROLES = """
             SELECT l.WorkFlowId, r.PKey, r.Code FROM BuyDocumentWorkFlowAdmRole l JOIN AdmRole r ON r.PKey = l.AdmRoleId
-            ORDER BY r.Code ASC""";
+            WHERE l.WorkFlowId IS NOT NULL ORDER BY r.Code ASC""";
 
     private final EntityManager em;
 
