@@ -27,12 +27,15 @@ public record FiltresDocumentsAchat(
         @Parameter(description = "true : pièces dont le reste à régler dépasse 0,05 (trop réglées exclues).")
         Boolean nonSoldes,
         @Parameter(description = "Recherche insensible à la casse : code, référence, description, fournisseur.")
-        String search) {
+        String search,
+        @Parameter(description = "true : statut « OK pour paiement » seulement ; absent ou false : pas de filtre.")
+        Boolean okPourPaiement) {
 
     public FiltresDocumentsAchat {
         natures = natures == null ? List.of() : natures;
         statutIds = statutIds == null ? List.of() : statutIds;
         projetIds = projetIds == null ? List.of() : projetIds;
         nonSoldes = Boolean.TRUE.equals(nonSoldes);
+        okPourPaiement = Boolean.TRUE.equals(okPourPaiement);
     }
 }

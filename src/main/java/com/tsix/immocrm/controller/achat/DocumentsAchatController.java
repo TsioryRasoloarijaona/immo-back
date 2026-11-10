@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto;
+import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.services.achat.DocumentsAchatService;
 import com.tsix.immocrm.web.export.ColonneFixe;
@@ -78,6 +79,17 @@ public class DocumentsAchatController {
     public PageDto<DocumentAchatListItemDto> liste(@ParameterObject @ModelAttribute FiltresDocumentsAchat filtres,
                                                    @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
         return PageDto.of(service.liste(filtres, pageable));
+    }
+
+    @GetMapping("/documents/totaux")
+    @Operation(summary = "Totaux de la liste des pièces d'achat : mêmes filtres, toutes pages")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Totaux ; à zéro si l'appelant n'a aucun projet."),
+            @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date, nature, booléen).",
+                    content = @Content)
+    })
+    public TotauxDocumentsAchatDto totaux(@ParameterObject @ModelAttribute FiltresDocumentsAchat filtres) {
+        return service.totaux(filtres);
     }
 
     @GetMapping("/documents/export")
