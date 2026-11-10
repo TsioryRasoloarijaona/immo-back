@@ -35,5 +35,9 @@ public record DocumentAchatListItemDto(
         @Schema(description = "Σ des lignes de règlement de la pièce, règlements annulés exclus.") BigDecimal montantRegle,
         @Schema(description = "Montant à payer − réglé ; négatif si la pièce est trop réglée.") BigDecimal resteARegler,
         @Schema(description = "Vrai si |reste| ≤ 0,05.") boolean solde,
-        @Schema(description = "Vrai si le reste est inférieur à −0,05 (pièce trop réglée).") boolean tropRegle) {
+        @Schema(description = "Vrai si le reste est inférieur à −0,05 (pièce trop réglée).") boolean tropRegle,
+        @Schema(description = "Décompte lié (PrjWorkingOut.PKey, par PrjWorkingOut.BuyDocumentId) ; null sans décompte.")
+        UUID decompteId,
+        @Schema(description = "Code du décompte lié ; null sans décompte.") String decompteCode,
+        @Schema(description = "N° d'ordre du décompte dans son lot (Sorting) ; null sans décompte.") Integer decompteNumero) {
 }

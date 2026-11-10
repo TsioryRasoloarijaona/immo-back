@@ -8,7 +8,9 @@ Pièces d'achat (`BuyDocument`) en **lecture seule** : factures, bons de command
 
 ## liste
 
-Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `nonSoldes=true` garde les pièces dont le reste dépasse 0,05 ; une pièce trop réglée n'y figure pas. `search` cherche, sans tenir compte de la casse, dans le code, la référence, la description et le nom du fournisseur. Tri par défaut : `dateDocument` décroissante puis `code` décroissant. Propriétés de tri acceptées : `code`, `nature`, `dateDocument`, `dateEcheance`, `reference`, `fournisseurNom`, `projetCode`, `lotCode`, `statutCode`, `montantTTC`, `montantAPayer`, `montantRegle`, `resteARegler` ; une autre propriété répond 400.
+Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `nonSoldes=true` garde les pièces dont le reste dépasse 0,05 ; une pièce trop réglée n'y figure pas. `search` cherche, sans tenir compte de la casse, dans le code, la référence, la description et le nom du fournisseur. Tri par défaut : `dateDocument` décroissante puis `code` décroissant. Propriétés de tri acceptées : `code`, `nature`, `dateDocument`, `dateEcheance`, `reference`, `fournisseurNom`, `projetCode`, `lotCode`, `statutCode`, `montantTTC`, `montantAPayer`, `montantRegle`, `resteARegler`, `decompteCode` ; une autre propriété répond 400.
+
+**Décompte lié** (`decompteId`, `decompteCode`, `decompteNumero`) : le décompte de chantier dont `PrjWorkingOut.BuyDocumentId` pointe la pièce (le premier par date puis code si plusieurs), `null` sinon. `BuyDocument.PrjWorkingOutId` (sens des avances) n'est jamais lu.
 
 ## fiche
 

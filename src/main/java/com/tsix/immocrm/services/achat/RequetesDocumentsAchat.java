@@ -47,14 +47,15 @@ class RequetesDocumentsAchat {
             + "bs.Description AS StatutDescription, bs.IsOkForPayement, bs.IsValidatedOnAccounting, d.AmountHT, "
             + "d.AmountVat, d.AmountTTC, d.AmountToPay, r.Regle, d.Notes, d.AmountRegul, d.FiscalStamp, "
             + "e.Code AS EntiteCode, e.Description AS EntiteDescription, d.UserCreateDateTime, d.UserCreate, "
-            + "d.UserUpdateDateTime, d.UserUpdate "
+            + "d.UserUpdateDateTime, d.UserUpdate, dc.DecompteId, dc.DecompteCode, dc.DecompteNumero "
             + "FROM BuyDocument d LEFT JOIN CfgTier t ON t.PKey = d.CfgTierId "
             + "LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId "
             + "LEFT JOIN CfgCompany c ON c.PKey = d.CfgCompanyId LEFT JOIN StrEntity e ON e.PKey = d.StrEntityId "
             + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId "
             + "OUTER APPLY (SELECT SUM(l.Amount) AS Regle FROM StlSettlementLine l "
             + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId WHERE l.BuyDocumentId = d.PKey AND "
-            + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + ") r WHERE d.PrjProjectId IN (:projets) ";
+            + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + ") r " + RequetesReglementsProjet.DECOMPTE
+            + "WHERE d.PrjProjectId IN (:projets) ";
 
     private static final String LISTE = PIECES
             + "AND (:toutesNatures = 1 OR d.DocType IN (:natures)) "
@@ -190,7 +191,8 @@ class RequetesDocumentsAchat {
                 chaine(rs, "StatutDescription"), rs.getBoolean("IsOkForPayement"), rs.getBigDecimal("AmountHT"),
                 rs.getBigDecimal("AmountVat"), rs.getBigDecimal("AmountTTC"), solde.montantAPayer(),
                 solde.montantRegle(), solde.resteARegler(), solde.solde(),
-                solde.resteARegler().compareTo(TOLERANCE.negate()) < 0);
+                solde.resteARegler().compareTo(TOLERANCE.negate()) < 0, uuid(rs, "DecompteId"),
+                chaine(rs, "DecompteCode"), (Integer) rs.getObject("DecompteNumero"));
     }
 
     /** Règle « non soldée » du filtre {@code nonSoldes} (réponse du manager n° 1) : reste strictement > 0,05. */
@@ -198,20 +200,20 @@ class RequetesDocumentsAchat {
         return piece.resteARegler().compareTo(TOLERANCE) > 0;
     }
 
-    private static List<String> textes(Collection<UUID> ids) {
+    static List<String> textes(Collection<UUID> ids) {
         return ids.stream().map(UUID::toString).toList();
     }
 
-    private static String texte(UUID id) {
+    static String texte(UUID id) {
         return id == null ? null : id.toString();
     }
 
-    private static String chaine(ResultSet rs, String colonne) throws SQLException {
+    static String chaine(ResultSet rs, String colonne) throws SQLException {
         String valeur = rs.getString(colonne);
         return valeur == null || valeur.isBlank() ? null : valeur;
     }
 
-    private static UUID uuid(ResultSet rs, String colonne) throws SQLException {
+    static UUID uuid(ResultSet rs, String colonne) throws SQLException {
         String valeur = rs.getString(colonne);
         return valeur == null ? null : UUID.fromString(valeur);
     }
@@ -220,7 +222,7 @@ class RequetesDocumentsAchat {
         return rs.getObject(colonne, LocalDateTime.class);
     }
 
-    private static LocalDate jour(ResultSet rs, String colonne) throws SQLException {
+    static LocalDate jour(ResultSet rs, String colonne) throws SQLException {
         LocalDateTime valeur = horodatage(rs, colonne);
         return valeur == null ? null : valeur.toLocalDate();
     }
