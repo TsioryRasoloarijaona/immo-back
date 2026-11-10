@@ -14,6 +14,14 @@ Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet
 
 Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre. Aucun projet visible : tout à zéro.
 
+## soldes
+
+Solde de chaque fournisseur, une ligne par (fournisseur, société), sur les factures et documents à régler (avoirs exclus) **des projets visibles de l'appelant** (habilitations projet, aucune exemption de rôle) : deux utilisateurs aux projets différents voient deux soldes différents pour le même fournisseur. Les règlements non affectés à une pièce ne sont pas comptés. À payer = `AmountToPay`, réglé = lignes de règlement non annulées, reste = différence (calcul `SoldeDocumentAchat`). `projetIds` hors périmètre est ignoré ; `search` compare le nom du fournisseur sans espaces ni casse ; `nonSoldes=true` masque les lignes soldées (|reste| ≤ 0,05). Non paginé, trié par nom de fournisseur puis code société ; `sort` est ignoré. `total` somme les lignes rendues.
+
+## exporterSoldes
+
+Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/soldes`, sans la ligne de total.
+
 ## fiche
 
 Fiche d'une pièce visible : les champs de la ligne de liste (mêmes calculs), l'en-tête (notes, régularisation, timbre, entité, audit), les lignes (`Sorting`), la ventilation (taux par catégorie), l'historique des statuts (date croissante) et les règlements, annulés compris avec `annule = true` (exclus du réglé).
