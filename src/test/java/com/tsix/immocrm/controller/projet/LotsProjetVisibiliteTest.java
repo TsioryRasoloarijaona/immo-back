@@ -188,6 +188,20 @@ class LotsProjetVisibiliteTest {
     }
 
     @Test
+    void r1_referentiels_fournisseurs_seulementCeuxDesLotsVisibles() throws Exception {
+        UUID fournisseurB = fixture.fournisseur("FOB-" + jeton);
+        fixture.lot(projetB, "LB2-" + jeton, fournisseurB);
+
+        Reponse r = appels.lire(a, REFERENTIELS);
+
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(r.statut()).isEqualTo(200);
+            s.assertThat(r.ids("$.fournisseurs[*].id")).containsExactly(fournisseur.toString());
+            s.assertThat(r.ids("$.fournisseurs[*].id")).doesNotContain(fournisseurB.toString());
+        });
+    }
+
+    @Test
     void lotSansProjet_invisible_404() throws Exception {
         Reponse visible = appels.lire(a, LOTS + "/" + lotA1);
         Reponse sansProjet = appels.lire(a, LOTS + "/" + lotSansProjet);
@@ -216,6 +230,7 @@ class LotsProjetVisibiliteTest {
             s.assertThat(decomptes.nombre(TOTAL)).isEqualByComparingTo("0");
             s.assertThat(referentiels.statut()).isEqualTo(200);
             s.assertThat(referentiels.ids("$.projets[*].id")).isEmpty();
+            s.assertThat(referentiels.ids("$.fournisseurs[*].id")).isEmpty();
         });
     }
 
