@@ -12,7 +12,7 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Historique de statut d'une facture fournisseur ; {@code buyDocumentWorkFlowId} reste NULL comme en production. */
+/** Historique de statut d'une pièce d'achat ; {@code buyDocumentWorkFlowId} NULL à la création, transition empruntée sinon. */
 @Getter
 @Setter
 @Entity
@@ -33,4 +33,7 @@ public class BuyDocumentStatusHistory {
     @Nationalized
     @Column(name = "Notes", length = 1000)
     private String notes;
+    // Nom réel en base, minuscule initiale.
+    @Column(name = "buyDocumentWorkFlowId")
+    private UUID buyDocumentWorkFlowId;
 }
