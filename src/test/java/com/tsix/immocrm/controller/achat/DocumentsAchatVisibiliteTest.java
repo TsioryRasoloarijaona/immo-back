@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.fixtures.FixtureAchat;
 import com.tsix.immocrm.fixtures.FixtureAchat.Piece;
+import com.tsix.immocrm.fixtures.FixtureVisibiliteOmran;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Règle 1 (visibilité par habilitation {@code PrjProject}, comme OMRAN) et règle 4 (lecture seule) —
- * FEATURE-achat-lecture-factures.md §2, §7 tests 1 à 3.
+ * FEATURE-achat-lecture-factures.md §2, §7 tests 1 à 3 ; société habilitée en plus depuis FEATURE-visibilite-omran.md R3.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,8 +47,10 @@ class DocumentsAchatVisibiliteTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureAchat fixture;
+    @Autowired private FixtureVisibiliteOmran visibilite;
 
     private String jeton;
+    private UUID societe;
     private UUID projetA;
     private UUID projetB;
     private UUID pieceA;
@@ -59,7 +62,7 @@ class DocumentsAchatVisibiliteTest {
     @BeforeEach
     void setUp() {
         jeton = FixtureAchat.jeton("AVI");
-        UUID societe = fixture.societe("SOC-" + jeton);
+        societe = fixture.societe("SOC-" + jeton);
         projetA = fixture.projet("PA-" + jeton, societe);
         projetB = fixture.projet("PB-" + jeton, societe);
         String nom = "Fournisseur " + jeton;
@@ -71,6 +74,7 @@ class DocumentsAchatVisibiliteTest {
         pieceB = fixture.piece(Piece.facture(codeB, LocalDate.of(2026, 3, 11), fournisseur, nom, societe, projetB,
                 new BigDecimal("2400")));
         habiliteA = fixture.compte("ACH-A-" + jeton, COMMERCIAL);
+        visibilite.habiliterSociete(habiliteA, societe);
         fixture.habiliter(habiliteA, projetA);
     }
 
@@ -177,20 +181,23 @@ class DocumentsAchatVisibiliteTest {
 
     // ------------------------------------------------------------------ §7.3 pièce sans projet
 
+    /** FEATURE-visibilite-omran.md R3 : la pièce sans projet suit la seule habilitation société. */
     @Test
-    void r1_pieceSansProjet_invisibleMemePourUnHabiliteATousLesProjets() throws Exception {
-        fixture.habiliter(habiliteA, projetB);
-        String codeSans = jeton + "-SANS";
-        UUID societe = fixture.societe("SOC2-" + jeton);
+    void r3_pieceSansProjet_visibleSiSaSocieteEstHabilitee_invisibleSinon() throws Exception {
         String nom = "Fournisseur sans projet " + jeton;
-        UUID sansProjet = fixture.piece(Piece.facture(codeSans, LocalDate.of(2026, 3, 12),
-                fixture.fournisseur("FOU2-" + jeton, nom), nom, societe, null, new BigDecimal("100")));
+        UUID fournisseur = fixture.fournisseur("FOU2-" + jeton, nom);
+        String codeSans = jeton + "-SANS";
+        UUID sansProjet = fixture.piece(Piece.facture(codeSans, LocalDate.of(2026, 3, 12), fournisseur, nom, societe,
+                null, new BigDecimal("100")));
+        String codeAutre = jeton + "-AUTRE";
+        UUID autreSociete = fixture.piece(Piece.facture(codeAutre, LocalDate.of(2026, 3, 12), fournisseur, nom,
+                fixture.societe("SOC2-" + jeton), null, new BigDecimal("100")));
 
         String json = corps(mockMvc, liste(qui()));
 
-        assertThat(codes(json)).containsExactlyInAnyOrder(codeA, codeB).doesNotContain(codeSans);
-        mockMvc.perform(get(AppelsAchat.DOCUMENT, sansProjet).with(qui()))
-                .andExpect(status().isNotFound());
+        assertThat(codes(json)).containsExactlyInAnyOrder(codeA, codeSans).doesNotContain(codeAutre);
+        mockMvc.perform(get(AppelsAchat.DOCUMENT, sansProjet).with(qui())).andExpect(status().isOk());
+        mockMvc.perform(get(AppelsAchat.DOCUMENT, autreSociete).with(qui())).andExpect(status().isNotFound());
     }
 
     // ------------------------------------------------------------------ règle 4 : lecture seule

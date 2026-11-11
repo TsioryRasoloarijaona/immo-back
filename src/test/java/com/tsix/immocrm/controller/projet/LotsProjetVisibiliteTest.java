@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   projet A : lots L1, L2 ; décompte DA sur L1        projet B : lot LB ; décompte DB
  *   lot LS sans projet                                  « a » habilité sur A seulement (AdmUserHabilitation.PrjProjectId)
  * </pre>
+ * Comptes à rôle exempté de la clause de statut (FEATURE-visibilite-omran.md R1) : seule l'habilitation projet joue ici.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

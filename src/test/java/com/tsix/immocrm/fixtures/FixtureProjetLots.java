@@ -55,10 +55,15 @@ public class FixtureProjetLots {
 
     // ------------------------------------------------------------------ comptes et habilitations
 
-    /** Compte actif sans aucune ligne d'habilitation. */
+    /**
+     * Compte actif sans aucune ligne d'habilitation, porteur d'un rôle exempté de la clause de statut des lots
+     * ({@code WithSequenceFreeRestriction = 0}, FEATURE-visibilite-omran.md R1) : seule l'habilitation projet joue.
+     */
     public AdmUser compte(String code) {
-        AdmUser user = vente.compte(code);
+        String role = "LIBRE-" + code;
+        AdmUser user = vente.compte(code, role);
         em.flush();
+        jdbc.update("UPDATE AdmRole SET WithSequenceFreeRestriction = 0 WHERE Code = ?", role);
         return user;
     }
 

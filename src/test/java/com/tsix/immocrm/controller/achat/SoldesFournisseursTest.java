@@ -78,6 +78,8 @@ class SoldesFournisseursTest {
         nomX = "Fournisseur X " + jeton;
         fournisseurX = fixture.fournisseur("FOUX-" + jeton, nomX);
         compte = fixture.compte("ACH-" + jeton, ROLE);
+        fixture.habiliterSociete(compte, societe1);
+        fixture.habiliterSociete(compte, societe2);
         fixture.habiliter(compte, projet1);
         fixture.habiliter(compte, projet2);
     }

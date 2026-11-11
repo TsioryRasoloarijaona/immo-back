@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.achat;
 
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.fixtures.FixtureAchat;
+import com.tsix.immocrm.fixtures.FixtureVisibiliteOmran;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 
 /**
  * Visibilité par habilitation projet, sans exemption de rôle, chemins de refus —
- * FEATURE-achat-impayes.md §3.5, §8 test 6.
+ * FEATURE-achat-impayes.md §3.5, §8 test 6 ; société habilitée en plus depuis FEATURE-visibilite-omran.md R4.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,6 +48,7 @@ class SoldesFournisseursVisibiliteTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureAchat fixture;
+    @Autowired private FixtureVisibiliteOmran visibilite;
 
     private String jeton;
     private UUID societe;
@@ -76,6 +78,7 @@ class SoldesFournisseursVisibiliteTest {
         fixture.piece(jeton + "-XB", FACTURE, fournisseurX, nomX, societe, projetB, statutOk, "200");
         fixture.piece(jeton + "-ZB", FACTURE, fournisseurZ, nomZ, societe, projetB, statutOk, "500");
         habiliteA = fixture.compte("ACH-A-" + jeton, COMMERCIAL);
+        visibilite.habiliterSociete(habiliteA, societe);
         fixture.habiliter(habiliteA, projetA);
     }
 
@@ -108,6 +111,7 @@ class SoldesFournisseursVisibiliteTest {
     @Test
     void r5_deuxUtilisateursAuxProjetsDifferents_deuxSoldesPourLeMemeFournisseur() throws Exception {
         AdmUser habiliteB = fixture.compte("ACH-B-" + jeton, COMMERCIAL);
+        visibilite.habiliterSociete(habiliteB, societe);
         fixture.habiliter(habiliteB, projetB);
 
         String json = corps(mockMvc, appel(SOLDES, connecte(habiliteB, COMMERCIAL)));
@@ -147,14 +151,15 @@ class SoldesFournisseursVisibiliteTest {
                 () -> assertThat(nombre(json, TOTAL_A_PAYER)).isEqualByComparingTo("0"));
     }
 
+    /** FEATURE-visibilite-omran.md R4 : la pièce sans projet d'une société habilitée entre dans le solde. */
     @Test
-    void r5_pieceSansProjet_jamaisComptee() throws Exception {
+    void r4_pieceSansProjet_compteeSiSaSocieteEstHabilitee() throws Exception {
         fixture.habiliter(habiliteA, projetB);
         fixture.piece(jeton + "-X0", FACTURE, fournisseurX, nomX, societe, null, statutOk, "1000");
 
         String json = corps(mockMvc, appel(SOLDES, qui()));
 
-        assertThat(montant(json, fournisseurX, soc, A_PAYER)).isEqualByComparingTo("300");
+        assertThat(montant(json, fournisseurX, soc, A_PAYER)).isEqualByComparingTo("1300");
     }
 
     @Test
