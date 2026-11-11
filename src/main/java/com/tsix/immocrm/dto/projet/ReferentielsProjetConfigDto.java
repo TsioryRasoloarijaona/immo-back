@@ -10,6 +10,9 @@ public record ReferentielsProjetConfigDto(
         @Schema(description = "Sociétés (CfgCompany), actives ou non.") List<ReferentielItemDto> societes,
         @Schema(description = "Statuts de projet (lecture : le statut n'est pas saisi).") List<ReferentielItemDto> statutsProjet,
         @Schema(description = "Personnel (CfgTier de type EMP), choix du gestionnaire ; description = nom.")
-        List<ReferentielItemDto> gestionnaires
+        List<ReferentielItemDto> gestionnaires,
+        @Schema(description = "Nivellements (StkLeveling), par code ; description = code.") List<ReferentielItemDto> nivellements,
+        @Schema(description = "Catégories de dépense (StlCategory non crédit), choix de la catégorie d'un critère d'avancement.")
+        List<ReferentielItemDto> categoriesDepense
 ) {
 }

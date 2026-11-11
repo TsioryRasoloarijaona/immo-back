@@ -32,6 +32,16 @@ public record ProjetConfigDto(
         @Schema(description = "Date de création (UserCreateDateTime), null si inconnue.") LocalDateTime dateCreation,
         @Schema(description = "Auteur de la création (UserCreate).") String creePar,
         @Schema(description = "Date de dernière modification (UserUpdateDateTime).") LocalDateTime dateModification,
-        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar
+        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar,
+        @Schema(description = "Lancement prévisionnel des travaux (ProvisionalWorkStartDate), null si vide.")
+        LocalDateTime dateLancementPrevisionnelle,
+        @Schema(description = "Achèvement prévisionnel des travaux (ProvisionalCompletingWorkDate), null si vide.")
+        LocalDateTime dateAchevementPrevisionnelle,
+        @Schema(description = "Lancement réel des travaux (RealWorkStartDate), null si vide.") LocalDateTime dateLancementReelle,
+        @Schema(description = "Achèvement réel des travaux (RealCompletingWorkDate), null si vide.") LocalDateTime dateAchevementReelle,
+        @Schema(description = "Nivellement (StkLeveling.PKey, colonne StkLevelingId), null si aucun.") UUID nivellementId,
+        @Schema(description = "Projet référence (PrjProject.PKey, colonne ReferenceId), null si aucun.") UUID projetReferenceId,
+        @Schema(description = "Lot du projet gestionnaire du compte prorata (PrjMarket.PKey), null si aucun.")
+        UUID lotGestionnaireProrataId
 ) {
 }

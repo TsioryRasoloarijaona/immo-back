@@ -4,7 +4,11 @@ Configuration du module Projet : projets de chantier (`PrjProject`) et statuts d
 
 ## creer
 
-Le statut (« Nouveau », seul statut du workflow projet) et le type d'objet (`StrEntity` « PrjProject ») sont posés par le serveur. Défauts : non ventilé, taux 0, sans parties communes. Une habilitation (`AdmUserHabilitation`, portée projet seule) est créée pour l'utilisateur courant dans la même transaction : un échec de l'une annule l'autre.
+Le statut (premier statut de type « Nouveau » du workflow projet) et le type d'objet (`StrEntity` « PrjProject ») sont posés par le serveur, avec une ligne d'historique `StrHistory` « Création ». Défauts : non ventilé, taux 0, sans parties communes. Une habilitation (`AdmUserHabilitation`, portée projet seule) est créée pour l'utilisateur courant dans la même transaction : un échec de l'une annule l'autre.
+
+## modifier
+
+Remplacement complet des champs obligatoires ; les champs facultatifs absents (booléens, taux, 4 dates, nivellement, projet référence, lot prorata) restent inchangés. Pour vider une date ou un lien, le nommer dans `champsAVider`. Le lot gestionnaire du compte prorata doit être un lot de ce projet ; le projet référence, un autre projet existant.
 
 ## supprimer
 
