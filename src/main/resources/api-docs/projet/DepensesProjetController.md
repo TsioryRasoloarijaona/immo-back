@@ -3,8 +3,9 @@
 Dépenses des projets de chantier en **lecture seule** : factures fournisseurs (`BuyDocument.DocType = 'INVOICE'`) et
 règlements qui leur sont affectés. Voir `FEATURE-achat-depenses-projet.md`.
 
-**Visibilité, comme OMRAN** : projets des lignes `AdmUserHabilitation.PrjProjectId` de l'appelant, **quel que soit son
-rôle** (aucune exemption Administrateur). Un filtre hors périmètre (projet, lot, facture) donne une réponse vide (200),
+**Visibilité, comme OMRAN** : celle de `GET /api/achat/documents` (société habilitée ET projet habilité ou sans projet,
+**quel que soit le rôle**) restreinte aux pièces du module Projet (`AdmModuleId` = module `PRJ`). Une facture sans projet
+figure dans les règlements, jamais dans la synthèse par projet. Un filtre hors périmètre (projet, lot, facture) donne une réponse vide (200),
 jamais 403 ni 404. Documents à régler, avoirs, commandes, devis et bons de livraison ne sont ni comptés ni sommés.
 
 **Solde** : celui de `GET /api/achat/documents` (même calcul) : réglé = Σ des lignes de règlement non annulées

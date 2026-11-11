@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -55,6 +56,18 @@ public class IntervenantCourant {
             roleIds.addAll(intervenerRepository.rolesParCode(codes));
         }
         return new Intervenant(admUserId, roleIds, codes.contains(ROLE_ADMINISTRATEUR));
+    }
+
+    /**
+     * Statuts de lot et de projet visibles de l'appelant (FEATURE-visibilite-omran.md R1, R7) : vide = un de ses rôles a
+     * {@code WithSequenceFreeRestriction = 0} ; sinon les statuts liés à son rôle ou à lui, même règle que les dossiers.
+     */
+    public Optional<Set<UUID>> statutsDeLotsEtProjets() {
+        Intervenant utilisateur = courant();
+        if (!utilisateur.roleIds().isEmpty() && intervenerRepository.rolesSansRestriction(utilisateur.roleIds()) > 0) {
+            return Optional.empty();
+        }
+        return Optional.of(StatutsVisibles.visibles(utilisateur, intervenerRepository.deTousStatuts()));
     }
 
     /**

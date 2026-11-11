@@ -54,6 +54,7 @@ class DocumentsAchatFicheTest {
         piece = fixture.piece(Piece.facture(code, LocalDate.of(2026, 5, 4), fixture.fournisseur("FOU-" + jeton, nom),
                 nom, societe, projet, new BigDecimal("1200")));
         compte = fixture.compte("ACH-" + jeton, ROLE);
+        fixture.habiliterSociete(compte, societe);
         fixture.habiliter(compte, projet);
     }
 

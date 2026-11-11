@@ -123,6 +123,14 @@ public class FixtureAchat {
                 .setParameter("projet", prjProjectId));
     }
 
+    /** Ligne {@code AdmUserHabilitation.CfgCompanyId} : sans elle, aucune pièce de la société (FEATURE-visibilite-omran.md R3). */
+    public void habiliterSociete(AdmUser compte, UUID cfgCompanyId) {
+        executer(em.createNativeQuery("""
+                        INSERT INTO AdmUserHabilitation (PKey, AdmUserId, CfgCompanyId) VALUES (:id, :user, :societe)""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter("user", compte.getId())
+                .setParameter("societe", cfgCompanyId));
+    }
+
     // ------------------------------------------------------------------ pièces
 
     /** Pièce d'achat ; {@code projet}, {@code lot}, {@code statut} nuls possibles. */

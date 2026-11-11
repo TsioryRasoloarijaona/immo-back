@@ -21,6 +21,14 @@ public interface StrIntervenerRepository extends JpaRepository<StrIntervener, UU
             + "WHERE i.id = si.strIntervenerId AND s.id = si.strStatusId AND s.strConfigEntityId = :entite")
     List<Object[]> deStatuts(UUID entite);
 
+    /** Intervenants de tous les statuts, toutes entités ; tuple [StrStatusId, intervenant]. */
+    @Query("SELECT si.strStatusId, i FROM StrStatusIntervener si, StrIntervener i WHERE i.id = si.strIntervenerId")
+    List<Object[]> deTousStatuts();
+
+    /** Nombre de rôles donnés à {@code AdmRole.WithSequenceFreeRestriction = 0} (NULL = restreint). */
+    @Query("SELECT COUNT(r) FROM AdmRole r WHERE r.id IN :roles AND r.withSequenceFreeRestriction = false")
+    long rolesSansRestriction(Collection<UUID> roles);
+
     /** {@code AdmRole.PKey} des codes de rôle donnés (rôles portés par le jeton). */
     @Query("SELECT r.id FROM AdmRole r WHERE r.code IN :codes")
     List<UUID> rolesParCode(Collection<String> codes);

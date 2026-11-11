@@ -34,7 +34,7 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 public class LotsProjetController {
 
     private static final String ID_LOT = "Identifiant du lot (PrjMarket.PKey).";
-    private static final String LOT_INTROUVABLE = "Lot introuvable : id inconnu, lot sans projet ou projet hors périmètre.";
+    private static final String LOT_INTROUVABLE = "Lot introuvable : id inconnu, lot sans projet, projet hors périmètre ou statut invisible.";
 
     private final LotsProjetService service;
 

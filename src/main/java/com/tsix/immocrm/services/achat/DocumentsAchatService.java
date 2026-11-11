@@ -10,6 +10,7 @@ import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.NatureAchatDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -31,7 +32,7 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
- * Pièces d'achat en lecture, visibles par habilitation projet ({@link PerimetreProjetService}), solde par
+ * Pièces d'achat en lecture, visibles selon {@link PerimetreAchat} (société et projet habilités), solde par
  * {@code SoldeDocumentAchat}. Filtrées en SQL, triées et paginées ici : le tri porte aussi sur le reste calculé.
  */
 @Service
@@ -67,11 +68,12 @@ public class DocumentsAchatService {
 
     public ReferentielsAchatDto referentiels() {
         Set<UUID> projets = perimetre.projetsVisibles();
+        PerimetreAchat pieces = perimetre.achat(List.of());
         List<NatureAchatDto> natures = Arrays.stream(NatureDocumentAchat.values())
                 .map(n -> new NatureAchatDto(n.name(), n.libelle())).toList();
         return new ReferentielsAchatDto(natures, requetes.statuts(),
                 projets.isEmpty() ? List.of() : requetes.projets(projets),
-                projets.isEmpty() ? List.of() : requetes.fournisseurs(projets));
+                pieces.vide() ? List.of() : requetes.fournisseurs(pieces));
     }
 
     public Page<DocumentAchatListItemDto> liste(FiltresDocumentsAchat filtres, Pageable pageable) {
@@ -94,11 +96,12 @@ public class DocumentsAchatService {
 
     /** Pièces visibles retenues par les filtres (SQL puis {@code nonSoldes} / {@code okPourPaiement}), sans tri. */
     List<DocumentAchatListItemDto> pieces(FiltresDocumentsAchat filtres) {
-        Set<UUID> projets = perimetre.restreindre(filtres.projetIds());
-        if (projets.isEmpty()) {
+        PerimetreAchat tous = perimetre.achat(filtres.projetIds());
+        PerimetreAchat visibles = Boolean.TRUE.equals(filtres.moduleProjet()) ? tous.duModuleProjet() : tous;
+        if (visibles.vide()) {
             return List.of();
         }
-        return requetes.pieces(projets, filtres).stream()
+        return requetes.pieces(visibles, filtres).stream()
                 .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
                 .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
                 .toList();
@@ -113,7 +116,7 @@ public class DocumentsAchatService {
     }
 
     public DocumentAchatDetailDto fiche(UUID id) {
-        RequetesDocumentsAchat.Entete entete = Optional.of(perimetre.projetsVisibles()).filter(p -> !p.isEmpty())
+        RequetesDocumentsAchat.Entete entete = Optional.of(perimetre.achat(List.of())).filter(p -> !p.vide())
                 .flatMap(p -> requetes.entete(p, id))
                 .orElseThrow(() -> new ResourceNotFoundException("Pièce introuvable"));
         return entete.avec(requetes.lignes(id), requetes.ventilation(id), requetes.historique(id),

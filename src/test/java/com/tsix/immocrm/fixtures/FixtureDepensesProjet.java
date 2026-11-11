@@ -21,7 +21,7 @@ import java.util.UUID;
  *                       ← FH2 TTC 400, à payer 380, réglée par RG4 à cheval : 150 sur FH2 + 250 sur FB1
  *                       ← DTP DOCUMENT_TO_PAY 700 (hors synthèse)
  *   projet B : lot B ← FB1 800 (ligne de 250 de RG4)
- *   « a » habilité A ; « ab » habilité A et B ; rôle Commercial.
+ *   toutes les pièces au module PRJ ; « a » habilité société + A ; « ab » société + A et B ; rôle Commercial.
  * </pre>
  */
 @Component
@@ -34,11 +34,14 @@ public class FixtureDepensesProjet {
     private final EntityManager em;
     private final FixtureAchat achat;
     private final FixtureProjetLots projets;
+    private final FixtureVisibiliteOmran visibilite;
 
-    public FixtureDepensesProjet(EntityManager em, FixtureAchat achat, FixtureProjetLots projets) {
+    public FixtureDepensesProjet(EntityManager em, FixtureAchat achat, FixtureProjetLots projets,
+                                 FixtureVisibiliteOmran visibilite) {
         this.em = em;
         this.achat = achat;
         this.projets = projets;
+        this.visibilite = visibilite;
     }
 
     /** Ids et codes du jeu ; les codes de pièce et de règlement sont {@code jeton + suffixe}. */
@@ -94,6 +97,7 @@ public class FixtureDepensesProjet {
         achat.poser(fh2, "AmountToPay", new BigDecimal("380"));
         UUID dtp = achat.piece(Piece.facture(jeton + "-DTP", LocalDate.of(2026, 3, 7), fournisseur, nom, societe,
                 projetA, new BigDecimal("700")).nature("DOCUMENT_TO_PAY"));
+        visibilite.modulePiece(dtp, visibilite.modulePrj());
         UUID fb1 = facture(jeton + "-FB1", LocalDate.of(2026, 3, 8), fournisseur, nom, societe, projetB, lotB, "800");
 
         UUID d1 = decompte(lotA1, jeton + "-DZ1", 1, "1000");
@@ -112,8 +116,10 @@ public class FixtureDepensesProjet {
         UUID l4b = ligne(rg4, fb1, "250");
 
         AdmUser compteA = achat.compte("DEPA-" + jeton, ROLE);
+        visibilite.habiliterSociete(compteA, societe);
         achat.habiliter(compteA, projetA);
         AdmUser compteAB = achat.compte("DEPAB-" + jeton, ROLE);
+        visibilite.habiliterSociete(compteAB, societe);
         achat.habiliter(compteAB, projetA);
         achat.habiliter(compteAB, projetB);
 
@@ -121,10 +127,12 @@ public class FixtureDepensesProjet {
                 fa1, fa2, fh1, fh2, dtp, fb1, d1, d2, rg1, rg2, rg3, rg4, l1, l2, l4a, l4b);
     }
 
-    /** Facture ({@code INVOICE}) ; {@code lot} nul = hors lot. TTC = à payer. */
+    /** Facture ({@code INVOICE}) du module PRJ ; {@code lot} nul = hors lot. TTC = à payer. */
     public UUID facture(String code, LocalDate date, UUID fournisseur, String nom, UUID societe, UUID projet, UUID lot,
                         String aPayer) {
-        return achat.piece(Piece.facture(code, date, fournisseur, nom, societe, projet, new BigDecimal(aPayer)).lot(lot));
+        UUID id = achat.piece(Piece.facture(code, date, fournisseur, nom, societe, projet, new BigDecimal(aPayer)).lot(lot));
+        visibilite.modulePiece(id, visibilite.modulePrj());
+        return id;
     }
 
     /** Décompte du lot (TTC = à payer = {@code montant}), daté du {@code numero} mars 2026. */
