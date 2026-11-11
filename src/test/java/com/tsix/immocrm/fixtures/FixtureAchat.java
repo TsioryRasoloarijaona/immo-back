@@ -21,6 +21,10 @@ public class FixtureAchat {
     public static final String POINTE = "POINTED";
     public static final String ANNULE = "CANCELED";
 
+    public static final String FACTURE = "INVOICE";
+    public static final String DOCUMENT_A_REGLER = "DOCUMENT_TO_PAY";
+    public static final String AVOIR = "REFUND";
+
     private static final String P_ID = "id";
     private static final String P_CODE = "code";
 
@@ -178,6 +182,13 @@ public class FixtureAchat {
     public void poser(UUID pieceId, String colonne, Object valeur) {
         executer(em.createNativeQuery("UPDATE BuyDocument SET " + colonne + " = :valeur WHERE PKey = :id")
                 .setParameter(P_ID, pieceId).setParameter("valeur", valeur));
+    }
+
+    /** Lot A3 : pièce de {@code nature} donnée, à payer signé (récupération d'avance négative possible). */
+    public UUID piece(String code, String nature, UUID fournisseur, String fournisseurNom, UUID societe, UUID projet,
+                      UUID statut, String aPayer) {
+        return piece(Piece.facture(code, LocalDate.of(2026, 5, 4), fournisseur, fournisseurNom, societe, projet,
+                new BigDecimal(aPayer)).nature(nature).statut(statut));
     }
 
     // ------------------------------------------------------------------ règlements, lignes, ventilation, historique
