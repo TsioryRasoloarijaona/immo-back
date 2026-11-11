@@ -1,11 +1,13 @@
 package com.tsix.immocrm.services.achat;
 
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
+import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.NatureAchatDto;
+import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
@@ -16,14 +18,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * Pièces d'achat en lecture, visibles par habilitation projet ({@link PerimetreProjetService}), solde par
@@ -71,16 +76,40 @@ public class DocumentsAchatService {
 
     public Page<DocumentAchatListItemDto> liste(FiltresDocumentsAchat filtres, Pageable pageable) {
         Comparator<DocumentAchatListItemDto> tri = comparateur(pageable.getSort());
-        Set<UUID> projets = perimetre.restreindre(filtres.projetIds());
-        if (projets.isEmpty()) {
-            return Page.empty(pageable);
-        }
-        List<DocumentAchatListItemDto> pieces = requetes.pieces(projets, filtres).stream()
-                .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || RequetesDocumentsAchat.nonSoldee(p))
-                .sorted(tri).toList();
+        List<DocumentAchatListItemDto> pieces = pieces(filtres).stream().sorted(tri).toList();
         int debut = (int) Math.min(pageable.getOffset(), pieces.size());
         int fin = Math.min(debut + pageable.getPageSize(), pieces.size());
         return new PageImpl<>(pieces.subList(debut, fin), pageable, pieces.size());
+    }
+
+    public TotauxDocumentsAchatDto totaux(FiltresDocumentsAchat filtres) {
+        List<DocumentAchatListItemDto> pieces = pieces(filtres);
+        List<SoldeDocumentAchat> soldes = pieces.stream().map(DocumentsAchatService::solde).toList();
+        List<SoldeDocumentAchat> aRegler = soldes.stream().filter(SoldeDocumentAchat::aRegler).toList();
+        SoldeDocumentAchat total = SoldeDocumentAchat.total(soldes);
+        return new TotauxDocumentsAchatDto(pieces.size(),
+                somme(pieces.stream().map(DocumentAchatListItemDto::montantTTC)), total.montantAPayer(),
+                total.montantRegle(), total.resteARegler(), aRegler.size(), SoldeDocumentAchat.total(aRegler).resteARegler());
+    }
+
+    /** Pièces visibles retenues par les filtres (SQL puis {@code nonSoldes} / {@code okPourPaiement}), sans tri. */
+    List<DocumentAchatListItemDto> pieces(FiltresDocumentsAchat filtres) {
+        Set<UUID> projets = perimetre.restreindre(filtres.projetIds());
+        if (projets.isEmpty()) {
+            return List.of();
+        }
+        return requetes.pieces(projets, filtres).stream()
+                .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
+                .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
+                .toList();
+    }
+
+    static SoldeDocumentAchat solde(DocumentAchatListItemDto piece) {
+        return SoldeDocumentAchat.de(piece.montantAPayer(), piece.montantRegle());
+    }
+
+    static BigDecimal somme(Stream<BigDecimal> montants) {
+        return montants.filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public DocumentAchatDetailDto fiche(UUID id) {

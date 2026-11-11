@@ -35,27 +35,23 @@ import java.util.UUID;
 @Component
 class RequetesDocumentsAchat {
 
-    private static final BigDecimal TOLERANCE = new BigDecimal("0.05");
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
     private static final String ID = "id";
     private static final String PROJETS = "projets";
 
-    // Alias s imposé par StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX ; réglé = Σ brute (IsCredit = 0 chez les fournisseurs).
     private static final String PIECES = "SELECT d.PKey, d.Code, d.DocType, d.DocRef, d.Description, d.DocDate, "
             + "d.MaturityDate, d.CfgTierId, t.Description AS FournisseurNom, d.PrjProjectId, p.Code AS ProjetCode, "
             + "d.PrjMarketId, m.Code AS LotCode, c.Code AS SocieteCode, d.BuyDocumentStatusId, bs.Code AS StatutCode, "
             + "bs.Description AS StatutDescription, bs.IsOkForPayement, bs.IsValidatedOnAccounting, d.AmountHT, "
-            + "d.AmountVat, d.AmountTTC, d.AmountToPay, r.Regle, d.Notes, d.AmountRegul, d.FiscalStamp, "
+            + "d.AmountVat, d.AmountTTC, d.AmountToPay, (" + SoldeDocumentAchat.SQL_REGLE + ") AS Regle, "
+            + "d.Notes, d.AmountRegul, d.FiscalStamp, "
             + "e.Code AS EntiteCode, e.Description AS EntiteDescription, d.UserCreateDateTime, d.UserCreate, "
             + "d.UserUpdateDateTime, d.UserUpdate, dc.DecompteId, dc.DecompteCode, dc.DecompteNumero "
             + "FROM BuyDocument d LEFT JOIN CfgTier t ON t.PKey = d.CfgTierId "
             + "LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId "
             + "LEFT JOIN CfgCompany c ON c.PKey = d.CfgCompanyId LEFT JOIN StrEntity e ON e.PKey = d.StrEntityId "
             + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId "
-            + "OUTER APPLY (SELECT SUM(l.Amount) AS Regle FROM StlSettlementLine l "
-            + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId WHERE l.BuyDocumentId = d.PKey AND "
-            + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + ") r " + RequetesReglementsProjet.DECOMPTE
-            + "WHERE d.PrjProjectId IN (:projets) ";
+            + RequetesReglementsProjet.DECOMPTE + "WHERE d.PrjProjectId IN (:projets) ";
 
     private static final String LISTE = PIECES
             + "AND (:toutesNatures = 1 OR d.DocType IN (:natures)) "
@@ -190,14 +186,8 @@ class RequetesDocumentsAchat {
                 chaine(rs, "SocieteCode"), uuid(rs, "BuyDocumentStatusId"), chaine(rs, "StatutCode"),
                 chaine(rs, "StatutDescription"), rs.getBoolean("IsOkForPayement"), rs.getBigDecimal("AmountHT"),
                 rs.getBigDecimal("AmountVat"), rs.getBigDecimal("AmountTTC"), solde.montantAPayer(),
-                solde.montantRegle(), solde.resteARegler(), solde.solde(),
-                solde.resteARegler().compareTo(TOLERANCE.negate()) < 0, uuid(rs, "DecompteId"),
-                chaine(rs, "DecompteCode"), (Integer) rs.getObject("DecompteNumero"));
-    }
-
-    /** Règle « non soldée » du filtre {@code nonSoldes} (réponse du manager n° 1) : reste strictement > 0,05. */
-    static boolean nonSoldee(DocumentAchatListItemDto piece) {
-        return piece.resteARegler().compareTo(TOLERANCE) > 0;
+                solde.montantRegle(), solde.resteARegler(), solde.solde(), solde.tropRegle(), solde.aDeduire(),
+                uuid(rs, "DecompteId"), chaine(rs, "DecompteCode"), (Integer) rs.getObject("DecompteNumero"));
     }
 
     static List<String> textes(Collection<UUID> ids) {
