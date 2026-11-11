@@ -29,7 +29,9 @@ public record FiltresDocumentsAchat(
         @Parameter(description = "Recherche insensible à la casse : code, référence, description, fournisseur.")
         String search,
         @Parameter(description = "true : statut « OK pour paiement » seulement ; absent ou false : pas de filtre.")
-        Boolean okPourPaiement) {
+        Boolean okPourPaiement,
+        @Parameter(description = "true : pièces du module Projet (PRJ) seulement, comme Projet › Dépenses ; absent : tous.")
+        Boolean moduleProjet) {
 
     public FiltresDocumentsAchat {
         natures = natures == null ? List.of() : natures;
@@ -37,5 +39,6 @@ public record FiltresDocumentsAchat(
         projetIds = projetIds == null ? List.of() : projetIds;
         nonSoldes = Boolean.TRUE.equals(nonSoldes);
         okPourPaiement = Boolean.TRUE.equals(okPourPaiement);
+        moduleProjet = Boolean.TRUE.equals(moduleProjet);
     }
 }

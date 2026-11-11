@@ -43,7 +43,7 @@ public class SoldesFournisseursService {
     public SoldesFournisseursDto soldes(FiltresSoldesFournisseurs f) {
         String motif = f.search() == null ? "" : sansEspaces(f.search());
         Map<Cle, List<DocumentAchatListItemDto>> parCle = documents.pieces(new FiltresDocumentsAchat(NATURES, null,
-                        f.projetIds(), null, null, null, null, false, null, false)).stream()
+                        f.projetIds(), null, null, null, null, false, null, false, false)).stream()
                 .filter(p -> f.societeCodes().isEmpty() || f.societeCodes().contains(p.societeCode()))
                 .filter(p -> motif.isEmpty() || sansEspaces(Objects.toString(p.fournisseurNom(), "")).contains(motif))
                 .collect(Collectors.groupingBy(p -> new Cle(p.fournisseurId(), p.fournisseurNom(), p.societeCode()),

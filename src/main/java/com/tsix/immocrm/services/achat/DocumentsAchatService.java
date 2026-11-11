@@ -96,7 +96,8 @@ public class DocumentsAchatService {
 
     /** Pièces visibles retenues par les filtres (SQL puis {@code nonSoldes} / {@code okPourPaiement}), sans tri. */
     List<DocumentAchatListItemDto> pieces(FiltresDocumentsAchat filtres) {
-        PerimetreAchat visibles = perimetre.achat(filtres.projetIds());
+        PerimetreAchat tous = perimetre.achat(filtres.projetIds());
+        PerimetreAchat visibles = Boolean.TRUE.equals(filtres.moduleProjet()) ? tous.duModuleProjet() : tous;
         if (visibles.vide()) {
             return List.of();
         }

@@ -36,7 +36,7 @@ import java.util.stream.Stream;
 public class DepensesProjetService {
 
     private static final FiltresDocumentsAchat FACTURES = new FiltresDocumentsAchat(
-            List.of(NatureDocumentAchat.INVOICE), null, null, null, null, null, null, null, null, null);
+            List.of(NatureDocumentAchat.INVOICE), null, null, null, null, null, null, null, null, null, null);
 
     private static final Comparator<DepensesLotDto> ORDRE_LOTS = Comparator
             .comparing((DepensesLotDto l) -> l.lotId() == null)
