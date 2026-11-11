@@ -61,6 +61,7 @@ class DocumentsAchatSoldeTest {
         fournisseur = fixture.fournisseur("FOU-" + jeton, nom);
         type = fixture.typeReglement("VIR-" + jeton);
         compte = fixture.compte("ACH-" + jeton, ROLE);
+        fixture.habiliterSociete(compte, societe);
         fixture.habiliter(compte, projet);
     }
 

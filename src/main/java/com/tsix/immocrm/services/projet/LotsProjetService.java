@@ -18,9 +18,11 @@ import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.entities.prj.PrjMarketLine;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.prj.PrjMarketRepository;
+import com.tsix.immocrm.services.dossier.workflow.IntervenantCourant;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.JoinType;
@@ -52,6 +54,10 @@ public class LotsProjetService {
     static final String LOT_INTROUVABLE = "Lot introuvable";
     private static final String ID = "id";
     private static final String DESCRIPTION = "description";
+    private static final String PROJETS = "projets";
+    private static final String STATUTS = "statuts";
+    // Clause de statut de Visibilite.lier, sur l'alias m (lot) ; FK lue sans jointure : un lot sans statut reste compté.
+    private static final String STATUT_M = " and (:tousStatuts = true or m.strStatus.id in :statuts)";
 
     // Lignes de stock exclues ; un lot sans ligne retenue n'est pas dans le résultat → repli sur le forfait.
     private static final String SOMMES = "select l.prjMarketId, sum(l.quantity * l.unitPriceHT),"
@@ -73,6 +79,27 @@ public class LotsProjetService {
             WHERE e.Code LIKE 'PrjMarket%'
             ORDER BY e.Code ASC, s.Sorting ASC""";
 
+    /**
+     * Lots visibles (FEATURE-visibilite-omran.md R1) : projet habilité ET, pour un compte restreint, statut visible ;
+     * les mêmes statuts filtrent la liste des projets (R7). {@code statuts} vide = aucune restriction de statut.
+     */
+    private record Visibilite(Set<UUID> projets, Optional<Set<UUID>> statuts) {
+
+        boolean vide() {
+            return projets.isEmpty() || statuts.map(Set::isEmpty).orElse(false);
+        }
+
+        /** Lie {@code :projets}, {@code :tousStatuts} et {@code :statuts} (jamais vide : SQL Server refuse IN ()). */
+        <T> TypedQuery<T> lier(TypedQuery<T> requete) {
+            return requete.setParameter(PROJETS, projets).setParameter("tousStatuts", statuts.isEmpty())
+                    .setParameter(STATUTS, statuts.filter(s -> !s.isEmpty()).orElse(Set.of(new UUID(0, 0))));
+        }
+
+        boolean voit(PrjMarket lot) {
+            return statuts.map(s -> lot.getStrStatus() != null && s.contains(lot.getStrStatus().getId())).orElse(true);
+        }
+    }
+
     /** Cumuls des décomptes d'un lot. */
     private record Cumuls(long nb, BigDecimal ht, BigDecimal ttc, BigDecimal extras, BigDecimal rg, BigDecimal net) {
         static final Cumuls AUCUN = new Cumuls(0, null, null, null, null, null);
@@ -82,29 +109,31 @@ public class LotsProjetService {
     private final DecomptesProjetService decomptes;
     private final FacturesDecomptes factures;
     private final PerimetreProjetService perimetre;
+    private final IntervenantCourant intervenant;
     private final EntityManager em;
 
     public LotsProjetService(PrjMarketRepository lots, DecomptesProjetService decomptes, FacturesDecomptes factures,
-                             PerimetreProjetService perimetre, EntityManager em) {
+                             PerimetreProjetService perimetre, IntervenantCourant intervenant, EntityManager em) {
         this.lots = lots;
         this.decomptes = decomptes;
         this.factures = factures;
         this.perimetre = perimetre;
+        this.intervenant = intervenant;
         this.em = em;
     }
 
     public ReferentielsProjetDto referentiels() {
-        Set<UUID> projets = perimetre.projetsVisibles();
-        return new ReferentielsProjetDto(projets(projets), elements("select t from PrjMarketType t order by t.code"),
-                statutsLot(), statutsFacture(), categories(projets), fournisseurs(projets));
+        Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
+        return new ReferentielsProjetDto(projets(v), elements("select t from PrjMarketType t order by t.code"),
+                statutsLot(), statutsFacture(), categories(v), fournisseurs(v));
     }
 
     public Page<LotListItemDto> lots(FiltresLots filtres, Pageable pageable) {
-        Set<UUID> projets = perimetre.restreindre(filtres.projetIds());
-        if (projets.isEmpty()) {
+        Visibilite v = new Visibilite(perimetre.restreindre(filtres.projetIds()), intervenant.statutsDeLotsEtProjets());
+        if (v.vide()) {
             return Page.empty(pageable);
         }
-        Page<PrjMarket> page = lots.findAll((root, q, cb) -> filtre(root, cb, filtres, projets), pageable);
+        Page<PrjMarket> page = lots.findAll((root, q, cb) -> filtre(root, cb, filtres, v), pageable);
         List<UUID> ids = page.map(PrjMarket::getId).getContent();
         Map<UUID, Trio> bordereaux = sommes(SOMMES_BORDEREAU, ids);
         Map<UUID, Cumuls> cumuls = cumuls(ids);
@@ -157,8 +186,9 @@ public class LotsProjetService {
     }
 
     private PrjMarket visible(UUID id) {
-        Set<UUID> projets = perimetre.projetsVisibles();
-        return (projets.isEmpty() ? Optional.<PrjMarket>empty() : lots.findByIdAndPrjProjectIdIn(id, projets))
+        Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
+        return (v.vide() ? Optional.<PrjMarket>empty() : lots.findByIdAndPrjProjectIdIn(id, v.projets()))
+                .filter(v::voit)
                 .orElseThrow(() -> new ResourceNotFoundException(LOT_INTROUVABLE));
     }
 
@@ -212,14 +242,14 @@ public class LotsProjetService {
         return parLot;
     }
 
-    private List<ProjetFiltreDto> projets(Set<UUID> projets) {
-        if (projets.isEmpty()) {
+    private List<ProjetFiltreDto> projets(Visibilite v) {
+        if (v.vide()) {
             return List.of();
         }
-        return em.createQuery("select p.id, p.code, p.description,"
-                        + " (select count(m) from PrjMarket m where m.prjProject = p)"
-                        + " from PrjProject p where p.id in :projets order by p.code", Object[].class)
-                .setParameter("projets", projets)
+        return v.lier(em.createQuery("select p.id, p.code, p.description,"
+                        + " (select count(m) from PrjMarket m where m.prjProject = p" + STATUT_M + ")"
+                        + " from PrjProject p where p.id in :projets"
+                        + " and (:tousStatuts = true or p.strStatus.id in :statuts) order by p.code", Object[].class))
                 .getResultList().stream()
                 .map(r -> new ProjetFiltreDto((UUID) r[0], (String) r[1], (String) r[2], (Long) r[3]))
                 .toList();
@@ -241,27 +271,29 @@ public class LotsProjetService {
                 .toList();
     }
 
-    private List<ElementReferentielProjetDto> categories(Set<UUID> projets) {
-        if (projets.isEmpty()) {
+    private List<ElementReferentielProjetDto> categories(Visibilite v) {
+        if (v.vide()) {
             return List.of();
         }
-        return em.createQuery("select distinct c.id, c.code, c.description, c.sorting from PrjMarket m join m.stlCategory c"
-                        + " where m.prjProject.id in :projets order by c.sorting, c.code", Object[].class)
-                .setParameter("projets", projets)
+        return v.lier(em.createQuery("select distinct c.id, c.code, c.description, c.sorting from PrjMarket m"
+                        + " join m.stlCategory c where m.prjProject.id in :projets" + STATUT_M
+                        + " order by c.sorting, c.code", Object[].class))
                 .getResultList().stream()
                 .map(r -> new ElementReferentielProjetDto((UUID) r[0], (String) r[1], (String) r[2], (Integer) r[3]))
                 .toList();
     }
 
     // Un décompte peut porter son propre tiers quand le lot n'a pas de fournisseur : les deux sources comptent.
-    private List<ElementReferentielProjetDto> fournisseurs(Set<UUID> projets) {
-        if (projets.isEmpty()) {
+    private List<ElementReferentielProjetDto> fournisseurs(Visibilite v) {
+        if (v.vide()) {
             return List.of();
         }
         Map<UUID, CfgTier> parId = new HashMap<>();
-        for (String jpql : List.of("select distinct t from PrjMarket m join m.cfgSupplier t where m.prjProject.id in :projets",
-                "select distinct t from PrjWorkingOut w join w.cfgTier t where w.prjMarket.prjProject.id in :projets")) {
-            em.createQuery(jpql, CfgTier.class).setParameter("projets", projets).getResultList()
+        for (String jpql : List.of("select distinct t from PrjMarket m join m.cfgSupplier t where m.prjProject.id in :projets"
+                        + STATUT_M,
+                "select distinct t from PrjWorkingOut w join w.prjMarket m join w.cfgTier t"
+                        + " where m.prjProject.id in :projets" + STATUT_M)) {
+            v.lier(em.createQuery(jpql, CfgTier.class)).getResultList()
                     .forEach(t -> parId.putIfAbsent(t.getId(), t));
         }
         return parId.values().stream()
@@ -279,9 +311,10 @@ public class LotsProjetService {
                 .toList();
     }
 
-    private static Predicate filtre(Root<PrjMarket> root, CriteriaBuilder cb, FiltresLots f, Collection<UUID> projets) {
+    private static Predicate filtre(Root<PrjMarket> root, CriteriaBuilder cb, FiltresLots f, Visibilite v) {
         List<Predicate> p = new ArrayList<>();
-        p.add(root.get("prjProject").get(ID).in(projets));
+        p.add(root.get("prjProject").get(ID).in(v.projets()));
+        v.statuts().ifPresent(s -> p.add(root.get("strStatus").get(ID).in(s)));
         if (f.statutId() != null) {
             p.add(cb.equal(root.get("strStatus").get(ID), f.statutId()));
         }

@@ -77,6 +77,7 @@ class ImpayesAchatTest {
         statutEnCours = fixture.statut("ENC-" + jeton, false, false, 1);
         type = fixture.typeReglement("VIR-" + jeton);
         compte = fixture.compte("ACH-" + jeton, ROLE);
+        fixture.habiliterSociete(compte, societe);
         fixture.habiliter(compte, projet);
     }
 

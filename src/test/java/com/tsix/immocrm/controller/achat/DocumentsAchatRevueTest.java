@@ -67,6 +67,7 @@ class DocumentsAchatRevueTest {
         fixture.piece(Piece.facture(jeton + "-B", LocalDate.of(2026, 3, 11), fournisseurB, nomB, societe, projetB,
                 new BigDecimal("2400")));
         habiliteA = fixture.compte("ACH-RV-" + jeton, COMMERCIAL);
+        fixture.habiliterSociete(habiliteA, societe);
         fixture.habiliter(habiliteA, projetA);
     }
 

@@ -14,6 +14,7 @@ import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.FournisseurAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.ProjetAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.StatutAchatDto;
 import com.tsix.immocrm.services.administration.HistoriqueService;
+import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -38,6 +39,12 @@ class RequetesDocumentsAchat {
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
     private static final String ID = "id";
     private static final String PROJETS = "projets";
+    private static final UUID AUCUN = new UUID(0, 0);
+
+    /** Seul prédicat de visibilité d'une pièce {@code d} (R3, R4, R5), lié par {@link #parametres}. */
+    static final String VISIBLE = "d.CfgCompanyId IN (:societes) AND (d.PrjProjectId IN (:projets) "
+            + "OR (:sansProjet = 1 AND d.PrjProjectId IS NULL)) AND (:moduleProjet = 0 OR d.AdmModuleId IN "
+            + "(SELECT am.PKey FROM AdmModule am WHERE am.Code = N'PRJ')) ";
 
     private static final String PIECES = "SELECT d.PKey, d.Code, d.DocType, d.DocRef, d.Description, d.DocDate, "
             + "d.MaturityDate, d.CfgTierId, t.Description AS FournisseurNom, d.PrjProjectId, p.Code AS ProjetCode, "
@@ -51,7 +58,7 @@ class RequetesDocumentsAchat {
             + "LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId "
             + "LEFT JOIN CfgCompany c ON c.PKey = d.CfgCompanyId LEFT JOIN StrEntity e ON e.PKey = d.StrEntityId "
             + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId "
-            + RequetesReglementsProjet.DECOMPTE + "WHERE d.PrjProjectId IN (:projets) ";
+            + RequetesReglementsProjet.DECOMPTE + "WHERE " + VISIBLE;
 
     private static final String LISTE = PIECES
             + "AND (:toutesNatures = 1 OR d.DocType IN (:natures)) "
@@ -89,7 +96,7 @@ class RequetesDocumentsAchat {
             + "WHERE PKey IN (:projets) ORDER BY Code";
 
     private static final String FOURNISSEURS = "SELECT DISTINCT t.PKey, t.Description FROM BuyDocument d "
-            + "JOIN CfgTier t ON t.PKey = d.CfgTierId WHERE d.PrjProjectId IN (:projets) ORDER BY t.Description";
+            + "JOIN CfgTier t ON t.PKey = d.CfgTierId WHERE " + VISIBLE + "ORDER BY t.Description";
 
     /** En-tête de la fiche : la ligne de liste et les colonnes propres à la fiche. */
     record Entete(DocumentAchatListItemDto document, String notes, BigDecimal regularisation, BigDecimal timbreFiscal,
@@ -110,14 +117,26 @@ class RequetesDocumentsAchat {
         this.jdbc = jdbc;
     }
 
-    /** Pièces des {@code projets} (non vides) retenues par les filtres, solde calculé, sans tri. */
-    List<DocumentAchatListItemDto> pieces(Collection<UUID> projets, FiltresDocumentsAchat f) {
-        MapSqlParameterSource p = new MapSqlParameterSource(PROJETS, textes(projets))
+    /** Paramètres de {@link #VISIBLE} ; une liste vide devient un UUID qui ne désigne rien (SQL Server refuse IN ()). */
+    static MapSqlParameterSource parametres(PerimetreAchat perimetre) {
+        return new MapSqlParameterSource("societes", nonVide(perimetre.societes()))
+                .addValue(PROJETS, nonVide(perimetre.projets()))
+                .addValue("sansProjet", perimetre.sansProjet() ? 1 : 0)
+                .addValue("moduleProjet", perimetre.moduleProjet() ? 1 : 0);
+    }
+
+    private static List<String> nonVide(Collection<UUID> ids) {
+        return textes(ids.isEmpty() ? List.of(AUCUN) : ids);
+    }
+
+    /** Pièces du {@code perimetre} retenues par les filtres, solde calculé, sans tri. */
+    List<DocumentAchatListItemDto> pieces(PerimetreAchat perimetre, FiltresDocumentsAchat f) {
+        MapSqlParameterSource p = parametres(perimetre)
                 .addValue("toutesNatures", f.natures().isEmpty() ? 1 : 0)
                 .addValue("natures", f.natures().isEmpty() ? List.of("") : f.natures().stream().map(Enum::name).toList())
                 .addValue("tousStatuts", f.statutIds().isEmpty() ? 1 : 0)
                 // SQL Server convertit la liste même quand :tousStatuts = 1 : un UUID valide, jamais ''.
-                .addValue("statuts", textes(f.statutIds().isEmpty() ? List.of(new UUID(0, 0)) : f.statutIds()))
+                .addValue("statuts", nonVide(f.statutIds()))
                 .addValue("lot", texte(f.lotId()), Types.VARCHAR)
                 .addValue("fournisseur", texte(f.fournisseurId()), Types.VARCHAR)
                 .addValue("du", f.du(), Types.DATE)
@@ -127,8 +146,8 @@ class RequetesDocumentsAchat {
         return jdbc.query(LISTE, p, (rs, n) -> piece(rs));
     }
 
-    Optional<Entete> entete(Collection<UUID> projets, UUID id) {
-        return jdbc.query(FICHE, Map.of(PROJETS, textes(projets), ID, id.toString()), (rs, n) -> new Entete(piece(rs),
+    Optional<Entete> entete(PerimetreAchat perimetre, UUID id) {
+        return jdbc.query(FICHE, parametres(perimetre).addValue(ID, id.toString()), (rs, n) -> new Entete(piece(rs),
                         chaine(rs, "Notes"), rs.getBigDecimal("AmountRegul"), rs.getBigDecimal("FiscalStamp"),
                         rs.getBoolean("IsValidatedOnAccounting"), chaine(rs, "EntiteCode"),
                         chaine(rs, "EntiteDescription"), horodatage(rs, "UserCreateDateTime"), chaine(rs, "UserCreate"),
@@ -171,8 +190,8 @@ class RequetesDocumentsAchat {
                 uuid(rs, "PKey"), chaine(rs, "Code"), chaine(rs, "Description")));
     }
 
-    List<FournisseurAchatDto> fournisseurs(Collection<UUID> projets) {
-        return jdbc.query(FOURNISSEURS, Map.of(PROJETS, textes(projets)), (rs, n) -> new FournisseurAchatDto(
+    List<FournisseurAchatDto> fournisseurs(PerimetreAchat perimetre) {
+        return jdbc.query(FOURNISSEURS, parametres(perimetre), (rs, n) -> new FournisseurAchatDto(
                 uuid(rs, "PKey"), chaine(rs, "Description")));
     }
 

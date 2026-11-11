@@ -63,6 +63,7 @@ class DocumentsAchatFiltresTest {
         nom = "Fournisseur " + jeton;
         fournisseur = fixture.fournisseur("FOU-" + jeton, nom);
         compte = fixture.compte("ACH-" + jeton, ROLE);
+        fixture.habiliterSociete(compte, societe);
         fixture.habiliter(compte, projet);
     }
 

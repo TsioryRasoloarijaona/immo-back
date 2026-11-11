@@ -36,6 +36,18 @@ public class PerimetreProjetService {
                 .getResultList());
     }
 
+    /** Pièces d'achat visibles ; un filtre « projets » demandé exclut les pièces sans projet. */
+    public PerimetreAchat achat(Collection<UUID> projetsDemandes) {
+        Set<UUID> societes = PerimetreCommercialService.admUserIdCourant().map(user -> Set.copyOf(entityManager
+                        .createQuery("select distinct h.cfgCompany.id from AdmUserHabilitation h"
+                                + " where h.admUser.id = :user and h.cfgCompany is not null", UUID.class)
+                        .setParameter("user", user)
+                        .getResultList()))
+                .orElseGet(Set::of);
+        return new PerimetreAchat(societes, restreindre(projetsDemandes),
+                projetsDemandes == null || projetsDemandes.isEmpty(), false);
+    }
+
     public boolean estVisible(UUID prjProjectId) {
         return prjProjectId != null && projetsVisibles().contains(prjProjectId);
     }
