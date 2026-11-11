@@ -88,7 +88,7 @@ public class DocumentsAchatController {
     @GetMapping("/documents")
     @Operation(summary = "Liste paginée des pièces d'achat visibles (société et projet habilités)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Page de pièces ; vide si l'appelant n'a aucun projet."),
+            @ApiResponse(responseCode = "200", description = "Page de pièces ; vide si aucune pièce visible (société, projet)."),
             @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date, nature) ou tri inconnu.",
                     content = @Content)
     })
@@ -100,7 +100,7 @@ public class DocumentsAchatController {
     @GetMapping("/documents/totaux")
     @Operation(summary = "Totaux de la liste des pièces d'achat : mêmes filtres, toutes pages")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Totaux ; à zéro si l'appelant n'a aucun projet."),
+            @ApiResponse(responseCode = "200", description = "Totaux ; à zéro si aucune pièce visible (société, projet)."),
             @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date, nature, booléen).",
                     content = @Content)
     })
@@ -145,7 +145,7 @@ public class DocumentsAchatController {
     @GetMapping("/fournisseurs/soldes")
     @Operation(summary = "Solde par fournisseur et société, sur les pièces visibles (non paginé)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lignes et total ; vides si l'appelant n'a aucun projet."),
+            @ApiResponse(responseCode = "200", description = "Lignes et total ; vides si aucune pièce visible (société, projet)."),
             @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID).", content = @Content)
     })
     public SoldesFournisseursDto soldes(@ParameterObject @ModelAttribute FiltresSoldesFournisseurs filtres) {
