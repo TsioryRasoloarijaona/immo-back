@@ -1,15 +1,20 @@
 package com.tsix.immocrm.services.projet;
 
+import com.tsix.immocrm.dto.projet.ExecutionTransitionProjetDto;
+import com.tsix.immocrm.dto.projet.HistoriqueProjetDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetConfigDto;
 import com.tsix.immocrm.dto.projet.StatutLotDto;
+import com.tsix.immocrm.dto.projet.TransitionProjetDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjProject;
+import com.tsix.immocrm.entities.stl.StlCategory;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.entities.str.StrWorkFlow;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -30,6 +35,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -47,7 +53,16 @@ public class ProjetConfigService {
 
     private static final String ID = "id";
     private static final String ENTITE_PROJET = "PrjProject";
-    private static final String STATUT_INITIAL = "Nouveau";
+    private static final UUID TYPE_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
+    private static final String DATE_LP = "dateLancementPrevisionnelle";
+    private static final String DATE_AP = "dateAchevementPrevisionnelle";
+    private static final String DATE_LR = "dateLancementReelle";
+    private static final String DATE_AR = "dateAchevementReelle";
+    private static final String NIVELLEMENT = "nivellementId";
+    private static final String REFERENCE = "projetReferenceId";
+    private static final String LOT_PRORATA = "lotGestionnaireProrataId";
+    private static final Set<String> VIDABLES = Set.of(DATE_LP, DATE_AP, DATE_LR, DATE_AR, NIVELLEMENT, REFERENCE, LOT_PRORATA);
+    private static final String PROJET_EXISTE = "SELECT COUNT(*) FROM PrjProject WHERE PKey = :id";
     private static final Pattern ANNEE_SOCIETE = Pattern.compile("^\\d{4}-");
     private static final String STATUTS_DU_PROJET = """
             SELECT s FROM StrStatus s WHERE s.strConfigEntityId IN (SELECT e.id FROM StrEntity e WHERE e.code = :entite)
@@ -106,14 +121,16 @@ public class ProjetConfigService {
     private final CfgTierRepository tiers;
     private final TracePatrimoine trace;
     private final SuppressionProjet suppression;
+    private final TransitionsProjet transitions;
 
     public ProjetConfigService(PrjProjectRepository projets, CfgCompanyRepository societes, CfgTierRepository tiers,
-                               TracePatrimoine trace, SuppressionProjet suppression) {
+                               TracePatrimoine trace, SuppressionProjet suppression, TransitionsProjet transitions) {
         this.projets = projets;
         this.societes = societes;
         this.tiers = tiers;
         this.trace = trace;
         this.suppression = suppression;
+        this.transitions = transitions;
     }
 
     public List<ProjetConfigDto> lister() {
@@ -137,8 +154,9 @@ public class ProjetConfigService {
         appliquer(p, saisie);
         List<StrStatus> statuts = statutsDuProjet();
         p.setStrEntity(entiteProjet());
-        p.setStrStatus(statuts.stream().filter(s -> STATUT_INITIAL.equals(s.getCode())).findFirst()
-                .orElseThrow(() -> new ConflictException("Paramétrage : statut « Nouveau » des projets introuvable.")));
+        // StrStatus.GetStartStatus : premier statut de type « Nouveau », pas le code.
+        p.setStrStatus(statuts.stream().filter(s -> TYPE_NOUVEAU.equals(s.getStrStatusTypeId())).findFirst()
+                .orElseThrow(() -> new ConflictException("Paramétrage : statut de type « Nouveau » des projets introuvable.")));
         TracePatrimoine.Trace t = trace.maintenant();
         p.setUserCreate(t.auteur());
         p.setUserCreateDateTime(t.le());
@@ -146,17 +164,46 @@ public class ProjetConfigService {
         p.setUserUpdateDateTime(t.le());
         em().persist(p);
         trace.habiliterCreateur(p);
+        transitions.historiser(p, TransitionsProjet.CREATION, null, "", null);
         return toDto(p, new long[2]);
+    }
+
+    public List<TransitionProjetDto> transitions(UUID id) {
+        List<StrWorkFlow> sortantes = transitions.sortantes(charger(id));
+        Map<UUID, StrStatus> cibles = transitions.cibles(sortantes);
+        return sortantes.stream().map(w -> new TransitionProjetDto(w.getId(), w.getCode(), w.getDescription(),
+                Champs.de(cibles.get(w.getStatusToId()), s -> new ReferentielItemDto(s.getId(), s.getCode(), s.getDescription(),
+                        s.getSorting())), Boolean.TRUE.equals(w.getWithComment()), Boolean.TRUE.equals(w.getWithUserDate()),
+                Boolean.TRUE.equals(w.getWithPassword()))).toList();
+    }
+
+    @Transactional
+    public ProjetConfigDto executerTransition(UUID id, ExecutionTransitionProjetDto saisie) {
+        PrjProject p = charger(id);
+        transitions.executer(p, saisie);
+        tracerModification(p);
+        return toDto(p, compteursDe(id));
+    }
+
+    public List<HistoriqueProjetDto> historique(UUID id) {
+        return transitions.historiques().findByObjectIdInOrderByDocDateDesc(List.of(charger(id).getId())).stream()
+                .map(h -> new HistoriqueProjetDto(h.getId(), h.getDocDate(), h.getDescription(), h.getAdmUserDescription(),
+                        h.getStrWorkflowDescription(), h.getStrStatusDescription(), h.getNotes(), h.getUserDate()))
+                .toList();
     }
 
     @Transactional
     public ProjetConfigDto modifier(UUID id, ProjetConfigRequest saisie) {
         PrjProject p = charger(id);
         appliquer(p, saisie);
+        tracerModification(p);
+        return toDto(p, compteursDe(id));
+    }
+
+    private void tracerModification(PrjProject p) {
         TracePatrimoine.Trace t = trace.maintenant();
         p.setUserUpdate(t.auteur());
         p.setUserUpdateDateTime(t.le());
-        return toDto(p, compteursDe(id));
     }
 
     /** 409 dès qu'une ligne référence le projet ; sinon ses habilitations partent avec lui, jamais par une cascade. */
@@ -180,7 +227,14 @@ public class ProjetConfigService {
                 statutsDuProjet().stream()
                         .map(s -> new ReferentielItemDto(s.getId(), s.getCode(), s.getDescription(), s.getSorting())).toList(),
                 tiers.findEmployes().stream()
-                        .map(e -> new ReferentielItemDto(e.getId(), e.getCode(), e.getDescription(), null)).toList());
+                        .map(e -> new ReferentielItemDto(e.getId(), e.getCode(), e.getDescription(), null)).toList(),
+                ((List<?>) em().createNativeQuery("SELECT CONVERT(varchar(36), PKey), Code FROM StkLeveling ORDER BY Code ASC")
+                        .getResultList()).stream().map(Object[].class::cast)
+                        .map(r -> new ReferentielItemDto(UUID.fromString((String) r[0]), (String) r[1], (String) r[1], null))
+                        .toList(),
+                em().createQuery("SELECT c FROM StlCategory c ORDER BY c.code", StlCategory.class).getResultStream()
+                        .filter(OngletsProjetConfigService::estDepense)
+                        .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList());
     }
 
     public List<StatutLotDto> statutsLot() {
@@ -193,6 +247,18 @@ public class ProjetConfigService {
     /** PUT : remplacement complet, code, libellé et société obligatoires ; booléens et taux absents = inchangés. */
     private void appliquer(PrjProject p, ProjetConfigRequest s) {
         // Avant tout setter : les requêtes du contrôle flushent l'entité.
+        Set<String> vides = s.champsAVider() == null ? Set.of() : Set.copyOf(s.champsAVider());
+        if (!VIDABLES.containsAll(vides)) {
+            throw new InvalidRequestException("champsAVider : seuls %s se vident.".formatted(String.join(", ", VIDABLES)));
+        }
+        if (p.getId().equals(s.projetReferenceId())) {
+            throw new InvalidRequestException("projetReferenceId : un projet ne peut pas être sa propre référence.");
+        }
+        UUID nivellement = existant(s.nivellementId(), "SELECT COUNT(*) FROM StkLeveling WHERE PKey = :id", p,
+                "nivellementId : nivellement inconnu.");
+        UUID reference = existant(s.projetReferenceId(), PROJET_EXISTE, p, "projetReferenceId : projet inconnu.");
+        UUID lot = existant(s.lotGestionnaireProrataId(), "SELECT COUNT(*) FROM PrjMarket WHERE PKey = :id AND PrjProjectId = :projet",
+                p, "lotGestionnaireProrataId : aucun lot de ce projet avec cet id.");
         p.setCode(codeLibre(obligatoire(sansBlancsAuxBords(s.code()), null, "Le code"), p.getId()));
         p.setDescription(obligatoire(sansBlancsAuxBords(s.description()), null, "La description"));
         p.setDescriptionLong(texte(s.descriptionLongue(), null, 500, "La description longue"));
@@ -205,6 +271,33 @@ public class ProjetConfigService {
         p.setDefaultVentilationRate(ou(positif(s.tauxVentilationDefaut(), "Le taux de ventilation"),
                 p.getDefaultVentilationRate()));
         p.setIsACommon(ou(s.partiesCommunes(), p.getIsACommon()));
+        p.setProvisionalWorkStartDate(vider(vides, DATE_LP, s.dateLancementPrevisionnelle(), p.getProvisionalWorkStartDate()));
+        p.setProvisionalCompletingWorkDate(vider(vides, DATE_AP, s.dateAchevementPrevisionnelle(),
+                p.getProvisionalCompletingWorkDate()));
+        p.setRealWorkStartDate(vider(vides, DATE_LR, s.dateLancementReelle(), p.getRealWorkStartDate()));
+        p.setRealCompletingWorkDate(vider(vides, DATE_AR, s.dateAchevementReelle(), p.getRealCompletingWorkDate()));
+        p.setStkLevelingId(vider(vides, NIVELLEMENT, nivellement, p.getStkLevelingId()));
+        p.setReferenceId(vider(vides, REFERENCE, reference, p.getReferenceId()));
+        p.setManageProrataPrjMarketId(vider(vides, LOT_PRORATA, lot, p.getManageProrataPrjMarketId()));
+    }
+
+    private static <T> T vider(Set<String> vides, String champ, T saisie, T actuel) {
+        return vides.contains(champ) ? null : ou(saisie, actuel);
+    }
+
+    /** {@code id} nul ou présent en base ({@code sql} lie {@code :id}, et {@code :projet} s'il le cite) ; sinon 400. */
+    private UUID existant(UUID id, String sql, PrjProject p, String erreur) {
+        if (id == null) {
+            return null;
+        }
+        Query requete = em().createNativeQuery(sql).setParameter(ID, id);
+        if (sql.contains(":projet")) {
+            requete.setParameter("projet", p.getId());
+        }
+        if (((Number) requete.getSingleResult()).intValue() == 0) {
+            throw new InvalidRequestException(erreur);
+        }
+        return id;
     }
 
     private CfgCompany societe(UUID id) {
@@ -264,6 +357,8 @@ public class ProjetConfigService {
                 Champs.de(gestionnaire, CfgTier::getId), Champs.de(gestionnaire, CfgTier::getDescription),
                 Boolean.TRUE.equals(p.getIsVentilated()), p.getDefaultVentilationRate(), Boolean.TRUE.equals(p.getIsACommon()),
                 p.getCode() != null && ANNEE_SOCIETE.matcher(p.getCode()).find(), compteurs[0], compteurs[1],
-                p.getUserCreateDateTime(), p.getUserCreate(), p.getUserUpdateDateTime(), p.getUserUpdate());
+                p.getUserCreateDateTime(), p.getUserCreate(), p.getUserUpdateDateTime(), p.getUserUpdate(),
+                p.getProvisionalWorkStartDate(), p.getProvisionalCompletingWorkDate(), p.getRealWorkStartDate(),
+                p.getRealCompletingWorkDate(), p.getStkLevelingId(), p.getReferenceId(), p.getManageProrataPrjMarketId());
     }
 }

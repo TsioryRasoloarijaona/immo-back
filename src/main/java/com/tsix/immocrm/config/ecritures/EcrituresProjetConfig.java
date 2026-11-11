@@ -14,6 +14,6 @@ public class EcrituresProjetConfig implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("PrjMarketType", "PrjProject");
+        return List.of("PrjMarketType", "PrjProject", "PrjProjectCfgTrancheVentilation", "PrjProjectProgressCriteriaLine");
     }
 }
