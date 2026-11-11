@@ -175,7 +175,7 @@ class EcriturePieceAchatInstantaneTest {
                 .containsExactlyInAnyOrder(1, 2);
         for (Tuple l : lignes) {
             boolean premier = ("Concrétisation du dossier N° " + d1.code()).equals(l.get(DESCRIPTION));
-            BigDecimal montant = premier ? new BigDecimal("300.5") : new BigDecimal("100");
+            BigDecimal montant = new BigDecimal(premier ? "300.5" : "100");
             new ColonnesEcrites()
                     .avec("Code", null)
                     .avec(DESCRIPTION, "Concrétisation du dossier N° " + (premier ? d1.code() : d2.code()))
@@ -202,9 +202,12 @@ class EcriturePieceAchatInstantaneTest {
         List<Tuple> historique = commissions.lignes(HISTORIQUE, piece);
         assertAll(
                 () -> assertThat(categories).isEmpty(),
-                () -> assertThat(projets).singleElement().satisfies(v -> new ColonnesEcrites()
-                        .avec("PrjProjectId", projet).avec("VentilationRate", BigDecimal.ONE)
-                        .verifier(v, "BuyVentilationExpense")),
+                () -> {
+                    assertThat(projets).hasSize(1);
+                    new ColonnesEcrites()
+                            .avec("PrjProjectId", projet).avec("VentilationRate", BigDecimal.ONE)
+                            .verifier(projets.get(0), "BuyVentilationExpense");
+                },
                 () -> assertThat(historique).singleElement().satisfies(h -> new ColonnesEcrites()
                         .avec("BuyDocumentStatusId", STATUT_EN_COURS)
                         .avec("AdmUserId", compte.compte().getId())
@@ -227,9 +230,9 @@ class EcriturePieceAchatInstantaneTest {
         TypeFrais type = terrains.typeFrais(t.jeton(), true, true);
         UUID fournisseur = terrains.fournisseur("FRN-" + t.jeton(), null);
         UUID frais = terrains.frais(terrain, type.id(), fournisseur, MONTANT_FRAIS, false);
-        UUID employe = terrains.fournisseur("EMP-" + t.jeton(), null);
-        terrains.employeDuCompte(admin.getId(), employe);
-        return new Frais(admin, t, terrain, type, fournisseur, frais, employe);
+        UUID personnel = terrains.fournisseur("EMP-" + t.jeton(), null);
+        terrains.employeDuCompte(admin.getId(), personnel);
+        return new Frais(admin, t, terrain, type, fournisseur, frais, personnel);
     }
 
     private Tuple validerFrais(Frais f) throws Exception {
