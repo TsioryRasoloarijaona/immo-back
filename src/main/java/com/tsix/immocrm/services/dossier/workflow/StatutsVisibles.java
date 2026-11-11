@@ -7,11 +7,11 @@ import com.tsix.immocrm.services.dossier.liste.StatutsVisiblesListe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Statuts de dossier qu'un utilisateur voit dans la liste ({@code StrStatus.GetStatusFilterQueryClauseForListing}) :
@@ -43,12 +43,11 @@ public class StatutsVisibles implements StatutsVisiblesListe {
         if (lignes.isEmpty()) {
             return Optional.empty();
         }
-        Set<UUID> visibles = new HashSet<>();
-        for (Object[] ligne : lignes) {
-            if (utilisateur.correspond((StrIntervener) ligne[1])) {
-                visibles.add((UUID) ligne[0]);
-            }
-        }
-        return Optional.of(Set.copyOf(visibles));
+        return Optional.of(visibles(utilisateur, lignes));
+    }
+
+    static Set<UUID> visibles(Intervenant utilisateur, List<Object[]> lignes) {
+        return lignes.stream().filter(ligne -> utilisateur.correspond((StrIntervener) ligne[1]))
+                .map(ligne -> (UUID) ligne[0]).collect(Collectors.toUnmodifiableSet());
     }
 }

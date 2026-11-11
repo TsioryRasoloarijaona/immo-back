@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.projet.DepensesLotDto;
 import com.tsix.immocrm.dto.projet.DepensesProjetDto;
 import com.tsix.immocrm.dto.projet.FiltresReglementsProjet;
 import com.tsix.immocrm.dto.projet.ReglementProjetDto;
+import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -22,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -54,11 +54,13 @@ public class DepensesProjetService {
     }
 
     public List<DepensesProjetDto> lireDepenses(List<UUID> projetIds) {
-        Set<UUID> projets = perimetre.restreindre(projetIds);
-        if (projets.isEmpty()) {
+        PerimetreAchat visibles = perimetre.achat(projetIds).duModuleProjet();
+        if (visibles.vide()) {
             return List.of();
         }
-        Map<UUID, List<DocumentAchatListItemDto>> parProjet = requetes.pieces(projets, FACTURES).stream()
+        // Les pièces sans projet sont dans les listes Dépenses, jamais dans la synthèse par projet.
+        Map<UUID, List<DocumentAchatListItemDto>> parProjet = requetes.pieces(visibles, FACTURES).stream()
+                .filter(f -> f.projetId() != null)
                 .collect(Collectors.groupingBy(DocumentAchatListItemDto::projetId));
         if (parProjet.isEmpty()) {
             return List.of();
@@ -67,11 +69,11 @@ public class DepensesProjetService {
     }
 
     public Page<ReglementProjetDto> lireReglements(FiltresReglementsProjet filtres, Pageable pageable) {
-        Set<UUID> projets = perimetre.restreindre(filtres.projetIds());
-        if (projets.isEmpty()) {
+        PerimetreAchat visibles = perimetre.achat(filtres.projetIds()).duModuleProjet();
+        if (visibles.vide()) {
             return Page.empty(pageable);
         }
-        List<ReglementProjetDto> lignes = reglements.lignes(projets, filtres);
+        List<ReglementProjetDto> lignes = reglements.lignes(visibles, filtres);
         return new PageImpl<>(lignes.stream().skip(pageable.getOffset()).limit(pageable.getPageSize()).toList(),
                 pageable, lignes.size());
     }

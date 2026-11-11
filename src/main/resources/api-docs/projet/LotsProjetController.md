@@ -5,13 +5,18 @@ Module Projet (chantier OMRAN), en **lecture seule** : lots (`PrjMarket`, « mar
 
 **Visibilité, comme OMRAN** : l'appelant voit les projets de ses lignes `AdmUserHabilitation.PrjProjectId`, **quel que soit
 son rôle** (aucune exemption Administrateur ni Direction Générale). Sans ligne d'habilitation, ou appelant non identifiable :
-listes vides. Un lot sans projet, ou dont le projet n'est pas visible, répond **404** comme un identifiant inconnu (jamais 403).
+listes vides. **Lots** : il faut en plus, comme OMRAN (`StrStatus.GetStatusFilterQueryClauseForListing`), que le statut
+du lot soit lié (`StrStatusIntervener`) à un intervenant dont le rôle est un rôle de l'appelant ou qui est l'appelant ; seule
+exemption : un rôle de l'appelant à `AdmRole.WithSequenceFreeRestriction = 0` (aucune exemption par le code de rôle). Lot
+sans statut ou statut sans intervenant : invisible. Un lot sans projet, hors périmètre ou au statut invisible répond **404**
+comme un identifiant inconnu (jamais 403), fiche et sous-routes. Les décomptes (`/api/projet/decomptes`) ne suivent que
+le projet. Voir `FEATURE-visibilite-omran.md` R1, R2, R7.
 
 ## referentiels
 
-Listes de choix des écrans Lots et Décomptes. `projets` et `categories` ne contiennent que ce que l'appelant voit ;
-`typesLot`, `statutsLot` et `statutsFacture` sont des référentiels complets. Le statut d'un lot n'est pas tenu à jour dans
-la donnée OMRAN : c'est une étiquette, jamais une règle.
+Listes de choix des écrans Lots et Décomptes. `projets` (projets habilités dont le statut est visible, même clause que les
+lots), `nbLots`, `categories` et `fournisseurs` ne contiennent que ce que l'appelant voit ; `typesLot`, `statutsLot` et
+`statutsFacture` sont des référentiels complets.
 
 ## lots
 

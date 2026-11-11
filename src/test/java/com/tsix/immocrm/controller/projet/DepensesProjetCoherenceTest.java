@@ -4,12 +4,14 @@ import com.jayway.jsonpath.JsonPath;
 import com.tsix.immocrm.controller.projet.AppelsProjet.Reponse;
 import com.tsix.immocrm.fixtures.FixtureDepensesProjet;
 import com.tsix.immocrm.fixtures.FixtureDepensesProjet.Jeu;
+import jakarta.persistence.EntityManager;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,8 @@ class DepensesProjetCoherenceTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureDepensesProjet fixture;
+    @Autowired private EntityManager em;
+    @Autowired private JdbcTemplate jdbc;
 
     private AppelsProjet appels;
     private Jeu jeu;
@@ -53,6 +57,9 @@ class DepensesProjetCoherenceTest {
         appels = new AppelsProjet(mockMvc);
         jeu = fixture.jeu();
         a = connecte(jeu.compteA(), FixtureDepensesProjet.ROLE);
+        // Lots du jeu sans statut : rôle exempté de la clause de statut (FEATURE-visibilite-omran.md R1).
+        em.flush();
+        jdbc.update("UPDATE AdmRole SET WithSequenceFreeRestriction = 0 WHERE Code = ?", FixtureDepensesProjet.ROLE);
     }
 
     private Reponse ok(String url, String... params) throws Exception {

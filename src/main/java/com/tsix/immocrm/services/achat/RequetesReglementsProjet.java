@@ -3,19 +3,17 @@ package com.tsix.immocrm.services.achat;
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.dto.projet.FiltresReglementsProjet;
 import com.tsix.immocrm.dto.projet.ReglementProjetDto;
+import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.sql.Types;
-import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
 
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.chaine;
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.jour;
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.texte;
-import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.textes;
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.uuid;
 
 /** SQL natif des affectations de règlement sur les factures d'un projet (FEATURE-achat-depenses-projet.md §4.2). */
@@ -38,7 +36,7 @@ class RequetesReglementsProjet {
             + "LEFT JOIN StlSettlementType ty ON ty.PKey = s.StlSettlementTypeId "
             + "LEFT JOIN CfgTier t ON t.PKey = d.CfgTierId LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId "
             + "LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId " + DECOMPTE
-            + "WHERE d.DocType = 'INVOICE' AND d.PrjProjectId IN (:projets) "
+            + "WHERE d.DocType = 'INVOICE' AND " + RequetesDocumentsAchat.VISIBLE
             // Une facture d'un projet visible peut porter le lot d'un autre projet : le lot filtré doit être visible aussi.
             + "AND (:lot IS NULL OR (d.PrjMarketId = :lot AND m.PrjProjectId IN (:projets))) "
             + "AND (:facture IS NULL OR d.PKey = :facture) "
@@ -52,9 +50,9 @@ class RequetesReglementsProjet {
         this.jdbc = jdbc;
     }
 
-    /** Lignes des factures des {@code projets} (non vides) retenues par les filtres, tri fixe. */
-    List<ReglementProjetDto> lignes(Collection<UUID> projets, FiltresReglementsProjet f) {
-        MapSqlParameterSource p = new MapSqlParameterSource("projets", textes(projets))
+    /** Lignes des factures du {@code perimetre} retenues par les filtres, tri fixe. */
+    List<ReglementProjetDto> lignes(PerimetreAchat perimetre, FiltresReglementsProjet f) {
+        MapSqlParameterSource p = RequetesDocumentsAchat.parametres(perimetre)
                 .addValue("lot", texte(f.lotId()), Types.VARCHAR)
                 .addValue("facture", texte(f.factureId()), Types.VARCHAR)
                 .addValue("du", f.du(), Types.DATE)

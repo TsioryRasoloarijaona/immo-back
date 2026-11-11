@@ -2,7 +2,7 @@
 
 Pièces d'achat (`BuyDocument`) en **lecture seule** : factures, bons de commande, devis, documents à régler, bons de livraison, avoirs. Voir `instructions/FEATURE-achat-lecture-factures.md`.
 
-**Visibilité, comme OMRAN** : une pièce est visible si et seulement si son projet (`PrjProjectId`) figure dans les habilitations projet de l'appelant (`AdmUserHabilitation.PrjProjectId`), **pour tous les rôles** (aucune exemption Administrateur / Direction générale). Une pièce sans projet n'est jamais visible. Une pièce hors périmètre répond 404, comme un id inconnu.
+**Visibilité, comme les listes OMRAN** : une pièce est visible si et seulement si sa société (`CfgCompanyId`) figure dans les habilitations société de l'appelant (`AdmUserHabilitation.CfgCompanyId`) **et** son projet (`PrjProjectId`) dans ses habilitations projet (`AdmUserHabilitation.PrjProjectId`) **ou** la pièce n'a pas de projet ; **pour tous les rôles** (aucune exemption Administrateur / Direction générale). Sans habilitation société : rien. Un filtre `projetIds` exclut les pièces sans projet. Une pièce hors périmètre répond 404, comme un id inconnu. Voir `instructions/FEATURE-visibilite-omran.md` R3.
 
 **Solde** : `montantRegle` = somme des lignes de règlement (`StlSettlementLine.Amount`) de la pièce dont le règlement n'est pas annulé (`CANCELED`) ; `resteARegler` = `montantAPayer` (`AmountToPay`) − réglé, à 2 décimales ; `solde` = |reste| ≤ 0,05 ; `aDeduire` = à payer < −0,05 (récupération d'avance sur décompte, jamais « trop réglée ») ; `tropRegle` = reste < −0,05 sur une pièce qui n'est pas à déduire. « Payé » ne se lit jamais dans le statut. Calcul unique : `SoldeDocumentAchat` (FEATURE-achat-impayes.md §3.1).
 
@@ -14,11 +14,11 @@ Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet
 
 ## totaux
 
-Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre. Aucun projet visible : tout à zéro.
+Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre. Aucune pièce visible : tout à zéro.
 
 ## soldes
 
-Solde de chaque fournisseur, une ligne par (fournisseur, société), sur les factures et documents à régler (avoirs exclus) **des projets visibles de l'appelant** (habilitations projet, aucune exemption de rôle) : deux utilisateurs aux projets différents voient deux soldes différents pour le même fournisseur. Les règlements non affectés à une pièce ne sont pas comptés. À payer = `AmountToPay`, réglé = lignes de règlement non annulées, reste = différence (calcul `SoldeDocumentAchat`). `projetIds` hors périmètre est ignoré ; `search` compare le nom du fournisseur sans espaces ni casse ; `nonSoldes=true` masque les lignes soldées (|reste| ≤ 0,05). Non paginé, trié par nom de fournisseur puis code société ; `sort` est ignoré. `total` somme les lignes rendues.
+Solde de chaque fournisseur, une ligne par (fournisseur, société), sur les factures et documents à régler (avoirs exclus) **visibles de l'appelant** (même règle que la liste : société habilitée et projet habilité ou sans projet, aucune exemption de rôle) : deux utilisateurs aux projets différents voient deux soldes différents pour le même fournisseur. Les règlements non affectés à une pièce ne sont pas comptés. À payer = `AmountToPay`, réglé = lignes de règlement non annulées, reste = différence (calcul `SoldeDocumentAchat`). `projetIds` hors périmètre est ignoré ; `search` compare le nom du fournisseur sans espaces ni casse ; `nonSoldes=true` masque les lignes soldées (|reste| ≤ 0,05). Non paginé, trié par nom de fournisseur puis code société ; `sort` est ignoré. `total` somme les lignes rendues.
 
 ## exporterSoldes
 
