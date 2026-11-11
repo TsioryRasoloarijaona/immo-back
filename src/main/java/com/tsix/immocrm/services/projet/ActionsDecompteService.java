@@ -20,6 +20,8 @@ import com.tsix.immocrm.entities.prj.PrjWorkingOutRetainedLine;
 import com.tsix.immocrm.entities.prj.PrjWorkingOutStockLine;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.dossier.ReferencesOmran;
+import com.tsix.immocrm.utils.TierNomFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,13 +56,15 @@ public class ActionsDecompteService {
     private final VerrouDecompte verrou;
     private final DonneesDecompte donnees;
     private final EcritureDecompte ecriture;
+    private final ReferencesOmran references;
 
     public ActionsDecompteService(DecomptesProjetService lecture, VerrouDecompte verrou, DonneesDecompte donnees,
-                                  EcritureDecompte ecriture) {
+                                  EcritureDecompte ecriture, ReferencesOmran references) {
         this.lecture = lecture;
         this.verrou = verrou;
         this.donnees = donnees;
         this.ecriture = ecriture;
+        this.references = references;
     }
 
     /** {@code W:NewWorkingOut} l.1950-2035 ; ni lignes (lot sans décomposition) ni lignes d'appro (aucun PrjStockLine). */
@@ -71,7 +75,7 @@ public class ActionsDecompteService {
         if (dernier != null && Boolean.TRUE.equals(dernier.getFinalWorkingOut())) {
             throw new ConflictException("Vous ne pouvez pas ajouter un décompte pour un lot contenant un décompte final.");
         }
-        LocalDateTime date = demande.dateDocument().atStartOfDay();
+        LocalDateTime date = demande.dateDocument() == null ? null : demande.dateDocument().atStartOfDay();
         verifierDate(date, lot, dernier);
         PrjWorkingOut w = new PrjWorkingOut();
         w.setId(UUID.randomUUID());
@@ -90,7 +94,9 @@ public class ActionsDecompteService {
         w.setProrataBasedOnAmount(false);
         reprendreDuLot(w, lot, null);
         reprendreDuPrecedent(w, lot, dernier);
+        w.setStlCurrencyId(references.deviseParDefaut());
         w.setCode(ecriture.codeSuivant());
+        libeller(w);
         ecriture.creer(w);
         calculerEtEcrire(w);
         return lecture.decompte(w.getId());
@@ -100,11 +106,11 @@ public class ActionsDecompteService {
     public DecompteDetailDto enregistrer(UUID id, EnregistrerDecompteRequest demande) {
         PrjWorkingOut w = modifiable(id, MODIFIER);
         PrjMarket lot = w.getPrjMarket();
-        LocalDateTime date = demande.dateDocument() == null ? w.getDocDate() : demande.dateDocument().atStartOfDay();
-        verifierDate(date, lot, donnees.precedent(lot.getId(), w.getSorting()));
         if (changeParMontant(w, demande)) {
             verrou.exiger(PAR_MONTANT);
         }
+        LocalDateTime date = demande.dateDocument() == null ? w.getDocDate() : demande.dateDocument().atStartOfDay();
+        verifierDate(date, lot, donnees.precedent(lot.getId(), w.getSorting()));
         CfgTier tiers = demande.fournisseurId() == null ? w.getCfgTier() : donnees.tiers(demande.fournisseurId());
         List<LigneSaisie> saisies = demande.lignes() == null ? List.of() : demande.lignes();
         boolean rechargees = saisies.stream().anyMatch(s -> s.id() == null);
@@ -113,6 +119,7 @@ public class ActionsDecompteService {
         Map<PrjWorkingOutLine, LigneSaisie> parLigne = associer(cibles, saisies, rechargees);
         w.setDocDate(date);
         w.setCfgTier(tiers);
+        libeller(w);
         appliquerSaisie(w, demande);
         parLigne.forEach((l, s) -> {
             boolean changee = fixerQuantite(lot, l, s.quantiteSaisie() == null ? l.getQuantityOrigin() : s.quantiteSaisie(),
@@ -198,6 +205,14 @@ public class ActionsDecompteService {
             throw new ConflictException("Décompte en lecture seule : " + motif + ".");
         }
         return w;
+    }
+
+    /** {@code W:Description} l.266-276 et {@code W:SupplierDescription} l.1821-1835 (raison sociale du tiers). */
+    private static void libeller(PrjWorkingOut w) {
+        w.setDescription("Décompte N° " + w.getCode() + " du " + JOUR.format(w.getDocDate()));
+        if (w.getCfgTier() != null) {
+            w.setSupplierDescription(TierNomFormatter.nom(w.getCfgTier()));
+        }
     }
 
     /** {@code W:Verif} l.2084-2105. */

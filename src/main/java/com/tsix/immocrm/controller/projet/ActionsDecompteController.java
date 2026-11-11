@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -53,7 +52,7 @@ public class ActionsDecompteController {
             content = @Content)
     @ApiResponse(responseCode = "409", description = "Le dernier décompte du lot est le décompte final.", content = @Content)
     public DecompteDetailDto creer(@Parameter(description = "Identifiant du lot (PrjMarket.PKey).") @PathVariable UUID lotId,
-                                   @Valid @RequestBody CreerDecompteRequest demande) {
+                                   @RequestBody CreerDecompteRequest demande) {
         return service.creer(lotId, demande);
     }
 

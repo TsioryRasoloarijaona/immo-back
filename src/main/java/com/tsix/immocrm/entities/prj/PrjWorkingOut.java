@@ -16,6 +16,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /** Décompte d'un lot ; plusieurs colonnes ont une minuscule initiale dans la base (casse recopiée). */
 @Getter
@@ -117,6 +118,14 @@ public class PrjWorkingOut extends AuditOmran {
     @Size(max = 1000)
     @Column(name = "Notes")
     private String notes;
+
+    @Nationalized
+    @Size(max = 255)
+    @Column(name = "SupplierDescription")
+    private String supplierDescription;
+
+    @Column(name = "StlCurrencyId")
+    private UUID stlCurrencyId;
 
     @Column(name = "AmountRegul", precision = 26, scale = 6)
     private BigDecimal amountRegul;
