@@ -59,6 +59,9 @@ public class PrjMarket extends AuditOmran {
     @Column(name = "WithMarketView")
     private Boolean withMarketView;
 
+    @Column(name = "ExecutedQuantityBasedInsert")
+    private Boolean executedQuantityBasedInsert;
+
     @Column(name = "BlokWarrantyRestitution")
     private Boolean blokWarrantyRestitution;
 

@@ -76,6 +76,14 @@ public class ActionsDecompteController {
         return service.definirDernier(id);
     }
 
+    @PostMapping("/decomptes/{id}/cumuls")
+    @Operation(summary = "Recharger les cumuls : quantité antérieure de chaque ligne relue sur les décomptes précédents")
+    @ApiResponse(responseCode = "200", description = "Fiche relue après écriture ; les quantités saisies restent.")
+    @ApiResponse(responseCode = "409", description = VERROU, content = @Content)
+    public DecompteDetailDto rechargerCumuls(@Parameter(description = ID_DECOMPTE) @PathVariable UUID id) {
+        return service.rechargerCumuls(id);
+    }
+
     @PostMapping("/decomptes/{id}/recalcul")
     @Operation(summary = "Recalculer un décompte avec les taux et plafonds du lot")
     @ApiResponse(responseCode = "200", description = "Fiche relue après écriture.")
