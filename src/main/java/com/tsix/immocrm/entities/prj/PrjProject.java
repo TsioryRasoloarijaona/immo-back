@@ -17,6 +17,8 @@ import lombok.Setter;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 /** Projet du module Projet (pas un programme {@code CfgProject}) : « Projet de facturation pour les dépenses ». */
 @Getter
@@ -63,4 +65,25 @@ public class PrjProject extends AuditOmran {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CfgTierManagerId")
     private CfgTier cfgTierManager;
+
+    @Column(name = "ProvisionalWorkStartDate")
+    private LocalDateTime provisionalWorkStartDate;
+
+    @Column(name = "ProvisionalCompletingWorkDate")
+    private LocalDateTime provisionalCompletingWorkDate;
+
+    @Column(name = "RealWorkStartDate")
+    private LocalDateTime realWorkStartDate;
+
+    @Column(name = "RealCompletingWorkDate")
+    private LocalDateTime realCompletingWorkDate;
+
+    @Column(name = "StkLevelingId")
+    private UUID stkLevelingId;
+
+    @Column(name = "ReferenceId")
+    private UUID referenceId;
+
+    @Column(name = "ManageProrataPrjMarketId")
+    private UUID manageProrataPrjMarketId;
 }
