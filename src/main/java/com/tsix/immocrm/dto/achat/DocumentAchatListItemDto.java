@@ -38,5 +38,9 @@ public record DocumentAchatListItemDto(
         @Schema(description = "Vrai si le réglé dépasse de plus de 0,05 un à-payer positif ; faux pour une pièce négative.")
         boolean tropRegle,
         @Schema(description = "Vrai si le montant à payer est inférieur à −0,05 (récupération d'avance à déduire).")
-        boolean aDeduire) {
+        boolean aDeduire,
+        @Schema(description = "Décompte lié (PrjWorkingOut.PKey, par PrjWorkingOut.BuyDocumentId) ; null sans décompte.")
+        UUID decompteId,
+        @Schema(description = "Code du décompte lié ; null sans décompte.") String decompteCode,
+        @Schema(description = "N° d'ordre du décompte dans son lot (Sorting) ; null sans décompte.") Integer decompteNumero) {
 }
