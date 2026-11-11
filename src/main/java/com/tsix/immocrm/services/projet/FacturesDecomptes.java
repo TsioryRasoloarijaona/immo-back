@@ -31,14 +31,13 @@ class FacturesDecomptes {
     }
 
     private static final String FACTURES = """
-            SELECT wo.PKey, wo.PrjMarketId, b.PKey, b.Code, st.Code, st.Description, b.AmountToPay,
+            SELECT wo.PKey, wo.PrjMarketId, d.PKey, d.Code, st.Code, st.Description, d.AmountToPay,
                    CASE WHEN st.IsOkForPayement = 1 THEN 1 ELSE 0 END,
-                   (SELECT SUM(l.Amount) FROM StlSettlementLine l LEFT JOIN StlSettlement s ON s.PKey = l.StlSettlementId
-                    WHERE l.BuyDocumentId = b.PKey AND """ + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + """
+                   (""" + SoldeDocumentAchat.SQL_REGLE + """
             )
             FROM PrjWorkingOut wo
-            JOIN BuyDocument b ON b.PKey = wo.BuyDocumentId
-            LEFT JOIN BuyDocumentStatus st ON st.PKey = b.BuyDocumentStatusId
+            JOIN BuyDocument d ON d.PKey = wo.BuyDocumentId
+            LEFT JOIN BuyDocumentStatus st ON st.PKey = d.BuyDocumentStatusId
             WHERE\s""";
 
     private static final String PAR_LOTS = FACTURES + "wo.PrjMarketId IN (:ids)";
@@ -71,9 +70,7 @@ class FacturesDecomptes {
         Map<UUID, Map<UUID, SoldeDocumentAchat>> parLot = new HashMap<>();
         lire(PAR_LOTS, lotIds).forEach(f -> parLot.computeIfAbsent(f.lotId(), k -> new HashMap<>()).put(f.id(), f.solde()));
         Map<UUID, SoldeDocumentAchat> totaux = new HashMap<>();
-        parLot.forEach((lot, factures) -> totaux.put(lot, SoldeDocumentAchat.de(
-                somme(factures.values(), SoldeDocumentAchat::montantAPayer),
-                somme(factures.values(), SoldeDocumentAchat::montantRegle))));
+        parLot.forEach((lot, factures) -> totaux.put(lot, SoldeDocumentAchat.total(factures.values())));
         return totaux;
     }
 
@@ -93,10 +90,6 @@ class FacturesDecomptes {
                 (String) r[3], (String) r[4], (String) r[5], ((Number) r[7]).intValue() == 1,
                 SoldeDocumentAchat.de(montant(r[6]), montant(r[8]))))
                 .toList();
-    }
-
-    private static BigDecimal somme(Collection<SoldeDocumentAchat> soldes, Function<SoldeDocumentAchat, BigDecimal> champ) {
-        return soldes.stream().map(champ).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static UUID uuid(Object brut) {

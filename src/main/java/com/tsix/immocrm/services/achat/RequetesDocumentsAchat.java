@@ -46,11 +46,12 @@ class RequetesDocumentsAchat {
             + "d.AmountVat, d.AmountTTC, d.AmountToPay, (" + SoldeDocumentAchat.SQL_REGLE + ") AS Regle, "
             + "d.Notes, d.AmountRegul, d.FiscalStamp, "
             + "e.Code AS EntiteCode, e.Description AS EntiteDescription, d.UserCreateDateTime, d.UserCreate, "
-            + "d.UserUpdateDateTime, d.UserUpdate "
+            + "d.UserUpdateDateTime, d.UserUpdate, dc.DecompteId, dc.DecompteCode, dc.DecompteNumero "
             + "FROM BuyDocument d LEFT JOIN CfgTier t ON t.PKey = d.CfgTierId "
             + "LEFT JOIN PrjProject p ON p.PKey = d.PrjProjectId LEFT JOIN PrjMarket m ON m.PKey = d.PrjMarketId "
             + "LEFT JOIN CfgCompany c ON c.PKey = d.CfgCompanyId LEFT JOIN StrEntity e ON e.PKey = d.StrEntityId "
-            + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId WHERE d.PrjProjectId IN (:projets) ";
+            + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId "
+            + RequetesReglementsProjet.DECOMPTE + "WHERE d.PrjProjectId IN (:projets) ";
 
     private static final String LISTE = PIECES
             + "AND (:toutesNatures = 1 OR d.DocType IN (:natures)) "
@@ -185,23 +186,24 @@ class RequetesDocumentsAchat {
                 chaine(rs, "SocieteCode"), uuid(rs, "BuyDocumentStatusId"), chaine(rs, "StatutCode"),
                 chaine(rs, "StatutDescription"), rs.getBoolean("IsOkForPayement"), rs.getBigDecimal("AmountHT"),
                 rs.getBigDecimal("AmountVat"), rs.getBigDecimal("AmountTTC"), solde.montantAPayer(),
-                solde.montantRegle(), solde.resteARegler(), solde.solde(), solde.tropRegle(), solde.aDeduire());
+                solde.montantRegle(), solde.resteARegler(), solde.solde(), solde.tropRegle(), solde.aDeduire(),
+                uuid(rs, "DecompteId"), chaine(rs, "DecompteCode"), (Integer) rs.getObject("DecompteNumero"));
     }
 
-    private static List<String> textes(Collection<UUID> ids) {
+    static List<String> textes(Collection<UUID> ids) {
         return ids.stream().map(UUID::toString).toList();
     }
 
-    private static String texte(UUID id) {
+    static String texte(UUID id) {
         return id == null ? null : id.toString();
     }
 
-    private static String chaine(ResultSet rs, String colonne) throws SQLException {
+    static String chaine(ResultSet rs, String colonne) throws SQLException {
         String valeur = rs.getString(colonne);
         return valeur == null || valeur.isBlank() ? null : valeur;
     }
 
-    private static UUID uuid(ResultSet rs, String colonne) throws SQLException {
+    static UUID uuid(ResultSet rs, String colonne) throws SQLException {
         String valeur = rs.getString(colonne);
         return valeur == null ? null : UUID.fromString(valeur);
     }
@@ -210,7 +212,7 @@ class RequetesDocumentsAchat {
         return rs.getObject(colonne, LocalDateTime.class);
     }
 
-    private static LocalDate jour(ResultSet rs, String colonne) throws SQLException {
+    static LocalDate jour(ResultSet rs, String colonne) throws SQLException {
         LocalDateTime valeur = horodatage(rs, colonne);
         return valeur == null ? null : valeur.toLocalDate();
     }

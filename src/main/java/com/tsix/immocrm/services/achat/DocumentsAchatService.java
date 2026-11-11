@@ -52,7 +52,8 @@ public class DocumentsAchatService {
             Map.entry("montantTTC", par(DocumentAchatListItemDto::montantTTC)),
             Map.entry("montantAPayer", par(DocumentAchatListItemDto::montantAPayer)),
             Map.entry("montantRegle", par(DocumentAchatListItemDto::montantRegle)),
-            Map.entry("resteARegler", par(DocumentAchatListItemDto::resteARegler)));
+            Map.entry("resteARegler", par(DocumentAchatListItemDto::resteARegler)),
+            Map.entry("decompteCode", par(DocumentAchatListItemDto::decompteCode)));
 
     private static final Sort TRI_DEFAUT = Sort.by(Sort.Order.desc("dateDocument"), Sort.Order.desc("code"));
 
