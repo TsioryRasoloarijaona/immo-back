@@ -4,7 +4,9 @@ import com.tsix.immocrm.dto.projet.ProjetConfigDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetConfigDto;
 import com.tsix.immocrm.dto.projet.StatutLotDto;
+import com.tsix.immocrm.dto.projet.TypeLotParDefautDto;
 import com.tsix.immocrm.services.projet.ProjetConfigService;
+import com.tsix.immocrm.services.projet.ValeurParDefautTypeLot;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,13 +36,16 @@ public class ConfigurationProjetController {
     private static final String PAS_ADMIN = "L'appelant n'a pas le rôle Administrateur.";
     private static final String ID_PROJET = "Id du projet (PrjProject.PKey).";
     private static final String INTROUVABLE = "Projet introuvable.";
-    private static final String SAISIE = "Code, libellé ou société manquant, société ou gestionnaire inconnu, texte trop long.";
+    private static final String SAISIE = "Code, libellé ou société manquant ; société, gestionnaire, nivellement, référence ou lot "
+            + "invalide ; texte trop long.";
     private static final String CODE_PRIS = "Code déjà utilisé par un autre projet.";
 
     private final ProjetConfigService service;
+    private final ValeurParDefautTypeLot typeLotParDefaut;
 
-    public ConfigurationProjetController(ProjetConfigService service) {
+    public ConfigurationProjetController(ProjetConfigService service, ValeurParDefautTypeLot typeLotParDefaut) {
         this.service = service;
+        this.typeLotParDefaut = typeLotParDefaut;
     }
 
     @GetMapping("/projets")
@@ -116,5 +121,22 @@ public class ConfigurationProjetController {
     @Operation(summary = "Statuts de lot, groupés par genre de lot puis par ordre (lecture seule, tout authentifié)")
     public List<StatutLotDto> statutsLot() {
         return service.statutsLot();
+    }
+
+    @GetMapping("/types-lot/defaut")
+    @Operation(summary = "Type de lot par défaut (onglet « Valeurs par défaut » des types de lot, tout authentifié)")
+    public TypeLotParDefautDto typeLotParDefaut() {
+        return typeLotParDefaut.lire();
+    }
+
+    @PutMapping("/types-lot/defaut")
+    @PreAuthorize(ADMIN)
+    @Operation(summary = "Enregistre le type de lot par défaut ; null l'efface")
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", description = "Type de lot inconnu."),
+            @ApiResponse(responseCode = "403", description = PAS_ADMIN)
+    })
+    public TypeLotParDefautDto enregistrerTypeLotParDefaut(@RequestBody TypeLotParDefautDto saisie) {
+        return typeLotParDefaut.enregistrer(saisie.typeLotId());
     }
 }
