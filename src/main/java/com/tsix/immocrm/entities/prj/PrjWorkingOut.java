@@ -9,9 +9,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -20,7 +21,6 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Immutable
 @Table(name = "PrjWorkingOut")
 public class PrjWorkingOut extends AuditOmran {
     @ManyToOne(fetch = FetchType.LAZY)
@@ -107,4 +107,92 @@ public class PrjWorkingOut extends AuditOmran {
 
     @Column(name = "FluctuationsToPay", precision = 26, scale = 6)
     private BigDecimal fluctuationsToPay;
+
+    @Nationalized
+    @Size(max = 255)
+    @Column(name = "DocRef")
+    private String docRef;
+
+    @Nationalized
+    @Size(max = 1000)
+    @Column(name = "Notes")
+    private String notes;
+
+    @Column(name = "AmountRegul", precision = 26, scale = 6)
+    private BigDecimal amountRegul;
+
+    @Column(name = "AdvanceRatio", precision = 26, scale = 6)
+    private BigDecimal advanceRatio;
+
+    @Column(name = "insuranceDECRatio", precision = 26, scale = 6)
+    private BigDecimal insuranceDECRatio;
+
+    @Column(name = "insuranceTRCRatio", precision = 26, scale = 6)
+    private BigDecimal insuranceTRCRatio;
+
+    @Column(name = "proportionRatio", precision = 26, scale = 6)
+    private BigDecimal proportionRatio;
+
+    @Column(name = "advanceRest", precision = 26, scale = 6)
+    private BigDecimal advanceRest;
+
+    @Column(name = "insuranceDECRest", precision = 26, scale = 6)
+    private BigDecimal insuranceDECRest;
+
+    @Column(name = "insuranceTRCRest", precision = 26, scale = 6)
+    private BigDecimal insuranceTRCRest;
+
+    @Column(name = "InsuranceDECAmountMax", precision = 26, scale = 6)
+    private BigDecimal insuranceDECAmountMax;
+
+    @Column(name = "InsuranceTRCAmountMax", precision = 26, scale = 6)
+    private BigDecimal insuranceTRCAmountMax;
+
+    @Column(name = "WorkingOutAdvanceAmountRestAtCreation", precision = 26, scale = 6)
+    private BigDecimal workingOutAdvanceAmountRestAtCreation;
+
+    @Column(name = "StockPileRatio", precision = 26, scale = 6)
+    private BigDecimal stockPileRatio;
+
+    @Column(name = "StockAmount", precision = 26, scale = 6)
+    private BigDecimal stockAmount;
+
+    @Column(name = "StockAmountHT", precision = 26, scale = 6)
+    private BigDecimal stockAmountHT;
+
+    @Column(name = "StockAmountOld", precision = 26, scale = 6)
+    private BigDecimal stockAmountOld;
+
+    @Column(name = "StockAmountOldHT", precision = 26, scale = 6)
+    private BigDecimal stockAmountOldHT;
+
+    @Column(name = "StockAmountToPayHT", precision = 26, scale = 6)
+    private BigDecimal stockAmountToPayHT;
+
+    @Column(name = "FluctuationsOld", precision = 26, scale = 6)
+    private BigDecimal fluctuationsOld;
+
+    @Column(name = "FluctuationsHT", precision = 26, scale = 6)
+    private BigDecimal fluctuationsHT;
+
+    @Column(name = "FluctuationsOldHT", precision = 26, scale = 6)
+    private BigDecimal fluctuationsOldHT;
+
+    @Column(name = "FluctuationsToPayHT", precision = 26, scale = 6)
+    private BigDecimal fluctuationsToPayHT;
+
+    @Column(name = "AdvanceBasedOnAmount")
+    private Boolean advanceBasedOnAmount;
+
+    @Column(name = "WarrantyBasedOnAmount")
+    private Boolean warrantyBasedOnAmount;
+
+    @Column(name = "DECBasedOnAmount")
+    private Boolean decBasedOnAmount;
+
+    @Column(name = "TRCBasedOnAmount")
+    private Boolean trcBasedOnAmount;
+
+    @Column(name = "ProrataBasedOnAmount")
+    private Boolean prorataBasedOnAmount;
 }

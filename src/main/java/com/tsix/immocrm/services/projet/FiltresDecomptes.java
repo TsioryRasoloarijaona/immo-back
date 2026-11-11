@@ -20,6 +20,7 @@ public record FiltresDecomptes(
         @Parameter(description = "Statut de la facture du décompte (BuyDocumentStatus.PKey).") UUID statutFactureId,
         @Parameter(description = "true = seulement les décomptes sans facture ; absent ou false = tous.") Boolean sansFacture,
         @Parameter(description = "Sous-chaîne sur le code du décompte, le code ou la désignation du lot, le fournisseur.")
-        String search
+        String search,
+        @Parameter(description = "Société (« Entité » d'OMRAN) du projet du lot (PrjProject.CfgCompanyId).") UUID societeId
 ) {
 }

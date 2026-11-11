@@ -49,4 +49,18 @@ public class PrjMarketLine extends AuditOmran {
 
     @Column(name = "IsStock")
     private Boolean isStock;
+
+    @Column(name = "FODECRatio", precision = 26, scale = 16)
+    private BigDecimal fodecRatio;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "Notes")
+    private String notes;
+
+    @Column(name = "BuyItemId")
+    private UUID buyItemId;
+
+    @Column(name = "StlCategoryId")
+    private UUID stlCategoryId;
 }

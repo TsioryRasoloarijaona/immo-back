@@ -9,6 +9,7 @@ import com.tsix.immocrm.dto.projet.ExtraDecompteDto;
 import com.tsix.immocrm.dto.projet.FactureDecompteDto;
 import com.tsix.immocrm.dto.projet.LigneDecompteDto;
 import com.tsix.immocrm.dto.projet.RetenueDecompteDto;
+import com.tsix.immocrm.dto.projet.TotauxDecomptesDto;
 import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
@@ -93,10 +94,15 @@ public class DecomptesProjetService {
         return new DecompteDetailDto(ligne(w, f), w.getAmountVat(), MontantsLot.pourcentage(w.getWarrantyRatio()),
                 w.getWorkingOutAmountTTC(), w.getAdvanceAmount(), w.getWorkingOutAdvanceAmount(), w.getProportionAmount(),
                 w.getInsuranceDECAmount(), w.getInsuranceTRCAmount(), w.getNonRefundableRetainer(), w.getRefundableRetainer(),
-                w.getFluctuations(), w.getFluctuationsToPay(), w.getAmountToBePaid(), cumulTTC(w),
+                w.getFluctuations(), w.getAmountToBePaid(), cumulTTC(w),
                 w.getUserCreateDateTime(), w.getUserCreate(), w.getUserUpdateDateTime(), w.getUserUpdate(),
                 facture(w.getBuyDocument(), f), f.id() == null ? List.of() : factures.reglements(f.id()),
-                lignes(id), extras(id), retenues(id));
+                lignes(id), extras(id), retenues(id), null, false, false, false, false, false, null, null, null, null,
+                w.getProrataRefundAmount(), null, null, null, null, null, null, null, null, List.of(), false, false, false);
+    }
+
+    public TotauxDecomptesDto totaux(FiltresDecomptes filtres) {
+        throw new UnsupportedOperationException();
     }
 
     private static DecompteListItemDto ligne(PrjWorkingOut w, FacturesDecomptes.Facture f) {
@@ -111,7 +117,8 @@ public class DecomptesProjetService {
                 w.getAmountHT(), w.getAmountTTC(), w.getExtraAmount(), w.getWarrantyAmount(), w.getAmountToPay(),
                 net.recalcule(), net.ecart(), net.significatif(), w.getAmountTTCAfterDeductions(),
                 Boolean.TRUE.equals(w.getFinalWorkingOut()), f.id(), f.code(), f.statutCode(), f.statutDescription(),
-                f.solde().montantRegle(), f.solde().resteARegler());
+                f.solde().montantRegle(), f.solde().resteARegler(), null, null, null, null, w.getStockAmountToPay(),
+                w.getFluctuationsToPay(), null, false, null, false);
     }
 
     private static FactureDecompteDto facture(BuyDocument b, FacturesDecomptes.Facture f) {
@@ -147,7 +154,8 @@ public class DecomptesProjetService {
         BigDecimal cumulee = somme(l.getQuantityOld(), l.getQuantity());
         return new LigneDecompteDto(l.getId(), l.getSorting(), l.getDescription(), l.getUnity(), quantiteMarche,
                 l.getUnitPriceHT(), l.getQuantityOld(), l.getQuantity(), cumulee, l.getCoefficient(),
-                MontantsLot.applique(l.getQuantity(), l.getUnitPriceHT()), MontantsLot.avancementPct(cumulee, quantiteMarche));
+                MontantsLot.applique(l.getQuantity(), l.getUnitPriceHT()), MontantsLot.avancementPct(cumulee, quantiteMarche),
+                l.getPrjMarketLineId(), null);
     }
 
     private List<ExtraDecompteDto> extras(UUID decompte) {

@@ -77,6 +77,15 @@ public class PrjMarket extends AuditOmran {
     @Column(name = "InsuranceTRCRatio", precision = 26, scale = 6)
     private BigDecimal insuranceTRCRatio;
 
+    @Column(name = "InsuranceDECAmount", precision = 26, scale = 6)
+    private BigDecimal insuranceDECAmount;
+
+    @Column(name = "InsuranceTRCAmount", precision = 26, scale = 6)
+    private BigDecimal insuranceTRCAmount;
+
+    @Column(name = "StockPileRatio", precision = 26, scale = 6)
+    private BigDecimal stockPileRatio;
+
     @Column(name = "DefaultVat", precision = 26, scale = 6)
     private BigDecimal defaultVat;
 
