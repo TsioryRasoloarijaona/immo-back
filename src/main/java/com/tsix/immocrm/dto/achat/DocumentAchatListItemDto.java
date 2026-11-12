@@ -63,5 +63,17 @@ public record DocumentAchatListItemDto(
         @Schema(description = "Bon de commande à clôturer : HT ≤ Σ HT de ses factures, statut non terminé ; false sinon.")
         boolean aCloturer,
         @Schema(description = "Couleur du statut (BuyDocumentStatus.ColorName, nom .NET) ; null sans statut.",
-                example = "Green") String statutCouleur) {
+                example = "Green") String statutCouleur,
+        @Schema(description = "Agrégats du bon de commande (factures, livraisons, avances, garanties) ; null hors bon de commande.")
+        AgregatsBonCommandeDto agregats) {
+
+    public DocumentAchatListItemDto avecAgregats(AgregatsBonCommandeDto valeurs) {
+        return new DocumentAchatListItemDto(id, code, nature, natureLibelle, reference, description, dateDocument,
+                dateEcheance, fournisseurId, fournisseurNom, projetId, projetCode, lotId, lotCode, societeCode, statutId,
+                statutCode, statutDescription, okPourPaiement, montantHT, montantTVA, montantTTC, montantAPayer,
+                montantRegle, resteARegler, solde, tropRegle, aDeduire, decompteId, decompteCode, decompteNumero,
+                societeNom, moduleCode, moduleLibelle, typeLotId, typeLotLibelle, archive, comptabilise,
+                referenceBureauOrdre, personneAContacter, dossierGroupement, categories, deviseCode, dateAlerte,
+                aCloturer, statutCouleur, valeurs);
+    }
 }

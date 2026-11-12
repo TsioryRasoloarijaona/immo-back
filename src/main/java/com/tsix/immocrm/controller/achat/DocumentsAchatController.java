@@ -46,6 +46,8 @@ import static com.tsix.immocrm.web.PaginationDefaults.DEFAULT_PAGE_SIZE;
 @RequestMapping("/api/achat")
 public class DocumentsAchatController {
 
+    private static final String AGREGATS = "agregats.";
+
     private static final List<ColonneFixe> COLONNES_EXPORT = List.of(ColonneFixe.texte("code", "N°"),
             ColonneFixe.texte("natureLibelle", "Nature"), ColonneFixe.de("dateDocument", "Date", TypeExport.DATE),
             ColonneFixe.de("dateEcheance", "Échéance", TypeExport.DATE), ColonneFixe.texte("reference", "Référence"),
@@ -64,7 +66,21 @@ public class DocumentsAchatController {
             ColonneFixe.texte("personneAContacter", "Personne à contacter"),
             ColonneFixe.texte("dossierGroupement", "Dossier de groupement"),
             ColonneFixe.texte("categories", "Catégorie"), ColonneFixe.texte("deviseCode", "Devise"),
-            ColonneFixe.de("aCloturer", "À clôturer", TypeExport.BOOLEEN));
+            ColonneFixe.de("aCloturer", "À clôturer", TypeExport.BOOLEEN),
+            bc("factureHT", "Montant facturé HT"), bc("factureTVA", "Montant facturé TVA"),
+            bc("factureTTC", "Montant facturé TTC"), bc("factureNetAPayer", "Montant facturé net à payer"),
+            bc("livreHT", "Montant livré HT"), bc("livreTTC", "Montant livré TTC"),
+            bc("livreNetAPayer", "Montant livré net à payer"), bc("resteALivrerHT", "Reste à livrer HT"),
+            bc("resteALivrerTTC", "Reste à livrer TTC"), bc("resteALivrerNetAPayer", "Reste à livrer net à payer"),
+            bc("avance", "Avance"), ColonneFixe.de(AGREGATS + "avanceTauxPrevu", "Avance ratio", TypeExport.NOMBRE),
+            ColonneFixe.de(AGREGATS + "avanceTauxEffectif", "Pourcentage effectif d'avance", TypeExport.NOMBRE),
+            bc("avanceAmortie", "Avance amortie"), bc("avanceRegle", "Avance réglé"), bc("avanceReste", "Avance reste"),
+            bc("avanceResteAAmortir", "Avance reste à amortir"), bc("garantieRetenue", "Retenue de garantie retenue"),
+            bc("garantieRestituee", "Retenue de garantie restituée"), bc("garantieReste", "Retenue de garantie reste"),
+            bc("regle", "Montant réglé"), bc("resteAPayerSurFacture", "Reste à payer sur facturé"),
+            bc("resteAPayerTotal", "Reste à payer total"),
+            ColonneFixe.texte(AGREGATS + "bonsLivraisonCodes", "Bons de livraison"),
+            ColonneFixe.texte(AGREGATS + "facturesCodes", "Factures"), ColonneFixe.texte(AGREGATS + "devisCode", "Devis"));
 
     private static final List<ColonneFixe> COLONNES_SOLDES = List.of(
             ColonneFixe.texte("fournisseurNom", "Fournisseur"), ColonneFixe.texte("societeCode", "Société"),
@@ -75,6 +91,11 @@ public class DocumentsAchatController {
             ColonneFixe.de("nombreValideesARegler", "Validées à régler", TypeExport.NOMBRE),
             ColonneFixe.de("resteValideARegler", "Reste validé", TypeExport.MONTANT),
             ColonneFixe.de("montantADeduire", "À déduire", TypeExport.MONTANT));
+
+    /** Montant de l'objet {@code agregats} (bons de commande ; vide pour les autres pièces). */
+    private static ColonneFixe bc(String nom, String libelle) {
+        return ColonneFixe.de(AGREGATS + nom, libelle, TypeExport.MONTANT);
+    }
 
     private final DocumentsAchatService service;
     private final SoldesFournisseursService soldesFournisseurs;

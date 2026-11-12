@@ -140,9 +140,10 @@ class RequetesDocumentsAchat {
                   boolean valideComptabilite, String entiteCode, String entiteDescription, LocalDateTime dateCreation,
                   String creePar, LocalDateTime dateModification, String modifiePar) {
 
-        DocumentAchatDetailDto avec(List<LigneDocumentAchatDto> lignes, List<VentilationDocumentAchatDto> ventilation,
+        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, List<LigneDocumentAchatDto> lignes,
+                                    List<VentilationDocumentAchatDto> ventilation,
                                     List<HistoriqueDocumentAchatDto> historique, List<ReglementDocumentAchatDto> reglements) {
-            return new DocumentAchatDetailDto(document, notes, regularisation, timbreFiscal, valideComptabilite,
+            return new DocumentAchatDetailDto(piece, notes, regularisation, timbreFiscal, valideComptabilite,
                     entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, lignes,
                     ventilation, historique, reglements);
         }
@@ -280,7 +281,7 @@ class RequetesDocumentsAchat {
                 uuid(rs, "PrjMarketTypeId"), chaine(rs, "TypeLotLibelle"), rs.getBoolean("IsClosed"),
                 rs.getBoolean("IsAccounted"), chaine(rs, "OfficeOrderRef"), chaine(rs, "PersonToContact"),
                 chaine(rs, "DossierGroupement"), chaine(rs, "Categories"), chaine(rs, "DeviseCode"), null, aCloturer,
-                chaine(rs, "ColorName"));
+                chaine(rs, "ColorName"), null);
     }
 
     static List<String> textes(Collection<UUID> ids) {
