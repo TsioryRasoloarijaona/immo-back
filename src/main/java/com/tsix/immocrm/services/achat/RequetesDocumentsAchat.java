@@ -145,7 +145,8 @@ class RequetesDocumentsAchat {
                                     List<HistoriqueDocumentAchatDto> historique, List<ReglementDocumentAchatDto> reglements) {
             return new DocumentAchatDetailDto(piece, notes, regularisation, timbreFiscal, valideComptabilite,
                     entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, lignes,
-                    ventilation, historique, reglements);
+                    ventilation, historique, reglements, null, null, null, null, false, BigDecimal.ZERO, null, null,
+                    null, null, null, null, null, List.of(), List.of(), List.of(), List.of(), List.of());
         }
     }
 
@@ -216,7 +217,7 @@ class RequetesDocumentsAchat {
         return jdbc.query(LIGNES, Map.of(ID, id.toString()), (rs, n) -> new LigneDocumentAchatDto(uuid(rs, "Pkey"),
                 (Integer) rs.getObject("Sorting"), chaine(rs, DESCRIPTION), chaine(rs, "Unity"),
                 rs.getBigDecimal("Quantity"), rs.getBigDecimal("UnitPriceHT"), pourcent(rs.getBigDecimal("VatRatio")),
-                pourcent(rs.getBigDecimal("DiscountRatio"))));
+                pourcent(rs.getBigDecimal("DiscountRatio")), null, null, null, null, null, null, null));
     }
 
     List<VentilationDocumentAchatDto> ventilation(UUID id) {
@@ -227,7 +228,7 @@ class RequetesDocumentsAchat {
     List<HistoriqueDocumentAchatDto> historique(UUID id) {
         return jdbc.query(HISTORIQUE, Map.of(ID, id.toString()), (rs, n) -> new HistoriqueDocumentAchatDto(
                 horodatage(rs, DOC_DATE), chaine(rs, CODE), chaine(rs, DESCRIPTION), chaine(rs, "Utilisateur"),
-                chaine(rs, "Notes")));
+                chaine(rs, "Notes"), null));
     }
 
     List<ReglementDocumentAchatDto> reglements(UUID id) {

@@ -160,10 +160,11 @@ public class DocumentsAchatController {
     }
 
     @GetMapping("/documents/{id}")
-    @Operation(summary = "Fiche d'une pièce d'achat : lignes, ventilation, historique, règlements")
+    @Operation(summary = "Fiche d'une pièce d'achat : lignes, ventilation, liens, historique, règlements")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Pièce visible."),
-            @ApiResponse(responseCode = "404", description = "Pièce introuvable ou hors périmètre (société, projet).",
+            @ApiResponse(responseCode = "404",
+                    description = "Pièce introuvable, hors périmètre (société, projet) ou bon de commande d'un autre déclencheur.",
                     content = @Content)
     })
     public DocumentAchatDetailDto fiche(@Parameter(description = "Id de la pièce (BuyDocument.PKey).")
