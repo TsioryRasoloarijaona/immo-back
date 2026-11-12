@@ -1,5 +1,7 @@
 package com.tsix.immocrm.services.perimetre;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,5 +22,15 @@ public record PerimetreAchat(Set<UUID> societes, Set<UUID> projets, boolean sans
 
     public PerimetreAchat duModuleProjet() {
         return new PerimetreAchat(societes, projets, sansProjet, true);
+    }
+
+    /** Sociétés habilitées ∩ {@code demandees} (vide = toutes) : une société hors périmètre est ignorée, jamais ajoutée. */
+    public PerimetreAchat deSocietes(Collection<UUID> demandees) {
+        if (demandees.isEmpty()) {
+            return this;
+        }
+        Set<UUID> retenues = new HashSet<>(demandees);
+        retenues.retainAll(societes);
+        return new PerimetreAchat(retenues, projets, sansProjet, moduleProjet);
     }
 }
