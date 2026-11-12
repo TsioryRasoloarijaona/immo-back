@@ -48,9 +48,9 @@ class PositionsFournisseursControleVueManuelTest {
     private static final String REFERENCE = """
             SELECT LOWER(CAST(v.CfgCompanyId AS varchar(36))) + '|' + LOWER(CAST(v.CfgTierId AS varchar(36))) AS Cle,
               ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) < ? THEN v.AmountCredit - v.AmountDebit ELSE 0 END), 3) AS soldeDebut,
-              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) BETWEEN ? AND ? THEN v.AmountCredit ELSE 0 END), 3) AS netAPayer,
-              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) BETWEEN ? AND ? THEN v.AmountDebit ELSE 0 END), 3) AS regle,
-              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) <= ? THEN v.AmountCredit - v.AmountDebit ELSE 0 END), 3) AS soldeFin
+              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) BETWEEN ? AND ? OR (? = 1 AND v.DocDate IS NULL) THEN v.AmountCredit ELSE 0 END), 3) AS netAPayer,
+              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) BETWEEN ? AND ? OR (? = 1 AND v.DocDate IS NULL) THEN v.AmountDebit ELSE 0 END), 3) AS regle,
+              ROUND(SUM(CASE WHEN CAST(v.DocDate AS date) <= ? OR (? = 1 AND v.DocDate IS NULL) THEN v.AmountCredit - v.AmountDebit ELSE 0 END), 3) AS soldeFin
             FROM (SELECT DocDate, CfgCompanyId, CfgTierId, ISNULL(AmountCredit, 0) AS AmountCredit,
                 ISNULL(AmountDebit, 0) AS AmountDebit FROM BuySupplierPositionView) v JOIN CfgTier t ON t.PKey = v.CfgTierId AND t.CfgTierTypeId = ?
             GROUP BY v.CfgCompanyId, v.CfgTierId""";
@@ -79,7 +79,8 @@ class PositionsFournisseursControleVueManuelTest {
         Map<String, Map<String, Object>> vue = new HashMap<>();
         LocalDate d = du == null ? DEBUT_DES_TEMPS : du;
         LocalDate f = au == null ? FIN_DES_TEMPS : au;
-        for (Map<String, Object> l : jdbc.queryForList(REFERENCE, d, d, f, d, f, f, FOU)) {
+        int sansPeriode = au == null ? 1 : 0;
+        for (Map<String, Object> l : jdbc.queryForList(REFERENCE, d, d, f, sansPeriode, d, f, sansPeriode, f, sansPeriode, FOU)) {
             vue.put((String) l.get("Cle"), l);
         }
         return vue;
