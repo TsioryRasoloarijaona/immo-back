@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.projet;
 
 import com.tsix.immocrm.controller.projet.AppelsProjet.Reponse;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.fixtures.FixtureLotSousFenetres;
 import com.tsix.immocrm.fixtures.FixtureProjetLots;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -46,9 +48,12 @@ class LotsProjetVisibiliteTest {
     private static final String DECOMPTE_INTROUVABLE = "Décompte introuvable";
     private static final String PROJET_IDS = "projetIds";
     private static final String SIZE = "size";
+    private static final List<String> SOUS_FENETRES = List.of("avances", "avoirs", "avenants", "remboursements",
+            "bordereau-estimatif", "previsions");
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureProjetLots fixture;
+    @Autowired private FixtureLotSousFenetres sousFenetres;
     @Autowired private JdbcTemplate jdbc;
 
     private AppelsProjet appels;
@@ -249,6 +254,26 @@ class LotsProjetVisibiliteTest {
             s.assertThat(visible.statut()).isEqualTo(200);
             s.assertThat(sansProjet.statut()).isEqualTo(404);
             s.assertThat((String) sansProjet.valeur(DETAIL)).contains(LOT_INTROUVABLE);
+        });
+    }
+
+    // FEATURE-lot-sous-fenetres.md §3 règle 1 et §8 : les 6 sous-fenêtres d'un lot hors périmètre sont des 404 comme la fiche ;
+    // l'Administrateur sans habilitation n'en voit aucune.
+    @Test
+    void r1_sousFenetresDuLot_horsPerimetreEtAdministrateurSansHabilitation_404() throws Exception {
+        sousFenetres.tables();
+        RequestPostProcessor admin = connecte(fixture.compte("prj.admin.sf." + jeton), "Administrateur");
+
+        SoftAssertions.assertSoftly(s -> {
+            for (String route : SOUS_FENETRES) {
+                Reponse visible = lireSansErreur(a, LOTS + "/" + lotA1 + "/" + route);
+                Reponse horsPerimetre = lireSansErreur(a, LOTS + "/" + lotB + "/" + route);
+                Reponse sansHabilitation = lireSansErreur(admin, LOTS + "/" + lotA1 + "/" + route);
+                s.assertThat(visible.statut()).as("témoin " + route).isEqualTo(200);
+                s.assertThat(horsPerimetre.statut()).as("hors périmètre " + route).isEqualTo(404);
+                s.assertThat(horsPerimetre.corps()).as("hors périmètre " + route).contains(LOT_INTROUVABLE);
+                s.assertThat(sansHabilitation.statut()).as("admin sans habilitation " + route).isEqualTo(404);
+            }
         });
     }
 

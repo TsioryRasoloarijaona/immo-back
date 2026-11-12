@@ -92,15 +92,15 @@ class FacturesDecomptes {
                 .toList();
     }
 
-    private static UUID uuid(Object brut) {
+    static UUID uuid(Object brut) {
         return brut instanceof UUID u ? u : UUID.fromString(String.valueOf(brut));
     }
 
-    private static BigDecimal montant(Object brut) {
+    static BigDecimal montant(Object brut) {
         return brut instanceof Number n ? new BigDecimal(n.toString()) : null;
     }
 
-    private static LocalDate date(Object brut) {
+    static LocalDate date(Object brut) {
         if (brut instanceof Timestamp t) {
             return t.toLocalDateTime().toLocalDate();
         }

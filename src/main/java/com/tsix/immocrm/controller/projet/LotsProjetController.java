@@ -2,8 +2,15 @@ package com.tsix.immocrm.controller.projet;
 
 import com.tsix.immocrm.domain.TypeExport;
 import com.tsix.immocrm.dto.common.PageDto;
+import com.tsix.immocrm.dto.projet.AvancesLotDto;
+import com.tsix.immocrm.dto.projet.AvenantLotDto;
+import com.tsix.immocrm.dto.projet.AvoirLotDto;
 import com.tsix.immocrm.dto.projet.BordereauDto;
+import com.tsix.immocrm.dto.projet.BordereauEstimatifDto;
 import com.tsix.immocrm.dto.projet.CreerLotRequest;
+import com.tsix.immocrm.dto.projet.PrevisionsLotDto;
+import com.tsix.immocrm.dto.projet.RemboursementsLotDto;
+import com.tsix.immocrm.services.projet.SousFenetresLotService;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
 import com.tsix.immocrm.dto.projet.DemandeAchatLotDto;
 import com.tsix.immocrm.dto.projet.ExecutionTransitionLotDto;
@@ -79,14 +86,16 @@ public class LotsProjetController {
     private final ModificationLot modification;
     private final CopieLot copie;
     private final ExportTableur exportTableur;
+    private final SousFenetresLotService sousFenetres;
 
     public LotsProjetController(LotsProjetService service, EcrituresLotService ecritures, ModificationLot modification,
-                                CopieLot copie, ExportTableur exportTableur) {
+                                CopieLot copie, ExportTableur exportTableur, SousFenetresLotService sousFenetres) {
         this.service = service;
         this.ecritures = ecritures;
         this.modification = modification;
         this.copie = copie;
         this.exportTableur = exportTableur;
+        this.sousFenetres = sousFenetres;
     }
 
     @GetMapping("/referentiels")
@@ -234,6 +243,54 @@ public class LotsProjetController {
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public BordereauDto bordereau(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.bordereau(id);
+    }
+
+    @GetMapping("/lots/{id}/bordereau-estimatif")
+    @Operation(summary = "Bordereau estimatif d'un lot, en lecture seule")
+    @ApiResponse(responseCode = "200", description = "Groupes, lignes du bordereau estimatif et leurs totaux.")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public BordereauEstimatifDto bordereauEstimatif(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return service.bordereauEstimatif(id);
+    }
+
+    @GetMapping("/lots/{id}/avances")
+    @Operation(summary = "Avances du lot : sur marché et sur décompte")
+    @ApiResponse(responseCode = "200", description = "Deux listes, éventuellement vides.")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public AvancesLotDto avances(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return sousFenetres.avances(id);
+    }
+
+    @GetMapping("/lots/{id}/avoirs")
+    @Operation(summary = "Avoirs du lot, par date décroissante")
+    @ApiResponse(responseCode = "200", description = "Avoirs du lot (éventuellement vide).")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public List<AvoirLotDto> avoirs(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return sousFenetres.avoirs(id);
+    }
+
+    @GetMapping("/lots/{id}/avenants")
+    @Operation(summary = "Avenants du lot, par date décroissante")
+    @ApiResponse(responseCode = "200", description = "Avenants du lot (éventuellement vide).")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public List<AvenantLotDto> avenants(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return sousFenetres.avenants(id);
+    }
+
+    @GetMapping("/lots/{id}/remboursements")
+    @Operation(summary = "Remboursements du lot : échéances et réceptions de RG, remboursements RG et compte prorata")
+    @ApiResponse(responseCode = "200", description = "Quatre listes, éventuellement vides.")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public RemboursementsLotDto remboursements(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return sousFenetres.remboursements(id);
+    }
+
+    @GetMapping("/lots/{id}/previsions")
+    @Operation(summary = "Prévisions du lot : séries mensuelles du graphe")
+    @ApiResponse(responseCode = "200", description = "Mois consécutifs ; liste vide si le lot n'a aucun point.")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public PrevisionsLotDto previsions(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return sousFenetres.previsions(id);
     }
 
     @GetMapping("/lots/{id}/decomptes")
