@@ -7,7 +7,6 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
@@ -17,7 +16,6 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Immutable
 @Table(name = "PrjWorkingOutRetainedLine")
 public class PrjWorkingOutRetainedLine {
     @Id
