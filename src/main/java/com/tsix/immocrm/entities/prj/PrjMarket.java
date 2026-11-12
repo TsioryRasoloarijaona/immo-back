@@ -160,4 +160,48 @@ public class PrjMarket extends AuditOmran {
 
     @Column(name = "WorkLaunchDate")
     private LocalDateTime workLaunchDate;
+
+    @Column(name = "TendersResortDate")
+    private LocalDateTime tendersResortDate;
+
+    @Column(name = "TendersReportDate")
+    private LocalDateTime tendersReportDate;
+
+    @Column(name = "WorkCompletionDate")
+    private LocalDateTime workCompletionDate;
+
+    @Column(name = "ReattachmentDate")
+    private LocalDateTime reattachmentDate;
+
+    @Column(name = "MassChangeRatio", precision = 26, scale = 6)
+    private BigDecimal massChangeRatio;
+
+    @Column(name = "TotalPoints")
+    private Integer totalPoints;
+
+    @Column(name = "StlSettlementTypeId")
+    private UUID stlSettlementTypeId;
+
+    @Column(name = "ApplyDiscountOnAdditionalWork")
+    private Boolean applyDiscountOnAdditionalWork;
+
+    @Column(name = "ApplyWithholdingTaxOnAdditionalWork")
+    private Boolean applyWithholdingTaxOnAdditionalWork;
+
+    // Faute d'orthographe réelle de la colonne (« Achivement »).
+    @Column(name = "CanEditWorkingOutLineByAchivement")
+    private Boolean canEditWorkingOutLineByAchivement;
+
+    @Column(name = "CancellationDate")
+    private LocalDateTime cancellationDate;
+
+    // varchar, pas nvarchar : jamais @Nationalized.
+    @Size(max = 500)
+    @Column(name = "CancellationCause")
+    private String cancellationCause;
+
+    @Size(max = 500)
+    @Nationalized
+    @Column(name = "DescriptionLong")
+    private String descriptionLong;
 }

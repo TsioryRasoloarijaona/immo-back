@@ -8,8 +8,14 @@ import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.dto.projet.BordereauDto;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
+import com.tsix.immocrm.dto.projet.DemandeAchatLotDto;
 import com.tsix.immocrm.dto.projet.ElementReferentielProjetDto;
 import com.tsix.immocrm.dto.projet.EntiteFiltreDto;
+import com.tsix.immocrm.dto.projet.FicheEtendueLotDto;
+import com.tsix.immocrm.entities.buy.BuySelection;
+import com.tsix.immocrm.entities.stl.StlCategory;
+import com.tsix.immocrm.entities.stl.StlCurrency;
+import com.tsix.immocrm.entities.stl.StlSettlementType;
 import com.tsix.immocrm.dto.projet.TotauxLotsDto;
 import com.tsix.immocrm.dto.projet.TransitionLotDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
@@ -245,7 +251,36 @@ public class LotsProjetService {
                 jour(m.getWithdrawalTenderDocumentsDate()), jour(m.getTenderMaturityDate()), jour(m.getBidOpeningDate()),
                 jour(m.getTenderDate()), jour(m.getContractSignatureDate()), jour(m.getServiceOrderDate()),
                 jour(m.getWorkLaunchDate()), m.getUserCreateDateTime(), m.getUserCreate(), m.getUserUpdateDateTime(),
-                m.getUserUpdate());
+                m.getUserUpdate(), fiche(m));
+    }
+
+    private FicheEtendueLotDto fiche(PrjMarket m) {
+        StlCurrency devise = m.getStlCurrencyId() == null ? null : em.find(StlCurrency.class, m.getStlCurrencyId());
+        StlSettlementType paiement = m.getStlSettlementTypeId() == null ? null
+                : em.find(StlSettlementType.class, m.getStlSettlementTypeId());
+        return new FicheEtendueLotDto(Champs.de(m.getPrjMarketType(), CodeLibelleOmran::getId), m.getStlCurrencyId(),
+                Champs.de(devise, StlCurrency::getCode), Champs.de(m.getStlCategory(), StlCategory::getId),
+                jour(m.getStartDateManual()), m.getDelayManual(), jour(m.getEndDateManual()), jour(m.getTendersResortDate()),
+                jour(m.getTendersReportDate()), jour(m.getWorkCompletionDate()), jour(m.getReattachmentDate()),
+                MontantsLot.pourcentage(m.getMassChangeRatio()), MontantsLot.pourcentage(m.getStockPileRatio()),
+                m.getTotalPoints(), m.getStlSettlementTypeId(), Champs.de(paiement, StlSettlementType::getDescription),
+                Boolean.TRUE.equals(m.getApplyDiscountOnAdditionalWork()),
+                Boolean.TRUE.equals(m.getApplyWithholdingTaxOnAdditionalWork()),
+                Boolean.TRUE.equals(m.getExecutedQuantityBasedInsert()),
+                Boolean.TRUE.equals(m.getCanEditWorkingOutLineByAchivement()), jour(m.getCancellationDate()),
+                m.getCancellationCause(), m.getDescriptionLong());
+    }
+
+    public List<DemandeAchatLotDto> demandesAchat(UUID id) {
+        return em.createQuery("select b from BuySelection b left join fetch b.procedure left join fetch b.strStatus"
+                        + " left join fetch b.cfgTier where b.prjMarketId = :lot order by b.docDate desc, b.code",
+                        BuySelection.class)
+                .setParameter("lot", visible(id).getId()).getResultList().stream()
+                .map(b -> new DemandeAchatLotDto(b.getId(), Champs.de(b.getProcedure(), CodeLibelleOmran::getDescription),
+                        Champs.de(b.getStrStatus(), StrStatus::getDescription), Champs.de(b.getStrStatus(), StrStatus::getColorName),
+                        b.getCode(), jour(b.getDocDate()), b.getDescription(), Champs.de(b.getCfgTier(), CfgTier::getId),
+                        TierNomFormatter.nom(b.getCfgTier()), b.getNotes()))
+                .toList();
     }
 
     public BordereauDto bordereau(UUID id) {

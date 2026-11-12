@@ -137,6 +137,11 @@ public class EcrituresLotService {
     }
 
     @Transactional
+    public LotDetailDto copier(UUID id) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Transactional
     public LotListItemDto executerTransition(UUID id, ExecutionTransitionLotDto d) {
         if (d == null || d.transitionId() == null) {
             throw new InvalidRequestException("transitionId : obligatoire");

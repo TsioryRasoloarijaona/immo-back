@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Schema(description = "Fiche d'un lot : les champs de la ligne de liste, plus estimation, taux, options et dates.")
+@Schema(description = "Fiche d'un lot : les champs de la ligne de liste, plus estimation, taux, options, dates et onglets de la fiche.")
 public record LotDetailDto(
         @JsonUnwrapped LotListItemDto lot,
         @Schema(description = "Libellé du projet.") String projetDescription,
@@ -48,6 +48,7 @@ public record LotDetailDto(
         @Schema(description = "Création (UserCreateDateTime).") LocalDateTime dateCreation,
         @Schema(description = "Auteur de la création (UserCreate).") String creePar,
         @Schema(description = "Dernière modification (UserUpdateDateTime).") LocalDateTime dateModification,
-        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar
+        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar,
+        @JsonUnwrapped FicheEtendueLotDto fiche
 ) {
 }
