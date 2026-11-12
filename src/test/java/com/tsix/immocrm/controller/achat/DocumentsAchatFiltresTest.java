@@ -205,25 +205,30 @@ class DocumentsAchatFiltresTest {
         assertThat(codes(json)).containsExactly(jeton + "-L1");
     }
 
-    /** Réponse du manager n° 1 : {@code nonSoldes} = reste > 0,05 ; ni le soldé au seuil, ni le trop réglé. */
+    /**
+     * FEATURE-achat-impayes-soldes.md, Q1 (remplace la réponse n° 1 d'A1) : {@code nonSoldes} = ROUND(reste, 2) > 0 comme
+     * OMRAN ; le reste de 0,04 est impayé, le reste arrondi à 0, le soldé et le trop réglé ne le sont pas.
+     */
     @Test
-    void r5_reponse1_filtreNonSoldes_resteStrictementSuperieurA005() throws Exception {
+    void r5_q1A3_filtreNonSoldes_resteArrondiA2StrictementPositif() throws Exception {
         UUID type = fixture.typeReglement("VIR-" + jeton);
         UUID impaye = fixture.piece(facture("-IMP", MARS_10, "1000"));
         UUID auSeuil = fixture.piece(facture("-SEU", MARS_10, "500"));
         UUID justeAuDessus = fixture.piece(facture("-DES", MARS_10, "500"));
+        UUID arrondiAZero = fixture.piece(facture("-ARR", MARS_10, "500"));
         UUID tropRegle = fixture.piece(facture("-TRO", MARS_10, "3000"));
         UUID solde = fixture.piece(facture("-SOL", MARS_10, "800"));
         LocalDate date = LocalDate.of(2026, 3, 20);
         fixture.reglement(impaye, "RG1-" + jeton, new BigDecimal("100"), FixtureAchat.EN_COURS, date, type);
         fixture.reglement(auSeuil, "RG2-" + jeton, new BigDecimal("499.96"), FixtureAchat.EN_COURS, date, type);
         fixture.reglement(justeAuDessus, "RG3-" + jeton, new BigDecimal("499.94"), FixtureAchat.EN_COURS, date, type);
+        fixture.reglement(arrondiAZero, "RG6-" + jeton, new BigDecimal("499.996"), FixtureAchat.EN_COURS, date, type);
         fixture.reglement(tropRegle, "RG4-" + jeton, new BigDecimal("3020"), FixtureAchat.EN_COURS, date, type);
         fixture.reglement(solde, "RG5-" + jeton, new BigDecimal("800"), FixtureAchat.EN_COURS, date, type);
 
         String json = corps(mockMvc, liste(qui(), "nonSoldes", "true"));
 
-        assertThat(codes(json)).containsExactlyInAnyOrder(jeton + "-IMP", jeton + "-DES");
+        assertThat(codes(json)).containsExactlyInAnyOrder(jeton + "-IMP", jeton + "-SEU", jeton + "-DES");
     }
 
     @Test

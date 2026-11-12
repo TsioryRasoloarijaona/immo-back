@@ -74,7 +74,7 @@ public class SoldesFournisseursService {
                         .map(SoldeDocumentAchat::montantAPayer)));
     }
 
-    private static String sansEspaces(String texte) {
+    static String sansEspaces(String texte) {
         return texte.replaceAll("\\s", "").toLowerCase(Locale.ROOT);
     }
 }
