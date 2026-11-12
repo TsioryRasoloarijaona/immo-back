@@ -13,6 +13,6 @@ public class EcrituresRoles implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("AdmRole", "AdmRight");
+        return List.of("AdmRole", "AdmRight", "BuyDocumentWorkFlowAdmRole");
     }
 }
