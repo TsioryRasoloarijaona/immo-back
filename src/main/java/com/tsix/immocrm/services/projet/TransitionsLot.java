@@ -48,8 +48,8 @@ record TransitionsLot(StrStatusRepository statuts, StrWorkFlowRepository workflo
                 Champs.de(m.getStrStatus(), StrStatus::getId)).stream()
                 .filter(w -> !Boolean.TRUE.equals(w.getWithPassword())).toList();
         Intervenant moi = intervenant.courant();
-        if (sortantes.isEmpty() || moi.administrateur()
-                || (!moi.roleIds().isEmpty() && intervenants.rolesSansRestriction(moi.roleIds()) > 0)) {
+        // Comme OMRAN, aucun raccourci Administrateur : seule l'exemption de rôle compte (FEATURE-lot-fiche-parite.md E7).
+        if (sortantes.isEmpty() || (!moi.roleIds().isEmpty() && intervenants.rolesSansRestriction(moi.roleIds()) > 0)) {
             return sortantes;
         }
         Set<UUID> ouvertes = new HashSet<>();

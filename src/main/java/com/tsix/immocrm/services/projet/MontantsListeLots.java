@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot;
 import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot.Composantes;
 import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot.Paire;
 import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot.Taux;
+import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
@@ -144,11 +145,18 @@ class MontantsListeLots {
         }));
     }
 
+    /** {@code EstimatedPrice*} d'un seul lot, tel que la liste le calcule (non arrondi ; TVA = TTC − HT). */
+    Trio estimation(PrjMarket m) {
+        BigDecimal[] lignes = sommes(ESTIMATION, List.of(m.getId())).getOrDefault(m.getId(), RIEN);
+        Paire e = estime(m, lignes);
+        return new Trio(e.ht(), e.ttc().subtract(e.ht()), e.ttc(), paire(lignes, 1).ht().signum() != 0);
+    }
+
     /** {@code EstimatedPrice*} : Σ bordereau estimatif s'il est non nul, sinon le forfait saisi. */
     private static Paire estime(PrjMarket m, BigDecimal[] lignes) {
         Paire estimation = paire(lignes, 1);
-        return estimation.ht().signum() != 0 ? estimation
-                : new Paire(m.getEstimatedPriceHTManual(), m.getEstimatedPriceTTCManual());
+        return estimation.ht().signum() == 0 ? new Paire(m.getEstimatedPriceHTManual(), m.getEstimatedPriceTTCManual())
+                : estimation;
     }
 
     private static Taux taux(PrjMarket m) {

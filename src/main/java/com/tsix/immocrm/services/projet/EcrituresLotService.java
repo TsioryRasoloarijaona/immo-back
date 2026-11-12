@@ -19,6 +19,7 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
+import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
@@ -74,8 +75,8 @@ public class EcrituresLotService {
         Optional<GenreLot> genre = GenreLot.deNom(r.genre());
         if (genre.isPresent()) {
             droits.exiger(genre.get().droitCreation());
-        } else if (droits.parmi(GenreLot.DROIT_NOUVEAU, GenreLot.DROIT_NOUVEAU_MULTI).isEmpty()) {
-            throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+        } else {
+            exigerUnDroitDeCreation();
         }
         GenreLot g = genre.orElseThrow(() -> new InvalidRequestException("genre : obligatoire et parmi " + listeGenres()));
         String description = obligatoire(StringUtils.hasText(r.description()) ? r.description().trim() : null, "description");
@@ -136,6 +137,24 @@ public class EcrituresLotService {
         }
     }
 
+    /** Lot à copier (E8) : 403 sans aucun droit de création, 404, puis 403 sans le droit de son genre. */
+    PrjMarket copiable(UUID id) {
+        exigerUnDroitDeCreation();
+        PrjMarket m = lots.visible(id);
+        droits.exiger(genre(m).droitCreation());
+        return m;
+    }
+
+    static GenreLot genre(PrjMarket m) {
+        return GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).orElse(GenreLot.ENTREPRENEURS);
+    }
+
+    private void exigerUnDroitDeCreation() {
+        if (droits.parmi(GenreLot.DROIT_NOUVEAU, GenreLot.DROIT_NOUVEAU_MULTI).isEmpty()) {
+            throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+        }
+    }
+
     @Transactional
     public LotListItemDto executerTransition(UUID id, ExecutionTransitionLotDto d) {
         if (d == null || d.transitionId() == null) {
@@ -149,7 +168,7 @@ public class EcrituresLotService {
         return lots.ligne(m);
     }
 
-    private String codeLibre() {
+    String codeLibre() {
         String code = sequences.suivantSelonLigne(SEQUENCE);
         while (em.createQuery("select count(m) from PrjMarket m where m.code = :c", Long.class).setParameter("c", code)
                 .getSingleResult() > 0) {
@@ -158,7 +177,7 @@ public class EcrituresLotService {
         return code;
     }
 
-    private StrStatus statutDeDepart(GenreLot g) {
+    StrStatus statutDeDepart(GenreLot g) {
         return em.createQuery("select s from StrStatus s where s.strConfigEntityId = :e and s.strStatusTypeId = :t"
                         + " order by s.sorting asc", StrStatus.class)
                 .setParameter("e", g.entite()).setParameter("t", TYPE_STATUT_NOUVEAU).setMaxResults(1)

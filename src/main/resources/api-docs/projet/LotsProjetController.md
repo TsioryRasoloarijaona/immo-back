@@ -84,9 +84,45 @@ commentaire et que `notes` est vide.
 
 ## lot
 
-Fiche d'un lot : les champs de la liste, plus le montant forfaitaire saisi, l'estimation (Σ bordereau estimatif, sinon le
-forfaitaire), la retenue de garantie et l'avance théoriques (marché TTC × taux), les taux en pourcentage (0–100), les
-options et les dates d'appel d'offres et de chantier (`null` si non saisies).
+Fiche d'un lot : les champs de la liste, plus le montant forfaitaire saisi, l'estimation (même calcul que la liste :
+Σ `Quantity × UnitPriceHT × (1 + FODECRatio)` du bordereau estimatif, TTC = HT × (1 + `VatRatio`) par ligne, TVA = TTC − HT ;
+sinon le forfaitaire HT / TTC), la retenue de garantie et l'avance théoriques (marché TTC × taux), les taux en pourcentage (0–100), les
+options et les dates d'appel d'offres et de chantier (`null` si non saisies). Champs des onglets de la fiche OMRAN
+(`FEATURE-lot-fiche-parite.md` E1) : devise, catégorie, « Est. de base » (`dateDebutBase`, `delaiBaseJours`,
+`dateFinBase`), les 12 dates, les options (ratios en pourcentage 0–100), la résiliation et la description détaillée.
+L'avancement décompté de l'en-tête est `avancement` (fraction 0–1) de la ligne de liste.
+
+## modifier
+
+Enregistre la fiche (`FEATURE-lot-fiche-parite.md` E6). Le corps ne contient que les champs à changer : **absent =
+inchangé**, `null` explicite = vidé (400 pour `description`, `categorieId`, `typeId`). Taux et ratios en pourcentage 0–100
+(10 → 0,1 en base). Tout autre champ (code, genre, statut, projet, multi-fournisseur, dates prévisionnelles, montants
+calculés) répond **400** et rien n'est écrit. Ordre des refus : **404** (lot invisible) → **403** (estimation manuelle
+changée sans le droit `Yes.Prj.Front.Market.MarketMonitoring.ManualEstimationAdministrator` : `montantForfaitaireHT/TTC`,
+`dateDebutBase`, `delaiBaseJours`, `dateFinBase` ; renvoyer la valeur stockée n'est pas un changement) → **409** (statut
+du lot à `StrStatus.IsReadOnly = 1`) → **400** (contrôles). Chaîne des 12 dates, dans l'ordre lancement AO, retrait du
+dossier, échéance de remise des offres, report AO, ouverture des plis, rapport de dépouillement, adjudication, signature du
+marché, ordre de service, lancement des travaux, achèvement des travaux, recollement : chaque date renseignée (après
+application du corps) doit être ≥ chaque date renseignée qui la précède, sinon 400 nommant les deux. Estimation
+confidentielle comme OMRAN : `montantForfaitaireHT` recalcule TVA et TTC au taux `DefaultVat`, `montantForfaitaireTTC`
+recalcule HT et TVA, `tvaDefautPct` changé recalcule TVA et TTC depuis le HT stocké ; une valeur renvoyée identique ne
+recalcule rien. Écrit `UserUpdate` / `UserUpdateDateTime` et une ligne d'audit ; renvoie la fiche.
+
+## copier
+
+Copie un lot visible : nouveau code de la séquence « Market » (incrémentée jusqu'à un code libre), description suivie de
+« (Copie) », lot ouvert, statut de départ du genre (statut « Nouveau » de plus petit ordre), ligne d'historique
+« Création ». Comme OMRAN, le bordereau de la source (lignes et groupes) devient le bordereau **estimatif** de la copie :
+l'estimatif pour un lot multi-fournisseur ; sinon le définitif, ou l'estimatif s'il n'a aucune ligne. Le définitif de la
+copie est vide. Hors multi-fournisseur, fournisseur, dates d'appel d'offres et de marché et résiliation sont vidés, et
+l'estimation manuelle reçoit l'estimation de la source (Σ estimatif, sinon forfait). Prévisions, retenues et lignes de
+stock ne sont pas copiées. Droit `toolNew` (Entrepreneurs) ou `toolNewMultiSupplier` (autres genres) ;
+ordre des refus : 403 si l'appelant n'a aucun des deux, 404, puis 403 si le droit du genre du lot manque.
+
+## demandesAchat
+
+Demandes internes d'achat (`BuySelection`) rattachées au lot, en lecture seule, par date décroissante puis code. Onglet
+Réclamations : module SAV non porté, aucune route.
 
 ## bordereau
 

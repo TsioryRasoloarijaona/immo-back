@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Schema(description = "Fiche d'un lot : les champs de la ligne de liste, plus estimation, taux, options et dates.")
+@Schema(description = "Fiche d'un lot : les champs de la ligne de liste, plus estimation, taux, options, dates et onglets de la fiche.")
 public record LotDetailDto(
         @JsonUnwrapped LotListItemDto lot,
         @Schema(description = "Libellé du projet.") String projetDescription,
@@ -16,10 +16,12 @@ public record LotDetailDto(
         @Schema(description = "Montant forfaitaire HT saisi (EstimatedPriceHTManual).") BigDecimal montantForfaitaireHT,
         @Schema(description = "TVA forfaitaire saisie (EstimatedVatAmountManual).") BigDecimal montantForfaitaireTVA,
         @Schema(description = "Montant forfaitaire TTC saisi (EstimatedPriceTTCManual).") BigDecimal montantForfaitaireTTC,
-        @Schema(description = "Estimation HT : Σ bordereau estimatif, sinon montant forfaitaire HT.") BigDecimal estimationHT,
-        @Schema(description = "Estimation TVA : Σ bordereau estimatif, sinon TVA forfaitaire.") BigDecimal estimationTVA,
-        @Schema(description = "Estimation TTC : Σ bordereau estimatif, sinon montant forfaitaire TTC.") BigDecimal estimationTTC,
-        @Schema(description = "Vrai si l'estimation vient du bordereau estimatif.") boolean estimationDepuisBordereau,
+        @Schema(description = "Estimation HT : Σ quantité × PU HT × (1 + FODEC) de l'estimatif, sinon forfait HT.")
+        BigDecimal estimationHT,
+        @Schema(description = "Estimation TVA : estimation TTC − estimation HT.") BigDecimal estimationTVA,
+        @Schema(description = "Estimation TTC : Σ HT ligne × (1 + TVA) de l'estimatif, sinon forfait TTC.")
+        BigDecimal estimationTTC,
+        @Schema(description = "Vrai si l'estimation vient du bordereau estimatif (Σ HT non nulle).") boolean estimationDepuisBordereau,
         @Schema(description = "Marché TTC × taux de retenue de garantie.") BigDecimal retenueGarantieTheorique,
         @Schema(description = "Marché TTC × taux d'avance.") BigDecimal avanceTheorique,
         @Schema(description = "Taux d'avance en pourcentage (0–100).") BigDecimal tauxAvance,
@@ -48,6 +50,7 @@ public record LotDetailDto(
         @Schema(description = "Création (UserCreateDateTime).") LocalDateTime dateCreation,
         @Schema(description = "Auteur de la création (UserCreate).") String creePar,
         @Schema(description = "Dernière modification (UserUpdateDateTime).") LocalDateTime dateModification,
-        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar
+        @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar,
+        @JsonUnwrapped FicheEtendueLotDto fiche
 ) {
 }

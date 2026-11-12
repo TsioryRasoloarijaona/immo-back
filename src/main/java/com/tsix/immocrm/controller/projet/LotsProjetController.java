@@ -5,15 +5,19 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.dto.projet.BordereauDto;
 import com.tsix.immocrm.dto.projet.CreerLotRequest;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
+import com.tsix.immocrm.dto.projet.DemandeAchatLotDto;
 import com.tsix.immocrm.dto.projet.ExecutionTransitionLotDto;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
+import com.tsix.immocrm.dto.projet.ModifierLotRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
 import com.tsix.immocrm.dto.projet.TotauxLotsDto;
 import com.tsix.immocrm.dto.projet.TransitionLotDto;
+import com.tsix.immocrm.services.projet.CopieLot;
 import com.tsix.immocrm.services.projet.EcrituresLotService;
 import com.tsix.immocrm.services.projet.FiltresLots;
 import com.tsix.immocrm.services.projet.LotsProjetService;
+import com.tsix.immocrm.services.projet.ModificationLot;
 import com.tsix.immocrm.web.export.ColonneFixe;
 import com.tsix.immocrm.web.export.ExportTableur;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +36,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,6 +46,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.UUID;
@@ -69,11 +75,16 @@ public class LotsProjetController {
 
     private final LotsProjetService service;
     private final EcrituresLotService ecritures;
+    private final ModificationLot modification;
+    private final CopieLot copie;
     private final ExportTableur exportTableur;
 
-    public LotsProjetController(LotsProjetService service, EcrituresLotService ecritures, ExportTableur exportTableur) {
+    public LotsProjetController(LotsProjetService service, EcrituresLotService ecritures, ModificationLot modification,
+                                CopieLot copie, ExportTableur exportTableur) {
         this.service = service;
         this.ecritures = ecritures;
+        this.modification = modification;
+        this.copie = copie;
         this.exportTableur = exportTableur;
     }
 
@@ -170,6 +181,42 @@ public class LotsProjetController {
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public LotDetailDto lot(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.lot(id);
+    }
+
+    @PatchMapping("/lots/{id}")
+    @Operation(summary = "Enregistrer la fiche d'un lot (champ absent = inchangé, null = vidé)")
+    @ApiResponse(responseCode = "200", description = "Fiche du lot enregistrée.")
+    @ApiResponse(responseCode = "400", description = "Champ non modifiable, valeur invalide, référence inconnue ou dates hors ordre.",
+            content = @Content)
+    @ApiResponse(responseCode = "403", description = "Estimation manuelle changée sans le droit ManualEstimationAdministrator.",
+            content = @Content)
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    @ApiResponse(responseCode = "409", description = "Statut du lot en lecture seule (StrStatus.IsReadOnly).", content = @Content)
+    public LotDetailDto modifier(@Parameter(description = ID_LOT) @PathVariable UUID id,
+                                 @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                                         content = @Content(schema = @Schema(implementation = ModifierLotRequest.class)))
+                                 @RequestBody JsonNode corps) {
+        return modification.modifier(id, corps);
+    }
+
+    @PostMapping("/lots/{id}/copie")
+    @Operation(summary = "Copier un lot : en-tête, lignes de bordereau et leurs groupes")
+    @ApiResponse(responseCode = "201", description = "Copie créée ; en-tête Location = sa fiche.")
+    @ApiResponse(responseCode = "403", description = "Droit de création du genre du lot absent (aucun des deux : avant le 404).",
+            content = @Content)
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public ResponseEntity<LotDetailDto> copier(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        LotDetailDto copieLot = this.copie.copier(id);
+        return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentContextPath().path("/api/projet/lots/{id}")
+                .buildAndExpand(copieLot.lot().id()).toUri()).body(copieLot);
+    }
+
+    @GetMapping("/lots/{id}/demandes-achat")
+    @Operation(summary = "Demandes internes d'achat du lot, par date décroissante")
+    @ApiResponse(responseCode = "200", description = "Demandes du lot (éventuellement vide).")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public List<DemandeAchatLotDto> demandesAchat(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return service.demandesAchat(id);
     }
 
     @GetMapping("/lots/{id}/bordereau")
