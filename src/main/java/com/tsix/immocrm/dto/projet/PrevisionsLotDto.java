@@ -17,8 +17,8 @@ public record PrevisionsLotDto(
     @Schema(description = "Mois du graphe ; montants à 0 et avancements null sans donnée.")
     public record PointPrevisionDto(
             @Schema(description = "Premier jour du mois.") LocalDate mois,
-            @Schema(description = "Estimation de base : montant du mois.") BigDecimal estimation,
-            @Schema(description = "Estimation de base : avancement (fraction 0–1).") BigDecimal avancementEstimation,
+            @Schema(description = "Estimation de base : montant du mois (pas encore calculée, toujours 0).") BigDecimal estimation,
+            @Schema(description = "Estimation de base : avancement 0–1 (pas encore calculé, toujours null).") BigDecimal avancementEstimation,
             @Schema(description = "Σ PrjMarketPaymentPrevision.Amount du mois.") BigDecimal prevision,
             @Schema(description = "Avancement prévu (fraction 0–1), maximum du mois ; null si négatif.") BigDecimal avancementPrevision,
             @Schema(description = "Σ net à payer des pièces du lot hors avoirs, par mois d'échéance.") BigDecimal reel,
