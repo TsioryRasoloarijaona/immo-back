@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -451,6 +452,148 @@ public class FixtureAchat {
                         VALUES (:id, :reglement, :piece, :montant)""")
                 .setParameter(P_ID, UUID.randomUUID()).setParameter("reglement", reglement)
                 .setParameter("piece", pieceId).setParameter("montant", montant));
+    }
+
+    // ------------------------------------------------------------------ lot A2b-1 « fiche, écritures » (FEATURE-achat-fiche-ecritures.md)
+
+    public static final String LIMITE_QUANTITES = "LimitDeliveryAndInvoiceQuantityToOrder";
+
+    // Définitions de yesRemsProd ; tables absentes de yesRemsTest et de la CI au 12/11.
+    private static final String TABLE_PARAMETRES = """
+            IF OBJECT_ID('dbo.AdmParamsBoolean', 'U') IS NULL
+                CREATE TABLE dbo.AdmParamsBoolean (Code nvarchar(255) NOT NULL PRIMARY KEY, CodeValue bit NULL,
+                    PKey uniqueidentifier NULL)""";
+    private static final String TABLE_ACT_ENTRY = """
+            IF OBJECT_ID('dbo.ActEntry', 'U') IS NULL
+                CREATE TABLE dbo.ActEntry (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL,
+                    DocCode nvarchar(255) NULL, Description nvarchar(255) NULL, Notes nvarchar(500) NULL, DocDate datetime NULL,
+                    CfgCompanyId uniqueidentifier NULL, AdmModuleId uniqueidentifier NULL, StlSettlementId uniqueidentifier NULL,
+                    ComFolderId uniqueidentifier NULL, BuyDocumentId uniqueidentifier NULL, StlDocumentId uniqueidentifier NULL,
+                    UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL,
+                    UserUpdateDateTime datetime NULL)""";
+    private static final String TABLE_STL_ACCOUNTING = """
+            IF OBJECT_ID('dbo.StlAccountingEntry', 'U') IS NULL
+                CREATE TABLE dbo.StlAccountingEntry (PKey uniqueidentifier NOT NULL PRIMARY KEY, DocDate datetime NULL,
+                    DocNumber nvarchar(255) NULL, DocLabel nvarchar(255) NULL, AmountCredit decimal(26, 6) NULL,
+                    AmountDebit decimal(26, 6) NULL, CfgCompanyId uniqueidentifier NULL, CfgTierId uniqueidentifier NULL,
+                    BuyDocumentId uniqueidentifier NULL, StlDocumentId uniqueidentifier NULL,
+                    StlSettlementId uniqueidentifier NULL, UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL,
+                    UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL)""";
+
+    /** Société, projet et fournisseur d'un test d'écriture ; {@code jeton} préfixe les codes. */
+    public record Cadre(String jeton, UUID societe, UUID projet, UUID fournisseur, String fournisseurNom) {
+    }
+
+    public Cadre cadre(String prefixe) {
+        String j = jeton(prefixe);
+        UUID societe = societe("SOC-" + j);
+        String nom = "Fournisseur " + j;
+        return new Cadre(j, societe, projet("P-" + j, societe), fournisseur("FOU-" + j, nom), nom);
+    }
+
+    /** Compte habilité à la société et au projet du cadre, un rôle {@code AdmUserRole} propre, droits OMRAN donnés. */
+    public AdmUser compteHabilite(Cadre c, String code, String role, String... droits) {
+        AdmUser compte = compte(code + "-" + c.jeton(), role);
+        habiliterSociete(compte, c.societe());
+        habiliter(compte, c.projet());
+        for (String droit : droits) {
+            droitOmran(compte, droit);
+        }
+        return compte;
+    }
+
+    /** Pièce du cadre, à payer 100, sans statut, sans lot, sans déclencheur. */
+    public UUID piece(Cadre c, String suffixe, String nature) {
+        return piece(Piece.facture(c.jeton() + suffixe, LocalDate.of(2026, 5, 4), c.fournisseur(), c.fournisseurNom(),
+                c.societe(), c.projet(), new BigDecimal("100")).nature(nature));
+    }
+
+    /** Rôle ({@code AdmUserRole.AdmRoleId}) du compte : celui que {@link #droitOmran} et les transitions visent. */
+    public UUID roleDe(AdmUser compte) {
+        em.flush();
+        Object id = em.createNativeQuery("""
+                        SELECT TOP 1 CAST(AdmRoleId AS varchar(36)) FROM AdmUserRole WHERE AdmUserId = :user
+                        ORDER BY AdmRoleId ASC""")
+                .setParameter("user", compte.getId()).getSingleResult();
+        return UUID.fromString(id.toString());
+    }
+
+    /** Paramètre {@code AdmParamsBoolean} posé (table créée si absente). */
+    public void parametreBooleen(String code, boolean valeur) {
+        executer(em.createNativeQuery(TABLE_PARAMETRES));
+        executer(em.createNativeQuery("""
+                        IF EXISTS (SELECT 1 FROM AdmParamsBoolean WHERE Code = :code)
+                            UPDATE AdmParamsBoolean SET CodeValue = :valeur WHERE Code = :code
+                        ELSE
+                            INSERT INTO AdmParamsBoolean (Code, CodeValue, PKey) VALUES (:code, :valeur, :id)""")
+                .setParameter(P_CODE, code).setParameter("valeur", valeur).setParameter(P_ID, UUID.randomUUID()));
+    }
+
+    /** {@code ActEntry} et {@code StlAccountingEntry} créées si absentes (la suppression les lit). */
+    public void tablesComptables() {
+        executer(em.createNativeQuery(TABLE_ACT_ENTRY));
+        executer(em.createNativeQuery(TABLE_STL_ACCOUNTING));
+    }
+
+    /** Écriture comptable {@code ActEntry} citant la pièce. */
+    public void ecritureComptable(UUID pieceId) {
+        tablesComptables();
+        executer(em.createNativeQuery("INSERT INTO ActEntry (PKey, Code, BuyDocumentId) VALUES (:id, :code, :piece)")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter(P_CODE, "ACT-" + pieceId.toString().substring(0, 8))
+                .setParameter("piece", pieceId));
+    }
+
+    /** Décompte ({@code PrjWorkingOut}) dont la facture est {@code factureId} : la facture devient « gérée ailleurs ». */
+    public UUID decompte(UUID factureId) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("INSERT INTO PrjWorkingOut (PKey, Code, BuyDocumentId) VALUES (:id, :code, :facture)")
+                .setParameter(P_ID, id).setParameter(P_CODE, "DEC-" + id.toString().substring(0, 8))
+                .setParameter("facture", factureId));
+        return id;
+    }
+
+    /** Règlement au pointage complet ; {@code datePointage} et {@code echeance} nulles possibles. */
+    public record ReglementPointe(String code, BigDecimal montant, BigDecimal montantBrut, String statut,
+                                  LocalDate dateReglement, LocalDate datePointage, LocalDate echeance) {
+    }
+
+    /** Règlement sans ligne (lignes ajoutées par {@link #ligneReglement}). */
+    public UUID reglement(ReglementPointe r, UUID type) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO StlSettlement (PKey, Code, DocDate, Amount, AmountBase, Status, IsCredit, StlSettlementTypeId)
+                        VALUES (:id, :code, :date, :montant, :brut, :statut, 0, :type)""")
+                .setParameter(P_ID, id).setParameter(P_CODE, r.code()).setParameter("date", r.dateReglement().atStartOfDay())
+                .setParameter("montant", r.montant()).setParameter("brut", r.montantBrut()).setParameter("statut", r.statut())
+                .setParameter("type", type));
+        if (r.datePointage() != null) {
+            poserSur("StlSettlement", id, "SettlementDate", r.datePointage().atStartOfDay());
+        }
+        if (r.echeance() != null) {
+            poserSur("StlSettlement", id, "EcheanceDate", r.echeance().atStartOfDay());
+        }
+        return id;
+    }
+
+    /** Nombre de lignes de {@code table} dont {@code colonne} vaut {@code id} (noms fixes, jamais une saisie). */
+    public int nombre(String table, String colonne, UUID id) {
+        em.flush();
+        Object n = em.createNativeQuery("SELECT COUNT(*) FROM " + table + " WHERE " + colonne + " = :id")
+                .setParameter(P_ID, id).getSingleResult();
+        return ((Number) n).intValue();
+    }
+
+    /** Colonne uniqueidentifier de {@code BuyDocument} en texte ({@code null} si NULL ou pièce absente). */
+    public String lienDe(UUID pieceId, String colonne) {
+        em.flush();
+        List<?> valeurs = em.createNativeQuery("SELECT CAST(" + colonne + " AS varchar(36)) FROM BuyDocument WHERE PKey = :id")
+                .setParameter(P_ID, pieceId).getResultList();
+        return valeurs.isEmpty() || valeurs.get(0) == null ? null : valeurs.get(0).toString().toUpperCase();
+    }
+
+    /** Après un refus : oublie l'état en mémoire sans l'écrire, avant de relire la base. */
+    public void oublier() {
+        em.clear();
     }
 
     private void executer(Query query) {
