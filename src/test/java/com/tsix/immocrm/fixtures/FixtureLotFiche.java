@@ -260,6 +260,115 @@ public class FixtureLotFiche {
         return id;
     }
 
+    // ------------------------------------------------------------------ montants de la fiche (L2b, FEATURE-lot-fiche-suivi.md)
+
+    /** Genres de pièce que lit {@code PrjMarketMonitoringView} (PKeys de prod) ; facture d'avenant = seule exclue des factures. */
+    public static final UUID ENTITE_FACTURE_DECOMPTE = UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B604");
+    public static final UUID ENTITE_FACTURE_AVENANT = UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B622");
+    public static final UUID ENTITE_AVANCE_MARCHE = UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B601");
+    public static final UUID ENTITE_AVANCE_DECOMPTE = UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B603");
+
+    private static final String INVOICE = "INVOICE";
+    private static final String DOCUMENT_TO_PAY = "DOCUMENT_TO_PAY";
+
+    private static final Map<UUID, String> ENTITES_PIECES = Map.of(
+            ENTITE_FACTURE_DECOMPTE, "PrjInvoiceDebitWorkingOut", ENTITE_FACTURE_AVENANT, "PrjInvoiceDebitMarketClause",
+            ENTITE_AVANCE_MARCHE, "PrjDocumentDebitMarketAdvance", ENTITE_AVANCE_DECOMPTE, "PrjDocumentDebitMarketWorkingOutAdvance");
+
+    // PrjClause est dans la CI (010_tables.sql), pas dans yesRemsTest : créée si absente, dans la transaction du test.
+    private static final String TABLE_AVENANTS = """
+            IF OBJECT_ID('dbo.PrjClause', 'U') IS NULL
+                CREATE TABLE dbo.PrjClause (PKey uniqueidentifier NOT NULL PRIMARY KEY, Sorting int NULL, Code nvarchar(255) NULL,
+                    Description nvarchar(255) NULL, DocDate datetime NULL, DocRef nvarchar(255) NULL,
+                    SupplierDescription nvarchar(255) NULL, Notes nvarchar(1000) NULL, AmountHT decimal(26, 6) NULL,
+                    AmountVat decimal(26, 6) NULL, AmountTTC decimal(26, 6) NULL, AmountToPay decimal(26, 6) NULL,
+                    WarrantyBasedOnAmount bit NULL, WarrantyRatio decimal(26, 6) NULL, WarrantyAmount decimal(26, 6) NULL,
+                    DECBasedOnAmount bit NULL, InsuranceDECRatio decimal(26, 6) NULL, InsuranceDECAmount decimal(26, 6) NULL,
+                    TRCBasedOnAmount bit NULL, InsuranceTRCAmount decimal(26, 6) NULL, InsuranceTRCRatio decimal(26, 6) NULL,
+                    ProrataBasedOnAmount bit NULL, ProportionRatio decimal(26, 6) NULL, ProportionAmount decimal(26, 6) NULL,
+                    CfgTierId uniqueidentifier NULL, PrjMarketId uniqueidentifier NULL, UserCreate nvarchar(255) NULL,
+                    UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL);""";
+
+    /** Les {@code StrEntity} des pièces du lot, créées si absentes (yesRemsTest et CI n'ont pas les lignes de prod). */
+    public void entitesPiecesLot() {
+        ENTITES_PIECES.forEach((id, code) -> maj("""
+                IF NOT EXISTS (SELECT 1 FROM StrEntity WHERE PKey = ?)
+                    INSERT INTO StrEntity (PKey, Code, Description) VALUES (?, ?, ?)""", s(id), s(id), code, code));
+    }
+
+    /** Pièce d'achat du lot ({@code BuyDocument.PrjMarketId}) ; {@code entite} et {@code reference} peuvent être nuls. */
+    public UUID pieceLot(UUID lot, String code, String type, String reference, UUID entite, BigDecimal ht, BigDecimal ttc) {
+        UUID id = UUID.randomUUID();
+        maj("""
+                INSERT INTO BuyDocument (PKey, Code, DocType, ReferenceType, StrEntityId, DocDate, AmountHT, AmountTTC, AmountToPay,
+                    PrjMarketId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                s(id), code, type, reference, s(entite), jour(LocalDate.of(2026, 3, 20)), ht, ttc, ttc, s(lot));
+        return id;
+    }
+
+    /** Facture de décompte du lot (genre {@code PrjInvoiceDebitWorkingOut}). */
+    public UUID factureLot(UUID lot, String code, String ht, String ttc) {
+        return pieceLot(lot, code, INVOICE, null, ENTITE_FACTURE_DECOMPTE, new BigDecimal(ht), new BigDecimal(ttc));
+    }
+
+    /** Avoir du lot ({@code DocType = REFUND}). */
+    public UUID avoirLot(UUID lot, String code, String ht, String ttc) {
+        return pieceLot(lot, code, "REFUND", null, null, new BigDecimal(ht), new BigDecimal(ttc));
+    }
+
+    /** Pièce d'avance sur marché validée ({@code ReferenceType = MARKET_ADVANCE}), montant TTC. */
+    public UUID avanceMarche(UUID lot, String code, String ttc) {
+        return pieceLot(lot, code, DOCUMENT_TO_PAY, "MARKET_ADVANCE", ENTITE_AVANCE_MARCHE, new BigDecimal(ttc), new BigDecimal(ttc));
+    }
+
+    /** Pièce d'avance sur décompte validée ({@code ReferenceType = WORKINGOUT_ADVANCE}), montant TTC. */
+    public UUID avanceDecompte(UUID lot, String code, String ttc) {
+        return pieceLot(lot, code, DOCUMENT_TO_PAY, "WORKINGOUT_ADVANCE", ENTITE_AVANCE_DECOMPTE, new BigDecimal(ttc),
+                new BigDecimal(ttc));
+    }
+
+    /** Devis retenu du lot ({@code QUOTE}, {@code IsSelected = 1}) : le « Marché » de la fiche. */
+    public UUID devisRetenu(UUID lot, String code, String ht, String ttc) {
+        UUID id = pieceLot(lot, code, "QUOTE", null, null, new BigDecimal(ht), new BigDecimal(ttc));
+        maj("UPDATE BuyDocument SET IsSelected = 1 WHERE PKey = ?", s(id));
+        return id;
+    }
+
+    /** Avenant du lot ({@code PrjClause}). */
+    public UUID avenant(UUID lot, String code, String ht, String tva, String ttc) {
+        maj(TABLE_AVENANTS);
+        UUID id = UUID.randomUUID();
+        maj("""
+                INSERT INTO PrjClause (PKey, Sorting, Code, Description, DocDate, AmountHT, AmountVat, AmountTTC, AmountToPay, PrjMarketId)
+                VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                s(id), code, "Avenant " + code, jour(LocalDate.of(2026, 3, 10)), new BigDecimal(ht), new BigDecimal(tva),
+                new BigDecimal(ttc), new BigDecimal(ttc), s(lot));
+        return id;
+    }
+
+    /** Facture d'avenant (genre {@code PrjInvoiceDebitMarketClause}, {@code PrjClauseId}). */
+    public UUID factureAvenant(UUID lot, UUID avenant, String code, String ht, String ttc) {
+        UUID id = pieceLot(lot, code, INVOICE, null, ENTITE_FACTURE_AVENANT, new BigDecimal(ht), new BigDecimal(ttc));
+        maj("UPDATE BuyDocument SET PrjClauseId = ? WHERE PKey = ?", s(avenant), s(id));
+        return id;
+    }
+
+    /** Ligne du bordereau estimatif ({@code PrjMarketLineEstimation}), TVA 20 %, FODEC 0. */
+    public void ligneEstimative(UUID lot, String code, String quantite, String puHT) {
+        BigDecimal pu = new BigDecimal(puHT);
+        maj("""
+                INSERT INTO PrjMarketLineEstimation (PKey, Code, Description, Sorting, Unity, Quantity, UnitPriceHT, VatRatio,
+                    UnitPriceTTC, FODECRatio, IsStock, PrjMarketId)
+                VALUES (?, ?, ?, 1, N'U', ?, ?, 0.2, ?, 0, 0, ?)""",
+                s(UUID.randomUUID()), code, "Ligne " + code, new BigDecimal(quantite), pu, pu.multiply(new BigDecimal("1.2")), s(lot));
+    }
+
+    /** Retenue forfaitaire d'un décompte ({@code PrjWorkingOutRetainedLine}). */
+    public void retenueForfaitaire(UUID decompte, String montant) {
+        maj("INSERT INTO PrjWorkingOutRetainedLine (PKey, PrjWorkingOutId, Sorting, Description, Amount) VALUES (?, ?, 1, ?, ?)",
+                s(UUID.randomUUID()), s(decompte), "Retenue forfaitaire", new BigDecimal(montant));
+    }
+
     // ------------------------------------------------------------------ lecture
 
     /** Ligne {@code PrjMarket} après un appel accepté : la session est écrite avant la lecture. */
