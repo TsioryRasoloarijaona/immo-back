@@ -1,8 +1,10 @@
 package com.tsix.immocrm.services.achat;
 
+import com.tsix.immocrm.domain.achat.AgregatsBonCommande;
 import com.tsix.immocrm.domain.achat.ModuleAchat;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.dto.achat.AgregatsBonCommandeDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
@@ -74,6 +76,36 @@ public class DocumentsAchatService {
             Map.entry("categories", par(DocumentAchatListItemDto::categories)),
             Map.entry("dateAlerte", par(DocumentAchatListItemDto::dateAlerte)));
 
+    /** Clés lues dans {@code agregats} : les pièces sans agrégats (non-BC) restent en fin dans les deux sens. */
+    private static final Map<String, Comparator<DocumentAchatListItemDto>> TRIS_AGREGATS = Map.ofEntries(
+            Map.entry("factureHT", parAgregat(AgregatsBonCommandeDto::factureHT)),
+            Map.entry("factureTTC", parAgregat(AgregatsBonCommandeDto::factureTTC)),
+            Map.entry("factureNetAPayer", parAgregat(AgregatsBonCommandeDto::factureNetAPayer)),
+            Map.entry("livreHT", parAgregat(AgregatsBonCommandeDto::livreHT)),
+            Map.entry("livreTTC", parAgregat(AgregatsBonCommandeDto::livreTTC)),
+            Map.entry("livreNetAPayer", parAgregat(AgregatsBonCommandeDto::livreNetAPayer)),
+            Map.entry("resteALivrerHT", parAgregat(AgregatsBonCommandeDto::resteALivrerHT)),
+            Map.entry("resteALivrerTTC", parAgregat(AgregatsBonCommandeDto::resteALivrerTTC)),
+            Map.entry("resteALivrerNetAPayer", parAgregat(AgregatsBonCommandeDto::resteALivrerNetAPayer)),
+            Map.entry("avance", parAgregat(AgregatsBonCommandeDto::avance)),
+            Map.entry("avanceTauxPrevu", parAgregat(AgregatsBonCommandeDto::avanceTauxPrevu)),
+            Map.entry("avanceTauxEffectif", parAgregat(AgregatsBonCommandeDto::avanceTauxEffectif)),
+            Map.entry("avanceAmortie", parAgregat(AgregatsBonCommandeDto::avanceAmortie)),
+            Map.entry("avanceRegle", parAgregat(AgregatsBonCommandeDto::avanceRegle)),
+            Map.entry("avanceReste", parAgregat(AgregatsBonCommandeDto::avanceReste)),
+            Map.entry("avanceResteAAmortir", parAgregat(AgregatsBonCommandeDto::avanceResteAAmortir)),
+            Map.entry("garantieRetenue", parAgregat(AgregatsBonCommandeDto::garantieRetenue)),
+            Map.entry("garantieRestituee", parAgregat(AgregatsBonCommandeDto::garantieRestituee)),
+            Map.entry("garantieReste", parAgregat(AgregatsBonCommandeDto::garantieReste)),
+            Map.entry("regle", parAgregat(AgregatsBonCommandeDto::regle)),
+            Map.entry("resteAPayerSurFacture", parAgregat(AgregatsBonCommandeDto::resteAPayerSurFacture)),
+            Map.entry("resteAPayerTotal", parAgregat(AgregatsBonCommandeDto::resteAPayerTotal)),
+            Map.entry("bonsLivraisonCodes", parAgregat(AgregatsBonCommandeDto::bonsLivraisonCodes)),
+            Map.entry("facturesCodes", parAgregat(AgregatsBonCommandeDto::facturesCodes)),
+            Map.entry("devisCode", parAgregat(AgregatsBonCommandeDto::devisCode)));
+
+    private static final Comparator<DocumentAchatListItemDto> BC_D_ABORD = Comparator.comparing(d -> d.agregats() == null);
+
     private static final Sort TRI_DEFAUT = Sort.by(Sort.Order.desc("dateDocument"), Sort.Order.desc("code"));
 
     static final String DROIT_BC_SANS_RESTRICTION = "Yes.Buy.Front.Order.OrderList.WithNoRestriction";
@@ -81,11 +113,14 @@ public class DocumentsAchatService {
     private final PerimetreProjetService perimetre;
     private final RequetesDocumentsAchat requetes;
     private final DroitsOmran droits;
+    private final RequetesAgregatsBonCommande requetesAgregats;
 
-    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes, DroitsOmran droits) {
+    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes, DroitsOmran droits,
+                                 RequetesAgregatsBonCommande requetesAgregats) {
         this.perimetre = perimetre;
         this.requetes = requetes;
         this.droits = droits;
+        this.requetesAgregats = requetesAgregats;
     }
 
     public ReferentielsAchatDto referentiels() {
@@ -119,7 +154,9 @@ public class DocumentsAchatService {
                 somme(pieces.stream().map(DocumentAchatListItemDto::montantTTC)), total.montantAPayer(),
                 total.montantRegle(), total.resteARegler(), aRegler.size(), SoldeDocumentAchat.total(aRegler).resteARegler(),
                 somme(pieces.stream().map(DocumentAchatListItemDto::montantHT)),
-                somme(pieces.stream().map(DocumentAchatListItemDto::montantTVA)));
+                somme(pieces.stream().map(DocumentAchatListItemDto::montantTVA)),
+                AgregatsBonCommande.total(pieces.stream().map(DocumentAchatListItemDto::agregats)
+                        .filter(Objects::nonNull).toList()));
     }
 
     /** Pièces visibles retenues par les filtres (SQL puis {@code nonSoldes} / {@code okPourPaiement}), sans tri. */
@@ -129,10 +166,25 @@ public class DocumentsAchatService {
         if (visibles.vide()) {
             return List.of();
         }
-        return requetes.pieces(visibles, filtres, declencheurImpose(filtres)).stream()
+        return avecAgregats(requetes.pieces(visibles, filtres, declencheurImpose(filtres)).stream()
                 .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
                 .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
-                .toList();
+                .toList());
+    }
+
+    /** Agrégats posés sur les bons de commande de {@code pieces} (liste, totaux et fiche). */
+    private List<DocumentAchatListItemDto> avecAgregats(List<DocumentAchatListItemDto> pieces) {
+        List<UUID> bons = pieces.stream().filter(DocumentsAchatService::estCommande)
+                .map(DocumentAchatListItemDto::id).toList();
+        if (bons.isEmpty()) {
+            return pieces;
+        }
+        Map<UUID, AgregatsBonCommandeDto> agregats = requetesAgregats.agregats(bons);
+        return pieces.stream().map(p -> estCommande(p) ? p.avecAgregats(agregats.get(p.id())) : p).toList();
+    }
+
+    private static boolean estCommande(DocumentAchatListItemDto piece) {
+        return NatureDocumentAchat.ORDER.name().equals(piece.nature());
     }
 
     /**
@@ -163,21 +215,28 @@ public class DocumentsAchatService {
         RequetesDocumentsAchat.Entete entete = Optional.of(perimetre.achat(List.of())).filter(p -> !p.vide())
                 .flatMap(p -> requetes.entete(p, id))
                 .orElseThrow(() -> new ResourceNotFoundException("Pièce introuvable"));
-        return entete.avec(requetes.lignes(id), requetes.ventilation(id), requetes.historique(id),
-                requetes.reglements(id));
+        return entete.avec(avecAgregats(List.of(entete.document())).getFirst(), requetes.lignes(id),
+                requetes.ventilation(id), requetes.historique(id), requetes.reglements(id));
     }
 
     /** Tri demandé (propriétés de la ligne), puis le défaut et l'id pour une pagination stable ; inconnu = 400. */
     private static Comparator<DocumentAchatListItemDto> comparateur(Sort demande) {
         Comparator<DocumentAchatListItemDto> tri = (a, b) -> 0;
         for (Sort.Order ordre : demande.and(TRI_DEFAUT).and(Sort.by("id"))) {
-            Comparator<DocumentAchatListItemDto> cle = TRIS.get(ordre.getProperty());
+            Comparator<DocumentAchatListItemDto> agregat = TRIS_AGREGATS.get(ordre.getProperty());
+            Comparator<DocumentAchatListItemDto> cle = agregat != null ? agregat : TRIS.get(ordre.getProperty());
             if (cle == null) {
                 throw new InvalidRequestException("Propriété de tri inconnue : " + ordre.getProperty());
             }
-            tri = tri.thenComparing(ordre.isAscending() ? cle : cle.reversed());
+            Comparator<DocumentAchatListItemDto> sens = ordre.isAscending() ? cle : cle.reversed();
+            tri = tri.thenComparing(agregat == null ? sens : BC_D_ABORD.thenComparing(sens));
         }
         return tri;
+    }
+
+    private static <U extends Comparable<? super U>> Comparator<DocumentAchatListItemDto> parAgregat(
+            Function<AgregatsBonCommandeDto, U> cle) {
+        return par(d -> d.agregats() == null ? null : cle.apply(d.agregats()));
     }
 
     private static <U extends Comparable<? super U>> Comparator<DocumentAchatListItemDto> par(

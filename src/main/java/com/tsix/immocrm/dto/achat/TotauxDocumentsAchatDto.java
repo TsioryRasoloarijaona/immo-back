@@ -14,5 +14,7 @@ public record TotauxDocumentsAchatDto(
         @Schema(description = "Nombre de pièces dont le reste dépasse 0,05.") long nombreARegler,
         @Schema(description = "Σ des restes supérieurs à 0,05 seulement : ce qui est vraiment dû.") BigDecimal resteDu,
         @Schema(description = "Σ des montants HT.") BigDecimal montantHT,
-        @Schema(description = "Σ des montants de TVA.") BigDecimal montantTVA) {
+        @Schema(description = "Σ des montants de TVA.") BigDecimal montantTVA,
+        @Schema(description = "Σ champ à champ des agrégats des bons de commande retenus ; ratios et codes null ; null sans BC.")
+        AgregatsBonCommandeDto agregats) {
 }
