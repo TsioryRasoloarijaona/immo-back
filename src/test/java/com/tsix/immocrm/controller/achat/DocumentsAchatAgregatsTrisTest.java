@@ -75,6 +75,7 @@ class DocumentsAchatAgregatsTrisTest {
         typeReglement = fixture.typeReglement("VIR-" + jeton);
         compte = fixture.compte("ACH-" + jeton, ROLE);
         fixture.habiliterSociete(compte, societe);
+        fixture.sansPersonnel(compte); // Q2 : avec un personnel, seuls ses BC seraient visibles
 
         bcA = bonDeCommande("-A", new Jeu("100", "120", "0.1", "10", "12", "12", "1", "1", "1", "20", "24", "6", "2",
                 "0.5"));

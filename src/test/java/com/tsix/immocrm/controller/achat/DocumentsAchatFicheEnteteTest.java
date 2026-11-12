@@ -82,6 +82,7 @@ class DocumentsAchatFicheEnteteTest {
         compte = fixture.compte("ACH-" + jeton, ROLE);
         fixture.habiliterSociete(compte, societe);
         fixture.habiliter(compte, projet);
+        fixture.sansPersonnel(compte); // Q2 : un compte avec personnel ne verrait que ses BC ; ici on teste l'en-tête
     }
 
     private UUID piece(String suffixe, String nature, String aPayer) {

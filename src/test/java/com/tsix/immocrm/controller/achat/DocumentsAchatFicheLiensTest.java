@@ -84,8 +84,11 @@ class DocumentsAchatFicheLiensTest {
         return corps(mockMvc, get(AppelsAchat.DOCUMENT, piece).with(connecte(compte, ROLE)));
     }
 
+    /** BC déclenché par le personnel du compte : visible malgré la restriction des BC (Q2), seul le projet filtre. */
     private UUID bonDeCommande() {
-        return piece("-BC", FixtureAchat.BON_COMMANDE, false, "5000");
+        UUID bc = piece("-BC", FixtureAchat.BON_COMMANDE, false, "5000");
+        fixture.poser(bc, "CfgTierTriggerId", compte.getCfgEmployee().getId());
+        return bc;
     }
 
     // ------------------------------------------------------------------ BC › Bons de livraison
