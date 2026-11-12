@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -248,6 +249,110 @@ public class FixtureAchat {
                         VALUES (:id, :date, :statut, :piece, :user, :note)""")
                 .setParameter(P_ID, UUID.randomUUID()).setParameter("date", date).setParameter("statut", statut)
                 .setParameter("piece", pieceId).setParameter("user", auteur.getId()).setParameter("note", note));
+    }
+
+    // ------------------------------------------------------------------ lot C8 « liste des pièces » (FEATURE-achat-liste-parite.md)
+
+    public static final String DROIT_BC_SANS_RESTRICTION = "Yes.Buy.Front.Order.OrderList.WithNoRestriction";
+
+    /** Types d'état de workflow ({@code AdmWorkFlowStateType}) aux PKey de production. */
+    public static final UUID ETAT_TERMINE_SUCCES = UUID.fromString("D572CE4B-A4DD-4F38-8998-359EAB5A9FCA");
+    public static final UUID ETAT_TERMINE_ECHEC = UUID.fromString("22B7D73E-2A8F-4A74-839D-29F1DE329B97");
+    public static final UUID ETAT_ANNULATION = UUID.fromString("A9E040DB-533F-4744-AE9A-1425793ADEA0");
+    public static final UUID ETAT_INTERMEDIAIRE = UUID.fromString("B53E0A4F-3D67-4BF9-8C0E-B24155865FD6");
+
+    private static final Map<String, UUID> MODULES = Map.of(
+            "BUY", UUID.fromString("00002C2D-BDFA-4541-94F7-C708A0E00003"),
+            "STL", UUID.fromString("00002C2D-BDFA-4541-94F7-C708A0E00004"),
+            "PRJ", UUID.fromString("00002C2D-BDFA-4541-94F7-C708A0E00005"));
+    private static final Map<String, String> LIBELLES_MODULES = Map.of(
+            "BUY", "Achat", "STL", "Trésorerie", "PRJ", "Projet");
+
+    /** Module {@code AdmModule} BUY / STL / PRJ à sa PKey de production, créé s'il manque ; rend la PKey du code. */
+    public UUID module(String code) {
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmModule WHERE Code = :code)
+                            INSERT INTO AdmModule (PKey, Code, Description) VALUES (:id, :code, :libelle)""")
+                .setParameter(P_ID, MODULES.get(code)).setParameter(P_CODE, code)
+                .setParameter("libelle", LIBELLES_MODULES.get(code)));
+        Object id = em.createNativeQuery(
+                        "SELECT TOP 1 CAST(PKey AS varchar(36)) FROM AdmModule WHERE Code = :code ORDER BY PKey ASC")
+                .setParameter(P_CODE, code).getSingleResult();
+        return UUID.fromString(id.toString());
+    }
+
+    /** Type de lot ({@code PrjMarketType}). */
+    public UUID typeLot(String code, String libelle) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("INSERT INTO PrjMarketType (PKey, Code, Description) VALUES (:id, :code, :libelle)")
+                .setParameter(P_ID, id).setParameter(P_CODE, code).setParameter("libelle", libelle));
+        return id;
+    }
+
+    /** Devise ({@code StlCurrency}). */
+    public UUID devise(String code) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("INSERT INTO StlCurrency (PKey, Code, Description) VALUES (:id, :code, :code)")
+                .setParameter(P_ID, id).setParameter(P_CODE, code));
+        return id;
+    }
+
+    /** Dossier de groupement ({@code BuyFolder}, absente de yesRemsTest : créée dans la transaction si besoin). */
+    public UUID dossierGroupement(String code, String description) {
+        executer(em.createNativeQuery("""
+                IF OBJECT_ID('dbo.BuyFolder', 'U') IS NULL
+                    CREATE TABLE dbo.BuyFolder (Pkey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL,
+                        Description nvarchar(255) NULL, IsClosed bit NULL, UserCreate nvarchar(255) NULL,
+                        UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL,
+                        Notes nvarchar(255) NULL)"""));
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("INSERT INTO BuyFolder (Pkey, Code, Description) VALUES (:id, :code, :description)")
+                .setParameter(P_ID, id).setParameter(P_CODE, code).setParameter("description", description));
+        return id;
+    }
+
+    /** Statut de pièce rattaché au type d'état {@code etat} (créé à sa PKey de production s'il manque), couleur donnée. */
+    public UUID statutDEtat(String code, UUID etat, String couleur) {
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmWorkFlowStateType WHERE PKey = :id)
+                            INSERT INTO AdmWorkFlowStateType (PKey, Code, Description) VALUES (:id, :code, :code)""")
+                .setParameter(P_ID, etat).setParameter(P_CODE, "ETAT-" + etat.toString().substring(0, 8)));
+        UUID statut = statut(code, false, false, 50);
+        executer(em.createNativeQuery("UPDATE BuyDocumentStatus SET AdmWorkFlowStateTypeId = :etat WHERE PKey = :id")
+                .setParameter(P_ID, statut).setParameter("etat", etat));
+        if (couleur != null) {
+            executer(em.createNativeQuery("UPDATE BuyDocumentStatus SET ColorName = :couleur WHERE PKey = :id")
+                    .setParameter(P_ID, statut).setParameter("couleur", couleur));
+        }
+        return statut;
+    }
+
+    /** Colonne de {@code BuyDocument} remise à NULL (nom fixe ; évite de lier un null sans type). */
+    public void effacer(UUID pieceId, String colonne) {
+        executer(em.createNativeQuery("UPDATE BuyDocument SET " + colonne + " = NULL WHERE PKey = :id")
+                .setParameter(P_ID, pieceId));
+    }
+
+    /** Colonne d'une table de référence écrite par le test ({@code table} / {@code colonne} fixes, jamais une saisie). */
+    public void poserSur(String table, UUID id, String colonne, Object valeur) {
+        executer(em.createNativeQuery("UPDATE " + table + " SET " + colonne + " = :valeur WHERE PKey = :id")
+                .setParameter(P_ID, id).setParameter("valeur", valeur));
+    }
+
+    /** Droit OMRAN ({@code AdmRight.Code}) porté par le rôle du compte, tel que {@code DroitsOmran} le lit. */
+    public void droitOmran(AdmUser compte, String code) {
+        executer(em.createNativeQuery("""
+                        INSERT INTO AdmRight (PKey, Code, Description, AdmRoleId)
+                        SELECT TOP (1) :id, :code, :code, ur.AdmRoleId FROM AdmUserRole ur WHERE ur.AdmUserId = :user
+                        ORDER BY ur.AdmRoleId ASC""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter(P_CODE, code).setParameter("user", compte.getId()));
+    }
+
+    /** Compte sans personnel : {@code AdmUser.CfgEmployeeId} NULL en base et dans le principal ({@code connecte}). */
+    public void sansPersonnel(AdmUser compte) {
+        compte.setCfgEmployee(null);
+        executer(em.createNativeQuery("UPDATE AdmUser SET CfgEmployeeId = NULL WHERE PKey = :id")
+                .setParameter(P_ID, compte.getId()));
     }
 
     private void executer(Query query) {
