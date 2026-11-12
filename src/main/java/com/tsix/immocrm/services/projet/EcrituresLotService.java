@@ -10,6 +10,7 @@ import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stl.StlCategory;
+import com.tsix.immocrm.entities.stl.StlCurrency;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ConflictException;
@@ -85,6 +86,9 @@ public class EcrituresLotService {
         StlCategory categorie = existant(StlCategory.class, obligatoire(r.categorieId(), "categorieId"), "categorieId");
         PrjMarketType type = existant(PrjMarketType.class, obligatoire(r.typeId(), "typeId"), "typeId");
         CfgTier fournisseur = r.fournisseurId() == null ? null : existant(CfgTier.class, r.fournisseurId(), "fournisseurId");
+        if (r.deviseId() != null) {
+            existant(StlCurrency.class, r.deviseId(), "deviseId");
+        }
         PrjProject projet = lots.projetVisible(projetId);
 
         PrjMarket m = new PrjMarket();

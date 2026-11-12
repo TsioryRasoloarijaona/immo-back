@@ -62,6 +62,7 @@ Crée un lot d'un des cinq `genre` (`ENTREPRENEURS`, `FOURNISSEURS`, `ADMINISTRA
 Code = séquence OMRAN « Market » (`yy/nnnnn`), incrémentée jusqu'à un code libre. Statut de départ = statut de type
 « Nouveau » du genre de plus petit ordre. Entrepreneurs : non multi-fournisseur ; autres genres : multi-fournisseur et hors
 prévisions de paiement. Écrit une ligne d'historique « Création ». Ordre des refus : 403, puis 400, puis 404.
+Une `categorieId`, `typeId`, `fournisseurId` ou `deviseId` inconnue répond 400.
 
 ## supprimer
 

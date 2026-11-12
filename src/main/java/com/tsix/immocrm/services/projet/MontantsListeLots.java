@@ -90,7 +90,7 @@ class MontantsListeLots {
     // Lot multi-fournisseur : dépassement d'une commande validée (comme l'offert) = Σ de ses factures au-delà de son montant.
     private static final String DEPASSEMENTS_COMMANDES = """
             SELECT o.PrjMarketId, SUM(IIF(f.HT > o.AmountHT, f.HT - o.AmountHT, 0)),
-                SUM(IIF(f.TTC > o.AmountTTC, f.TTC - o.AmountTTC, 0))
+                SUM(IIF(f.HT - o.AmountHT <= 0, 0, f.TTC - o.AmountTTC))
             FROM BuyDocument o
             JOIN BuyDocumentStatus s ON s.PKey = o.BuyDocumentStatusId AND s.IsOkForPayement = 1
             JOIN (SELECT BuyOrderId, SUM(AmountHT) AS HT, SUM(AmountTTC) AS TTC FROM BuyDocument
