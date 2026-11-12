@@ -140,7 +140,7 @@ public class DocumentsAchatService {
      * {@link #DROIT_BC_SANS_RESTRICTION} ; compte sans personnel : aucune restriction (OMRAN {@code OrderView.cs:803}).
      */
     private UUID declencheurImpose(FiltresDocumentsAchat filtres) {
-        if (!filtres.natures().equals(List.of(NatureDocumentAchat.ORDER))) {
+        if (!Set.copyOf(filtres.natures()).equals(Set.of(NatureDocumentAchat.ORDER))) {
             return null;
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
