@@ -134,6 +134,19 @@ class LotsProjetVisibiliteTest {
         });
     }
 
+    // FEATURE-lot-fiche-suivi.md, Vérification 5 : le suivi d'un lot hors périmètre est un 404 comme la fiche.
+    @Test
+    void r1_suiviDuLot_horsPerimetre_404() throws Exception {
+        Reponse visible = appels.lire(a, LOTS + "/" + lotA1 + "/suivi");
+        Reponse horsPerimetre = appels.lire(a, LOTS + "/" + lotB + "/suivi");
+
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(visible.statut()).as("témoin").isEqualTo(200);
+            s.assertThat(horsPerimetre.statut()).isEqualTo(404);
+            s.assertThat((String) horsPerimetre.valeur(DETAIL)).contains(LOT_INTROUVABLE);
+        });
+    }
+
     @Test
     void r1_decomptesDuLot_horsPerimetre_404() throws Exception {
         Reponse visible = appels.lire(a, LOTS + "/" + lotA1 + "/decomptes");

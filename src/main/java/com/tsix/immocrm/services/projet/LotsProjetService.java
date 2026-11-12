@@ -2,11 +2,12 @@ package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.domain.Colonne;
-import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot;
+import com.tsix.immocrm.domain.projet.CalculLot;
 import com.tsix.immocrm.domain.projet.GenreLot;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.dto.projet.BordereauDto;
+import com.tsix.immocrm.dto.projet.ColonneCoutDto;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
 import com.tsix.immocrm.dto.projet.DemandeAchatLotDto;
 import com.tsix.immocrm.dto.projet.ElementReferentielProjetDto;
@@ -38,6 +39,7 @@ import com.tsix.immocrm.dto.projet.LotListItemDto;
 import com.tsix.immocrm.dto.projet.ProjetFiltreDto;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
 import com.tsix.immocrm.dto.projet.StatutLotProjetDto;
+import com.tsix.immocrm.dto.projet.SuiviLotDto;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
@@ -209,13 +211,16 @@ public class LotsProjetService {
     }
 
     private List<LotListItemDto> lignes(List<PrjMarket> marches) {
+        return lignes(marches, montants.calculer(marches));
+    }
+
+    private List<LotListItemDto> lignes(List<PrjMarket> marches, Map<UUID, CalculLot> calculs) {
         List<UUID> ids = marches.stream().map(PrjMarket::getId).toList();
         Map<UUID, Trio> bordereaux = sommes(SOMMES_BORDEREAU, ids);
         Map<UUID, Cumuls> cumuls = cumuls(ids);
         Map<UUID, SoldeDocumentAchat> soldes = factures.totauxParLot(ids);
-        Map<UUID, CoutPrevisionnelLot> couts = montants.calculer(marches);
         return marches.stream().map(m -> ligne(m, marche(m, bordereaux), cumuls.getOrDefault(m.getId(), Cumuls.AUCUN),
-                soldes.get(m.getId()), couts.get(m.getId()))).toList();
+                soldes.get(m.getId()), Objects.requireNonNull(calculs.get(m.getId())))).toList();
     }
 
     private static TotauxLotsDto totaliser(List<LotListItemDto> lignes) {
@@ -234,7 +239,9 @@ public class LotsProjetService {
         Trio marche = marche(m, sommes(SOMMES_BORDEREAU, ids));
         Trio estimation = montants.estimation(m);
         Cumuls c = cumuls(ids).getOrDefault(id, Cumuls.AUCUN);
-        return new LotDetailDto(ligne(m),
+        Map<UUID, CalculLot> calculs = montants.calculer(List.of(m));
+        CalculLot calcul = Objects.requireNonNull(calculs.get(id));
+        return new LotDetailDto(lignes(List.of(m), calculs).get(0),
                 m.getPrjProject().getDescription(), m.getStrEntity() == null ? null : m.getStrEntity().getCode(),
                 m.getStrEntity() == null ? null : m.getStrEntity().getDescription(),
                 MontantsLot.arrondi(m.getEstimatedPriceHTManual()), MontantsLot.arrondi(m.getEstimatedVatAmountManual()),
@@ -250,10 +257,15 @@ public class LotsProjetService {
                 jour(m.getWithdrawalTenderDocumentsDate()), jour(m.getTenderMaturityDate()), jour(m.getBidOpeningDate()),
                 jour(m.getTenderDate()), jour(m.getContractSignatureDate()), jour(m.getServiceOrderDate()),
                 jour(m.getWorkLaunchDate()), m.getUserCreateDateTime(), m.getUserCreate(), m.getUserUpdateDateTime(),
-                m.getUserUpdate(), fiche(m));
+                m.getUserUpdate(), calcul.general(), fiche(m, calcul));
     }
 
-    private FicheEtendueLotDto fiche(PrjMarket m) {
+    public SuiviLotDto suivi(UUID id) {
+        PrjMarket m = visible(id);
+        return Objects.requireNonNull(montants.calculer(List.of(m)).get(id)).suivi();
+    }
+
+    private FicheEtendueLotDto fiche(PrjMarket m, CalculLot calcul) {
         StlCurrency devise = m.getStlCurrencyId() == null ? null : em.find(StlCurrency.class, m.getStlCurrencyId());
         StlSettlementType paiement = m.getStlSettlementTypeId() == null ? null
                 : em.find(StlSettlementType.class, m.getStlSettlementTypeId());
@@ -267,7 +279,8 @@ public class LotsProjetService {
                 Boolean.TRUE.equals(m.getApplyWithholdingTaxOnAdditionalWork()),
                 Boolean.TRUE.equals(m.getExecutedQuantityBasedInsert()),
                 Boolean.TRUE.equals(m.getCanEditWorkingOutLineByAchivement()), jour(m.getCancellationDate()),
-                m.getCancellationCause(), m.getDescriptionLong(), m.getInsuranceDECAmount(), m.getInsuranceTRCAmount());
+                m.getCancellationCause(), m.getDescriptionLong(), m.getInsuranceDECAmount(), m.getInsuranceTRCAmount(),
+                calcul.avancementFacture(), calcul.avancementDecompte());
     }
 
     public List<DemandeAchatLotDto> demandesAchat(UUID id) {
@@ -318,9 +331,9 @@ public class LotsProjetService {
     }
 
     private static LotListItemDto ligne(PrjMarket m, Trio marche, Cumuls c, SoldeDocumentAchat solde,
-                                       CoutPrevisionnelLot cout) {
+                                       CalculLot calcul) {
         SoldeDocumentAchat s = solde != null ? solde : SoldeDocumentAchat.de(null, null);
-        CoutPrevisionnelLot k = Objects.requireNonNullElse(cout, CoutPrevisionnelLot.ZERO);
+        ColonneCoutDto k = calcul.coutPrevisionnel();
         BigDecimal cumulTTC = MontantsLot.arrondi(c.ttc());
         return new LotListItemDto(m.getId(), m.getCode(), m.getDescription(), m.getPrjProject().getId(),
                 m.getPrjProject().getCode(), code(m.getPrjMarketType()), description(m.getPrjMarketType()),
@@ -335,7 +348,7 @@ public class LotsProjetService {
                 marche.depuisBordereau(), MontantsLot.pourcentage(m.getWarrantyRatio()), c.nb(),
                 MontantsLot.arrondi(c.ht()), cumulTTC, MontantsLot.arrondi(c.extras()), MontantsLot.arrondi(c.rg()),
                 MontantsLot.avancementPct(cumulTTC, marche.ttc()), s.montantAPayer(), s.montantRegle(), s.resteARegler(),
-                k.avancement(), k.ht(), k.ttc(), k.netAPayer(), k.regle(), k.reste(),
+                calcul.avancementFacture(), k.total().ht(), k.total().ttc(), k.netAPayer(), k.regle(), k.reste(),
                 Champs.de(m.getStrStatus(), StrStatus::getColorName),
                 GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).map(Enum::name).orElse(null), m.getNotes());
     }
