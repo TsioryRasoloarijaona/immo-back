@@ -79,10 +79,10 @@ public class SousFenetresLotService {
             SELECT PaymentDate, Amount, Achievement FROM PrjMarketPaymentPrevision
             WHERE PrjMarketId = :lot AND PaymentDate IS NOT NULL""";
 
-    // Réel d'OMRAN (GetPaymentReal) : toutes les pièces du lot hors avoirs, sans filtre société ni CanBePayed.
+    // Réel d'OMRAN (GetPaymentReal lit BuyDocumentToPayView, filtrée CanBePayed = 1) : hors avoirs, sans filtre société.
     private static final String REEL = """
             SELECT d.MaturityDate, d.AmountToPay FROM BuyDocument d
-            WHERE d.PrjMarketId = :lot AND d.DocType <> 'REFUND' AND d.MaturityDate IS NOT NULL""";
+            WHERE d.PrjMarketId = :lot AND d.CanBePayed = 1 AND d.DocType <> 'REFUND' AND d.MaturityDate IS NOT NULL""";
 
     private static final String DECOMPTES_FACTURES = "select w.id, w.docDate from PrjWorkingOut w"
             + " where w.prjMarket.id = :lot and w.buyDocument is not null and w.docDate is not null";

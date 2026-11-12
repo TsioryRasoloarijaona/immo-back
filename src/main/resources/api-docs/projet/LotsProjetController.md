@@ -164,7 +164,7 @@ du compte prorata (`MARKET_PROPORTION`) avec les mêmes champs, filtres et calcu
 
 Fenêtre « Prévisions » (`FEATURE-lot-sous-fenetres.md` §4.6) : un point par mois, du mois précédant le premier point au dernier,
 sans trou. `prevision` = Σ `PrjMarketPaymentPrevision.Amount` par mois de `PaymentDate`, `avancementPrevision` = son avancement
-maximal du mois (null si négatif ou lot multi-fournisseur). `reel` = Σ net à payer des pièces du lot hors avoirs par mois
+maximal du mois (null si négatif ou lot multi-fournisseur). `reel` = Σ net à payer des pièces payables du lot hors avoirs par mois
 d'échéance ; `avancementReel` = avancement maximal des décomptes facturés du mois (null si lot multi-fournisseur).
 `estimation` / `avancementEstimation` (estimation de base OMRAN) ne sont pas encore calculées : toujours 0 et null.
 Montants à 0 et avancements null pour un mois sans donnée ; `mois` vide si le lot n'a aucun point.
