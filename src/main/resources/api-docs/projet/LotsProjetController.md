@@ -72,12 +72,13 @@ décompte, une pièce d'achat ou toute autre référence répond **409** et rest
 
 Transitions OMRAN (`StrWorkFlow`) partant du statut actuel du lot. Si aucun rôle de l'appelant n'est à
 `AdmRole.WithSequenceFreeRestriction = 0`, seules celles dont un intervenant (`StrWorkFlowIntervener`) est son rôle ou lui.
+Les transitions à second valideur (`WithPassword`) ne sont jamais proposées.
 C'est exactement l'ensemble accepté par `POST …/transition`.
 
 ## executerTransition
 
 Passe le lot au statut d'arrivée de la transition et écrit l'historique (`StrHistory`, `notes` = commentaire). **409** si la
-transition n'est pas dans `GET …/transitions` pour l'appelant ou exige un second utilisateur ; 400 si elle exige un
+transition n'est pas dans `GET …/transitions` pour l'appelant ; 400 si elle exige un
 commentaire et que `notes` est vide.
 
 ## lot

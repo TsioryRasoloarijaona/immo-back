@@ -36,6 +36,7 @@ import java.util.UUID;
 public class EcrituresLotService {
 
     private static final String SEQUENCE = "Market";
+    private static final int DESCRIPTION_MAX = 255;
     private static final UUID TYPE_STATUT_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
     static final String LOT_CITE = "Ce lot est utilisé ailleurs (décomptes, achats…) et ne peut pas être supprimé.";
     // Références NO_ACTION vérifiées avant le DELETE : la base de test n'a pas les FK ; les autres tombent au flush.
@@ -67,7 +68,8 @@ public class EcrituresLotService {
 
     /** Droit avant le corps (403 avant 400), projet visible (404), puis écriture et ligne « Création ». */
     @Transactional
-    public LotDetailDto creer(CreerLotRequest r) {
+    public LotDetailDto creer(CreerLotRequest corps) {
+        CreerLotRequest r = corps != null ? corps : new CreerLotRequest(null, null, null, null, null, null, null);
         Optional<GenreLot> genre = GenreLot.deNom(r.genre());
         if (genre.isPresent()) {
             droits.exiger(genre.get().droitCreation());
@@ -76,6 +78,9 @@ public class EcrituresLotService {
         }
         GenreLot g = genre.orElseThrow(() -> new InvalidRequestException("genre : obligatoire et parmi " + listeGenres()));
         String description = obligatoire(StringUtils.hasText(r.description()) ? r.description().trim() : null, "description");
+        if (description.length() > DESCRIPTION_MAX) {
+            throw new InvalidRequestException("description : " + DESCRIPTION_MAX + " caractères au plus");
+        }
         UUID projetId = obligatoire(r.projetId(), "projetId");
         StlCategory categorie = existant(StlCategory.class, obligatoire(r.categorieId(), "categorieId"), "categorieId");
         PrjMarketType type = existant(PrjMarketType.class, obligatoire(r.typeId(), "typeId"), "typeId");

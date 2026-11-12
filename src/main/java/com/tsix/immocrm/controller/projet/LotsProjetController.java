@@ -125,7 +125,7 @@ public class LotsProjetController {
     @ApiResponse(responseCode = "403", description = "Droit de création du genre absent (contrôlé avant le corps).",
             content = @Content)
     @ApiResponse(responseCode = "404", description = "Projet inconnu ou hors périmètre de l'appelant.", content = @Content)
-    public ResponseEntity<LotDetailDto> creer(@RequestBody CreerLotRequest requete) {
+    public ResponseEntity<LotDetailDto> creer(@RequestBody(required = false) CreerLotRequest requete) {
         LotDetailDto lot = ecritures.creer(requete);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
                 .buildAndExpand(lot.lot().id()).toUri()).body(lot);

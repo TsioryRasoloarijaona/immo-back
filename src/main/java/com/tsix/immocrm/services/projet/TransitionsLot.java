@@ -7,7 +7,6 @@ import com.tsix.immocrm.entities.str.StrHistory;
 import com.tsix.immocrm.entities.str.StrIntervener;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.entities.str.StrWorkFlow;
-import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.InvalidStatutTransitionException;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
@@ -44,8 +43,10 @@ record TransitionsLot(StrStatusRepository statuts, StrWorkFlowRepository workflo
 
     /** Seul calcul des transitions permises : lu par le GET et par l'exécution (R7). */
     List<StrWorkFlow> permises(PrjMarket m) {
+        // Second valideur (WithPassword) hors lot (2ᵉ passe Q5) : jamais proposée, donc refusée en 409.
         List<StrWorkFlow> sortantes = workflows.sortantes(Champs.de(m.getStrEntity(), StrEntity::getId),
-                Champs.de(m.getStrStatus(), StrStatus::getId));
+                Champs.de(m.getStrStatus(), StrStatus::getId)).stream()
+                .filter(w -> !Boolean.TRUE.equals(w.getWithPassword())).toList();
         Intervenant moi = intervenant.courant();
         if (sortantes.isEmpty() || moi.administrateur()
                 || (!moi.roleIds().isEmpty() && intervenants.rolesSansRestriction(moi.roleIds()) > 0)) {
@@ -74,9 +75,6 @@ record TransitionsLot(StrStatusRepository statuts, StrWorkFlowRepository workflo
                         "Transition non permise depuis le statut %s.".formatted(libelle(depuis)),
                         permises.stream().map(t -> cibles.get(t.getStatusToId())).filter(Objects::nonNull)
                                 .map(StrStatus::getCode).toList()));
-        if (Boolean.TRUE.equals(w.getWithPassword())) {
-            throw new ConflictException("Cette transition exige un second utilisateur : non prise en charge.");
-        }
         if (Boolean.TRUE.equals(w.getWithComment()) && (notes == null || notes.isBlank())) {
             throw new InvalidRequestException("notes : Veuillez saisir un commentaire obligatoirement !");
         }
