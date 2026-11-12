@@ -87,11 +87,12 @@ class MontantsListeLots {
             FROM BuyDocument d LEFT JOIN BuyDocumentStatus s ON s.PKey = d.BuyDocumentStatusId
             WHERE d.PrjMarketId IN (:lots) GROUP BY d.PrjMarketId""";
 
-    // Lot multi-fournisseur : dépassement d'une commande = Σ de ses factures au-delà de son montant.
+    // Lot multi-fournisseur : dépassement d'une commande validée (comme l'offert) = Σ de ses factures au-delà de son montant.
     private static final String DEPASSEMENTS_COMMANDES = """
             SELECT o.PrjMarketId, SUM(IIF(f.HT > o.AmountHT, f.HT - o.AmountHT, 0)),
                 SUM(IIF(f.TTC > o.AmountTTC, f.TTC - o.AmountTTC, 0))
             FROM BuyDocument o
+            JOIN BuyDocumentStatus s ON s.PKey = o.BuyDocumentStatusId AND s.IsOkForPayement = 1
             JOIN (SELECT BuyOrderId, SUM(AmountHT) AS HT, SUM(AmountTTC) AS TTC FROM BuyDocument
                   WHERE DocType = 'INVOICE' AND BuyOrderId IS NOT NULL GROUP BY BuyOrderId) f ON f.BuyOrderId = o.PKey
             WHERE o.DocType = 'ORDER' AND o.PrjMarketId IN (:lots) GROUP BY o.PrjMarketId""";
