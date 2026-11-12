@@ -8,7 +8,6 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
@@ -18,7 +17,6 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Immutable
 @Table(name = "PrjWorkingOutLineExtra")
 @AttributeOverride(name = "id", column = @Column(name = "Pkey", nullable = false))
 @AttributeOverride(name = "description", column = @Column(name = "Description", length = 500))
@@ -45,4 +43,7 @@ public class PrjWorkingOutLineExtra extends AuditOmran {
 
     @Column(name = "VatRatio", precision = 26, scale = 6)
     private BigDecimal vatRatio;
+
+    @Column(name = "FODECRatio", precision = 26, scale = 16)
+    private BigDecimal fodecRatio;
 }
