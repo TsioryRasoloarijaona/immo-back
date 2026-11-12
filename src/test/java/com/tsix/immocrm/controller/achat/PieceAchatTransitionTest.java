@@ -356,7 +356,7 @@ class PieceAchatTransitionTest {
 
     /** OMRAN l.527 : sans déclencheur sur la pièce, seule la voie des rôles reste (T03 n'a aucun rôle). */
     @Test
-    void eb2_declencheur_pieceSansDeclencheur_rolesSeuls_403() throws Exception {
+    void eb2_declencheur_pieceSansDeclencheur_rolesSeuls_403() {
         UUID piece = piece(g, s0);
 
         assertAll(

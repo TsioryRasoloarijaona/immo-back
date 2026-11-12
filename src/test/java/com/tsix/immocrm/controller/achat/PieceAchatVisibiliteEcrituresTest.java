@@ -154,7 +154,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     /** Témoin : le compte restreint écrit sur son propre BC. */
     @Test
-    void v2_compteRestreint_sonBc_patch200_delete204() throws Exception {
+    void v2_compteRestreint_sonBc_patch200_delete204() {
         UUID bcA = bc(c, personnelA);
         UUID autreBcA = bc(c, personnelA);
 
@@ -193,7 +193,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     @ParameterizedTest
     @EnumSource(Compte.class)
-    void v2_horsSociete_patchEtDelete404_memeDeclencheur(Compte k) throws Exception {
+    void v2_horsSociete_patchEtDelete404_memeDeclencheur(Compte k) {
         UUID bcHs = bc(horsSociete, personnelA);
 
         assertAll(
@@ -203,7 +203,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     @ParameterizedTest
     @EnumSource(Compte.class)
-    void v2_projetNonHabilite_patchEtDelete404_memeDeclencheur(Compte k) throws Exception {
+    void v2_projetNonHabilite_patchEtDelete404_memeDeclencheur(Compte k) {
         UUID bcPnh = bc(projetNonHabilite, personnelA);
 
         assertAll(
@@ -213,7 +213,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     @ParameterizedTest
     @EnumSource(Compte.class)
-    void v2_factureHorsPerimetre_affecter404PieceIntrouvable(Compte k) throws Exception {
+    void v2_factureHorsPerimetre_affecter404PieceIntrouvable(Compte k) {
         UUID bcA = bc(c, personnelA);
 
         assertAll(
@@ -223,7 +223,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     @ParameterizedTest
     @EnumSource(value = Compte.class, names = {"A_RESTREINT", "A_AVEC_DROIT", "SANS_PERSONNEL"})
-    void v2_bcHorsPerimetre_affecter404BonDeCommandeIntrouvable(Compte k) throws Exception {
+    void v2_bcHorsPerimetre_affecter404BonDeCommandeIntrouvable(Compte k) {
         UUID facture = facture(c);
 
         assertAll(
@@ -235,7 +235,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     /** Sans droit ni rôle : une pièce invisible répond 404, jamais 403 (droit) ni 409 (transition, nature). */
     @Test
-    void v2_compteSansDroit_pieceInvisible_404JamaisRefusMetier() throws Exception {
+    void v2_compteSansDroit_pieceInvisible_404JamaisRefusMetier() {
         UUID bcB = bc(c, personnelB);
         UUID bcHs = bc(horsSociete, personnelA);
 
@@ -249,7 +249,7 @@ class PieceAchatVisibiliteEcrituresTest {
 
     /** Témoins du compte sans droit sur une pièce visible : 403 (suppression), 403 (transition sans rôle). */
     @Test
-    void v2_compteSansDroit_pieceVisible_refus403() throws Exception {
+    void v2_compteSansDroit_pieceVisible_refus403() {
         UUID facture = facture(c);
         fixture.poser(facture, "StrEntityId", gestion);
         fixture.poser(facture, "BuyDocumentStatusId", s0);

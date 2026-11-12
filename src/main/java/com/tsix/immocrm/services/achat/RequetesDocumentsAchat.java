@@ -55,6 +55,7 @@ import java.util.stream.Stream;
 class RequetesDocumentsAchat {
 
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
+    private static final String MONTANT = "Amount";
     private static final String ID = "id";
     private static final String PROJETS = "projets";
     private static final String PKEY = "PKey";
@@ -320,7 +321,7 @@ class RequetesDocumentsAchat {
     }
 
     private static RetenueAchatDto retenue(ResultSet rs, String prefixe) throws SQLException {
-        return new RetenueAchatDto(rs.getBigDecimal(prefixe + "Ratio"), rs.getBigDecimal(prefixe + "Amount"));
+        return new RetenueAchatDto(rs.getBigDecimal(prefixe + "Ratio"), rs.getBigDecimal(prefixe + MONTANT));
     }
 
     /** Lignes des pièces {@code ids}, colonnes calculées par {@link LigneAchatCalculee}, par pièce dans l'ordre Sorting. */
@@ -362,7 +363,7 @@ class RequetesDocumentsAchat {
     List<ReglementDocumentAchatDto> reglements(UUID id) {
         return jdbc.query(REGLEMENTS, Map.of(ID, id.toString()), (rs, n) -> new ReglementDocumentAchatDto(
                 uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE), chaine(rs, "TypeCode"),
-                chaine(rs, "TypeDescription"), rs.getBigDecimal("Amount"), rs.getInt("Annule") == 1));
+                chaine(rs, "TypeDescription"), rs.getBigDecimal(MONTANT), rs.getInt("Annule") == 1));
     }
 
     List<ReglementDocumentAchatDto> reglementsCommande(UUID id, LocalDate aujourdhui) {
@@ -371,7 +372,7 @@ class RequetesDocumentsAchat {
             LocalDate pointage = jour(rs, "SettlementDate");
             PointageReglement p = PointageReglement.de(etat, pointage, jour(rs, "EcheanceDate"), aujourdhui);
             return new ReglementDocumentAchatDto(uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE),
-                    chaine(rs, "TypeCode"), chaine(rs, "TypeDescription"), rs.getBigDecimal("Amount"),
+                    chaine(rs, "TypeCode"), chaine(rs, "TypeDescription"), rs.getBigDecimal(MONTANT),
                     rs.getInt("Annule") == 1, etat, pointage, p.prevue(), p.reporte(), p.reportee(),
                     rs.getBigDecimal("AmountBase"));
         });

@@ -22,8 +22,8 @@ import java.util.function.Function;
 @Component
 class QuantitesBonCommande {
 
-    private static final String PARAMETRE = """
-            SELECT COUNT(*) FROM AdmParamsBoolean WHERE Code = 'LimitDeliveryAndInvoiceQuantityToOrder' AND CodeValue = 1""";
+    private static final String PARAMETRE =
+            "SELECT COUNT(*) FROM AdmParamsBoolean WHERE Code = 'LimitDeliveryAndInvoiceQuantityToOrder' AND CodeValue = 1";
     private static final String LIGNES = "SELECT l FROM BuyDocumentLine l WHERE l.buyDocumentId = :piece";
     private static final String DEJA_FACTURE = """
             SELECT l FROM BuyDocumentLine l, BuyDocument d WHERE l.buyDocumentId = d.id AND d.buyOrderId = :bc
@@ -41,6 +41,10 @@ class QuantitesBonCommande {
         /** Article du BC : même code, PU nul côté BC ou égal. */
         boolean couvre(String code, BigDecimal prix) {
             return Objects.equals(this.code, code) && (estNul(this.prix) || prix != null && this.prix.compareTo(prix) == 0);
+        }
+
+        private static boolean estNul(BigDecimal prix) {
+            return prix == null || prix.signum() == 0;
         }
     }
 
@@ -89,9 +93,5 @@ class QuantitesBonCommande {
 
     private static BigDecimal quantite(BuyDocumentLine l) {
         return Objects.requireNonNullElse(l.getQuantity(), BigDecimal.ZERO);
-    }
-
-    private static boolean estNul(BigDecimal prix) {
-        return prix == null || prix.signum() == 0;
     }
 }

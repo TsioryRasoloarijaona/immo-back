@@ -144,7 +144,7 @@ class PieceAchatReglementsBonCommandeTest {
 
         List<String> codes = JsonPath.read(ficheDe(bc), "$.reglements[*].code");
 
-        assertThat(codes).doesNotContain(code("R-GAR"));
+        assertThat(codes).isEmpty();
     }
 
     /** Un rang par règlement : deux lignes (facture + avance du même BC) → un rang, montant = StlSettlement.Amount. */
