@@ -54,6 +54,9 @@ public abstract class LigneBordereauOmran extends AuditOmran {
     @Column(name = "Notes")
     private String notes;
 
+    @Column(name = "WeightingRatio", precision = 26, scale = 6)
+    private BigDecimal weightingRatio;
+
     @Column(name = "BuyItemId")
     private UUID buyItemId;
 

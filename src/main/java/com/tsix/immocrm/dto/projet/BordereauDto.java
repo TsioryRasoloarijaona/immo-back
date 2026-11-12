@@ -10,7 +10,8 @@ import java.util.UUID;
 public record BordereauDto(
         @Schema(description = "Lot (PrjMarket.PKey).") UUID lotId,
         @Schema(description = "Lignes, tri par ordre.") List<LigneBordereauDto> lignes,
-        @Schema(description = "Totaux des lignes.") TotauxBordereauDto totaux
+        @Schema(description = "Totaux des lignes.") TotauxBordereauDto totaux,
+        @Schema(description = "Groupes du bordereau hors approvisionnement (arbre plat).") List<GroupeBordereauDto> groupes
 ) {
 
     @Schema(description = "Totaux du bordereau ; égaux au marché du lot quand il a des lignes.")

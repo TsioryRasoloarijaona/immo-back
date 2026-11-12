@@ -127,7 +127,47 @@ Réclamations : module SAV non porté, aucune route.
 ## bordereau
 
 Lignes du bordereau **définitif** (`PrjMarketLine` hors stock), tri par ordre, avec leurs totaux calculés. Liste vide : lot
-au montant forfaitaire (« Bordereau non saisi »).
+au montant forfaitaire (« Bordereau non saisi »). `groupes` = arbre plat des regroupements (`PrjMarketLineGrouping` hors
+approvisionnement, `parentId` null à la racine), tri par ordre puis code ; chaque ligne porte `groupeId` et `ponderation`
+(`WeightingRatio` tel que stocké, jamais calculé).
+
+## bordereauEstimatif
+
+Fenêtre « Bordereau estimatif » (`FEATURE-lot-sous-fenetres.md` §4.5) : mêmes champs et mêmes calculs que le bordereau
+définitif, lus dans `PrjMarketLineEstimation` / `PrjMarketLineGroupingEstimation`. `verrouille` vaut toujours `true` (aucune
+écriture dans ce lot). Lignes d'approvisionnement (`IsStock`) exclues.
+
+## avances
+
+Fenêtre « Avances » : pièces `DOCUMENT_TO_PAY` du lot, `surMarche` = `ReferenceType` `MARKET_ADVANCE`, `surDecompte` =
+`WORKINGOUT_ADVANCE`. Seules les pièces payables (`CanBePayed = 1`) d'une société habilitée de l'appelant ; une pièce d'une
+autre société est omise (jamais 404). Réglé = Σ des règlements non annulés, reste = net à payer − réglé : même calcul que la
+liste Achat. Tri par date décroissante puis code.
+
+## avoirs
+
+Fenêtre « Avoirs » : pièces `REFUND` rattachées au lot (`PrjMarketId`), payables, d'une société habilitée. Tri par date
+décroissante puis code.
+
+## avenants
+
+Fenêtre « Avenants » : `PrjClause` du lot, tri par date décroissante puis code. `factureCode` = codes des factures
+(`INVOICE`) rattachées à l'avenant, séparés par « , » ; null sans facture.
+
+## remboursements
+
+Fenêtre « Remboursements » : échéances de remboursement de la retenue de garantie (`PrjMarketWarrantyLine`, pourcentage =
+`Ratio` × 100) et réceptions (`PrjMarketReception`), par ordre ; remboursements de retenue de garantie (`MARKET_WARRANTY`) et
+du compte prorata (`MARKET_PROPORTION`) avec les mêmes champs, filtres et calculs que les avances.
+
+## previsions
+
+Fenêtre « Prévisions » (`FEATURE-lot-sous-fenetres.md` §4.6) : un point par mois, du mois précédant le premier point au dernier,
+sans trou. `prevision` = Σ `PrjMarketPaymentPrevision.Amount` par mois de `PaymentDate`, `avancementPrevision` = son avancement
+maximal du mois (null si négatif ou lot multi-fournisseur). `reel` = Σ net à payer des pièces payables du lot hors avoirs par mois
+d'échéance ; `avancementReel` = avancement maximal des décomptes facturés du mois (null si lot multi-fournisseur).
+`estimation` / `avancementEstimation` (estimation de base OMRAN) ne sont pas encore calculées : toujours 0 et null.
+Montants à 0 et avancements null pour un mois sans donnée ; `mois` vide si le lot n'a aucun point.
 
 ## decomptesDuLot
 
