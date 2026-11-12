@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.achat;
 import com.tsix.immocrm.dto.achat.AffecterBonCommandeRequest;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.TransitionPieceAchatRequest;
+import com.tsix.immocrm.services.achat.ecriture.EcrituresPieceAchatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,6 +29,12 @@ public class ActionsPieceAchatController {
 
     private static final String ID_PIECE = "Id de la pièce d'achat (BuyDocument.PKey).";
 
+    private final EcrituresPieceAchatService ecritures;
+
+    public ActionsPieceAchatController(EcrituresPieceAchatService ecritures) {
+        this.ecritures = ecritures;
+    }
+
     @PatchMapping("/statut")
     @Operation(summary = "Change le statut d'une pièce d'achat par une transition de sa gestion")
     @ApiResponses({
@@ -41,7 +48,7 @@ public class ActionsPieceAchatController {
             @ApiResponse(responseCode = "409", content = @Content)})
     public DocumentAchatDetailDto modifierStatut(@Parameter(description = ID_PIECE) @PathVariable UUID id,
                                                  @RequestBody TransitionPieceAchatRequest corps) {
-        throw new UnsupportedOperationException();
+        return ecritures.modifierStatut(id, corps);
     }
 
     @DeleteMapping
@@ -55,7 +62,7 @@ public class ActionsPieceAchatController {
                     content = @Content),
             @ApiResponse(responseCode = "409", content = @Content)})
     public void supprimer(@Parameter(description = ID_PIECE) @PathVariable UUID id) {
-        throw new UnsupportedOperationException();
+        ecritures.supprimer(id);
     }
 
     @PutMapping("/bon-commande")
@@ -69,6 +76,6 @@ public class ActionsPieceAchatController {
             @ApiResponse(responseCode = "409", content = @Content)})
     public DocumentAchatDetailDto affecterBonCommande(@Parameter(description = ID_PIECE) @PathVariable UUID id,
                                                       @RequestBody AffecterBonCommandeRequest corps) {
-        throw new UnsupportedOperationException();
+        return ecritures.affecterBonCommande(id, corps);
     }
 }

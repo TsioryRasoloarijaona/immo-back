@@ -83,6 +83,14 @@ public class BuyDocument extends AuditOmran {
     private UUID prjProjectId;
     @Column(name = "PrjMarketId")
     private UUID prjMarketId;
+    @Column(name = "BuyOrderId")
+    private UUID buyOrderId;
+    @Column(name = "BuyQuoteId")
+    private UUID buyQuoteId;
+    @Column(name = "BuyInvoiceId")
+    private UUID buyInvoiceId;
+    @Column(name = "InvoiceSourceId")
+    private UUID invoiceSourceId;
 
     @Column(name = "AmountHT", precision = 26, scale = 6)
     private BigDecimal amountHT;

@@ -5,6 +5,7 @@ import com.tsix.immocrm.domain.achat.AlerteClotureCommande;
 import com.tsix.immocrm.domain.achat.ChampDateAchat;
 import com.tsix.immocrm.domain.achat.LigneAchatCalculee;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
+import com.tsix.immocrm.domain.achat.PointageReglement;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.dto.achat.ActionsPieceAchatDto;
 import com.tsix.immocrm.dto.achat.AvoirAchatDto;
@@ -160,6 +161,15 @@ class RequetesDocumentsAchat {
             + " THEN 0 ELSE 1 END AS Annule FROM StlSettlementLine l JOIN StlSettlement s ON s.PKey = l.StlSettlementId "
             + "LEFT JOIN StlSettlementType ty ON ty.PKey = s.StlSettlementTypeId WHERE l.BuyDocumentId = :id "
             + "ORDER BY s.DocDate, s.Code";
+
+    /** Règlements d'un BC, un rang par règlement : comme OMRAN {@code StlSettlementView.GetListForOrder} (E-B5). */
+    private static final String REGLEMENTS_BC = "SELECT s.PKey, s.Code, s.DocDate, ty.Code AS TypeCode, "
+            + "ty.Description AS TypeDescription, s.Amount, CASE WHEN " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX
+            + " THEN 0 ELSE 1 END AS Annule, s.Status, s.SettlementDate, s.EcheanceDate, s.AmountBase "
+            + "FROM StlSettlement s LEFT JOIN StlSettlementType ty ON ty.PKey = s.StlSettlementTypeId "
+            + "WHERE EXISTS (SELECT 1 FROM StlSettlementLine l JOIN BuyDocument p ON p.PKey = l.BuyDocumentId "
+            + "WHERE l.StlSettlementId = s.PKey AND p.BuyOrderId = :id "
+            + "AND (p.ReferenceType = 'ORDER_ADVANCE' OR p.DocType = 'INVOICE')) ORDER BY s.DocDate, s.Code";
 
     private static final String STATUTS = "SELECT PKey, Code, Description, IsOkForPayement, IsValidatedOnAccounting, "
             + "Sorting FROM BuyDocumentStatus ORDER BY Sorting, Code";
@@ -353,6 +363,18 @@ class RequetesDocumentsAchat {
         return jdbc.query(REGLEMENTS, Map.of(ID, id.toString()), (rs, n) -> new ReglementDocumentAchatDto(
                 uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE), chaine(rs, "TypeCode"),
                 chaine(rs, "TypeDescription"), rs.getBigDecimal("Amount"), rs.getInt("Annule") == 1));
+    }
+
+    List<ReglementDocumentAchatDto> reglementsCommande(UUID id, LocalDate aujourdhui) {
+        return jdbc.query(REGLEMENTS_BC, Map.of(ID, id.toString()), (rs, n) -> {
+            String etat = chaine(rs, "Status");
+            LocalDate pointage = jour(rs, "SettlementDate");
+            PointageReglement p = PointageReglement.de(etat, pointage, jour(rs, "EcheanceDate"), aujourdhui);
+            return new ReglementDocumentAchatDto(uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE),
+                    chaine(rs, "TypeCode"), chaine(rs, "TypeDescription"), rs.getBigDecimal("Amount"),
+                    rs.getInt("Annule") == 1, etat, pointage, p.prevue(), p.reporte(), p.reportee(),
+                    rs.getBigDecimal("AmountBase"));
+        });
     }
 
     List<StatutAchatDto> statuts() {
