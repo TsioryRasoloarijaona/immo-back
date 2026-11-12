@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.achat;
 
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
+import com.tsix.immocrm.dto.achat.ActionsPieceAchatDto;
 import com.tsix.immocrm.dto.achat.AvoirAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.LigneDocumentAchatDto;
@@ -73,7 +74,8 @@ public class FicheAchatService {
                         lignes.getOrDefault(a.id(), List.of()))).toList(),
                 DocumentsAchatService.somme(avoirs.stream().map(DocumentAchatListItemDto::montantTTC)));
         return entete.avec(piece, complement, onglets,
-                requetes.codesVisibles(visibles, declencheur, complement.references()));
+                requetes.codesVisibles(visibles, declencheur, complement.references()),
+                new ActionsPieceAchatDto(false, false, List.of()));
     }
 
     private static List<DocumentAchatListItemDto> filles(Map<String, List<DocumentAchatListItemDto>> liees,

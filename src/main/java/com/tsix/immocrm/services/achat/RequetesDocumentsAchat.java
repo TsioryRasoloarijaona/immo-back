@@ -6,6 +6,7 @@ import com.tsix.immocrm.domain.achat.ChampDateAchat;
 import com.tsix.immocrm.domain.achat.LigneAchatCalculee;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.dto.achat.ActionsPieceAchatDto;
 import com.tsix.immocrm.dto.achat.AvoirAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.HistoriqueDocumentAchatDto;
@@ -180,7 +181,8 @@ class RequetesDocumentsAchat {
                   String creePar, LocalDateTime dateModification, String modifiePar) {
 
         /** {@code visibles} : code des pièces désignées par l'en-tête que le compte voit ; les autres sortent à null. */
-        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, Complement c, Onglets o, Map<UUID, String> visibles) {
+        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, Complement c, Onglets o, Map<UUID, String> visibles,
+                                    ActionsPieceAchatDto actions) {
             return new DocumentAchatDetailDto(piece, notes, regularisation, timbreFiscal, valideComptabilite,
                     entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, o.lignes(),
                     o.ventilation(), o.historique(), o.reglements(), c.declencheurId(), c.declencheurNom(),
@@ -188,7 +190,7 @@ class RequetesDocumentsAchat {
                     visible(c.devisOrigineId(), visibles), visibles.get(c.devisOrigineId()),
                     visible(c.bonCommandeId(), visibles), visibles.get(c.bonCommandeId()),
                     visible(c.factureSourceId(), visibles), visibles.get(c.factureSourceId()), o.recapTva(),
-                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs());
+                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs(), actions);
         }
 
         private static UUID visible(UUID id, Map<UUID, String> visibles) {

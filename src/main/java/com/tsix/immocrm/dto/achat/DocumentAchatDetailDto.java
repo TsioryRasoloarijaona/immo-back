@@ -48,7 +48,8 @@ public record DocumentAchatDetailDto(
         @Schema(description = "Factures visibles d'un bon de commande (BuyOrderId ∪ BuyOrderInvoice) ; vide sinon.")
         List<PieceLieeAchatDto> factures,
         @Schema(description = "Avoirs visibles d'une facture (InvoiceSourceId), avec leurs lignes ; vide pour une autre nature.")
-        List<AvoirAchatDto> avoirs) {
+        List<AvoirAchatDto> avoirs,
+        @Schema(description = "Actions d'écriture ouvertes au compte (boutons de la fiche).") ActionsPieceAchatDto actions) {
 
     @Schema(description = "Ligne de la pièce (BuyDocumentLine) : colonnes stockées puis calculées (vue OMRAN BuyDocumentLineView).")
     public record LigneDocumentAchatDto(
@@ -86,14 +87,30 @@ public record DocumentAchatDetailDto(
             @Schema(description = "Transition empruntée (BuyDocumentWorkFlow.Description) ; null à la création.") String transition) {
     }
 
-    @Schema(description = "Ligne de règlement de la pièce et son règlement (StlSettlement).")
+    @Schema(description = "Règlement de la pièce (StlSettlement) ; pour un bon de commande, un rang par règlement de ses factures "
+            + "et avances, avec le pointage.")
     public record ReglementDocumentAchatDto(
             @Schema(description = "Id du règlement (StlSettlement.id).") UUID id,
             @Schema(description = "Code du règlement.") String code,
             @Schema(description = "Date du règlement (StlSettlement.DocDate).") LocalDate dateDocument,
             @Schema(description = "Code du type de règlement.") String typeCode,
             @Schema(description = "Libellé du type de règlement.") String typeDescription,
-            @Schema(description = "Montant de la ligne affecté à la pièce.") BigDecimal montant,
-            @Schema(description = "Vrai si le règlement est annulé (CANCELED) : listé, exclu du réglé.") boolean annule) {
+            @Schema(description = "Montant de la ligne affecté à la pièce ; pour un bon de commande, montant du règlement.")
+            BigDecimal montant,
+            @Schema(description = "Vrai si le règlement est annulé (CANCELED) : listé, exclu du réglé.") boolean annule,
+            @Schema(description = "État du règlement (Status) ; bon de commande seulement, null sinon.") String etat,
+            @Schema(description = "Date de pointage (SettlementDate) ; bon de commande seulement.") LocalDate datePointage,
+            @Schema(description = "Date de pointage, à défaut échéance ; bon de commande seulement.") LocalDate datePointagePrevue,
+            @Schema(description = "Prévue échue et règlement non pointé (POINTED) ; null hors bon de commande.")
+            Boolean pointageReporte,
+            @Schema(description = "Prévue future : prévue ; échue : prévue si pointé, sinon aujourd'hui ; bon de commande seulement.")
+            LocalDate datePointageReportee,
+            @Schema(description = "Montant brut du règlement (AmountBase) ; bon de commande seulement.") BigDecimal montantBrut) {
+
+        /** Rang hors bon de commande : sans pointage. */
+        public ReglementDocumentAchatDto(UUID id, String code, LocalDate dateDocument, String typeCode,
+                                         String typeDescription, BigDecimal montant, boolean annule) {
+            this(id, code, dateDocument, typeCode, typeDescription, montant, annule, null, null, null, null, null, null);
+        }
     }
 }
