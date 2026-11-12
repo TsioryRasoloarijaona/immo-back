@@ -7,6 +7,7 @@ import com.tsix.immocrm.domain.projet.GenreLot;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.dto.projet.BordereauDto;
+import com.tsix.immocrm.dto.projet.BordereauEstimatifDto;
 import com.tsix.immocrm.dto.projet.ColonneCoutDto;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
 import com.tsix.immocrm.dto.projet.DemandeAchatLotDto;
@@ -43,7 +44,9 @@ import com.tsix.immocrm.dto.projet.SuiviLotDto;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
-import com.tsix.immocrm.entities.prj.PrjMarketLine;
+import com.tsix.immocrm.dto.projet.GroupeBordereauDto;
+import com.tsix.immocrm.entities.prj.GroupeBordereauOmran;
+import com.tsix.immocrm.entities.prj.LigneBordereauOmran;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.prj.PrjMarketRepository;
@@ -99,6 +102,23 @@ public class LotsProjetService {
     private static final String OU_LOTS = " l where l.prjMarketId in :lots and (l.isStock is null or l.isStock = false)"
             + " group by l.prjMarketId";
     private static final String SOMMES_BORDEREAU = SOMMES + " from PrjMarketLine" + OU_LOTS;
+
+    /** Requêtes d'un bordereau : groupes (tous, stock compris pour les libellés), lignes hors stock, Σ. */
+    private record SourceBordereau(String groupes, String lignes, String sommes) {
+    }
+
+    private record Bordereau(List<GroupeBordereauDto> groupes, List<LigneBordereauDto> lignes,
+                             BordereauDto.TotauxBordereauDto totaux) {
+    }
+
+    private static final String GROUPES_DU_LOT = " g where g.prjMarketId = :lot order by g.sorting, g.code";
+    private static final String LIGNES_DU_LOT = " l where l.prjMarketId = :lot and (l.isStock is null or l.isStock = false)"
+            + " order by l.sorting, l.code";
+    private static final SourceBordereau DEFINITIF = new SourceBordereau("select g from PrjMarketLineGrouping" + GROUPES_DU_LOT,
+            "select l from PrjMarketLine" + LIGNES_DU_LOT, SOMMES_BORDEREAU);
+    private static final SourceBordereau ESTIMATIF = new SourceBordereau(
+            "select g from PrjMarketLineGroupingEstimation" + GROUPES_DU_LOT, "select l from PrjMarketLineEstimation" + LIGNES_DU_LOT,
+            SOMMES + " from PrjMarketLineEstimation" + OU_LOTS);
 
     private static final String CUMULS = "select w.prjMarket.id, count(w), sum(w.amountHT), sum(w.amountTTC),"
             + " sum(w.extraAmount), sum(w.warrantyAmount), sum(w.amountToPay)"
@@ -296,15 +316,28 @@ public class LotsProjetService {
     }
 
     public BordereauDto bordereau(UUID id) {
-        PrjMarket m = visible(id);
-        List<Object[]> lignes = em.createQuery("select l, g.description from PrjMarketLine l"
-                        + " left join PrjMarketLineGrouping g on g.id = l.prjMarketLineGroupingId"
-                        + " where l.prjMarketId = :lot and (l.isStock is null or l.isStock = false)"
-                        + " order by l.sorting, l.code", Object[].class)
-                .setParameter("lot", id)
-                .getResultList();
-        Trio totaux = sommes(SOMMES_BORDEREAU, List.of(id)).getOrDefault(id, new Trio(null, null, null, true));
-        return new BordereauDto(m.getId(), lignes.stream().map(r -> ligneBordereau((PrjMarketLine) r[0], (String) r[1])).toList(),
+        Bordereau b = lireBordereau(visible(id).getId(), DEFINITIF);
+        return new BordereauDto(id, b.lignes(), b.totaux(), b.groupes());
+    }
+
+    /** Même lecture que {@link #bordereau} sur les tables estimatives ; toujours verrouillé (lecture seule). */
+    public BordereauEstimatifDto bordereauEstimatif(UUID id) {
+        Bordereau b = lireBordereau(visible(id).getId(), ESTIMATIF);
+        return new BordereauEstimatifDto(id, true, b.groupes(), b.lignes(), b.totaux());
+    }
+
+    private Bordereau lireBordereau(UUID id, SourceBordereau source) {
+        List<GroupeBordereauOmran> tous = em.createQuery(source.groupes(), GroupeBordereauOmran.class)
+                .setParameter("lot", id).getResultList();
+        Map<UUID, String> libelles = new HashMap<>();
+        tous.forEach(g -> libelles.put(g.getId(), g.getDescription()));
+        List<LigneBordereauDto> lignes = em.createQuery(source.lignes(), LigneBordereauOmran.class)
+                .setParameter("lot", id).getResultList().stream()
+                .map(l -> ligneBordereau(l, libelles.get(l.getPrjMarketLineGroupingId()))).toList();
+        Trio totaux = sommes(source.sommes(), List.of(id)).getOrDefault(id, new Trio(null, null, null, true));
+        return new Bordereau(tous.stream().filter(g -> !Boolean.TRUE.equals(g.getIsStock()))
+                .map(g -> new GroupeBordereauDto(g.getId(), g.getParentId(), g.getSorting(), g.getCode(), g.getDescription(),
+                        false, g.getNotes())).toList(), lignes,
                 new BordereauDto.TotauxBordereauDto(MontantsLot.arrondi(totaux.ht()), MontantsLot.arrondi(totaux.tva()),
                         MontantsLot.arrondi(totaux.ttc()), lignes.size()));
     }
@@ -358,11 +391,12 @@ public class LotsProjetService {
                 m.getEstimatedVatAmountManual(), m.getEstimatedPriceTTCManual());
     }
 
-    private static LigneBordereauDto ligneBordereau(PrjMarketLine l, String groupe) {
+    private static LigneBordereauDto ligneBordereau(LigneBordereauOmran l, String groupe) {
         return new LigneBordereauDto(l.getId(), l.getSorting(), groupe, l.getCode(), l.getDescription(), l.getUnity(),
                 l.getQuantity(), l.getUnitPriceHT(), MontantsLot.pourcentage(l.getVatRatio()),
                 MontantsLot.applique(l.getQuantity(), l.getUnitPriceHT()),
-                MontantsLot.applique(l.getQuantity(), l.getUnitPriceTTC()));
+                MontantsLot.applique(l.getQuantity(), l.getUnitPriceTTC()), l.getPrjMarketLineGroupingId(),
+                l.getWeightingRatio());
     }
 
     /** Σ bordereau (définitif ou estimatif) par lot ; un lot absent de la map n'a aucune ligne retenue. */
