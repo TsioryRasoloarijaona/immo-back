@@ -206,9 +206,9 @@ public class LotsProjetController {
             content = @Content)
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public ResponseEntity<LotDetailDto> copier(@Parameter(description = ID_LOT) @PathVariable UUID id) {
-        LotDetailDto copie = this.copie.copier(id);
+        LotDetailDto copieLot = this.copie.copier(id);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentContextPath().path("/api/projet/lots/{id}")
-                .buildAndExpand(copie.lot().id()).toUri()).body(copie);
+                .buildAndExpand(copieLot.lot().id()).toUri()).body(copieLot);
     }
 
     @GetMapping("/lots/{id}/demandes-achat")

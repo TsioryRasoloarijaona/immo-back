@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.projet;
 
+import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.VerificationDatesLot;
 import com.tsix.immocrm.domain.projet.VerificationDatesLot.DateNommee;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
@@ -50,6 +51,8 @@ public class ModificationLot {
     private static final String HT = "montantForfaitaireHT";
     private static final String TTC = "montantForfaitaireTTC";
     private static final String DESCRIPTION = "description";
+    private static final String CATEGORIE = "categorieId";
+    private static final String TYPE = "typeId";
     private static final int ECHELLE = 6;
 
     private record DateLot(String nom, String libelle, Function<ModifierLotRequest, LocalDate> saisie,
@@ -91,8 +94,8 @@ public class ModificationLot {
 
     /** Estimation manuelle : vrai si la valeur envoyée est celle déjà en base (pas un changement, pas de droit exigé). */
     private static final Map<String, BiPredicate<PrjMarket, ModifierLotRequest>> ESTIMATION_INCHANGEE = Map.of(
-            HT, (m, r) -> memeMontant(r.montantForfaitaireHT(), m.getEstimatedPriceHTManual()),
-            TTC, (m, r) -> memeMontant(r.montantForfaitaireTTC(), m.getEstimatedPriceTTCManual()),
+            HT, (m, r) -> memeMontantAffiche(r.montantForfaitaireHT(), m.getEstimatedPriceHTManual()),
+            TTC, (m, r) -> memeMontantAffiche(r.montantForfaitaireTTC(), m.getEstimatedPriceTTCManual()),
             "dateDebutBase", (m, r) -> Objects.equals(r.dateDebutBase(), jour(m.getStartDateManual())),
             "delaiBaseJours", (m, r) -> Objects.equals(r.delaiBaseJours(), m.getDelayManual()),
             "dateFinBase", (m, r) -> Objects.equals(r.dateFinBase(), jour(m.getEndDateManual())));
@@ -100,8 +103,8 @@ public class ModificationLot {
     private static final List<Reference> REFERENCES = List.of(
             new Reference("fournisseurId", CfgTier.class, ModifierLotRequest::fournisseurId),
             new Reference("deviseId", StlCurrency.class, ModifierLotRequest::deviseId),
-            new Reference("categorieId", StlCategory.class, ModifierLotRequest::categorieId),
-            new Reference("typeId", PrjMarketType.class, ModifierLotRequest::typeId),
+            new Reference(CATEGORIE, StlCategory.class, ModifierLotRequest::categorieId),
+            new Reference(TYPE, PrjMarketType.class, ModifierLotRequest::typeId),
             new Reference("typePaiementId", StlSettlementType.class, ModifierLotRequest::typePaiementId));
 
     private static final List<Texte> TEXTES = List.of(
@@ -187,18 +190,20 @@ public class ModificationLot {
                 throw new InvalidRequestException(t.nom() + " : " + t.max() + " caractères au plus");
             }
         });
-        REFERENCES.stream().filter(ref -> presents.contains(ref.nom())).forEach(ref -> {
-            UUID ident = ref.id().apply(r);
-            boolean obligatoire = "categorieId".equals(ref.nom()) || "typeId".equals(ref.nom());
-            if (ident == null ? obligatoire : em.find(ref.classe(), ident) == null) {
-                throw new InvalidRequestException(ref.nom() + (ident == null ? " : obligatoire" : " : introuvable"));
-            }
-        });
+        REFERENCES.stream().filter(ref -> presents.contains(ref.nom())).forEach(ref -> controlerReference(ref, r));
         List<DateNommee> chaine = CHAINE.stream().map(d -> new DateNommee(d.libelle(),
                 presents.contains(d.nom()) ? d.saisie().apply(r) : jour(d.enBase().apply(m)))).toList();
         VerificationDatesLot.premiereErreur(chaine).ifPresent(message -> {
             throw new InvalidRequestException(message);
         });
+    }
+
+    private void controlerReference(Reference ref, ModifierLotRequest r) {
+        UUID ident = ref.id().apply(r);
+        boolean obligatoire = CATEGORIE.equals(ref.nom()) || TYPE.equals(ref.nom());
+        if (ident == null ? obligatoire : em.find(ref.classe(), ident) == null) {
+            throw new InvalidRequestException(ref.nom() + (ident == null ? " : obligatoire" : " : introuvable"));
+        }
     }
 
     private Map<String, BiConsumer<PrjMarket, ModifierLotRequest>> ecritures() {
@@ -207,8 +212,8 @@ public class ModificationLot {
         e.put("fournisseurId", (m, r) -> m.setCfgSupplier(r.fournisseurId() == null ? null
                 : em.find(CfgTier.class, r.fournisseurId())));
         e.put("deviseId", (m, r) -> m.setStlCurrencyId(r.deviseId()));
-        e.put("categorieId", (m, r) -> m.setStlCategory(em.find(StlCategory.class, r.categorieId())));
-        e.put("typeId", (m, r) -> m.setPrjMarketType(em.find(PrjMarketType.class, r.typeId())));
+        e.put(CATEGORIE, (m, r) -> m.setStlCategory(em.find(StlCategory.class, r.categorieId())));
+        e.put(TYPE,(m, r) -> m.setPrjMarketType(em.find(PrjMarketType.class, r.typeId())));
         e.put("dureeGarantieMois", (m, r) -> m.setWarrantyInMonths(r.dureeGarantieMois()));
         e.put("tauxAvancePct", (m, r) -> m.setAdvanceRatio(fraction(r.tauxAvancePct())));
         e.put("tauxRetenueGarantiePct", (m, r) -> m.setWarrantyRatio(fraction(r.tauxRetenueGarantiePct())));
@@ -269,7 +274,15 @@ public class ModificationLot {
     }
 
     private static boolean memeMontant(BigDecimal saisi, BigDecimal enBase) {
-        return saisi == null || enBase == null ? Objects.equals(saisi, enBase) : saisi.compareTo(enBase) == 0;
+        if (saisi == null || enBase == null) {
+            return saisi == null && enBase == null;
+        }
+        return saisi.compareTo(enBase) == 0;
+    }
+
+    /** La fiche expose le forfait arrondi à 2 décimales : le renvoyer tel quel n'est pas un changement. */
+    private static boolean memeMontantAffiche(BigDecimal saisi, BigDecimal enBase) {
+        return memeMontant(saisi, enBase) || enBase != null && memeMontant(saisi, MontantsLot.arrondi(enBase));
     }
 
     private static LocalDateTime debut(LocalDate jour) {

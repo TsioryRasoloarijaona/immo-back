@@ -155,8 +155,8 @@ class MontantsListeLots {
     /** {@code EstimatedPrice*} : Σ bordereau estimatif s'il est non nul, sinon le forfait saisi. */
     private static Paire estime(PrjMarket m, BigDecimal[] lignes) {
         Paire estimation = paire(lignes, 1);
-        return estimation.ht().signum() != 0 ? estimation
-                : new Paire(m.getEstimatedPriceHTManual(), m.getEstimatedPriceTTCManual());
+        return estimation.ht().signum() == 0 ? new Paire(m.getEstimatedPriceHTManual(), m.getEstimatedPriceTTCManual())
+                : estimation;
     }
 
     private static Taux taux(PrjMarket m) {
