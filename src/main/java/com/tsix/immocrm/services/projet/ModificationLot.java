@@ -134,19 +134,23 @@ public class ModificationLot {
         PrjMarket m = lots.visible(id);
         Set<String> presents = presents(corps);
         ModifierLotRequest r = lire(corps);
-        if (ESTIMATION_INCHANGEE.entrySet().stream().anyMatch(e -> presents.contains(e.getKey()) && !e.getValue().test(m, r))) {
+        Set<String> estimationChangee = ESTIMATION_INCHANGEE.entrySet().stream()
+                .filter(e -> presents.contains(e.getKey()) && !e.getValue().test(m, r)).map(Map.Entry::getKey)
+                .collect(Collectors.toUnmodifiableSet());
+        if (!estimationChangee.isEmpty()) {
             droits.exiger(DROIT_ESTIMATION);
         }
         if (m.getStrStatus() != null && Boolean.TRUE.equals(m.getStrStatus().getLectureSeule())) {
             throw new ConflictException("Le statut du lot est en lecture seule : la fiche ne peut pas être modifiée.");
         }
         controler(m, r, presents);
+        BigDecimal tvaAvant = m.getDefaultVat();
         ecritures.forEach((nom, ecrire) -> {
             if (presents.contains(nom)) {
                 ecrire.accept(m, r);
             }
         });
-        estimation(m, r, presents);
+        estimation(m, r, estimationChangee, !memeMontant(tvaAvant, m.getDefaultVat()));
         m.setUserUpdate(utilisateur.courant().nom());
         m.setUserUpdateDateTime(LocalDateTime.now(clock));
         em.flush();
@@ -235,28 +239,33 @@ public class ModificationLot {
         return Map.copyOf(e);
     }
 
-    /** Comme le setter OMRAN : HT saisi → TVA = HT × DefaultVat ; TTC saisi → HT = TTC / (1 + DefaultVat). */
-    private static void estimation(PrjMarket m, ModifierLotRequest r, Set<String> presents) {
+    /**
+     * Setters OMRAN ({@code MarketMonitoring.cs}), déclenchés seulement par une valeur qui change : HT → TVA = HT × DefaultVat ;
+     * TTC → HT = TTC / (1 + DefaultVat) ; DefaultVat → TVA et TTC recalculés depuis le HT stocké.
+     */
+    private static void estimation(PrjMarket m, ModifierLotRequest r, Set<String> changes, boolean tvaChangee) {
         BigDecimal taux = Objects.requireNonNullElse(m.getDefaultVat(), BigDecimal.ZERO);
-        BigDecimal ht;
-        if (presents.contains(HT)) {
-            ht = r.montantForfaitaireHT();
-        } else if (presents.contains(TTC)) {
-            ht = r.montantForfaitaireTTC() == null ? null
-                    : r.montantForfaitaireTTC().divide(BigDecimal.ONE.add(taux), ECHELLE, RoundingMode.HALF_UP);
-        } else {
-            return;
+        if (changes.contains(HT)) {
+            depuisHT(m, r.montantForfaitaireHT(), taux);
+        } else if (changes.contains(TTC)) {
+            BigDecimal ttc = r.montantForfaitaireTTC();
+            depuisHT(m, ttc == null ? null : ttc.divide(BigDecimal.ONE.add(taux), ECHELLE, RoundingMode.HALF_UP), taux);
+            m.setEstimatedPriceTTCManual(ttc);
+        } else if (tvaChangee && m.getEstimatedPriceHTManual() != null) {
+            depuisHT(m, m.getEstimatedPriceHTManual(), taux);
         }
+    }
+
+    private static void depuisHT(PrjMarket m, BigDecimal ht, BigDecimal taux) {
+        m.setEstimatedPriceHTManual(ht);
         if (ht == null) {
-            m.setEstimatedPriceHTManual(null);
             m.setEstimatedVatAmountManual(null);
             m.setEstimatedPriceTTCManual(null);
-            return;
+        } else {
+            BigDecimal tva = ht.multiply(taux).setScale(ECHELLE, RoundingMode.HALF_UP);
+            m.setEstimatedVatAmountManual(tva);
+            m.setEstimatedPriceTTCManual(ht.add(tva));
         }
-        BigDecimal tva = ht.multiply(taux).setScale(ECHELLE, RoundingMode.HALF_UP);
-        m.setEstimatedPriceHTManual(ht);
-        m.setEstimatedVatAmountManual(tva);
-        m.setEstimatedPriceTTCManual(presents.contains(HT) ? ht.add(tva) : r.montantForfaitaireTTC());
     }
 
     private static boolean memeMontant(BigDecimal saisi, BigDecimal enBase) {

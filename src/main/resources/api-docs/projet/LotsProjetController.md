@@ -104,7 +104,8 @@ dossier, échéance de remise des offres, report AO, ouverture des plis, rapport
 marché, ordre de service, lancement des travaux, achèvement des travaux, recollement : chaque date renseignée (après
 application du corps) doit être ≥ chaque date renseignée qui la précède, sinon 400 nommant les deux. Estimation
 confidentielle comme OMRAN : `montantForfaitaireHT` recalcule TVA et TTC au taux `DefaultVat`, `montantForfaitaireTTC`
-recalcule HT et TVA. Écrit `UserUpdate` / `UserUpdateDateTime` et une ligne d'audit ; renvoie la fiche.
+recalcule HT et TVA, `tvaDefautPct` changé recalcule TVA et TTC depuis le HT stocké ; une valeur renvoyée identique ne
+recalcule rien. Écrit `UserUpdate` / `UserUpdateDateTime` et une ligne d'audit ; renvoie la fiche.
 
 ## copier
 
