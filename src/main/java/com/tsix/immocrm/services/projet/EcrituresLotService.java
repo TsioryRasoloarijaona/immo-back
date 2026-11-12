@@ -5,8 +5,11 @@ import com.tsix.immocrm.dto.projet.CreerLotRequest;
 import com.tsix.immocrm.dto.projet.ExecutionTransitionLotDto;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
+import com.tsix.immocrm.entities.AuditOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
+import com.tsix.immocrm.entities.prj.PrjMarketLine;
+import com.tsix.immocrm.entities.prj.PrjMarketLineGrouping;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stl.StlCategory;
@@ -19,6 +22,7 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
+import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
@@ -29,6 +33,9 @@ import org.springframework.util.StringUtils;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,8 +81,8 @@ public class EcrituresLotService {
         Optional<GenreLot> genre = GenreLot.deNom(r.genre());
         if (genre.isPresent()) {
             droits.exiger(genre.get().droitCreation());
-        } else if (droits.parmi(GenreLot.DROIT_NOUVEAU, GenreLot.DROIT_NOUVEAU_MULTI).isEmpty()) {
-            throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+        } else {
+            exigerUnDroitDeCreation();
         }
         GenreLot g = genre.orElseThrow(() -> new InvalidRequestException("genre : obligatoire et parmi " + listeGenres()));
         String description = obligatoire(StringUtils.hasText(r.description()) ? r.description().trim() : null, "description");
@@ -136,9 +143,63 @@ public class EcrituresLotService {
         }
     }
 
+    /** 403 sans aucun droit de création, 404, 403 sans le droit du genre ; copie l'en-tête, les groupes et les lignes. */
     @Transactional
     public LotDetailDto copier(UUID id) {
-        throw new UnsupportedOperationException();
+        exigerUnDroitDeCreation();
+        PrjMarket m = lots.visible(id);
+        GenreLot genre = GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).orElse(GenreLot.ENTREPRENEURS);
+        droits.exiger(genre.droitCreation());
+        List<PrjMarketLineGrouping> groupes = enfants("select g from PrjMarketLineGrouping g where g.prjMarketId = :lot",
+                PrjMarketLineGrouping.class, id);
+        List<PrjMarketLine> lignes = enfants("select l from PrjMarketLine l where l.prjMarketId = :lot", PrjMarketLine.class, id);
+
+        em.detach(m);
+        UUID copie = UUID.randomUUID();
+        nouvelle(m, copie);
+        m.setCode(codeLibre());
+        m.setDescription(m.getDescription() + " (Copie)");
+        m.setIsClosed(false);
+        m.setStrStatus(statutDeDepart(genre));
+        em.persist(m);
+        transitions.historiser(m, TransitionsLot.CREATION, null, "");
+
+        Map<UUID, UUID> nouveauxGroupes = new HashMap<>();
+        for (PrjMarketLineGrouping g : groupes) {
+            nouveauxGroupes.put(g.getId(), UUID.randomUUID());
+            nouvelle(g, nouveauxGroupes.get(g.getId()));
+            g.setPrjMarketId(copie);
+            em.persist(g);
+        }
+        for (PrjMarketLine l : lignes) {
+            nouvelle(l, UUID.randomUUID());
+            l.setPrjMarketId(copie);
+            l.setPrjMarketLineGroupingId(nouveauxGroupes.get(l.getPrjMarketLineGroupingId()));
+            em.persist(l);
+        }
+        em.flush();
+        return lots.lot(copie);
+    }
+
+    private void exigerUnDroitDeCreation() {
+        if (droits.parmi(GenreLot.DROIT_NOUVEAU, GenreLot.DROIT_NOUVEAU_MULTI).isEmpty()) {
+            throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+        }
+    }
+
+    private <T extends AuditOmran> List<T> enfants(String jpql, Class<T> classe, UUID lot) {
+        List<T> enfants = em.createQuery(jpql, classe).setParameter("lot", lot).getResultList();
+        enfants.forEach(em::detach);
+        return enfants;
+    }
+
+    /** Ligne détachée réinsérée sous une nouvelle clé, créée par l'appelant. */
+    private void nouvelle(AuditOmran e, UUID id) {
+        e.setId(id);
+        e.setUserCreate(utilisateur.courant().nom());
+        e.setUserCreateDateTime(LocalDateTime.now(clock));
+        e.setUserUpdate(null);
+        e.setUserUpdateDateTime(null);
     }
 
     @Transactional

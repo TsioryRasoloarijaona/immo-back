@@ -41,6 +41,11 @@ public final class MontantsLot {
         return ratio == null ? null : ratio.multiply(CENT).stripTrailingZeros();
     }
 
+    /** Pourcentage 0–100 saisi → fraction 0–1 de la base ; null reste null. */
+    public static BigDecimal fraction(BigDecimal pourcentage) {
+        return pourcentage == null ? null : pourcentage.movePointLeft(2);
+    }
+
     public static BigDecimal arrondi(BigDecimal v) {
         return z(v).setScale(2, RoundingMode.HALF_UP);
     }

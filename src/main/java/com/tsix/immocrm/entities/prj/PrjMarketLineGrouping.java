@@ -4,9 +4,11 @@ import com.tsix.immocrm.entities.AuditOmran;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.Nationalized;
 
 import java.util.UUID;
 
@@ -22,4 +24,12 @@ public class PrjMarketLineGrouping extends AuditOmran {
 
     @Column(name = "Sorting")
     private Integer sorting;
+
+    @Column(name = "IsStock")
+    private Boolean isStock;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "Notes")
+    private String notes;
 }

@@ -36,6 +36,9 @@ public record FicheEtendueLotDto(
         boolean avancementParLigne,
         @Schema(description = "Date de résiliation (CancellationDate).") LocalDate dateResiliation,
         @Schema(description = "Cause de la résiliation (CancellationCause), chaîne vide possible.") String causeResiliation,
-        @Schema(description = "Description détaillée (DescriptionLong).") String descriptionDetaillee
+        @Schema(description = "Description détaillée (DescriptionLong).") String descriptionDetaillee,
+        @Schema(description = "Montant d'assurance décennale (InsuranceDECAmount), null si non saisi.") BigDecimal montantAssuranceDEC,
+        @Schema(description = "Montant d'assurance tous risques chantier (InsuranceTRCAmount), null si non saisi.")
+        BigDecimal montantAssuranceTRC
 ) {
 }

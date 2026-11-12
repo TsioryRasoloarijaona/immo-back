@@ -268,7 +268,7 @@ public class LotsProjetService {
                 Boolean.TRUE.equals(m.getApplyWithholdingTaxOnAdditionalWork()),
                 Boolean.TRUE.equals(m.getExecutedQuantityBasedInsert()),
                 Boolean.TRUE.equals(m.getCanEditWorkingOutLineByAchivement()), jour(m.getCancellationDate()),
-                m.getCancellationCause(), m.getDescriptionLong());
+                m.getCancellationCause(), m.getDescriptionLong(), m.getInsuranceDECAmount(), m.getInsuranceTRCAmount());
     }
 
     public List<DemandeAchatLotDto> demandesAchat(UUID id) {
