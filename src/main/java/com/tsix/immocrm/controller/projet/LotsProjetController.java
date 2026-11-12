@@ -13,6 +13,7 @@ import com.tsix.immocrm.dto.projet.ModifierLotRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
 import com.tsix.immocrm.dto.projet.TotauxLotsDto;
 import com.tsix.immocrm.dto.projet.TransitionLotDto;
+import com.tsix.immocrm.services.projet.CopieLot;
 import com.tsix.immocrm.services.projet.EcrituresLotService;
 import com.tsix.immocrm.services.projet.FiltresLots;
 import com.tsix.immocrm.services.projet.LotsProjetService;
@@ -75,13 +76,15 @@ public class LotsProjetController {
     private final LotsProjetService service;
     private final EcrituresLotService ecritures;
     private final ModificationLot modification;
+    private final CopieLot copie;
     private final ExportTableur exportTableur;
 
     public LotsProjetController(LotsProjetService service, EcrituresLotService ecritures, ModificationLot modification,
-                                ExportTableur exportTableur) {
+                                CopieLot copie, ExportTableur exportTableur) {
         this.service = service;
         this.ecritures = ecritures;
         this.modification = modification;
+        this.copie = copie;
         this.exportTableur = exportTableur;
     }
 
@@ -203,7 +206,7 @@ public class LotsProjetController {
             content = @Content)
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public ResponseEntity<LotDetailDto> copier(@Parameter(description = ID_LOT) @PathVariable UUID id) {
-        LotDetailDto copie = ecritures.copier(id);
+        LotDetailDto copie = this.copie.copier(id);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentContextPath().path("/api/projet/lots/{id}")
                 .buildAndExpand(copie.lot().id()).toUri()).body(copie);
     }

@@ -111,8 +111,11 @@ recalcule rien. Écrit `UserUpdate` / `UserUpdateDateTime` et une ligne d'audit 
 
 Copie un lot visible : nouveau code de la séquence « Market » (incrémentée jusqu'à un code libre), description suivie de
 « (Copie) », lot ouvert, statut de départ du genre (statut « Nouveau » de plus petit ordre), ligne d'historique
-« Création » ; les lignes du bordereau définitif et leurs groupes sont copiés et rattachés à la copie. Prévisions et lignes
-de retenue de garantie ne sont pas copiées. Droit `toolNew` (Entrepreneurs) ou `toolNewMultiSupplier` (autres genres) ;
+« Création ». Comme OMRAN, le bordereau de la source (lignes et groupes) devient le bordereau **estimatif** de la copie :
+l'estimatif pour un lot multi-fournisseur ; sinon le définitif, ou l'estimatif s'il n'a aucune ligne. Le définitif de la
+copie est vide. Hors multi-fournisseur, fournisseur, dates d'appel d'offres et de marché et résiliation sont vidés, et
+l'estimation manuelle reçoit l'estimation de la source (Σ estimatif, sinon forfait). Prévisions, retenues et lignes de
+stock ne sont pas copiées. Droit `toolNew` (Entrepreneurs) ou `toolNewMultiSupplier` (autres genres) ;
 ordre des refus : 403 si l'appelant n'a aucun des deux, 404, puis 403 si le droit du genre du lot manque.
 
 ## demandesAchat

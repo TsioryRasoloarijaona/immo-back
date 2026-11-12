@@ -144,6 +144,11 @@ class MontantsListeLots {
         }));
     }
 
+    /** {@code EstimatedPrice*} d'un seul lot, tel que la liste le calcule. */
+    Paire estimation(PrjMarket m) {
+        return estime(m, sommes(ESTIMATION, List.of(m.getId())).getOrDefault(m.getId(), RIEN));
+    }
+
     /** {@code EstimatedPrice*} : Σ bordereau estimatif s'il est non nul, sinon le forfait saisi. */
     private static Paire estime(PrjMarket m, BigDecimal[] lignes) {
         Paire estimation = paire(lignes, 1);

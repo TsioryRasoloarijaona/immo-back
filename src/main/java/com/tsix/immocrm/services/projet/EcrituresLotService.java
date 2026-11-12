@@ -5,11 +5,8 @@ import com.tsix.immocrm.dto.projet.CreerLotRequest;
 import com.tsix.immocrm.dto.projet.ExecutionTransitionLotDto;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
-import com.tsix.immocrm.entities.AuditOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
-import com.tsix.immocrm.entities.prj.PrjMarketLine;
-import com.tsix.immocrm.entities.prj.PrjMarketLineGrouping;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stl.StlCategory;
@@ -33,9 +30,6 @@ import org.springframework.util.StringUtils;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -143,63 +137,22 @@ public class EcrituresLotService {
         }
     }
 
-    /** 403 sans aucun droit de création, 404, 403 sans le droit du genre ; copie l'en-tête, les groupes et les lignes. */
-    @Transactional
-    public LotDetailDto copier(UUID id) {
+    /** Lot à copier (E8) : 403 sans aucun droit de création, 404, puis 403 sans le droit de son genre. */
+    PrjMarket copiable(UUID id) {
         exigerUnDroitDeCreation();
         PrjMarket m = lots.visible(id);
-        GenreLot genre = GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).orElse(GenreLot.ENTREPRENEURS);
-        droits.exiger(genre.droitCreation());
-        List<PrjMarketLineGrouping> groupes = enfants("select g from PrjMarketLineGrouping g where g.prjMarketId = :lot",
-                PrjMarketLineGrouping.class, id);
-        List<PrjMarketLine> lignes = enfants("select l from PrjMarketLine l where l.prjMarketId = :lot", PrjMarketLine.class, id);
+        droits.exiger(genre(m).droitCreation());
+        return m;
+    }
 
-        em.detach(m);
-        UUID copie = UUID.randomUUID();
-        nouvelle(m, copie);
-        m.setCode(codeLibre());
-        m.setDescription(m.getDescription() + " (Copie)");
-        m.setIsClosed(false);
-        m.setStrStatus(statutDeDepart(genre));
-        em.persist(m);
-        transitions.historiser(m, TransitionsLot.CREATION, null, "");
-
-        Map<UUID, UUID> nouveauxGroupes = new HashMap<>();
-        for (PrjMarketLineGrouping g : groupes) {
-            nouveauxGroupes.put(g.getId(), UUID.randomUUID());
-            nouvelle(g, nouveauxGroupes.get(g.getId()));
-            g.setPrjMarketId(copie);
-            em.persist(g);
-        }
-        for (PrjMarketLine l : lignes) {
-            nouvelle(l, UUID.randomUUID());
-            l.setPrjMarketId(copie);
-            l.setPrjMarketLineGroupingId(nouveauxGroupes.get(l.getPrjMarketLineGroupingId()));
-            em.persist(l);
-        }
-        em.flush();
-        return lots.lot(copie);
+    static GenreLot genre(PrjMarket m) {
+        return GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).orElse(GenreLot.ENTREPRENEURS);
     }
 
     private void exigerUnDroitDeCreation() {
         if (droits.parmi(GenreLot.DROIT_NOUVEAU, GenreLot.DROIT_NOUVEAU_MULTI).isEmpty()) {
             throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
         }
-    }
-
-    private <T extends AuditOmran> List<T> enfants(String jpql, Class<T> classe, UUID lot) {
-        List<T> enfants = em.createQuery(jpql, classe).setParameter("lot", lot).getResultList();
-        enfants.forEach(em::detach);
-        return enfants;
-    }
-
-    /** Ligne détachée réinsérée sous une nouvelle clé, créée par l'appelant. */
-    private void nouvelle(AuditOmran e, UUID id) {
-        e.setId(id);
-        e.setUserCreate(utilisateur.courant().nom());
-        e.setUserCreateDateTime(LocalDateTime.now(clock));
-        e.setUserUpdate(null);
-        e.setUserUpdateDateTime(null);
     }
 
     @Transactional
@@ -215,7 +168,7 @@ public class EcrituresLotService {
         return lots.ligne(m);
     }
 
-    private String codeLibre() {
+    String codeLibre() {
         String code = sequences.suivantSelonLigne(SEQUENCE);
         while (em.createQuery("select count(m) from PrjMarket m where m.code = :c", Long.class).setParameter("c", code)
                 .getSingleResult() > 0) {
@@ -224,7 +177,7 @@ public class EcrituresLotService {
         return code;
     }
 
-    private StrStatus statutDeDepart(GenreLot g) {
+    StrStatus statutDeDepart(GenreLot g) {
         return em.createQuery("select s from StrStatus s where s.strConfigEntityId = :e and s.strStatusTypeId = :t"
                         + " order by s.sorting asc", StrStatus.class)
                 .setParameter("e", g.entite()).setParameter("t", TYPE_STATUT_NOUVEAU).setMaxResults(1)
