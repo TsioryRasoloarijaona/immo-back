@@ -225,8 +225,13 @@ public class ExportTableur {
         cellule.setCellStyle(style);
     }
 
-    /** Clé d'une ligne {@code Map}, ou composante du {@code record}, portant le nom de la colonne ; absente = vide. */
+    /** Clé d'une ligne {@code Map}, ou composante du {@code record}, portant le nom de la colonne ({@code a.b} = imbriquée) ; absente = vide. */
     private Object valeur(Object ligne, String nom) {
+        int point = nom.indexOf('.');
+        if (point > 0) {
+            Object parent = valeur(ligne, nom.substring(0, point));
+            return parent == null ? null : valeur(parent, nom.substring(point + 1));
+        }
         if (ligne instanceof Map<?, ?> map) {
             return map.get(nom);
         }

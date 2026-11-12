@@ -20,11 +20,13 @@ Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet
 
 Tri par défaut : `dateDocument` décroissante puis `code` décroissant. Propriétés de tri acceptées : `code`, `nature`, `dateDocument`, `dateEcheance`, `reference`, `fournisseurNom`, `projetCode`, `lotCode`, `statutCode`, `montantTTC`, `montantAPayer`, `montantRegle`, `resteARegler`, `decompteCode`, `typeLotLibelle`, `moduleLibelle`, `societeNom`, `archive`, `comptabilise`, `referenceBureauOrdre`, `personneAContacter`, `dossierGroupement`, `aCloturer`, `deviseCode`, `categories`, `dateAlerte` ; une autre propriété répond 400.
 
+**Agrégats des bons de commande** (`agregats`, objet `AgregatsBonCommandeDto`, `null` hors bon de commande) : calculés sur les pièces liées par `BuyOrderId` (voir le schéma). Clés de tri en plus, lues dans `agregats` : `factureHT`, `factureTTC`, `factureNetAPayer`, `livreHT`, `livreTTC`, `livreNetAPayer`, `resteALivrerHT`, `resteALivrerTTC`, `resteALivrerNetAPayer`, `avance`, `avanceTauxPrevu`, `avanceTauxEffectif`, `avanceAmortie`, `avanceRegle`, `avanceReste`, `avanceResteAAmortir`, `garantieRetenue`, `garantieRestituee`, `garantieReste`, `regle`, `resteAPayerSurFacture`, `resteAPayerTotal`, `bonsLivraisonCodes`, `facturesCodes`, `devisCode` ; les pièces qui ne sont pas des bons de commande restent en fin de liste dans les deux sens.
+
 **Décompte lié** (`decompteId`, `decompteCode`, `decompteNumero`) : le décompte de chantier dont `PrjWorkingOut.BuyDocumentId` pointe la pièce (le premier par date puis code si plusieurs), `null` sinon. `BuyDocument.PrjWorkingOutId` (sens des avances) n'est jamais lu.
 
 ## totaux
 
-Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre, `montantHT` / `montantTVA` = Σ HT / TVA des lignes. Aucune pièce visible : tout à zéro.
+Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre, `montantHT` / `montantTVA` = Σ HT / TVA des lignes. `agregats` = Σ champ à champ des agrégats des bons de commande du même jeu (ratios et codes `null`), `null` si le jeu ne contient aucun bon de commande. Aucune pièce visible : tout à zéro.
 
 ## soldes
 
@@ -36,4 +38,4 @@ Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/soldes`, sans l
 
 ## fiche
 
-Fiche d'une pièce visible : les champs de la ligne de liste (mêmes calculs), l'en-tête (notes, régularisation, timbre, entité, audit), les lignes (`Sorting`), la ventilation (taux par catégorie), l'historique des statuts (date croissante) et les règlements, annulés compris avec `annule = true` (exclus du réglé).
+Fiche d'une pièce visible : les champs de la ligne de liste (mêmes calculs, `agregats` compris pour un bon de commande), l'en-tête (notes, régularisation, timbre, entité, audit), les lignes (`Sorting`), la ventilation (taux par catégorie), l'historique des statuts (date croissante) et les règlements, annulés compris avec `annule = true` (exclus du réglé).

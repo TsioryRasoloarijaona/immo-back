@@ -355,6 +355,34 @@ public class FixtureAchat {
                 .setParameter(P_ID, compte.getId()));
     }
 
+    // ------------------------------------------------------------------ lot A1 bis « agrégats des BC » (FEATURE-achat-bc-agregats.md)
+
+    public static final String BON_COMMANDE = "ORDER";
+    public static final String BON_LIVRAISON = "DELIVRY";
+    public static final String DEVIS = "QUOTE";
+    public static final String AVANCE_COMMANDE = "ORDER_ADVANCE";
+    public static final String GARANTIE_COMMANDE = "ORDER_WARRANTY";
+
+    /** Montants stockés de la pièce, posés tels quels (TVA = TTC − HT) : HT, TTC et à payer indépendants. */
+    public void montants(UUID pieceId, String ht, String ttc, String aPayer) {
+        BigDecimal h = new BigDecimal(ht);
+        BigDecimal t = new BigDecimal(ttc);
+        executer(em.createNativeQuery("""
+                        UPDATE BuyDocument SET AmountHT = :ht, AmountVat = :tva, AmountTTC = :ttc, AmountToPay = :apayer
+                        WHERE PKey = :id""")
+                .setParameter(P_ID, pieceId).setParameter("ht", h).setParameter("tva", t.subtract(h))
+                .setParameter("ttc", t).setParameter("apayer", new BigDecimal(aPayer)));
+    }
+
+    /** Ligne de plus sur un règlement existant ({@code reglement}). */
+    public void ligneReglement(UUID reglement, UUID pieceId, BigDecimal montant) {
+        executer(em.createNativeQuery("""
+                        INSERT INTO StlSettlementLine (PKey, StlSettlementId, BuyDocumentId, Amount)
+                        VALUES (:id, :reglement, :piece, :montant)""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter("reglement", reglement)
+                .setParameter("piece", pieceId).setParameter("montant", montant));
+    }
+
     private void executer(Query query) {
         em.flush();
         query.executeUpdate();
