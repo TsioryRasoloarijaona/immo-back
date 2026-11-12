@@ -55,6 +55,7 @@ class DecomptesRevueD1Test {
     private UUID projet;
     private UUID lot;
     private RequestPostProcessor admin;
+    private RequestPostProcessor libre;
 
     @BeforeEach
     void setUp() {
@@ -64,6 +65,7 @@ class DecomptesRevueD1Test {
         AdmUser compte = vente.compte("prj.rv.a." + jeton, ADMINISTRATEUR);
         fixture.habiliter(compte, projet);
         admin = connecte(compte, ADMINISTRATEUR);
+        libre = decomptes.compte(projet, jeton, DROIT_MODIFIER, DROIT_SUPPRIMER);
     }
 
     private UUID decompte(UUID lotId, String code, int numero) {
@@ -108,7 +110,7 @@ class DecomptesRevueD1Test {
     /** W:Description l.266-276 : « Décompte N° code du jj/mm/aaaa » (749 / 749 renseignés dans yesRemsProd). */
     @Test
     void creation_poseLaDescriptionOmran() throws Exception {
-        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", admin)).isEqualTo(201);
+        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", libre)).isEqualTo(201);
 
         Map<String, Object> n = seulDecompteDuLot();
         assertThat(n).containsEntry("Description", "Décompte N° " + n.get("Code") + " du 01/04/2026");
@@ -117,7 +119,7 @@ class DecomptesRevueD1Test {
     /** W:SupplierDescription l.1821-1835 : raison sociale du tiers (749 / 749 renseignés dans yesRemsProd). */
     @Test
     void creation_poseLeNomDuFournisseurOmran() throws Exception {
-        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", admin)).isEqualTo(201);
+        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", libre)).isEqualTo(201);
 
         assertThat(seulDecompteDuLot()).extractingByKey("SupplierDescription").isNotNull();
     }
@@ -125,7 +127,7 @@ class DecomptesRevueD1Test {
     /** W:StlCurrencyId l.44, l.334-335 : [IsMandatory], devise par défaut (749 / 749 renseignés dans yesRemsProd). */
     @Test
     void creation_poseLaDeviseObligatoireOmran() throws Exception {
-        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", admin)).isEqualTo(201);
+        assertThat(creer(lot, "{\"dateDocument\":\"2026-04-01\"}", libre)).isEqualTo(201);
 
         assertThat(seulDecompteDuLot()).extractingByKey("devise").isNotNull();
     }
@@ -134,7 +136,7 @@ class DecomptesRevueD1Test {
 
     @Test
     void creation_corpsSansDate_lotInconnu_404avant400() throws Exception {
-        assertThat(creer(UUID.randomUUID(), "{}", admin)).isEqualTo(404);
+        assertThat(creer(UUID.randomUUID(), "{}", libre)).isEqualTo(404);
     }
 
     @Test

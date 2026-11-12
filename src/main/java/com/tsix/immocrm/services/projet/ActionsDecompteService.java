@@ -53,14 +53,16 @@ public class ActionsDecompteService {
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final DecomptesProjetService lecture;
+    private final LotsProjetService lots;
     private final VerrouDecompte verrou;
     private final DonneesDecompte donnees;
     private final EcritureDecompte ecriture;
     private final ReferencesOmran references;
 
-    public ActionsDecompteService(DecomptesProjetService lecture, VerrouDecompte verrou, DonneesDecompte donnees,
-                                  EcritureDecompte ecriture, ReferencesOmran references) {
+    public ActionsDecompteService(DecomptesProjetService lecture, LotsProjetService lots, VerrouDecompte verrou,
+                                  DonneesDecompte donnees, EcritureDecompte ecriture, ReferencesOmran references) {
         this.lecture = lecture;
+        this.lots = lots;
         this.verrou = verrou;
         this.donnees = donnees;
         this.ecriture = ecriture;
@@ -69,7 +71,7 @@ public class ActionsDecompteService {
 
     /** {@code W:NewWorkingOut} l.1950-2035 ; ni lignes (lot sans décomposition) ni lignes d'appro (aucun PrjStockLine). */
     public DecompteDetailDto creer(UUID lotId, CreerDecompteRequest demande) {
-        PrjMarket lot = lecture.lotVisible(lotId);
+        PrjMarket lot = lots.visible(lotId);
         verrou.exiger(MODIFIER);
         PrjWorkingOut dernier = donnees.precedent(lotId, null);
         if (dernier != null && Boolean.TRUE.equals(dernier.getFinalWorkingOut())) {

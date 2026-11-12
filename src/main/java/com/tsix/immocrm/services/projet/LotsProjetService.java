@@ -185,7 +185,8 @@ public class LotsProjetService {
         return decomptes.duLot(visible(id).getId());
     }
 
-    private PrjMarket visible(UUID id) {
+    /** Seule lecture d'un lot par id (fiche, bordereau, création de décompte) : 404 hors projet habilité ou statut visible. */
+    PrjMarket visible(UUID id) {
         Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
         return (v.vide() ? Optional.<PrjMarket>empty() : lots.findByIdAndPrjProjectIdIn(id, v.projets()))
                 .filter(v::voit)

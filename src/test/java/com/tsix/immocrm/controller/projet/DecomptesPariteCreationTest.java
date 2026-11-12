@@ -1,8 +1,6 @@
 package com.tsix.immocrm.controller.projet;
 
-import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.fixtures.FixtureDecomptes;
-import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.fixtures.FixtureProjetLots;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +27,6 @@ import static com.tsix.immocrm.controller.projet.AppelsProjet.LOTS;
 import static com.tsix.immocrm.fixtures.FixtureDecomptes.DROIT_MODIFIER;
 import static com.tsix.immocrm.fixtures.FixtureDecomptes.DROIT_RECALCULER;
 import static com.tsix.immocrm.fixtures.FixtureDecomptes.DROIT_SUPPRIMER;
-import static com.tsix.immocrm.fixtures.FixtureDossierVente.connecte;
 import static com.tsix.immocrm.fixtures.FixtureProjetLots.A_PAYER;
 import static com.tsix.immocrm.fixtures.FixtureProjetLots.TTC;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,12 +44,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Transactional
 class DecomptesPariteCreationTest {
 
-    private static final String ADMINISTRATEUR = "Administrateur";
     private static final String CORPS = "{\"dateDocument\":\"2026-04-01\"}";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureProjetLots fixture;
-    @Autowired private FixtureDossierVente vente;
     @Autowired private FixtureDecomptes decomptes;
     @Autowired private JdbcTemplate jdbc;
 
@@ -68,9 +63,7 @@ class DecomptesPariteCreationTest {
         projet = fixture.projet("PPC-" + jeton);
         fournisseur = fixture.fournisseur("FPC-" + jeton);
         lot = fixture.lot(projet, "LPC-" + jeton, fournisseur);
-        AdmUser compte = vente.compte("prj.pc.a." + jeton, ADMINISTRATEUR);
-        fixture.habiliter(compte, projet);
-        admin = connecte(compte, ADMINISTRATEUR);
+        admin = decomptes.compte(projet, jeton, DROIT_MODIFIER, DROIT_SUPPRIMER, DROIT_RECALCULER);
     }
 
     private UUID decompte(String code, int numero) {

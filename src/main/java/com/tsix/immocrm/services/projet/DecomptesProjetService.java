@@ -50,7 +50,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -87,7 +86,7 @@ public class DecomptesProjetService {
 
     /** Ce qu'une ligne de liste lit hors de son décompte, chargé une fois pour toute la page. */
     private record Contexte(Map<UUID, FacturesDecomptes.Facture> factures, Map<UUID, AvancementDecomptes.Avancement> avancements,
-                            Map<UUID, Integer> derniers, Set<String> droits) {
+                            Map<UUID, Integer> derniers, Set<UUID> referencesAchat, Set<String> droits) {
     }
 
     public Page<DecompteListItemDto> decomptes(FiltresDecomptes filtres, Pageable pageable) {
@@ -120,15 +119,6 @@ public class DecomptesProjetService {
         Set<UUID> projets = perimetre.projetsVisibles();
         return projets.isEmpty() ? introuvable()
                 : decomptes.findByIdAndPrjMarketPrjProjectIdIn(id, projets).orElseGet(DecomptesProjetService::introuvable);
-    }
-
-    /** Lot d'un projet habilité, sinon 404. */
-    PrjMarket lotVisible(UUID lotId) {
-        Set<UUID> projets = perimetre.projetsVisibles();
-        return (projets.isEmpty() ? Stream.<PrjMarket>empty()
-                : em.createQuery("select m from PrjMarket m where m.id = :id and m.prjProject.id in :projets", PrjMarket.class)
-                .setParameter(ID, lotId).setParameter("projets", projets).getResultStream())
-                .findFirst().orElseThrow(() -> new ResourceNotFoundException("Lot introuvable"));
     }
 
     public DecompteDetailDto decompte(UUID id) {
@@ -164,14 +154,15 @@ public class DecomptesProjetService {
     private Contexte contexte(List<PrjWorkingOut> liste) {
         Set<UUID> lots = liste.stream().map(w -> w.getPrjMarket().getId()).collect(Collectors.toSet());
         return new Contexte(factures.parDecompte(liste.stream().map(PrjWorkingOut::getId).toList()),
-                avancement.parDecompte(lots), verrou.derniersNumeros(lots), verrou.droitsCourants());
+                avancement.parDecompte(lots), verrou.derniersNumeros(lots), verrou.referencesAchat(lots),
+                verrou.droitsCourants());
     }
 
     private static DecompteListItemDto ligne(PrjWorkingOut w, Contexte ctx) {
         PrjMarket lot = w.getPrjMarket();
         FacturesDecomptes.Facture f = ctx.factures().getOrDefault(w.getId(), SANS_FACTURE);
         AvancementDecomptes.Avancement a = ctx.avancements().getOrDefault(w.getId(), SANS_AVANCEMENT);
-        String motif = VerrouDecompte.motif(w, ctx.derniers().get(lot.getId()));
+        String motif = VerrouDecompte.motif(w, ctx.derniers().get(lot.getId()), ctx.referencesAchat().contains(w.getId()));
         CfgTier fournisseur = w.getCfgTier() != null ? w.getCfgTier() : lot.getCfgSupplier();
         NetAPayerDecompte net = NetAPayerDecompte.de(new NetAPayerDecompte.Montants(w.getAmountTTC(), w.getAdvanceAmount(),
                 w.getWorkingOutAdvanceAmount(), w.getWarrantyAmount(), w.getNonRefundableRetainer(), w.getExtraAmount(),

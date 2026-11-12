@@ -55,7 +55,10 @@ public class DonneesDecompte {
                 .setParameter(LOT, lot).getResultList();
     }
 
-    /** Σ des décomptes du lot de numéro inférieur ({@code LastWorkingOut.Cumul…}). */
+    /**
+     * Σ des décomptes du lot de numéro inférieur ({@code LastWorkingOut.Cumul…}). Retenues = RG + prorata + DEC + TRC
+     * ({@code PreviousDeductionAmountAccumalted}) : les retenues forfaitaires n'y sont pas.
+     */
     public Precedents precedents(PrjWorkingOut w) {
         if (w.getSorting() == null) {
             return Precedents.AUCUN;
@@ -63,7 +66,8 @@ public class DonneesDecompte {
         Object[] s = em.createQuery("""
                         select sum(o.amountTTC), sum(o.advanceAmount), sum(o.warrantyAmount), sum(o.proportionAmount),
                                sum(o.insuranceDECAmount), sum(o.insuranceTRCAmount),
-                               sum(coalesce(o.refundableRetainer, 0) + coalesce(o.nonRefundableRetainer, 0))
+                               sum(coalesce(o.warrantyAmount, 0) + coalesce(o.proportionAmount, 0)
+                                   + coalesce(o.insuranceDECAmount, 0) + coalesce(o.insuranceTRCAmount, 0))
                         from PrjWorkingOut o where o.prjMarket.id = :lot and o.sorting < :avant""", Object[].class)
                 .setParameter(LOT, w.getPrjMarket().getId()).setParameter(AVANT, w.getSorting()).getSingleResult();
         return new Precedents((BigDecimal) s[0], (BigDecimal) s[1], (BigDecimal) s[2], (BigDecimal) s[3], (BigDecimal) s[4],

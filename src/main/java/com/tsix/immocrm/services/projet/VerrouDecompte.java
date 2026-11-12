@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Seule règle du verrou d'un décompte (facturé, ou un autre décompte du lot a un numéro supérieur : {@code W:IsLocked})
@@ -25,6 +26,7 @@ public class VerrouDecompte {
     public static final String PAR_MONTANT = "Yes.Prj.Front.Market.MarketMonitoringList.CanEditWorkingOutRetainByAmount";
     static final String FACTURE = "facturé";
     static final String PAS_LE_DERNIER = "pas le dernier du lot";
+    static final String AVANCE = "référencé par une pièce d'achat (avance sur décompte)";
 
     private final DroitsOmran droits;
     private final EntityManager em;
@@ -46,10 +48,24 @@ public class VerrouDecompte {
         return m;
     }
 
+    /** Décomptes des lots désignés par une pièce d'achat ({@code BuyDocument.PrjWorkingOutId}, FK sans cascade). */
+    public Set<UUID> referencesAchat(Collection<UUID> lots) {
+        if (lots.isEmpty()) {
+            return Set.of();
+        }
+        List<?> ids = em.createNativeQuery("SELECT DISTINCT b.PrjWorkingOutId FROM BuyDocument b"
+                        + " JOIN PrjWorkingOut w ON w.PKey = b.PrjWorkingOutId WHERE w.PrjMarketId IN (:lots)")
+                .setParameter("lots", lots).getResultList();
+        return ids.stream().map(o -> UUID.fromString(String.valueOf(o))).collect(Collectors.toSet());
+    }
+
     /** Motif du verrou, null si le décompte est modifiable. */
-    public static String motif(PrjWorkingOut w, Integer dernierNumero) {
+    public static String motif(PrjWorkingOut w, Integer dernierNumero, boolean referencePiece) {
         if (w.getBuyDocument() != null) {
             return FACTURE;
+        }
+        if (referencePiece) {
+            return AVANCE;
         }
         boolean dernier = dernierNumero == null || (w.getSorting() != null && w.getSorting() >= dernierNumero);
         return dernier ? null : PAS_LE_DERNIER;
@@ -57,7 +73,7 @@ public class VerrouDecompte {
 
     public String motif(PrjWorkingOut w) {
         UUID lot = w.getPrjMarket().getId();
-        return motif(w, derniersNumeros(List.of(lot)).get(lot));
+        return motif(w, derniersNumeros(List.of(lot)).get(lot), referencesAchat(List.of(lot)).contains(w.getId()));
     }
 
     public Set<String> droitsCourants() {

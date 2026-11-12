@@ -44,6 +44,8 @@ public class FixtureDecomptes {
         String role = "Decomptes " + jeton + "-" + UUID.randomUUID().toString().substring(0, 6);
         AdmUser compte = vente.compte("prj.dr." + jeton, role);
         lots.habiliter(compte, projet);
+        flush();
+        jdbc.update("UPDATE AdmRole SET WithSequenceFreeRestriction = 0 WHERE Code = ?", role);
         String roleId = jdbc.queryForObject("SELECT CAST(AdmRoleId AS varchar(36)) FROM AdmUserRole WHERE AdmUserId = ?",
                 String.class, compte.getId().toString());
         for (String droit : droits) {
