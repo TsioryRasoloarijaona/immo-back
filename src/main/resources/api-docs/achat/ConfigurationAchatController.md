@@ -1,6 +1,10 @@
 # ConfigurationAchatController
 
-Configuration des pièces d'achat en **lecture seule** : statuts (`BuyDocumentStatus`) et transitions (`BuyDocumentWorkFlow`). OMRAN reste maître du paramétrage ; aucune écriture. Tout compte connecté lit. Voir `instructions/FEATURE-achat-regle-commune.md` §4.
+Configuration des pièces d'achat : statuts (`BuyDocumentStatus`) et transitions (`BuyDocumentWorkFlow`). Toute lecture est ouverte à tout compte connecté ; l'écriture (`POST`/`PUT`/`DELETE` des mêmes chemins) exige le droit OMRAN `Yes.Buy.Front.Config.BuyDocumentStatus`. Voir `instructions/FEATURE-achat-regle-commune.md` §4 et `instructions/FEATURE-statuts-achat-parite.md`.
+
+## statuts
+
+Une ligne par statut, triée par `ordre` puis `code`. `champsObligatoires` / `champsObligatoiresFournisseur` sont des noms du catalogue `/statuts/champs-obligatoires`, stockés sans effet sur la saisie des pièces. `nombreTransitions` compte les transitions qui citent le statut en départ **ou** en arrivée (une transition comptée une fois) ; `nombreHistoriques` les lignes de `BuyDocumentStatusHistory`. Ces trois nombres sont ceux qui bloquent la suppression.
 
 ## transitions
 

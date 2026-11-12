@@ -3,7 +3,9 @@ package com.tsix.immocrm.controller.achat;
 import com.tsix.immocrm.fixtures.FixtureConfigurationAchat;
 import com.tsix.immocrm.fixtures.FixtureConfigurationAchat.Statut;
 import com.tsix.immocrm.fixtures.FixturePatrimoine;
+import com.tsix.immocrm.fixtures.FixtureStatutsAchat;
 import jakarta.persistence.EntityManager;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -27,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.tsix.immocrm.controller.achat.LectureConfigurationAchat.STATUTS;
 import static com.tsix.immocrm.controller.achat.LectureConfigurationAchat.TRANSITIONS;
 import static com.tsix.immocrm.controller.achat.LectureConfigurationAchat.ligne;
 import static com.tsix.immocrm.controller.achat.LectureConfigurationAchat.lire;
@@ -63,6 +66,7 @@ class ConfigurationAchatRequetesTest {
     @Autowired private EntityManager em;
     @Autowired private FixtureConfigurationAchat fixture;
     @Autowired private FixturePatrimoine patrimoine;
+    @Autowired private FixtureStatutsAchat statutsAchat;
 
     @Test
     void transitions_memeNombreDOrdresSql_pour2Et50Transitions() throws Exception {
@@ -84,6 +88,62 @@ class ConfigurationAchatRequetesTest {
                 () -> assertThat(ids).hasSize(50),
                 () -> assertThat(pour2).isPositive(),
                 () -> assertThat(pour50).isEqualTo(pour2));
+    }
+
+    /**
+     * FEATURE-statuts-achat-parite.md règle 13 : GET /statuts (types, image, documents à joindre, comptes de pièces,
+     * transitions, historiques) émet autant d'ordres SQL pour 2 que pour 30 statuts.
+     */
+    @Test
+    void r13_statuts_memeNombreDOrdresSql_pour2Et30Statuts() throws Exception {
+        String jeton = FixtureConfigurationAchat.jeton("K2Q");
+        RequestPostProcessor qui = connecte(patrimoine.administrateur());
+        statutsAchat.tables();
+        UUID typeEtat = fixture.typeEtat("Intermédiaire " + jeton);
+        UUID image = statutsAchat.image("IMG-" + jeton, FixtureStatutsAchat.PNG);
+        UUID typeDocument = statutsAchat.typeDocument("Contrat " + jeton);
+        UUID cible = fixture.statut(Statut.simple("CIB-" + jeton, 0));
+        List<UUID> ids = new ArrayList<>();
+        ajouterStatuts(ids, 2, jeton, typeEtat, image, typeDocument, cible);
+        lire(mockMvc, STATUTS, qui);
+
+        int pour2 = compterStatuts(qui, ids);
+        ajouterStatuts(ids, 28, jeton, typeEtat, image, typeDocument, cible);
+        int pour30 = compterStatuts(qui, ids);
+
+        assertAll(
+                () -> assertThat(ids).hasSize(30),
+                () -> assertThat(pour2).isPositive(),
+                () -> assertThat(pour30).isEqualTo(pour2));
+    }
+
+    /** {@code n} statuts, chacun avec image, type, un document à joindre, une pièce, une transition et un passage. */
+    private void ajouterStatuts(List<UUID> ids, int n, String jeton, UUID typeEtat, UUID image, UUID typeDocument,
+                                UUID cible) {
+        for (int i = 0; i < n; i++) {
+            int rang = ids.size();
+            UUID s = fixture.statut(new Statut("S" + rang + "-" + jeton, "Statut " + rang, rang, typeEtat, true, false,
+                    false, "Pink", 0));
+            em.flush();
+            em.createNativeQuery("UPDATE BuyDocumentStatus SET CfgImageId = :image WHERE PKey = :id")
+                    .setParameter("image", image).setParameter("id", s).executeUpdate();
+            statutsAchat.documentAJoindre(s, typeDocument, true, false);
+            UUID piece = fixture.piece(s, null);
+            fixture.transition(null, rang, "T" + rang + " " + jeton, s, cible);
+            fixture.passage(piece, null, s, LocalDateTime.of(2022, 1, 1, 8, 0).plusDays(rang));
+            ids.add(s);
+        }
+    }
+
+    /** Ordres SQL d'un appel ; chaque statut créé est rendu avec son document à joindre. */
+    private int compterStatuts(RequestPostProcessor qui, List<UUID> ids) throws Exception {
+        em.flush();
+        ORDRES.set(0);
+        List<Map<String, Object>> lignes = lire(mockMvc, STATUTS, qui);
+        int n = ORDRES.get();
+        assertThat(ids).isNotEmpty().allSatisfy(id -> assertThat(ligne(lignes, id)).isNotNull()
+                .extractingByKey("documentsAJoindre").asInstanceOf(InstanceOfAssertFactories.LIST).hasSize(1));
+        return n;
     }
 
     /** {@code n} transitions, chacune avec deux rôles et un passage. */

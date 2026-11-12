@@ -25,6 +25,7 @@ public record TransitionAchatDto(
         @Schema(description = "Rôles autorisés, triés par code ; vide si aucun rôle.") List<RoleTransitionDto> roles,
         @Schema(description = "Lignes d'historique (BuyDocumentStatusHistory) portant cette transition.", example = "1655")
         long nombrePassages,
-        @Schema(description = "Date du dernier passage, null si jamais empruntée.") LocalDate dernierPassage
+        @Schema(description = "Date du dernier passage, null si jamais empruntée.") LocalDate dernierPassage,
+        @Schema(description = "Gestion (StrEntity.PKey), null sans gestion ; à renvoyer tel quel dans un PUT.") UUID gestionId
 ) {
 }
