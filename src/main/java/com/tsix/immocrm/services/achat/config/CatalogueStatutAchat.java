@@ -100,7 +100,7 @@ final class CatalogueStatutAchat {
     }
 
     static String stocker(List<String> noms) {
-        return noms.isEmpty() ? null : "," + String.join(",", noms);
+        return noms.isEmpty() ? "" : "," + String.join(",", noms);
     }
 
     private static List<ChampStatutAchatDto> champs(String lignes) {

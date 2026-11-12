@@ -39,4 +39,15 @@ public class BuyDocumentWorkFlow extends LigneOmran {
 
     @Column(name = "NotesMandatory")
     private Boolean notesMandatory;
+
+    // OMRAN fait .Split(',') sur ces deux listes en changeant le statut d'une pièce : jamais NULL.
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "MandatoryFields")
+    private String mandatoryFields;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "SupplierMandatoryFields")
+    private String supplierMandatoryFields;
 }

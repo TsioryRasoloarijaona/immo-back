@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -94,8 +95,9 @@ public class EcritureConfigurationAchatService {
 
     private void appliquer(BuyDocumentStatus s, StatutAchatEcritureDto d) {
         Integer ordre = exiger(d.ordre(), "Ordre");
-        String code = SaisiePatrimoine.obligatoire(d.code(), null, "Code");
-        String description = SaisiePatrimoine.obligatoire(d.description(), null, "Description");
+        String code = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.code()), null, "Code");
+        String description = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.description()), null,
+                "Description");
         UUID type = exiger(d.typeId(), "Type");
         verifierExiste("SELECT COUNT(*) FROM AdmWorkFlowStateType WHERE PKey = :id", type, "Type d'état inconnu.");
         if (d.dureeVieJours() < 0) {
@@ -146,14 +148,14 @@ public class EcritureConfigurationAchatService {
             throw new InvalidRequestException("%s : champ(s) inconnu(s) %s".formatted(libelle, inconnus));
         }
         String stocke = CatalogueStatutAchat.stocker(noms.stream().distinct().toList());
-        if (stocke != null && stocke.length() > LONG) {
+        if (stocke.length() > LONG) {
             throw new InvalidRequestException("%s : %d caractères au plus une fois stockés.".formatted(libelle, LONG));
         }
         return stocke;
     }
 
     private void verifierDocuments(List<DocumentAJoindreAchatDto> documents) {
-        HashSet<UUID> vus = new HashSet<>();
+        Set<UUID> vus = new HashSet<>();
         for (DocumentAJoindreAchatDto doc : documents) {
             UUID type = exiger(doc == null ? null : doc.typeDocumentId(), "Type de document");
             if (em.find(AdmAttachedFileType.class, type) == null) {
@@ -245,6 +247,8 @@ public class EcritureConfigurationAchatService {
         w.setStrEntityId(d.gestionId());
         w.setNotesMandatory(d.noteObligatoire());
         w.setIsValidatedByCfgTierTrigger(d.valideeParDeclencheur());
+        w.setMandatoryFields(Objects.requireNonNullElse(w.getMandatoryFields(), ""));
+        w.setSupplierMandatoryFields(Objects.requireNonNullElse(w.getSupplierMandatoryFields(), ""));
         horodater(w);
     }
 
