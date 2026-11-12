@@ -97,7 +97,6 @@ public class LotsProjetService {
     private static final String OU_LOTS = " l where l.prjMarketId in :lots and (l.isStock is null or l.isStock = false)"
             + " group by l.prjMarketId";
     private static final String SOMMES_BORDEREAU = SOMMES + " from PrjMarketLine" + OU_LOTS;
-    private static final String SOMMES_ESTIMATION = SOMMES + " from PrjMarketLineEstimation" + OU_LOTS;
 
     private static final String CUMULS = "select w.prjMarket.id, count(w), sum(w.amountHT), sum(w.amountTTC),"
             + " sum(w.extraAmount), sum(w.warrantyAmount), sum(w.amountToPay)"
@@ -233,14 +232,14 @@ public class LotsProjetService {
         PrjMarket m = visible(id);
         List<UUID> ids = List.of(id);
         Trio marche = marche(m, sommes(SOMMES_BORDEREAU, ids));
-        Trio estimation = MontantsLot.choisir(sommes(SOMMES_ESTIMATION, ids).get(id), m.getEstimatedPriceHTManual(),
-                m.getEstimatedVatAmountManual(), m.getEstimatedPriceTTCManual());
+        Trio estimation = montants.estimation(m);
         Cumuls c = cumuls(ids).getOrDefault(id, Cumuls.AUCUN);
         return new LotDetailDto(ligne(m),
                 m.getPrjProject().getDescription(), m.getStrEntity() == null ? null : m.getStrEntity().getCode(),
                 m.getStrEntity() == null ? null : m.getStrEntity().getDescription(),
                 MontantsLot.arrondi(m.getEstimatedPriceHTManual()), MontantsLot.arrondi(m.getEstimatedVatAmountManual()),
-                MontantsLot.arrondi(m.getEstimatedPriceTTCManual()), estimation.ht(), estimation.tva(), estimation.ttc(),
+                MontantsLot.arrondi(m.getEstimatedPriceTTCManual()), MontantsLot.arrondi(estimation.ht()),
+                MontantsLot.arrondi(estimation.tva()), MontantsLot.arrondi(estimation.ttc()),
                 estimation.depuisBordereau(), MontantsLot.applique(marche.ttc(), m.getWarrantyRatio()),
                 MontantsLot.applique(marche.ttc(), m.getAdvanceRatio()), MontantsLot.pourcentage(m.getAdvanceRatio()),
                 MontantsLot.pourcentage(m.getProportionRatio()), MontantsLot.pourcentage(m.getInsuranceDECRatio()),

@@ -84,8 +84,9 @@ commentaire et que `notes` est vide.
 
 ## lot
 
-Fiche d'un lot : les champs de la liste, plus le montant forfaitaire saisi, l'estimation (Σ bordereau estimatif, sinon le
-forfaitaire), la retenue de garantie et l'avance théoriques (marché TTC × taux), les taux en pourcentage (0–100), les
+Fiche d'un lot : les champs de la liste, plus le montant forfaitaire saisi, l'estimation (même calcul que la liste :
+Σ `Quantity × UnitPriceHT × (1 + FODECRatio)` du bordereau estimatif, TTC = HT × (1 + `VatRatio`) par ligne, TVA = TTC − HT ;
+sinon le forfaitaire HT / TTC), la retenue de garantie et l'avance théoriques (marché TTC × taux), les taux en pourcentage (0–100), les
 options et les dates d'appel d'offres et de chantier (`null` si non saisies). Champs des onglets de la fiche OMRAN
 (`FEATURE-lot-fiche-parite.md` E1) : devise, catégorie, « Est. de base » (`dateDebutBase`, `delaiBaseJours`,
 `dateFinBase`), les 12 dates, les options (ratios en pourcentage 0–100), la résiliation et la description détaillée.

@@ -1,6 +1,6 @@
 package com.tsix.immocrm.services.projet;
 
-import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot.Paire;
+import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.entities.AuditOmran;
 import com.tsix.immocrm.entities.prj.GroupeBordereauOmran;
@@ -66,7 +66,7 @@ public class CopieLot {
         Class<? extends GroupeBordereauOmran> classeGroupes =
                 definitif ? PrjMarketLineGrouping.class : PrjMarketLineGroupingEstimation.class;
         List<? extends GroupeBordereauOmran> groupes = duLot(classeGroupes, id);
-        Paire estimation = montants.estimation(m);
+        Trio estimation = montants.estimation(m);
 
         em.detach(m);
         UUID copie = UUID.randomUUID();
@@ -90,7 +90,7 @@ public class CopieLot {
     }
 
     /** {@code Clone} l.3135-3155 : fournisseur, dates d'appel d'offres et de marché, résiliation vidés ; estimation figée. */
-    private static void enTeteHorsMultiFournisseur(PrjMarket m, Paire estimation) {
+    private static void enTeteHorsMultiFournisseur(PrjMarket m, Trio estimation) {
         m.setCfgSupplier(null);
         m.setLaunchOfTenderDate(null);
         m.setWithdrawalTenderDocumentsDate(null);
@@ -107,7 +107,7 @@ public class CopieLot {
         m.setCancellationDate(null);
         m.setCancellationCause(null);
         m.setEstimatedPriceHTManual(estimation.ht());
-        m.setEstimatedVatAmountManual(estimation.ttc().subtract(estimation.ht()));
+        m.setEstimatedVatAmountManual(estimation.tva());
         m.setEstimatedPriceTTCManual(estimation.ttc());
     }
 
