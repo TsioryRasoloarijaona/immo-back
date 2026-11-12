@@ -2,7 +2,7 @@
 
 ## modifierStatut
 
-Transitions candidates : celles de la **gestion de la pièce** (`StrEntityId`) qui partent du statut courant, triées par ordre (`Sorting`). Une transition est permise au compte si l'un de ses rôles (`AdmUserRole`) figure dans les rôles de la transition, **ou** si elle est validée par le déclencheur et que le déclencheur de la pièce est l'employé du compte. L'Administrateur n'a **aucune** exemption. Ordre des refus : 404 pièce → 400 `statutId` absent → 409 → 403 → 400 note vide (après `trim`) exigée par la transition. Écrit le statut, l'auteur et la date de modification, et une ligne d'historique (note ou vide, transition retenue = la première autorisée par ordre). Une pièce à statut en lecture seule peut changer de statut. Les statuts acceptés sont exactement ceux de `actions.transitions` de la fiche.
+Transitions candidates : celles de la **gestion de la pièce** (`StrEntityId`) qui partent du statut courant, triées par ordre (`Sorting`). Une transition est permise au compte si l'un de ses rôles (`AdmUserRole`) figure dans les rôles de la transition, **ou** si elle est validée par le déclencheur et que le déclencheur de la pièce est l'employé du compte. L'Administrateur n'a **aucune** exemption. Ordre des refus : 404 pièce → 400 `statutId` absent → 409 → 403 → 400 note vide (après `trim`) exigée par la transition, ou note de plus de 1000 caractères. Écrit le statut, l'auteur et la date de modification, et une ligne d'historique (note ou vide, transition retenue = la première autorisée par ordre). Une pièce à statut en lecture seule peut changer de statut. Les statuts acceptés sont exactement ceux de `actions.transitions` de la fiche.
 
 ### reponse 409
 
