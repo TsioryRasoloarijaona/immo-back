@@ -35,8 +35,8 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class DepensesProjetService {
 
-    private static final FiltresDocumentsAchat FACTURES = new FiltresDocumentsAchat(
-            List.of(NatureDocumentAchat.INVOICE), null, null, null, null, null, null, null, null, null, null);
+    private static final FiltresDocumentsAchat FACTURES =
+            FiltresDocumentsAchat.de(List.of(NatureDocumentAchat.INVOICE), null);
 
     private static final Comparator<DepensesLotDto> ORDRE_LOTS = Comparator
             .comparing((DepensesLotDto l) -> l.lotId() == null)
@@ -59,7 +59,7 @@ public class DepensesProjetService {
             return List.of();
         }
         // Les pièces sans projet sont dans les listes Dépenses, jamais dans la synthèse par projet.
-        Map<UUID, List<DocumentAchatListItemDto>> parProjet = requetes.pieces(visibles, FACTURES).stream()
+        Map<UUID, List<DocumentAchatListItemDto>> parProjet = requetes.pieces(visibles, FACTURES, null).stream()
                 .filter(f -> f.projetId() != null)
                 .collect(Collectors.groupingBy(DocumentAchatListItemDto::projetId));
         if (parProjet.isEmpty()) {

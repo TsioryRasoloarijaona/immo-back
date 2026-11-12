@@ -10,7 +10,31 @@ public record ReferentielsAchatDto(
         @Schema(description = "Natures, dans l'ordre d'affichage.") List<NatureAchatDto> natures,
         @Schema(description = "Statuts de pièce, par ordre (Sorting).") List<StatutAchatDto> statuts,
         @Schema(description = "Projets visibles de l'appelant (habilitations projet).") List<ProjetAchatDto> projets,
-        @Schema(description = "Fournisseurs des pièces visibles, par nom.") List<FournisseurAchatDto> fournisseurs) {
+        @Schema(description = "Fournisseurs des pièces visibles, par nom.") List<FournisseurAchatDto> fournisseurs,
+        @Schema(description = "Sociétés habilitées de l'appelant (filtre Entité), par code ; vide sans habilitation.")
+        List<SocieteAchatDto> societes,
+        @Schema(description = "Modules d'une pièce : BUY, PRJ, STL.") List<ModuleAchatDto> modules,
+        @Schema(description = "Types de lot (PrjMarketType), par libellé.") List<TypeLotAchatDto> typesLot) {
+
+    @Schema(description = "Société (CfgCompany) habilitée.")
+    public record SocieteAchatDto(
+            @Schema(description = "Id de la société.") UUID id,
+            @Schema(description = "Code.") String code,
+            @Schema(description = "Libellé (Description).") String description) {
+    }
+
+    @Schema(description = "Module OMRAN (AdmModule).")
+    public record ModuleAchatDto(
+            @Schema(description = "Code (AdmModule.Code).", example = "BUY") String code,
+            @Schema(description = "Libellé.", example = "Achat") String libelle) {
+    }
+
+    @Schema(description = "Type de lot (PrjMarketType).")
+    public record TypeLotAchatDto(
+            @Schema(description = "Id du type.") UUID id,
+            @Schema(description = "Code.") String code,
+            @Schema(description = "Libellé (Description).", example = "TRAVAUX") String libelle) {
+    }
 
     @Schema(description = "Nature de pièce (DocType).")
     public record NatureAchatDto(
