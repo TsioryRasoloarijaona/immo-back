@@ -41,16 +41,19 @@ class RequetesPositionFournisseur {
             + "WHERE b.CanBePayed = 1";
 
     // Une part par ligne de règlement, plus la part non rattachée (base − Σ lignes) si elle n'est pas nulle.
+    // Base × taux et non la part : comme BuySettlementVentilationView, taux divisé dans chaque branche puis réuni
+    // (SQL Server réduit l'échelle du decimal ; un autre ordre d'opérations décale la vue de quelques centimes).
     private static final String REGLEMENTS = "SELECT s.PKey, CASE WHEN x.Rattache = 1 THEN '" + REGLEMENT + "' ELSE '"
             + NON_RATTACHE + "' END, s.Code, CONCAT_WS(' ', s.Description, s.Notes), s.DocDate, "
             + "ISNULL(s.SettlementDate, s.EcheanceDate), s.CfgCompanyId, s.TierId, "
             + "CASE WHEN x.Rattache = 1 THEN COALESCE(pd.PrjProjectId, v.PrjProjectId) END, NULL, NULL, "
-            + "x.Part * ISNULL(v.VentilationRate, 1), s.AmountRS * x.Part / s.AmountBase * ISNULL(v.VentilationRate, 1), "
+            + "s.AmountBase * x.Taux * ISNULL(v.VentilationRate, 1), s.AmountRS * x.Taux * ISNULL(v.VentilationRate, 1), "
             + "CASE WHEN s.IsCredit = 0 THEN 0 ELSE 1 END, 1 FROM StlSettlement s "
             + "JOIN StrEntity e ON e.PKey = s.StrEntityId JOIN CfgCompany sc ON sc.PKey = s.CfgCompanyId "
-            + "CROSS APPLY (SELECT l.BuyDocumentId, l.Amount AS Part, 1 AS Rattache FROM StlSettlementLine l "
-            + "WHERE l.StlSettlementId = s.PKey UNION ALL SELECT NULL, s.AmountBase - ISNULL((SELECT SUM(l2.Amount) "
-            + "FROM StlSettlementLine l2 WHERE l2.StlSettlementId = s.PKey), 0), 0) x "
+            + "CROSS APPLY (SELECT l.BuyDocumentId, l.Amount / s.AmountBase AS Taux, 1 AS Rattache, 1 AS Part "
+            + "FROM StlSettlementLine l WHERE l.StlSettlementId = s.PKey UNION ALL SELECT NULL, r.Part / s.AmountBase, 0, "
+            + "r.Part FROM (SELECT s.AmountBase - (SELECT ISNULL(SUM(l2.Amount), 0) FROM StlSettlementLine l2 "
+            + "WHERE l2.StlSettlementId = s.PKey) AS Part) r) x "
             + "LEFT JOIN BuyDocument pd ON pd.PKey = x.BuyDocumentId "
             + "LEFT JOIN BuyVentilationExpense v ON v.BuyDocumentId = x.BuyDocumentId "
             + "WHERE s.AmountBase <> 0 AND (x.Rattache = 1 OR x.Part <> 0)";
