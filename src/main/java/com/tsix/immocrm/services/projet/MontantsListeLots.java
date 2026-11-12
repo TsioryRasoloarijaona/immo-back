@@ -132,7 +132,7 @@ class MontantsListeLots {
                 SUM(IIF(BuyOrderId IS NULL AND DocType IN ('INVOICE', 'REFUND'), AmountHT * Signe, 0)),
                 SUM(IIF(BuyOrderId IS NULL AND DocType IN ('INVOICE', 'REFUND'), AmountTTC * Signe, 0)),
                 SUM(IIF(BuyOrderId IS NOT NULL AND DocType IN ('INVOICE', 'REFUND'), AmountHT * Signe, 0)),
-                SUM(IIF(ReferenceType IN ('MARKET_ADVANCE', 'ORDER_ADVANCE'), AmountTTC, 0)),
+                SUM(IIF(ReferenceType = 'MARKET_ADVANCE', AmountTTC, 0)), SUM(IIF(ReferenceType = 'ORDER_ADVANCE', AmountTTC, 0)),
                 SUM(IIF(ReferenceType = 'WORKINGOUT_ADVANCE', AmountTTC, 0)),
                 SUM(G * AmountTTC), -SUM(G * AmountRegul),
                 SUM(IIF(StrEntityId = 'F9091D83-6134-4B70-BE54-B208B25F073D', AmountToPay, 0))
@@ -141,7 +141,7 @@ class MontantsListeLots {
     // Réglé = toutes les lignes de règlement des pièces du lot, annulées comprises.
     private static final Requete REGLEMENTS = new Requete("""
             SELECT d.PrjMarketId, SUM(l.Amount), SUM(IIF(d.DocType = 'REFUND', l.Amount, 0)),
-                SUM(IIF(d.ReferenceType IN ('MARKET_ADVANCE', 'ORDER_ADVANCE'), l.Amount, 0)),
+                SUM(IIF(d.ReferenceType = 'MARKET_ADVANCE', l.Amount, 0)), SUM(IIF(d.ReferenceType = 'ORDER_ADVANCE', l.Amount, 0)),
                 SUM(IIF(d.ReferenceType = 'WORKINGOUT_ADVANCE', l.Amount, 0)),
                 SUM(IIF(d.StrEntityId IN ('A71B4F91-AEFC-4C70-87F7-82A6C7365CB5', 'E7999F70-7507-40D9-AA78-A2825C42B602'), l.Amount, 0))
             FROM StlSettlementLine l JOIN BuyDocument d ON d.PKey = l.BuyDocumentId

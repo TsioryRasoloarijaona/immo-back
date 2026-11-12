@@ -12,7 +12,7 @@ public record ColonneCoutDto(
         @Schema(description = "Travaux supplémentaires.") TrioDto travauxSupplementaires,
         @Schema(description = "Fluctuations (révision des prix).") TrioDto fluctuations,
         @Schema(description = "Avenants (PrjClause), facturés pour un lot terminé / le coût réel.") TrioDto avenants,
-        @Schema(description = "Coût total, avenants compris (= coutPrevisionnelHT/TTC de la liste pour le prévisionnel).")
+        @Schema(description = "Coût total, avenants compris (= coutPrevisionnelHT/TTC de la liste) ; coût réel : facturé moins avoirs.")
         TrioDto total,
         @Schema(description = "Retenues non remboursables (compte prorata, assurances, retenues forfaitaires, pénalités).")
         BigDecimal retenueNonRemboursable,

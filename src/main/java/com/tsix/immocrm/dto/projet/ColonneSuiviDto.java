@@ -6,14 +6,14 @@ import java.math.BigDecimal;
 
 @Schema(description = "Colonne Décomptes, Factures ou Avoirs de l'onglet Suivi ; null = case absente de la colonne.")
 public record ColonneSuiviDto(
-        @Schema(description = "Montant HT.") BigDecimal montantHT,
+        @Schema(description = "Montant HT des lignes, hors dépassements et travaux supplémentaires.") BigDecimal montantHT,
         @Schema(description = "TVA.") BigDecimal tva,
-        @Schema(description = "Montant TTC.") BigDecimal montantTTC,
+        @Schema(description = "Montant TTC des lignes, hors dépassements et travaux supplémentaires.") BigDecimal montantTTC,
         @Schema(description = "Approvisionnements TTC ; null pour les avoirs.") BigDecimal approTTC,
         @Schema(description = "Dépassements TTC ; null pour les avoirs.") BigDecimal depassementsTTC,
         @Schema(description = "Travaux supplémentaires TTC ; null pour les avoirs.") BigDecimal travauxSuppTTC,
         @Schema(description = "Fluctuations TTC ; null pour les avoirs.") BigDecimal fluctuationsTTC,
-        @Schema(description = "Total TTC = montant + appro + travaux supp. + fluctuations ; null pour les avoirs.")
+        @Schema(description = "Total TTC = montant + appro + dépassements + travaux supp. + fluctuations ; null pour les avoirs.")
         BigDecimal totalTTC,
         @Schema(description = "Avenants TTC ; null pour les avoirs.") BigDecimal avenantsTTC,
         @Schema(description = "Coût TTC = total + avenants ; null pour les avoirs.") BigDecimal coutTTC,

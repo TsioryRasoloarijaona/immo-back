@@ -95,21 +95,21 @@ public final class CalculLot {
         if (d.termine()) {
             return colonne(new Lignes(facturesLignes(), stockFactures, depassementsFactures, supplementairesFactures,
                             fluctuationsFactures, avenantsFactures, factureCout().moins(avoirsTotal())),
-                    null, facturesNRR(), s(FAC_REMB_PRORATA), facturesREG().subtract(avoirsREG()), s(REGLE));
+                    facturesNRR(), s(FAC_REMB_PRORATA), facturesREG().subtract(avoirsREG()), s(REGLE));
         }
         boolean sansMarche = marcheAjuste.ht().signum() == 0;
         BigDecimal nrr = sansMarche ? nonRemboursables(est.ttc()) : previsionNRR();
         return colonne(new Lignes(sansMarche ? est : marcheAjuste, stockDecomptes, depassements, supplementaires,
                         fluctuationsDecomptes, avenants, totalEnCours(sansMarche)),
-                null, nrr, s(PREV_REMB_PRORATA), s(REGUL), s(REGLE));
+                nrr, s(PREV_REMB_PRORATA), s(REGUL), s(REGLE));
     }
 
-    /** {@code Position*} : factures − avoirs. */
+    /** {@code Position*} : factures − avoirs ; « Coût total » = {@code PositionTotal*} (binding OMRAN), pas {@code PositionHT}. */
     public ColonneCoutDto coutReel() {
         return colonne(new Lignes(facturesLignes().moins(avoirs), stockFactures.moins(stockAvoirs), depassementsFactures,
                         supplementairesFactures, fluctuationsFactures.moins(fluctuationsAvoirs), avenantsFactures,
-                        factures.moins(avoirs)),
-                factureCout().moins(avoirsTotal()).ttc(), facturesNRR().subtract(avoirsNRR()),
+                        factureCout().moins(avoirsTotal())),
+                facturesNRR().subtract(avoirsNRR()),
                 s(FAC_REMB_PRORATA).subtract(s(AVO_REMB_PRORATA)), facturesREG().subtract(avoirsREG()),
                 s(REGLE).subtract(s(REGLE_AVOIRS)));
     }
@@ -130,21 +130,23 @@ public final class CalculLot {
         return new SuiviLotDto(new SuiviLotDto.ColonnesSuiviDto(colonneDecomptes(), colonneFactures(), colonneAvoirs()),
                 bloc(new BigDecimal[]{pourcentage(t.avance()), sur(t.avance(), t.forfaitTTC()), sur(t.avance(), est.ttc()),
                         arrondi(d.multi() ? s(CMD_AVANCE) : t.avance().multiply(marche.ttc()))},
-                        AVANCE_VALIDEE, REGLE_AVANCE, FAC_AVANCE),
+                        d.multi() ? AVANCE_CMD_VALIDEE : AVANCE_VALIDEE, regleAvance(), FAC_AVANCE),
                 bloc(new BigDecimal[4], AVANCE_DEC_VALIDEE, REGLE_AVANCE_DEC, FAC_AVANCE_DECOMPTE),
                 retenueGarantie(), retenues());
     }
 
     private ColonneSuiviDto colonneDecomptes() {
         Paire total = decomptesTotal();
-        return new ColonneSuiviDto(arrondi(decomptes.ht()), arrondi(decomptes.tva()), arrondi(decomptes.ttc()),
+        Paire lignes = decomptes.moins(depassements);
+        return new ColonneSuiviDto(arrondi(lignes.ht()), arrondi(lignes.tva()), arrondi(lignes.ttc()),
                 arrondi(stockDecomptes.ttc()), arrondi(depassements.ttc()), arrondi(supplementaires.ttc()),
                 arrondi(fluctuationsDecomptes.ttc()), arrondi(total.ttc()), arrondi(avenants.ttc()),
                 arrondi(total.plus(avenants).ttc()), arrondi(decomptesNRR()), arrondi(s(DEC_REMB_PRORATA)), null);
     }
 
     private ColonneSuiviDto colonneFactures() {
-        return new ColonneSuiviDto(arrondi(factures.ht()), arrondi(factures.tva()), arrondi(factures.ttc()),
+        Paire lignes = facturesLignes();
+        return new ColonneSuiviDto(arrondi(lignes.ht()), arrondi(lignes.tva()), arrondi(lignes.ttc()),
                 arrondi(stockFactures.ttc()), arrondi(depassementsFactures.ttc()), arrondi(supplementairesFactures.ttc()),
                 arrondi(fluctuationsFactures.ttc()), arrondi(facturesTotal().ttc()), arrondi(avenantsFactures.ttc()),
                 arrondi(factureCout().ttc()), arrondi(facturesNRR()), arrondi(s(FAC_REMB_PRORATA)), arrondi(facturesREG()));
@@ -251,7 +253,12 @@ public final class CalculLot {
 
     /** Lot terminé seulement : avances réglées − avances amorties. */
     private BigDecimal penaliteAvance(Somme amortie, Somme amortieDecompte) {
-        return d.termine() ? somme(REGLE_AVANCE, REGLE_AVANCE_DEC).subtract(somme(amortie, amortieDecompte)) : ZERO;
+        return d.termine() ? somme(regleAvance(), REGLE_AVANCE_DEC).subtract(somme(amortie, amortieDecompte)) : ZERO;
+    }
+
+    /** Avance sur marché ; multi-fournisseur : avances sur commande. */
+    private Somme regleAvance() {
+        return d.multi() ? REGLE_AVANCE_CMD : REGLE_AVANCE;
     }
 
     private BigDecimal blocageDecomptes() {
@@ -299,11 +306,9 @@ public final class CalculLot {
         return arrondi(taux.multiply(base).multiply(ratioAnnulation()));
     }
 
-    /** {@code base} nul = TTC du total (prévisionnel). */
-    private static ColonneCoutDto colonne(Lignes l, BigDecimal base, BigDecimal nrr, BigDecimal remboursement,
-                                          BigDecimal regulation, BigDecimal regle) {
-        BigDecimal ttc = base == null ? l.total().ttc() : base;
-        BigDecimal net = arrondi(ttc.add(remboursement).add(regulation).subtract(nrr));
+    private static ColonneCoutDto colonne(Lignes l, BigDecimal nrr, BigDecimal remboursement, BigDecimal regulation,
+                                          BigDecimal regle) {
+        BigDecimal net = arrondi(l.total().ttc().add(remboursement).add(regulation).subtract(nrr));
         BigDecimal r = arrondi(regle);
         return new ColonneCoutDto(l.bordereau().trio(), l.appro().trio(), l.depassements().trio(), l.supplementaires().trio(),
                 l.fluctuations().trio(), l.avenants().trio(), l.total().trio(), arrondi(nrr), arrondi(remboursement),
