@@ -4,13 +4,17 @@ import com.tsix.immocrm.domain.TypeExport;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
+import com.tsix.immocrm.dto.achat.FiltresPositionsFournisseurs;
 import com.tsix.immocrm.dto.achat.FiltresSoldesFournisseurs;
+import com.tsix.immocrm.dto.achat.LignePositionDto;
+import com.tsix.immocrm.dto.achat.PositionsFournisseursDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto;
 import com.tsix.immocrm.dto.achat.SoldesFournisseursDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.services.achat.DocumentsAchatService;
 import com.tsix.immocrm.services.achat.FicheAchatService;
+import com.tsix.immocrm.services.achat.PositionsFournisseursService;
 import com.tsix.immocrm.services.achat.SoldesFournisseursService;
 import com.tsix.immocrm.web.export.ColonneFixe;
 import com.tsix.immocrm.web.export.ExportTableur;
@@ -93,6 +97,13 @@ public class DocumentsAchatController {
             ColonneFixe.de("resteValideARegler", "Reste validé", TypeExport.MONTANT),
             ColonneFixe.de("montantADeduire", "À déduire", TypeExport.MONTANT));
 
+    private static final List<ColonneFixe> COLONNES_POSITIONS = List.of(
+            ColonneFixe.texte("fournisseurNom", "Fournisseur"), ColonneFixe.texte("societeCode", "Société"),
+            ColonneFixe.de("soldeDebut", "Solde début", TypeExport.MONTANT),
+            ColonneFixe.de("netAPayer", "Net à payer", TypeExport.MONTANT),
+            ColonneFixe.de("regle", "Réglé", TypeExport.MONTANT),
+            ColonneFixe.de("soldeFin", "Solde fin", TypeExport.MONTANT));
+
     /** Montant de l'objet {@code agregats} (bons de commande ; vide pour les autres pièces). */
     private static ColonneFixe bc(String nom, String libelle) {
         return ColonneFixe.de(AGREGATS + nom, libelle, TypeExport.MONTANT);
@@ -102,13 +113,16 @@ public class DocumentsAchatController {
     private final FicheAchatService fiches;
     private final SoldesFournisseursService soldesFournisseurs;
     private final ExportTableur exportTableur;
+    private final PositionsFournisseursService positionsFournisseurs;
 
     public DocumentsAchatController(DocumentsAchatService service, FicheAchatService fiches,
-                                    SoldesFournisseursService soldesFournisseurs, ExportTableur exportTableur) {
+                                    SoldesFournisseursService soldesFournisseurs, ExportTableur exportTableur,
+                                    PositionsFournisseursService positionsFournisseurs) {
         this.service = service;
         this.fiches = fiches;
         this.soldesFournisseurs = soldesFournisseurs;
         this.exportTableur = exportTableur;
+        this.positionsFournisseurs = positionsFournisseurs;
     }
 
     @GetMapping("/referentiels")
@@ -200,5 +214,46 @@ public class DocumentsAchatController {
         ExportTableur.exigerXlsx(format);
         return exportTableur.reponse("soldes-fournisseurs", "Solde fournisseurs", COLONNES_SOLDES,
                 soldesFournisseurs.soldes(filtres).lignes());
+    }
+
+    @GetMapping("/fournisseurs/positions")
+    @Operation(summary = "Soldes fournisseurs comme OMRAN : solde début, net à payer, réglé, solde fin (non paginé)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lignes et total ; vides si aucun mouvement visible (société, projet)."),
+            @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date).", content = @Content)
+    })
+    public PositionsFournisseursDto positions(@ParameterObject @ModelAttribute FiltresPositionsFournisseurs filtres) {
+        return positionsFournisseurs.positions(filtres);
+    }
+
+    @GetMapping("/fournisseurs/positions/export")
+    @Operation(summary = "Export Excel des soldes fournisseurs, mêmes filtres et mêmes lignes")
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", content = @Content,
+                    description = "Filtre mal formé ou format autre que xlsx."),
+            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
+                    content = @Content(schema = @Schema(type = "string", format = "binary"),
+                            mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    })
+    public ResponseEntity<StreamingResponseBody> exporterPositions(
+            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) @Parameter(example = ExportTableur.FORMAT_XLSX)
+            String format, @ParameterObject @ModelAttribute FiltresPositionsFournisseurs filtres) {
+        ExportTableur.exigerXlsx(format);
+        return exportTableur.reponse("soldes-fournisseurs", "Soldes fournisseurs", COLONNES_POSITIONS,
+                positionsFournisseurs.positions(filtres).lignes());
+    }
+
+    @GetMapping("/fournisseurs/{fournisseurId}/position")
+    @Operation(summary = "Lignes de solde d'un fournisseur dans une société (fenêtre « Ligne de solde » d'OMRAN)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lignes ; vide si fournisseur inconnu ou hors périmètre."),
+            @ApiResponse(responseCode = "400", description = "societeId absent ou filtre mal formé (UUID, date).",
+                    content = @Content)
+    })
+    public List<LignePositionDto> lignesPosition(
+            @Parameter(description = "Fournisseur (CfgTier.id).") @PathVariable UUID fournisseurId,
+            @Parameter(description = "Société (CfgCompany.id) de la ligne de solde.") @RequestParam UUID societeId,
+            @ParameterObject @ModelAttribute FiltresPositionsFournisseurs filtres) {
+        return positionsFournisseurs.lignes(fournisseurId, societeId, filtres);
     }
 }

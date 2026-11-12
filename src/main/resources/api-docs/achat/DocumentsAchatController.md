@@ -12,7 +12,7 @@ Pièces d'achat (`BuyDocument`) en **lecture seule** : factures, bons de command
 
 ## liste
 
-Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `societeIds` est de même croisé avec les sociétés habilitées : une société non habilitée est ignorée, et si aucune ne reste la page est vide (jamais « aucun filtre »). Une liste vide ou un paramètre vide (`societeIds=`) = pas de filtre. `nonSoldes=true` garde les pièces dont le reste dépasse 0,05 ; une pièce trop réglée ou à déduire n'y figure pas. `okPourPaiement=true` garde les pièces dont le statut est « OK pour paiement » ; avec `natures=INVOICE&natures=DOCUMENT_TO_PAY&nonSoldes=true`, c'est la liste « Validées, non réglées ». `modules` se combine par ET avec `moduleProjet`. `montantDe` / `montantA` sont inclus et portent sur `AmountToPay` (`montantDe > montantA` = page vide). `du` / `au` (inclus) portent sur la colonne de `champDate` (`DATE_PIECE` = `DocDate`, `ECHEANCE` = `MaturityDate`) ; `dateRenseignee=true` garde les pièces dont cette colonne est renseignée et ignore `du` / `au`. `search` cherche, sans tenir compte de la casse, dans le code, la référence, la référence bureau d'ordre, la description, les notes, le fournisseur, le projet (code, description), le lot (code, description) et le dossier de groupement.
+Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `societeIds` est de même croisé avec les sociétés habilitées : une société non habilitée est ignorée, et si aucune ne reste la page est vide (jamais « aucun filtre »). Une liste vide ou un paramètre vide (`societeIds=`) = pas de filtre. `nonSoldes=true` garde les pièces dont le reste arrondi à 2 décimales est strictement positif (`ROUND(reste, 2) > 0`, comme les impayés OMRAN) ; une pièce trop réglée ou à déduire n'y figure pas. `okPourPaiement=true` garde les pièces dont le statut est « OK pour paiement » ; avec `natures=INVOICE&natures=DOCUMENT_TO_PAY&nonSoldes=true`, c'est la liste « Validées, non réglées ». `modules` se combine par ET avec `moduleProjet`. `montantDe` / `montantA` sont inclus et portent sur `AmountToPay` (`montantDe > montantA` = page vide). `du` / `au` (inclus) portent sur la colonne de `champDate` (`DATE_PIECE` = `DocDate`, `ECHEANCE` = `MaturityDate`) ; `dateRenseignee=true` garde les pièces dont cette colonne est renseignée et ignore `du` / `au`. `search` cherche, sans tenir compte de la casse, dans le code, la référence, la référence bureau d'ordre, la description, les notes, le fournisseur, le projet (code, description), le lot (code, description) et le dossier de groupement.
 
 **Bons de commande** (quelles que soient les natures demandées, Documents Achats compris) : comme OMRAN (`OrderView.cs:803`), seuls les BC dont le déclencheur (`CfgTierTriggerId`) est le personnel du compte (`AdmUser.CfgEmployeeId`) sont rendus, sauf droit OMRAN `Yes.Buy.Front.Order.OrderList.WithNoRestriction` (l'Administrateur l'a) ; un compte sans personnel n'est pas restreint. Les autres natures ne sont jamais restreintes. Même règle pour les totaux, l'export et la fiche.
 
@@ -35,6 +35,22 @@ Solde de chaque fournisseur, une ligne par (fournisseur, société), sur les fac
 ## exporterSoldes
 
 Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/soldes`, sans la ligne de total.
+
+## positions
+
+Écran OMRAN « Soldes fournisseurs » (`BuySupplierPositionView`, FEATURE-achat-impayes-soldes.md §3). Une ligne par (fournisseur, société) ayant au moins un mouvement visible ; seuls les tiers de type **Fournisseur** (FOU) sont comptés. Mouvements : factures et documents à régler payables (`CanBePayed`) au **crédit** pour leur net à payer, avoirs non financiers de la facture réajoutés ; avoirs payables au **débit** ; règlements du tiers (avec entité OMRAN et montant de base non nul, **annulés compris**), une part par ligne de règlement et une part **non rattachée** (base − Σ lignes, sans projet), au débit (`IsCredit = 0`) ou au crédit. Pièces et parts de règlement sont multipliées par le taux de ventilation projet de la pièce (`BuyVentilationExpense`, 1 sans ventilation).
+
+**Visibilité** : société habilitée **et** (projet habilité **ou** mouvement sans projet), aucune exemption de rôle ; une part non rattachée est visible dès que sa société l'est. `projetIds` exclut les mouvements sans projet ; un projet ou une société hors périmètre est ignoré (jamais 403).
+
+**Période** : `soldeDebut` = mouvements avant `du` (0 sans `du`) ; `netAPayer` / `regle` = crédits / débits de `du` à `au` inclus ; `soldeFin` = mouvements jusqu'à `au` (tout l'historique sans `au`). Sommes arrondies à 3 décimales. `masquerResteZero` (vrai par défaut) retire les lignes dont le solde fin est entre −1 et 1 inclus. Tri par nom de fournisseur puis code société ; `total` somme les lignes rendues.
+
+## exporterPositions
+
+Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/positions`, sans la ligne de total.
+
+## lignesPosition
+
+Mouvements visibles du fournisseur dans la société `societeId`, datés de `du` à `au` inclus (bornes absentes = ouvertes), triés par date puis code ; mêmes règles de mouvement et de visibilité que `GET /api/achat/fournisseurs/positions`. `societeIds`, `search` et `masquerResteZero` sont ignorés. Sans `du`, Σ des lignes au crédit − Σ des lignes au débit (`aPayer` pour une pièce, `reglement` pour un règlement) = `soldeFin` de la ligne de solde. Fournisseur inconnu, d'un autre type ou société non habilitée : liste vide.
 
 ## fiche
 

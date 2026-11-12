@@ -28,7 +28,7 @@ public record FiltresDocumentsAchat(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
         @Parameter(description = "Date (colonne de champDate) jusqu'à ce jour inclus.", example = "2026-12-31")
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
-        @Parameter(description = "true : pièces dont le reste à régler dépasse 0,05 (trop réglées exclues).")
+        @Parameter(description = "true : pièces dont le reste arrondi à 2 décimales est strictement positif (trop réglées exclues).")
         Boolean nonSoldes,
         @Parameter(description = "Recherche multi-critère insensible à la casse ; champs lus : voir la description de la liste.")
         String search,

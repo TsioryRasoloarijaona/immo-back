@@ -158,7 +158,7 @@ public class DocumentsAchatService {
             return List.of();
         }
         return avecAgregats(requetes.pieces(visibles, filtres, restriction.declencheurImpose()).stream()
-                .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
+                .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).impaye())
                 .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
                 .toList());
     }

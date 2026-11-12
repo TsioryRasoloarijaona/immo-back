@@ -11,7 +11,8 @@ import java.util.Collection;
  * Le réglé est la somme brute de {@code StlSettlementLine.Amount}, jamais {@code SQL_MONTANT_SIGNE} (IsCredit = 0 l'inverserait).
  * Seul calcul du solde d'achat (règle 6) — voir FEATURE-achat-impayes.md §3.1.
  */
-public record SoldeDocumentAchat(BigDecimal montantAPayer, BigDecimal montantRegle, BigDecimal resteARegler, boolean solde) {
+public record SoldeDocumentAchat(BigDecimal montantAPayer, BigDecimal montantRegle, BigDecimal resteARegler, boolean solde,
+                                 boolean impaye) {
 
     /** Sous-requête scalaire du réglé d'une pièce, alias {@code d} = {@code BuyDocument} ; NULL sans ligne. */
     public static final String SQL_REGLE = "SELECT SUM(l.Amount) FROM StlSettlementLine l "
@@ -25,7 +26,9 @@ public record SoldeDocumentAchat(BigDecimal montantAPayer, BigDecimal montantReg
         BigDecimal aPayer = arrondi(montantAPayer);
         BigDecimal regle = arrondi(montantRegle);
         BigDecimal reste = aPayer.subtract(regle);
-        return new SoldeDocumentAchat(aPayer, regle, reste, reste.abs().compareTo(TOLERANCE) <= 0);
+        // impaye = impayé OMRAN (ROUND(reste brut, 2) > 0), filtre nonSoldes seulement ; aRegler garde la tolérance 0,05.
+        boolean impaye = brut(montantAPayer).subtract(brut(montantRegle)).setScale(2, RoundingMode.HALF_UP).signum() > 0;
+        return new SoldeDocumentAchat(aPayer, regle, reste, reste.abs().compareTo(TOLERANCE) <= 0, impaye);
     }
 
     /** Agrégat (fournisseur, liste) : recalculé sur les sommes, jamais la somme des restes arrondis à part. */
@@ -48,6 +51,10 @@ public record SoldeDocumentAchat(BigDecimal montantAPayer, BigDecimal montantReg
     }
 
     private static BigDecimal arrondi(BigDecimal montant) {
-        return (montant == null ? BigDecimal.ZERO : montant).setScale(2, RoundingMode.HALF_UP);
+        return brut(montant).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal brut(BigDecimal montant) {
+        return montant == null ? BigDecimal.ZERO : montant;
     }
 }
