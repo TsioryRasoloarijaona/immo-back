@@ -75,7 +75,7 @@ class LotControleVueFicheManuelTest {
         trio(m, REEL + "travauxSupplementaires", "PositionExtraHT", "PositionExtraVAT", "PositionExtraTTC");
         trio(m, REEL + "fluctuations", "PositionFluctuationsHT", "PositionFluctuationsVAT", "PositionFluctuationsTTC");
         trio(m, REEL + "avenants", "PositionClauseHT", "PositionClauseVAT", "PositionClauseTTC");
-        trio(m, REEL + "total", "PositionHT", "PositionVAT", "PositionTTC");
+        trio(m, REEL + "total", "PositionTotalHT", "PositionTotalVAT", "PositionTotalTTC");
         m.putAll(Map.of(PREVU + "retenueNonRemboursable", "CostNRRAmount", PREVU + "remboursement", "CostREFAmount",
                 PREVU + "regulation", "CostREGAmount", PREVU + "netAPayer", "CostToPay", PREVU + "regle", "CostToPaySettled",
                 PREVU + "reste", "CostToPayRest"));
@@ -97,13 +97,13 @@ class LotControleVueFicheManuelTest {
         String rd = "$.retenues.decompte.";
         String rf = "$.retenues.facture.";
         Map<String, String> m = new LinkedHashMap<>();
-        m.putAll(Map.of(d + "montantHT", "PrjWorkingOutTotalAmountHT", d + "tva", "PrjWorkingOutTotalAmountVat",
-                d + "montantTTC", "PrjWorkingOutTotalAmountTTC", d + "approTTC", "PrjWorkingOutTotalStockToPayAmount",
+        m.putAll(Map.of(d + "montantHT", "PrjWorkingOutTotalLinesHT", d + "tva", "PrjWorkingOutTotalLinesVAT",
+                d + "montantTTC", "PrjWorkingOutTotalLinesTTC", d + "approTTC", "PrjWorkingOutTotalStockToPayAmount",
                 d + "depassementsTTC", "OverAmountTTC", d + "travauxSuppTTC", "ExtraAmountTTC",
                 d + "fluctuationsTTC", "PrjWorkingOutTotalFluctuationsToPayAmount", d + "totalTTC", "PrjWorkingOutTotalTTC",
                 d + "avenantsTTC", "ClausesAmountTTC", d + "coutTTC", "PrjWorkingOutCostTTC"));
         m.putAll(Map.of(d + "retenues", "PrjWorkingOutCostNRRAmount", d + "remboursement", "PrjWorkingOutCostREFAmount"));
-        m.putAll(Map.of(f + "montantHT", "InvoiceAmountHT", f + "tva", "InvoiceAmountVAT", f + "montantTTC", "InvoiceAmountTTC",
+        m.putAll(Map.of(f + "montantHT", "InvoiceTotalLinesHT", f + "tva", "InvoiceTotalLinesVAT", f + "montantTTC", "InvoiceTotalLinesTTC",
                 f + "approTTC", "InvoiceTotalStockToPayAmount", f + "depassementsTTC", "OverInvoiceAmountTTC",
                 f + "travauxSuppTTC", "InvoiceExtraAmountTTC", f + "fluctuationsTTC", "InvoiceTotalFluctuationsToPayAmount",
                 f + "totalTTC", "InvoiceTotalTTC", f + "avenantsTTC", "ClausesInvoicedAmountTTC", f + "coutTTC", "InvoiceCostTTC"));
