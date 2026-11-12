@@ -11,18 +11,19 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
-/** Lot (« marché » dans la base) d'un projet ; lu seulement (FEATURE-projet-lots-decomptes.md). */
+/** Lot (« marché » dans la base) d'un projet ; créé, supprimé et changé de statut par FEATURE-lots-liste-parite.md. */
 @Getter
 @Setter
 @Entity
-@Immutable
 @Table(name = "PrjMarket")
 public class PrjMarket extends AuditOmran {
     @ManyToOne(fetch = FetchType.LAZY)
@@ -52,6 +53,17 @@ public class PrjMarket extends AuditOmran {
 
     @Column(name = "IsMultiSupplier")
     private Boolean isMultiSupplier;
+
+    @Size(max = 1000)
+    @Nationalized
+    @Column(name = "Notes")
+    private String notes;
+
+    @Column(name = "IncludedInPaymentPrevision")
+    private Boolean includedInPaymentPrevision;
+
+    @Column(name = "StlCurrencyId")
+    private UUID stlCurrencyId;
 
     @Column(name = "IsClosed")
     private Boolean isClosed;

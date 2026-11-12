@@ -1,11 +1,31 @@
 package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.domain.Colonne;
+import com.tsix.immocrm.domain.projet.CoutPrevisionnelLot;
+import com.tsix.immocrm.domain.projet.GenreLot;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.MontantsLot.Trio;
 import com.tsix.immocrm.dto.projet.BordereauDto;
 import com.tsix.immocrm.dto.projet.DecompteListItemDto;
 import com.tsix.immocrm.dto.projet.ElementReferentielProjetDto;
+import com.tsix.immocrm.dto.projet.EntiteFiltreDto;
+import com.tsix.immocrm.dto.projet.TotauxLotsDto;
+import com.tsix.immocrm.dto.projet.TransitionLotDto;
+import com.tsix.immocrm.entities.cfg.CfgCompany;
+import com.tsix.immocrm.entities.str.StrEntity;
+import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.entities.str.StrWorkFlow;
+import com.tsix.immocrm.services.droits.DroitsOmran;
+import com.tsix.immocrm.utils.Champs;
+import com.tsix.immocrm.web.export.ExportTableur;
+import com.tsix.immocrm.web.export.FeuilleExport;
+import com.tsix.immocrm.web.export.LignesExport;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Sort;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import com.tsix.immocrm.dto.projet.LigneBordereauDto;
 import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
@@ -16,6 +36,7 @@ import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.entities.prj.PrjMarketLine;
+import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.prj.PrjMarketRepository;
 import com.tsix.immocrm.services.dossier.workflow.IntervenantCourant;
@@ -56,6 +77,11 @@ public class LotsProjetService {
     private static final String DESCRIPTION = "description";
     private static final String PROJETS = "projets";
     private static final String STATUTS = "statuts";
+    private static final String COUT_HT = "coutPrevisionnelHT";
+    private static final String COUT_TTC = "coutPrevisionnelTTC";
+    private static final String COUT_NET = "coutPrevisionnelNetAPayer";
+    private static final String COUT_REGLE = "coutPrevisionnelRegle";
+    private static final String COUT_RESTE = "coutPrevisionnelReste";
     // Clause de statut de Visibilite.lier, sur l'alias m (lot) ; FK lue sans jointure : un lot sans statut reste compté.
     private static final String STATUT_M = " and (:tousStatuts = true or m.strStatus.id in :statuts)";
 
@@ -72,7 +98,7 @@ public class LotsProjetService {
             + " from PrjWorkingOut w where w.prjMarket.id in :lots group by w.prjMarket.id";
 
     private static final String STATUTS_LOT = """
-            SELECT s.PKey, s.Code, s.Description, s.Sorting, t.Code, e.Code
+            SELECT s.PKey, s.Code, s.Description, s.Sorting, t.Code, e.Code, s.ColorName, e.PKey
             FROM StrStatus s
             JOIN StrEntity e ON e.PKey = s.StrConfigEntityId
             LEFT JOIN StrStatusType t ON t.PKey = s.StrStatusTypeId
@@ -111,21 +137,29 @@ public class LotsProjetService {
     private final PerimetreProjetService perimetre;
     private final IntervenantCourant intervenant;
     private final EntityManager em;
+    private final MontantsListeLots montants;
+    private final TransitionsLot transitionsLot;
+    private final DroitsOmran droits;
 
     public LotsProjetService(PrjMarketRepository lots, DecomptesProjetService decomptes, FacturesDecomptes factures,
-                             PerimetreProjetService perimetre, IntervenantCourant intervenant, EntityManager em) {
+                             PerimetreProjetService perimetre, IntervenantCourant intervenant, EntityManager em,
+                             MontantsListeLots montants, TransitionsLot transitionsLot, DroitsOmran droits) {
         this.lots = lots;
         this.decomptes = decomptes;
         this.factures = factures;
         this.perimetre = perimetre;
         this.intervenant = intervenant;
         this.em = em;
+        this.montants = montants;
+        this.transitionsLot = transitionsLot;
+        this.droits = droits;
     }
 
     public ReferentielsProjetDto referentiels() {
         Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
-        return new ReferentielsProjetDto(projets(v), elements("select t from PrjMarketType t order by t.code"),
-                statutsLot(), statutsFacture(), categories(v), fournisseurs(v));
+        List<ProjetFiltreDto> projets = projets(v);
+        return new ReferentielsProjetDto(projets, elements("select t from PrjMarketType t order by t.code"),
+                statutsLot(), statutsFacture(), categories(v), fournisseurs(v), entites(projets, em));
     }
 
     public Page<LotListItemDto> lots(FiltresLots filtres, Pageable pageable) {
@@ -134,12 +168,59 @@ public class LotsProjetService {
             return Page.empty(pageable);
         }
         Page<PrjMarket> page = lots.findAll((root, q, cb) -> filtre(root, cb, filtres, v), pageable);
-        List<UUID> ids = page.map(PrjMarket::getId).getContent();
+        return new PageImpl<>(lignes(page.getContent()), pageable, page.getTotalElements());
+    }
+
+    /** Σ des lignes de {@link #lots} sur toutes les pages : aucune seconde formule (R5). */
+    public TotauxLotsDto totaux(FiltresLots filtres) {
+        return totaliser(lots(filtres, Pageable.unpaged()).getContent());
+    }
+
+    /** Feuille d'export : lignes de la liste triées comme elle, ligne « Total » = {@link #totaux}. 403 sans le droit. */
+    public FeuilleExport feuilleExport(FiltresLots filtres, Sort tri, List<? extends Colonne> colonnes) {
+        droits.exiger(GenreLot.DROIT_EXPORTER);
+        List<LotListItemDto> lignes = LignesExport.toutes(tri, page -> lots(filtres, page));
+        TotauxLotsDto t = totaliser(lignes);
+        return new FeuilleExport(ExportTableur.FEUILLE, colonnes, lignes, Map.of(COUT_HT, t.coutPrevisionnelHT(),
+                COUT_TTC, t.coutPrevisionnelTTC(), COUT_NET, t.coutPrevisionnelNetAPayer(), COUT_REGLE,
+                t.coutPrevisionnelRegle(), COUT_RESTE, t.coutPrevisionnelReste()));
+    }
+
+    /** Transitions exécutables par l'appelant (même calcul que l'exécution, R7). */
+    public List<TransitionLotDto> transitions(UUID id) {
+        PrjMarket m = visible(id);
+        List<StrWorkFlow> permises = transitionsLot.permises(m);
+        Map<UUID, StrStatus> cibles = transitionsLot.cibles(permises);
+        return permises.stream().map(w -> {
+            StrStatus cible = cibles.get(w.getStatusToId());
+            return new TransitionLotDto(w.getId(), w.getDescription(), w.getStatusToId(),
+                    Champs.de(cible, StrStatus::getDescription), Champs.de(cible, StrStatus::getColorName));
+        }).toList();
+    }
+
+    /** Ligne de liste d'un lot déjà lu (après écriture). */
+    LotListItemDto ligne(PrjMarket m) {
+        return lignes(List.of(m)).get(0);
+    }
+
+    private List<LotListItemDto> lignes(List<PrjMarket> marches) {
+        List<UUID> ids = marches.stream().map(PrjMarket::getId).toList();
         Map<UUID, Trio> bordereaux = sommes(SOMMES_BORDEREAU, ids);
         Map<UUID, Cumuls> cumuls = cumuls(ids);
         Map<UUID, SoldeDocumentAchat> soldes = factures.totauxParLot(ids);
-        return page.map(m -> ligne(m, marche(m, bordereaux), cumuls.getOrDefault(m.getId(), Cumuls.AUCUN),
-                soldes.get(m.getId())));
+        Map<UUID, CoutPrevisionnelLot> couts = montants.calculer(marches);
+        return marches.stream().map(m -> ligne(m, marche(m, bordereaux), cumuls.getOrDefault(m.getId(), Cumuls.AUCUN),
+                soldes.get(m.getId()), couts.get(m.getId()))).toList();
+    }
+
+    private static TotauxLotsDto totaliser(List<LotListItemDto> lignes) {
+        return new TotauxLotsDto(lignes.size(), somme(lignes, LotListItemDto::coutPrevisionnelHT),
+                somme(lignes, LotListItemDto::coutPrevisionnelTTC), somme(lignes, LotListItemDto::coutPrevisionnelNetAPayer),
+                somme(lignes, LotListItemDto::coutPrevisionnelRegle), somme(lignes, LotListItemDto::coutPrevisionnelReste));
+    }
+
+    private static BigDecimal somme(List<LotListItemDto> lignes, Function<LotListItemDto, BigDecimal> champ) {
+        return lignes.stream().map(champ).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public LotDetailDto lot(UUID id) {
@@ -149,7 +230,7 @@ public class LotsProjetService {
         Trio estimation = MontantsLot.choisir(sommes(SOMMES_ESTIMATION, ids).get(id), m.getEstimatedPriceHTManual(),
                 m.getEstimatedVatAmountManual(), m.getEstimatedPriceTTCManual());
         Cumuls c = cumuls(ids).getOrDefault(id, Cumuls.AUCUN);
-        return new LotDetailDto(ligne(m, marche, c, factures.totauxParLot(ids).get(id)),
+        return new LotDetailDto(ligne(m),
                 m.getPrjProject().getDescription(), m.getStrEntity() == null ? null : m.getStrEntity().getCode(),
                 m.getStrEntity() == null ? null : m.getStrEntity().getDescription(),
                 MontantsLot.arrondi(m.getEstimatedPriceHTManual()), MontantsLot.arrondi(m.getEstimatedVatAmountManual()),
@@ -193,8 +274,19 @@ public class LotsProjetService {
                 .orElseThrow(() -> new ResourceNotFoundException(LOT_INTROUVABLE));
     }
 
-    private static LotListItemDto ligne(PrjMarket m, Trio marche, Cumuls c, SoldeDocumentAchat solde) {
+    /** Projet où l'appelant peut créer un lot : même règle que la liste (R3) ; 404 sinon. */
+    PrjProject projetVisible(UUID projetId) {
+        Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
+        return Optional.ofNullable(v.projets().contains(projetId) ? em.find(PrjProject.class, projetId) : null)
+                .filter(p -> v.statuts().map(s -> p.getStrStatus() != null && s.contains(p.getStrStatus().getId()))
+                        .orElse(true))
+                .orElseThrow(() -> new ResourceNotFoundException("Projet introuvable"));
+    }
+
+    private static LotListItemDto ligne(PrjMarket m, Trio marche, Cumuls c, SoldeDocumentAchat solde,
+                                       CoutPrevisionnelLot cout) {
         SoldeDocumentAchat s = solde != null ? solde : SoldeDocumentAchat.de(null, null);
+        CoutPrevisionnelLot k = Objects.requireNonNullElse(cout, CoutPrevisionnelLot.ZERO);
         BigDecimal cumulTTC = MontantsLot.arrondi(c.ttc());
         return new LotListItemDto(m.getId(), m.getCode(), m.getDescription(), m.getPrjProject().getId(),
                 m.getPrjProject().getCode(), code(m.getPrjMarketType()), description(m.getPrjMarketType()),
@@ -208,7 +300,10 @@ public class LotsProjetService {
                 Boolean.TRUE.equals(m.getIsMultiSupplier()), marche.ht(), marche.tva(), marche.ttc(),
                 marche.depuisBordereau(), MontantsLot.pourcentage(m.getWarrantyRatio()), c.nb(),
                 MontantsLot.arrondi(c.ht()), cumulTTC, MontantsLot.arrondi(c.extras()), MontantsLot.arrondi(c.rg()),
-                MontantsLot.avancementPct(cumulTTC, marche.ttc()), s.montantAPayer(), s.montantRegle(), s.resteARegler());
+                MontantsLot.avancementPct(cumulTTC, marche.ttc()), s.montantAPayer(), s.montantRegle(), s.resteARegler(),
+                k.avancement(), k.ht(), k.ttc(), k.netAPayer(), k.regle(), k.reste(),
+                Champs.de(m.getStrStatus(), StrStatus::getColorName),
+                GenreLot.deEntite(Champs.de(m.getStrEntity(), StrEntity::getId)).map(Enum::name).orElse(null), m.getNotes());
     }
 
     private static Trio marche(PrjMarket m, Map<UUID, Trio> bordereaux) {
@@ -248,12 +343,22 @@ public class LotsProjetService {
             return List.of();
         }
         return v.lier(em.createQuery("select p.id, p.code, p.description,"
-                        + " (select count(m) from PrjMarket m where m.prjProject = p" + STATUT_M + ")"
+                        + " (select count(m) from PrjMarket m where m.prjProject = p" + STATUT_M + "), p.cfgCompany.id"
                         + " from PrjProject p where p.id in :projets"
                         + " and (:tousStatuts = true or p.strStatus.id in :statuts) order by p.code", Object[].class))
                 .getResultList().stream()
-                .map(r -> new ProjetFiltreDto((UUID) r[0], (String) r[1], (String) r[2], (Long) r[3]))
+                .map(r -> new ProjetFiltreDto((UUID) r[0], (String) r[1], (String) r[2], (Long) r[3], (UUID) r[4]))
                 .toList();
+    }
+
+    private static List<EntiteFiltreDto> entites(List<ProjetFiltreDto> projets, EntityManager em) {
+        Set<UUID> ids = projets.stream().map(ProjetFiltreDto::entiteId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return em.createQuery("select c from CfgCompany c where c.id in :ids order by c.code", CfgCompany.class)
+                .setParameter("ids", ids).getResultList().stream()
+                .map(c -> new EntiteFiltreDto(c.getId(), c.getCode(), c.getDescription())).toList();
     }
 
     private List<ElementReferentielProjetDto> elements(String jpql) {
@@ -308,7 +413,8 @@ public class LotsProjetService {
         List<?> lignes = em.createNativeQuery(STATUTS_LOT).getResultList();
         return lignes.stream().map(Object[].class::cast)
                 .map(r -> new StatutLotProjetDto(UUID.fromString(String.valueOf(r[0])), (String) r[1], (String) r[2],
-                        r[3] instanceof Number n ? n.intValue() : null, (String) r[4], (String) r[5]))
+                        r[3] instanceof Number n ? n.intValue() : null, (String) r[4], (String) r[5], (String) r[6],
+                        GenreLot.deEntite(UUID.fromString(String.valueOf(r[7]))).map(Enum::name).orElse(null)))
                 .toList();
     }
 
@@ -316,8 +422,11 @@ public class LotsProjetService {
         List<Predicate> p = new ArrayList<>();
         p.add(root.get("prjProject").get(ID).in(v.projets()));
         v.statuts().ifPresent(s -> p.add(root.get("strStatus").get(ID).in(s)));
-        if (f.statutId() != null) {
-            p.add(cb.equal(root.get("strStatus").get(ID), f.statutId()));
+        if (f.statutIds() != null && !f.statutIds().isEmpty()) {
+            p.add(root.get("strStatus").get(ID).in(f.statutIds()));
+        }
+        if (f.entiteId() != null) {
+            p.add(cb.equal(root.get("prjProject").get("cfgCompany").get(ID), f.entiteId()));
         }
         if (f.typeId() != null) {
             p.add(cb.equal(root.get("prjMarketType").get(ID), f.typeId()));

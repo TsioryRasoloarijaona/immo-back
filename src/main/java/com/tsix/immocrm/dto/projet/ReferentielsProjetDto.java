@@ -11,6 +11,7 @@ public record ReferentielsProjetDto(
         @Schema(description = "Statuts de lot, par genre de lot puis ordre.") List<StatutLotProjetDto> statutsLot,
         @Schema(description = "Statuts de facture (BuyDocumentStatus), tri par ordre du circuit (sorting) puis code.") List<ElementReferentielProjetDto> statutsFacture,
         @Schema(description = "Catégories (StlCategory) portées par au moins un lot visible.") List<ElementReferentielProjetDto> categories,
-        @Schema(description = "Fournisseurs (CfgTier) d'un lot ou d'un décompte visible, tri par nom ; description = nom affiché.") List<ElementReferentielProjetDto> fournisseurs
+        @Schema(description = "Fournisseurs (CfgTier) d'un lot ou d'un décompte visible, tri par nom ; description = nom affiché.") List<ElementReferentielProjetDto> fournisseurs,
+        @Schema(description = "Entités juridiques (CfgCompany) portant au moins un projet visible, tri par code.") List<EntiteFiltreDto> entites
 ) {
 }

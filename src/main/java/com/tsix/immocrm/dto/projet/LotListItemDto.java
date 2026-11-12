@@ -42,6 +42,19 @@ public record LotListItemDto(
         BigDecimal avancementPct,
         @Schema(description = "Σ à payer des factures des décomptes (BuyDocument.AmountToPay).") BigDecimal totalFacture,
         @Schema(description = "Σ des règlements non annulés de ces factures.") BigDecimal totalRegle,
-        @Schema(description = "Facturé − réglé.") BigDecimal resteARegler
+        @Schema(description = "Facturé − réglé.") BigDecimal resteARegler,
+        @Schema(description = "Avancement OMRAN (Achievement), en fraction : 0,42 = 42 %.", example = "0.42") BigDecimal avancement,
+        @Schema(description = "Coût prévisionnel HT (CostHT d'OMRAN).") BigDecimal coutPrevisionnelHT,
+        @Schema(description = "Coût prévisionnel TTC (CostTTC d'OMRAN).") BigDecimal coutPrevisionnelTTC,
+        @Schema(description = "Net à payer prévisionnel (CostToPay d'OMRAN).") BigDecimal coutPrevisionnelNetAPayer,
+        @Schema(description = "Σ des lignes de règlement des pièces d'achat du lot, annulées comprises (AmountSettled).")
+        BigDecimal coutPrevisionnelRegle,
+        @Schema(description = "coutPrevisionnelNetAPayer − coutPrevisionnelRegle.") BigDecimal coutPrevisionnelReste,
+        @Schema(description = "Nom de couleur .NET du statut (StrStatus.ColorName), null si absent.", example = "LimeGreen")
+        String statutCouleur,
+        @Schema(description = "Genre du lot (StrEntityId), null si inconnu.",
+                allowableValues = {"ENTREPRENEURS", "FOURNISSEURS", "ADMINISTRATION", "MAITRES_OEUVRE", "CONCESSIONNAIRES"})
+        String genre,
+        @Schema(description = "Autres notes du lot (PrjMarket.Notes).") String notes
 ) {
 }

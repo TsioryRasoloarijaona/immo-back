@@ -11,6 +11,9 @@ public record StatutLotProjetDto(
         @Schema(description = "Libellé du statut.") String description,
         @Schema(description = "Ordre dans le workflow (Sorting), null si absent.") Integer ordre,
         @Schema(description = "Catégorie du statut (StrStatusType.Code), null si absente.", example = "Nouveau") String typeCode,
-        @Schema(description = "Genre de lot (StrEntity.Code).", example = "PrjMarket") String entiteCode
+        @Schema(description = "Genre de lot (StrEntity.Code).", example = "PrjMarket") String entiteCode,
+        @Schema(description = "Nom de couleur .NET (ColorName) tel quel, null si absent.", example = "LimeGreen") String couleur,
+        @Schema(description = "Genre de lot, comme LotListItemDto.genre ; null si genre inconnu.", example = "ENTREPRENEURS")
+        String genre
 ) {
 }
