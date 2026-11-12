@@ -3,8 +3,10 @@ package com.tsix.immocrm.services.achat;
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.domain.achat.AlerteClotureCommande;
 import com.tsix.immocrm.domain.achat.ChampDateAchat;
+import com.tsix.immocrm.domain.achat.LigneAchatCalculee;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.dto.achat.AvoirAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.HistoriqueDocumentAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.LigneDocumentAchatDto;
@@ -12,6 +14,11 @@ import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.ReglementDocumentAchatD
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.VentilationDocumentAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
+import com.tsix.immocrm.dto.achat.PieceLieeAchatDto;
+import com.tsix.immocrm.dto.achat.RecapTvaAchatDto;
+import com.tsix.immocrm.dto.achat.RetenuesAvancesAchatDto;
+import com.tsix.immocrm.dto.achat.RetenuesAvancesAchatDto.RetenueAchatDto;
+import com.tsix.immocrm.dto.achat.VentilationProjetAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.FournisseurAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.ProjetAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.SocieteAchatDto;
@@ -19,6 +26,7 @@ import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.StatutAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.TypeLotAchatDto;
 import com.tsix.immocrm.services.administration.HistoriqueService;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -30,11 +38,15 @@ import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** SQL natif des pièces d'achat : aucune entité {@code Prj*} dans ce lot (FEATURE-achat-lecture-factures.md §4). */
 @Component
@@ -79,6 +91,10 @@ class RequetesDocumentsAchat {
             + "LEFT JOIN BuyFolder bf ON bf.Pkey = d.BuyFolderId LEFT JOIN StlCurrency cur ON cur.PKey = d.StlCurrencyId "
             + RequetesReglementsProjet.DECOMPTE + "WHERE " + VISIBLE;
 
+    /** Restriction « mes BC » de {@link RestrictionBonsCommande}, liée par {@link #restreints} ; autres natures libres. */
+    static final String RESTRICTION_BC = "(d.DocType <> 'ORDER' OR :declencheur IS NULL "
+            + "OR d.CfgTierTriggerId = :declencheur) ";
+
     private static final String DATE_FILTREE = "CAST(CASE WHEN :echeance = 1 THEN d.MaturityDate ELSE d.DocDate END AS date)";
 
     private static final String LISTE = PIECES
@@ -91,7 +107,7 @@ class RequetesDocumentsAchat {
             + "AND (:comptabilise IS NULL OR COALESCE(d.IsAccounted, 0) = :comptabilise) "
             + "AND (:montantDe IS NULL OR d.AmountToPay >= :montantDe) "
             + "AND (:montantA IS NULL OR d.AmountToPay <= :montantA) "
-            + "AND (:declencheur IS NULL OR d.CfgTierTriggerId = :declencheur) "
+            + "AND " + RESTRICTION_BC
             + "AND (:renseignee = 0 OR " + DATE_FILTREE + " IS NOT NULL) "
             + "AND (:du IS NULL OR " + DATE_FILTREE + " >= :du) AND (:au IS NULL OR " + DATE_FILTREE + " <= :au) "
             + "AND (:motif IS NULL OR LOWER(d.Code) LIKE :motif OR LOWER(d.DocRef) LIKE :motif "
@@ -100,10 +116,31 @@ class RequetesDocumentsAchat {
             + "OR LOWER(p.Description) LIKE :motif OR LOWER(m.Code) LIKE :motif OR LOWER(m.Description) LIKE :motif "
             + "OR LOWER(bf.Description) LIKE :motif)";
 
-    private static final String FICHE = PIECES + "AND d.PKey = :id";
+    private static final String FICHE = PIECES + "AND " + RESTRICTION_BC + "AND d.PKey = :id";
 
-    private static final String LIGNES = "SELECT Pkey, Sorting, Description, Unity, Quantity, UnitPriceHT, VatRatio, "
-            + "DiscountRatio FROM BuyDocumentLine WHERE BuyDocumentId = :id ORDER BY Sorting, Code";
+    /** Pièces filles de la fiche : BL et factures d'un BC (Q4 : BuyOrderId ∪ BuyOrderInvoice), avoirs d'une facture. */
+    private static final String LIEES = PIECES + "AND " + RESTRICTION_BC
+            + "AND ((d.DocType = 'DELIVRY' AND d.BuyOrderId = :id) OR (d.DocType = 'INVOICE' AND (d.BuyOrderId = :id "
+            + "OR d.PKey IN (SELECT oi.BuyInvoiceId FROM BuyOrderInvoice oi WHERE oi.BuyOrderId = :id))) "
+            + "OR (d.DocType = 'REFUND' AND d.InvoiceSourceId = :id))";
+
+    private static final String CODES_VISIBLES = "SELECT d.PKey, d.Code FROM BuyDocument d WHERE " + VISIBLE + "AND "
+            + RESTRICTION_BC + "AND d.PKey IN (:references)";
+
+    private static final String COMPLEMENT = "SELECT d.CfgTierTriggerId, tr.Description AS DeclencheurNom, "
+            + "d.PrevisionDeliveryDate, d.Notes2, d.IsSelected, d.BuyQuoteId, d.BuyOrderId, d.InvoiceSourceId, "
+            + "d.AdvanceRatio, d.AdvanceAmount, d.AdvanceRest, d.WarrantyRatio, d.WarrantyAmount, d.InsuranceTRCRatio, "
+            + "d.InsuranceTRCAmount, d.InsuranceDECRatio, d.InsuranceDECAmount, d.ProportionRatio, d.ProportionAmount, "
+            + "d.RetainedAmount, d.WorkingOutAdvanceAmount, d.StockAmountToPay, d.ProrataRefundAmount, d.FluctuationsToPay "
+            + "FROM BuyDocument d LEFT JOIN CfgTier tr ON tr.PKey = d.CfgTierTriggerId WHERE d.PKey = :id";
+
+    private static final String LIGNES = "SELECT BuyDocumentId, Pkey, Sorting, Code, Description, Unity, Quantity, "
+            + "UnitPriceHT, UnitPriceTTC, VatRatio, DiscountRatio, FODECRatio FROM BuyDocumentLine "
+            + "WHERE BuyDocumentId IN (:ids) ORDER BY Sorting, Code";
+
+    private static final String VENTILATION_PROJETS = "SELECT v.PrjProjectId, p.Code, p.Description, v.VentilationRate "
+            + "FROM BuyVentilationExpense v LEFT JOIN PrjProject p ON p.PKey = v.PrjProjectId "
+            + "WHERE v.BuyDocumentId = :id ORDER BY p.Code";
 
     private static final String VENTILATION = "SELECT c.Code, c.Description, v.VentilationRate "
             + "FROM BuyVentilationCategory v LEFT JOIN StlCategory c ON c.PKey = v.StlCategoryId "
@@ -111,8 +148,10 @@ class RequetesDocumentsAchat {
 
     private static final String HISTORIQUE = "SELECT h.DocDate, st.Code, st.Description, "
             // Piège : Description et Code n'ont pas la même collation en CI.
-            + "COALESCE(NULLIF(u.Description, '') COLLATE DATABASE_DEFAULT, u.Code COLLATE DATABASE_DEFAULT) AS Utilisateur, h.Notes FROM BuyDocumentStatusHistory h "
+            + "COALESCE(NULLIF(u.Description, '') COLLATE DATABASE_DEFAULT, u.Code COLLATE DATABASE_DEFAULT) AS Utilisateur, h.Notes, "
+            + "w.Description AS Transition FROM BuyDocumentStatusHistory h "
             + "LEFT JOIN BuyDocumentStatus st ON st.PKey = h.BuyDocumentStatusId "
+            + "LEFT JOIN BuyDocumentWorkFlow w ON w.PKey = h.buyDocumentWorkFlowId "
             + "LEFT JOIN AdmUser u ON u.PKey = h.AdmUserId WHERE h.BuyDocumentId = :id ORDER BY h.DocDate";
 
     private static final String REGLEMENTS = "SELECT s.PKey, s.Code, s.DocDate, ty.Code AS TypeCode, "
@@ -140,14 +179,39 @@ class RequetesDocumentsAchat {
                   boolean valideComptabilite, String entiteCode, String entiteDescription, LocalDateTime dateCreation,
                   String creePar, LocalDateTime dateModification, String modifiePar) {
 
-        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, List<LigneDocumentAchatDto> lignes,
-                                    List<VentilationDocumentAchatDto> ventilation,
-                                    List<HistoriqueDocumentAchatDto> historique, List<ReglementDocumentAchatDto> reglements) {
+        /** {@code visibles} : code des pièces désignées par l'en-tête que le compte voit ; les autres sortent à null. */
+        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, Complement c, Onglets o, Map<UUID, String> visibles) {
             return new DocumentAchatDetailDto(piece, notes, regularisation, timbreFiscal, valideComptabilite,
-                    entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, lignes,
-                    ventilation, historique, reglements, null, null, null, null, false, BigDecimal.ZERO, null, null,
-                    null, null, null, null, null, List.of(), List.of(), List.of(), List.of(), List.of());
+                    entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, o.lignes(),
+                    o.ventilation(), o.historique(), o.reglements(), c.declencheurId(), c.declencheurNom(),
+                    c.dateLivraisonSouhaitee(), c.note2(), c.devisSelectionne(), o.avoirsMontant(), c.retenuesAvances(),
+                    visible(c.devisOrigineId(), visibles), visibles.get(c.devisOrigineId()),
+                    visible(c.bonCommandeId(), visibles), visibles.get(c.bonCommandeId()),
+                    visible(c.factureSourceId(), visibles), visibles.get(c.factureSourceId()), o.recapTva(),
+                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs());
         }
+
+        private static UUID visible(UUID id, Map<UUID, String> visibles) {
+            return visibles.containsKey(id) ? id : null;
+        }
+    }
+
+    /** Colonnes d'en-tête propres à la fiche (E2), lues sans filtre : la pièce a déjà passé {@link #FICHE}. */
+    record Complement(UUID declencheurId, String declencheurNom, LocalDate dateLivraisonSouhaitee, String note2,
+                      boolean devisSelectionne, RetenuesAvancesAchatDto retenuesAvances, UUID devisOrigineId,
+                      UUID bonCommandeId, UUID factureSourceId) {
+
+        List<UUID> references() {
+            return Stream.of(devisOrigineId, bonCommandeId, factureSourceId).filter(Objects::nonNull).toList();
+        }
+    }
+
+    /** Onglets de la fiche et le montant des avoirs, calculés par {@code FicheAchatService}. */
+    record Onglets(List<LigneDocumentAchatDto> lignes, List<RecapTvaAchatDto> recapTva,
+                   List<VentilationDocumentAchatDto> ventilation, List<VentilationProjetAchatDto> ventilationProjets,
+                   List<HistoriqueDocumentAchatDto> historique, List<ReglementDocumentAchatDto> reglements,
+                   List<PieceLieeAchatDto> bonsLivraison, List<PieceLieeAchatDto> factures, List<AvoirAchatDto> avoirs,
+                   BigDecimal avoirsMontant) {
     }
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -164,6 +228,11 @@ class RequetesDocumentsAchat {
                 .addValue("moduleProjet", perimetre.moduleProjet() ? 1 : 0);
     }
 
+    /** Paramètres de {@link #VISIBLE} et de {@link #RESTRICTION_BC} ({@code declencheur} nul = aucune restriction). */
+    private static MapSqlParameterSource restreints(PerimetreAchat perimetre, UUID declencheur) {
+        return parametres(perimetre).addValue("declencheur", texte(declencheur), Types.VARCHAR);
+    }
+
     private static List<String> nonVide(Collection<UUID> ids) {
         return textes(ids.isEmpty() ? List.of(AUCUN) : ids);
     }
@@ -174,7 +243,7 @@ class RequetesDocumentsAchat {
      */
     List<DocumentAchatListItemDto> pieces(PerimetreAchat perimetre, FiltresDocumentsAchat f, UUID declencheur) {
         boolean renseignee = Boolean.TRUE.equals(f.dateRenseignee());
-        MapSqlParameterSource p = parametres(perimetre)
+        MapSqlParameterSource p = restreints(perimetre, declencheur)
                 .addValue("toutesNatures", f.natures().isEmpty() ? 1 : 0)
                 .addValue("natures", codes(f.natures()))
                 .addValue("tousStatuts", f.statutIds().isEmpty() ? 1 : 0)
@@ -190,7 +259,6 @@ class RequetesDocumentsAchat {
                 .addValue("comptabilise", f.comptabilise(), Types.BIT)
                 .addValue("montantDe", f.montantDe(), Types.DECIMAL)
                 .addValue("montantA", f.montantA(), Types.DECIMAL)
-                .addValue("declencheur", texte(declencheur), Types.VARCHAR)
                 .addValue("echeance", f.champDate() == ChampDateAchat.ECHEANCE ? 1 : 0)
                 .addValue("renseignee", renseignee ? 1 : 0)
                 .addValue("du", renseignee ? null : f.du(), Types.DATE)
@@ -204,8 +272,8 @@ class RequetesDocumentsAchat {
         return valeurs.isEmpty() ? List.of("") : valeurs.stream().map(Enum::name).toList();
     }
 
-    Optional<Entete> entete(PerimetreAchat perimetre, UUID id) {
-        return jdbc.query(FICHE, parametres(perimetre).addValue(ID, id.toString()), (rs, n) -> new Entete(piece(rs),
+    Optional<Entete> entete(PerimetreAchat perimetre, UUID declencheur, UUID id) {
+        return jdbc.query(FICHE, restreints(perimetre, declencheur).addValue(ID, id.toString()), (rs, n) -> new Entete(piece(rs),
                         chaine(rs, "Notes"), rs.getBigDecimal("AmountRegul"), rs.getBigDecimal("FiscalStamp"),
                         rs.getBoolean("IsValidatedOnAccounting"), chaine(rs, "EntiteCode"),
                         chaine(rs, "EntiteDescription"), horodatage(rs, "UserCreateDateTime"), chaine(rs, "UserCreate"),
@@ -213,11 +281,59 @@ class RequetesDocumentsAchat {
                 .stream().findFirst();
     }
 
-    List<LigneDocumentAchatDto> lignes(UUID id) {
-        return jdbc.query(LIGNES, Map.of(ID, id.toString()), (rs, n) -> new LigneDocumentAchatDto(uuid(rs, "Pkey"),
-                (Integer) rs.getObject("Sorting"), chaine(rs, DESCRIPTION), chaine(rs, "Unity"),
-                rs.getBigDecimal("Quantity"), rs.getBigDecimal("UnitPriceHT"), pourcent(rs.getBigDecimal("VatRatio")),
-                pourcent(rs.getBigDecimal("DiscountRatio")), null, null, null, null, null, null, null));
+    /** Pièces filles visibles de la pièce {@code id} (voir {@link #LIEES}), sans tri. */
+    List<DocumentAchatListItemDto> liees(PerimetreAchat perimetre, UUID declencheur, UUID id) {
+        return jdbc.query(LIEES, restreints(perimetre, declencheur).addValue(ID, id.toString()), (rs, n) -> piece(rs));
+    }
+
+    /** Code de chaque pièce de {@code references} visible du compte ; les autres sont absentes. */
+    Map<UUID, String> codesVisibles(PerimetreAchat perimetre, UUID declencheur, List<UUID> references) {
+        Map<UUID, String> codes = new HashMap<>();
+        if (!references.isEmpty()) {
+            jdbc.query(CODES_VISIBLES, restreints(perimetre, declencheur).addValue("references", textes(references)),
+                    (RowCallbackHandler) rs -> codes.put(uuid(rs, PKEY), chaine(rs, CODE)));
+        }
+        return codes;
+    }
+
+    Complement complement(UUID id) {
+        return jdbc.queryForObject(COMPLEMENT, Map.of(ID, id.toString()), (rs, n) -> new Complement(
+                uuid(rs, "CfgTierTriggerId"), chaine(rs, "DeclencheurNom"), jour(rs, "PrevisionDeliveryDate"),
+                chaine(rs, "Notes2"), rs.getBoolean("IsSelected"), new RetenuesAvancesAchatDto(retenue(rs, "Advance"),
+                rs.getBigDecimal("AdvanceRest"), retenue(rs, "Warranty"), retenue(rs, "InsuranceTRC"),
+                retenue(rs, "InsuranceDEC"), retenue(rs, "Proportion"), rs.getBigDecimal("RetainedAmount"),
+                rs.getBigDecimal("WorkingOutAdvanceAmount"), rs.getBigDecimal("StockAmountToPay"),
+                rs.getBigDecimal("ProrataRefundAmount"), rs.getBigDecimal("FluctuationsToPay")),
+                uuid(rs, "BuyQuoteId"), uuid(rs, "BuyOrderId"), uuid(rs, "InvoiceSourceId")));
+    }
+
+    private static RetenueAchatDto retenue(ResultSet rs, String prefixe) throws SQLException {
+        return new RetenueAchatDto(rs.getBigDecimal(prefixe + "Ratio"), rs.getBigDecimal(prefixe + "Amount"));
+    }
+
+    /** Lignes des pièces {@code ids}, colonnes calculées par {@link LigneAchatCalculee}, par pièce dans l'ordre Sorting. */
+    Map<UUID, List<LigneDocumentAchatDto>> lignes(List<UUID> ids) {
+        return jdbc.query(LIGNES, Map.of("ids", textes(ids)), (rs, n) -> Map.entry(uuid(rs, "BuyDocumentId"), ligne(rs)))
+                .stream().collect(Collectors.groupingBy(Map.Entry::getKey,
+                        Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
+    }
+
+    private static LigneDocumentAchatDto ligne(ResultSet rs) throws SQLException {
+        BigDecimal quantite = rs.getBigDecimal("Quantity");
+        BigDecimal prix = rs.getBigDecimal("UnitPriceHT");
+        BigDecimal tva = rs.getBigDecimal("VatRatio");
+        BigDecimal remise = rs.getBigDecimal("DiscountRatio");
+        BigDecimal fodec = rs.getBigDecimal("FODECRatio");
+        LigneAchatCalculee calcul = LigneAchatCalculee.de(prix, quantite, remise, fodec, tva);
+        return new LigneDocumentAchatDto(uuid(rs, "Pkey"), (Integer) rs.getObject("Sorting"), chaine(rs, DESCRIPTION),
+                chaine(rs, "Unity"), quantite, prix, pourcent(tva), pourcent(remise), chaine(rs, CODE),
+                pourcent(fodec == null ? BigDecimal.ZERO : fodec), rs.getBigDecimal("UnitPriceTTC"),
+                calcul.prixUnitaireHTNet(), calcul.totalHT(), calcul.totalTVA(), calcul.totalTTC());
+    }
+
+    List<VentilationProjetAchatDto> ventilationProjets(UUID id) {
+        return jdbc.query(VENTILATION_PROJETS, Map.of(ID, id.toString()), (rs, n) -> new VentilationProjetAchatDto(
+                uuid(rs, "PrjProjectId"), chaine(rs, CODE), chaine(rs, DESCRIPTION), rs.getBigDecimal("VentilationRate")));
     }
 
     List<VentilationDocumentAchatDto> ventilation(UUID id) {
@@ -228,7 +344,7 @@ class RequetesDocumentsAchat {
     List<HistoriqueDocumentAchatDto> historique(UUID id) {
         return jdbc.query(HISTORIQUE, Map.of(ID, id.toString()), (rs, n) -> new HistoriqueDocumentAchatDto(
                 horodatage(rs, DOC_DATE), chaine(rs, CODE), chaine(rs, DESCRIPTION), chaine(rs, "Utilisateur"),
-                chaine(rs, "Notes"), null));
+                chaine(rs, "Notes"), chaine(rs, "Transition")));
     }
 
     List<ReglementDocumentAchatDto> reglements(UUID id) {
