@@ -89,11 +89,47 @@ public class DonneesDecompte {
                 .setParameter("type", type).setParameter(LOT, lot).setParameter(EXCLU, exclu).getSingleResult();
     }
 
+    /** Colonnes sommables ; le JPQL est constant (pas de concaténation, S2077). */
+    public enum Colonne {
+        PRORATA_REMBOURSE("""
+                select coalesce(sum(o.prorataRefundAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu""", """
+                select coalesce(sum(o.prorataRefundAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu and o.sorting < :avant"""),
+        ASSURANCE_DEC("""
+                select coalesce(sum(o.insuranceDECAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu""", """
+                select coalesce(sum(o.insuranceDECAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu and o.sorting < :avant"""),
+        ASSURANCE_TRC("""
+                select coalesce(sum(o.insuranceTRCAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu""", """
+                select coalesce(sum(o.insuranceTRCAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu and o.sorting < :avant"""),
+        AVANCE_MARCHE("""
+                select coalesce(sum(o.advanceAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu""", """
+                select coalesce(sum(o.advanceAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu and o.sorting < :avant"""),
+        AVANCE_DECOMPTE("""
+                select coalesce(sum(o.workingOutAdvanceAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu""", """
+                select coalesce(sum(o.workingOutAdvanceAmount), 0) from PrjWorkingOut o
+                where o.prjMarket.id = :lot and o.id <> :exclu and o.sorting < :avant""");
+
+        private final String jpql;
+        private final String jpqlAvant;
+
+        Colonne(String jpql, String jpqlAvant) {
+            this.jpql = jpql;
+            this.jpqlAvant = jpqlAvant;
+        }
+    }
+
     /** Σ d'une colonne des autres décomptes du lot, de numéro inférieur à {@code avant} s'il est donné. */
-    public BigDecimal somme(String champ, UUID lot, UUID exclu, Integer avant) {
-        TypedQuery<BigDecimal> q = em.createQuery("select coalesce(sum(o." + champ + "), 0) from PrjWorkingOut o"
-                        + " where o.prjMarket.id = :lot and o.id <> :exclu" + (avant == null ? "" : " and o.sorting < :avant"),
-                BigDecimal.class).setParameter(LOT, lot).setParameter(EXCLU, exclu);
+    public BigDecimal somme(Colonne colonne, UUID lot, UUID exclu, Integer avant) {
+        TypedQuery<BigDecimal> q = em.createQuery(avant == null ? colonne.jpql : colonne.jpqlAvant, BigDecimal.class)
+                .setParameter(LOT, lot).setParameter(EXCLU, exclu);
         return (avant == null ? q : q.setParameter(AVANT, avant)).getSingleResult();
     }
 
@@ -108,7 +144,7 @@ public class DonneesDecompte {
         BigDecimal retenu = em.createQuery("select coalesce(sum(o.proportionAmount), 0) from PrjWorkingOut o"
                         + " where o.prjMarket.prjProject.id = :projet", BigDecimal.class)
                 .setParameter("projet", w.getPrjMarket().getPrjProject().getId()).getSingleResult();
-        return retenu.subtract(somme("prorataRefundAmount", lot, w.getId(), null));
+        return retenu.subtract(somme(Colonne.PRORATA_REMBOURSE,lot, w.getId(), null));
     }
 
     /** Σ Quantity des décomptes du lot de numéro inférieur, par ligne de bordereau ({@code WL:AffectOldValues}). */

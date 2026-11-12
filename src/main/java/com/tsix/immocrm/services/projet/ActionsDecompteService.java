@@ -241,15 +241,16 @@ public class ActionsDecompteService {
         w.setInsuranceTRCRatio(lot.getInsuranceTRCRatio());
         w.setInsuranceDECAmountMax(lot.getInsuranceDECAmount());
         w.setInsuranceTRCAmountMax(lot.getInsuranceTRCAmount());
-        w.setInsuranceDECRest(reste(lot.getInsuranceDECAmount(), donnees.somme("insuranceDECAmount", lot.getId(), w.getId(), avant)));
-        w.setInsuranceTRCRest(reste(lot.getInsuranceTRCAmount(), donnees.somme("insuranceTRCAmount", lot.getId(), w.getId(), avant)));
+        w.setInsuranceDECRest(reste(lot.getInsuranceDECAmount(), donnees.somme(DonneesDecompte.Colonne.ASSURANCE_DEC, lot.getId(), w.getId(), avant)));
+        w.setInsuranceTRCRest(reste(lot.getInsuranceTRCAmount(), donnees.somme(DonneesDecompte.Colonne.ASSURANCE_TRC, lot.getId(), w.getId(), avant)));
     }
 
     /** {@code W:1961-1963}, {@code 2010-2014} et {@code Utils.cs:GetAdvanceRestByMarket / GetWorkingOutAdvanceRestByMarket}. */
     private void reprendreDuPrecedent(PrjWorkingOut w, PrjMarket lot, PrjWorkingOut dernier) {
-        w.setAdvanceRest(resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_MARCHE, "advanceAmount"));
+        w.setAdvanceRest(resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_MARCHE,
+                DonneesDecompte.Colonne.AVANCE_MARCHE));
         BigDecimal resteAvanceDecompte = resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_DECOMPTE,
-                "workingOutAdvanceAmount");
+                DonneesDecompte.Colonne.AVANCE_DECOMPTE);
         w.setWorkingOutAdvanceAmountRestAtCreation(resteAvanceDecompte);
         w.setWorkingOutAdvanceAmount(resteAvanceDecompte);
         w.setStockPileRatio(dernier != null && dernier.getStockPileRatio() != null ? dernier.getStockPileRatio()
@@ -264,7 +265,7 @@ public class ActionsDecompteService {
         }
     }
 
-    private BigDecimal resteAvance(UUID lot, UUID id, String typePiece, String champ) {
+    private BigDecimal resteAvance(UUID lot, UUID id, String typePiece, DonneesDecompte.Colonne champ) {
         BigDecimal pieces = donnees.pieces(lot, typePiece, id);
         return pieces == null ? BigDecimal.ZERO : pieces.subtract(donnees.somme(champ, lot, id, null));
     }
