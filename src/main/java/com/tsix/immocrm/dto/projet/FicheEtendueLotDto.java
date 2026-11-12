@@ -39,6 +39,9 @@ public record FicheEtendueLotDto(
         @Schema(description = "Description détaillée (DescriptionLong).") String descriptionDetaillee,
         @Schema(description = "Montant d'assurance décennale (InsuranceDECAmount), null si non saisi.") BigDecimal montantAssuranceDEC,
         @Schema(description = "Montant d'assurance tous risques chantier (InsuranceTRCAmount), null si non saisi.")
-        BigDecimal montantAssuranceTRC
+        BigDecimal montantAssuranceTRC,
+        @Schema(description = "Avancement facturé, fraction 0–1 (= avancement de la liste des lots).") BigDecimal avancementFacture,
+        @Schema(description = "Avancement décompté, fraction 0–1 : (décomptes HT − dépassements) / bordereau HT.")
+        BigDecimal avancementDecompte
 ) {
 }

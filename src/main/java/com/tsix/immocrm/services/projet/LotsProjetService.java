@@ -38,6 +38,7 @@ import com.tsix.immocrm.dto.projet.LotListItemDto;
 import com.tsix.immocrm.dto.projet.ProjetFiltreDto;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
 import com.tsix.immocrm.dto.projet.StatutLotProjetDto;
+import com.tsix.immocrm.dto.projet.SuiviLotDto;
 import com.tsix.immocrm.entities.CodeLibelleOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
@@ -250,7 +251,12 @@ public class LotsProjetService {
                 jour(m.getWithdrawalTenderDocumentsDate()), jour(m.getTenderMaturityDate()), jour(m.getBidOpeningDate()),
                 jour(m.getTenderDate()), jour(m.getContractSignatureDate()), jour(m.getServiceOrderDate()),
                 jour(m.getWorkLaunchDate()), m.getUserCreateDateTime(), m.getUserCreate(), m.getUserUpdateDateTime(),
-                m.getUserUpdate(), fiche(m));
+                m.getUserUpdate(), null, fiche(m));
+    }
+
+    public SuiviLotDto suivi(UUID id) {
+        visible(id);
+        throw new UnsupportedOperationException();
     }
 
     private FicheEtendueLotDto fiche(PrjMarket m) {
@@ -267,7 +273,8 @@ public class LotsProjetService {
                 Boolean.TRUE.equals(m.getApplyWithholdingTaxOnAdditionalWork()),
                 Boolean.TRUE.equals(m.getExecutedQuantityBasedInsert()),
                 Boolean.TRUE.equals(m.getCanEditWorkingOutLineByAchivement()), jour(m.getCancellationDate()),
-                m.getCancellationCause(), m.getDescriptionLong(), m.getInsuranceDECAmount(), m.getInsuranceTRCAmount());
+                m.getCancellationCause(), m.getDescriptionLong(), m.getInsuranceDECAmount(), m.getInsuranceTRCAmount(),
+                null, null);
     }
 
     public List<DemandeAchatLotDto> demandesAchat(UUID id) {

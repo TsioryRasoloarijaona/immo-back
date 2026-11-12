@@ -51,6 +51,7 @@ public record LotDetailDto(
         @Schema(description = "Auteur de la création (UserCreate).") String creePar,
         @Schema(description = "Dernière modification (UserUpdateDateTime).") LocalDateTime dateModification,
         @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar,
+        @Schema(description = "Onglet Général : marché, estimations, coûts prévisionnel et réel.") GeneralLotDto general,
         @JsonUnwrapped FicheEtendueLotDto fiche
 ) {
 }

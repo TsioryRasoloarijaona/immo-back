@@ -11,6 +11,7 @@ import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
 import com.tsix.immocrm.dto.projet.ModifierLotRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetDto;
+import com.tsix.immocrm.dto.projet.SuiviLotDto;
 import com.tsix.immocrm.dto.projet.TotauxLotsDto;
 import com.tsix.immocrm.dto.projet.TransitionLotDto;
 import com.tsix.immocrm.services.projet.CopieLot;
@@ -217,6 +218,14 @@ public class LotsProjetController {
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public List<DemandeAchatLotDto> demandesAchat(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.demandesAchat(id);
+    }
+
+    @GetMapping("/lots/{id}/suivi")
+    @Operation(summary = "Onglets Suivi et Retenues de la fiche d'un lot")
+    @ApiResponse(responseCode = "200", description = "Colonnes, avances, retenue de garantie et retenues du lot.")
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    public SuiviLotDto suivi(@Parameter(description = ID_LOT) @PathVariable UUID id) {
+        return service.suivi(id);
     }
 
     @GetMapping("/lots/{id}/bordereau")
