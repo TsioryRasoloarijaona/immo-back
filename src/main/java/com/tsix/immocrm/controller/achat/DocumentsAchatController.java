@@ -56,7 +56,15 @@ public class DocumentsAchatController {
             ColonneFixe.de("montantTTC", "TTC", TypeExport.MONTANT),
             ColonneFixe.de("montantAPayer", "À payer", TypeExport.MONTANT),
             ColonneFixe.de("montantRegle", "Réglé", TypeExport.MONTANT),
-            ColonneFixe.de("resteARegler", "Reste", TypeExport.MONTANT));
+            ColonneFixe.de("resteARegler", "Reste", TypeExport.MONTANT),
+            ColonneFixe.texte("societeNom", "Entité"), ColonneFixe.texte("moduleLibelle", "Module"),
+            ColonneFixe.texte("typeLotLibelle", "Type"), ColonneFixe.de("archive", "Archivé", TypeExport.BOOLEEN),
+            ColonneFixe.de("comptabilise", "Comptabilisé", TypeExport.BOOLEEN),
+            ColonneFixe.texte("referenceBureauOrdre", "Réf. bureau d'ordre"),
+            ColonneFixe.texte("personneAContacter", "Personne à contacter"),
+            ColonneFixe.texte("dossierGroupement", "Dossier de groupement"),
+            ColonneFixe.texte("categories", "Catégorie"), ColonneFixe.texte("deviseCode", "Devise"),
+            ColonneFixe.de("aCloturer", "À clôturer", TypeExport.BOOLEEN));
 
     private static final List<ColonneFixe> COLONNES_SOLDES = List.of(
             ColonneFixe.texte("fournisseurNom", "Fournisseur"), ColonneFixe.texte("societeCode", "Société"),
@@ -80,7 +88,7 @@ public class DocumentsAchatController {
     }
 
     @GetMapping("/referentiels")
-    @Operation(summary = "Listes de choix des filtres : natures, statuts, projets et fournisseurs visibles")
+    @Operation(summary = "Listes de choix des filtres : natures, statuts, projets, fournisseurs, sociétés, modules, types de lot")
     public ReferentielsAchatDto referentiels() {
         return service.referentiels();
     }
@@ -89,8 +97,8 @@ public class DocumentsAchatController {
     @Operation(summary = "Liste paginée des pièces d'achat visibles (société et projet habilités)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Page de pièces ; vide si aucune pièce visible (société, projet)."),
-            @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date, nature) ou tri inconnu.",
-                    content = @Content)
+            @ApiResponse(responseCode = "400", content = @Content,
+                    description = "Filtre mal formé (UUID, date, nature, module, champDate, montant) ou tri inconnu.")
     })
     public PageDto<DocumentAchatListItemDto> liste(@ParameterObject @ModelAttribute FiltresDocumentsAchat filtres,
                                                    @PageableDefault(size = DEFAULT_PAGE_SIZE) Pageable pageable) {
@@ -101,8 +109,8 @@ public class DocumentsAchatController {
     @Operation(summary = "Totaux de la liste des pièces d'achat : mêmes filtres, toutes pages")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Totaux ; à zéro si aucune pièce visible (société, projet)."),
-            @ApiResponse(responseCode = "400", description = "Filtre mal formé (UUID, date, nature, booléen).",
-                    content = @Content)
+            @ApiResponse(responseCode = "400", content = @Content,
+                    description = "Filtre mal formé (UUID, date, nature, module, champDate, montant, booléen).")
     })
     public TotauxDocumentsAchatDto totaux(@ParameterObject @ModelAttribute FiltresDocumentsAchat filtres) {
         return service.totaux(filtres);
