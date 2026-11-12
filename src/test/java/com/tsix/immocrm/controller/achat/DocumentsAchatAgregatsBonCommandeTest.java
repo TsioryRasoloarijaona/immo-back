@@ -88,6 +88,7 @@ class DocumentsAchatAgregatsBonCommandeTest {
         typeReglement = fixture.typeReglement("VIR-" + jeton);
         compte = fixture.compte("ACH-" + jeton, ROLE);
         fixture.habiliterSociete(compte, societe);
+        fixture.sansPersonnel(compte); // Q2 : avec un personnel, seuls ses BC seraient visibles
     }
 
     private RequestPostProcessor qui() {
@@ -182,7 +183,7 @@ class DocumentsAchatAgregatsBonCommandeTest {
         String json = json();
 
         attendus(json, c, FACTURE_HT, "400", FACTURE_TVA, "80", FACTURE_TTC, "480", FACTURE_NET, "470");
-        assertThat(champ(json, c, "aCloturer")).isEqualTo(false);
+        assertThat((Boolean) champ(json, c, "aCloturer")).isFalse();
     }
 
     @Test
@@ -210,7 +211,7 @@ class DocumentsAchatAgregatsBonCommandeTest {
         String json = json();
 
         attendus(json, c, FACTURE_HT, "1000", REGLE, "1200", RESTE_SUR_FACTURE, "0", RESTE_TOTAL, "0");
-        assertThat(champ(json, c, "aCloturer")).isEqualTo(true);
+        assertThat((Boolean) champ(json, c, "aCloturer")).isTrue();
     }
 
     @Test

@@ -214,6 +214,7 @@ class DocumentsAchatAgregatsTotauxTest {
 
     @Test
     void cas9_valeursAttendues_sansFiltre() throws Exception {
+        fixture.sansPersonnel(compte); // Q2 : les 4 BC visibles, pas seulement BC1
         String totaux = corps(mockMvc, appel(TOTAUX, qui()));
 
         assertAll(

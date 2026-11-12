@@ -146,7 +146,8 @@ class DocumentsAchatFiltresTest {
     @Test
     void r5_filtreNatures_multiple() throws Exception {
         fixture.piece(facture("-I", MARS_10, "100"));
-        fixture.piece(facture("-O", MARS_10, "100").nature("ORDER"));
+        UUID bc = fixture.piece(facture("-O", MARS_10, "100").nature("ORDER"));
+        fixture.poser(bc, "CfgTierTriggerId", compte.getCfgEmployee().getId()); // Q2 : un BC du compte reste visible
         fixture.piece(facture("-Q", MARS_10, "100").nature("QUOTE"));
 
         String json = corps(mockMvc, liste(qui(), NATURES, "INVOICE", NATURES, "ORDER"));

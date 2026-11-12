@@ -5,7 +5,6 @@ import com.tsix.immocrm.domain.achat.ModuleAchat;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.dto.achat.AgregatsBonCommandeDto;
-import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto;
@@ -13,17 +12,12 @@ import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.ModuleAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.NatureAchatDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.security.AuthenticatedUser;
-import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +27,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -108,18 +101,16 @@ public class DocumentsAchatService {
 
     private static final Sort TRI_DEFAUT = Sort.by(Sort.Order.desc("dateDocument"), Sort.Order.desc("code"));
 
-    static final String DROIT_BC_SANS_RESTRICTION = "Yes.Buy.Front.Order.OrderList.WithNoRestriction";
-
     private final PerimetreProjetService perimetre;
     private final RequetesDocumentsAchat requetes;
-    private final DroitsOmran droits;
+    private final RestrictionBonsCommande restriction;
     private final RequetesAgregatsBonCommande requetesAgregats;
 
-    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes, DroitsOmran droits,
-                                 RequetesAgregatsBonCommande requetesAgregats) {
+    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes,
+                                 RestrictionBonsCommande restriction, RequetesAgregatsBonCommande requetesAgregats) {
         this.perimetre = perimetre;
         this.requetes = requetes;
-        this.droits = droits;
+        this.restriction = restriction;
         this.requetesAgregats = requetesAgregats;
     }
 
@@ -166,14 +157,14 @@ public class DocumentsAchatService {
         if (visibles.vide()) {
             return List.of();
         }
-        return avecAgregats(requetes.pieces(visibles, filtres, declencheurImpose(filtres)).stream()
+        return avecAgregats(requetes.pieces(visibles, filtres, restriction.declencheurImpose()).stream()
                 .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
                 .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
                 .toList());
     }
 
     /** Agrégats posés sur les bons de commande de {@code pieces} (liste, totaux et fiche). */
-    private List<DocumentAchatListItemDto> avecAgregats(List<DocumentAchatListItemDto> pieces) {
+    List<DocumentAchatListItemDto> avecAgregats(List<DocumentAchatListItemDto> pieces) {
         List<UUID> bons = pieces.stream().filter(DocumentsAchatService::estCommande)
                 .map(DocumentAchatListItemDto::id).toList();
         if (bons.isEmpty()) {
@@ -183,24 +174,8 @@ public class DocumentsAchatService {
         return pieces.stream().map(p -> estCommande(p) ? p.avecAgregats(agregats.get(p.id())) : p).toList();
     }
 
-    private static boolean estCommande(DocumentAchatListItemDto piece) {
+    static boolean estCommande(DocumentAchatListItemDto piece) {
         return NatureDocumentAchat.ORDER.name().equals(piece.nature());
-    }
-
-    /**
-     * Liste des BC ({@code natures} = [ORDER] seul) : déclencheur imposé = personnel du compte, sauf droit
-     * {@link #DROIT_BC_SANS_RESTRICTION} ; compte sans personnel : aucune restriction (OMRAN {@code OrderView.cs:803}).
-     */
-    private UUID declencheurImpose(FiltresDocumentsAchat filtres) {
-        if (!Set.copyOf(filtres.natures()).equals(Set.of(NatureDocumentAchat.ORDER))) {
-            return null;
-        }
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID personnel = auth != null && auth.getPrincipal() instanceof AuthenticatedUser user ? user.employeeId() : null;
-        if (personnel == null || !droits.parmi(DROIT_BC_SANS_RESTRICTION).isEmpty()) {
-            return null;
-        }
-        return personnel;
     }
 
     static SoldeDocumentAchat solde(DocumentAchatListItemDto piece) {
@@ -209,14 +184,6 @@ public class DocumentsAchatService {
 
     static BigDecimal somme(Stream<BigDecimal> montants) {
         return montants.filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    public DocumentAchatDetailDto fiche(UUID id) {
-        RequetesDocumentsAchat.Entete entete = Optional.of(perimetre.achat(List.of())).filter(p -> !p.vide())
-                .flatMap(p -> requetes.entete(p, id))
-                .orElseThrow(() -> new ResourceNotFoundException("Pièce introuvable"));
-        return entete.avec(avecAgregats(List.of(entete.document())).getFirst(), requetes.lignes(id),
-                requetes.ventilation(id), requetes.historique(id), requetes.reglements(id));
     }
 
     /** Tri demandé (propriétés de la ligne), puis le défaut et l'id pour une pagination stable ; inconnu = 400. */

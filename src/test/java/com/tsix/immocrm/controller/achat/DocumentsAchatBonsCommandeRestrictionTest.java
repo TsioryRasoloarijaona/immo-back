@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Lot C8 — FEATURE-achat-liste-parite.md, réponse du manager Q1 (règle 6, visibilité) : liste des BC
  * ({@code natures=ORDER} seul) restreinte à {@code CfgTierTriggerId} = personnel du compte ({@code AdmUser.CfgEmployeeId},
  * {@code OrderView.cs:803}), sauf droit OMRAN {@code …OrderList.WithNoRestriction} ; compte sans personnel = aucune restriction
- * (2ᵉ passe) ; seulement si {@code natures} vaut exactement [ORDER].
+ * (2ᵉ passe) ; depuis A2a (réponse Q2, 12/11) : quelles que soient les natures demandées.
  * <pre>
  *   société S (habilitée) : BC-MOI (déclencheur = mon personnel), BC-AUTRE (autre personnel), BC-SANS (aucun),
  *                           FAC-AUTRE (facture, autre personnel)
@@ -111,21 +111,22 @@ class DocumentsAchatBonsCommandeRestrictionTest {
         assertThat(codes(json)).containsExactlyInAnyOrder(code("-BC-MOI"), code("-BC-AUTRE"), code("-BC-SANS"));
     }
 
-    /** 2ᵉ passe : restriction seulement pour {@code natures} = [ORDER] exactement. */
+    /**
+     * Remplace la 2ᵉ passe d'A1 (« seulement pour natures = [ORDER] ») : décision du user du 12/11
+     * (FEATURE-achat-fiche-parite.md, réponse Q2) — les BC sont restreints aussi dans Documents Achats (toutes natures).
+     */
     @Test
-    void q1_naturesAbsentes_pasDeRestriction() throws Exception {
+    void q2_naturesAbsentes_bcRestreints_factureIntacte() throws Exception {
         String json = corps(mockMvc, liste(qui()));
 
-        assertThat(codes(json)).containsExactlyInAnyOrder(code("-BC-MOI"), code("-BC-AUTRE"), code("-BC-SANS"),
-                code("-FAC-AUTRE"));
+        assertThat(codes(json)).containsExactlyInAnyOrder(code("-BC-MOI"), code("-FAC-AUTRE"));
     }
 
     @Test
-    void q1_naturesOrderEtInvoice_pasDeRestriction() throws Exception {
+    void q2_naturesOrderEtInvoice_bcRestreints_factureIntacte() throws Exception {
         String json = corps(mockMvc, liste(qui(), NATURES, ORDER, NATURES, FixtureAchat.FACTURE));
 
-        assertThat(codes(json)).containsExactlyInAnyOrder(code("-BC-MOI"), code("-BC-AUTRE"), code("-BC-SANS"),
-                code("-FAC-AUTRE"));
+        assertThat(codes(json)).containsExactlyInAnyOrder(code("-BC-MOI"), code("-FAC-AUTRE"));
     }
 
     @Test

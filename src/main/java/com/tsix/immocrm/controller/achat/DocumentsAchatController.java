@@ -10,6 +10,7 @@ import com.tsix.immocrm.dto.achat.SoldesFournisseursDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.services.achat.DocumentsAchatService;
+import com.tsix.immocrm.services.achat.FicheAchatService;
 import com.tsix.immocrm.services.achat.SoldesFournisseursService;
 import com.tsix.immocrm.web.export.ColonneFixe;
 import com.tsix.immocrm.web.export.ExportTableur;
@@ -98,12 +99,14 @@ public class DocumentsAchatController {
     }
 
     private final DocumentsAchatService service;
+    private final FicheAchatService fiches;
     private final SoldesFournisseursService soldesFournisseurs;
     private final ExportTableur exportTableur;
 
-    public DocumentsAchatController(DocumentsAchatService service, SoldesFournisseursService soldesFournisseurs,
-                                    ExportTableur exportTableur) {
+    public DocumentsAchatController(DocumentsAchatService service, FicheAchatService fiches,
+                                    SoldesFournisseursService soldesFournisseurs, ExportTableur exportTableur) {
         this.service = service;
+        this.fiches = fiches;
         this.soldesFournisseurs = soldesFournisseurs;
         this.exportTableur = exportTableur;
     }
@@ -160,15 +163,16 @@ public class DocumentsAchatController {
     }
 
     @GetMapping("/documents/{id}")
-    @Operation(summary = "Fiche d'une pièce d'achat : lignes, ventilation, historique, règlements")
+    @Operation(summary = "Fiche d'une pièce d'achat : lignes, ventilation, liens, historique, règlements")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Pièce visible."),
-            @ApiResponse(responseCode = "404", description = "Pièce introuvable ou hors périmètre (société, projet).",
+            @ApiResponse(responseCode = "404",
+                    description = "Pièce introuvable, hors périmètre (société, projet) ou bon de commande d'un autre déclencheur.",
                     content = @Content)
     })
     public DocumentAchatDetailDto fiche(@Parameter(description = "Id de la pièce (BuyDocument.PKey).")
                                         @PathVariable UUID id) {
-        return service.fiche(id);
+        return fiches.fiche(id);
     }
 
     @GetMapping("/fournisseurs/soldes")
