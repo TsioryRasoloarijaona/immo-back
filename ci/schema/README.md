@@ -120,6 +120,8 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 
 `170_decomptes-parite_tables.sql` : en local, appliqué tel quel (`-i`), sans `171_decomptes-parite_fk.sql`.
 
+`172_statuts-achat-parite_tables.sql` : déjà présente en local (créée par `FixtureStatutsAchat.tables()`), sans `173_statuts-achat-parite_fk.sql`.
+
 `165_projet-config.sql` : en local, seulement ses `CREATE TABLE` (une commande `-Q` par table), sans ses clés étrangères.
 
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression
