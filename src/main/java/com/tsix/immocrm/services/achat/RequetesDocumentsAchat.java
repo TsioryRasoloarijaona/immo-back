@@ -5,7 +5,9 @@ import com.tsix.immocrm.domain.achat.AlerteClotureCommande;
 import com.tsix.immocrm.domain.achat.ChampDateAchat;
 import com.tsix.immocrm.domain.achat.LigneAchatCalculee;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
+import com.tsix.immocrm.domain.achat.PointageReglement;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.dto.achat.ActionsPieceAchatDto;
 import com.tsix.immocrm.dto.achat.AvoirAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto.HistoriqueDocumentAchatDto;
@@ -53,6 +55,7 @@ import java.util.stream.Stream;
 class RequetesDocumentsAchat {
 
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
+    private static final String MONTANT = "Amount";
     private static final String ID = "id";
     private static final String PROJETS = "projets";
     private static final String PKEY = "PKey";
@@ -160,6 +163,15 @@ class RequetesDocumentsAchat {
             + "LEFT JOIN StlSettlementType ty ON ty.PKey = s.StlSettlementTypeId WHERE l.BuyDocumentId = :id "
             + "ORDER BY s.DocDate, s.Code";
 
+    /** Règlements d'un BC, un rang par règlement : comme OMRAN {@code StlSettlementView.GetListForOrder} (E-B5). */
+    private static final String REGLEMENTS_BC = "SELECT s.PKey, s.Code, s.DocDate, ty.Code AS TypeCode, "
+            + "ty.Description AS TypeDescription, s.Amount, CASE WHEN " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX
+            + " THEN 0 ELSE 1 END AS Annule, s.Status, s.SettlementDate, s.EcheanceDate, s.AmountBase "
+            + "FROM StlSettlement s LEFT JOIN StlSettlementType ty ON ty.PKey = s.StlSettlementTypeId "
+            + "WHERE EXISTS (SELECT 1 FROM StlSettlementLine l JOIN BuyDocument p ON p.PKey = l.BuyDocumentId "
+            + "WHERE l.StlSettlementId = s.PKey AND p.BuyOrderId = :id "
+            + "AND (p.ReferenceType = 'ORDER_ADVANCE' OR p.DocType = 'INVOICE')) ORDER BY s.DocDate, s.Code";
+
     private static final String STATUTS = "SELECT PKey, Code, Description, IsOkForPayement, IsValidatedOnAccounting, "
             + "Sorting FROM BuyDocumentStatus ORDER BY Sorting, Code";
 
@@ -180,7 +192,8 @@ class RequetesDocumentsAchat {
                   String creePar, LocalDateTime dateModification, String modifiePar) {
 
         /** {@code visibles} : code des pièces désignées par l'en-tête que le compte voit ; les autres sortent à null. */
-        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, Complement c, Onglets o, Map<UUID, String> visibles) {
+        DocumentAchatDetailDto avec(DocumentAchatListItemDto piece, Complement c, Onglets o, Map<UUID, String> visibles,
+                                    ActionsPieceAchatDto actions) {
             return new DocumentAchatDetailDto(piece, notes, regularisation, timbreFiscal, valideComptabilite,
                     entiteCode, entiteDescription, dateCreation, creePar, dateModification, modifiePar, o.lignes(),
                     o.ventilation(), o.historique(), o.reglements(), c.declencheurId(), c.declencheurNom(),
@@ -188,7 +201,7 @@ class RequetesDocumentsAchat {
                     visible(c.devisOrigineId(), visibles), visibles.get(c.devisOrigineId()),
                     visible(c.bonCommandeId(), visibles), visibles.get(c.bonCommandeId()),
                     visible(c.factureSourceId(), visibles), visibles.get(c.factureSourceId()), o.recapTva(),
-                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs());
+                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs(), actions);
         }
 
         private static UUID visible(UUID id, Map<UUID, String> visibles) {
@@ -308,7 +321,7 @@ class RequetesDocumentsAchat {
     }
 
     private static RetenueAchatDto retenue(ResultSet rs, String prefixe) throws SQLException {
-        return new RetenueAchatDto(rs.getBigDecimal(prefixe + "Ratio"), rs.getBigDecimal(prefixe + "Amount"));
+        return new RetenueAchatDto(rs.getBigDecimal(prefixe + "Ratio"), rs.getBigDecimal(prefixe + MONTANT));
     }
 
     /** Lignes des pièces {@code ids}, colonnes calculées par {@link LigneAchatCalculee}, par pièce dans l'ordre Sorting. */
@@ -350,7 +363,19 @@ class RequetesDocumentsAchat {
     List<ReglementDocumentAchatDto> reglements(UUID id) {
         return jdbc.query(REGLEMENTS, Map.of(ID, id.toString()), (rs, n) -> new ReglementDocumentAchatDto(
                 uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE), chaine(rs, "TypeCode"),
-                chaine(rs, "TypeDescription"), rs.getBigDecimal("Amount"), rs.getInt("Annule") == 1));
+                chaine(rs, "TypeDescription"), rs.getBigDecimal(MONTANT), rs.getInt("Annule") == 1));
+    }
+
+    List<ReglementDocumentAchatDto> reglementsCommande(UUID id, LocalDate aujourdhui) {
+        return jdbc.query(REGLEMENTS_BC, Map.of(ID, id.toString()), (rs, n) -> {
+            String etat = chaine(rs, "Status");
+            LocalDate pointage = jour(rs, "SettlementDate");
+            PointageReglement p = PointageReglement.de(etat, pointage, jour(rs, "EcheanceDate"), aujourdhui);
+            return new ReglementDocumentAchatDto(uuid(rs, PKEY), chaine(rs, CODE), jour(rs, DOC_DATE),
+                    chaine(rs, "TypeCode"), chaine(rs, "TypeDescription"), rs.getBigDecimal(MONTANT),
+                    rs.getInt("Annule") == 1, etat, pointage, p.prevue(), p.reporte(), p.reportee(),
+                    rs.getBigDecimal("AmountBase"));
+        });
     }
 
     List<StatutAchatDto> statuts() {
