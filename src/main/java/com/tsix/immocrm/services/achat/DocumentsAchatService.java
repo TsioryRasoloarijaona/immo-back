@@ -1,21 +1,27 @@
 package com.tsix.immocrm.services.achat;
 
+import com.tsix.immocrm.domain.achat.ModuleAchat;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.FiltresDocumentsAchat;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto;
+import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.ModuleAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.NatureAchatDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,16 +60,32 @@ public class DocumentsAchatService {
             Map.entry("montantAPayer", par(DocumentAchatListItemDto::montantAPayer)),
             Map.entry("montantRegle", par(DocumentAchatListItemDto::montantRegle)),
             Map.entry("resteARegler", par(DocumentAchatListItemDto::resteARegler)),
-            Map.entry("decompteCode", par(DocumentAchatListItemDto::decompteCode)));
+            Map.entry("decompteCode", par(DocumentAchatListItemDto::decompteCode)),
+            Map.entry("typeLotLibelle", par(DocumentAchatListItemDto::typeLotLibelle)),
+            Map.entry("moduleLibelle", par(DocumentAchatListItemDto::moduleLibelle)),
+            Map.entry("societeNom", par(DocumentAchatListItemDto::societeNom)),
+            Map.entry("archive", par(DocumentAchatListItemDto::archive)),
+            Map.entry("comptabilise", par(DocumentAchatListItemDto::comptabilise)),
+            Map.entry("referenceBureauOrdre", par(DocumentAchatListItemDto::referenceBureauOrdre)),
+            Map.entry("personneAContacter", par(DocumentAchatListItemDto::personneAContacter)),
+            Map.entry("dossierGroupement", par(DocumentAchatListItemDto::dossierGroupement)),
+            Map.entry("aCloturer", par(DocumentAchatListItemDto::aCloturer)),
+            Map.entry("deviseCode", par(DocumentAchatListItemDto::deviseCode)),
+            Map.entry("categories", par(DocumentAchatListItemDto::categories)),
+            Map.entry("dateAlerte", par(DocumentAchatListItemDto::dateAlerte)));
 
     private static final Sort TRI_DEFAUT = Sort.by(Sort.Order.desc("dateDocument"), Sort.Order.desc("code"));
 
+    static final String DROIT_BC_SANS_RESTRICTION = "Yes.Buy.Front.Order.OrderList.WithNoRestriction";
+
     private final PerimetreProjetService perimetre;
     private final RequetesDocumentsAchat requetes;
+    private final DroitsOmran droits;
 
-    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes) {
+    public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes, DroitsOmran droits) {
         this.perimetre = perimetre;
         this.requetes = requetes;
+        this.droits = droits;
     }
 
     public ReferentielsAchatDto referentiels() {
@@ -71,9 +93,13 @@ public class DocumentsAchatService {
         PerimetreAchat pieces = perimetre.achat(List.of());
         List<NatureAchatDto> natures = Arrays.stream(NatureDocumentAchat.values())
                 .map(n -> new NatureAchatDto(n.name(), n.libelle())).toList();
+        List<ModuleAchatDto> modules = Arrays.stream(ModuleAchat.values())
+                .map(m -> new ModuleAchatDto(m.name(), m.libelle())).toList();
         return new ReferentielsAchatDto(natures, requetes.statuts(),
                 projets.isEmpty() ? List.of() : requetes.projets(projets),
-                pieces.vide() ? List.of() : requetes.fournisseurs(pieces));
+                pieces.vide() ? List.of() : requetes.fournisseurs(pieces),
+                pieces.societes().isEmpty() ? List.of() : requetes.societes(pieces.societes()), modules,
+                requetes.typesLot());
     }
 
     public Page<DocumentAchatListItemDto> liste(FiltresDocumentsAchat filtres, Pageable pageable) {
@@ -91,20 +117,38 @@ public class DocumentsAchatService {
         SoldeDocumentAchat total = SoldeDocumentAchat.total(soldes);
         return new TotauxDocumentsAchatDto(pieces.size(),
                 somme(pieces.stream().map(DocumentAchatListItemDto::montantTTC)), total.montantAPayer(),
-                total.montantRegle(), total.resteARegler(), aRegler.size(), SoldeDocumentAchat.total(aRegler).resteARegler());
+                total.montantRegle(), total.resteARegler(), aRegler.size(), SoldeDocumentAchat.total(aRegler).resteARegler(),
+                somme(pieces.stream().map(DocumentAchatListItemDto::montantHT)),
+                somme(pieces.stream().map(DocumentAchatListItemDto::montantTVA)));
     }
 
     /** Pièces visibles retenues par les filtres (SQL puis {@code nonSoldes} / {@code okPourPaiement}), sans tri. */
     List<DocumentAchatListItemDto> pieces(FiltresDocumentsAchat filtres) {
-        PerimetreAchat tous = perimetre.achat(filtres.projetIds());
+        PerimetreAchat tous = perimetre.achat(filtres.projetIds()).deSocietes(filtres.societeIds());
         PerimetreAchat visibles = Boolean.TRUE.equals(filtres.moduleProjet()) ? tous.duModuleProjet() : tous;
         if (visibles.vide()) {
             return List.of();
         }
-        return requetes.pieces(visibles, filtres).stream()
+        return requetes.pieces(visibles, filtres, declencheurImpose(filtres)).stream()
                 .filter(p -> !Boolean.TRUE.equals(filtres.nonSoldes()) || solde(p).aRegler())
                 .filter(p -> !Boolean.TRUE.equals(filtres.okPourPaiement()) || p.okPourPaiement())
                 .toList();
+    }
+
+    /**
+     * Liste des BC ({@code natures} = [ORDER] seul) : déclencheur imposé = personnel du compte, sauf droit
+     * {@link #DROIT_BC_SANS_RESTRICTION} ; compte sans personnel : aucune restriction (OMRAN {@code OrderView.cs:803}).
+     */
+    private UUID declencheurImpose(FiltresDocumentsAchat filtres) {
+        if (!Set.copyOf(filtres.natures()).equals(Set.of(NatureDocumentAchat.ORDER))) {
+            return null;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID personnel = auth != null && auth.getPrincipal() instanceof AuthenticatedUser user ? user.employeeId() : null;
+        if (personnel == null || !droits.parmi(DROIT_BC_SANS_RESTRICTION).isEmpty()) {
+            return null;
+        }
+        return personnel;
     }
 
     static SoldeDocumentAchat solde(DocumentAchatListItemDto piece) {

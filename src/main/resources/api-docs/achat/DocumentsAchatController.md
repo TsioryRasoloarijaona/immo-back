@@ -6,15 +6,25 @@ Pièces d'achat (`BuyDocument`) en **lecture seule** : factures, bons de command
 
 **Solde** : `montantRegle` = somme des lignes de règlement (`StlSettlementLine.Amount`) de la pièce dont le règlement n'est pas annulé (`CANCELED`) ; `resteARegler` = `montantAPayer` (`AmountToPay`) − réglé, à 2 décimales ; `solde` = |reste| ≤ 0,05 ; `aDeduire` = à payer < −0,05 (récupération d'avance sur décompte, jamais « trop réglée ») ; `tropRegle` = reste < −0,05 sur une pièce qui n'est pas à déduire. « Payé » ne se lit jamais dans le statut. Calcul unique : `SoldeDocumentAchat` (FEATURE-achat-impayes.md §3.1).
 
+## referentiels
+
+`societes` = sociétés habilitées de l'appelant seulement (vide sans habilitation société) ; `modules` = BUY (Achat), PRJ (Projet), STL (Trésorerie) ; `typesLot` = tous les types de lot (`PrjMarketType`).
+
 ## liste
 
-Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `nonSoldes=true` garde les pièces dont le reste dépasse 0,05 ; une pièce trop réglée ou à déduire n'y figure pas. `okPourPaiement=true` garde les pièces dont le statut est « OK pour paiement » ; avec `natures=INVOICE&natures=DOCUMENT_TO_PAY&nonSoldes=true`, c'est la liste « Validées, non réglées ». `search` cherche, sans tenir compte de la casse, dans le code, la référence, la description et le nom du fournisseur. Tri par défaut : `dateDocument` décroissante puis `code` décroissant. Propriétés de tri acceptées : `code`, `nature`, `dateDocument`, `dateEcheance`, `reference`, `fournisseurNom`, `projetCode`, `lotCode`, `statutCode`, `montantTTC`, `montantAPayer`, `montantRegle`, `resteARegler`, `decompteCode` ; une autre propriété répond 400.
+Pièces visibles, filtrées. `projetIds` est restreint au périmètre (un projet hors périmètre est ignoré, jamais d'erreur ; s'il ne reste rien, la page est vide). `societeIds` est de même croisé avec les sociétés habilitées : une société non habilitée est ignorée, et si aucune ne reste la page est vide (jamais « aucun filtre »). Une liste vide ou un paramètre vide (`societeIds=`) = pas de filtre. `nonSoldes=true` garde les pièces dont le reste dépasse 0,05 ; une pièce trop réglée ou à déduire n'y figure pas. `okPourPaiement=true` garde les pièces dont le statut est « OK pour paiement » ; avec `natures=INVOICE&natures=DOCUMENT_TO_PAY&nonSoldes=true`, c'est la liste « Validées, non réglées ». `modules` se combine par ET avec `moduleProjet`. `montantDe` / `montantA` sont inclus et portent sur `AmountToPay` (`montantDe > montantA` = page vide). `du` / `au` (inclus) portent sur la colonne de `champDate` (`DATE_PIECE` = `DocDate`, `ECHEANCE` = `MaturityDate`) ; `dateRenseignee=true` garde les pièces dont cette colonne est renseignée et ignore `du` / `au`. `search` cherche, sans tenir compte de la casse, dans le code, la référence, la référence bureau d'ordre, la description, les notes, le fournisseur, le projet (code, description), le lot (code, description) et le dossier de groupement.
+
+**Bons de commande** (`natures=ORDER` seul, écran « Bons de commande ») : comme OMRAN (`OrderView.cs:803`), seuls les BC dont le déclencheur (`CfgTierTriggerId`) est le personnel du compte (`AdmUser.CfgEmployeeId`) sont rendus, sauf droit OMRAN `Yes.Buy.Front.Order.OrderList.WithNoRestriction` (l'Administrateur l'a) ; un compte sans personnel n'est pas restreint. Toute autre combinaison de natures n'est pas restreinte. Mêmes règles pour les totaux et l'export.
+
+**À clôturer** (`aCloturer`) : bon de commande dont le HT est inférieur ou égal à la Σ des HT de ses factures (`BuyOrderId`), et dont le statut n'est ni « Terminé avec succès » ni « Terminé avec échec » (une annulation alerte) ; faux sans statut et pour toute autre nature.
+
+Tri par défaut : `dateDocument` décroissante puis `code` décroissant. Propriétés de tri acceptées : `code`, `nature`, `dateDocument`, `dateEcheance`, `reference`, `fournisseurNom`, `projetCode`, `lotCode`, `statutCode`, `montantTTC`, `montantAPayer`, `montantRegle`, `resteARegler`, `decompteCode`, `typeLotLibelle`, `moduleLibelle`, `societeNom`, `archive`, `comptabilise`, `referenceBureauOrdre`, `personneAContacter`, `dossierGroupement`, `aCloturer`, `deviseCode`, `categories`, `dateAlerte` ; une autre propriété répond 400.
 
 **Décompte lié** (`decompteId`, `decompteCode`, `decompteNumero`) : le décompte de chantier dont `PrjWorkingOut.BuyDocumentId` pointe la pièce (le premier par date puis code si plusieurs), `null` sinon. `BuyDocument.PrjWorkingOutId` (sens des avances) n'est jamais lu.
 
 ## totaux
 
-Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre. Aucune pièce visible : tout à zéro.
+Totaux de la liste pour les mêmes filtres (même requête, toutes pages ; `sort`, `page` et `size` ignorés) : `nombre` = `totalElements` de la liste, `resteARegler` = Σ à payer − Σ réglé (signé), `resteDu` = Σ des seuls restes supérieurs à 0,05 et `nombreARegler` leur nombre, `montantHT` / `montantTVA` = Σ HT / TVA des lignes. Aucune pièce visible : tout à zéro.
 
 ## soldes
 

@@ -12,5 +12,7 @@ public record TotauxDocumentsAchatDto(
         @Schema(description = "Σ des réglés (règlements annulés exclus).") BigDecimal montantRegle,
         @Schema(description = "Σ à payer − Σ réglé : reste signé de la sélection.") BigDecimal resteARegler,
         @Schema(description = "Nombre de pièces dont le reste dépasse 0,05.") long nombreARegler,
-        @Schema(description = "Σ des restes supérieurs à 0,05 seulement : ce qui est vraiment dû.") BigDecimal resteDu) {
+        @Schema(description = "Σ des restes supérieurs à 0,05 seulement : ce qui est vraiment dû.") BigDecimal resteDu,
+        @Schema(description = "Σ des montants HT.") BigDecimal montantHT,
+        @Schema(description = "Σ des montants de TVA.") BigDecimal montantTVA) {
 }
