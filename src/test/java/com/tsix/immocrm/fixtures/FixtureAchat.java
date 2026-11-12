@@ -355,6 +355,79 @@ public class FixtureAchat {
                 .setParameter(P_ID, compte.getId()));
     }
 
+    // ------------------------------------------------------------------ lot A2a « fiche pièce » (FEATURE-achat-fiche-parite.md)
+
+    public static final String DEVIS = "QUOTE";
+    public static final String BON_COMMANDE = "ORDER";
+    public static final String BON_LIVRAISON = "DELIVRY";
+
+    /** Ligne complète ; fractions comme OMRAN (remise, FODEC, TVA) ; {@code code} nul possible ; PU TTC stocké tel quel. */
+    public record LigneAchat(int ordre, String code, String designation, String unite, BigDecimal quantite,
+                             BigDecimal prixUnitaireHT, BigDecimal tauxTva, BigDecimal remise, BigDecimal fodec,
+                             BigDecimal prixUnitaireTTC) {
+    }
+
+    public UUID ligne(UUID pieceId, LigneAchat l) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyDocumentLine (Pkey, BuyDocumentId, Sorting, Code, Description, Unity, Quantity,
+                            UnitPriceHT, UnitPriceTTC, VatRatio, DiscountRatio, FODECRatio)
+                        VALUES (:id, :piece, :ordre, :code, :designation, :unite, :qte, :pu, :puttc, :tva, :remise, :fodec)""")
+                .setParameter(P_ID, id).setParameter("piece", pieceId).setParameter("ordre", l.ordre())
+                .setParameter(P_CODE, l.code() == null ? "" : l.code()).setParameter("designation", l.designation())
+                .setParameter("unite", l.unite()).setParameter("qte", l.quantite()).setParameter("pu", l.prixUnitaireHT())
+                .setParameter("puttc", l.prixUnitaireTTC()).setParameter("tva", l.tauxTva())
+                .setParameter("remise", l.remise()).setParameter("fodec", l.fodec()));
+        if (l.code() == null) {
+            executer(em.createNativeQuery("UPDATE BuyDocumentLine SET Code = NULL WHERE Pkey = :id").setParameter(P_ID, id));
+        }
+        return id;
+    }
+
+    /** Ventilation par projet ({@code BuyVentilationExpense}). */
+    public void ventilationProjet(UUID pieceId, UUID projet, BigDecimal taux) {
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyVentilationExpense (Pkey, BuyDocumentId, PrjProjectId, VentilationRate)
+                        VALUES (:id, :piece, :projet, :taux)""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter("piece", pieceId).setParameter("projet", projet)
+                .setParameter("taux", taux));
+    }
+
+    /** Lien BC ↔ facture de la table {@code BuyOrderInvoice} (absente de yesRemsTest et de la CI au 12/11 : créée si besoin). */
+    public void lierFactureACommande(UUID bonCommande, UUID facture) {
+        executer(em.createNativeQuery("""
+                IF OBJECT_ID('dbo.BuyOrderInvoice', 'U') IS NULL
+                    CREATE TABLE dbo.BuyOrderInvoice (PKey uniqueidentifier NOT NULL PRIMARY KEY,
+                        BuyOrderId uniqueidentifier NULL, BuyInvoiceId uniqueidentifier NULL,
+                        UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL,
+                        UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL)"""));
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyOrderInvoice (PKey, BuyOrderId, BuyInvoiceId) VALUES (:id, :bc, :facture)""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter("bc", bonCommande).setParameter("facture", facture));
+    }
+
+    /** Transition de workflow ({@code BuyDocumentWorkFlow}) entre deux statuts existants. */
+    public UUID transition(UUID depart, UUID arrivee, String description) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyDocumentWorkFlow (PKey, Sorting, StartStatusId, EndStatusId, Description)
+                        VALUES (:id, 1, :depart, :arrivee, :description)""")
+                .setParameter(P_ID, id).setParameter("depart", depart).setParameter("arrivee", arrivee)
+                .setParameter("description", description));
+        return id;
+    }
+
+    /** Passage d'historique avec sa transition ({@code buyDocumentWorkFlowId}, colonne en minuscule). */
+    public void historique(UUID pieceId, UUID statut, LocalDateTime date, AdmUser auteur, String note, UUID transition) {
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyDocumentStatusHistory (PKey, DocDate, BuyDocumentStatusId, BuyDocumentId, AdmUserId, Notes,
+                            buyDocumentWorkFlowId)
+                        VALUES (:id, :date, :statut, :piece, :user, :note, :transition)""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter("date", date).setParameter("statut", statut)
+                .setParameter("piece", pieceId).setParameter("user", auteur.getId()).setParameter("note", note)
+                .setParameter("transition", transition));
+    }
+
     private void executer(Query query) {
         em.flush();
         query.executeUpdate();
