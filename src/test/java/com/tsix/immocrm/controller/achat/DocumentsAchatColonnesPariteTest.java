@@ -57,6 +57,7 @@ class DocumentsAchatColonnesPariteTest {
         fournisseur = fixture.fournisseur("FOU-" + jeton, nom);
         compte = fixture.compte("ACH-" + jeton, ROLE);
         fixture.habiliterSociete(compte, societe);
+        fixture.sansPersonnel(compte); // Q2 : avec un personnel, seuls ses BC seraient visibles
     }
 
     private RequestPostProcessor qui() {
