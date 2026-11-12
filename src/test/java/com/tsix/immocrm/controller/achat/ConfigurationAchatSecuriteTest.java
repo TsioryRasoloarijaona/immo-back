@@ -54,10 +54,13 @@ class ConfigurationAchatSecuriteTest {
         mockMvc.perform(get(url).with(commercial)).andExpect(status().isOk());
     }
 
-    /** §4.1 « Aucun POST/PUT/DELETE » : la route existe en lecture seule → 405. */
+    /**
+     * §4.1 « Aucun POST/PUT/DELETE » : la route existe en lecture seule → 405. POST /statuts et POST /transitions sont
+     * ouverts par FEATURE-statuts-achat-parite.md (PUT / DELETE y prennent un {id}, la collection reste en 405 ; écritures
+     * testées dans StatutsAchat*Test et TransitionsAchatEcritureTest).
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"POST " + STATUTS, "PUT " + STATUTS, "DELETE " + STATUTS,
-            "POST " + TRANSITIONS, "PUT " + TRANSITIONS, "DELETE " + TRANSITIONS})
+    @ValueSource(strings = {"PUT " + STATUTS, "DELETE " + STATUTS, "PUT " + TRANSITIONS, "DELETE " + TRANSITIONS})
     void ecriture_405(String methodeEtUrl) throws Exception {
         String[] m = methodeEtUrl.split(" ");
 
