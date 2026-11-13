@@ -1,10 +1,17 @@
 package com.tsix.immocrm.controller.projet;
 
+import com.tsix.immocrm.config.CollecteurLignesEcrites;
+import com.tsix.immocrm.config.EcrituresValidees;
+import com.tsix.immocrm.config.LigneEcrite;
 import com.tsix.immocrm.controller.projet.AppelsProjet.Reponse;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.fixtures.FixtureBordereauxEcriture;
 import com.tsix.immocrm.fixtures.FixtureProjetLots;
+import jakarta.persistence.EntityManagerFactory;
 import org.assertj.core.api.SoftAssertions;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.event.service.spi.EventListenerRegistry;
+import org.hibernate.event.spi.EventType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,9 +19,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -41,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@RecordApplicationEvents
 class LotBordereauxEcritureCommitTest {
 
     private static final Logger log = LoggerFactory.getLogger(LotBordereauxEcritureCommitTest.class);
@@ -49,6 +61,18 @@ class LotBordereauxEcritureCommitTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private DataSource dataSource;
+    @Autowired private ApplicationEvents evenements;
+
+    /** Le collecteur de la remontée n'est branché qu'en deux bases : le brancher ici, contexte propre à cette classe. */
+    @TestConfiguration
+    static class AvecCollecteur {
+        AvecCollecteur(EntityManagerFactory fabrique, ApplicationEventPublisher publication) {
+            CollecteurLignesEcrites collecteur = new CollecteurLignesEcrites(publication);
+            EventListenerRegistry registre = fabrique.unwrap(SessionFactoryImplementor.class).getEventListenerRegistry();
+            registre.appendListeners(EventType.POST_INSERT, collecteur);
+            registre.appendListeners(EventType.POST_DELETE, collecteur);
+        }
+    }
 
     private final String jeton = FixtureProjetLots.jeton();
     private final List<Runnable> nettoyages = new ArrayList<>();
@@ -219,5 +243,45 @@ class LotBordereauxEcritureCommitTest {
         assertThat(r.statut()).as(r.corps()).isEqualTo(200);
         assertThat(compter("SELECT COUNT(*) FROM AdmWebHistorics WHERE ObjectId = ? OR ParentObjectId = ?",
                 lot.toString(), lot.toString())).isPositive();
+    }
+
+    // R12 + remontée : chaque ligne de ventilation remplacée est publiée, sa relecture absente l'efface de la copie.
+    @Test
+    void r12_ventilationReecrite_ancienneLignePublieePourEtreEffaceeDeLaCopie() throws Exception {
+        UUID ancienne = UUID.randomUUID();
+        jdbc.update("INSERT INTO PrjMarketVentilationCategory (PKey, StlCategoryId, PrjMarketId, VentilationRate) VALUES (?, ?, ?, 1)",
+                ancienne.toString(), categorie.toString(), lot.toString());
+        UUID nouvelle = UUID.randomUUID();
+        idsEcrits.add(nouvelle);
+
+        Reponse r = appels.ecrire(admin, lot, ESTIMATIF,
+                bordereau(List.of(), List.of(ligne(nouvelle, null, 1, "1", "1", "100", categorie))));
+
+        List<UUID> enBase = jdbc.queryForList("SELECT PKey FROM PrjMarketVentilationCategory WHERE PrjMarketId = ?",
+                String.class, lot.toString()).stream().map(UUID::fromString).toList();
+        List<UUID> publiees = evenements.stream(EcrituresValidees.class).flatMap(e -> e.lignes().stream())
+                .filter(l -> "PrjMarketVentilationCategory".equals(l.table())).map(LigneEcrite::pkey).toList();
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(r.statut()).as(r.corps()).isEqualTo(200);
+            s.assertThat(enBase).hasSize(1).doesNotContain(ancienne);
+            s.assertThat(publiees).as("lignes remontées dans la copie").contains(ancienne).containsAll(enBase);
+        });
+    }
+
+    // Revue : la suppression du lot publie ses lignes de bordereau supprimées et le lot, pour les effacer de la copie.
+    @Test
+    void suppressionDuLot_lignesEtLotPubliesPourEtreEffacesDeLaCopie() throws Exception {
+        UUID ligneLot = ligneDefinitive(null, 1, "1", "1");
+
+        int statut = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/projet/lots/{id}", lot).with(admin)).andReturn().getResponse().getStatus();
+
+        List<UUID> publiees = evenements.stream(EcrituresValidees.class).flatMap(e -> e.lignes().stream())
+                .map(LigneEcrite::pkey).toList();
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(statut).isBetween(200, 299);
+            s.assertThat(compter("SELECT COUNT(*) FROM PrjMarket WHERE PKey = ?", lot.toString())).isZero();
+            s.assertThat(publiees).as("suppressions remontées dans la copie").contains(ligneLot, lot);
+        });
     }
 }

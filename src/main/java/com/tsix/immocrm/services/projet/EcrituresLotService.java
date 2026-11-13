@@ -7,6 +7,8 @@ import com.tsix.immocrm.dto.projet.LotDetailDto;
 import com.tsix.immocrm.dto.projet.LotListItemDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
+import com.tsix.immocrm.entities.prj.PrjMarketLine;
+import com.tsix.immocrm.entities.prj.PrjMarketLineEstimation;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stl.StlCategory;
@@ -124,9 +126,11 @@ public class EcrituresLotService {
             throw new ConflictException(LOT_CITE);
         }
         try {
-            em.createQuery("delete from PrjMarketLine l where l.prjMarketId = :id").setParameter("id", id).executeUpdate();
-            em.createQuery("delete from PrjMarketLineEstimation l where l.prjMarketId = :id").setParameter("id", id)
-                    .executeUpdate();
+            // em.remove et non un delete JPQL : seul l'évènement de suppression fait effacer la ligne de la copie de lecture.
+            em.createQuery("from PrjMarketLine l where l.prjMarketId = :id", PrjMarketLine.class).setParameter("id", id)
+                    .getResultList().forEach(em::remove);
+            em.createQuery("from PrjMarketLineEstimation l where l.prjMarketId = :id", PrjMarketLineEstimation.class)
+                    .setParameter("id", id).getResultList().forEach(em::remove);
             em.remove(m);
             em.flush();
         } catch (PersistenceException e) {

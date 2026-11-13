@@ -44,8 +44,9 @@ class VentilationLot {
         if (parts.isEmpty()) {
             parts = Collections.singletonMap(Champs.de(lot.getStlCategory(), StlCategory::getId), BigDecimal.ONE);
         }
-        em.createQuery("delete from PrjMarketVentilationCategory v where v.prjMarketId = :lot")
-                .setParameter("lot", lot.getId()).executeUpdate();
+        // em.remove et non un delete JPQL : seul l'évènement de suppression fait effacer la ligne de la copie de lecture.
+        em.createQuery("from PrjMarketVentilationCategory v where v.prjMarketId = :lot", PrjMarketVentilationCategory.class)
+                .setParameter("lot", lot.getId()).getResultList().forEach(em::remove);
         parts.forEach((categorie, taux) -> {
             PrjMarketVentilationCategory v = new PrjMarketVentilationCategory();
             v.setId(UUID.randomUUID());
