@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** Montants d'un lot : marché / estimation (bordereau ou forfait), avancement, taux. Voir FEATURE-projet-chantier-lecture.md §5.2. */
 public final class MontantsLot {
@@ -78,7 +79,7 @@ public final class MontantsLot {
     }
 
     public static BigDecimal arrondi(BigDecimal v) {
-        return v == null ? BigDecimal.ZERO.setScale(2) : v.setScale(2, RoundingMode.HALF_UP);
+        return Objects.requireNonNullElse(v, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal z(BigDecimal v) {
