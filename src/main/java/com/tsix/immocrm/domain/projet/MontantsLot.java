@@ -78,7 +78,7 @@ public final class MontantsLot {
     }
 
     public static BigDecimal arrondi(BigDecimal v) {
-        return z(v).setScale(2, RoundingMode.HALF_UP);
+        return v == null ? BigDecimal.ZERO.setScale(2) : v.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal z(BigDecimal v) {
