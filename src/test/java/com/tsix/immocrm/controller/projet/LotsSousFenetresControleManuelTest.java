@@ -126,7 +126,6 @@ class LotsSousFenetresControleManuelTest {
             System.out.printf("lot %s : totalHT API %s / table %s%n", lot, JsonPath.read(corps, "$.totaux.totalHT"), t.get("HT"));
             s.assertThat(groupes).as("groupes %s", lot).hasSize(nbGroupes == null ? 0 : nbGroupes);
             s.assertThat((long) lignes.size()).as("lignes %s", lot).isEqualTo(((Number) t.get("Nb")).longValue());
-            s.assertThat(JsonPath.<Boolean>read(corps, "$.verrouille")).as("verrouillé %s", lot).isTrue();
         }
         s.assertAll();
     }

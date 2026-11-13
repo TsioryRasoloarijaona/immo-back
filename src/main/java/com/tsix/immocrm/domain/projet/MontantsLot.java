@@ -2,6 +2,11 @@ package com.tsix.immocrm.domain.projet;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /** Montants d'un lot : marché / estimation (bordereau ou forfait), avancement, taux. Voir FEATURE-projet-chantier-lecture.md §5.2. */
 public final class MontantsLot {
@@ -46,8 +51,35 @@ public final class MontantsLot {
         return pourcentage == null ? null : pourcentage.movePointLeft(2);
     }
 
+    /** PU TTC d'une ligne de bordereau = PU HT × (1 + FODEC) × (1 + TVA), ratios ; 6 décimales comme la colonne. */
+    public static BigDecimal prixTTC(BigDecimal prixHT, BigDecimal fodecRatio, BigDecimal tvaRatio) {
+        return z(prixHT).multiply(BigDecimal.ONE.add(z(fodecRatio))).multiply(BigDecimal.ONE.add(z(tvaRatio)))
+                .setScale(6, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Parts (ratios à 6 décimales) de chaque clé dans le total des montants, la dernière absorbant l'écart pour que la somme
+     * vaille exactement 1 ; vide si le total n'est pas positif.
+     */
+    public static <K> Map<K, BigDecimal> parts(Map<K, BigDecimal> montants) {
+        BigDecimal total = montants.values().stream().map(MontantsLot::z).reduce(BigDecimal.ZERO, BigDecimal::add);
+        Map<K, BigDecimal> parts = new LinkedHashMap<>();
+        if (total.signum() <= 0) {
+            return parts;
+        }
+        BigDecimal reste = BigDecimal.ONE;
+        List<K> cles = new ArrayList<>(montants.keySet());
+        for (int i = 0; i < cles.size() - 1; i++) {
+            BigDecimal part = z(montants.get(cles.get(i))).divide(total, 6, RoundingMode.HALF_UP);
+            parts.put(cles.get(i), part);
+            reste = reste.subtract(part);
+        }
+        parts.put(cles.get(cles.size() - 1), reste);
+        return parts;
+    }
+
     public static BigDecimal arrondi(BigDecimal v) {
-        return z(v).setScale(2, RoundingMode.HALF_UP);
+        return Objects.requireNonNullElse(v, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal z(BigDecimal v) {

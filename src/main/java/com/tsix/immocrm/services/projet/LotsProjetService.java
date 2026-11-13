@@ -316,24 +316,37 @@ public class LotsProjetService {
     }
 
     public BordereauDto bordereau(UUID id) {
-        Bordereau b = lireBordereau(visible(id).getId(), DEFINITIF);
-        return new BordereauDto(id, b.lignes(), b.totaux(), b.groupes());
+        PrjMarket m = visible(id);
+        Bordereau b = lireBordereau(id, DEFINITIF, lignesDecomptees(id));
+        return new BordereauDto(id, b.lignes(), b.totaux(), b.groupes(),
+                DroitsBordereau.refus(droits, m, false).isEmpty(), MontantsLot.pourcentage(m.getDefaultVat()),
+                Champs.de(m.getStlCategory(), StlCategory::getId));
     }
 
-    /** Même lecture que {@link #bordereau} sur les tables estimatives ; toujours verrouillé (lecture seule). */
+    /** Même lecture que {@link #bordereau} sur les tables estimatives ; aucune ligne n'y est décomptée. */
     public BordereauEstimatifDto bordereauEstimatif(UUID id) {
-        Bordereau b = lireBordereau(visible(id).getId(), ESTIMATIF);
-        return new BordereauEstimatifDto(id, true, b.groupes(), b.lignes(), b.totaux());
+        PrjMarket m = visible(id);
+        Bordereau b = lireBordereau(id, ESTIMATIF, Set.of());
+        return new BordereauEstimatifDto(id, DroitsBordereau.refus(droits, m, true).isPresent(), b.groupes(), b.lignes(),
+                b.totaux(), MontantsLot.pourcentage(m.getDefaultVat()), Champs.de(m.getStlCategory(), StlCategory::getId));
     }
 
-    private Bordereau lireBordereau(UUID id, SourceBordereau source) {
+    /** Lignes définitives du lot citées par une ligne de décompte : non supprimables (FEATURE-lot-ecritures.md R9). */
+    Set<UUID> lignesDecomptees(UUID lot) {
+        return Set.copyOf(em.createQuery("select distinct w.prjMarketLineId from PrjWorkingOutLine w where w.prjMarketLineId in"
+                + " (select l.id from PrjMarketLine l where l.prjMarketId = :lot)", UUID.class).setParameter("lot", lot)
+                .getResultList());
+    }
+
+    private Bordereau lireBordereau(UUID id, SourceBordereau source, Set<UUID> decomptees) {
         List<GroupeBordereauOmran> tous = em.createQuery(source.groupes(), GroupeBordereauOmran.class)
                 .setParameter("lot", id).getResultList();
         Map<UUID, String> libelles = new HashMap<>();
         tous.forEach(g -> libelles.put(g.getId(), g.getDescription()));
         List<LigneBordereauDto> lignes = em.createQuery(source.lignes(), LigneBordereauOmran.class)
                 .setParameter("lot", id).getResultList().stream()
-                .map(l -> ligneBordereau(l, libelles.get(l.getPrjMarketLineGroupingId()))).toList();
+                .map(l -> ligneBordereau(l, libelles.get(l.getPrjMarketLineGroupingId()), decomptees.contains(l.getId())))
+                .toList();
         Trio totaux = sommes(source.sommes(), List.of(id)).getOrDefault(id, new Trio(null, null, null, true));
         return new Bordereau(tous.stream().filter(g -> !Boolean.TRUE.equals(g.getIsStock()))
                 .map(g -> new GroupeBordereauDto(g.getId(), g.getParentId(), g.getSorting(), g.getCode(), g.getDescription(),
@@ -391,12 +404,13 @@ public class LotsProjetService {
                 m.getEstimatedVatAmountManual(), m.getEstimatedPriceTTCManual());
     }
 
-    private static LigneBordereauDto ligneBordereau(LigneBordereauOmran l, String groupe) {
+    private static LigneBordereauDto ligneBordereau(LigneBordereauOmran l, String groupe, boolean decomptee) {
         return new LigneBordereauDto(l.getId(), l.getSorting(), groupe, l.getCode(), l.getDescription(), l.getUnity(),
                 l.getQuantity(), l.getUnitPriceHT(), MontantsLot.pourcentage(l.getVatRatio()),
                 MontantsLot.applique(l.getQuantity(), l.getUnitPriceHT()),
                 MontantsLot.applique(l.getQuantity(), l.getUnitPriceTTC()), l.getPrjMarketLineGroupingId(),
-                l.getWeightingRatio());
+                l.getWeightingRatio(), MontantsLot.pourcentage(l.getFodecRatio()), l.getStlCategoryId(), l.getNotes(),
+                decomptee);
     }
 
     /** Σ bordereau (définitif ou estimatif) par lot ; un lot absent de la map n'a aucune ligne retenue. */

@@ -116,6 +116,7 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/160_fiches-verrouillees_tables.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/161_actions_view.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/170_projets-config-parite_tables.sql"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/182_lot-ecritures_tables.sql"
 ```
 
 `170_decomptes-parite_tables.sql` : en local, appliqué tel quel (`-i`), sans `171_decomptes-parite_fk.sql`.

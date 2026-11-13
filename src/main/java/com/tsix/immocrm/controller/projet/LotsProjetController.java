@@ -7,6 +7,8 @@ import com.tsix.immocrm.dto.projet.AvenantLotDto;
 import com.tsix.immocrm.dto.projet.AvoirLotDto;
 import com.tsix.immocrm.dto.projet.BordereauDto;
 import com.tsix.immocrm.dto.projet.BordereauEstimatifDto;
+import com.tsix.immocrm.dto.projet.BordereauSaisieDto;
+import com.tsix.immocrm.services.projet.EcritureBordereauLot;
 import com.tsix.immocrm.dto.projet.CreerLotRequest;
 import com.tsix.immocrm.dto.projet.PrevisionsLotDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto;
@@ -47,6 +49,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -70,6 +73,7 @@ public class LotsProjetController {
     private static final String LOT_INTROUVABLE = "Lot introuvable : id inconnu, lot sans projet, projet hors périmètre ou statut invisible.";
 
     private static final String FILTRE_MAL_FORME = "Filtre mal formé (UUID).";
+    private static final String CORPS_INVALIDE = "Champ obligatoire absent ou hors bornes, id d'un autre bordereau, groupe hors envoi.";
     // Colonnes de la liste OMRAN (MarketMonitoringList.cs:grid_InitializeLayout_1), dans son ordre.
     private static final List<ColonneFixe> COLONNES_EXPORT = List.of(ColonneFixe.texte("code", "Code"),
             ColonneFixe.texte("description", "Description"), ColonneFixe.texte("fournisseurNom", "Fournisseur"),
@@ -87,15 +91,18 @@ public class LotsProjetController {
     private final CopieLot copie;
     private final ExportTableur exportTableur;
     private final SousFenetresLotService sousFenetres;
+    private final EcritureBordereauLot bordereaux;
 
     public LotsProjetController(LotsProjetService service, EcrituresLotService ecritures, ModificationLot modification,
-                                CopieLot copie, ExportTableur exportTableur, SousFenetresLotService sousFenetres) {
+                                CopieLot copie, ExportTableur exportTableur, SousFenetresLotService sousFenetres,
+                                EcritureBordereauLot bordereaux) {
         this.service = service;
         this.ecritures = ecritures;
         this.modification = modification;
         this.copie = copie;
         this.exportTableur = exportTableur;
         this.sousFenetres = sousFenetres;
+        this.bordereaux = bordereaux;
     }
 
     @GetMapping("/referentiels")
@@ -245,12 +252,39 @@ public class LotsProjetController {
         return service.bordereau(id);
     }
 
+    @PutMapping("/lots/{id}/bordereau")
+    @Operation(summary = "Enregistrer le bordereau définitif entier d'un lot")
+    @ApiResponse(responseCode = "200", description = "Bordereau définitif relu après écriture.")
+    @ApiResponse(responseCode = "400", description = CORPS_INVALIDE, content = @Content)
+    @ApiResponse(responseCode = "403", description = "Droit MarketMonitoringList.toolNew ou MarketMonitoring.toolAddMarketLine absent.",
+            content = @Content)
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    @ApiResponse(responseCode = "409", description = "Suppression d'une ligne décomptée ou d'un groupe qui en contient une.",
+            content = @Content)
+    public BordereauDto ecrireBordereau(@Parameter(description = ID_LOT) @PathVariable UUID id,
+                                        @RequestBody BordereauSaisieDto corps) {
+        return bordereaux.enregistrerDefinitif(id, corps);
+    }
+
     @GetMapping("/lots/{id}/bordereau-estimatif")
-    @Operation(summary = "Bordereau estimatif d'un lot, en lecture seule")
+    @Operation(summary = "Bordereau estimatif d'un lot")
     @ApiResponse(responseCode = "200", description = "Groupes, lignes du bordereau estimatif et leurs totaux.")
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
     public BordereauEstimatifDto bordereauEstimatif(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return service.bordereauEstimatif(id);
+    }
+
+    @PutMapping("/lots/{id}/bordereau-estimatif")
+    @Operation(summary = "Enregistrer le bordereau estimatif entier d'un lot")
+    @ApiResponse(responseCode = "200", description = "Bordereau estimatif relu après écriture.")
+    @ApiResponse(responseCode = "400", description = CORPS_INVALIDE + " Code de ligne en double.", content = @Content)
+    @ApiResponse(responseCode = "403", description = "Droit MarketMonitoringList.toolNew absent.", content = @Content)
+    @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    @ApiResponse(responseCode = "409", description = "Estimatif cadenassé par le statut du lot, ou lot multi-fournisseurs.",
+            content = @Content)
+    public BordereauEstimatifDto ecrireBordereauEstimatif(@Parameter(description = ID_LOT) @PathVariable UUID id,
+                                                          @RequestBody BordereauSaisieDto corps) {
+        return bordereaux.enregistrerEstimatif(id, corps);
     }
 
     @GetMapping("/lots/{id}/avances")
