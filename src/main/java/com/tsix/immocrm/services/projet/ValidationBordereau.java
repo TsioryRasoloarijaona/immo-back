@@ -24,6 +24,9 @@ final class ValidationBordereau {
     private static final int UNITE = 50;
     private static final int NOTES = 1000;
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
+    // Capacités des colonnes : decimal(26,6) pour quantité / pondération, decimal(26,16) pour UnitPriceHT du définitif.
+    private static final BigDecimal CAPACITE = BigDecimal.TEN.pow(20).subtract(BigDecimal.ONE);
+    private static final BigDecimal CAPACITE_PRIX = BigDecimal.TEN.pow(10).subtract(BigDecimal.ONE);
 
     private ValidationBordereau() {
     }
@@ -68,13 +71,14 @@ final class ValidationBordereau {
     }
 
     private static void ligne(LigneSaisieDto l, Set<UUID> ids, Set<UUID> groupes) {
-        exiger(l.id() != null && ids.add(l.id()), "lignes[].id : obligatoire et unique");
+        exiger(l.id() != null && !groupes.contains(l.id()) && ids.add(l.id()), "lignes[].id : obligatoire et unique");
         exiger(l.groupeId() == null || groupes.contains(l.groupeId()), "lignes[].groupeId : groupe absent de l'envoi");
         exiger(l.ordre() != null, "lignes[].ordre : obligatoire");
         exiger(StringUtils.hasText(l.designation()), "lignes[].designation : obligatoire");
         exiger(l.categorieId() != null, "lignes[].categorieId : obligatoire");
-        exiger(entre(l.quantite(), null), "lignes[].quantite : obligatoire, positive ou nulle");
-        exiger(entre(l.prixUnitaireHT(), null), "lignes[].prixUnitaireHT : obligatoire, positif ou nul");
+        exiger(entre(l.quantite(), CAPACITE), "lignes[].quantite : obligatoire, positive ou nulle");
+        exiger(entre(l.prixUnitaireHT(), CAPACITE_PRIX), "lignes[].prixUnitaireHT : obligatoire, positif ou nul");
+        exiger(l.ponderation() == null || l.ponderation().abs().compareTo(CAPACITE) < 0, "lignes[].ponderation : hors limites");
         exiger(entre(l.tauxTVA(), CENT), "lignes[].tauxTVA : obligatoire, entre 0 et 100");
         exiger(l.tauxFODEC() == null || entre(l.tauxFODEC(), CENT), "lignes[].tauxFODEC : entre 0 et 100");
         longueur(l.code(), TEXTE, "lignes[].code");

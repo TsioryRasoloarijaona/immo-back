@@ -203,8 +203,10 @@ public class EcritureBordereauLot {
     }
 
     private static void remplir(LigneBordereauOmran l, LigneSaisieDto s, UUID lot) {
-        BigDecimal tva = MontantsLot.fraction(s.tauxTVA());
-        BigDecimal fodec = MontantsLot.fraction(Objects.requireNonNullElse(s.tauxFODEC(), BigDecimal.ZERO));
+        // Taux arrondis à l'échelle de VatRatio (6) avant le PU TTC : sinon le TTC stocké ne suit pas la TVA stockée.
+        BigDecimal tva = MontantsLot.fraction(s.tauxTVA()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal fodec = MontantsLot.fraction(Objects.requireNonNullElse(s.tauxFODEC(), BigDecimal.ZERO))
+                .setScale(6, RoundingMode.HALF_UP);
         l.setPrjMarketId(lot);
         l.setIsStock(false);
         l.setPrjMarketLineGroupingId(s.groupeId());
