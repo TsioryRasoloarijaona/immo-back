@@ -267,4 +267,21 @@ class LotBordereauxEcritureCommitTest {
             s.assertThat(publiees).as("lignes remontées dans la copie").contains(ancienne).containsAll(enBase);
         });
     }
+
+    // Revue : la suppression du lot publie ses lignes de bordereau supprimées et le lot, pour les effacer de la copie.
+    @Test
+    void suppressionDuLot_lignesEtLotPubliesPourEtreEffacesDeLaCopie() throws Exception {
+        UUID ligneLot = ligneDefinitive(null, 1, "1", "1");
+
+        int statut = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/projet/lots/{id}", lot).with(admin)).andReturn().getResponse().getStatus();
+
+        List<UUID> publiees = evenements.stream(EcrituresValidees.class).flatMap(e -> e.lignes().stream())
+                .map(LigneEcrite::pkey).toList();
+        SoftAssertions.assertSoftly(s -> {
+            s.assertThat(statut).isBetween(200, 299);
+            s.assertThat(compter("SELECT COUNT(*) FROM PrjMarket WHERE PKey = ?", lot.toString())).isZero();
+            s.assertThat(publiees).as("suppressions remontées dans la copie").contains(ligneLot, lot);
+        });
+    }
 }
