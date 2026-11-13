@@ -129,13 +129,35 @@ Réclamations : module SAV non porté, aucune route.
 Lignes du bordereau **définitif** (`PrjMarketLine` hors stock), tri par ordre, avec leurs totaux calculés. Liste vide : lot
 au montant forfaitaire (« Bordereau non saisi »). `groupes` = arbre plat des regroupements (`PrjMarketLineGrouping` hors
 approvisionnement, `parentId` null à la racine), tri par ordre puis code ; chaque ligne porte `groupeId` et `ponderation`
-(`WeightingRatio` tel que stocké, jamais calculé).
+(`WeightingRatio` tel que stocké, jamais calculé). `decomptee` = ligne citée par une ligne de décompte. `modifiable` = vrai si
+`PUT …/bordereau` serait accepté pour l'appelant (même règle) ; `tvaParDefaut` / `categorieParDefautId` = défauts d'une
+nouvelle ligne.
+
+## ecrireBordereau
+
+Enregistre le bordereau **définitif entier** (`FEATURE-lot-ecritures.md` §3) dans une seule transaction : un id inconnu est
+inséré, un id du bordereau modifié, une ligne ou un groupe de la base absent de l'envoi supprimé ; la moindre erreur annule
+tout. Lignes et groupes d'approvisionnement (`IsStock`) ni lus ni touchés ; leur id dans l'envoi → 400, comme un id d'un autre
+lot ou de l'estimatif. Les nouveaux ids sont générés par le front (UUID). Le PU TTC est recalculé (PU HT × (1 + FODEC) ×
+(1 + TVA)), la quantité arrondie à 6 décimales. Droits : `MarketMonitoringList.toolNew` **et** `MarketMonitoring.toolAddMarketLine`
+(aucun verrou de statut). Supprimer une ligne décomptée → 409 « Vous ne pouvez pas supprimer cette ligne » ; un groupe dont une
+ligne supprimée est décomptée → 409 « Vous ne pouvez pas supprimer ce groupe ». La déplacer ou changer sa quantité / son prix
+reste permis, sans recalcul des décomptes. Après écriture, la ventilation par catégorie du lot est réécrite ; aucun montant du
+lot ni aucune prévision n'est recalculé. Ordre des refus : 404, 403, 400, 409.
 
 ## bordereauEstimatif
 
 Fenêtre « Bordereau estimatif » (`FEATURE-lot-sous-fenetres.md` §4.5) : mêmes champs et mêmes calculs que le bordereau
-définitif, lus dans `PrjMarketLineEstimation` / `PrjMarketLineGroupingEstimation`. `verrouille` vaut toujours `true` (aucune
-écriture dans ce lot). Lignes d'approvisionnement (`IsStock`) exclues.
+définitif, lus dans `PrjMarketLineEstimation` / `PrjMarketLineGroupingEstimation`. `verrouille` = vrai si
+`PUT …/bordereau-estimatif` serait refusé à l'appelant (droit, statut du lot sans « Avec bordereau estimatif »,
+lot multi-fournisseurs). `decomptee` toujours faux. Lignes d'approvisionnement (`IsStock`) exclues.
+
+## ecrireBordereauEstimatif
+
+Enregistre le bordereau **estimatif entier**, mêmes règles que `PUT …/bordereau` sur les tables estimatives, avec :
+droit `MarketMonitoringList.toolNew` seul ; 409 « Le bordereau estimatif est verrouillé par le statut du lot » si le statut
+n'a pas `BoolField004` (« Avec bordereau estimatif »), 409 pour un lot multi-fournisseurs ; codes de ligne uniques (400 « Le
+code X doit être unique pour les lignes du bordereaux ! ») ; aucune garde de décompte. Ordre des refus : 404, 403, 409, 400.
 
 ## avances
 

@@ -11,7 +11,12 @@ public record BordereauDto(
         @Schema(description = "Lot (PrjMarket.PKey).") UUID lotId,
         @Schema(description = "Lignes, tri par ordre.") List<LigneBordereauDto> lignes,
         @Schema(description = "Totaux des lignes.") TotauxBordereauDto totaux,
-        @Schema(description = "Groupes du bordereau hors approvisionnement (arbre plat).") List<GroupeBordereauDto> groupes
+        @Schema(description = "Groupes du bordereau hors approvisionnement (arbre plat).") List<GroupeBordereauDto> groupes,
+        @Schema(description = "Vrai si l'appelant peut enregistrer ce bordereau (mêmes droits que PUT …/bordereau).")
+        boolean modifiable,
+        @Schema(description = "TVA par défaut du lot en pourcentage (DefaultVat × 100), null si vide.", example = "20")
+        BigDecimal tvaParDefaut,
+        @Schema(description = "Catégorie de dépense du lot (StlCategoryId), défaut d'une nouvelle ligne.") UUID categorieParDefautId
 ) {
 
     @Schema(description = "Totaux du bordereau ; égaux au marché du lot quand il a des lignes.")

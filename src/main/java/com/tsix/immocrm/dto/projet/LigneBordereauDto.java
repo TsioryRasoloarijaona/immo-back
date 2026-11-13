@@ -19,6 +19,11 @@ public record LigneBordereauDto(
         @Schema(description = "Quantité × prix unitaire HT.") BigDecimal totalHT,
         @Schema(description = "Quantité × prix unitaire TTC.") BigDecimal totalTTC,
         @Schema(description = "Groupe de la ligne (PrjMarketLineGroupingId), null sans groupe.") UUID groupeId,
-        @Schema(description = "Pondération (WeightingRatio) telle que stockée ; null si non saisie.") BigDecimal ponderation
+        @Schema(description = "Pondération (WeightingRatio) telle que stockée ; null si non saisie.") BigDecimal ponderation,
+        @Schema(description = "Taux de FODEC en pourcentage (FODECRatio × 100).", example = "0") BigDecimal tauxFODEC,
+        @Schema(description = "Catégorie de dépense (StlCategoryId).") UUID categorieId,
+        @Schema(description = "Notes de la ligne.") String notes,
+        @Schema(description = "Définitif : ligne citée par un décompte (ne peut être supprimée) ; toujours faux à l'estimatif.")
+        boolean decomptee
 ) {
 }
