@@ -2,6 +2,7 @@ package com.tsix.immocrm.domain.projet;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +67,7 @@ public final class MontantsLot {
             return parts;
         }
         BigDecimal reste = BigDecimal.ONE;
-        List<K> cles = List.copyOf(montants.keySet());
+        List<K> cles = new ArrayList<>(montants.keySet());
         for (int i = 0; i < cles.size() - 1; i++) {
             BigDecimal part = z(montants.get(cles.get(i))).divide(total, 6, RoundingMode.HALF_UP);
             parts.put(cles.get(i), part);

@@ -263,7 +263,7 @@ public class LotsProjetController {
             content = @Content)
     public BordereauDto ecrireBordereau(@Parameter(description = ID_LOT) @PathVariable UUID id,
                                         @RequestBody BordereauSaisieDto corps) {
-        return bordereaux.ecrireDefinitif(id, corps);
+        return bordereaux.enregistrerDefinitif(id, corps);
     }
 
     @GetMapping("/lots/{id}/bordereau-estimatif")
@@ -284,7 +284,7 @@ public class LotsProjetController {
             content = @Content)
     public BordereauEstimatifDto ecrireBordereauEstimatif(@Parameter(description = ID_LOT) @PathVariable UUID id,
                                                           @RequestBody BordereauSaisieDto corps) {
-        return bordereaux.ecrireEstimatif(id, corps);
+        return bordereaux.enregistrerEstimatif(id, corps);
     }
 
     @GetMapping("/lots/{id}/avances")

@@ -201,7 +201,7 @@ public class EcrituresLotService {
         return Arrays.toString(GenreLot.values());
     }
 
-    private static boolean contrainte(Throwable e) {
+    static boolean contrainte(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof ConstraintViolationException) {
                 return true;
