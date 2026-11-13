@@ -60,6 +60,7 @@ public class EcritureBordereauLot {
     private static final List<String> IDS_PRIS = Stream.of("PrjMarketLine", "PrjMarketLineEstimation", "PrjMarketLineGrouping",
             "PrjMarketLineGroupingEstimation").map("select count(x) from %s x where x.id in :ids"::formatted).toList();
     private static final int LOT_IDS = 1000;
+    private static final BigDecimal TOLERANCE_PU = new BigDecimal("1e-10");
 
     private final LotsProjetService lots;
     private final DroitsOmran droits;
@@ -215,13 +216,19 @@ public class EcritureBordereauLot {
         l.setDescription(s.designation());
         l.setUnity(s.unite());
         l.setQuantity(s.quantite().setScale(6, RoundingMode.HALF_UP));
-        l.setUnitPriceHT(s.prixUnitaireHT());
+        BigDecimal puHT = puConserve(l.getUnitPriceHT(), s.prixUnitaireHT());
+        l.setUnitPriceHT(puHT);
         l.setVatRatio(tva);
         l.setFodecRatio(fodec);
-        l.setUnitPriceTTC(MontantsLot.prixTTC(s.prixUnitaireHT(), fodec, tva));
+        l.setUnitPriceTTC(MontantsLot.prixTTC(puHT, fodec, tva));
         l.setStlCategoryId(s.categorieId());
         l.setWeightingRatio(s.ponderation());
         l.setNotes(s.notes());
+    }
+
+    // Le front relit le PU HT (26,16) en double : un écart sous 1e-10 garde la valeur stockée (R14).
+    private static BigDecimal puConserve(BigDecimal stocke, BigDecimal envoye) {
+        return stocke != null && stocke.subtract(envoye).abs().compareTo(TOLERANCE_PU) < 0 ? stocke : envoye;
     }
 
     private static List<Object> etat(GroupeBordereauOmran g) {
