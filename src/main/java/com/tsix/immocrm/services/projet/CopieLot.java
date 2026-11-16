@@ -38,9 +38,11 @@ public class CopieLot {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public CopieLot(EcrituresLotService ecritures, LotsProjetService lots, TransitionsLot transitions,
-                    MontantsListeLots montants, UtilisateurAffiche utilisateur, EntityManager em, Clock clock) {
+                    MontantsListeLots montants, UtilisateurAffiche utilisateur, EntityManager em, Clock clock,
+                    PrevisionsPaiementLot previsions) {
         this.ecritures = ecritures;
         this.lots = lots;
         this.transitions = transitions;
@@ -48,6 +50,7 @@ public class CopieLot {
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     /**
@@ -86,6 +89,7 @@ public class CopieLot {
         groupes.forEach(g -> em.persist(groupe(g, cles, copie)));
         lignes.forEach(l -> em.persist(ligne(l, cles, copie)));
         em.flush();
+        previsions.recalculer(copie);
         return lots.lot(copie);
     }
 

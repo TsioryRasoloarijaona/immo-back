@@ -58,15 +58,18 @@ public class ActionsDecompteService {
     private final DonneesDecompte donnees;
     private final EcritureDecompte ecriture;
     private final ReferencesOmran references;
+    private final PrevisionsPaiementLot previsions;
 
     public ActionsDecompteService(DecomptesProjetService lecture, LotsProjetService lots, VerrouDecompte verrou,
-                                  DonneesDecompte donnees, EcritureDecompte ecriture, ReferencesOmran references) {
+                                  DonneesDecompte donnees, EcritureDecompte ecriture, ReferencesOmran references,
+                                  PrevisionsPaiementLot previsions) {
         this.lecture = lecture;
         this.lots = lots;
         this.verrou = verrou;
         this.donnees = donnees;
         this.ecriture = ecriture;
         this.references = references;
+        this.previsions = previsions;
     }
 
     /** {@code W:NewWorkingOut} l.1950-2035 ; ni lignes (lot sans décomposition) ni lignes d'appro (aucun PrjStockLine). */
@@ -184,6 +187,7 @@ public class ActionsDecompteService {
         ecriture.supprimer(donnees.enfants(PrjWorkingOutLine.class, id));
         ecriture.supprimer(donnees.enfants(PrjWorkingOutLineExtra.class, id));
         ecriture.supprimer(List.of(w));
+        previsions.recalculer(w.getPrjMarket().getId());
     }
 
     /** Aperçu de {@code W:ReloadLines} : rien n'est écrit (Q10). */
@@ -390,6 +394,7 @@ public class ActionsDecompteService {
                 w.getFluctuationsOldHT()));
         ecrire(w, r);
         ecriture.modifier(w);
+        previsions.recalculer(w.getPrjMarket().getId());
     }
 
     private static void ecrire(PrjWorkingOut w, Resultat r) {

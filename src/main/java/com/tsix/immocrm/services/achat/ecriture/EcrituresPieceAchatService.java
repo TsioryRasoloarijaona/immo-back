@@ -22,6 +22,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.exceptions.TransitionAchatRefuseeException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.achat.FicheAchatService;
+import com.tsix.immocrm.services.projet.PrevisionsPaiementLot;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -55,10 +56,11 @@ public class EcrituresPieceAchatService {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public EcrituresPieceAchatService(FicheAchatService fiche, DroitsPieceAchat droits, TransitionsPieceAchat transitions,
                                       QuantitesBonCommande quantites, UtilisateurAffiche utilisateur, EntityManager em,
-                                      Clock clock) {
+                                      Clock clock, PrevisionsPaiementLot previsions) {
         this.fiche = fiche;
         this.droits = droits;
         this.transitions = transitions;
@@ -66,6 +68,7 @@ public class EcrituresPieceAchatService {
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     private record Piece(DocumentAchatListItemDto vue, BuyDocument entite) {
@@ -114,6 +117,7 @@ public class EcrituresPieceAchatService {
         h.setBuyDocumentWorkFlowId(retenue.id());
         em.persist(h);
         em.flush();
+        previsions.apresPiece(d);
         return fiche.fiche(id);
     }
 
@@ -133,6 +137,7 @@ public class EcrituresPieceAchatService {
         lire(BuyOrderInvoice.class, "buyInvoiceId", id).forEach(em::remove);
         em.remove(d);
         em.flush();
+        previsions.apresPiece(d);
     }
 
     private void verifierSuppression(Piece p) {
@@ -195,6 +200,7 @@ public class EcrituresPieceAchatService {
         facture.setBuyOrderId(bc.getId());
         modifiee(facture);
         em.flush();
+        previsions.apresPiece(bc);
         return fiche.fiche(id);
     }
 

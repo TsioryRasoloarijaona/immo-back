@@ -16,6 +16,7 @@ import com.tsix.immocrm.services.achat.ecriture.ConfigurationPieceAchat.Configur
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.EnTete;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Ligne;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Part;
+import com.tsix.immocrm.services.projet.PrevisionsPaiementLot;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
@@ -59,14 +60,16 @@ public class EcriturePieceAchat {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public EcriturePieceAchat(ConfigurationPieceAchat configuration, GenerateurCodeSequence sequences,
-                              UtilisateurAffiche utilisateur, EntityManager em, Clock clock) {
+                              UtilisateurAffiche utilisateur, EntityManager em, Clock clock, PrevisionsPaiementLot previsions) {
         this.configuration = configuration;
         this.sequences = sequences;
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -111,6 +114,7 @@ public class EcriturePieceAchat {
         if (d.getBuyDocumentStatusId() != null && !NatureDocumentAchat.DELIVRY.name().equals(piece.nature())) {
             historique(d);
         }
+        previsions.apresPiece(d);
         return d;
     }
 
@@ -122,11 +126,16 @@ public class EcriturePieceAchat {
                 ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
                         .getSingleResult().toString())
                 : BigDecimal.ZERO;
+        UUID ancienLot = d.getPrjMarketId();
         entete(d, piece, e.module(), e.declencheur());
         List.of(BuyVentilationCategory.class, BuyVentilationExpense.class).forEach(v -> lire(v, d.getId()).forEach(em::remove));
         Map<UUID, BuyDocumentLine> existantes = lire(BuyDocumentLine.class, d.getId()).stream()
                 .collect(Collectors.toMap(BuyDocumentLine::getId, Function.identity()));
         ecrireContenu(d, piece, existantes, avoirs);
+        previsions.apresPiece(d);
+        if (ancienLot != null && !ancienLot.equals(d.getPrjMarketId())) {
+            previsions.recalculer(ancienLot);
+        }
         return d;
     }
 

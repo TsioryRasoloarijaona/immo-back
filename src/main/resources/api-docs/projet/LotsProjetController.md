@@ -188,8 +188,10 @@ Fenêtre « Prévisions » (`FEATURE-lot-sous-fenetres.md` §4.6) : un point par
 sans trou. `prevision` = Σ `PrjMarketPaymentPrevision.Amount` par mois de `PaymentDate`, `avancementPrevision` = son avancement
 maximal du mois (null si négatif ou lot multi-fournisseur). `reel` = Σ net à payer des pièces payables du lot hors avoirs par mois
 d'échéance ; `avancementReel` = avancement maximal des décomptes facturés du mois (null si lot multi-fournisseur).
-`estimation` / `avancementEstimation` (estimation de base OMRAN) ne sont pas encore calculées : toujours 0 et null.
-Montants à 0 et avancements null pour un mois sans donnée ; `mois` vide si le lot n'a aucun point.
+`estimation` = paiements simulés de l'estimation de base OMRAN (avance, décomptes, solde, prorata, retenue de garantie),
+calculés à la lecture et jamais stockés ; `avancementEstimation` = avancement de base du mois (null s'il vaut 0 après le début
+de base). Voir `FEATURE-lot-previsions.md` §3.3. `modifiable` = droit `Yes.Prj.Front.Tdb.ProjectPrevision.toolNew`.
+Montants à 0 et avancements null pour un mois sans donnée ; `mois` vide si le lot n'a ni point ni estimation.
 
 ## decomptesDuLot
 
