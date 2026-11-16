@@ -204,8 +204,22 @@ public class EcritureConfigurationAchatService {
         if (d.documentsAJoindre() != null) {
             documentsTransition(id).forEach(em::remove);
             ecrireDocumentsTransition(id, d.documentsAJoindre());
+        } else {
+            verifierDocumentsGardes(id, d.gestionId());
         }
         return ecrireRoles(id, d.roleIds());
+    }
+
+    // Documents conservés (liste absente) : ils doivent suivre la règle des décomptes de la nouvelle gestion.
+    private void verifierDocumentsGardes(UUID transition, UUID gestionId) {
+        StrEntity entite = gestionId == null ? null : em.find(StrEntity.class, gestionId);
+        boolean decomptes = entite != null && GESTION_DECOMPTES.equals(entite.getCode());
+        boolean incoherent = documentsTransition(transition).stream().anyMatch(doc ->
+                (Boolean.TRUE.equals(doc.getForFirstWorkingOut()) || Boolean.TRUE.equals(doc.getForIntermediateWorkingOut())
+                        || Boolean.TRUE.equals(doc.getForFinalWorkingOut())) != decomptes);
+        if (incoherent) {
+            throw new InvalidRequestException("Les documents à joindre ne correspondent plus à la gestion : renvoyez-les.");
+        }
     }
 
     // Liens de rôles et documents d'abord : FK NO ACTION vers la transition ; l'historique n'a pas de FK, il reste.

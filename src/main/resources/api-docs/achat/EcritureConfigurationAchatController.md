@@ -20,4 +20,4 @@ Documents à joindre (grille OMRAN « Fichiers attachés ») : un document = typ
 
 ## modifierTransition
 
-La transition est remplacée, ses rôles réécrits en bloc. Les champs obligatoires, les 4 cases de notification et `documentsAJoindre` absents du corps sont gardés ; une liste vide les efface. Mêmes contrôles que la création, précédés du 404. La suppression emporte les rôles et les documents à joindre.
+La transition est remplacée, ses rôles réécrits en bloc. Les champs obligatoires, les 4 cases de notification et `documentsAJoindre` absents du corps sont gardés ; une liste vide les efface ; si la gestion change, les documents gardés doivent suivre la règle des décomptes de la nouvelle gestion, sinon 400 (renvoyer la liste). Mêmes contrôles que la création, précédés du 404. La suppression emporte les rôles et les documents à joindre.
