@@ -49,6 +49,10 @@ public class EcriturePieceAchat {
     private static final String RESTE_AVANCE = """
             SELECT (SELECT ISNULL(SUM(AmountTTC), 0) FROM BuyDocument WHERE ReferenceType = 'MARKET_ADVANCE' AND PrjMarketId = :lot),
                    (SELECT ISNULL(SUM(AdvanceAmount), 0) FROM PrjWorkingOut WHERE PrjMarketId = :lot)""";
+    /** Σ des avoirs non financiers d'une facture (OMRAN {@code Invoice.cs} AmountRefunded) ; suivi de l'id de la facture. */
+    public static final String AVOIRS_NON_FINANCIERS = "SELECT SUM(r.AmountToPay) FROM BuyDocument r "
+            + "WHERE r.DocType = 'REFUND' AND r.IsFinancialRefund = 0 AND r.InvoiceSourceId = ";
+    private static final String AVOIRS_DE_LA_FACTURE = "SELECT ISNULL((" + AVOIRS_NON_FINANCIERS + ":facture), 0)";
 
     private final ConfigurationPieceAchat configuration;
     private final GenerateurCodeSequence sequences;
@@ -103,7 +107,7 @@ public class EcriturePieceAchat {
             retenuesDuLot(d);
         }
         em.persist(d);
-        ecrireContenu(d, piece, Map.of());
+        ecrireContenu(d, piece, Map.of(), BigDecimal.ZERO);
         if (d.getBuyDocumentStatusId() != null && !NatureDocumentAchat.DELIVRY.name().equals(piece.nature())) {
             historique(d);
         }
@@ -114,11 +118,15 @@ public class EcriturePieceAchat {
     @Transactional(propagation = Propagation.MANDATORY)
     public BuyDocument modifier(BuyDocument d, PieceAchatACreer piece) {
         EnTete e = Objects.requireNonNull(piece.entete());
+        BigDecimal avoirs = NatureDocumentAchat.INVOICE.name().equals(d.getDocType())
+                ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
+                        .getSingleResult().toString())
+                : BigDecimal.ZERO;
         entete(d, piece, e.module(), e.declencheur());
         List.of(BuyVentilationCategory.class, BuyVentilationExpense.class).forEach(v -> lire(v, d.getId()).forEach(em::remove));
         Map<UUID, BuyDocumentLine> existantes = lire(BuyDocumentLine.class, d.getId()).stream()
                 .collect(Collectors.toMap(BuyDocumentLine::getId, Function.identity()));
-        ecrireContenu(d, piece, existantes);
+        ecrireContenu(d, piece, existantes, avoirs);
         return d;
     }
 
@@ -178,13 +186,14 @@ public class EcriturePieceAchat {
     }
 
     /** Lignes, montants et ventilations ; {@code existantes} : lignes de la pièce par id, celles absentes du corps supprimées. */
-    private void ecrireContenu(BuyDocument d, PieceAchatACreer piece, Map<UUID, BuyDocumentLine> existantes) {
+    private void ecrireContenu(BuyDocument d, PieceAchatACreer piece, Map<UUID, BuyDocumentLine> existantes,
+                               BigDecimal avoirs) {
         List<Ligne> lignes = piece.lignes();
         MontantsPieceAchat.Totaux totaux = MontantsPieceAchat.totaux(lignes.stream().map(Ligne::montants).toList());
         d.setAmountHT(totaux.ht());
         d.setAmountVat(totaux.tva());
         d.setAmountTTC(totaux.ttc());
-        d.setAmountToPay(NetAPayerAchat.calculer(totaux.ttc(), composantes(d)));
+        d.setAmountToPay(NetAPayerAchat.calculer(totaux.ttc(), composantes(d, avoirs)));
         d.setLinesCount(lignes.size());
         List<UUID> gardees = lignes.stream().map(Ligne::id).filter(Objects::nonNull).toList();
         existantes.values().stream().filter(l -> !gardees.contains(l.getId())).forEach(em::remove);
@@ -246,12 +255,12 @@ public class EcriturePieceAchat {
         return l;
     }
 
-    private static NetAPayerAchat.Composantes composantes(BuyDocument d) {
+    private static NetAPayerAchat.Composantes composantes(BuyDocument d, BigDecimal avoirs) {
         return new NetAPayerAchat.Composantes(zero(d.getAmountRegul()), zero(d.getFiscalStamp()),
                 zero(d.getStockAmountToPay()), zero(d.getProrataRefundAmount()), zero(d.getFluctuationsToPay()),
                 zero(d.getProportionAmount()), zero(d.getWarrantyAmount()), zero(d.getAdvanceAmount()),
                 zero(d.getInsuranceTRCAmount()), zero(d.getInsuranceDECAmount()), zero(d.getWorkingOutAdvanceAmount()),
-                zero(d.getRetainedAmount()), BigDecimal.ZERO);
+                zero(d.getRetainedAmount()), avoirs);
     }
 
     private static BigDecimal zero(BigDecimal v) {

@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.achat;
 
 import com.tsix.immocrm.domain.achat.MouvementPosition;
 import com.tsix.immocrm.dto.achat.LignePositionDto;
+import com.tsix.immocrm.services.achat.ecriture.EcriturePieceAchat;
 import com.tsix.immocrm.services.patrimoine.ReferencesPatrimoine;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -33,9 +34,8 @@ class RequetesPositionFournisseur {
             + "b.CfgCompanyId, b.CfgTierId, COALESCE(b.PrjProjectId, v.PrjProjectId) AS PrjProjectId, "
             + "CAST(NULL AS uniqueidentifier) AS AdmModuleId, (ISNULL(b.AmountTTC, 0) + ISNULL(b.StockAmountToPay, 0) "
             + "+ ISNULL(b.FluctuationsToPay, 0) + ISNULL(b.ProrataRefundAmount, 0)) * ISNULL(v.VentilationRate, 1) AS Ttc, "
-            + "CASE WHEN b.DocType = 'REFUND' THEN ISNULL(b.AmountToPay, 0) ELSE ISNULL(b.AmountToPay + ISNULL((SELECT "
-            + "SUM(r.AmountToPay) FROM BuyDocument r WHERE r.DocType = 'REFUND' AND r.IsFinancialRefund = 0 "
-            + "AND r.InvoiceSourceId = b.PKey), 0), 0) END * ISNULL(v.VentilationRate, 1) AS Montant, "
+            + "CASE WHEN b.DocType = 'REFUND' THEN ISNULL(b.AmountToPay, 0) ELSE ISNULL(b.AmountToPay + ISNULL(("
+            + EcriturePieceAchat.AVOIRS_NON_FINANCIERS + "b.PKey), 0), 0) END * ISNULL(v.VentilationRate, 1) AS Montant, "
             + "CAST(NULL AS decimal(38, 12)) AS Ras, CASE WHEN b.DocType = 'REFUND' THEN 0 ELSE 1 END AS Credit, "
             + "0 AS Reglement FROM BuyDocument b LEFT JOIN BuyVentilationExpense v ON v.BuyDocumentId = b.PKey "
             + "WHERE b.CanBePayed = 1";
