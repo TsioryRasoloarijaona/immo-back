@@ -44,7 +44,6 @@ import static com.tsix.immocrm.fixtures.ConnexionDeTest.connecte;
 import static com.tsix.immocrm.fixtures.FixtureCommissions.CONCRETISATION;
 import static com.tsix.immocrm.fixtures.FixturePatrimoine.decimal;
 import static com.tsix.immocrm.fixtures.FixturePatrimoine.guid;
-import static com.tsix.immocrm.fixtures.FixtureTerrains.STATUT_EN_COURS;
 import static com.tsix.immocrm.fixtures.FixtureTerrains.STATUT_REGLE;
 import static com.tsix.immocrm.fixtures.FixtureTerrains.VALIDER;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,10 +69,9 @@ class EcriturePieceAchatReglesTest {
     private static final String ECRIVAIN = "com.tsix.immocrm.services.achat.ecriture.EcriturePieceAchat";
     private static final String SANS_DEPART_COMMISSION =
             "Aucun statut de départ dans le workflow des documents de commission.";
-    private static final String SANS_DEPART_FRAIS = "Aucun statut de départ dans le workflow des factures de frais.";
     private static final String PIECES_DU_TIERS = "SELECT * FROM BuyDocument WHERE CfgTierId = :id";
     private static final String NB_PIECES_DU_TIERS = "SELECT COUNT(*) FROM BuyDocument WHERE CfgTierId = :id";
-    private static final String NB_PIECES_DU_FRAIS = "SELECT COUNT(*) FROM BuyDocument WHERE StkExpenseId = :id";
+    private static final String PIECES_DU_FRAIS = "SELECT * FROM BuyDocument WHERE StkExpenseId = :id";
     private static final String LIGNES = "SELECT * FROM BuyDocumentLine WHERE BuyDocumentId = :id";
     private static final String PROJETS = "SELECT * FROM BuyVentilationExpense WHERE BuyDocumentId = :id";
     private static final String HISTORIQUE = "SELECT * FROM BuyDocumentStatusHistory WHERE BuyDocumentId = :id";
@@ -132,30 +130,38 @@ class EcriturePieceAchatReglesTest {
 
     // ------------------------------------------------------------------ R4 statut de départ
 
-    /** R4 : gestion des commissions sans transition → 500 (message actuel), séquence inchangée, rien d'écrit. */
+    /**
+     * R4, amendé par A2b-2a (réponse 2 du manager, 16/11) : gestion des commissions sans transition → statut NULL et 201,
+     * comme un devis ; la séquence avance d'un numéro.
+     */
     @Test
-    void r4_commission_gestionSansWorkflow_500_seqValueInchangee_rienEcrit() throws Exception {
+    void r4_commission_gestionSansWorkflow_201_statutNull() throws Exception {
         UUID l = ligne(commissions.dossier(c, "D1", commercial, PRIX, AVANCE), new BigDecimal("300"));
         terrains.executer(MASQUER_WORKFLOW.formatted("ComInvoiceDebitCommission"));
 
-        documenter(List.of(l)).andExpect(status().isInternalServerError())
-                .andExpect(jsonPath(DETAIL).value(SANS_DEPART_COMMISSION));
+        documenter(List.of(l)).andExpect(status().isCreated());
 
+        Tuple p = pieceDuCommercial();
         assertAll(
-                () -> assertThat(commissions.valeurSequence()).isEqualTo(3013),
-                () -> assertThat(commissions.compter(NB_PIECES_DU_TIERS, commercial)).isZero(),
+                () -> assertThat(p.get("BuyDocumentStatusId")).isNull(),
+                () -> assertThat(commissions.valeurSequence()).isEqualTo(3014),
                 () -> assertThat(commissions.lignes(DOCUMENT_DE_LA_LIGNE, l))
-                        .singleElement().satisfies(t -> assertThat(t.get(0)).isNull()));
+                        .singleElement().satisfies(t -> assertThat(guid(t.get(0))).isEqualTo(guid(p.get("PKey")))));
     }
 
-    /** R4 / D4 : un workflow en boucle (tout départ est l'arrivée d'une autre transition) n'a pas de départ → 500. */
+    /**
+     * R4 / D4, puis A2b-2a E-C4.3 : boucle entre deux statuts « Intermédiaire » → aucun départ ni par l'ancienne règle
+     * ni par la règle OMRAN (aucun départ de type « Nouveau ») → 500.
+     */
     @Test
     void r4_commission_workflowEnBoucle_aucunDepart_500_rienEcrit() throws Exception {
         UUID l = ligne(commissions.dossier(c, "D1", commercial, PRIX, AVANCE), new BigDecimal("300"));
         terrains.executer(MASQUER_WORKFLOW.formatted("ComInvoiceDebitCommission"));
         UUID gestion = commissions.entiteDocument();
-        configuration.transition(gestion, 10, "Aller", STATUT_EN_COURS, STATUT_REGLE);
-        configuration.transition(gestion, 20, "Retour", STATUT_REGLE, STATUT_EN_COURS);
+        UUID valide = configuration.statut(new FixtureConfigurationAchat.Statut("VALIDE-" + c.jeton(), "Validé", 15,
+                FixtureTerrains.ETAT_INTERMEDIAIRE, false, false, false, null, null));
+        configuration.transition(gestion, 10, "Aller", valide, STATUT_REGLE);
+        configuration.transition(gestion, 20, "Retour", STATUT_REGLE, valide);
 
         documenter(List.of(l)).andExpect(status().isInternalServerError())
                 .andExpect(jsonPath(DETAIL).value(SANS_DEPART_COMMISSION));
@@ -165,9 +171,9 @@ class EcriturePieceAchatReglesTest {
                 () -> assertThat(commissions.compter(NB_PIECES_DU_TIERS, commercial)).isZero());
     }
 
-    /** R4 : frais terrain, gestion sans transition → 500 avec le message actuel de l'appelant, rien d'écrit. */
+    /** R4, amendé par A2b-2a (réponse 2 du manager, 16/11) : frais terrain, gestion sans transition → 200, facture à statut NULL. */
     @Test
-    void r4_fraisTerrain_gestionSansWorkflow_500_messageDeLAppelant_rienEcrit() throws Exception {
+    void r4_fraisTerrain_gestionSansWorkflow_200_statutNull() throws Exception {
         AdmUser admin = patrimoine.administrateur();
         FixtureTerrains.Contexte t = terrains.contexte("A0RF");
         UUID terrain = terrains.terrain(t, "TER-" + t.jeton());
@@ -176,13 +182,10 @@ class EcriturePieceAchatReglesTest {
                 new BigDecimal("8000"), false);
         terrains.executer(MASQUER_WORKFLOW.formatted("StkInvoiceDebitLand"));
 
-        mockMvc.perform(post(VALIDER, terrain, frais).with(connecte(admin)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath(DETAIL).value(SANS_DEPART_FRAIS));
+        mockMvc.perform(post(VALIDER, terrain, frais).with(connecte(admin))).andExpect(status().isOk());
 
-        assertAll(
-                () -> assertThat(terrains.valeurSequence()).isEqualTo(3013),
-                () -> assertThat(terrains.compter(NB_PIECES_DU_FRAIS, frais)).isZero());
+        assertThat(terrains.lignes(PIECES_DU_FRAIS, frais))
+                .singleElement().satisfies(p -> assertThat(p.get("BuyDocumentStatusId")).isNull());
     }
 
     // ------------------------------------------------------------------ R6 lignes
