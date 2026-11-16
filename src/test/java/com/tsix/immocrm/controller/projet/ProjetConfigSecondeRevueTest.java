@@ -22,7 +22,6 @@ import java.util.UUID;
 import static com.tsix.immocrm.fixtures.ConnexionDeTest.connecte;
 import static com.tsix.immocrm.fixtures.FixtureProjetConfig.PROJET;
 import static com.tsix.immocrm.fixtures.FixtureProjetConfig.SLUG_TYPES_LOT;
-import static com.tsix.immocrm.fixtures.FixtureProjetConfig.STATUTS_LOT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -105,10 +104,9 @@ class ProjetConfigSecondeRevueTest {
                 type)).isEqualTo(1);
     }
 
+    /** Les statuts de lot sont désormais éditables (FEATURE-restes-projet-achat.md §6) ; les types de lot restent sans PUT. */
     @Test
-    void statutsLot_aucuneEcriture() throws Exception {
-        mockMvc.perform(post(STATUTS_LOT).with(connecte(admin)).contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isMethodNotAllowed());
+    void typesLot_aucunePut() throws Exception {
         mockMvc.perform(put(TYPES_LOT + "/{id}", UUID.randomUUID()).with(connecte(admin))
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isMethodNotAllowed());

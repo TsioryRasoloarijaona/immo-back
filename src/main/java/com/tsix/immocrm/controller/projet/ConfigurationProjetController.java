@@ -3,7 +3,6 @@ package com.tsix.immocrm.controller.projet;
 import com.tsix.immocrm.dto.projet.ProjetConfigDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetConfigDto;
-import com.tsix.immocrm.dto.projet.StatutLotDto;
 import com.tsix.immocrm.dto.projet.TypeLotParDefautDto;
 import com.tsix.immocrm.services.projet.ProjetConfigService;
 import com.tsix.immocrm.services.projet.ValeurParDefautTypeLot;
@@ -115,12 +114,6 @@ public class ConfigurationProjetController {
     @ApiResponse(responseCode = "403", description = PAS_ADMIN)
     public ReferentielsProjetConfigDto referentiels() {
         return service.referentiels();
-    }
-
-    @GetMapping("/statuts-lot")
-    @Operation(summary = "Statuts de lot, groupés par genre de lot puis par ordre (lecture seule, tout authentifié)")
-    public List<StatutLotDto> statutsLot() {
-        return service.statutsLot();
     }
 
     @GetMapping("/types-lot/defaut")

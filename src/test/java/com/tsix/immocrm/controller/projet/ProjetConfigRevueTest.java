@@ -29,7 +29,6 @@ import static com.tsix.immocrm.fixtures.FixtureProjetConfig.REFERENTIELS;
 import static com.tsix.immocrm.fixtures.FixtureProjetConfig.SOCIETE_ID;
 import static com.tsix.immocrm.fixtures.FixtureProjetConfig.STATUTS_LOT;
 import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -109,9 +108,9 @@ class ProjetConfigRevueTest {
                 .andExpect(jsonPath("$.societes[*].id", hasItem(inactive.toString())));
     }
 
-    /** Réponse 3 du manager : les statuts des 3 genres retenus seulement ; prod en a 2 de plus chez Administration et Concessionnaires. */
+    /** FEATURE-restes-projet-achat.md §6 (réponse 5) : les 5 genres sont listés, Concessionnaires compris. */
     @Test
-    void statutsLot_genreConcessionnaires_exclu() throws Exception {
+    void statutsLot_genreConcessionnaires_inclus() throws Exception {
         entityManager.flush();
         entityManager.createNativeQuery("""
                         IF NOT EXISTS (SELECT 1 FROM StrEntity WHERE PKey = :id)
@@ -121,6 +120,6 @@ class ProjetConfigRevueTest {
 
         mockMvc.perform(get(STATUTS_LOT).with(enCommercial()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id", not(hasItem(statut.toString()))));
+                .andExpect(jsonPath("$[*].id", hasItem(statut.toString())));
     }
 }

@@ -7,6 +7,7 @@ import com.tsix.immocrm.fixtures.FixtureDossierVente;
 import com.tsix.immocrm.fixtures.FixturePatrimoine;
 import com.tsix.immocrm.fixtures.FixtureProjetConfig;
 import com.tsix.immocrm.fixtures.FixtureReferentielsAdmin;
+import com.tsix.immocrm.fixtures.FixtureStatutsLot;
 import jakarta.persistence.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,7 @@ class ProjetConfigTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private FixturePatrimoine patrimoine;
     @Autowired private FixtureProjetConfig fixture;
+    @Autowired private FixtureStatutsLot statutsLot;
 
     private AdmUser admin;
     private AdmUser commercial;
@@ -203,6 +205,24 @@ class ProjetConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItems(entrepreneurs.toString(), maitresOuvrage.toString())))
                 .andExpect(jsonPath("$[*].id", not(hasItem(STATUT_NOUVEAU.toString().toLowerCase()))));
+    }
+
+    /** FEATURE-restes-projet-achat.md §6 (réponse 5) : la liste couvre les 5 genres de lot (17 statuts en prod), plus 3. */
+    @Test
+    void statutsLot_cinqGenresDeLot() throws Exception {
+        statutsLot.genres();
+        List<UUID> statuts = List.of(
+                statutsLot.statut(FixtureStatutsLot.ENTREPRENEURS, "S5E-" + jeton, 1),
+                statutsLot.statut(FixtureStatutsLot.FOURNISSEURS, "S5F-" + jeton, 1),
+                statutsLot.statut(FixtureStatutsLot.ADMINISTRATION, "S5A-" + jeton, 1),
+                statutsLot.statut(FixtureStatutsLot.MAITRES_OUVRAGE, "S5M-" + jeton, 1),
+                statutsLot.statut(FixtureStatutsLot.CONCESSIONNAIRES, "S5C-" + jeton, 1));
+
+        String json = appeler(get(STATUTS_LOT), enCommercial(commercial)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> ids = JsonPath.<List<String>>read(json, "$[*].id").stream().map(String::toLowerCase).toList();
+        assertThat(ids).containsAll(statuts.stream().map(s -> s.toString().toLowerCase()).toList());
     }
 
     @Test

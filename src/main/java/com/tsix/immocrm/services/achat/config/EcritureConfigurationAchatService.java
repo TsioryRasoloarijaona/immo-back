@@ -2,18 +2,19 @@ package com.tsix.immocrm.services.achat.config;
 
 import com.tsix.immocrm.dto.achat.config.CatalogueChampsStatutDto.ChampStatutAchatDto;
 import com.tsix.immocrm.dto.achat.config.DocumentAJoindreAchatDto;
+import com.tsix.immocrm.dto.achat.config.DocumentTransitionAchatDto;
 import com.tsix.immocrm.dto.achat.config.StatutAchatConfigDto;
 import com.tsix.immocrm.dto.achat.config.StatutAchatEcritureDto;
 import com.tsix.immocrm.dto.achat.config.TransitionAchatDto;
 import com.tsix.immocrm.dto.achat.config.TransitionAchatEcritureDto;
-import com.tsix.immocrm.entities.AuditOmran;
-import com.tsix.immocrm.entities.LigneOmran;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.buy.BuyDocumentStatus;
 import com.tsix.immocrm.entities.buy.BuyDocumentStatusDocumentToAttach;
 import com.tsix.immocrm.entities.buy.BuyDocumentWorkFlow;
 import com.tsix.immocrm.entities.buy.BuyDocumentWorkFlowAdmRole;
+import com.tsix.immocrm.entities.buy.BuyDocumentWorkFlowDocumentToAttach;
+import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
@@ -26,6 +27,7 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -45,7 +47,11 @@ public class EcritureConfigurationAchatService {
     private static final String STATUT = "Statut d'achat";
     private static final String TRANSITION = "Transition d'achat";
     private static final int LONG = 1000;
+    private static final String CHAMPS_PIECE = "Champs obligatoires";
+    private static final String CHAMPS_FOURNISSEUR = "Champs obligatoires fournisseur";
     private static final UUID SANS_GESTION = new UUID(0, 0);
+    private static final String TYPE_DOCUMENT = "Type de document";
+    private static final String GESTION_DECOMPTES = "PrjInvoiceDebitWorkingOut";
 
     private final EntityManager em;
     private final DroitsOmran droits;
@@ -94,23 +100,11 @@ public class EcritureConfigurationAchatService {
     }
 
     private void appliquer(BuyDocumentStatus s, StatutAchatEcritureDto d) {
-        Integer ordre = exiger(d.ordre(), "Ordre");
-        String code = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.code()), null, "Code");
-        String description = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.description()), null,
-                "Description");
-        UUID type = exiger(d.typeId(), "Type");
-        verifierExiste("SELECT COUNT(*) FROM AdmWorkFlowStateType WHERE PKey = :id", type, "Type d'état inconnu.");
-        if (d.dureeVieJours() < 0) {
-            throw new InvalidRequestException("Durée de vie : un nombre de jours positif ou nul.");
-        }
-        String couleur = couleur(d.couleur());
-        if (d.imageId() != null) {
-            verifierExiste("SELECT COUNT(*) FROM CfgImage WHERE PKey = :id", d.imageId(), "Image inconnue.");
-        }
-        String notes = SaisiePatrimoine.texte(d.notes(), null, LONG, "Notes");
-        String champs = champs(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), "Champs obligatoires");
+        FicheStatut f = FicheStatut.lire(em, d, "SELECT COUNT(*) FROM AdmWorkFlowStateType WHERE PKey = :id");
+        String code = f.code();
+        String champs = champs(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), CHAMPS_PIECE, LONG);
         String champsFournisseur = champs(d.champsObligatoiresFournisseur(), CatalogueStatutAchat.CHAMPS.fournisseur(),
-                "Champs obligatoires fournisseur");
+                CHAMPS_FOURNISSEUR, LONG);
         verifierDocuments(d.documentsAJoindre());
         ReferentielAdminService.verrouiller(em, BuyDocumentStatus.class, code, STATUT);
         long pris = em.createQuery("SELECT COUNT(s) FROM BuyDocumentStatus s WHERE LOWER(TRIM(s.code)) = LOWER(:code) "
@@ -118,46 +112,48 @@ public class EcritureConfigurationAchatService {
         if (pris > 0) {
             throw new ConflictException("Le code %s est déjà pris par un autre statut d'achat.".formatted(code));
         }
-        s.setSorting(ordre);
+        s.setSorting(f.ordre());
         s.setCode(code);
-        s.setDescription(description);
-        s.setAdmWorkFlowStateTypeId(type);
+        s.setDescription(f.description());
+        s.setAdmWorkFlowStateTypeId(f.type());
         s.setDelay(d.dureeVieJours());
-        s.setColorName(couleur);
+        s.setColorName(f.couleur());
         s.setIsOkForPayement(d.okPourPaiement());
         s.setIsValidatedOnAccounting(d.valideComptabilite());
         s.setIsReadOnly(d.lectureSeule());
         s.setCfgImageId(d.imageId());
-        s.setNotes(notes);
+        s.setNotes(f.notes());
         s.setMandatoryFields(champs);
         s.setSupplierMandatoryFields(champsFournisseur);
-        horodater(s);
+        trace.horodater(s);
     }
 
-    private static String couleur(String saisie) {
-        if (saisie == null || saisie.isBlank()) {
-            return "";
-        }
-        return CatalogueStatutAchat.couleur(saisie.trim())
-                .orElseThrow(() -> new InvalidRequestException("Couleur inconnue : " + saisie));
-    }
-
-    private static String champs(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle) {
+    private static String champs(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle, int max) {
         List<String> inconnus = noms.stream().filter(n -> catalogue.stream().noneMatch(c -> c.nom().equals(n))).toList();
         if (!inconnus.isEmpty()) {
             throw new InvalidRequestException("%s : champ(s) inconnu(s) %s".formatted(libelle, inconnus));
         }
         String stocke = CatalogueStatutAchat.stocker(noms.stream().distinct().toList());
-        if (stocke.length() > LONG) {
-            throw new InvalidRequestException("%s : %d caractères au plus une fois stockés.".formatted(libelle, LONG));
+        if (stocke.length() > max) {
+            throw new InvalidRequestException("%s : %d caractères au plus une fois stockés.".formatted(libelle, max));
         }
         return stocke;
+    }
+
+    // Absent du corps = valeur gardée (false à la création) : FEATURE-restes-projet-achat.md §5.
+    private static String champsGardes(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle, int max,
+                                       String actuel) {
+        return noms == null ? Objects.requireNonNullElse(actuel, "") : champs(noms, catalogue, libelle, max);
+    }
+
+    private static Boolean garde(Boolean saisie, Boolean actuel) {
+        return saisie != null ? saisie : Boolean.TRUE.equals(actuel);
     }
 
     private void verifierDocuments(List<DocumentAJoindreAchatDto> documents) {
         Set<UUID> vus = new HashSet<>();
         for (DocumentAJoindreAchatDto doc : documents) {
-            UUID type = exiger(doc == null ? null : doc.typeDocumentId(), "Type de document");
+            UUID type = FicheStatut.exiger(doc == null ? null : doc.typeDocumentId(), TYPE_DOCUMENT);
             if (em.find(AdmAttachedFileType.class, type) == null) {
                 throw new InvalidRequestException("Type de document inconnu : " + type);
             }
@@ -176,7 +172,7 @@ public class EcritureConfigurationAchatService {
             ligne.setAdmAttachedFileTypeId(doc.typeDocumentId());
             ligne.setIsMandatory(doc.obligatoire());
             ligne.setWithTitle(doc.avecTitre());
-            horodater(ligne);
+            trace.horodater(ligne);
             em.persist(ligne);
         });
         em.flush();
@@ -196,6 +192,7 @@ public class EcritureConfigurationAchatService {
         w.setId(UUID.randomUUID());
         appliquer(w, d);
         em.persist(w);
+        ecrireDocumentsTransition(w.getId(), d.documentsAJoindre());
         return ecrireRoles(w.getId(), d.roleIds());
     }
 
@@ -204,14 +201,33 @@ public class EcritureConfigurationAchatService {
         droits.exiger(DROIT);
         appliquer(w, d);
         roles(id).forEach(em::remove);
+        if (d.documentsAJoindre() != null) {
+            documentsTransition(id).forEach(em::remove);
+            ecrireDocumentsTransition(id, d.documentsAJoindre());
+        } else {
+            verifierDocumentsGardes(id, d.gestionId());
+        }
         return ecrireRoles(id, d.roleIds());
     }
 
-    // Liens de rôles d'abord : FK NO ACTION vers la transition ; l'historique n'a pas de FK, il reste.
+    // Documents conservés (liste absente) : ils doivent suivre la règle des décomptes de la nouvelle gestion.
+    private void verifierDocumentsGardes(UUID transition, UUID gestionId) {
+        StrEntity entite = gestionId == null ? null : em.find(StrEntity.class, gestionId);
+        boolean decomptes = entite != null && GESTION_DECOMPTES.equals(entite.getCode());
+        boolean incoherent = documentsTransition(transition).stream().anyMatch(doc ->
+                (Boolean.TRUE.equals(doc.getForFirstWorkingOut()) || Boolean.TRUE.equals(doc.getForIntermediateWorkingOut())
+                        || Boolean.TRUE.equals(doc.getForFinalWorkingOut())) != decomptes);
+        if (incoherent) {
+            throw new InvalidRequestException("Les documents à joindre ne correspondent plus à la gestion : renvoyez-les.");
+        }
+    }
+
+    // Liens de rôles et documents d'abord : FK NO ACTION vers la transition ; l'historique n'a pas de FK, il reste.
     public void supprimerTransition(UUID id) {
         BuyDocumentWorkFlow w = trouver(BuyDocumentWorkFlow.class, id, TRANSITION);
         droits.exiger(DROIT);
         roles(id).forEach(em::remove);
+        documentsTransition(id).forEach(em::remove);
         em.flush();
         em.remove(w);
     }
@@ -223,12 +239,18 @@ public class EcritureConfigurationAchatService {
         if (depart.equals(arrivee)) {
             throw new InvalidRequestException("Le statut de départ et le statut d'arrivée doivent être différents.");
         }
-        if (d.gestionId() != null && em.find(StrEntity.class, d.gestionId()) == null) {
+        StrEntity entite = d.gestionId() == null ? null : em.find(StrEntity.class, d.gestionId());
+        if (d.gestionId() != null && entite == null) {
             throw new InvalidRequestException("Gestion inconnue : " + d.gestionId());
         }
+        verifierDocuments(d.documentsAJoindre(), entite != null && GESTION_DECOMPTES.equals(entite.getCode()));
         d.roleIds().stream().filter(r -> r == null || em.find(AdmRole.class, r) == null).findFirst().ifPresent(r -> {
             throw new InvalidRequestException("Rôle inconnu : " + r);
         });
+        String champs = champsGardes(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), CHAMPS_PIECE,
+                SaisiePatrimoine.COURT, w.getMandatoryFields());
+        String champsFournisseur = champsGardes(d.champsObligatoiresFournisseur(),
+                CatalogueStatutAchat.CHAMPS.fournisseur(), CHAMPS_FOURNISSEUR, LONG, w.getSupplierMandatoryFields());
         UUID gestion = Objects.requireNonNullElse(d.gestionId(), SANS_GESTION);
         ReferentielAdminService.verrouiller(em, BuyDocumentWorkFlow.class, depart + ">" + arrivee + "@" + gestion,
                 TRANSITION);
@@ -247,13 +269,17 @@ public class EcritureConfigurationAchatService {
         w.setStrEntityId(d.gestionId());
         w.setNotesMandatory(d.noteObligatoire());
         w.setIsValidatedByCfgTierTrigger(d.valideeParDeclencheur());
-        w.setMandatoryFields(Objects.requireNonNullElse(w.getMandatoryFields(), ""));
-        w.setSupplierMandatoryFields(Objects.requireNonNullElse(w.getSupplierMandatoryFields(), ""));
-        horodater(w);
+        w.setMandatoryFields(champs);
+        w.setSupplierMandatoryFields(champsFournisseur);
+        w.setWithNotification(garde(d.avecNotification(), w.getWithNotification()));
+        w.setSendEmailToUsers(garde(d.envoiEmails(), w.getSendEmailToUsers()));
+        w.setNotifyCfgTierTrigger(garde(d.notifierDeclencheur(), w.getNotifyCfgTierTrigger()));
+        w.setSendEMailToCfgTierTrigger(garde(d.emailDeclencheur(), w.getSendEMailToCfgTierTrigger()));
+        trace.horodater(w);
     }
 
     private UUID statut(UUID id, String libelle) {
-        if (em.find(BuyDocumentStatus.class, exiger(id, libelle)) == null) {
+        if (em.find(BuyDocumentStatus.class, FicheStatut.exiger(id, libelle)) == null) {
             throw new InvalidRequestException(libelle + " inconnu : " + id);
         }
         return id;
@@ -266,11 +292,65 @@ public class EcritureConfigurationAchatService {
             lien.setId(UUID.randomUUID());
             lien.setTransition(transition);
             lien.setRole(role);
-            horodater(lien);
+            trace.horodater(lien);
             em.persist(lien);
         });
         em.flush();
         return lecture.transition(transition).orElseThrow();
+    }
+
+    // Grille OMRAN (BuyDocumentWorkFlowAttachedFile) : un document par type de pièce × type de marché × décompte.
+    private void verifierDocuments(List<DocumentTransitionAchatDto> documents, boolean decomptes) {
+        if (documents == null) {
+            return;
+        }
+        Set<List<Object>> vus = new HashSet<>();
+        for (DocumentTransitionAchatDto brut : documents) {
+            DocumentTransitionAchatDto doc = FicheStatut.exiger(brut, "Document à joindre");
+            UUID type = FicheStatut.exiger(doc.typeDocumentId(), TYPE_DOCUMENT);
+            UUID marche = FicheStatut.exiger(doc.typeMarcheId(), "Type de marché");
+            if (em.find(AdmAttachedFileType.class, type) == null) {
+                throw new InvalidRequestException("Type de document inconnu : " + type);
+            }
+            if (em.find(PrjMarketType.class, marche) == null) {
+                throw new InvalidRequestException("Type de marché inconnu : " + marche);
+            }
+            String decompte = doc.decompte();
+            boolean valide = decompte == null ? !decomptes
+                    : decomptes && ConfigurationAchatService.DECOMPTES.contains(decompte);
+            if (!valide) {
+                throw new InvalidRequestException("Décompte (%s) obligatoire pour la gestion %s, absent pour les autres."
+                        .formatted(String.join(", ", ConfigurationAchatService.DECOMPTES), GESTION_DECOMPTES));
+            }
+            if (!vus.add(Arrays.asList(type, marche, decompte))) {
+                throw new InvalidRequestException("Document à joindre en double : " + type + " / " + marche);
+            }
+        }
+    }
+
+    private void ecrireDocumentsTransition(UUID transition, List<DocumentTransitionAchatDto> documents) {
+        if (documents == null) {
+            return;
+        }
+        documents.forEach(doc -> {
+            BuyDocumentWorkFlowDocumentToAttach ligne = new BuyDocumentWorkFlowDocumentToAttach();
+            ligne.setId(UUID.randomUUID());
+            ligne.setPorteurId(transition);
+            ligne.setAdmAttachedFileTypeId(doc.typeDocumentId());
+            ligne.setPrjMarketTypeId(doc.typeMarcheId());
+            ligne.setIsMandatory(true);
+            ligne.setWithTitle(false);
+            ligne.setForFirstWorkingOut(ConfigurationAchatService.DECOMPTES.get(0).equals(doc.decompte()));
+            ligne.setForIntermediateWorkingOut(ConfigurationAchatService.DECOMPTES.get(1).equals(doc.decompte()));
+            ligne.setForFinalWorkingOut(ConfigurationAchatService.DECOMPTES.get(2).equals(doc.decompte()));
+            trace.horodater(ligne);
+            em.persist(ligne);
+        });
+    }
+
+    private List<BuyDocumentWorkFlowDocumentToAttach> documentsTransition(UUID transition) {
+        return em.createQuery("SELECT d FROM BuyDocumentWorkFlowDocumentToAttach d WHERE d.buyDocumentWorkFlowId = :id",
+                BuyDocumentWorkFlowDocumentToAttach.class).setParameter(ID, transition).getResultList();
     }
 
     private List<BuyDocumentWorkFlowAdmRole> roles(UUID transition) {
@@ -286,38 +366,5 @@ public class EcritureConfigurationAchatService {
             throw new ResourceNotFoundException(objet + " introuvable : " + id);
         }
         return trouve;
-    }
-
-    private static <T> T exiger(T valeur, String libelle) {
-        if (valeur == null) {
-            throw new InvalidRequestException(libelle + " est obligatoire.");
-        }
-        return valeur;
-    }
-
-    private void verifierExiste(String requete, UUID id, String message) {
-        if (((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).intValue() == 0) {
-            throw new InvalidRequestException(message);
-        }
-    }
-
-    private void horodater(AuditOmran s) {
-        TracePatrimoine.Trace t = trace.maintenant();
-        if (s.getUserCreate() == null) {
-            s.setUserCreate(t.auteur());
-            s.setUserCreateDateTime(t.le());
-        }
-        s.setUserUpdate(t.auteur());
-        s.setUserUpdateDateTime(t.le());
-    }
-
-    private void horodater(LigneOmran l) {
-        TracePatrimoine.Trace t = trace.maintenant();
-        if (l.getUserCreate() == null) {
-            l.setUserCreate(t.auteur());
-            l.setUserCreateDateTime(t.le());
-        }
-        l.setUserUpdate(t.auteur());
-        l.setUserUpdateDateTime(t.le());
     }
 }

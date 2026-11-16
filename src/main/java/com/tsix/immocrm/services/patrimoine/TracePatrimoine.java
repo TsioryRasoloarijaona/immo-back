@@ -1,5 +1,7 @@
 package com.tsix.immocrm.services.patrimoine;
 
+import com.tsix.immocrm.entities.AuditOmran;
+import com.tsix.immocrm.entities.LigneOmran;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
@@ -34,6 +36,26 @@ public class TracePatrimoine {
 
     public Trace maintenant() {
         return new Trace(utilisateurAffiche.courant().nom(), LocalDateTime.now(clock));
+    }
+
+    public void horodater(AuditOmran ligne) {
+        Trace t = maintenant();
+        if (ligne.getUserCreate() == null) {
+            ligne.setUserCreate(t.auteur());
+            ligne.setUserCreateDateTime(t.le());
+        }
+        ligne.setUserUpdate(t.auteur());
+        ligne.setUserUpdateDateTime(t.le());
+    }
+
+    public void horodater(LigneOmran ligne) {
+        Trace t = maintenant();
+        if (ligne.getUserCreate() == null) {
+            ligne.setUserCreate(t.auteur());
+            ligne.setUserCreateDateTime(t.le());
+        }
+        ligne.setUserUpdate(t.auteur());
+        ligne.setUserUpdateDateTime(t.le());
     }
 
     /**
