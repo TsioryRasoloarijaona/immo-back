@@ -53,7 +53,8 @@ public class ConfigurationAchatService {
             SELECT w.PKey, w.Sorting, w.Description, e.Code,
                    COALESCE(e.Description COLLATE DATABASE_DEFAULT, e.Code COLLATE DATABASE_DEFAULT),
                    w.StartStatusId, sd.Code, w.EndStatusId, sa.Code, w.NotesMandatory, w.IsValidatedByCfgTierTrigger,
-                   COALESCE(h.Passages, 0), h.Dernier, e.PKey
+                   COALESCE(h.Passages, 0), h.Dernier, e.PKey, w.MandatoryFields, w.SupplierMandatoryFields,
+                   w.WithNotification, w.SendEmailToUsers, w.NotifyCfgTierTrigger, w.SendEMailToCfgTierTrigger
             FROM BuyDocumentWorkFlow w
             LEFT JOIN StrEntity e ON e.PKey = w.StrEntityId
             LEFT JOIN BuyDocumentStatus sd ON sd.PKey = w.StartStatusId
@@ -133,7 +134,9 @@ public class ConfigurationAchatService {
             return new TransitionAchatDto(id, (Integer) r[1], texte(r[2]), texte(r[3]),
                     gestion == null ? SANS_GESTION : gestion, uuid(r[5]), texte(r[6]), uuid(r[7]), texte(r[8]), vrai(r[9]),
                     vrai(r[10]), roles.getOrDefault(id, List.of()), ((Number) r[11]).longValue(),
-                    r[12] == null ? null : ((LocalDateTime) r[12]).toLocalDate(), uuid(r[13]));
+                    r[12] == null ? null : ((LocalDateTime) r[12]).toLocalDate(), uuid(r[13]),
+                    CatalogueStatutAchat.noms(texte(r[14])), CatalogueStatutAchat.noms(texte(r[15])),
+                    vrai(r[16]), vrai(r[17]), vrai(r[18]), vrai(r[19]));
         }).toList();
     }
 

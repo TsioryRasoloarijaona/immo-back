@@ -6,8 +6,6 @@ import com.tsix.immocrm.dto.achat.config.StatutAchatConfigDto;
 import com.tsix.immocrm.dto.achat.config.StatutAchatEcritureDto;
 import com.tsix.immocrm.dto.achat.config.TransitionAchatDto;
 import com.tsix.immocrm.dto.achat.config.TransitionAchatEcritureDto;
-import com.tsix.immocrm.entities.AuditOmran;
-import com.tsix.immocrm.entities.LigneOmran;
 import com.tsix.immocrm.entities.adm.AdmAttachedFileType;
 import com.tsix.immocrm.entities.adm.AdmRole;
 import com.tsix.immocrm.entities.buy.BuyDocumentStatus;
@@ -45,6 +43,8 @@ public class EcritureConfigurationAchatService {
     private static final String STATUT = "Statut d'achat";
     private static final String TRANSITION = "Transition d'achat";
     private static final int LONG = 1000;
+    private static final String CHAMPS_PIECE = "Champs obligatoires";
+    private static final String CHAMPS_FOURNISSEUR = "Champs obligatoires fournisseur";
     private static final UUID SANS_GESTION = new UUID(0, 0);
 
     private final EntityManager em;
@@ -103,14 +103,14 @@ public class EcritureConfigurationAchatService {
         if (d.dureeVieJours() < 0) {
             throw new InvalidRequestException("Durée de vie : un nombre de jours positif ou nul.");
         }
-        String couleur = couleur(d.couleur());
+        String couleur = CatalogueStatutAchat.couleur(d.couleur());
         if (d.imageId() != null) {
             verifierExiste("SELECT COUNT(*) FROM CfgImage WHERE PKey = :id", d.imageId(), "Image inconnue.");
         }
         String notes = SaisiePatrimoine.texte(d.notes(), null, LONG, "Notes");
-        String champs = champs(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), "Champs obligatoires");
+        String champs = champs(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), CHAMPS_PIECE, LONG);
         String champsFournisseur = champs(d.champsObligatoiresFournisseur(), CatalogueStatutAchat.CHAMPS.fournisseur(),
-                "Champs obligatoires fournisseur");
+                CHAMPS_FOURNISSEUR, LONG);
         verifierDocuments(d.documentsAJoindre());
         ReferentielAdminService.verrouiller(em, BuyDocumentStatus.class, code, STATUT);
         long pris = em.createQuery("SELECT COUNT(s) FROM BuyDocumentStatus s WHERE LOWER(TRIM(s.code)) = LOWER(:code) "
@@ -131,27 +131,29 @@ public class EcritureConfigurationAchatService {
         s.setNotes(notes);
         s.setMandatoryFields(champs);
         s.setSupplierMandatoryFields(champsFournisseur);
-        horodater(s);
+        trace.horodater(s);
     }
 
-    private static String couleur(String saisie) {
-        if (saisie == null || saisie.isBlank()) {
-            return "";
-        }
-        return CatalogueStatutAchat.couleur(saisie.trim())
-                .orElseThrow(() -> new InvalidRequestException("Couleur inconnue : " + saisie));
-    }
-
-    private static String champs(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle) {
+    private static String champs(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle, int max) {
         List<String> inconnus = noms.stream().filter(n -> catalogue.stream().noneMatch(c -> c.nom().equals(n))).toList();
         if (!inconnus.isEmpty()) {
             throw new InvalidRequestException("%s : champ(s) inconnu(s) %s".formatted(libelle, inconnus));
         }
         String stocke = CatalogueStatutAchat.stocker(noms.stream().distinct().toList());
-        if (stocke.length() > LONG) {
-            throw new InvalidRequestException("%s : %d caractères au plus une fois stockés.".formatted(libelle, LONG));
+        if (stocke.length() > max) {
+            throw new InvalidRequestException("%s : %d caractères au plus une fois stockés.".formatted(libelle, max));
         }
         return stocke;
+    }
+
+    // Absent du corps = valeur gardée (false à la création) : FEATURE-restes-projet-achat.md §5.
+    private static String champsGardes(List<String> noms, List<ChampStatutAchatDto> catalogue, String libelle, int max,
+                                       String actuel) {
+        return noms == null ? Objects.requireNonNullElse(actuel, "") : champs(noms, catalogue, libelle, max);
+    }
+
+    private static Boolean garde(Boolean saisie, Boolean actuel) {
+        return saisie != null ? saisie : Boolean.TRUE.equals(actuel);
     }
 
     private void verifierDocuments(List<DocumentAJoindreAchatDto> documents) {
@@ -176,7 +178,7 @@ public class EcritureConfigurationAchatService {
             ligne.setAdmAttachedFileTypeId(doc.typeDocumentId());
             ligne.setIsMandatory(doc.obligatoire());
             ligne.setWithTitle(doc.avecTitre());
-            horodater(ligne);
+            trace.horodater(ligne);
             em.persist(ligne);
         });
         em.flush();
@@ -229,6 +231,10 @@ public class EcritureConfigurationAchatService {
         d.roleIds().stream().filter(r -> r == null || em.find(AdmRole.class, r) == null).findFirst().ifPresent(r -> {
             throw new InvalidRequestException("Rôle inconnu : " + r);
         });
+        String champs = champsGardes(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), CHAMPS_PIECE,
+                SaisiePatrimoine.COURT, w.getMandatoryFields());
+        String champsFournisseur = champsGardes(d.champsObligatoiresFournisseur(),
+                CatalogueStatutAchat.CHAMPS.fournisseur(), CHAMPS_FOURNISSEUR, LONG, w.getSupplierMandatoryFields());
         UUID gestion = Objects.requireNonNullElse(d.gestionId(), SANS_GESTION);
         ReferentielAdminService.verrouiller(em, BuyDocumentWorkFlow.class, depart + ">" + arrivee + "@" + gestion,
                 TRANSITION);
@@ -247,9 +253,13 @@ public class EcritureConfigurationAchatService {
         w.setStrEntityId(d.gestionId());
         w.setNotesMandatory(d.noteObligatoire());
         w.setIsValidatedByCfgTierTrigger(d.valideeParDeclencheur());
-        w.setMandatoryFields(Objects.requireNonNullElse(w.getMandatoryFields(), ""));
-        w.setSupplierMandatoryFields(Objects.requireNonNullElse(w.getSupplierMandatoryFields(), ""));
-        horodater(w);
+        w.setMandatoryFields(champs);
+        w.setSupplierMandatoryFields(champsFournisseur);
+        w.setWithNotification(garde(d.avecNotification(), w.getWithNotification()));
+        w.setSendEmailToUsers(garde(d.envoiEmails(), w.getSendEmailToUsers()));
+        w.setNotifyCfgTierTrigger(garde(d.notifierDeclencheur(), w.getNotifyCfgTierTrigger()));
+        w.setSendEMailToCfgTierTrigger(garde(d.emailDeclencheur(), w.getSendEMailToCfgTierTrigger()));
+        trace.horodater(w);
     }
 
     private UUID statut(UUID id, String libelle) {
@@ -266,7 +276,7 @@ public class EcritureConfigurationAchatService {
             lien.setId(UUID.randomUUID());
             lien.setTransition(transition);
             lien.setRole(role);
-            horodater(lien);
+            trace.horodater(lien);
             em.persist(lien);
         });
         em.flush();
@@ -299,25 +309,5 @@ public class EcritureConfigurationAchatService {
         if (((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).intValue() == 0) {
             throw new InvalidRequestException(message);
         }
-    }
-
-    private void horodater(AuditOmran s) {
-        TracePatrimoine.Trace t = trace.maintenant();
-        if (s.getUserCreate() == null) {
-            s.setUserCreate(t.auteur());
-            s.setUserCreateDateTime(t.le());
-        }
-        s.setUserUpdate(t.auteur());
-        s.setUserUpdateDateTime(t.le());
-    }
-
-    private void horodater(LigneOmran l) {
-        TracePatrimoine.Trace t = trace.maintenant();
-        if (l.getUserCreate() == null) {
-            l.setUserCreate(t.auteur());
-            l.setUserCreateDateTime(t.le());
-        }
-        l.setUserUpdate(t.auteur());
-        l.setUserUpdateDateTime(t.le());
     }
 }

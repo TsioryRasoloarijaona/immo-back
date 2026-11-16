@@ -26,6 +26,14 @@ public record TransitionAchatDto(
         @Schema(description = "Lignes d'historique (BuyDocumentStatusHistory) portant cette transition.", example = "1655")
         long nombrePassages,
         @Schema(description = "Date du dernier passage, null si jamais empruntée.") LocalDate dernierPassage,
-        @Schema(description = "Gestion (StrEntity.PKey), null sans gestion ; à renvoyer tel quel dans un PUT.") UUID gestionId
+        @Schema(description = "Gestion (StrEntity.PKey), null sans gestion ; à renvoyer tel quel dans un PUT.") UUID gestionId,
+        @Schema(description = "Champs obligatoires de la pièce (MandatoryFields), noms du catalogue.")
+        List<String> champsObligatoires,
+        @Schema(description = "Champs obligatoires du fournisseur (SupplierMandatoryFields), noms du catalogue.")
+        List<String> champsObligatoiresFournisseur,
+        @Schema(description = "Avec notification (WithNotification = 1).") boolean avecNotification,
+        @Schema(description = "Avec envoi des e-mails (SendEmailToUsers = 1).") boolean envoiEmails,
+        @Schema(description = "Notifier le déclencheur (NotifyCfgTierTrigger = 1).") boolean notifierDeclencheur,
+        @Schema(description = "Envoyer un e-mail au déclencheur (SendEMailToCfgTierTrigger = 1).") boolean emailDeclencheur
 ) {
 }

@@ -1,8 +1,8 @@
 package com.tsix.immocrm.entities.str;
 
+import com.tsix.immocrm.entities.LigneOmran;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -16,11 +16,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "StrWorkFlow")
-public class StrWorkFlow {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
+public class StrWorkFlow extends LigneOmran {
     @Column(name = "StatusFromId")
     private UUID statusFromId;
 

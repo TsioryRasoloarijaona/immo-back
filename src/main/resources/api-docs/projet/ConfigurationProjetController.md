@@ -1,6 +1,6 @@
 # ConfigurationProjetController
 
-Configuration du module Projet : projets de chantier (`PrjProject`) et statuts de lot. Les projets sont réservés à l'Administrateur et montrés tous, hors périmètre ; les statuts de lot se lisent par tout utilisateur authentifié. Les types de lot passent par le moteur `/api/referentiels-admin/types-lot` (famille `PROJET`). Voir `instructions/FEATURE-projet-config.md`.
+Configuration du module Projet : projets de chantier (`PrjProject`). Les projets sont réservés à l'Administrateur et montrés tous, hors périmètre ; les statuts de lot sont sous le tag « Projet — statuts et transitions de lot ». Les types de lot passent par le moteur `/api/referentiels-admin/types-lot` (famille `PROJET`). Voir `instructions/FEATURE-projet-config.md`.
 
 ## creer
 
@@ -13,7 +13,3 @@ Remplacement complet des champs obligatoires ; les champs facultatifs absents (b
 ## supprimer
 
 Refusée en 409 « Utilisé par … » dès qu'une des 22 tables qui référencent `PrjProject` (lots, pièces d'achat, tranches, tâches, prêts, ventilations, réunions, prévisions, projet de référence…) a une ligne pour lui, y compris celles qu'une suppression en cascade viderait en base. Seules les habilitations du projet partent avec lui.
-
-## statutsLot
-
-Statuts des genres de lot (`StrEntity` dont le code commence par `PrjMarket` : entrepreneurs, fournisseurs, maîtres d'ouvrage), triés par genre puis par ordre. `couleur` est un nom de couleur .NET (`LimeGreen`…), à traduire côté écran.

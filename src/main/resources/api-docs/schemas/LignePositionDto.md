@@ -15,5 +15,6 @@ Pièce : (TTC + stock + fluctuations + prorata) × taux de projet ; null pour un
 
 ## aPayer
 
-Pièce : montant compté dans la position (net à payer × taux de projet, avoirs non financiers réajoutés pour une facture) ;
-null pour un règlement. Σ (crédits − débits) des lignes sans `du` = `soldeFin` du fournisseur.
+Facture ou document à régler : montant compté dans la position (net à payer × taux de projet, avoirs non financiers
+réajoutés pour une facture) ; null pour un avoir (montant en `base`, comme OMRAN) et pour un règlement.
+Σ (crédits − débits) des montants (`aPayer`, sinon `base`) des lignes sans `du` = `soldeFin` du fournisseur.

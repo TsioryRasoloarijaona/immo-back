@@ -1,8 +1,8 @@
 package com.tsix.immocrm.entities.str;
 
+import com.tsix.immocrm.entities.LigneOmran;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,11 +14,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "StrStatusMandatoryField")
-public class StrStatusMandatoryField {
-    @Id
-    @Column(name = "PKey", nullable = false)
-    private UUID id;
-
+public class StrStatusMandatoryField extends LigneOmran {
     @Column(name = "StrFieldId")
     private UUID strFieldId;
 
