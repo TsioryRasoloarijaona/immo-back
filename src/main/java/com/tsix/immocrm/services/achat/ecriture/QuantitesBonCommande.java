@@ -55,6 +55,11 @@ class QuantitesBonCommande {
     }
 
     void verifier(BuyDocument facture, BuyDocument bc) {
+        verifier(facture, bc, lignes(facture.getId()));
+    }
+
+    /** {@code lignesFacture} : lignes stockées, ou celles du corps d'une modification avant écriture (E-C5.4). */
+    void verifier(BuyDocument facture, BuyDocument bc, List<BuyDocumentLine> lignesFacture) {
         if (((Number) em.createNativeQuery(PARAMETRE).getSingleResult()).intValue() == 0) {
             return;
         }
@@ -62,7 +67,7 @@ class QuantitesBonCommande {
         List<BuyDocumentLine> dejaFacturees = em.createQuery(DEJA_FACTURE, BuyDocumentLine.class)
                 .setParameter("bc", bc.getId()).setParameter("facture", NatureDocumentAchat.INVOICE.name())
                 .setParameter("piece", facture.getId()).getResultList();
-        sommes(lignes(facture.getId()), Article::de).forEach((article, quantite) -> {
+        sommes(lignesFacture, Article::de).forEach((article, quantite) -> {
             Map.Entry<Commande, BigDecimal> commande = commandees.entrySet().stream()
                     .filter(e -> e.getKey().couvre(article.code(), article.prix())).findFirst()
                     .orElseThrow(() -> new ConflictException(

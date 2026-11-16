@@ -24,6 +24,10 @@ public class BuyDocumentLine extends AuditOmran {
     private UUID buyDocumentId;
     @Column(name = "StlCategoryId")
     private UUID stlCategoryId;
+    @Column(name = "PrjMarketLineId")
+    private UUID prjMarketLineId;
+    @Column(name = "BuyItemId")
+    private UUID buyItemId;
 
     @Size(max = 255)
     @Nationalized

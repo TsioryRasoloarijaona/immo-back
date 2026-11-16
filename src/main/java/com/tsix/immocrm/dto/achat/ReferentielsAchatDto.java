@@ -14,7 +14,9 @@ public record ReferentielsAchatDto(
         @Schema(description = "Sociétés habilitées de l'appelant (filtre Entité), par code ; vide sans habilitation.")
         List<SocieteAchatDto> societes,
         @Schema(description = "Modules d'une pièce : BUY, PRJ, STL.") List<ModuleAchatDto> modules,
-        @Schema(description = "Types de lot (PrjMarketType), par libellé.") List<TypeLotAchatDto> typesLot) {
+        @Schema(description = "Types de lot (PrjMarketType), par libellé.") List<TypeLotAchatDto> typesLot,
+        @Schema(description = "Natures que le compte peut créer (droit Achat « Nouveau ») : QUOTE, ORDER, DELIVRY, INVOICE.")
+        List<String> naturesCreables) {
 
     @Schema(description = "Société (CfgCompany) habilitée.")
     public record SocieteAchatDto(
@@ -26,7 +28,8 @@ public record ReferentielsAchatDto(
     @Schema(description = "Module OMRAN (AdmModule).")
     public record ModuleAchatDto(
             @Schema(description = "Code (AdmModule.Code).", example = "BUY") String code,
-            @Schema(description = "Libellé.", example = "Achat") String libelle) {
+            @Schema(description = "Libellé.", example = "Achat") String libelle,
+            @Schema(description = "Id (AdmModule.PKey), à envoyer en moduleId ; null si absent de la base.") UUID id) {
     }
 
     @Schema(description = "Type de lot (PrjMarketType).")

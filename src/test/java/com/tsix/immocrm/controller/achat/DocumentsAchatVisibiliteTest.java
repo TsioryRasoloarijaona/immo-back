@@ -29,8 +29,8 @@ import static com.tsix.immocrm.controller.achat.AppelsAchat.total;
 import static com.tsix.immocrm.fixtures.FixtureDossierVente.connecte;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -203,8 +203,8 @@ class DocumentsAchatVisibiliteTest {
     // ------------------------------------------------------------------ règle 4 : lecture seule
 
     @Test
-    void r4_lectureSeule_aucuneEcritureSurLaListe_405() throws Exception {
-        mockMvc.perform(post(AppelsAchat.DOCUMENTS).with(qui()).contentType("application/json").content("{}"))
+    void r4_aucuneSuppressionSurLaListe_405() throws Exception {
+        mockMvc.perform(delete(AppelsAchat.DOCUMENTS).with(qui()))
                 .andExpect(status().isMethodNotAllowed());
     }
 }

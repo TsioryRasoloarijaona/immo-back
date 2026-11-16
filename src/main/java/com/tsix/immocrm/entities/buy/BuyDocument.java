@@ -91,6 +91,12 @@ public class BuyDocument extends AuditOmran {
     private UUID buyInvoiceId;
     @Column(name = "InvoiceSourceId")
     private UUID invoiceSourceId;
+    @Column(name = "BuySelectionId")
+    private UUID buySelectionId;
+    @Column(name = "BuyFolderId")
+    private UUID buyFolderId;
+    @Column(name = "StatusValidityDate")
+    private LocalDateTime statusValidityDate;
 
     @Column(name = "AmountHT", precision = 26, scale = 6)
     private BigDecimal amountHT;

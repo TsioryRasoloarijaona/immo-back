@@ -5,6 +5,8 @@ import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.services.droits.DroitsOmran;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -56,9 +58,19 @@ public class DroitsPieceAchat {
         exiger(peutModifier(nature, aLot));
     }
 
+    /** Natures saisissables dont le compte porte le code Achat « Nouveau » (jamais le code Projet › Lot). */
+    public List<String> naturesCreables() {
+        return Arrays.stream(NatureDocumentAchat.values()).filter(n -> NatureDocumentAchat.saisissable(n.name()))
+                .map(Enum::name).filter(n -> peutModifier(n, false)).toList();
+    }
+
+    static ForbiddenException refus() {
+        return new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+    }
+
     private static void exiger(boolean autorise) {
         if (!autorise) {
-            throw new ForbiddenException("Vous n'avez pas le droit d'effectuer cette action.");
+            throw refus();
         }
     }
 
