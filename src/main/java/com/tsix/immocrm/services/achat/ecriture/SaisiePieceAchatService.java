@@ -55,13 +55,14 @@ public class SaisiePieceAchatService {
         return lecture.modele(n, ecriture.employeDuCompte());
     }
 
-    /** Ordre : 400 nature, 400 en-tête, 404 société / projet, 403 droit, 400 contenu ; la séquence n'est prise qu'à l'écriture. */
+    /** Ordre : 400 nature, 404 société / projet, 403 droit, 400 contenu ; la séquence n'est prise qu'à l'écriture. */
     @Transactional
     public DocumentAchatDetailDto creer(SaisiePieceAchatRequest corps) {
         NatureDocumentAchat nature = LectureSaisieAchat.nature(corps.nature());
         UUID declencheur = corps.declencheurId() != null ? corps.declencheurId() : ecriture.employeDuCompte();
         PieceAchatACreer piece = lecture.piece(corps, nature, declencheur,
                 () -> droits.exigerModification(nature.name(), corps.lotId() != null));
+        verifierIdsDeLignes(Set.of(), piece.lignes());
         BuyDocument d = ecriture.creer(piece);
         em.flush();
         return fiche.fiche(d.getId());
@@ -78,8 +79,10 @@ public class SaisiePieceAchatService {
         });
         PieceAchatACreer piece = lecture.piece(corps, LectureSaisieAchat.nature(d.getDocType()), corps.declencheurId(),
                 () -> { });
-        verifierIdsDeLignes(d, piece.lignes());
-        if (ActionsPieceAchat.estFacture(d) && d.getBuyOrderId() != null) {
+        verifierIdsDeLignes(Set.copyOf(em.createQuery("SELECT l.id FROM BuyDocumentLine l WHERE l.buyDocumentId = :piece",
+                UUID.class).setParameter("piece", d.getId()).getResultList()), piece.lignes());
+        boolean livraison = NatureDocumentAchat.DELIVRY.name().equals(d.getDocType());
+        if ((ActionsPieceAchat.estFacture(d) || livraison) && d.getBuyOrderId() != null) {
             quantites.verifier(d, Objects.requireNonNull(em.find(BuyDocument.class, d.getBuyOrderId())),
                     piece.lignes().stream().map(l -> EcriturePieceAchat.remplir(new BuyDocumentLine(), l, 0, d)).toList());
         }
@@ -88,9 +91,8 @@ public class SaisiePieceAchatService {
         return fiche.fiche(id);
     }
 
-    private void verifierIdsDeLignes(BuyDocument d, List<Ligne> lignes) {
-        Set<UUID> siennes = Set.copyOf(em.createQuery("SELECT l.id FROM BuyDocumentLine l WHERE l.buyDocumentId = :piece",
-                UUID.class).setParameter("piece", d.getId()).getResultList());
+    /** {@code siennes} : lignes de la pièce modifiée, vide à la création (tout id y est inconnu). */
+    private static void verifierIdsDeLignes(Set<UUID> siennes, List<Ligne> lignes) {
         Set<UUID> vues = new HashSet<>();
         for (int i = 0; i < lignes.size(); i++) {
             UUID ligne = lignes.get(i).id();

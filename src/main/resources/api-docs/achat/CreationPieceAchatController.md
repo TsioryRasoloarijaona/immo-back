@@ -14,7 +14,7 @@ Ordre des refus : 400 nature non prise en charge → 404 société ou projet non
 
 ### reponse 400
 
-Nature absente ou non prise en charge ; champ obligatoire absent (`dateDocument`, `societeId`, `moduleId`, `fournisseurId`, `typeMarcheId`), module ou type de marché inconnu ; ligne sans désignation, quantité, prix, TVA ou catégorie, taux hors [0 ; 1] ; lot hors du projet ; ventilation des catégories ou des projets incorrecte (textes d'OMRAN).
+Nature absente ou non prise en charge ; champ obligatoire absent (`dateDocument`, `societeId`, `moduleId`, `fournisseurId`, `typeMarcheId`), module ou type de marché inconnu ; ligne sans désignation, quantité, prix ou catégorie, ligne portant un `id` à la création, taux hors [0 ; 1] ; lot hors du projet ; ventilation des catégories ou des projets incorrecte (textes d'OMRAN).
 
 ### reponse 404
 

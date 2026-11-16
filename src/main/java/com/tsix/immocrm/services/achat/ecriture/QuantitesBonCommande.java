@@ -35,6 +35,10 @@ class QuantitesBonCommande {
             return new Article(l.getStlCategoryId(), l.getUnitPriceHT(), l.getDiscountRatio(), l.getFodecRatio(),
                     l.getVatRatio(), l.getCode(), l.getDescription());
         }
+
+        static Article duCode(BuyDocumentLine l) {
+            return new Article(null, null, null, null, null, l.getCode(), null);
+        }
     }
 
     private record Commande(String code, BigDecimal prix) {
@@ -63,11 +67,14 @@ class QuantitesBonCommande {
         if (((Number) em.createNativeQuery(PARAMETRE).getSingleResult()).intValue() == 0) {
             return;
         }
-        Map<Commande, BigDecimal> commandees = sommes(lignes(bc.getId()), l -> new Commande(l.getCode(), l.getUnitPriceHT()));
+        // BL (OMRAN Delivery.cs:Verif) : article reconnu au seul code, déjà livré = autres BL du BC
+        boolean livraison = NatureDocumentAchat.DELIVRY.name().equals(facture.getDocType());
+        Map<Commande, BigDecimal> commandees = sommes(lignes(bc.getId()),
+                l -> new Commande(l.getCode(), livraison ? null : l.getUnitPriceHT()));
         List<BuyDocumentLine> dejaFacturees = em.createQuery(DEJA_FACTURE, BuyDocumentLine.class)
-                .setParameter("bc", bc.getId()).setParameter("facture", NatureDocumentAchat.INVOICE.name())
+                .setParameter("bc", bc.getId()).setParameter("facture", facture.getDocType())
                 .setParameter("piece", facture.getId()).getResultList();
-        sommes(lignesFacture, Article::de).forEach((article, quantite) -> {
+        sommes(lignesFacture, livraison ? Article::duCode : Article::de).forEach((article, quantite) -> {
             Map.Entry<Commande, BigDecimal> commande = commandees.entrySet().stream()
                     .filter(e -> e.getKey().couvre(article.code(), article.prix())).findFirst()
                     .orElseThrow(() -> new ConflictException(

@@ -46,7 +46,7 @@ public record SaisiePieceAchatRequest(
             @Schema(description = "Prix unitaire HT, obligatoire.") BigDecimal prixUnitaireHT,
             @Schema(description = "Remise en fraction [0;1] ; 0 si absente.") BigDecimal remise,
             @Schema(description = "FODEC en fraction [0;1] ; 0 si absent.") BigDecimal fodec,
-            @Schema(description = "TVA en fraction [0;1], obligatoire.") BigDecimal tva,
+            @Schema(description = "TVA en fraction [0;1] ; null = 0.") BigDecimal tva,
             @Schema(description = "Catégorie (StlCategory), obligatoire.") UUID categorieId,
             @Schema(description = "Notes de la ligne ; '' si absentes.") String notes) {
     }
