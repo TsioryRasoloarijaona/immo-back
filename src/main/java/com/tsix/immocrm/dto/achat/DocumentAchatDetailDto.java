@@ -49,7 +49,11 @@ public record DocumentAchatDetailDto(
         List<PieceLieeAchatDto> factures,
         @Schema(description = "Avoirs visibles d'une facture (InvoiceSourceId), avec leurs lignes ; vide pour une autre nature.")
         List<AvoirAchatDto> avoirs,
-        @Schema(description = "Actions d'écriture ouvertes au compte (boutons de la fiche).") ActionsPieceAchatDto actions) {
+        @Schema(description = "Actions d'écriture ouvertes au compte (boutons de la fiche).") ActionsPieceAchatDto actions,
+        @Schema(description = "Société de la pièce (CfgCompanyId).") UUID societeId,
+        @Schema(description = "Module de la pièce (AdmModuleId).") UUID moduleId,
+        @Schema(description = "Catégorie d'en-tête : celle de la ventilation si elle n'a qu'une part, sinon null.")
+        UUID categorieId) {
 
     @Schema(description = "Ligne de la pièce (BuyDocumentLine) : colonnes stockées puis calculées (vue OMRAN BuyDocumentLineView).")
     public record LigneDocumentAchatDto(
@@ -67,7 +71,9 @@ public record DocumentAchatDetailDto(
             @Schema(description = "PU HT net : PU HT × (1 − remise) × (1 + FODEC), sans arrondi.") BigDecimal prixUnitaireHTNet,
             @Schema(description = "Total HT : PU HT net × quantité, sans arrondi.") BigDecimal totalHT,
             @Schema(description = "Total TVA : total HT × taux de TVA.") BigDecimal totalTVA,
-            @Schema(description = "Total TTC : total HT + total TVA.") BigDecimal totalTTC) {
+            @Schema(description = "Total TTC : total HT + total TVA.") BigDecimal totalTTC,
+            @Schema(description = "Catégorie de la ligne (StlCategoryId) ; null possible.") UUID categorieId,
+            @Schema(description = "Notes de la ligne (Notes) ; null possible.") String notes) {
     }
 
     @Schema(description = "Ventilation de la pièce sur une catégorie (BuyVentilationCategory) : le seul taux est stocké.")

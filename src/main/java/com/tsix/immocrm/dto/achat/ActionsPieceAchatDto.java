@@ -12,7 +12,9 @@ public record ActionsPieceAchatDto(
         @Schema(description = "Facture, droit de modification de facture porté et pièce non gérée ailleurs.")
         boolean peutAffecter,
         @Schema(description = "Statuts d'arrivée accessibles au compte depuis le statut courant, par ordre de transition ; "
-                + "vide sans transition.") List<TransitionPermiseAchatDto> transitions) {
+                + "vide sans transition.") List<TransitionPermiseAchatDto> transitions,
+        @Schema(description = "Même règle que le PUT : nature saisissable, droit de modification, pièce non gérée ailleurs "
+                + "ni en lecture seule.") boolean peutModifier) {
 
     @Schema(description = "Statut d'arrivée d'une transition permise au compte.")
     public record TransitionPermiseAchatDto(

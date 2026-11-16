@@ -39,9 +39,13 @@ public class ParametresVente {
 
     /** {@code ComPenaltyRatio}, en fraction ; zéro si absent. */
     public BigDecimal tauxPenalite() {
-        return premiereValeur("AdmParamsDecimal", LIRE_DECIMAL, TAUX_PENALITE)
-                .map(v -> v instanceof BigDecimal b ? b : new BigDecimal(v.toString()))
-                .orElse(BigDecimal.ZERO);
+        return decimal(TAUX_PENALITE).orElse(BigDecimal.ZERO);
+    }
+
+    /** Valeur d'un paramètre {@code AdmParamsDecimal} ; vide si table ou ligne absente. */
+    public Optional<BigDecimal> decimal(String code) {
+        return premiereValeur("AdmParamsDecimal", LIRE_DECIMAL, code)
+                .map(v -> v instanceof BigDecimal b ? b : new BigDecimal(v.toString()));
     }
 
     /** {@code DefaultComPenaltyDocumentType} : la catégorie des échéances pénalités ; vide si non posé. */

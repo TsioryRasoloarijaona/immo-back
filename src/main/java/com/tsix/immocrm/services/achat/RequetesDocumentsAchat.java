@@ -134,11 +134,13 @@ class RequetesDocumentsAchat {
             + "d.PrevisionDeliveryDate, d.Notes2, d.IsSelected, d.BuyQuoteId, d.BuyOrderId, d.InvoiceSourceId, "
             + "d.AdvanceRatio, d.AdvanceAmount, d.AdvanceRest, d.WarrantyRatio, d.WarrantyAmount, d.InsuranceTRCRatio, "
             + "d.InsuranceTRCAmount, d.InsuranceDECRatio, d.InsuranceDECAmount, d.ProportionRatio, d.ProportionAmount, "
-            + "d.RetainedAmount, d.WorkingOutAdvanceAmount, d.StockAmountToPay, d.ProrataRefundAmount, d.FluctuationsToPay "
+            + "d.RetainedAmount, d.WorkingOutAdvanceAmount, d.StockAmountToPay, d.ProrataRefundAmount, d.FluctuationsToPay, "
+            + "d.CfgCompanyId, d.AdmModuleId, (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(CAST(v.StlCategoryId AS varchar(36))) END "
+            + "FROM BuyVentilationCategory v WHERE v.BuyDocumentId = d.PKey) AS CategorieEnTete "
             + "FROM BuyDocument d LEFT JOIN CfgTier tr ON tr.PKey = d.CfgTierTriggerId WHERE d.PKey = :id";
 
     private static final String LIGNES = "SELECT BuyDocumentId, Pkey, Sorting, Code, Description, Unity, Quantity, "
-            + "UnitPriceHT, UnitPriceTTC, VatRatio, DiscountRatio, FODECRatio FROM BuyDocumentLine "
+            + "UnitPriceHT, UnitPriceTTC, VatRatio, DiscountRatio, FODECRatio, StlCategoryId, Notes FROM BuyDocumentLine "
             + "WHERE BuyDocumentId IN (:ids) ORDER BY Sorting, Code";
 
     private static final String VENTILATION_PROJETS = "SELECT v.PrjProjectId, p.Code, p.Description, v.VentilationRate "
@@ -201,7 +203,8 @@ class RequetesDocumentsAchat {
                     visible(c.devisOrigineId(), visibles), visibles.get(c.devisOrigineId()),
                     visible(c.bonCommandeId(), visibles), visibles.get(c.bonCommandeId()),
                     visible(c.factureSourceId(), visibles), visibles.get(c.factureSourceId()), o.recapTva(),
-                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs(), actions);
+                    o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs(), actions, c.societeId(),
+                    c.moduleId(), c.categorieId());
         }
 
         private static UUID visible(UUID id, Map<UUID, String> visibles) {
@@ -212,7 +215,7 @@ class RequetesDocumentsAchat {
     /** Colonnes d'en-tête propres à la fiche (E2), lues sans filtre : la pièce a déjà passé {@link #FICHE}. */
     record Complement(UUID declencheurId, String declencheurNom, LocalDate dateLivraisonSouhaitee, String note2,
                       boolean devisSelectionne, RetenuesAvancesAchatDto retenuesAvances, UUID devisOrigineId,
-                      UUID bonCommandeId, UUID factureSourceId) {
+                      UUID bonCommandeId, UUID factureSourceId, UUID societeId, UUID moduleId, UUID categorieId) {
 
         List<UUID> references() {
             return Stream.of(devisOrigineId, bonCommandeId, factureSourceId).filter(Objects::nonNull).toList();
@@ -317,7 +320,8 @@ class RequetesDocumentsAchat {
                 retenue(rs, "InsuranceDEC"), retenue(rs, "Proportion"), rs.getBigDecimal("RetainedAmount"),
                 rs.getBigDecimal("WorkingOutAdvanceAmount"), rs.getBigDecimal("StockAmountToPay"),
                 rs.getBigDecimal("ProrataRefundAmount"), rs.getBigDecimal("FluctuationsToPay")),
-                uuid(rs, "BuyQuoteId"), uuid(rs, "BuyOrderId"), uuid(rs, "InvoiceSourceId")));
+                uuid(rs, "BuyQuoteId"), uuid(rs, "BuyOrderId"), uuid(rs, "InvoiceSourceId"), uuid(rs, "CfgCompanyId"),
+                uuid(rs, "AdmModuleId"), uuid(rs, "CategorieEnTete")));
     }
 
     private static RetenueAchatDto retenue(ResultSet rs, String prefixe) throws SQLException {
@@ -341,7 +345,8 @@ class RequetesDocumentsAchat {
         return new LigneDocumentAchatDto(uuid(rs, "Pkey"), (Integer) rs.getObject("Sorting"), chaine(rs, DESCRIPTION),
                 chaine(rs, "Unity"), quantite, prix, pourcent(tva), pourcent(remise), chaine(rs, CODE),
                 pourcent(fodec == null ? BigDecimal.ZERO : fodec), rs.getBigDecimal("UnitPriceTTC"),
-                calcul.prixUnitaireHTNet(), calcul.totalHT(), calcul.totalTVA(), calcul.totalTTC());
+                calcul.prixUnitaireHTNet(), calcul.totalHT(), calcul.totalTVA(), calcul.totalTTC(),
+                uuid(rs, "StlCategoryId"), chaine(rs, "Notes"));
     }
 
     List<VentilationProjetAchatDto> ventilationProjets(UUID id) {

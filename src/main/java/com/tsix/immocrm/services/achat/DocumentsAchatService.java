@@ -12,6 +12,8 @@ import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.ModuleAchatDto;
 import com.tsix.immocrm.dto.achat.ReferentielsAchatDto.NatureAchatDto;
 import com.tsix.immocrm.dto.achat.TotauxDocumentsAchatDto;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.repositories.adm.AdmModuleRepository;
+import com.tsix.immocrm.services.achat.ecriture.DroitsPieceAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import org.springframework.data.domain.Page;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,13 +108,18 @@ public class DocumentsAchatService {
     private final RequetesDocumentsAchat requetes;
     private final RestrictionBonsCommande restriction;
     private final RequetesAgregatsBonCommande requetesAgregats;
+    private final DroitsPieceAchat droits;
+    private final AdmModuleRepository modules;
 
     public DocumentsAchatService(PerimetreProjetService perimetre, RequetesDocumentsAchat requetes,
-                                 RestrictionBonsCommande restriction, RequetesAgregatsBonCommande requetesAgregats) {
+                                 RestrictionBonsCommande restriction, RequetesAgregatsBonCommande requetesAgregats,
+                                 DroitsPieceAchat droits, AdmModuleRepository modules) {
         this.perimetre = perimetre;
         this.requetes = requetes;
         this.restriction = restriction;
         this.requetesAgregats = requetesAgregats;
+        this.droits = droits;
+        this.modules = modules;
     }
 
     public ReferentielsAchatDto referentiels() {
@@ -119,13 +127,15 @@ public class DocumentsAchatService {
         PerimetreAchat pieces = perimetre.achat(List.of());
         List<NatureAchatDto> natures = Arrays.stream(NatureDocumentAchat.values())
                 .map(n -> new NatureAchatDto(n.name(), n.libelle())).toList();
-        List<ModuleAchatDto> modules = Arrays.stream(ModuleAchat.values())
-                .map(m -> new ModuleAchatDto(m.name(), m.libelle())).toList();
+        Map<String, UUID> ids = new HashMap<>();
+        modules.findAllByOrderByCodeAsc().forEach(m -> ids.putIfAbsent(m.getCode(), m.getId()));
+        List<ModuleAchatDto> listeModules = Arrays.stream(ModuleAchat.values())
+                .map(m -> new ModuleAchatDto(m.name(), m.libelle(), ids.get(m.name()))).toList();
         return new ReferentielsAchatDto(natures, requetes.statuts(),
                 projets.isEmpty() ? List.of() : requetes.projets(projets),
                 pieces.vide() ? List.of() : requetes.fournisseurs(pieces),
-                pieces.societes().isEmpty() ? List.of() : requetes.societes(pieces.societes()), modules,
-                requetes.typesLot());
+                pieces.societes().isEmpty() ? List.of() : requetes.societes(pieces.societes()), listeModules,
+                requetes.typesLot(), droits.naturesCreables());
     }
 
     public Page<DocumentAchatListItemDto> liste(FiltresDocumentsAchat filtres, Pageable pageable) {

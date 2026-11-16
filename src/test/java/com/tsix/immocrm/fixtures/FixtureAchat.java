@@ -596,6 +596,185 @@ public class FixtureAchat {
         em.clear();
     }
 
+    // ------------------------------------------------------------------ lot A2b-2a « créer, modifier » (FEATURE-achat-fiche-creation.md)
+
+    /** Type d'état « Nouveau » ({@code AdmWorkFlowStateType}) à sa PKey de production. */
+    public static final UUID ETAT_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
+
+    public static final String GESTION_DEVIS = "BuyQuote";
+    public static final String GESTION_BC = "BuyOrder";
+    public static final String GESTION_BL = "BuyDelivery";
+    public static final String GESTION_FACTURE = "BuyInvoiceDebit";
+
+    /** Gestions ({@code StrEntity}) d'une création depuis le module Achat, aux PKeys de production. */
+    private static final Map<String, UUID> GESTIONS_SAISIE = Map.of(
+            GESTION_DEVIS, UUID.fromString("A168074F-113A-4AAC-BD9E-41AAB4C82CEB"),
+            GESTION_BC, UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42C003"),
+            GESTION_BL, UUID.fromString("14EDDFAA-AB8C-4005-BCA1-28A2E8CEF46D"),
+            GESTION_FACTURE, UUID.fromString("E7999F70-7507-40D9-AA78-A2825C42B600"));
+
+    /** Séquence ({@code AdmSequence.Code}) et valeur posée par nature ; code attendu = « 21/ » + valeur + 1 sur 5 chiffres. */
+    public record SequenceNature(String code, UUID pkey, int valeur) {
+        public String codeSuivant() {
+            return "21/%05d".formatted(valeur + 1);
+        }
+    }
+
+    public static final Map<String, SequenceNature> SEQUENCES_SAISIE = Map.of(
+            DEVIS, new SequenceNature("Devis entrant", UUID.fromString("50C4F768-BE0C-49AA-A6FD-F784D28F2F0A"), 500),
+            BON_COMMANDE, new SequenceNature("Bon de commande sortant",
+                    UUID.fromString("50C4F768-BE0C-49AA-A6FD-F784D28F2F1A"), 600),
+            BON_LIVRAISON, new SequenceNature("Bon de livraison entrant",
+                    UUID.fromString("50C4F768-BE0C-49AA-A6FD-F784D28F2F5A"), 700),
+            FACTURE, new SequenceNature("Facture fournisseur", UUID.fromString("50C4F768-BE0C-49AA-A6FD-F784D28F2F3A"), 800));
+
+    /** Taux de TVA par défaut posé ({@code AdmParamsDecimal.DefaultTva}) : ≠ 0,2 pour prouver qu'il est lu. */
+    public static final BigDecimal TVA_PAR_DEFAUT = new BigDecimal("0.14");
+
+    /**
+     * Configuration de saisie : statuts EN COURS (type « Nouveau »), VALIDÉ DG, VALIDÉ DT (lecture seule) propres au jeton ;
+     * workflows BuyQuote (aucune transition), BuyOrder (EN COURS → DG → DT), BuyDelivery (cycle EN COURS ↔ DG),
+     * BuyInvoiceDebit (EN COURS → DT) ; séquences des 4 natures ; devise, type de marché et TVA par défaut ; modules BUY et PRJ.
+     */
+    public record Saisie(String jeton, UUID enCours, UUID valideDg, UUID valideDt, UUID moduleAchat, UUID moduleProjet,
+                         UUID devise, UUID typeMarche, UUID categorie, Map<String, UUID> gestions) {
+        public UUID gestion(String code) {
+            return gestions.get(code);
+        }
+    }
+
+    public Saisie configurationSaisie(String jeton) {
+        typeEtat(ETAT_NOUVEAU, "Nouveau");
+        typeEtat(ETAT_INTERMEDIAIRE, "Intermédiaire");
+        UUID enCours = statutSaisie("EN COURS-" + jeton, 10, ETAT_NOUVEAU, false, false);
+        UUID valideDg = statutSaisie("VALIDE DG-" + jeton, 30, ETAT_INTERMEDIAIRE, true, false);
+        UUID valideDt = statutSaisie("VALIDE DT-" + jeton, 16, ETAT_INTERMEDIAIRE, true, true);
+        Map<String, UUID> gestions = new java.util.HashMap<>();
+        GESTIONS_SAISIE.forEach((code, pkey) -> gestions.put(code, gestionVide(code, pkey)));
+        transitionDe(gestions.get(GESTION_BC), 10, enCours, valideDg);
+        transitionDe(gestions.get(GESTION_BC), 20, valideDg, valideDt);
+        transitionDe(gestions.get(GESTION_BL), 10, enCours, valideDg);
+        transitionDe(gestions.get(GESTION_BL), 20, valideDg, enCours);
+        transitionDe(gestions.get(GESTION_FACTURE), 10, enCours, valideDt);
+        SEQUENCES_SAISIE.values().forEach(this::sequenceSaisie);
+        UUID devise = devise("DEV-" + jeton);
+        UUID typeMarche = typeLot("TM-" + jeton, "Travaux " + jeton);
+        parametreGuid("DefaultCurrency", devise);
+        parametreGuid("DefaultMarketType", typeMarche);
+        parametreDecimal("DefaultTva", TVA_PAR_DEFAUT);
+        return new Saisie(jeton, enCours, valideDg, valideDt, module("BUY"), module("PRJ"), devise, typeMarche,
+                categorie("CAT-" + jeton), Map.copyOf(gestions));
+    }
+
+    /** Type d'état de workflow à sa PKey de production, créé s'il manque. */
+    public void typeEtat(UUID pkey, String libelle) {
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmWorkFlowStateType WHERE PKey = :id)
+                            INSERT INTO AdmWorkFlowStateType (PKey, Code, Description) VALUES (:id, :code, :code)""")
+                .setParameter(P_ID, pkey).setParameter(P_CODE, libelle));
+    }
+
+    /** Statut de pièce typé ; {@code lectureSeule} = {@code IsReadOnly}. */
+    public UUID statutSaisie(String code, int ordre, UUID type, boolean okPaiement, boolean lectureSeule) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyDocumentStatus (PKey, Code, Description, Sorting, AdmWorkFlowStateTypeId, IsOkForPayement,
+                            IsValidatedOnAccounting, IsReadOnly)
+                        VALUES (:id, :code, :code, :ordre, :type, :ok, 0, :lecture)""")
+                .setParameter(P_ID, id).setParameter(P_CODE, code).setParameter("ordre", ordre).setParameter("type", type)
+                .setParameter("ok", okPaiement).setParameter("lecture", lectureSeule));
+        return id;
+    }
+
+    /** Gestion {@code code} (créée à sa PKey de prod si absente), ses transitions existantes détachées ; rend sa PKey. */
+    public UUID gestionVide(String code, UUID pkey) {
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM StrEntity WHERE Code = :code)
+                            INSERT INTO StrEntity (PKey, Code, Description) VALUES (:id, :code, :code)""")
+                .setParameter(P_ID, pkey).setParameter(P_CODE, code));
+        Object id = em.createNativeQuery("SELECT TOP 1 CAST(PKey AS varchar(36)) FROM StrEntity WHERE Code = :code ORDER BY PKey ASC")
+                .setParameter(P_CODE, code).getSingleResult();
+        UUID gestion = UUID.fromString(id.toString());
+        executer(em.createNativeQuery("UPDATE BuyDocumentWorkFlow SET StrEntityId = NULL WHERE StrEntityId = :id")
+                .setParameter(P_ID, gestion));
+        return gestion;
+    }
+
+    /** Transition de la gestion, ordre {@code Sorting} donné. */
+    public UUID transitionDe(UUID gestion, int ordre, UUID depart, UUID arrivee) {
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO BuyDocumentWorkFlow (PKey, Sorting, StartStatusId, EndStatusId, StrEntityId, Description)
+                        VALUES (:id, :ordre, :depart, :arrivee, :gestion, :description)""")
+                .setParameter(P_ID, id).setParameter("ordre", ordre).setParameter("depart", depart)
+                .setParameter("arrivee", arrivee).setParameter("gestion", gestion)
+                .setParameter("description", "Transition " + ordre));
+        return id;
+    }
+
+    /** Ligne {@code AdmSequence} posée (créée à sa PKey de prod si absente) : année fixe 2021, numéro sur 5 chiffres. */
+    public void sequenceSaisie(SequenceNature s) {
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmSequence WHERE Code = :code)
+                            INSERT INTO AdmSequence (PKey, Code, SeqYear, SeqYearNumber, SeqValue, SeqValueNumber, Separator,
+                                BasedOnSystemYear, CfgCompanyId, SeqPrefix, SeqSuffix)
+                            VALUES (:id, :code, 2021, 2, 0, 5, N'/', 0, NULL, N'', N'')""")
+                .setParameter(P_ID, s.pkey()).setParameter(P_CODE, s.code()));
+        executer(em.createNativeQuery("""
+                        UPDATE AdmSequence SET SeqValue = :valeur, SeqYear = 2021, SeqYearNumber = 2, SeqValueNumber = 5,
+                            Separator = N'/', BasedOnSystemYear = 0, SeqPrefix = N'', SeqSuffix = N''
+                        WHERE Code = :code""")
+                .setParameter(P_CODE, s.code()).setParameter("valeur", s.valeur()));
+    }
+
+    /** {@code SeqValue} courant de la séquence. */
+    public int valeurSequence(String code) {
+        em.flush();
+        Object n = em.createNativeQuery("SELECT TOP 1 SeqValue FROM AdmSequence WHERE Code = :code ORDER BY PKey ASC")
+                .setParameter(P_CODE, code).getSingleResult();
+        return ((Number) n).intValue();
+    }
+
+    /** {@code AdmParamsGuid} (clé primaire = Code) : supprimé puis réinséré. */
+    public void parametreGuid(String code, UUID valeur) {
+        executer(em.createNativeQuery("DELETE FROM AdmParamsGuid WHERE Code = :code").setParameter(P_CODE, code));
+        executer(em.createNativeQuery("INSERT INTO AdmParamsGuid (Code, CodeValue, PKey) VALUES (:code, :valeur, :id)")
+                .setParameter(P_CODE, code).setParameter("valeur", valeur).setParameter(P_ID, UUID.randomUUID()));
+    }
+
+    /** {@code AdmParamsDecimal} (absente de yesRemsTest et de la CI au 16/11 : créée si besoin), supprimé puis réinséré. */
+    public void parametreDecimal(String code, BigDecimal valeur) {
+        executer(em.createNativeQuery("""
+                IF OBJECT_ID('dbo.AdmParamsDecimal', 'U') IS NULL
+                    CREATE TABLE dbo.AdmParamsDecimal (Code nvarchar(255) NOT NULL PRIMARY KEY, CodeValue numeric(21, 6) NULL,
+                        PKey uniqueidentifier NULL)"""));
+        executer(em.createNativeQuery("DELETE FROM AdmParamsDecimal WHERE Code = :code").setParameter(P_CODE, code));
+        executer(em.createNativeQuery("INSERT INTO AdmParamsDecimal (Code, CodeValue, PKey) VALUES (:code, :valeur, :id)")
+                .setParameter(P_CODE, code).setParameter("valeur", valeur).setParameter(P_ID, UUID.randomUUID()));
+    }
+
+    /** Lignes d'une requête native à un paramètre {@code :id}, colonne → valeur (noms de la requête). */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> lire(String sql, UUID id) {
+        em.flush();
+        List<jakarta.persistence.Tuple> tuples = em.createNativeQuery(sql, jakarta.persistence.Tuple.class)
+                .setParameter(P_ID, id).getResultList();
+        return tuples.stream().map(t -> {
+            Map<String, Object> ligne = new java.util.LinkedHashMap<>();
+            t.getElements().forEach(e -> ligne.put(e.getAlias(), t.get(e)));
+            return ligne;
+        }).toList();
+    }
+
+    /** La ligne {@code BuyDocument} de la pièce, toutes colonnes. */
+    public Map<String, Object> pieceEnBase(UUID pieceId) {
+        List<Map<String, Object>> lignes = lire("SELECT * FROM BuyDocument WHERE PKey = :id", pieceId);
+        if (lignes.size() != 1) {
+            throw new AssertionError("Pièce " + pieceId + " : " + lignes.size() + " ligne(s) en base");
+        }
+        return lignes.get(0);
+    }
+
     private void executer(Query query) {
         em.flush();
         query.executeUpdate();

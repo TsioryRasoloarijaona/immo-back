@@ -47,8 +47,7 @@ public class EcrituresPieceAchatService {
 
     private static final String PIECE = "buyDocumentId";
     private static final int NOTE_MAX = 1000;
-    private static final String GEREE_AILLEURS = "Cette pièce est gérée ailleurs (décompte, avance, frais de terrain, document "
-            + "à régler) : elle ne se modifie pas depuis sa fiche.";
+    private static final String GEREE_AILLEURS = ActionsPieceAchat.GEREE_AILLEURS;
 
     private final FicheAchatService fiche;
     private final DroitsPieceAchat droits;

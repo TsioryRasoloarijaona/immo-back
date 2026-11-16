@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
 
 /**
@@ -35,6 +36,10 @@ class QuantitesBonCommande {
             return new Article(l.getStlCategoryId(), l.getUnitPriceHT(), l.getDiscountRatio(), l.getFodecRatio(),
                     l.getVatRatio(), l.getCode(), l.getDescription());
         }
+
+        static Article duCode(BuyDocumentLine l) {
+            return new Article(null, null, null, null, null, l.getCode(), null);
+        }
     }
 
     private record Commande(String code, BigDecimal prix) {
@@ -55,14 +60,24 @@ class QuantitesBonCommande {
     }
 
     void verifier(BuyDocument facture, BuyDocument bc) {
+        verifier(facture, bc, lignes(facture.getId()));
+    }
+
+    /** {@code lignesFacture} : lignes stockées, ou celles du corps d'une modification avant écriture (E-C5.4). */
+    void verifier(BuyDocument facture, BuyDocument bc, List<BuyDocumentLine> lignesFacture) {
         if (((Number) em.createNativeQuery(PARAMETRE).getSingleResult()).intValue() == 0) {
             return;
         }
-        Map<Commande, BigDecimal> commandees = sommes(lignes(bc.getId()), l -> new Commande(l.getCode(), l.getUnitPriceHT()));
+        // BL (OMRAN Delivery.cs:Verif) : article reconnu au seul code, quantité de la 1re ligne du BC portant ce code
+        // (FirstOrDefault, pas de somme), déjà livré = autres BL du BC
+        boolean livraison = NatureDocumentAchat.DELIVRY.name().equals(facture.getDocType());
+        BinaryOperator<BigDecimal> cumul = livraison ? (premiere, suivante) -> premiere : BigDecimal::add;
+        Map<Commande, BigDecimal> commandees = sommes(lignes(bc.getId()),
+                l -> new Commande(l.getCode(), livraison ? null : l.getUnitPriceHT()), cumul);
         List<BuyDocumentLine> dejaFacturees = em.createQuery(DEJA_FACTURE, BuyDocumentLine.class)
-                .setParameter("bc", bc.getId()).setParameter("facture", NatureDocumentAchat.INVOICE.name())
+                .setParameter("bc", bc.getId()).setParameter("facture", facture.getDocType())
                 .setParameter("piece", facture.getId()).getResultList();
-        sommes(lignes(facture.getId()), Article::de).forEach((article, quantite) -> {
+        sommes(lignesFacture, livraison ? Article::duCode : Article::de, BigDecimal::add).forEach((article, quantite) -> {
             Map.Entry<Commande, BigDecimal> commande = commandees.entrySet().stream()
                     .filter(e -> e.getKey().couvre(article.code(), article.prix())).findFirst()
                     .orElseThrow(() -> new ConflictException(
@@ -81,9 +96,9 @@ class QuantitesBonCommande {
     }
 
     private static <K> Map<K, BigDecimal> sommes(List<BuyDocumentLine> lignes,
-                                                 Function<BuyDocumentLine, K> cle) {
+                                                 Function<BuyDocumentLine, K> cle, BinaryOperator<BigDecimal> cumul) {
         Map<K, BigDecimal> sommes = new LinkedHashMap<>();
-        lignes.forEach(l -> sommes.merge(cle.apply(l), quantite(l), BigDecimal::add));
+        lignes.forEach(l -> sommes.merge(cle.apply(l), quantite(l), cumul));
         return sommes;
     }
 

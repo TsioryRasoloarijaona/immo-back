@@ -75,6 +75,8 @@ public class FixtureTerrains {
     public static final UUID TRANSITION_EN_COURS_REGLE = UUID.fromString("6C8FEF18-6F36-44C3-AB86-0B46C4230AC9");
     public static final UUID SEQUENCE_FACTURE = UUID.fromString("50C4F768-BE0C-49AA-A6FD-F784D28F2F3A");
     public static final String CODE_SEQUENCE = "Facture fournisseur";
+    public static final UUID ETAT_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
+    public static final UUID ETAT_INTERMEDIAIRE = UUID.fromString("B53E0A4F-3D67-4BF9-8C0E-B24155865FD6");
     public static final String MESSAGE_DEJA_VALIDE =
             "Vous ne pouvez pas ajouter une facture pour un frais qui est déjà validé !";
 
@@ -278,6 +280,9 @@ public class FixtureTerrains {
                 .setParameter(P_ID, ENTITE_FACTURE_TERRAIN));
         statutFacture(STATUT_EN_COURS, "EN COURS", 10);
         statutFacture(STATUT_REGLE, "REGLÉ", 20);
+        // Types d'état de prod : le statut de départ OMRAN est la 1re transition dont le départ est « Nouveau » (A2b-2a E-C4.3).
+        typerStatut(STATUT_EN_COURS, ETAT_NOUVEAU, "Nouveau");
+        typerStatut(STATUT_REGLE, ETAT_INTERMEDIAIRE, "Intermédiaire");
         if (tableExiste(TABLE_WORKFLOW) && compter(
                 "SELECT COUNT(*) FROM BuyDocumentWorkFlow WHERE StrEntityId = :id", entiteFactureTerrain()) == 0) {
             transitionFacture(TRANSITION_EN_COURS_REGLE, STATUT_EN_COURS, STATUT_REGLE);
@@ -296,6 +301,15 @@ public class FixtureTerrains {
                         IF NOT EXISTS (SELECT 1 FROM StlCurrency WHERE PKey = :id)
                             INSERT INTO StlCurrency (PKey, Code, Description) VALUES (:id, N'MAD', N'MAD')""")
                 .setParameter(P_ID, deviseParDefaut()));
+    }
+
+    private void typerStatut(UUID statut, UUID type, String libelle) {
+        executer(entityManager.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmWorkFlowStateType WHERE PKey = :id)
+                            INSERT INTO AdmWorkFlowStateType (PKey, Code, Description) VALUES (:id, :code, :code)""")
+                .setParameter(P_ID, type).setParameter(P_CODE, libelle));
+        executer(entityManager.createNativeQuery("UPDATE BuyDocumentStatus SET AdmWorkFlowStateTypeId = :type WHERE PKey = :id")
+                .setParameter(P_ID, statut).setParameter("type", type));
     }
 
     private void statutFacture(UUID id, String code, int ordre) {
