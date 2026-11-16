@@ -32,12 +32,6 @@ import static java.math.BigDecimal.ZERO;
 @Component
 class LectureSimulationLot {
 
-    private static final String POINTS = """
-            SELECT PointDate, PointAchivement, PointTime FROM %s
-            WHERE PrjMarketId = :lot AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""";
-    static final String TABLE_POINTS = "PrjMarketPrevision";
-    static final String TABLE_POINTS_BASE = "PrjMarketUserPrevision";
-
     private static final String ECHEANCES = """
             SELECT Ratio, EcheanceDate, Delay, Description FROM PrjMarketWarrantyLine
             WHERE PrjMarketId = :lot ORDER BY Sorting ASC, EcheanceDate ASC""";
@@ -104,7 +98,7 @@ class LectureSimulationLot {
                 lot.getWarrantyInMonths());
         return new EntreesSimulation(new EntreesSimulation.Etat(d.multi(), d.annule(), d.annule() || d.termine(),
                 d.gestionnaire(), d.blocage()), planning, calcul.montantsPrevisions(), calcul.retenuesPrevisions(),
-                points(TABLE_POINTS, id), points(TABLE_POINTS_BASE, id),
+                points(TablePoints.PREVISION, id), points(TablePoints.BASE, id),
                 lire(ECHEANCES, id, r -> new Echeance(zero(montant(r[0])), date(r[1]), r[2] instanceof Number n ? n.intValue() : 0,
                         (String) r[3])),
                 d.multi() ? reels(FACTURES, id, Map.of()) : reels(DECOMPTES, id, avancement.parDecompte(List.of(id))),
@@ -114,8 +108,8 @@ class LectureSimulationLot {
                         zero(montant(r[3])), zero(montant(r[4])))) : List.of());
     }
 
-    private List<Point> points(String table, UUID lot) {
-        return lire(POINTS.formatted(table), lot, r -> new Point(date(r[0]), zero(montant(r[1])), zero(montant(r[2]))));
+    private List<Point> points(TablePoints table, UUID lot) {
+        return lire(table.lireSimulation, lot, r -> new Point(date(r[0]), zero(montant(r[1])), zero(montant(r[2]))));
     }
 
     private List<DecompteReel> reels(String sql, UUID lot, Map<UUID, AvancementDecomptes.Avancement> parDecompte) {

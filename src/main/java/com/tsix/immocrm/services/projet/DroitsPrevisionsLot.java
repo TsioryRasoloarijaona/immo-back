@@ -8,11 +8,11 @@ import java.util.Set;
 /** Seule règle de droits des prévisions d'un lot (FEATURE-lot-previsions.md R1, R2), lue par le graphe, la saisie et le PUT. */
 record DroitsPrevisionsLot(boolean saisir, boolean base) {
 
-    static final String SAISIR = "Yes.Prj.Front.Tdb.ProjectPrevision.toolNew";
+    static final String DROIT_SAISIR ="Yes.Prj.Front.Tdb.ProjectPrevision.toolNew";
 
     static DroitsPrevisionsLot de(DroitsOmran droits) {
-        Set<String> portes = droits.parmi(SAISIR, ModificationLot.DROIT_ESTIMATION);
-        boolean saisir = portes.contains(SAISIR);
+        Set<String> portes = droits.parmi(DROIT_SAISIR,ModificationLot.DROIT_ESTIMATION);
+        boolean saisir = portes.contains(DROIT_SAISIR);
         return new DroitsPrevisionsLot(saisir, saisir && portes.contains(ModificationLot.DROIT_ESTIMATION));
     }
 

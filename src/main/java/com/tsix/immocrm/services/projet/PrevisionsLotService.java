@@ -30,8 +30,6 @@ import static com.tsix.immocrm.services.projet.DecomptesProjetService.jour;
 import static com.tsix.immocrm.services.projet.FacturesDecomptes.date;
 import static com.tsix.immocrm.services.projet.FacturesDecomptes.montant;
 import static com.tsix.immocrm.services.projet.FacturesDecomptes.uuid;
-import static com.tsix.immocrm.services.projet.LectureSimulationLot.TABLE_POINTS;
-import static com.tsix.immocrm.services.projet.LectureSimulationLot.TABLE_POINTS_BASE;
 import static java.math.BigDecimal.ZERO;
 
 /** Saisie et enregistrement des prévisions d'un lot (FEATURE-lot-previsions.md §4.2-4.3, R1-R7, R10). */
@@ -48,13 +46,6 @@ public class PrevisionsLotService {
     private static final String DECROISSANT = "Veuillez vérifier l'avancement dans la prevision du date %s !";
     private static final DateTimeFormatter JJ_MM_AAAA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private static final String LIRE_POINTS = """
-            SELECT PKey, PointDate, PointAchivement, PointTime, PointPayment, PointAmount FROM %s
-            WHERE PrjMarketId = :lot ORDER BY PointDate ASC""";
-    private static final String EFFACER_POINTS = "DELETE FROM %s WHERE PrjMarketId = :lot";
-    private static final String INSERER_POINT = """
-            INSERT INTO %s (PKey, PrjMarketId, PointDate, PointAchivement, PointTime, PointPayment, PointAmount)
-            VALUES (:id, :lot, :date, :avancement, :temps, :paiement, :montant)""";
     private static final String MAJ_PREVISIONS = "UPDATE PrjMarket SET StartDate = :debut, Delay = :duree, EndDate = :fin"
             + " WHERE PKey = :lot";
     private static final String MAJ_DATES_BASE = "UPDATE PrjMarket SET StartDateManual = :debut, DelayManual = :duree,"
@@ -101,7 +92,7 @@ public class PrevisionsLotService {
                 m.getEstimatedVatAmountManual(), m.getEstimatedPriceTTCManual(), MontantsLot.pourcentage(m.getDefaultVat()),
                 g.estimationConfidentielle().ht(), g.estimationConfidentielle().tva(), g.estimationConfidentielle().ttc(),
                 g.marcheAjuste().ht(), g.marcheAjuste().tva(), g.marcheAjuste().ttc(), calcul.montantsPrevisions().montant(),
-                calcul.avancementFacture(), points(TABLE_POINTS, id), points(TABLE_POINTS_BASE, id));
+                calcul.avancementFacture(), points(TablePoints.PREVISION, id), points(TablePoints.BASE, id));
     }
 
     /** Ordre : 404, 403 (R1 puis R2), 400 (R3, R4), puis écriture, recalcul (R8) et une ligne d'audit (R10). */
@@ -128,11 +119,11 @@ public class PrevisionsLotService {
         }
         em.refresh(m);
         if (r.points() != null) {
-            remplacer(TABLE_POINTS, id, r.points(), previsionsLot, calcul(m).montantsPrevisions().montant());
+            remplacer(TablePoints.PREVISION, id, r.points(), previsionsLot, calcul(m).montantsPrevisions().montant());
         }
         // Points de base réécrits dès qu'un champ de base change : leurs temps et montants en dépendent.
         if (r.pointsBase() != null && c.un()) {
-            remplacer(TABLE_POINTS_BASE, id, r.pointsBase(), base, Objects.requireNonNullElse(m.getEstimatedPriceTTCManual(), ZERO));
+            remplacer(TablePoints.BASE, id, r.pointsBase(), base, Objects.requireNonNullElse(m.getEstimatedPriceTTCManual(), ZERO));
         }
         em.persist(audit.resume(m, id, "Prévisions enregistrées"));
         previsions.recalculer(id);
@@ -145,7 +136,7 @@ public class PrevisionsLotService {
         boolean debutChange = r.debutBase() != null && debutBase != null && !r.debutBase().equals(debutBase);
         boolean dureeChange = change(entier(r.dureeBase()), entier(m.getDelayManual()));
         boolean montantChange = change(r.estimationBaseHT(), m.getEstimatedPriceHTManual());
-        boolean pointsChanges = r.pointsBase() != null && !memesPoints(trier(r.pointsBase()), points(TABLE_POINTS_BASE, m.getId()));
+        boolean pointsChanges = r.pointsBase() != null && !memesPoints(trier(r.pointsBase()), points(TablePoints.BASE, m.getId()));
         return new Changements(debutChange || dureeChange, montantChange, pointsChanges);
     }
 
@@ -238,12 +229,12 @@ public class PrevisionsLotService {
     }
 
     /** R5 / R6 : points effacés puis réinsérés par date ; paiement = avancement − précédent, montant = paiement × prix. */
-    private void remplacer(String table, UUID lot, List<PointSaisieDto> points, Periode periode, BigDecimal prix) {
-        em.createNativeQuery(EFFACER_POINTS.formatted(table)).setParameter("lot", lot).executeUpdate();
+    private void remplacer(TablePoints table, UUID lot, List<PointSaisieDto> points, Periode periode, BigDecimal prix) {
+        em.createNativeQuery(table.effacer).setParameter("lot", lot).executeUpdate();
         BigDecimal precedent = ZERO;
         for (PointSaisieDto p : trier(points)) {
             BigDecimal paiement = p.avancement().subtract(precedent);
-            em.createNativeQuery(INSERER_POINT.formatted(table)).setParameter("id", UUID.randomUUID()).setParameter("lot", lot)
+            em.createNativeQuery(table.inserer).setParameter("id", UUID.randomUUID()).setParameter("lot", lot)
                     .setParameter("date", p.date().atStartOfDay()).setParameter("avancement", p.avancement())
                     .setParameter("temps", CourbePrevisions.temps(p.date(), periode.debut(), periode.duree()).setScale(16, RoundingMode.HALF_UP))
                     .setParameter("paiement", paiement).setParameter("montant", paiement.multiply(prix).setScale(6, RoundingMode.HALF_UP))
@@ -252,8 +243,8 @@ public class PrevisionsLotService {
         }
     }
 
-    private List<PointSaisiDto> points(String table, UUID lot) {
-        List<?> brutes = em.createNativeQuery(LIRE_POINTS.formatted(table)).setParameter("lot", lot).getResultList();
+    private List<PointSaisiDto> points(TablePoints table, UUID lot) {
+        List<?> brutes = em.createNativeQuery(table.lire).setParameter("lot", lot).getResultList();
         return brutes.stream().map(Object[].class::cast).map(r -> new PointSaisiDto(uuid(r[0]), date(r[1]), montant(r[2]),
                 montant(r[3]), montant(r[4]), montant(r[5]))).toList();
     }
@@ -263,6 +254,9 @@ public class PrevisionsLotService {
     }
 
     private static LocalDate fin(LocalDate debut, Integer duree) {
-        return debut == null ? null : debut.plusDays(duree == null ? 0 : duree);
+        if (debut == null) {
+            return null;
+        }
+        return debut.plusDays(Objects.requireNonNullElse(duree, 0));
     }
 }

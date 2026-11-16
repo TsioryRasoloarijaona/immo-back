@@ -172,7 +172,7 @@ public class SousFenetresLotService {
     private void avancementsReels(UUID lot, TreeMap<YearMonth, PointMois> points) {
         Map<UUID, AvancementDecomptes.Avancement> parDecompte = avancement.parDecompte(List.of(lot));
         for (Object[] r : em.createQuery(DECOMPTES_FACTURES, Object[].class).setParameter("lot", lot).getResultList()) {
-            AvancementDecomptes.Avancement a = parDecompte.get((UUID) r[0]);
+            AvancementDecomptes.Avancement a = parDecompte.get(r[0]);
             if (a != null) {
                 PointMois p = points.computeIfAbsent(YearMonth.from((LocalDateTime) r[1]), m -> new PointMois());
                 p.avancementReel = max(p.avancementReel, MontantsLot.fraction(a.avaPct()));
@@ -203,7 +203,7 @@ public class SousFenetresLotService {
         }
         for (Object[] r : lignes(societesHabilitees(PIECES, lot).setParameter("references", List.of(references)))) {
             SoldeDocumentAchat solde = SoldeDocumentAchat.de(montant(r[6]), montant(r[7]));
-            parReference.get((String) r[10]).add(new AvanceLotDto(uuid(r[0]), (String) r[1], uuidOuNull(r[2]),
+            parReference.get(r[10]).add(new AvanceLotDto(uuid(r[0]), (String) r[1], uuidOuNull(r[2]),
                     (String) r[3], (String) r[4], date(r[5]), solde.montantAPayer(), solde.montantRegle(),
                     solde.resteARegler(), (String) r[8], (String) r[9]));
         }
