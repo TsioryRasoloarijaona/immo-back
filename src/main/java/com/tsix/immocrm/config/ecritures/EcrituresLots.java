@@ -15,6 +15,7 @@ public class EcrituresLots implements TablesEcrites {
     @Override
     public List<String> tables() {
         return List.of("PrjMarket", "PrjMarketLineGrouping", "PrjMarketLineGroupingEstimation", "PrjMarketLine",
-                "PrjMarketLineEstimation", "PrjMarketVentilationCategory");
+                "PrjMarketLineEstimation", "PrjMarketVentilationCategory", "PrjMarketPrevision", "PrjMarketUserPrevision",
+                "PrjMarketPaymentPrevision");
     }
 }

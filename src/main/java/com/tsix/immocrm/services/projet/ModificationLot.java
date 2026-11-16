@@ -47,7 +47,7 @@ import static com.tsix.immocrm.services.projet.DecomptesProjetService.jour;
 @Service
 public class ModificationLot {
 
-    private static final String DROIT_ESTIMATION = "Yes.Prj.Front.Market.MarketMonitoring.ManualEstimationAdministrator";
+    static final String DROIT_ESTIMATION = "Yes.Prj.Front.Market.MarketMonitoring.ManualEstimationAdministrator";
     private static final String HT = "montantForfaitaireHT";
     private static final String TTC = "montantForfaitaireTTC";
     private static final String DESCRIPTION = "description";
@@ -119,16 +119,18 @@ public class ModificationLot {
     private final EntityManager em;
     private final JsonMapper json;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
     private final Map<String, BiConsumer<PrjMarket, ModifierLotRequest>> ecritures;
 
     public ModificationLot(LotsProjetService lots, DroitsOmran droits, UtilisateurAffiche utilisateur, EntityManager em,
-                           JsonMapper json, Clock clock) {
+                           JsonMapper json, Clock clock, PrevisionsPaiementLot previsions) {
         this.lots = lots;
         this.droits = droits;
         this.utilisateur = utilisateur;
         this.em = em;
         this.json = json;
         this.clock = clock;
+        this.previsions = previsions;
         this.ecritures = ecritures();
     }
 
@@ -157,6 +159,7 @@ public class ModificationLot {
         m.setUserUpdate(utilisateur.courant().nom());
         m.setUserUpdateDateTime(LocalDateTime.now(clock));
         em.flush();
+        previsions.recalculer(id);
         return lots.lot(id);
     }
 

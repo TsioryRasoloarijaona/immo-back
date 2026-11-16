@@ -34,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -113,15 +114,18 @@ public class ProjetConfigService {
     private final TracePatrimoine trace;
     private final SuppressionProjet suppression;
     private final TransitionsProjet transitions;
+    private final PrevisionsPaiementLot previsions;
 
     public ProjetConfigService(PrjProjectRepository projets, CfgCompanyRepository societes, CfgTierRepository tiers,
-                               TracePatrimoine trace, SuppressionProjet suppression, TransitionsProjet transitions) {
+                               TracePatrimoine trace, SuppressionProjet suppression, TransitionsProjet transitions,
+                               PrevisionsPaiementLot previsions) {
         this.projets = projets;
         this.societes = societes;
         this.tiers = tiers;
         this.trace = trace;
         this.suppression = suppression;
         this.transitions = transitions;
+        this.previsions = previsions;
     }
 
     public List<ProjetConfigDto> lister() {
@@ -156,6 +160,7 @@ public class ProjetConfigService {
         em().persist(p);
         trace.habiliterCreateur(p);
         transitions.historiser(p, TransitionsProjet.CREATION, null, "", null);
+        previsions.recalculer(p.getManageProrataPrjMarketId());
         return toDto(p, new long[2]);
     }
 
@@ -186,8 +191,13 @@ public class ProjetConfigService {
     @Transactional
     public ProjetConfigDto modifier(UUID id, ProjetConfigRequest saisie) {
         PrjProject p = charger(id);
+        UUID prorataAvant = p.getManageProrataPrjMarketId();
         appliquer(p, saisie);
         tracerModification(p);
+        if (!Objects.equals(prorataAvant, p.getManageProrataPrjMarketId())) {
+            previsions.recalculer(prorataAvant);
+            previsions.recalculer(p.getManageProrataPrjMarketId());
+        }
         return toDto(p, compteursDe(id));
     }
 

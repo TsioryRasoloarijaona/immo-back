@@ -69,9 +69,10 @@ public class EcritureBordereauLot {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public EcritureBordereauLot(LotsProjetService lots, DroitsOmran droits, VentilationLot ventilation, EcouteurAuditOmran audit,
-                                UtilisateurAffiche utilisateur, EntityManager em, Clock clock) {
+                                UtilisateurAffiche utilisateur, EntityManager em, Clock clock, PrevisionsPaiementLot previsions) {
         this.lots = lots;
         this.droits = droits;
         this.ventilation = ventilation;
@@ -79,6 +80,7 @@ public class EcritureBordereauLot {
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     @Transactional
@@ -123,6 +125,7 @@ public class EcritureBordereauLot {
         }
         ventilation.reecrire(lot, e.auteur(), e.maintenant());
         em.persist(audit.resume(lot, id, t.resume()));
+        previsions.recalculer(id);
     }
 
     private Set<UUID> categoriesExistantes(Set<UUID> ids) {

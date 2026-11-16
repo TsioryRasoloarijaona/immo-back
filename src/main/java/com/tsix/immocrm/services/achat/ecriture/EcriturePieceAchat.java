@@ -12,6 +12,7 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.achat.ecriture.ConfigurationPieceAchat.Configuration;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Ligne;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Part;
+import com.tsix.immocrm.services.projet.PrevisionsPaiementLot;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
@@ -44,14 +45,16 @@ public class EcriturePieceAchat {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public EcriturePieceAchat(ConfigurationPieceAchat configuration, GenerateurCodeSequence sequences,
-                              UtilisateurAffiche utilisateur, EntityManager em, Clock clock) {
+                              UtilisateurAffiche utilisateur, EntityManager em, Clock clock, PrevisionsPaiementLot previsions) {
         this.configuration = configuration;
         this.sequences = sequences;
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -80,6 +83,7 @@ public class EcriturePieceAchat {
             em.persist(e);
         });
         historique(d);
+        previsions.apresPiece(d);
         return d;
     }
 
