@@ -70,7 +70,7 @@ class RequetesPositionFournisseur {
                      LignePositionDto ligne) {
 
         MouvementPosition position() {
-            BigDecimal montant = ligne.reglement() == null ? ligne.aPayer() : ligne.reglement();
+            BigDecimal montant = ligne.aPayer() == null ? ligne.base() : ligne.aPayer();
             return new MouvementPosition(ligne.dateDocument(), Objects.requireNonNullElse(montant, BigDecimal.ZERO),
                     ligne.credit());
         }
@@ -91,12 +91,15 @@ class RequetesPositionFournisseur {
 
     private static Mouvement mouvement(ResultSet rs) throws SQLException {
         boolean reglement = rs.getInt("Reglement") == 1;
+        String type = chaine(rs, "Type");
+        // Avoir en « Base » comme BuySupplierPositionView, montant positif au débit (FEATURE-restes-projet-achat.md §3).
+        boolean enBase = reglement || "REFUND".equals(type);
         BigDecimal montant = rs.getBigDecimal("Montant");
         BigDecimal ttc = rs.getBigDecimal("Ttc");
-        LignePositionDto ligne = new LignePositionDto(uuid(rs, "Id"), chaine(rs, "Type"), chaine(rs, "Code"),
+        LignePositionDto ligne = new LignePositionDto(uuid(rs, "Id"), type, chaine(rs, "Code"),
                 chaine(rs, "Libelle"), jour(rs, "DocDate"), jour(rs, "Echeance"), uuid(rs, "PrjProjectId"),
-                chaine(rs, "ProjetCode"), ttc, reglement || montant == null || ttc == null ? null : montant.subtract(ttc),
-                reglement ? null : montant, reglement ? montant : null, reglement ? rs.getBigDecimal("Ras") : null,
+                chaine(rs, "ProjetCode"), ttc, enBase || montant == null || ttc == null ? null : montant.subtract(ttc),
+                enBase ? null : montant, enBase ? montant : null, reglement ? rs.getBigDecimal("Ras") : null,
                 reglement ? montant : null, rs.getInt("Credit") == 1);
         return new Mouvement(uuid(rs, "CfgTierId"), chaine(rs, "FournisseurNom"), uuid(rs, "CfgCompanyId"),
                 chaine(rs, "SocieteCode"), ligne);

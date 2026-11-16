@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.achat.config;
 
 import com.tsix.immocrm.dto.achat.config.CatalogueChampsStatutDto;
 import com.tsix.immocrm.dto.achat.config.CatalogueChampsStatutDto.ChampStatutAchatDto;
+import com.tsix.immocrm.exceptions.InvalidRequestException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** Catalogues de la fiche statut d'achat : champs [IsWorkFlow] d'OMRAN et couleurs nommées .NET (voir FEATURE-statuts-achat-parite.md). */
-final class CatalogueStatutAchat {
+public final class CatalogueStatutAchat {
 
     static final CatalogueChampsStatutDto CHAMPS = new CatalogueChampsStatutDto(champs("""
             MaturityDate=Echéance
@@ -89,8 +90,17 @@ final class CatalogueStatutAchat {
     private CatalogueStatutAchat() {
     }
 
-    static Optional<String> couleur(String nom) {
-        return Optional.ofNullable(COULEURS.get(nom.toLowerCase()));
+    /** Saisie d'une couleur : vide si rien, sinon la graphie canonique ; 400 pour un nom inconnu. */
+    public static String couleur(String saisie) {
+        if (saisie == null || saisie.isBlank()) {
+            return "";
+        }
+        return Optional.ofNullable(COULEURS.get(saisie.trim().toLowerCase()))
+                .orElseThrow(() -> new InvalidRequestException("Couleur inconnue : " + saisie));
+    }
+
+    public static List<String> couleurs() {
+        return COULEURS.values().stream().sorted().toList();
     }
 
     /** Liste OMRAN « ,a,b » (string.Join sur un Split(',') : virgule de tête) vers ses noms. */
