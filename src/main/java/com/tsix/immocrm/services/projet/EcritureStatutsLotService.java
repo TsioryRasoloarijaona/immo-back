@@ -16,7 +16,7 @@ import com.tsix.immocrm.entities.str.StrWorkFlowIntervener;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.services.achat.config.CatalogueStatutAchat;
+import com.tsix.immocrm.services.achat.config.FicheStatut;
 import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.patrimoine.ReferentielAdminService;
 import com.tsix.immocrm.services.patrimoine.SaisiePatrimoine;
@@ -46,7 +46,6 @@ public class EcritureStatutsLotService {
     private static final String TRANSITION = "Transition de lot";
     private static final String ID = "id";
     private static final String GENRE = "genre";
-    private static final int NOTES = 1000;
     private static final String USAGES = """
             SELECT (SELECT COUNT(*) FROM PrjMarket WHERE StrStatusId = :id),
                    (SELECT COUNT(*) FROM StrWorkFlow WHERE StatusFromId = :id OR StatusToId = :id),
@@ -105,20 +104,7 @@ public class EcritureStatutsLotService {
 
     private List<UUID> appliquer(StrStatusEcriture s, StatutLotEcritureDto d) {
         UUID genre = genre(s.getStrConfigEntityId(), d.genreId());
-        Integer ordre = exiger(d.ordre(), "Ordre");
-        String code = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.code()), null, "Code");
-        String description = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.description()), null,
-                "Description");
-        UUID type = exiger(d.typeId(), "Type");
-        verifierExiste("SELECT COUNT(*) FROM StrStatusType WHERE PKey = :id", type, "Type de statut inconnu.");
-        if (d.dureeVieJours() < 0) {
-            throw new InvalidRequestException("Durée de vie : un nombre de jours positif ou nul.");
-        }
-        String couleur = CatalogueStatutAchat.couleur(d.couleur());
-        if (d.imageId() != null) {
-            verifierExiste("SELECT COUNT(*) FROM CfgImage WHERE PKey = :id", d.imageId(), "Image inconnue.");
-        }
-        String notes = SaisiePatrimoine.texte(d.notes(), null, NOTES, "Notes");
+        FicheStatut f = FicheStatut.lire(em, d, "SELECT COUNT(*) FROM StrStatusType WHERE PKey = :id");
         CatalogueStatutLotDto catalogue = lecture.catalogue(genre);
         List<Integer> libellees = catalogue.cases().stream().map(CaseStatutLotDto::numero).toList();
         d.cases().stream().filter(n -> !libellees.contains(n)).findFirst().ifPresent(n -> {
@@ -128,16 +114,16 @@ public class EcritureStatutsLotService {
         d.champsObligatoires().stream().filter(c -> !champsDuGenre.contains(c)).findFirst().ifPresent(c -> {
             throw new InvalidRequestException("Champ obligatoire hors du genre : " + c);
         });
-        verifierCodeLibre(s.getId(), genre, code);
+        verifierCodeLibre(s.getId(), genre, f.code());
         s.setStrConfigEntityId(genre);
-        s.setSorting(ordre);
-        s.setCode(code);
-        s.setDescription(description);
-        s.setStrStatusTypeId(type);
+        s.setSorting(f.ordre());
+        s.setCode(f.code());
+        s.setDescription(f.description());
+        s.setStrStatusTypeId(f.type());
         s.setDelay(d.dureeVieJours());
-        s.setColorName(couleur);
+        s.setColorName(f.couleur());
         s.setCfgImageId(d.imageId());
-        s.setNotes(notes);
+        s.setNotes(f.notes());
         libellees.forEach(n -> s.cocher(n, d.cases().contains(n)));
         trace.horodater(s);
         return d.champsObligatoires().stream().distinct().toList();
@@ -238,7 +224,7 @@ public class EcritureStatutsLotService {
     }
 
     private UUID statutDuGenre(UUID id, UUID genre, String libelle) {
-        StrStatusEcriture s = em.find(StrStatusEcriture.class, exiger(id, libelle));
+        StrStatusEcriture s = em.find(StrStatusEcriture.class, FicheStatut.exiger(id, libelle));
         if (s == null || !genre.equals(s.getStrConfigEntityId())) {
             throw new InvalidRequestException(libelle + " inconnu dans ce genre : " + id);
         }
@@ -296,7 +282,7 @@ public class EcritureStatutsLotService {
             }
             return actuel;
         }
-        UUID genre = exiger(saisi, "Genre");
+        UUID genre = FicheStatut.exiger(saisi, "Genre");
         return lecture.genre(genre).orElseThrow(() -> new InvalidRequestException("Genre de lot inconnu : " + genre))
                 .getId();
     }
@@ -307,19 +293,6 @@ public class EcritureStatutsLotService {
             throw new ResourceNotFoundException(objet + " introuvable : " + id);
         }
         return trouve;
-    }
-
-    private static <T> T exiger(T valeur, String libelle) {
-        if (valeur == null) {
-            throw new InvalidRequestException(libelle + " est obligatoire.");
-        }
-        return valeur;
-    }
-
-    private void verifierExiste(String requete, UUID id, String message) {
-        if (((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).intValue() == 0) {
-            throw new InvalidRequestException(message);
-        }
     }
 
     private static long nombre(Object valeur) {

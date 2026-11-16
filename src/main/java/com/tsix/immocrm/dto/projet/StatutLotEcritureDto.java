@@ -1,5 +1,6 @@
 package com.tsix.immocrm.dto.projet;
 
+import com.tsix.immocrm.dto.achat.config.FicheStatutSaisie;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -23,7 +24,7 @@ public record StatutLotEcritureDto(
         @Schema(description = "Numéros des cases cochées, pris dans le catalogue du genre ; absent = aucune.") List<Integer> cases,
         @Schema(description = "Champs obligatoires (StrField.PKey du catalogue du genre) ; absent = aucun.")
         List<UUID> champsObligatoires
-) {
+) implements FicheStatutSaisie {
     public StatutLotEcritureDto {
         dureeVieJours = Objects.requireNonNullElse(dureeVieJours, 0);
         cases = Objects.requireNonNullElse(cases, List.of());

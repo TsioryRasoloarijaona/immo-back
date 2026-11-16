@@ -26,7 +26,7 @@ public record StatutAchatEcritureDto(
         List<String> champsObligatoiresFournisseur,
         @Schema(description = "Documents à joindre, un type au plus une fois ; absent = aucun.")
         List<DocumentAJoindreAchatDto> documentsAJoindre
-) {
+) implements FicheStatutSaisie {
     public StatutAchatEcritureDto {
         dureeVieJours = Objects.requireNonNullElse(dureeVieJours, 0);
         okPourPaiement = Boolean.TRUE.equals(okPourPaiement);

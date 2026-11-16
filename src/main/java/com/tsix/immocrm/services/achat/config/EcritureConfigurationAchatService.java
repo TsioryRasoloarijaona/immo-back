@@ -94,20 +94,8 @@ public class EcritureConfigurationAchatService {
     }
 
     private void appliquer(BuyDocumentStatus s, StatutAchatEcritureDto d) {
-        Integer ordre = exiger(d.ordre(), "Ordre");
-        String code = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.code()), null, "Code");
-        String description = SaisiePatrimoine.obligatoire(SaisiePatrimoine.sansBlancsAuxBords(d.description()), null,
-                "Description");
-        UUID type = exiger(d.typeId(), "Type");
-        verifierExiste("SELECT COUNT(*) FROM AdmWorkFlowStateType WHERE PKey = :id", type, "Type d'état inconnu.");
-        if (d.dureeVieJours() < 0) {
-            throw new InvalidRequestException("Durée de vie : un nombre de jours positif ou nul.");
-        }
-        String couleur = CatalogueStatutAchat.couleur(d.couleur());
-        if (d.imageId() != null) {
-            verifierExiste("SELECT COUNT(*) FROM CfgImage WHERE PKey = :id", d.imageId(), "Image inconnue.");
-        }
-        String notes = SaisiePatrimoine.texte(d.notes(), null, LONG, "Notes");
+        FicheStatut f = FicheStatut.lire(em, d, "SELECT COUNT(*) FROM AdmWorkFlowStateType WHERE PKey = :id");
+        String code = f.code();
         String champs = champs(d.champsObligatoires(), CatalogueStatutAchat.CHAMPS.piece(), CHAMPS_PIECE, LONG);
         String champsFournisseur = champs(d.champsObligatoiresFournisseur(), CatalogueStatutAchat.CHAMPS.fournisseur(),
                 CHAMPS_FOURNISSEUR, LONG);
@@ -118,17 +106,17 @@ public class EcritureConfigurationAchatService {
         if (pris > 0) {
             throw new ConflictException("Le code %s est déjà pris par un autre statut d'achat.".formatted(code));
         }
-        s.setSorting(ordre);
+        s.setSorting(f.ordre());
         s.setCode(code);
-        s.setDescription(description);
-        s.setAdmWorkFlowStateTypeId(type);
+        s.setDescription(f.description());
+        s.setAdmWorkFlowStateTypeId(f.type());
         s.setDelay(d.dureeVieJours());
-        s.setColorName(couleur);
+        s.setColorName(f.couleur());
         s.setIsOkForPayement(d.okPourPaiement());
         s.setIsValidatedOnAccounting(d.valideComptabilite());
         s.setIsReadOnly(d.lectureSeule());
         s.setCfgImageId(d.imageId());
-        s.setNotes(notes);
+        s.setNotes(f.notes());
         s.setMandatoryFields(champs);
         s.setSupplierMandatoryFields(champsFournisseur);
         trace.horodater(s);
@@ -159,7 +147,7 @@ public class EcritureConfigurationAchatService {
     private void verifierDocuments(List<DocumentAJoindreAchatDto> documents) {
         Set<UUID> vus = new HashSet<>();
         for (DocumentAJoindreAchatDto doc : documents) {
-            UUID type = exiger(doc == null ? null : doc.typeDocumentId(), "Type de document");
+            UUID type = FicheStatut.exiger(doc == null ? null : doc.typeDocumentId(), "Type de document");
             if (em.find(AdmAttachedFileType.class, type) == null) {
                 throw new InvalidRequestException("Type de document inconnu : " + type);
             }
@@ -263,7 +251,7 @@ public class EcritureConfigurationAchatService {
     }
 
     private UUID statut(UUID id, String libelle) {
-        if (em.find(BuyDocumentStatus.class, exiger(id, libelle)) == null) {
+        if (em.find(BuyDocumentStatus.class, FicheStatut.exiger(id, libelle)) == null) {
             throw new InvalidRequestException(libelle + " inconnu : " + id);
         }
         return id;
@@ -296,18 +284,5 @@ public class EcritureConfigurationAchatService {
             throw new ResourceNotFoundException(objet + " introuvable : " + id);
         }
         return trouve;
-    }
-
-    private static <T> T exiger(T valeur, String libelle) {
-        if (valeur == null) {
-            throw new InvalidRequestException(libelle + " est obligatoire.");
-        }
-        return valeur;
-    }
-
-    private void verifierExiste(String requete, UUID id, String message) {
-        if (((Number) em.createNativeQuery(requete).setParameter(ID, id).getSingleResult()).intValue() == 0) {
-            throw new InvalidRequestException(message);
-        }
     }
 }
