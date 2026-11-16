@@ -57,10 +57,11 @@ public class EcrituresLotService {
     private final UtilisateurAffiche utilisateur;
     private final EntityManager em;
     private final Clock clock;
+    private final PrevisionsPaiementLot previsions;
 
     public EcrituresLotService(LotsProjetService lots, TransitionsLot transitions, DroitsOmran droits,
                                GenerateurCodeSequence sequences, UtilisateurAffiche utilisateur, EntityManager em,
-                               Clock clock) {
+                               Clock clock, PrevisionsPaiementLot previsions) {
         this.lots = lots;
         this.transitions = transitions;
         this.droits = droits;
@@ -68,6 +69,7 @@ public class EcrituresLotService {
         this.utilisateur = utilisateur;
         this.em = em;
         this.clock = clock;
+        this.previsions = previsions;
     }
 
     /** Droit avant le corps (403 avant 400), projet visible (404), puis écriture et ligne « Création ». */
@@ -114,6 +116,7 @@ public class EcrituresLotService {
         em.persist(m);
         transitions.historiser(m, TransitionsLot.CREATION, null, "");
         em.flush();
+        previsions.recalculer(m.getId());
         return lots.lot(m.getId());
     }
 
@@ -125,7 +128,9 @@ public class EcrituresLotService {
         if (em.createQuery(LOT_CITE_PAR, Long.class).setParameter("id", id).getSingleResult() > 0) {
             throw new ConflictException(LOT_CITE);
         }
+        PrjProject projet = m.getPrjProject();
         try {
+            previsions.effacer(id);
             // em.remove et non un delete JPQL : seul l'évènement de suppression fait effacer la ligne de la copie de lecture.
             em.createQuery("from PrjMarketLine l where l.prjMarketId = :id", PrjMarketLine.class).setParameter("id", id)
                     .getResultList().forEach(em::remove);
@@ -139,6 +144,7 @@ public class EcrituresLotService {
             }
             throw e;
         }
+        previsions.recalculerProrata(projet, id);
     }
 
     /** Lot à copier (E8) : 403 sans aucun droit de création, 404, puis 403 sans le droit de son genre. */
@@ -169,6 +175,7 @@ public class EcrituresLotService {
         m.setUserUpdate(utilisateur.courant().nom());
         m.setUserUpdateDateTime(LocalDateTime.now(clock));
         em.flush();
+        previsions.recalculer(id);
         return lots.ligne(m);
     }
 

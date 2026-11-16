@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.domain.projet.MontantsLot;
+import com.tsix.immocrm.domain.projet.SimulationPaiementsLot;
 import com.tsix.immocrm.dto.projet.AvanceLotDto;
 import com.tsix.immocrm.dto.projet.AvancesLotDto;
 import com.tsix.immocrm.dto.projet.AvenantLotDto;
@@ -93,14 +94,16 @@ public class SousFenetresLotService {
     private final AvancementDecomptes avancement;
     private final EntityManager em;
     private final DroitsOmran droits;
+    private final LectureSimulationLot simulation;
 
     SousFenetresLotService(LotsProjetService lots, PerimetreProjetService perimetre, AvancementDecomptes avancement,
-                           EntityManager em, DroitsOmran droits) {
+                           EntityManager em, DroitsOmran droits, LectureSimulationLot simulation) {
         this.lots = lots;
         this.perimetre = perimetre;
         this.avancement = avancement;
         this.em = em;
         this.droits = droits;
+        this.simulation = simulation;
     }
 
     public AvancesLotDto avances(UUID id) {
@@ -132,11 +135,20 @@ public class SousFenetresLotService {
                 parReference.get("MARKET_PROPORTION"));
     }
 
-    // Série « Estimation » non calculée (simulation de décomptes OMRAN) : voir RAPPORT, lot L3a-bis.
     public PrevisionsLotDto previsions(UUID id) {
         PrjMarket lot = lots.visible(id);
         boolean avecAvancement = !Boolean.TRUE.equals(lot.getIsMultiSupplier());
         TreeMap<YearMonth, PointMois> points = new TreeMap<>();
+        SimulationPaiementsLot.Estimation estimation = simulation.estimation(lot);
+        estimation.lignes().forEach(l -> {
+            PointMois p = points.computeIfAbsent(YearMonth.from(l.date()), m -> new PointMois());
+            p.estimation = p.estimation.add(l.montant());
+        });
+        if (avecAvancement) {
+            // Points triés par date : la dernière valeur du mois l'emporte (E8).
+            estimation.avancements().forEach(a -> points.computeIfAbsent(YearMonth.from(a.date()), m -> new PointMois())
+                    .avancementEstimation = a.avancement());
+        }
         for (Object[] r : lignes(duLot(PREVISIONS, lot.getId()))) {
             PointMois p = points.computeIfAbsent(mois(r[0]), m -> new PointMois());
             p.prevision = p.prevision.add(zero(montant(r[1])));
@@ -175,7 +187,7 @@ public class SousFenetresLotService {
         for (YearMonth m = points.firstKey().minusMonths(1); !m.isAfter(points.lastKey()); m = m.plusMonths(1)) {
             PointMois p = points.getOrDefault(m, new PointMois());
             // Sommes non arrondies : la moitié des montants prévus a plus de 2 décimales, Σ des mois = Σ de la table.
-            mois.add(new PointPrevisionDto(m.atDay(1), BigDecimal.ZERO, null, p.prevision, p.avancementPrevision, p.reel,
+            mois.add(new PointPrevisionDto(m.atDay(1), p.estimation, p.avancementEstimation, p.prevision, p.avancementPrevision, p.reel,
                     p.avancementReel));
         }
         return new PrevisionsLotDto(lot, mois.getFirst().mois(), modifiable, mois);
@@ -212,6 +224,8 @@ public class SousFenetresLotService {
     }
 
     private static final class PointMois {
+        private BigDecimal estimation = BigDecimal.ZERO;
+        private BigDecimal avancementEstimation;
         private BigDecimal prevision = BigDecimal.ZERO;
         private BigDecimal reel = BigDecimal.ZERO;
         private BigDecimal avancementPrevision;

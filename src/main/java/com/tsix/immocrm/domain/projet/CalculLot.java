@@ -124,6 +124,55 @@ public final class CalculLot {
         return avancement(decomptes.ht().subtract(depassements.ht()));
     }
 
+    // ------------------------------------------------------------------ prévisions (FEATURE-lot-previsions.md §3.1)
+
+    public EntreesLot.Drapeaux drapeaux() {
+        return d;
+    }
+
+    public EntreesSimulation.Montants montantsPrevisions() {
+        BigDecimal ratio = ratioAnnulation();
+        Paire realise = marcheAjuste.plus(depassements).plus(supplementaires);
+        BigDecimal pourMulti = realise.ht().compareTo(est.ht()) >= 0 ? ZERO : est.ttc().subtract(realise.ttc());
+        TrioDto cout = coutPrevisionnel().total();
+        BigDecimal avancement;
+        if (!d.multi()) {
+            avancement = avancementFacture();
+        } else {
+            avancement = cout.ttc().signum() == 0 ? ZERO : BigDecimal.ONE.subtract(pourMulti.divide(cout.ttc(), MathContext.DECIMAL64));
+        }
+        BigDecimal avanceMarche = d.multi() ? s(CMD_AVANCE) : t.avance().multiply(marche.ttc());
+        return new EntreesSimulation.Montants(premierNonNul(marcheAjuste.ttc(), est.ttc(), t.forfaitTTC()).multiply(ratio),
+                premierNonNul(avanceMarche, t.avance().multiply(est.ttc()), t.avance().multiply(t.forfaitTTC())).multiply(ratio),
+                premierNonNul(t.garantie().multiply(marcheAjuste.ttc()), t.garantie().multiply(est.ttc()),
+                        t.garantie().multiply(t.forfaitTTC())).multiply(ratio),
+                s(PREV_REMB_PRORATA).multiply(ratio), marcheAjuste.ttc().signum() != 0 ? marcheAjuste.ttc() : est.ttc(),
+                cout.ht(), cout.ttc(), coutRetenueGarantie(), coutPrevisionnel().remboursement(), s(RG_VALIDEE),
+                s(FAC_REMB_PRORATA), avancement, pourMulti);
+    }
+
+    public EntreesSimulation.Retenues retenuesPrevisions() {
+        return new EntreesSimulation.Retenues(t.avance(), t.garantie(), t.prorata(), t.decRatio(), t.decMontant(), t.trcRatio(),
+                t.trcMontant(), s(AVANCE_DEC_VALIDEE).subtract(s(DEC_AVANCE_DECOMPTE)));
+    }
+
+    /** {@code CostWarrantyAmount} de la vue. */
+    private BigDecimal coutRetenueGarantie() {
+        if (d.termine()) {
+            return somme(FAC_RG, FAV_RG);
+        }
+        if (marcheAjuste.ht().signum() == 0) {
+            return t.garantie().multiply(est.ttc());
+        }
+        BigDecimal base = marcheAjuste.ttc().add(depassements.ttc())
+                .add(d.retenueSurSupplementaires() ? supplementaires.ttc() : ZERO);
+        return t.garantie().multiply(base).add(s(AV_RG));
+    }
+
+    private static BigDecimal premierNonNul(BigDecimal... valeurs) {
+        return Arrays.stream(valeurs).filter(v -> v.signum() != 0).findFirst().orElse(ZERO);
+    }
+
     // ------------------------------------------------------------------ onglets Suivi et Retenues
 
     public SuiviLotDto suivi() {
