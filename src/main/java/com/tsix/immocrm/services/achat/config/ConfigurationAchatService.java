@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.achat.config;
 
 import com.tsix.immocrm.dto.achat.config.CatalogueChampsStatutDto;
 import com.tsix.immocrm.dto.achat.config.DocumentAJoindreAchatDto;
+import com.tsix.immocrm.dto.achat.config.DocumentTransitionAchatDto;
 import com.tsix.immocrm.dto.achat.config.ImageStatutDto;
 import com.tsix.immocrm.dto.achat.config.RoleTransitionDto;
 import com.tsix.immocrm.dto.achat.config.StatutAchatConfigDto;
@@ -69,6 +70,15 @@ public class ConfigurationAchatService {
     private static final String ROLES = """
             SELECT l.WorkFlowId, r.PKey, r.Code FROM BuyDocumentWorkFlowAdmRole l JOIN AdmRole r ON r.PKey = l.AdmRoleId
             WHERE l.WorkFlowId IS NOT NULL ORDER BY r.Code ASC""";
+    private static final String DOCUMENTS_TRANSITION = """
+            SELECT d.BuyDocumentWorkFlowId, d.AdmAttachedFileTypeId, COALESCE(f.Description, f.Code), d.PrjMarketTypeId,
+                   COALESCE(m.Description, m.Code), d.ForFirstWorkingOut, d.ForIntermediateWorkingOut, d.ForFinalWorkingOut
+            FROM BuyDocumentWorkFlowDocumentToAttach d
+            LEFT JOIN AdmAttachedFileType f ON f.PKey = d.AdmAttachedFileTypeId
+            LEFT JOIN PrjMarketType m ON m.PKey = d.PrjMarketTypeId
+            WHERE d.BuyDocumentWorkFlowId IS NOT NULL ORDER BY f.Description ASC, m.Description ASC""";
+    /** Décomptes d'une transition de PrjInvoiceDebitWorkingOut, dans l'ordre des colonnes For…WorkingOut. */
+    static final List<String> DECOMPTES = List.of("PREMIER", "INTERMEDIAIRE", "FINAL");
 
     private final EntityManager em;
 
@@ -128,6 +138,10 @@ public class ConfigurationAchatService {
         Map<UUID, List<RoleTransitionDto>> roles = lignes(em.createNativeQuery(ROLES).getResultList()).stream()
                 .collect(Collectors.groupingBy(r -> uuid(r[0]),
                         Collectors.mapping(r -> new RoleTransitionDto(uuid(r[1]), texte(r[2])), Collectors.toList())));
+        Map<UUID, List<DocumentTransitionAchatDto>> documents = lignes(em.createNativeQuery(DOCUMENTS_TRANSITION)
+                .getResultList()).stream().collect(Collectors.groupingBy(r -> uuid(r[0]), Collectors.mapping(
+                        r -> new DocumentTransitionAchatDto(uuid(r[1]), texte(r[2]), uuid(r[3]), texte(r[4]),
+                                decompte(r)), Collectors.toList())));
         return transitions.stream().map(r -> {
             UUID id = uuid(r[0]);
             String gestion = texte(r[4]);
@@ -136,8 +150,17 @@ public class ConfigurationAchatService {
                     vrai(r[10]), roles.getOrDefault(id, List.of()), ((Number) r[11]).longValue(),
                     r[12] == null ? null : ((LocalDateTime) r[12]).toLocalDate(), uuid(r[13]),
                     CatalogueStatutAchat.noms(texte(r[14])), CatalogueStatutAchat.noms(texte(r[15])),
-                    vrai(r[16]), vrai(r[17]), vrai(r[18]), vrai(r[19]));
+                    vrai(r[16]), vrai(r[17]), vrai(r[18]), vrai(r[19]), documents.getOrDefault(id, List.of()));
         }).toList();
+    }
+
+    private static String decompte(Object[] r) {
+        for (int i = 0; i < DECOMPTES.size(); i++) {
+            if (vrai(r[5 + i])) {
+                return DECOMPTES.get(i);
+            }
+        }
+        return null;
     }
 
     public Optional<TransitionAchatDto> transition(UUID id) {

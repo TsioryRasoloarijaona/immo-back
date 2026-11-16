@@ -34,6 +34,8 @@ public record TransitionAchatDto(
         @Schema(description = "Avec notification (WithNotification = 1).") boolean avecNotification,
         @Schema(description = "Avec envoi des e-mails (SendEmailToUsers = 1).") boolean envoiEmails,
         @Schema(description = "Notifier le déclencheur (NotifyCfgTierTrigger = 1).") boolean notifierDeclencheur,
-        @Schema(description = "Envoyer un e-mail au déclencheur (SendEMailToCfgTierTrigger = 1).") boolean emailDeclencheur
+        @Schema(description = "Envoyer un e-mail au déclencheur (SendEMailToCfgTierTrigger = 1).") boolean emailDeclencheur,
+        @Schema(description = "Documents à joindre, triés par type de document puis de marché ; vide si aucun.")
+        List<DocumentTransitionAchatDto> documentsAJoindre
 ) {
 }

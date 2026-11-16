@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-@Schema(description = "Transition de statut d'achat (POST et PUT) ; un PUT remplace la transition entière, rôles compris.")
+@Schema(description = "Transition de statut d'achat (POST et PUT) ; un PUT remplace tout sauf les champs « absent = inchangé ».")
 public record TransitionAchatEcritureDto(
         @Schema(description = "Ordre dans la gestion (Sorting).", example = "1") Integer ordre,
         @Schema(description = "Libellé, ≤ 255.", example = "Validation pour paiement") String description,
@@ -29,7 +29,9 @@ public record TransitionAchatEcritureDto(
         @Schema(description = "Notifier le déclencheur (NotifyCfgTierTrigger) ; absent = inchangé (false à la création).")
         Boolean notifierDeclencheur,
         @Schema(description = "Envoyer un e-mail au déclencheur (SendEMailToCfgTierTrigger) ; absent = inchangé.")
-        Boolean emailDeclencheur
+        Boolean emailDeclencheur,
+        @Schema(description = "Documents à joindre, remplacés en bloc ; absent = inchangés, vide = aucun.")
+        List<DocumentTransitionAchatDto> documentsAJoindre
 ) {
     public TransitionAchatEcritureDto {
         noteObligatoire = Boolean.TRUE.equals(noteObligatoire);

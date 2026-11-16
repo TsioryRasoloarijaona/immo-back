@@ -14,8 +14,10 @@ Refusé (409) tant qu'une pièce, une transition (départ ou arrivée) ou une li
 
 ## creerTransition
 
-Ordre des contrôles : droit (403), saisie (400 : statut de départ ou d'arrivée absent ou inconnu, départ = arrivée, gestion ou rôle inconnu), puis unicité (409) du triplet gestion / départ / arrivée — l'absence de gestion compte comme une gestion. `roleIds` vide ou absent = aucun rôle.
+Ordre des contrôles : droit (403), saisie (400 : statut de départ ou d'arrivée absent ou inconnu, départ = arrivée, gestion ou rôle inconnu, document à joindre invalide), puis unicité (409) du triplet gestion / départ / arrivée — l'absence de gestion compte comme une gestion. `roleIds` vide ou absent = aucun rôle.
+
+Documents à joindre (grille OMRAN « Fichiers attachés ») : un document = type de document × type de marché, toujours obligatoire. Pour la seule gestion `PrjInvoiceDebitWorkingOut`, chaque document porte aussi son décompte (`PREMIER`, `INTERMEDIAIRE` ou `FINAL`, obligatoire) ; ailleurs `decompte` doit être absent. 400 sur un type inconnu, un décompte manquant ou en trop, un triplet en double.
 
 ## modifierTransition
 
-La transition est remplacée, ses rôles réécrits en bloc. Mêmes contrôles que la création, précédés du 404.
+La transition est remplacée, ses rôles réécrits en bloc. Les champs obligatoires, les 4 cases de notification et `documentsAJoindre` absents du corps sont gardés ; une liste vide les efface. Mêmes contrôles que la création, précédés du 404. La suppression emporte les rôles et les documents à joindre.
