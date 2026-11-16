@@ -71,6 +71,8 @@ class ValiderFraisTerrainTest {
     private static final String NB_FACTURES = "SELECT COUNT(*) FROM BuyDocument WHERE StkExpenseId = :id";
     private static final String FRAIS_PAR_ID = "SELECT * FROM StkExpense WHERE Pkey = :id";
     private static final String DETAIL = "$.detail";
+    private static final String ENTITE_FACTURE_TERRAIN =
+            "(SELECT PKey FROM StrEntity WHERE Code = N'StkInvoiceDebitLand')";
 
     @TestBean(name = "horlogeMetier")
     private Clock horloge;
@@ -490,23 +492,37 @@ class ValiderFraisTerrainTest {
         verifierRienEcrit();
     }
 
+    /** A2b-2a Règles 3 : aucune transition pour StkInvoiceDebitLand → 200, facture à statut NULL (pas d'erreur). */
     @Test
-    void r3_1_5_aucuneLigneDeWorkflowPourLEntite_500_rienEcrit() throws Exception {
-        if (terrains.tableExiste("BuyDocumentWorkFlow")) {
-            terrains.executer("""
-                    DELETE FROM BuyDocumentWorkFlow
-                    WHERE StrEntityId IN (SELECT PKey FROM StrEntity WHERE Code = N'StkInvoiceDebitLand')""");
-        }
+    void r3_1_5_aucuneLigneDeWorkflowPourLEntite_200_statutNull() throws Exception {
+        terrains.executer("DELETE FROM BuyDocumentWorkFlow WHERE StrEntityId IN " + ENTITE_FACTURE_TERRAIN);
+
+        valider(terrain, frais).andExpect(status().isOk());
+
+        assertThat(facture().get("BuyDocumentStatusId")).isNull();
+    }
+
+    /** A2b-2a Règles 3 : transitions sans aucun départ de type « Nouveau » → 500, rien d'écrit. */
+    @Test
+    void r3_1_5_transitionsSansDepartNouveau_500_rienEcrit() throws Exception {
+        terrains.executer("""
+                UPDATE BuyDocumentStatus SET AdmWorkFlowStateTypeId = '%s'
+                WHERE PKey IN (SELECT StartStatusId FROM BuyDocumentWorkFlow WHERE StrEntityId IN %s)"""
+                .formatted(FixtureTerrains.ETAT_INTERMEDIAIRE, ENTITE_FACTURE_TERRAIN));
 
         valider(terrain, frais).andExpect(status().isInternalServerError());
 
         verifierRienEcrit();
     }
 
-    /** §3.1.5 : statut de départ = StartStatusId d'une ligne qui n'est EndStatusId d'aucune autre, lu en base. */
+    /** A2b-2a Règles 3 : statut de départ = départ de la 1re transition par Sorting dont le départ est « Nouveau ». */
     @Test
     void r3_1_5_statutDeDepart_luDansLeWorkflowDeLEntite() throws Exception {
-        UUID brouillon = terrains.statutFacture("BROUILLON-" + c.jeton());
+        String code = "BROUILLON-" + c.jeton();
+        UUID brouillon = terrains.statutFacture(code);
+        terrains.executer("UPDATE BuyDocumentStatus SET AdmWorkFlowStateTypeId = '%s' WHERE Code = N'%s'"
+                .formatted(FixtureTerrains.ETAT_NOUVEAU, code));
+        terrains.executer("UPDATE BuyDocumentWorkFlow SET Sorting = 20 WHERE StrEntityId IN " + ENTITE_FACTURE_TERRAIN);
         terrains.transitionFacture(UUID.randomUUID(), brouillon, STATUT_EN_COURS);
 
         valider(terrain, frais).andExpect(status().isOk());
