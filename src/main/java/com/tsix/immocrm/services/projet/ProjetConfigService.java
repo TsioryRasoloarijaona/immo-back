@@ -5,7 +5,6 @@ import com.tsix.immocrm.dto.projet.HistoriqueProjetDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigDto;
 import com.tsix.immocrm.dto.projet.ProjetConfigRequest;
 import com.tsix.immocrm.dto.projet.ReferentielsProjetConfigDto;
-import com.tsix.immocrm.dto.projet.StatutLotDto;
 import com.tsix.immocrm.dto.projet.TransitionProjetDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.entities.cfg.CfgCompany;
@@ -72,14 +71,6 @@ public class ProjetConfigService {
                 (SELECT COUNT(*) FROM BuyDocument d WHERE d.PrjProjectId = p.PKey)
             FROM PrjProject p""";
     private static final String COMPTEURS_DU_PROJET = COMPTEURS + " WHERE p.PKey = :id";
-    // Les 3 genres retenus (réponse 3) : Administrative et Dealers ont aussi des statuts en prod, sans aucun lot.
-    private static final String STATUTS_LOT = """
-            SELECT CONVERT(varchar(36), s.PKey), s.Code, s.Description, s.Sorting, s.ColorName,
-                CONVERT(varchar(36), e.PKey), e.Code, e.Description, t.Description
-            FROM StrStatus s JOIN StrEntity e ON e.PKey = s.StrConfigEntityId
-                LEFT JOIN StrStatusType t ON t.PKey = s.StrStatusTypeId
-            WHERE e.Code IN ('PrjMarket', 'PrjMarketMultiSupplier', 'PrjMarketStudies')
-            ORDER BY e.Code, s.Sorting""";
 
     /** Une ligne qui référence le projet bloque sa suppression ; habilitations exceptées (§8.4, réponse 4). */
     private record Reference(String sql, String libelle) {
@@ -235,13 +226,6 @@ public class ProjetConfigService {
                 em().createQuery("SELECT c FROM StlCategory c ORDER BY c.code", StlCategory.class).getResultStream()
                         .filter(OngletsProjetConfigService::estDepense)
                         .map(c -> new ReferentielItemDto(c.getId(), c.getCode(), c.getDescription(), null)).toList());
-    }
-
-    public List<StatutLotDto> statutsLot() {
-        List<?> lignes = em().createNativeQuery(STATUTS_LOT).getResultList();
-        return lignes.stream().map(Object[].class::cast).map(r -> new StatutLotDto(
-                UUID.fromString((String) r[0]), (String) r[1], (String) r[2], r[3] == null ? null : ((Number) r[3]).intValue(),
-                (String) r[4], UUID.fromString((String) r[5]), (String) r[6], (String) r[7], (String) r[8])).toList();
     }
 
     /** PUT : remplacement complet, code, libellé et société obligatoires ; booléens et taux absents = inchangés. */

@@ -14,6 +14,7 @@ public class EcrituresStatutsAchat implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("CfgImage", "BuyDocumentStatus", "BuyDocumentStatusDocumentToAttach", "BuyDocumentWorkFlow");
+        return List.of("BuyDocumentStatus", "BuyDocumentStatusDocumentToAttach", "BuyDocumentWorkFlow",
+                "BuyDocumentWorkFlowDocumentToAttach");
     }
 }

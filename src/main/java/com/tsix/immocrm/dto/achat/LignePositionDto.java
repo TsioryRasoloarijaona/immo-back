@@ -17,9 +17,11 @@ public record LignePositionDto(
         @Schema(description = "Projet de la pièce (ou de la pièce réglée) ; null pour une part non rattachée.") UUID projetId,
         @Schema(description = "Code du projet (PrjProject.Code).") String projetCode,
         BigDecimal montantTTC,
-        @Schema(description = "Pièce : aPayer − montantTTC ; null pour un règlement.") BigDecimal retenues,
+        @Schema(description = "Facture ou document : aPayer − montantTTC ; null pour un avoir et un règlement.")
+        BigDecimal retenues,
         BigDecimal aPayer,
-        @Schema(description = "Règlement : montant de base (AmountBase) de la part ; null pour une pièce.") BigDecimal base,
+        @Schema(description = "Règlement : base (AmountBase) de la part ; avoir : son montant, positif ; null sinon.")
+        BigDecimal base,
         @Schema(description = "Règlement : retenue à la source (AmountRS) de la part ; null pour une pièce.") BigDecimal ras,
         @Schema(description = "Règlement : montant de la part, au débit ou au crédit ; null pour une pièce.") BigDecimal reglement,
         @Schema(description = "Vrai : au crédit du fournisseur (augmente le solde) ; faux : au débit.") boolean credit) {

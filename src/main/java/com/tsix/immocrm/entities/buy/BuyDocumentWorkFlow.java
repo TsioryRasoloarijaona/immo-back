@@ -50,4 +50,16 @@ public class BuyDocumentWorkFlow extends LigneOmran {
     @Nationalized
     @Column(name = "SupplierMandatoryFields")
     private String supplierMandatoryFields;
+
+    @Column(name = "WithNotification")
+    private Boolean withNotification;
+
+    @Column(name = "SendEmailToUsers")
+    private Boolean sendEmailToUsers;
+
+    @Column(name = "NotifyCfgTierTrigger")
+    private Boolean notifyCfgTierTrigger;
+
+    @Column(name = "SendEMailToCfgTierTrigger")
+    private Boolean sendEMailToCfgTierTrigger;
 }
