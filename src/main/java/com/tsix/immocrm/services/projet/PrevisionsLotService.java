@@ -141,8 +141,8 @@ public class PrevisionsLotService {
 
     private Changements changements(PrjMarket m, PrevisionsSaisieRequest r) {
         LocalDate debutBase = jour(m.getStartDateManual());
-        boolean debutChange = r.debutBase() != null && !r.debutBase().equals(debutBase)
-                && !(debutBase == null && r.debutBase().equals(r.debut()));
+        // Base vide : le début envoyé seul est le défaut du front (même périmé après un changement de début), pas une saisie.
+        boolean debutChange = r.debutBase() != null && debutBase != null && !r.debutBase().equals(debutBase);
         boolean dureeChange = change(entier(r.dureeBase()), entier(m.getDelayManual()));
         boolean montantChange = change(r.estimationBaseHT(), m.getEstimatedPriceHTManual());
         boolean pointsChanges = r.pointsBase() != null && !memesPoints(trier(r.pointsBase()), points(TABLE_POINTS_BASE, m.getId()));

@@ -145,9 +145,11 @@ public class SousFenetresLotService {
             p.estimation = p.estimation.add(l.montant());
         });
         if (avecAvancement) {
-            // Points triés par date : la dernière valeur du mois l'emporte (E8).
+            // Points triés par date : la dernière valeur du mois l'emporte ; 0 après le début de base = null (E8).
+            LocalDate debutBase = DecomptesProjetService.jour(lot.getStartDateManual());
             estimation.avancements().forEach(a -> points.computeIfAbsent(YearMonth.from(a.date()), m -> new PointMois())
-                    .avancementEstimation = a.avancement());
+                    .avancementEstimation = a.avancement().signum() == 0 && debutBase != null && a.date().isAfter(debutBase)
+                    ? null : a.avancement());
         }
         for (Object[] r : lignes(duLot(PREVISIONS, lot.getId()))) {
             PointMois p = points.computeIfAbsent(mois(r[0]), m -> new PointMois());

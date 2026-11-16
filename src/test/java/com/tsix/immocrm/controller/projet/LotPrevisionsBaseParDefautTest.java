@@ -84,6 +84,17 @@ class LotPrevisionsBaseParDefautTest {
     }
 
     @Test
+    void baseVide_debutModifie_defautPerime_200_baseLaisseeVide() throws Exception {
+        baseVide();
+
+        Reponse r = appels.enregistrer(saisieSeule, lot,
+                saisie(DEBUT_2026.plusDays(10), 60, DEBUT_2026, 0, "0", List.of(), List.of()));
+
+        assertThat(r.statut()).as(r.corps()).isEqualTo(200);
+        assertThat(prev.lot(lot)).containsEntry("StartDateManual", null).containsEntry("DelayManual", null);
+    }
+
+    @Test
     void baseVide_dureeNonNulle_403() throws Exception {
         baseVide();
 
