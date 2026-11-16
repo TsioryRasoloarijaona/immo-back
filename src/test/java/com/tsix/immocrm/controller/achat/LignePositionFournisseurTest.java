@@ -53,6 +53,7 @@ class LignePositionFournisseurTest {
     private static final Set<String> PIECES = Set.of(FACTURE, DOCUMENT, AVOIR);
     private static final String CREDIT = "credit";
     private static final String A_PAYER = "aPayer";
+    private static final String BASE = "base";
     private static final String REGLE = "reglement";
     private static final String PROJET_ID = "projetId";
     private static final String DATE_DOCUMENT = "dateDocument";
@@ -133,14 +134,21 @@ class LignePositionFournisseurTest {
         return trouvees.get(0);
     }
 
-    /** Σ crédit − Σ débit ; montant = à payer (pièce) ou règlement (règlement). */
+    /** Σ crédit − Σ débit ; montant = base (avoir, FEATURE-restes-projet-achat.md §3), à payer (pièce) ou règlement. */
     private static BigDecimal solde(List<Map<String, Object>> lignes) {
         BigDecimal s = BigDecimal.ZERO;
         for (Map<String, Object> l : lignes) {
-            BigDecimal m = nombre(l.get(PIECES.contains((String) l.get("type")) ? A_PAYER : REGLE));
+            BigDecimal m = nombre(l.get(colonneDuMontant((String) l.get("type"))));
             s = Boolean.TRUE.equals(l.get(CREDIT)) ? s.add(m) : s.subtract(m);
         }
         return s;
+    }
+
+    private static String colonneDuMontant(String type) {
+        if (AVOIR.equals(type)) {
+            return BASE;
+        }
+        return PIECES.contains(type) ? A_PAYER : REGLE;
     }
 
     // ------------------------------------------------------------------ invariant
@@ -201,15 +209,16 @@ class LignePositionFournisseurTest {
                 () -> assertThat(nombre(f.get("retenues"))).isEqualByComparingTo("-117"));
     }
 
+    /** FEATURE-restes-projet-achat.md §3 (réponse 1) : l'avoir est au débit, montant positif en « Base », à payer et retenues nuls. */
     @Test
-    void r5_avoir_auDebit() throws Exception {
+    void s3_avoir_auDebit_enBase_aPayerEtRetenuesNuls() throws Exception {
         jeuComplet();
 
         Map<String, Object> av = seule(lignes(), AVOIR);
 
         assertAll(
-                () -> assertThat(av).containsEntry(CREDIT, false),
-                () -> assertThat(nombre(av.get(A_PAYER))).isEqualByComparingTo("200"));
+                () -> assertThat(av).containsEntry(CREDIT, false).containsEntry(A_PAYER, null).containsEntry("retenues", null),
+                () -> assertThat(nombre(av.get(BASE))).isEqualByComparingTo("200"));
     }
 
     @Test
