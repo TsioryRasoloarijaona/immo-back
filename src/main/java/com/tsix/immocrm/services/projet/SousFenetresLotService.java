@@ -12,6 +12,7 @@ import com.tsix.immocrm.dto.projet.RemboursementsLotDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto.EcheanceRgLotDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto.ReceptionLotDto;
 import com.tsix.immocrm.entities.prj.PrjMarket;
+import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -91,13 +92,15 @@ public class SousFenetresLotService {
     private final PerimetreProjetService perimetre;
     private final AvancementDecomptes avancement;
     private final EntityManager em;
+    private final DroitsOmran droits;
 
     SousFenetresLotService(LotsProjetService lots, PerimetreProjetService perimetre, AvancementDecomptes avancement,
-                           EntityManager em) {
+                           EntityManager em, DroitsOmran droits) {
         this.lots = lots;
         this.perimetre = perimetre;
         this.avancement = avancement;
         this.em = em;
+        this.droits = droits;
     }
 
     public AvancesLotDto avances(UUID id) {
@@ -163,9 +166,10 @@ public class SousFenetresLotService {
         }
     }
 
-    private static PrevisionsLotDto serie(UUID lot, TreeMap<YearMonth, PointMois> points) {
+    private PrevisionsLotDto serie(UUID lot, TreeMap<YearMonth, PointMois> points) {
+        boolean modifiable = DroitsPrevisionsLot.de(droits).saisir();
         if (points.isEmpty()) {
-            return new PrevisionsLotDto(lot, null, List.of());
+            return new PrevisionsLotDto(lot, null, modifiable, List.of());
         }
         List<PointPrevisionDto> mois = new ArrayList<>();
         for (YearMonth m = points.firstKey().minusMonths(1); !m.isAfter(points.lastKey()); m = m.plusMonths(1)) {
@@ -174,7 +178,7 @@ public class SousFenetresLotService {
             mois.add(new PointPrevisionDto(m.atDay(1), BigDecimal.ZERO, null, p.prevision, p.avancementPrevision, p.reel,
                     p.avancementReel));
         }
-        return new PrevisionsLotDto(lot, mois.getFirst().mois(), mois);
+        return new PrevisionsLotDto(lot, mois.getFirst().mois(), modifiable, mois);
     }
 
     /** Pièces DOCUMENT_TO_PAY du lot par ReferenceType (chaque type demandé présent, liste vide au besoin). */

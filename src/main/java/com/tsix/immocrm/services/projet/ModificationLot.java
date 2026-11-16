@@ -47,7 +47,7 @@ import static com.tsix.immocrm.services.projet.DecomptesProjetService.jour;
 @Service
 public class ModificationLot {
 
-    private static final String DROIT_ESTIMATION = "Yes.Prj.Front.Market.MarketMonitoring.ManualEstimationAdministrator";
+    static final String DROIT_ESTIMATION = "Yes.Prj.Front.Market.MarketMonitoring.ManualEstimationAdministrator";
     private static final String HT = "montantForfaitaireHT";
     private static final String TTC = "montantForfaitaireTTC";
     private static final String DESCRIPTION = "description";
