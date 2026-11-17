@@ -251,9 +251,9 @@ public class ActionsDecompteService {
 
     /** {@code W:1961-1963}, {@code 2010-2014} et {@code Utils.cs:GetAdvanceRestByMarket / GetWorkingOutAdvanceRestByMarket}. */
     private void reprendreDuPrecedent(PrjWorkingOut w, PrjMarket lot, PrjWorkingOut dernier) {
-        w.setAdvanceRest(resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_MARCHE,
+        w.setAdvanceRest(donnees.resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_MARCHE,
                 DonneesDecompte.Colonne.AVANCE_MARCHE));
-        BigDecimal resteAvanceDecompte = resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_DECOMPTE,
+        BigDecimal resteAvanceDecompte = donnees.resteAvance(lot.getId(), w.getId(), DonneesDecompte.AVANCE_DECOMPTE,
                 DonneesDecompte.Colonne.AVANCE_DECOMPTE);
         w.setWorkingOutAdvanceAmountRestAtCreation(resteAvanceDecompte);
         w.setWorkingOutAdvanceAmount(resteAvanceDecompte);
@@ -267,11 +267,6 @@ public class ActionsDecompteService {
             w.setFluctuationsOldHT(dernier.getFluctuationsHT());
             w.setFluctuationsHT(dernier.getFluctuationsHT());
         }
-    }
-
-    private BigDecimal resteAvance(UUID lot, UUID id, String typePiece, DonneesDecompte.Colonne champ) {
-        BigDecimal pieces = donnees.pieces(lot, typePiece, id);
-        return pieces == null ? BigDecimal.ZERO : pieces.subtract(donnees.somme(champ, lot, id, null));
     }
 
     private static BigDecimal reste(BigDecimal montantLot, BigDecimal deja) {

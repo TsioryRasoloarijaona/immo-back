@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
 import com.tsix.immocrm.domain.projet.MontantsLot;
+import com.tsix.immocrm.domain.projet.NaturePieceLot;
 import com.tsix.immocrm.domain.projet.SimulationPaiementsLot;
 import com.tsix.immocrm.dto.projet.AvanceLotDto;
 import com.tsix.immocrm.dto.projet.AvancesLotDto;
@@ -16,7 +17,6 @@ import com.tsix.immocrm.dto.projet.RemboursementsLotDto.OptionReceptionDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto.ReceptionLotDto;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.services.droits.DroitsOmran;
-import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -46,22 +45,18 @@ public class SousFenetresLotService {
     private static final String MARKET_ADVANCE = "MARKET_ADVANCE";
     private static final String MARKET_WARRANTY = "MARKET_WARRANTY";
 
-    // Pièces payables du lot, des seules sociétés habilitées (§3 règle 2) ; réglé par SoldeDocumentAchat (règle 6).
-    private static final String PIECES_DU_LOT = """
-             FROM BuyDocument d
-            LEFT JOIN BuyDocumentStatus st ON st.PKey = d.BuyDocumentStatusId
-            LEFT JOIN StlCurrency c ON c.PKey = d.StlCurrencyId
-            WHERE d.PrjMarketId = :lot AND d.CanBePayed = 1 AND d.CfgCompanyId IN (:societes) AND\s""";
+    // Réglé par SoldeDocumentAchat (règle 6) ; modifiable / supprimable par DroitsPieceLot (FEATURE-lot-pieces-a-payer.md R17).
     private static final String PAR_DATE = " ORDER BY d.DocDate DESC, d.Code ASC";
 
     private static final String PIECES = """
             SELECT d.PKey, d.Code, d.BuyDocumentStatusId, st.Description, st.ColorName, d.DocDate, d.AmountToPay,
-                   (""" + SoldeDocumentAchat.SQL_REGLE + "), c.Code, d.Notes, d.ReferenceType" + PIECES_DU_LOT
-            + "d.DocType = 'DOCUMENT_TO_PAY' AND d.ReferenceType IN (:references)" + PAR_DATE;
+                   (""" + SoldeDocumentAchat.SQL_REGLE + "), c.Code, d.Notes, d.ReferenceType, " + DroitsPieceLot.ETAT_PIECE
+            + DroitsPieceLot.PIECES_DU_LOT + DroitsPieceLot.DES_NATURES + PAR_DATE;
 
     private static final String AVOIRS = """
             SELECT d.PKey, d.DocDate, d.Code, st.Description, st.ColorName, d.PersonToContact,
-                   d.AmountHT, d.AmountVat, d.AmountTTC, d.OfficeOrderRef""" + PIECES_DU_LOT + "d.DocType = 'REFUND'" + PAR_DATE;
+                   d.AmountHT, d.AmountVat, d.AmountTTC, d.OfficeOrderRef, """ + DroitsPieceLot.ETAT_PIECE
+            + DroitsPieceLot.PIECES_DU_LOT + DroitsPieceLot.AVOIR + PAR_DATE;
 
     private static final String AVENANTS = """
             SELECT c.PKey, c.Sorting, c.DocDate, c.Code, c.Description, c.AmountHT, c.AmountVat, c.AmountTTC, c.AmountToPay,
@@ -95,18 +90,18 @@ public class SousFenetresLotService {
             + " where w.prjMarket.id = :lot and w.buyDocument is not null and w.docDate is not null";
 
     private final LotsProjetService lots;
-    private final PerimetreProjetService perimetre;
+    private final DroitsPieceLot pieceLot;
     private final AvancementDecomptes avancement;
     private final EntityManager em;
     private final DroitsOmran droits;
     private final LectureSimulationLot simulation;
     private final DateReceptionDefinitive dateDefinitive;
 
-    SousFenetresLotService(LotsProjetService lots, PerimetreProjetService perimetre, AvancementDecomptes avancement,
+    SousFenetresLotService(LotsProjetService lots, DroitsPieceLot pieceLot, AvancementDecomptes avancement,
                            EntityManager em, DroitsOmran droits, LectureSimulationLot simulation,
                            DateReceptionDefinitive dateDefinitive) {
         this.lots = lots;
-        this.perimetre = perimetre;
+        this.pieceLot = pieceLot;
         this.avancement = avancement;
         this.em = em;
         this.droits = droits;
@@ -116,13 +111,16 @@ public class SousFenetresLotService {
 
     public AvancesLotDto avances(UUID id) {
         Map<String, List<AvanceLotDto>> parReference = pieces(lots.visible(id).getId(), MARKET_ADVANCE, "WORKINGOUT_ADVANCE");
-        return new AvancesLotDto(parReference.get(MARKET_ADVANCE), parReference.get("WORKINGOUT_ADVANCE"), false);
+        return new AvancesLotDto(parReference.get(MARKET_ADVANCE), parReference.get("WORKINGOUT_ADVANCE"),
+                pieceLot.droits().avance());
     }
 
     public List<AvoirLotDto> avoirs(UUID id) {
-        return lignes(societesHabilitees(AVOIRS, lots.visible(id).getId())).stream().map(r -> new AvoirLotDto(uuid(r[0]), date(r[1]),
-                (String) r[2], (String) r[3], (String) r[4], (String) r[5], montant(r[6]), montant(r[7]), montant(r[8]),
-                (String) r[9], false)).toList();
+        DroitsPieceLot.Droits d = pieceLot.droits();
+        return lignes(pieceLot.duLot(AVOIRS, lots.visible(id).getId())).stream().map(r -> new AvoirLotDto(uuid(r[0]),
+                date(r[1]), (String) r[2], (String) r[3], (String) r[4], (String) r[5], montant(r[6]), montant(r[7]),
+                montant(r[8]), (String) r[9], DroitsPieceLot.refusSuppressionAvoir(d, DroitsPieceLot.etat(r, 10)) == null))
+                .toList();
     }
 
     public List<AvenantLotDto> avenants(UUID id) {
@@ -146,7 +144,8 @@ public class SousFenetresLotService {
         List<OptionGenreDto> genres = lignes(em.createNativeQuery(GENRES_RECEPTION)).stream()
                 .map(r -> new OptionGenreDto(uuid(r[0]), (String) r[1], vrai(r[2]))).toList();
         return new RemboursementsLotDto(echeances, receptions, parReference.get(MARKET_WARRANTY),
-                parReference.get("MARKET_PROPORTION"), dateDefinitive.du(lot), total, types, genres, false);
+                parReference.get("MARKET_PROPORTION"), dateDefinitive.du(lot), total, types, genres,
+                pieceLot.droits().avance());
     }
 
     public PrevisionsLotDto previsions(UUID id) {
@@ -215,19 +214,19 @@ public class SousFenetresLotService {
         for (String reference : references) {
             parReference.put(reference, new ArrayList<>());
         }
-        for (Object[] r : lignes(societesHabilitees(PIECES, lot).setParameter("references", List.of(references)))) {
+        DroitsPieceLot.Droits droits = pieceLot.droits();
+        DroitsPieceLot.EtatLot etatLot = pieceLot.etatLot(lot);
+        for (Object[] r : lignes(pieceLot.duLot(PIECES, lot).setParameter("references", List.of(references)))) {
             SoldeDocumentAchat solde = SoldeDocumentAchat.de(montant(r[6]), montant(r[7]));
+            NaturePieceLot nature = NaturePieceLot.valueOf((String) r[10]);
+            DroitsPieceLot.EtatPiece etat = DroitsPieceLot.etat(r, 11);
             parReference.get(r[10]).add(new AvanceLotDto(uuid(r[0]), (String) r[1], uuidOuNull(r[2]),
                     (String) r[3], (String) r[4], date(r[5]), solde.montantAPayer(), solde.montantRegle(),
-                    solde.resteARegler(), (String) r[8], (String) r[9], false, false));
+                    solde.resteARegler(), (String) r[8], (String) r[9],
+                    DroitsPieceLot.refusModification(nature, etatLot, etat) == null,
+                    DroitsPieceLot.refusSuppression(nature, droits, etat) == null));
         }
         return parReference;
-    }
-
-    private Query societesHabilitees(String sql, UUID lot) {
-        Set<UUID> societes = perimetre.achat(List.of()).societes();
-        // SQL Server refuse IN () : un ensemble vide devient un identifiant qui n'existe pas.
-        return duLot(sql, lot).setParameter("societes", societes.isEmpty() ? List.of(new UUID(0, 0)) : societes);
     }
 
     private Query duLot(String sql, UUID lot) {

@@ -38,7 +38,7 @@ public record ConfigurationPieceAchat(AdmModuleRepository modules, StrEntityRepo
         return new Configuration(module, entite, devise(), statutDepart(entite, piece.sansDepart()));
     }
 
-    UUID module(String code) {
+    public UUID module(String code) {
         return modules.findByCode(code).stream().findFirst().map(AdmModule::getId)
                 .orElseThrow(() -> new ConfigurationManquanteException("Module %s absent d'AdmModule.".formatted(code)));
     }
