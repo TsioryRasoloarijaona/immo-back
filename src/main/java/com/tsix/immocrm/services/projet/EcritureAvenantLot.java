@@ -47,8 +47,8 @@ public class EcritureAvenantLot {
     private static final String SEQUENCE = "Avenant";
     private static final String ENREGISTRE = "Avenant enregistré";
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final String FACTURES = """
-            SELECT COUNT(*), STRING_AGG(f.Code, ', ') FROM BuyDocument f WHERE f.PrjClauseId = :c AND f.DocType = 'INVOICE'""";
+    private static final String FACTURES =
+            "SELECT COUNT(*), STRING_AGG(f.Code, ', ') FROM BuyDocument f WHERE f.PrjClauseId = :c AND f.DocType = 'INVOICE'";
 
     private final LotsProjetService lots;
     private final DroitsOmran droits;
@@ -264,7 +264,8 @@ public class EcritureAvenantLot {
     }
 
     private static CalculAvenant.Ligne calcul(LigneAvenantSaisieDto s) {
-        return new CalculAvenant.Ligne(s.quantite().setScale(6, RoundingMode.HALF_UP), s.prixUnitaireHT(), ratio(s.tauxFODEC()),
+        return new CalculAvenant.Ligne(s.quantite().setScale(6, RoundingMode.HALF_UP),
+                s.prixUnitaireHT().setScale(6, RoundingMode.HALF_UP), ratio(s.tauxFODEC()),
                 ratio(s.tauxTVA()));
     }
 

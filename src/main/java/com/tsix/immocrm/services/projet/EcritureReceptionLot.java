@@ -28,7 +28,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -119,9 +119,9 @@ public class EcritureReceptionLot {
         } else {
             e.modifie(r);
         }
-        grilles.enregistrer(gr, rangees(corps.reserves(), ReserveSaisieDto::ordre,
+        grilles.enregistrer(gr, rangees(corps.reserves(), s -> s.ordre() == null,
                 (s, o) -> new ReserveSaisieDto(s.id(), o, s.description(), s.levee())), reservesEnBase, e);
-        grilles.enregistrer(gt, rangees(corps.tiersInvites(), TiersInviteSaisieDto::ordre,
+        grilles.enregistrer(gt, rangees(corps.tiersInvites(), s -> s.ordre() == null,
                 (s, o) -> new TiersInviteSaisieDto(s.id(), o, s.tiersId())), tiersEnBase, e);
         grilles.tracer(lot, ENREGISTRE);
     }
@@ -132,9 +132,9 @@ public class EcritureReceptionLot {
     }
 
     /** Ordre absent = rang dans l'envoi. */
-    private static <S> List<S> rangees(List<S> envoi, Function<S, Integer> ordre, BiFunction<S, Integer, S> avec) {
+    private static <S> List<S> rangees(List<S> envoi, Predicate<S> sansOrdre, BiFunction<S, Integer, S> avec) {
         return IntStream.range(0, envoi.size())
-                .mapToObj(i -> ordre.apply(envoi.get(i)) == null ? avec.apply(envoi.get(i), i + 1) : envoi.get(i)).toList();
+                .mapToObj(i -> sansOrdre.test(envoi.get(i)) ? avec.apply(envoi.get(i), i + 1) : envoi.get(i)).toList();
     }
 
     private void valider(ReceptionSaisieDto corps) {

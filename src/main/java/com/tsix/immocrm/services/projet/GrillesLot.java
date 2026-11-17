@@ -7,6 +7,9 @@ import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -76,8 +79,10 @@ class GrillesLot {
 
     /** Lignes en base du parent, par id. */
     <S, T> Map<UUID, T> enBase(Grille<S, T> g, UUID parent) {
-        return em.createQuery("select x from %s x where x.%s = :p".formatted(g.type().getSimpleName(), g.parent()), g.type())
-                .setParameter("p", parent).getResultList().stream()
+        CriteriaQuery<T> q = em.getCriteriaBuilder().createQuery(g.type());
+        Root<T> x = q.from(g.type());
+        q.select(x).where(em.getCriteriaBuilder().equal(x.get(g.parent()), parent));
+        return em.createQuery(q).getResultList().stream()
                 .collect(Collectors.toMap(g.cle(), Function.identity(), (a, b) -> a, HashMap::new));
     }
 
@@ -87,11 +92,17 @@ class GrillesLot {
         List<UUID> ids = envoi.stream().map(g.id()).filter(Objects::nonNull).toList();
         ValidationBordereau.exiger(ids.stream().allMatch(vus::add), champ + " : id en double");
         Collection<UUID> nouveaux = ids.stream().filter(i -> !enBase.containsKey(i)).toList();
-        boolean pris = !nouveaux.isEmpty() && em.createQuery("select count(x) from %s x where x.id in :ids"
-                .formatted(g.type().getSimpleName()), Long.class).setParameter("ids", nouveaux).getSingleResult() > 0;
-        if (pris) {
+        if (!nouveaux.isEmpty() && nombrePris(g.type(), nouveaux) > 0) {
             throw new InvalidRequestException(champ + " : id d'une autre fiche ou d'un autre lot");
         }
+    }
+
+    private <T> long nombrePris(Class<T> type, Collection<UUID> ids) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> q = cb.createQuery(Long.class);
+        Root<T> x = q.from(type);
+        q.select(cb.count(x)).where(x.get("id").in(ids));
+        return em.createQuery(q).getSingleResult();
     }
 
     /** Applique l'envoi ; {@code enBase} est vidé de ses lignes gardées, les autres sont supprimées. */
