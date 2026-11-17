@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 @Schema(description = "Retenue d'un avenant (garantie, prorata, assurance DEC ou TRC) : au taux ou au montant saisi.")
 public record RetenueAvenantDto(
         @Schema(description = "Vrai = montant saisi (taux = montant / TTC) ; faux = taux appliqué au TTC.") boolean parMontant,
-        @Schema(description = "Taux en pourcentage 0–100 ; recalculé par le serveur si parMontant.", example = "10") BigDecimal taux,
+        @Schema(description = "Taux en pourcentage 0–100 ; si parMontant, ignoré et recalculé (peut dépasser 100).", example = "10") BigDecimal taux,
         @Schema(description = "Montant de la retenue ; lu en écriture seulement si parMontant, calculé sinon.") BigDecimal montant
 ) {
 }

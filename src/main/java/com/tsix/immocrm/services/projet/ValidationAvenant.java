@@ -50,7 +50,8 @@ final class ValidationAvenant {
 
     private static void retenue(RetenueAvenantDto r, String champ) {
         if (r != null) {
-            exiger(r.taux() == null || entre(r.taux(), CENT), champ + ".taux : entre 0 et 100");
+            // Au montant, le taux est recalculé par le serveur et peut dépasser 100 (montant > TTC) : non contrôlé.
+            exiger(r.parMontant() || r.taux() == null || entre(r.taux(), CENT), champ + ".taux : entre 0 et 100");
             exiger(r.montant() == null || entre(r.montant(), CAPACITE), champ + ".montant : positif ou nul");
         }
     }
