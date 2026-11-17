@@ -11,7 +11,8 @@ public enum NatureDocumentAchat {
     INVOICE("Facture", "BuyInvoiceDebit", "Facture fournisseur"),
     ORDER("Bon de commande", "BuyOrder", "Bon de commande sortant"),
     QUOTE("Devis", "BuyQuote", "Devis entrant"),
-    DOCUMENT_TO_PAY("Document à régler", null, null),
+    // séquence seule, sans gestion : créée depuis la fiche lot, jamais saisissable depuis la fiche Achat
+    DOCUMENT_TO_PAY("Document à régler", null, "Document à régler entrant"),
     DELIVRY("Bon de livraison", "BuyDelivery", "Bon de livraison entrant"),
     REFUND("Avoir", null, null);
 

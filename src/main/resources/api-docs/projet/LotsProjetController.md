@@ -164,12 +164,15 @@ code X doit être unique pour les lignes du bordereaux ! ») ; aucune garde de d
 Fenêtre « Avances » : pièces `DOCUMENT_TO_PAY` du lot, `surMarche` = `ReferenceType` `MARKET_ADVANCE`, `surDecompte` =
 `WORKINGOUT_ADVANCE`. Seules les pièces payables (`CanBePayed = 1`) d'une société habilitée de l'appelant ; une pièce d'une
 autre société est omise (jamais 404). Réglé = Σ des règlements non annulés, reste = net à payer − réglé : même calcul que la
-liste Achat. Tri par date décroissante puis code.
+liste Achat. Tri par date décroissante puis code. `modifiable` / `supprimable` de chaque ligne et `droitPieces` (droit
+`Yes.Prj.Front.Market.MarketMonitoringList.toolAdvance`) viennent des mêmes règles que les écritures
+`/api/projet/lots/{id}/pieces-a-payer` (FEATURE-lot-pieces-a-payer.md R2, R10, R11, R17).
 
 ## avoirs
 
 Fenêtre « Avoirs » : pièces `REFUND` rattachées au lot (`PrjMarketId`), payables, d'une société habilitée. Tri par date
-décroissante puis code.
+décroissante puis code. `supprimable` = même règle que `DELETE /api/projet/lots/{id}/avoirs/{avoirId}` (droit
+`Yes.Prj.Front.Market.RefundList.toolDelete`, statut non verrouillé, aucun règlement).
 
 ## avenants
 
@@ -180,7 +183,8 @@ Fenêtre « Avenants » : `PrjClause` du lot, tri par date décroissante puis co
 
 Fenêtre « Remboursements » : échéances de remboursement de la retenue de garantie (`PrjMarketWarrantyLine`, pourcentage =
 `Ratio` × 100) et réceptions (`PrjMarketReception`), par ordre ; remboursements de retenue de garantie (`MARKET_WARRANTY`) et
-du compte prorata (`MARKET_PROPORTION`) avec les mêmes champs, filtres et calculs que les avances.
+du compte prorata (`MARKET_PROPORTION`) avec les mêmes champs, filtres et calculs que les avances, `modifiable`,
+`supprimable` et `droitPieces` compris.
 
 ## previsions
 

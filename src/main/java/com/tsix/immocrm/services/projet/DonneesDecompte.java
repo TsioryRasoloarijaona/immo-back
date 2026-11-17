@@ -89,6 +89,12 @@ public class DonneesDecompte {
                 .setParameter("type", type).setParameter(LOT, lot).setParameter(EXCLU, exclu).getSingleResult();
     }
 
+    /** Σ TTC des pièces du type − Σ de la colonne sur les autres décomptes ; 0 sans pièce ({@code Utils.cs:GetAdvanceRestByMarket}). */
+    public BigDecimal resteAvance(UUID lot, UUID decompte, String typePiece, Colonne champ) {
+        BigDecimal total = pieces(lot, typePiece, decompte);
+        return total == null ? BigDecimal.ZERO : total.subtract(somme(champ, lot, decompte, null));
+    }
+
     /** Colonnes sommables ; le JPQL est constant (pas de concaténation, S2077). */
     public enum Colonne {
         PRORATA_REMBOURSE("""

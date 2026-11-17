@@ -122,10 +122,7 @@ public class EcriturePieceAchat {
     @Transactional(propagation = Propagation.MANDATORY)
     public BuyDocument modifier(BuyDocument d, PieceAchatACreer piece) {
         EnTete e = Objects.requireNonNull(piece.entete());
-        BigDecimal avoirs = NatureDocumentAchat.INVOICE.name().equals(d.getDocType())
-                ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
-                        .getSingleResult().toString())
-                : BigDecimal.ZERO;
+        BigDecimal avoirs = avoirs(d);
         UUID ancienLot = d.getPrjMarketId();
         entete(d, piece, e.module(), e.declencheur());
         List.of(BuyVentilationCategory.class, BuyVentilationExpense.class).forEach(v -> lire(v, d.getId()).forEach(em::remove));
@@ -143,8 +140,8 @@ public class EcriturePieceAchat {
     private void entete(BuyDocument d, PieceAchatACreer piece, UUID module, UUID declencheur) {
         CfgTier tiers = piece.tiers();
         EnTete e = piece.entete();
-        d.setCfgTierId(tiers.getId());
-        d.setSupplierDescription(tiers.getDescription());
+        d.setCfgTierId(Champs.de(tiers, CfgTier::getId));
+        d.setSupplierDescription(Champs.de(tiers, CfgTier::getDescription));
         d.setCfgCompanyId(piece.societe());
         d.setPrjMarketTypeId(piece.typeMarche());
         d.setNotes(piece.notes());
@@ -168,17 +165,17 @@ public class EcriturePieceAchat {
         d.setUserUpdateDateTime(LocalDateTime.now(clock));
     }
 
-    /** Échéance absente : date + délai du lot s'il est > 0, sinon du fournisseur (OMRAN {@code CalculateMaturityDate}). */
     private void dates(BuyDocument d, LocalDate date, LocalDate echeance, LocalDate livraison, CfgTier tiers, UUID lot) {
         d.setDocDate(date.atStartOfDay());
         d.setPrevisionDeliveryDate(livraison.atStartOfDay());
-        LocalDate fin = echeance;
-        if (fin == null) {
-            Integer delaiLot = lot == null ? null : Champs.de(em.find(PrjMarket.class, lot), PrjMarket::getPaymentDelay);
-            Integer delai = delaiLot != null && delaiLot > 0 ? delaiLot : tiers.getPaymentDelay();
-            fin = delai != null && delai > 0 ? date.plusDays(delai) : date;
-        }
-        d.setMaturityDate(fin.atStartOfDay());
+        d.setMaturityDate((echeance == null ? echeance(date, tiers, lot) : echeance).atStartOfDay());
+    }
+
+    /** Échéance par défaut : date + délai du lot s'il est > 0, sinon du fournisseur (OMRAN {@code CalculateMaturityDate}). */
+    public LocalDate echeance(LocalDate date, CfgTier tiers, UUID lot) {
+        Integer delaiLot = lot == null ? null : Champs.de(em.find(PrjMarket.class, lot), PrjMarket::getPaymentDelay);
+        Integer delai = delaiLot != null && delaiLot > 0 ? delaiLot : Champs.de(tiers, CfgTier::getPaymentDelay);
+        return delai != null && delai > 0 ? date.plusDays(delai) : date;
     }
 
     /** Facture à lot : taux de retenue du lot et reste d'avance (OMRAN {@code GetMarketInfoForInvoice}, Q-6). */
@@ -264,6 +261,21 @@ public class EcriturePieceAchat {
         return l;
     }
 
+    private BigDecimal avoirs(BuyDocument d) {
+        return NatureDocumentAchat.INVOICE.name().equals(d.getDocType())
+                ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
+                        .getSingleResult().toString())
+                : BigDecimal.ZERO;
+    }
+
+    /** OMRAN {@code Refund.UpdateInvoices} : net à payer de la facture source, relu après la suppression d'un avoir. */
+    public void recalculerNetAPayer(UUID facture) {
+        BuyDocument f = facture == null ? null : em.find(BuyDocument.class, facture);
+        if (f != null) {
+            f.setAmountToPay(NetAPayerAchat.calculer(zero(f.getAmountTTC()), composantes(f, avoirs(f))));
+        }
+    }
+
     private static NetAPayerAchat.Composantes composantes(BuyDocument d, BigDecimal avoirs) {
         return new NetAPayerAchat.Composantes(zero(d.getAmountRegul()), zero(d.getFiscalStamp()),
                 zero(d.getStockAmountToPay()), zero(d.getProrataRefundAmount()), zero(d.getFluctuationsToPay()),
@@ -296,10 +308,15 @@ public class EcriturePieceAchat {
         BigDecimal reste = BigDecimal.ONE;
         int n = 0;
         for (Part p : parts) {
-            BigDecimal taux = ++n == parts.size() ? reste : p.montant().divide(base, 6, RoundingMode.HALF_UP);
+            BigDecimal taux = ++n == parts.size() ? reste : part(p.montant(), base);
             reste = reste.subtract(taux);
             ecrire.accept(p.cle(), taux);
         }
+    }
+
+    // Pièce à 0 (permise depuis le lot) : la dernière part prend tout plutôt qu'une division par zéro.
+    private static BigDecimal part(BigDecimal montant, BigDecimal base) {
+        return base.signum() == 0 ? BigDecimal.ZERO : montant.divide(base, 6, RoundingMode.HALF_UP);
     }
 
     private void historique(BuyDocument d) {
@@ -319,7 +336,7 @@ public class EcriturePieceAchat {
     }
 
     /** {@code AdmUser.CfgEmployeeId} lu en base : le compte de la session peut être chargé depuis plus longtemps. */
-    UUID employeDuCompte() {
+    public UUID employeDuCompte() {
         UUID compte = Champs.de(utilisateur.courant().compte(), AdmUser::getId);
         if (compte == null) {
             return null;

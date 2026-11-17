@@ -48,6 +48,7 @@ public class EcrituresPieceAchatService {
     private static final String PIECE = "buyDocumentId";
     private static final int NOTE_MAX = 1000;
     private static final String GEREE_AILLEURS = ActionsPieceAchat.GEREE_AILLEURS;
+    public static final String REGLEMENTS_LIES = "Des règlements sont liés à cette pièce : supprimez-les d'abord.";
 
     private final FicheAchatService fiche;
     private final DroitsPieceAchat droits;
@@ -130,6 +131,13 @@ public class EcrituresPieceAchatService {
         }
         droits.exigerSuppression(d.getDocType(), d.getPrjMarketId() != null);
         verifierSuppression(p);
+        supprimerContenu(d);
+        previsions.apresPiece(d);
+    }
+
+    /** Pièce, enfants et liens supprimés, dans la transaction de l'appelant ; contrôles à sa charge. */
+    public void supprimerContenu(BuyDocument d) {
+        UUID id = d.getId();
         lire(BuyDocument.class, "buyQuoteId", id).forEach(c -> c.setBuyQuoteId(null));
         lire(BuyDocument.class, "buyInvoiceId", id).forEach(c -> c.setBuyInvoiceId(null));
         List.of(BuyDocumentLine.class, BuyVentilationCategory.class, BuyVentilationExpense.class,
@@ -137,7 +145,6 @@ public class EcrituresPieceAchatService {
         lire(BuyOrderInvoice.class, "buyInvoiceId", id).forEach(em::remove);
         em.remove(d);
         em.flush();
-        previsions.apresPiece(d);
     }
 
     private void verifierSuppression(Piece p) {
@@ -157,7 +164,7 @@ public class EcrituresPieceAchatService {
             throw new ConflictException(lectureSeule + Objects.requireNonNullElse(statut.getDescription(), statut.getCode()));
         }
         if (!lire(StlSettlementLine.class, PIECE, id).isEmpty()) {
-            throw new ConflictException("Des règlements sont liés à cette pièce : supprimez-les d'abord.");
+            throw new ConflictException(REGLEMENTS_LIES);
         }
         if (!lire(BuyDocument.class, "buyOrderId", id).isEmpty() || !lire(BuyDocument.class, "invoiceSourceId", id).isEmpty()
                 || !lire(BuyOrderInvoice.class, "buyOrderId", id).isEmpty()) {
