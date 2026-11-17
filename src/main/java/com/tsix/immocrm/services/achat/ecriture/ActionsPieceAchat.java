@@ -40,7 +40,7 @@ public class ActionsPieceAchat {
         boolean aLot = d.getPrjMarketId() != null;
         return new ActionsPieceAchatDto(libre && droits.peutSupprimer(nature, aLot),
                 libre && estFacture(d) && droits.peutModifier(nature, false), transitions.permises(d),
-                refusModification(d, vue, aLot).isEmpty());
+                refusModification(d, vue, aLot).isEmpty(), java.util.List.of());
     }
 
     /**

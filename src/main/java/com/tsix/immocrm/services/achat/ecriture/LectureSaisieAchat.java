@@ -60,9 +60,9 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
         LocalDate jour = LocalDate.now(clock);
         SaisiePieceAchatRequest saisie = new SaisiePieceAchatRequest(nature.name(), jour, null, jour, null,
                 configuration.module(MODULE_ACHAT), null, null, null, configuration.marcheParDefaut(), declencheur, "", "", "",
-                "", "", BigDecimal.ZERO, BigDecimal.ZERO, null, List.of(), List.of());
+                "", "", BigDecimal.ZERO, BigDecimal.ZERO, null, List.of(), List.of(), List.of());
         return new ModelePieceAchatDto(saisie, nature.gestion(), statut, Champs.de(depart, BuyDocumentStatus::getDescription),
-                configuration.devise(), parametres.decimal("DefaultTva").orElse(null), List.of());
+                configuration.devise(), parametres.decimal("DefaultTva").orElse(null));
     }
 
     /** {@code droit} : contrôle 403 de l'appelant, joué après les 404 et avant les 400 de contenu. */

@@ -49,7 +49,7 @@ public class SaisiePieceAchatService {
     }
 
     @Transactional(readOnly = true)
-    public ModelePieceAchatDto modele(String nature) {
+    public ModelePieceAchatDto modele(String nature, List<UUID> sources) {
         NatureDocumentAchat n = LectureSaisieAchat.nature(nature);
         droits.exigerModification(n.name(), false);
         return lecture.modele(n, ecriture.employeDuCompte());

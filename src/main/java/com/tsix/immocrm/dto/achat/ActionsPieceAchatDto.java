@@ -14,7 +14,9 @@ public record ActionsPieceAchatDto(
         @Schema(description = "Statuts d'arrivée accessibles au compte depuis le statut courant, par ordre de transition ; "
                 + "vide sans transition.") List<TransitionPermiseAchatDto> transitions,
         @Schema(description = "Même règle que le PUT : nature saisissable, droit de modification, pièce non gérée ailleurs "
-                + "ni en lecture seule.") boolean peutModifier) {
+                + "ni en lecture seule.") boolean peutModifier,
+        @Schema(description = "Générations ouvertes : mêmes contrôles que le modèle avec cette source et droit de créer la "
+                + "cible ; vide sinon.") List<GenerationPieceAchatDto> generations) {
 
     @Schema(description = "Statut d'arrivée d'une transition permise au compte.")
     public record TransitionPermiseAchatDto(
