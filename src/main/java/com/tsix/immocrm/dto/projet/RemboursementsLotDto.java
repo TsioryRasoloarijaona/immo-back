@@ -12,8 +12,31 @@ public record RemboursementsLotDto(
         @Schema(description = "Échéances de remboursement de la retenue de garantie, par ordre.") List<EcheanceRgLotDto> echeances,
         @Schema(description = "Réceptions du lot, par ordre.") List<ReceptionLotDto> receptions,
         @Schema(description = "Remboursements de retenue de garantie (MARKET_WARRANTY).") List<AvanceLotDto> remboursementsRg,
-        @Schema(description = "Remboursements du compte prorata (MARKET_PROPORTION).") List<AvanceLotDto> remboursementsProrata
+        @Schema(description = "Remboursements du compte prorata (MARKET_PROPORTION).") List<AvanceLotDto> remboursementsProrata,
+        @Schema(description = "Dernière réception de genre définitif, sinon fin du lot (EndDate), sinon null.")
+        LocalDate dateReceptionDefinitive,
+        @Schema(description = "Σ des pourcentages des échéances (avertissement si ≠ 100, jamais refusé).", example = "100")
+        BigDecimal totalPourcentageEcheances,
+        @Schema(description = "Types de réception (PrjMarketReceptionType), liste de choix de la fiche réception.")
+        List<OptionReceptionDto> typesReception,
+        @Schema(description = "Genres de réception (PrjMarketReceptionKind), liste de choix de la fiche réception.")
+        List<OptionGenreDto> genresReception
 ) {
+
+    @Schema(description = "Type de réception proposé à la saisie.")
+    public record OptionReceptionDto(
+            @Schema(description = "PKey du type.") UUID id,
+            @Schema(description = "Libellé (Description).") String libelle
+    ) {
+    }
+
+    @Schema(description = "Genre de réception proposé à la saisie.")
+    public record OptionGenreDto(
+            @Schema(description = "PKey du genre.") UUID id,
+            @Schema(description = "Libellé (Description).") String libelle,
+            @Schema(description = "Genre définitif (IsFinal) : fixe la date de réception définitive.") boolean definitive
+    ) {
+    }
 
     @Schema(description = "Échéance de remboursement de la retenue de garantie (PrjMarketWarrantyLine).")
     public record EcheanceRgLotDto(

@@ -20,12 +20,12 @@ import java.util.stream.Collectors;
 /** Corps d'un bordereau entier (FEATURE-lot-ecritures.md R4, R5) : toute erreur = 400. */
 final class ValidationBordereau {
 
-    private static final int TEXTE = 255;
+    static final int TEXTE = 255;
     private static final int UNITE = 50;
-    private static final int NOTES = 1000;
-    private static final BigDecimal CENT = BigDecimal.valueOf(100);
+    static final int NOTES = 1000;
+    static final BigDecimal CENT = BigDecimal.valueOf(100);
     // Capacités des colonnes : decimal(26,6) pour quantité / pondération, decimal(26,16) pour UnitPriceHT du définitif.
-    private static final BigDecimal CAPACITE = BigDecimal.TEN.pow(20).subtract(BigDecimal.ONE);
+    static final BigDecimal CAPACITE = BigDecimal.TEN.pow(20).subtract(BigDecimal.ONE);
     private static final BigDecimal CAPACITE_PRIX = BigDecimal.TEN.pow(10).subtract(BigDecimal.ONE);
 
     private ValidationBordereau() {
@@ -87,19 +87,19 @@ final class ValidationBordereau {
         longueur(l.notes(), NOTES, "lignes[].notes");
     }
 
-    private static boolean sansNul(List<?> liste) {
+    static boolean sansNul(List<?> liste) {
         return liste != null && liste.stream().allMatch(Objects::nonNull);
     }
 
-    private static boolean entre(BigDecimal valeur, BigDecimal max) {
+    static boolean entre(BigDecimal valeur, BigDecimal max) {
         return valeur != null && valeur.signum() >= 0 && (max == null || valeur.compareTo(max) <= 0);
     }
 
-    private static void longueur(String texte, int max, String champ) {
+    static void longueur(String texte, int max, String champ) {
         exiger(texte == null || texte.length() <= max, champ + " : " + max + " caractères au plus");
     }
 
-    private static void exiger(boolean condition, String message) {
+    static void exiger(boolean condition, String message) {
         if (!condition) {
             throw new InvalidRequestException(message);
         }
