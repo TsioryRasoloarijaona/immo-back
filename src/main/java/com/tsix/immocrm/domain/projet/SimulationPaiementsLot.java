@@ -176,7 +176,7 @@ public final class SimulationPaiementsLot {
         if (p.debut() == null) {
             return List.of();
         }
-        List<Point> points = e.points().isEmpty() ? generer(p.debut(), p.fin()) : e.points();
+        List<Point> points = pointsPrevision(e);
         Calendrier c = calendrier(e, points);
         List<Ligne> lignes = new ArrayList<>();
         if (!e.etat().multi()) {
@@ -191,6 +191,12 @@ public final class SimulationPaiementsLot {
         }
         lignes.sort(Comparator.comparing(Ligne::date));
         return lignes;
+    }
+
+    /** Points « Prévisions » stockés, ou la courbe générée s'il n'y en a aucun ; début renseigné. */
+    static List<Point> pointsPrevision(EntreesSimulation e) {
+        Planning p = e.planning();
+        return e.points().isEmpty() ? generer(p.debut(), p.fin()) : e.points();
     }
 
     /** P3-P9. */
@@ -209,7 +215,7 @@ public final class SimulationPaiementsLot {
         }
         DecompteSimule decompte = new DecompteSimule(e.retenues().avance(), avance ? existantes.add(reste) : existantes,
                 e.retenues(), true);
-        reels.forEach(r -> decompte.precedent(r.ttc()));
+        reels.forEach(decompte::precedent);
         if (actif) {
             parPoint(e, points, c, dernier, reels.size() + 1, (pt, increment, rang) -> new Ligne(pt.date(),
                     "Décompte prévisionnel N° " + rang, decompte.net(m.montant().multiply(increment)),
@@ -315,7 +321,7 @@ public final class SimulationPaiementsLot {
      * {@code GetDeltaTime} : dernier réel − date de référence, interpolée entre les points qui encadrent l'avancement du lot
      * (OMRAN {@code Market.cs:CalculatereferenceDate}, dates en jours fractionnaires).
      */
-    private static BigDecimal ecart(EntreesSimulation e, List<Point> points) {
+    static BigDecimal ecart(EntreesSimulation e, List<Point> points) {
         Planning p = e.planning();
         BigDecimal a = e.montants().avancement();
         LocalDate reel = e.decomptesReels().stream().map(DecompteReel::date).max(Comparator.naturalOrder()).orElse(p.debut());
@@ -372,7 +378,7 @@ public final class SimulationPaiementsLot {
         return autres.filter(d -> d.isBefore(date)).min(Comparator.naturalOrder()).orElse(date);
     }
 
-    private static BigDecimal jour(LocalDate date) {
+    static BigDecimal jour(LocalDate date) {
         return BigDecimal.valueOf(date.toEpochDay());
     }
 }

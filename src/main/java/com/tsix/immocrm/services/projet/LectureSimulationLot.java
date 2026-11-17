@@ -7,6 +7,8 @@ import com.tsix.immocrm.domain.projet.EntreesSimulation.DecompteReel;
 import com.tsix.immocrm.domain.projet.EntreesSimulation.Echeance;
 import com.tsix.immocrm.domain.projet.EntreesSimulation.LigneFixe;
 import com.tsix.immocrm.domain.projet.EntreesSimulation.Point;
+import com.tsix.immocrm.domain.projet.EntreesSimulation.RetenueStockee;
+import com.tsix.immocrm.domain.projet.EntreesSimulation.RetenuesStockees;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.SimulationPaiementsLot;
 import com.tsix.immocrm.entities.prj.PrjMarket;
@@ -36,10 +38,19 @@ class LectureSimulationLot {
             SELECT Ratio, EcheanceDate, Delay, Description FROM PrjMarketWarrantyLine
             WHERE PrjMarketId = :lot ORDER BY Sorting ASC, EcheanceDate ASC""";
 
-    // P2 : décomptes facturés ; multi-fournisseur : factures (seule leur date sert, RealMaxDate).
+    // P2 : décomptes facturés et leurs retenues stockées (C1, C3) ; multi-fournisseur : factures (seule leur date sert).
     private static final String DECOMPTES = """
-            SELECT PKey, DocDate, AmountTTC FROM PrjWorkingOut
-            WHERE PrjMarketId = :lot AND BuyDocumentId IS NOT NULL AND DocDate IS NOT NULL ORDER BY DocDate ASC, Sorting ASC""";
+            SELECT w.PKey, w.DocDate, w.AmountTTC,
+                w.AdvanceRatio, (SELECT SUM(a.AmountTTC) FROM BuyDocument a WHERE a.PrjMarketId = w.PrjMarketId
+                    AND a.DocType = 'DOCUMENT_TO_PAY' AND a.ReferenceType = 'MARKET_ADVANCE'
+                    AND CAST(a.DocDate AS date) <= CAST(w.DocDate AS date)), w.AdvanceAmount, w.AdvanceBasedOnAmount,
+                w.WarrantyRatio, 0, w.WarrantyAmount, w.WarrantyBasedOnAmount,
+                w.proportionRatio, 0, w.proportionAmount, w.ProrataBasedOnAmount,
+                w.insuranceDECRatio, w.InsuranceDECAmountMax, w.insuranceDECAmount, w.DECBasedOnAmount,
+                w.insuranceTRCRatio, w.InsuranceTRCAmountMax, w.insuranceTRCAmount, w.TRCBasedOnAmount
+            FROM PrjWorkingOut w
+            WHERE w.PrjMarketId = :lot AND w.BuyDocumentId IS NOT NULL AND w.DocDate IS NOT NULL
+            ORDER BY w.DocDate ASC, w.Sorting ASC""";
     private static final String FACTURES = """
             SELECT PKey, DocDate, 0 FROM BuyDocument
             WHERE PrjMarketId = :lot AND DocType = 'INVOICE' AND DocDate IS NOT NULL ORDER BY DocDate ASC""";
@@ -85,7 +96,7 @@ class LectureSimulationLot {
         return SimulationPaiementsLot.paiements(entrees(lot));
     }
 
-    private EntreesSimulation entrees(PrjMarket lot) {
+    EntreesSimulation entrees(PrjMarket lot) {
         UUID id = lot.getId();
         CalculLot calcul = Objects.requireNonNull(montants.calculer(List.of(lot)).get(id));
         EntreesLot.Drapeaux d = calcul.drapeaux();
@@ -115,8 +126,17 @@ class LectureSimulationLot {
     private List<DecompteReel> reels(String sql, UUID lot, Map<UUID, AvancementDecomptes.Avancement> parDecompte) {
         return lire(sql, lot, r -> {
             AvancementDecomptes.Avancement a = parDecompte.get(uuid(r[0]));
-            return new DecompteReel(date(r[1]), a == null ? ZERO : zero(MontantsLot.fraction(a.avaPct())), zero(montant(r[2])));
+            RetenuesStockees retenues = r.length > 3 ? new RetenuesStockees(retenue(r, 3), retenue(r, 7), retenue(r, 11),
+                    retenue(r, 15), retenue(r, 19)) : RetenuesStockees.AUCUNES;
+            return new DecompteReel(date(r[1]), a == null ? ZERO : zero(MontantsLot.fraction(a.avaPct())), zero(montant(r[2])),
+                    retenues);
         });
+    }
+
+    /** Colonnes {@code i} à {@code i + 3} : taux, plafond, montant, « basé sur le montant ». */
+    private static RetenueStockee retenue(Object[] r, int i) {
+        return new RetenueStockee(zero(montant(r[i])), zero(montant(r[i + 1])), zero(montant(r[i + 2])),
+                r[i + 3] instanceof Boolean b ? b : r[i + 3] instanceof Number n && n.intValue() != 0);
     }
 
     private <T> List<T> lire(String sql, UUID lot, Function<Object[], T> ligne) {

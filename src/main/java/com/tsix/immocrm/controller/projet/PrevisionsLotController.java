@@ -32,6 +32,7 @@ public class PrevisionsLotController {
     private static final String ID_LOT = "Identifiant du lot (PrjMarket.PKey).";
     private static final String LOT_INTROUVABLE = "Lot introuvable : id inconnu, lot sans projet, projet hors périmètre ou statut invisible.";
     private static final String SANS_DROIT = "Droit ProjectPrevision.toolNew absent.";
+    private static final String SANS_DEBUT = "Lot sans date début.";
 
     private final PrevisionsLotService service;
     private final AlignementPrevisionsService alignement;
@@ -66,6 +67,7 @@ public class PrevisionsLotController {
     @ApiResponse(responseCode = "200", description = "Écarts de montant, d'avancement et de temps, date fin proposée.")
     @ApiResponse(responseCode = "403", description = SANS_DROIT, content = @Content)
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE, content = @Content)
+    @ApiResponse(responseCode = "409", description = SANS_DEBUT, content = @Content)
     public AlignementPrevisionsDto ecartsAlignement(@Parameter(description = ID_LOT) @PathVariable UUID id) {
         return alignement.ecarts(id);
     }
@@ -88,7 +90,7 @@ public class PrevisionsLotController {
     @ApiResponse(responseCode = "200", description = "Un point par ligne du modèle : début + durée × temps, avancement du modèle.")
     @ApiResponse(responseCode = "403", description = SANS_DROIT, content = @Content)
     @ApiResponse(responseCode = "404", description = LOT_INTROUVABLE + " Ou modèle inconnu.", content = @Content)
-    @ApiResponse(responseCode = "409", description = "Lot sans date début.", content = @Content)
+    @ApiResponse(responseCode = "409", description = SANS_DEBUT, content = @Content)
     public PropositionPointsDto proposerApplicationModele(@Parameter(description = ID_LOT) @PathVariable UUID id,
             @Parameter(description = "PrjMarketPrevisionModel.PKey.") @PathVariable UUID modeleId) {
         return alignement.appliquerModele(id, modeleId);

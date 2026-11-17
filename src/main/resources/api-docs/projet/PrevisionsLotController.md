@@ -26,7 +26,7 @@ relu, comme `GET /api/projet/lots/{id}/previsions`.
 
 Valeurs de la modale OMRAN « Alinger les prévisions au réel » (`FEATURE-lot-previsions-reel.md` §4 A2-A3), calculées sur
 l'**état enregistré** du lot : le front fait enregistrer la grille avant d'ouvrir la modale. Ordre : **404** lot invisible,
-**403** sans `ProjectPrevision.toolNew`. `ecartJours` = date de référence − dernier réel, où la date de référence est
+**403** sans `ProjectPrevision.toolNew`, **409** lot sans date début. `ecartJours` = date de référence − dernier réel, où la date de référence est
 interpolée entre les points « Prévisions » qui encadrent l'avancement réel du lot (début du lot sans réel) ; `finSysteme` =
 dernier réel (ou `finActuelle`) − `ecartJours`. `ecartAvancement` = avancement réel − avancement prévu à la date du dernier
 réel. `ecartMontant` = Σ des pièces à payer « Facture » (hors avances, RG et avoirs) − Σ des nets à payer des décomptes
