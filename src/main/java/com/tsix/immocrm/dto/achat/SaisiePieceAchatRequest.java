@@ -34,7 +34,9 @@ public record SaisiePieceAchatRequest(
         @Schema(description = "Lignes ; vide permis. En modification, la liste remplace les lignes existantes.")
         List<LigneSaisieAchat> lignes,
         @Schema(description = "Ventilation des projets (PrjProject), taux en fraction ; obligatoire sans projetId.")
-        List<PartVentilationAchat> ventilationProjets) {
+        List<PartVentilationAchat> ventilationProjets,
+        @Schema(description = "Pièces sources d'une génération, dans l'ordre ; null ou vide = création libre ; ignoré en "
+                + "modification.") List<UUID> sources) {
 
     @Schema(description = "Ligne saisie d'une pièce d'achat (BuyDocumentLine).")
     public record LigneSaisieAchat(
@@ -48,7 +50,9 @@ public record SaisiePieceAchatRequest(
             @Schema(description = "FODEC en fraction [0;1] ; 0 si absent.") BigDecimal fodec,
             @Schema(description = "TVA en fraction [0;1] ; null = 0.") BigDecimal tva,
             @Schema(description = "Catégorie (StlCategory), obligatoire.") UUID categorieId,
-            @Schema(description = "Notes de la ligne ; '' si absentes.") String notes) {
+            @Schema(description = "Notes de la ligne ; '' si absentes.") String notes,
+            @Schema(description = "Ligne de bordereau du lot (PrjMarketLineId) recopiée d'une source ; null = ligne libre. "
+                    + "Ignorée en modification.") UUID ligneBordereauId) {
     }
 
     @Schema(description = "Part d'une ventilation : clé et taux en fraction.")

@@ -337,9 +337,12 @@ class PieceAchatCreationTest {
         return lot;
     }
 
-    /** Q-6 (réponse du manager : comme OMRAN, {@code GetMarketInfoForInvoice}) : facture libre à lot → taux du lot recopiés. */
+    /**
+     * Q-A (FEATURE-achat-generation, remplace la réponse Q-6 d'A2b-2a) : facture libre à lot → taux à 0 ; seule la facture
+     * générée recopie les taux du lot ({@code PieceAchatGenerationGestionsTest}).
+     */
     @Test
-    void q6_factureALot_copieLesTauxDuLot() throws Exception {
+    void qA_factureLibreALot_tauxNuls() throws Exception {
         UUID lot = lotAvecTaux();
 
         UUID piece = creerOk(corpsValide(c, s, FixtureAchat.FACTURE).avec("lotId", lot));
@@ -347,11 +350,11 @@ class PieceAchatCreationTest {
         Map<String, Object> d = enBase(piece);
         assertAll(
                 () -> assertThat(guidDe(d, "PrjMarketId")).isEqualTo(id(lot)),
-                () -> assertThat(decimalDe(d, "AdvanceRatio")).isEqualByComparingTo("0.1"),
-                () -> assertThat(decimalDe(d, "WarrantyRatio")).isEqualByComparingTo("0.07"),
-                () -> assertThat(decimalDe(d, "ProportionRatio")).isEqualByComparingTo("0.02"),
-                () -> assertThat(decimalDe(d, "InsuranceDECRatio")).isEqualByComparingTo("0.01"),
-                () -> assertThat(decimalDe(d, "InsuranceTRCRatio")).isEqualByComparingTo("0.005"));
+                () -> assertThat(decimalDe(d, "AdvanceRatio")).isEqualByComparingTo("0"),
+                () -> assertThat(decimalDe(d, "WarrantyRatio")).isEqualByComparingTo("0"),
+                () -> assertThat(decimalDe(d, "ProportionRatio")).isEqualByComparingTo("0"),
+                () -> assertThat(decimalDe(d, "InsuranceDECRatio")).isEqualByComparingTo("0"),
+                () -> assertThat(decimalDe(d, "InsuranceTRCRatio")).isEqualByComparingTo("0"));
     }
 
     /**

@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -55,18 +56,27 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
     }
 
     ModelePieceAchatDto modele(NatureDocumentAchat nature, UUID declencheur) {
-        UUID statut = configuration.statutDepart(configuration.gestion(nature.gestion()), sansDepart(nature));
-        BuyDocumentStatus depart = statut == null ? null : em.find(BuyDocumentStatus.class, statut);
         LocalDate jour = LocalDate.now(clock);
         SaisiePieceAchatRequest saisie = new SaisiePieceAchatRequest(nature.name(), jour, null, jour, null,
                 configuration.module(MODULE_ACHAT), null, null, null, configuration.marcheParDefaut(), declencheur, "", "", "",
-                "", "", BigDecimal.ZERO, BigDecimal.ZERO, null, List.of(), List.of());
-        return new ModelePieceAchatDto(saisie, nature.gestion(), statut, Champs.de(depart, BuyDocumentStatus::getDescription),
-                configuration.devise(), parametres.decimal("DefaultTva").orElse(null), List.of());
+                "", "", BigDecimal.ZERO, BigDecimal.ZERO, null, List.of(), List.of(), List.of());
+        return modele(saisie, nature.gestion(), null);
     }
 
-    /** {@code droit} : contrôle 403 de l'appelant, joué après les 404 et avant les 400 de contenu. */
-    PieceAchatACreer piece(SaisiePieceAchatRequest corps, NatureDocumentAchat nature, UUID declencheur, Runnable droit) {
+    /** {@code gestion} : gestion de création ou d'arrivée d'une génération ; {@code devise} null = devise par défaut. */
+    ModelePieceAchatDto modele(SaisiePieceAchatRequest saisie, String gestion, UUID devise) {
+        UUID statut = configuration.statutDepart(configuration.gestion(gestion), sansDepart(gestion));
+        BuyDocumentStatus depart = statut == null ? null : em.find(BuyDocumentStatus.class, statut);
+        return new ModelePieceAchatDto(saisie, gestion, statut, Champs.de(depart, BuyDocumentStatus::getDescription),
+                devise == null ? configuration.devise() : devise, parametres.decimal("DefaultTva").orElse(null));
+    }
+
+    /**
+     * {@code droit} : contrôle 403 de l'appelant, joué après les 404 et avant les 400 de contenu ; {@code bordereaux} :
+     * lignes de bordereau permises à la création (celles des sources), null en modification (lien jamais lu).
+     */
+    PieceAchatACreer piece(SaisiePieceAchatRequest corps, NatureDocumentAchat nature, UUID declencheur, Runnable droit,
+                           Set<UUID> bordereaux) {
         verifierVisibilite(corps);
         droit.run();
         exiger(corps.dateDocument(), "dateDocument");
@@ -81,7 +91,7 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
             existant(CfgTier.class, declencheur, "declencheurId");
         }
         PrjMarket lot = lot(corps);
-        List<Ligne> lignes = lignes(Objects.requireNonNullElse(corps.lignes(), List.of()));
+        List<Ligne> lignes = lignes(Objects.requireNonNullElse(corps.lignes(), List.of()), bordereaux);
         List<Part> categories = categories(lignes, corps.categorieId(), lot);
         List<Part> projets = projets(corps);
         LocalDate date = corps.dateDocument();
@@ -89,7 +99,8 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
                 corps.dateLivraisonSouhaitee(), texte(corps.referenceInterne()), texte(corps.personneAContacter()),
                 texte(corps.notes2()), texte(corps.referenceBureauOrdre()), zero(corps.montantRegul()),
                 zero(corps.timbreFiscal()));
-        return new PieceAchatACreer(null, nature.gestion(), sansDepart(nature), nature.name(), "", tiers, corps.societeId(),
+        return new PieceAchatACreer(null, nature.gestion(), sansDepart(nature.gestion()), nature.name(), "", tiers,
+                corps.societeId(),
                 corps.typeMarcheId(), null, code -> "%s N° %s du %s".formatted(nature.libelle(), code, date.format(JOUR)),
                 texte(corps.notes()), lignes, categories, projets, e);
     }
@@ -118,11 +129,12 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
         return lot;
     }
 
-    private List<Ligne> lignes(List<LigneSaisieAchat> saisies) {
-        return IntStream.range(0, saisies.size()).mapToObj(i -> ligne(saisies.get(i), "lignes[%d].".formatted(i))).toList();
+    private List<Ligne> lignes(List<LigneSaisieAchat> saisies, Set<UUID> bordereaux) {
+        return IntStream.range(0, saisies.size())
+                .mapToObj(i -> ligne(saisies.get(i), "lignes[%d].".formatted(i), bordereaux)).toList();
     }
 
-    private Ligne ligne(LigneSaisieAchat l, String champ) {
+    private Ligne ligne(LigneSaisieAchat l, String champ, Set<UUID> bordereaux) {
         exiger(l.quantite(), champ + "quantite");
         exiger(l.prixUnitaireHT(), champ + "prixUnitaireHT");
         if (l.description() == null || l.description().isBlank()) {
@@ -130,9 +142,13 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
         }
         exiger(l.categorieId(), champ + CATEGORIE);
         existant(StlCategory.class, l.categorieId(), champ + CATEGORIE);
+        UUID bordereau = bordereaux == null ? null : l.ligneBordereauId();
+        if (bordereau != null && !bordereaux.contains(bordereau)) {
+            throw new InvalidRequestException(champ + "ligneBordereauId : ligne de bordereau absente des pièces sources.");
+        }
         return new Ligne(l.id(), texte(l.code()), l.description(), texte(l.unite()), l.quantite(), l.prixUnitaireHT(),
                 taux(l.remise(), champ + "remise"), taux(l.fodec(), champ + "fodec"), taux(l.tva(), champ + "tva"),
-                l.categorieId(), texte(l.notes()));
+                l.categorieId(), texte(l.notes()), bordereau);
     }
 
     /** Montants TTC par catégorie de ligne (parts nulles omises) ; sans TTC, catégorie d'en-tête, sinon du lot (E-C3.1). */
@@ -213,7 +229,7 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
         return Objects.requireNonNullElse(v, "");
     }
 
-    private static String sansDepart(NatureDocumentAchat nature) {
-        return "Aucune transition de la gestion %s ne part d'un statut « Nouveau ».".formatted(nature.gestion());
+    static String sansDepart(String gestion) {
+        return "Aucune transition de la gestion %s ne part d'un statut « Nouveau ».".formatted(gestion);
     }
 }
