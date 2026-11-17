@@ -105,7 +105,7 @@ public class SaisiePieceAchatService {
 
     /** Sources visibles du compte (même règle que la fiche), dans l'ordre ; une seule invisible = 404. */
     private List<BuyDocument> sources(List<UUID> ids) {
-        return ids == null ? List.of() : ids.stream().map(id -> {
+        return ids == null ? List.of() : ids.stream().distinct().map(id -> {
             fiche.visible(id).orElseThrow(() -> new ResourceNotFoundException(FicheAchatService.INTROUVABLE));
             BuyDocument source = Objects.requireNonNull(em.find(BuyDocument.class, id));
             em.refresh(source); // préconditions relues en base, pas dans le contexte d'une écriture native antérieure
