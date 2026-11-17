@@ -11,6 +11,8 @@ import com.tsix.immocrm.dto.projet.PrevisionsLotDto;
 import com.tsix.immocrm.dto.projet.PrevisionsLotDto.PointPrevisionDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto.EcheanceRgLotDto;
+import com.tsix.immocrm.dto.projet.RemboursementsLotDto.OptionGenreDto;
+import com.tsix.immocrm.dto.projet.RemboursementsLotDto.OptionReceptionDto;
 import com.tsix.immocrm.dto.projet.RemboursementsLotDto.ReceptionLotDto;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.services.droits.DroitsOmran;
@@ -77,6 +79,9 @@ public class SousFenetresLotService {
             LEFT JOIN PrjMarketReceptionKind k ON k.PKey = r.PrjMarketReceptionKindId
             WHERE r.PrjMarketId = :lot ORDER BY r.sorting ASC, r.Code ASC""";
 
+    private static final String TYPES_RECEPTION = "SELECT PKey, Description FROM PrjMarketReceptionType ORDER BY Code ASC";
+    private static final String GENRES_RECEPTION = "SELECT PKey, Description, IsFinal FROM PrjMarketReceptionKind ORDER BY Code ASC";
+
     private static final String PREVISIONS = """
             SELECT PaymentDate, Amount, Achievement FROM PrjMarketPaymentPrevision
             WHERE PrjMarketId = :lot AND PaymentDate IS NOT NULL""";
@@ -95,15 +100,18 @@ public class SousFenetresLotService {
     private final EntityManager em;
     private final DroitsOmran droits;
     private final LectureSimulationLot simulation;
+    private final DateReceptionDefinitive dateDefinitive;
 
     SousFenetresLotService(LotsProjetService lots, PerimetreProjetService perimetre, AvancementDecomptes avancement,
-                           EntityManager em, DroitsOmran droits, LectureSimulationLot simulation) {
+                           EntityManager em, DroitsOmran droits, LectureSimulationLot simulation,
+                           DateReceptionDefinitive dateDefinitive) {
         this.lots = lots;
         this.perimetre = perimetre;
         this.avancement = avancement;
         this.em = em;
         this.droits = droits;
         this.simulation = simulation;
+        this.dateDefinitive = dateDefinitive;
     }
 
     public AvancesLotDto avances(UUID id) {
@@ -131,8 +139,14 @@ public class SousFenetresLotService {
                 entier(r[1]), (String) r[2], date(r[3]), vrai(r[4]), (String) r[5], (String) r[6], (String) r[7],
                 vrai(r[8]))).toList();
         Map<String, List<AvanceLotDto>> parReference = pieces(lot, MARKET_WARRANTY, "MARKET_PROPORTION");
+        BigDecimal total = echeances.stream().map(EcheanceRgLotDto::pourcentage).map(SousFenetresLotService::zero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<OptionReceptionDto> types = lignes(em.createNativeQuery(TYPES_RECEPTION)).stream()
+                .map(r -> new OptionReceptionDto(uuid(r[0]), (String) r[1])).toList();
+        List<OptionGenreDto> genres = lignes(em.createNativeQuery(GENRES_RECEPTION)).stream()
+                .map(r -> new OptionGenreDto(uuid(r[0]), (String) r[1], vrai(r[2]))).toList();
         return new RemboursementsLotDto(echeances, receptions, parReference.get(MARKET_WARRANTY),
-                parReference.get("MARKET_PROPORTION"));
+                parReference.get("MARKET_PROPORTION"), dateDefinitive.du(lot), total, types, genres);
     }
 
     public PrevisionsLotDto previsions(UUID id) {
