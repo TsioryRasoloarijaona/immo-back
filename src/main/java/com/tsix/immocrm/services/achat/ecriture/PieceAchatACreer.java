@@ -51,13 +51,24 @@ public record PieceAchatACreer(String module, String gestion, String sansDepart,
      * BL facturés ({@code BuyInvoiceId}) et BC d'une ligne {@code BuyOrderInvoice} chacun.
      */
     public record Generation(String gestion, UUID devise, UUID devis, UUID commande, List<UUID> livraisons,
-                             List<UUID> commandes) {
+                             List<UUID> commandes, UUID factureSource, Boolean avoirFinancier) {
     }
 
-    /** En-tête saisi ; textes et montants déjà normalisés ('' et 0). */
+    /** En-tête saisi ; textes et montants déjà normalisés ('' et 0) ; {@code avoir} null hors avoir. */
     public record EnTete(UUID module, UUID projet, UUID lot, UUID declencheur, LocalDate date, LocalDate echeance,
                          LocalDate livraison, String reference, String personne, String notes2,
-                         String referenceBureauOrdre, BigDecimal regul, BigDecimal timbre) {
+                         String referenceBureauOrdre, BigDecimal regul, BigDecimal timbre, Avoir avoir) {
+
+        public EnTete(UUID module, UUID projet, UUID lot, UUID declencheur, LocalDate date, LocalDate echeance,
+                      LocalDate livraison, String reference, String personne, String notes2,
+                      String referenceBureauOrdre, BigDecimal regul, BigDecimal timbre) {
+            this(module, projet, lot, declencheur, date, echeance, livraison, reference, personne, notes2,
+                    referenceBureauOrdre, regul, timbre, null);
+        }
+    }
+
+    /** Avoir : HT et TVA saisis (seulement sans ligne) ; {@code financier} null = inchangé, défaut à la création. */
+    public record Avoir(BigDecimal ht, BigDecimal tva, Boolean financier) {
     }
 
     /** Ligne ; {@code id} d'une ligne existante (modification) ou null ; {@code bordereau} écrit seulement s'il est non nul. */

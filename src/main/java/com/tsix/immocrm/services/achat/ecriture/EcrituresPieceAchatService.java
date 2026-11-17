@@ -58,10 +58,12 @@ public class EcrituresPieceAchatService {
     private final EntityManager em;
     private final Clock clock;
     private final PrevisionsPaiementLot previsions;
+    private final EcriturePieceAchat ecriture;
 
     public EcrituresPieceAchatService(FicheAchatService fiche, DroitsPieceAchat droits, TransitionsPieceAchat transitions,
                                       QuantitesBonCommande quantites, UtilisateurAffiche utilisateur, EntityManager em,
-                                      Clock clock, PrevisionsPaiementLot previsions) {
+                                      Clock clock, PrevisionsPaiementLot previsions, EcriturePieceAchat ecriture) {
+        this.ecriture = ecriture;
         this.fiche = fiche;
         this.droits = droits;
         this.transitions = transitions;
@@ -131,7 +133,10 @@ public class EcrituresPieceAchatService {
         }
         droits.exigerSuppression(d.getDocType(), d.getPrjMarketId() != null);
         verifierSuppression(p);
+        UUID factureSource = d.getInvoiceSourceId();
         supprimerContenu(d);
+        ecriture.recalculerNetAPayer(factureSource);
+        em.flush();
         previsions.apresPiece(d);
     }
 

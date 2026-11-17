@@ -51,7 +51,8 @@ public class ActionsPieceAchat {
 
     /** G7 : cibles que le POST accepterait depuis cette seule pièce (droit de la cible, puis préconditions). */
     private List<GenerationPieceAchatDto> generations(BuyDocument d, boolean aLot) {
-        return Stream.of(NatureDocumentAchat.ORDER, NatureDocumentAchat.DELIVRY, NatureDocumentAchat.INVOICE)
+        return Stream.of(NatureDocumentAchat.ORDER, NatureDocumentAchat.DELIVRY, NatureDocumentAchat.INVOICE,
+                        NatureDocumentAchat.REFUND)
                 .filter(c -> droits.peutModifier(c.name(), aLot) && generation.permise(c, d))
                 .map(c -> new GenerationPieceAchatDto(c.name(), "Générer " + c.libelle())).toList();
     }

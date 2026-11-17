@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.achat.ecriture.ConfigurationPieceAchat.Configuration;
+import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Avoir;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.EnTete;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Generation;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Ligne;
@@ -107,14 +108,16 @@ public class EcriturePieceAchat {
         d.setOfficeOrderRef("");
         d.setUserCreate(auteur);
         d.setUserCreateDateTime(maintenant);
+        if (g != null) {
+            d.setBuyQuoteId(g.devis());
+            d.setBuyOrderId(g.commande());
+            d.setInvoiceSourceId(g.factureSource());
+            d.setIsFinancialRefund(g.avoirFinancier()); // défaut, remplacé par la case saisie dans entete()
+        }
         entete(d, piece, conf.module(), declencheur);
         d.setDescription(piece.description().apply(code));
         if (e != null && e.lot() != null && NatureDocumentAchat.INVOICE.name().equals(piece.nature())) {
             retenuesDuLot(d, g != null);
-        }
-        if (g != null) {
-            d.setBuyQuoteId(g.devis());
-            d.setBuyOrderId(g.commande());
         }
         em.persist(d);
         ecrireContenu(d, piece, Map.of(), BigDecimal.ZERO);
@@ -125,6 +128,7 @@ public class EcriturePieceAchat {
             historique(d);
         }
         previsions.apresPiece(d);
+        recalculerNetAPayer(d.getInvoiceSourceId());
         return d;
     }
 
@@ -143,6 +147,7 @@ public class EcriturePieceAchat {
         if (ancienLot != null && !ancienLot.equals(d.getPrjMarketId())) {
             previsions.recalculer(ancienLot);
         }
+        recalculerNetAPayer(d.getInvoiceSourceId());
         return d;
     }
 
@@ -169,6 +174,9 @@ public class EcriturePieceAchat {
             d.setOfficeOrderRef(e.referenceBureauOrdre());
             d.setAmountRegul(e.regul());
             d.setFiscalStamp(e.timbre());
+            if (e.avoir() != null && e.avoir().financier() != null) {
+                d.setIsFinancialRefund(e.avoir().financier());
+            }
             dates(d, e.date(), e.echeance(), Objects.requireNonNullElse(e.livraison(), e.date()), tiers, e.lot());
         }
         d.setUserUpdate(utilisateur.courant().nom());
@@ -222,7 +230,10 @@ public class EcriturePieceAchat {
     private void ecrireContenu(BuyDocument d, PieceAchatACreer piece, Map<UUID, BuyDocumentLine> existantes,
                                BigDecimal avoirs) {
         List<Ligne> lignes = piece.lignes();
-        MontantsPieceAchat.Totaux totaux = MontantsPieceAchat.totaux(lignes.stream().map(Ligne::montants).toList());
+        Avoir avoir = piece.entete() == null ? null : piece.entete().avoir();
+        MontantsPieceAchat.Totaux totaux = lignes.isEmpty() && avoir != null
+                ? new MontantsPieceAchat.Totaux(avoir.ht(), avoir.tva(), avoir.ht().add(avoir.tva()))
+                : MontantsPieceAchat.totaux(lignes.stream().map(Ligne::montants).toList());
         d.setAmountHT(totaux.ht());
         d.setAmountVat(totaux.tva());
         d.setAmountTTC(totaux.ttc());
@@ -298,10 +309,14 @@ public class EcriturePieceAchat {
                 : BigDecimal.ZERO;
     }
 
-    /** OMRAN {@code Refund.UpdateInvoices} : net à payer de la facture source, relu après la suppression d'un avoir. */
+    /**
+     * OMRAN {@code Refund.UpdateInvoices} : net à payer de la facture source, relu après l'écriture ou la suppression d'un
+     * avoir (seul calcul, FEATURE-achat-avoirs.md R6) ; null = sans effet.
+     */
     public void recalculerNetAPayer(UUID facture) {
         BuyDocument f = facture == null ? null : em.find(BuyDocument.class, facture);
         if (f != null) {
+            em.flush(); // la somme des avoirs est lue en SQL natif
             f.setAmountToPay(NetAPayerAchat.calculer(zero(f.getAmountTTC()), composantes(f, avoirs(f))));
         }
     }
