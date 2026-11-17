@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.buy.BuyDocumentLine;
 import com.tsix.immocrm.entities.buy.BuyDocumentStatusHistory;
+import com.tsix.immocrm.entities.buy.BuyOrderInvoice;
 import com.tsix.immocrm.entities.buy.BuyVentilationCategory;
 import com.tsix.immocrm.entities.buy.BuyVentilationExpense;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -14,6 +15,7 @@ import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.achat.ecriture.ConfigurationPieceAchat.Configuration;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.EnTete;
+import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Generation;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Ligne;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Part;
 import com.tsix.immocrm.services.projet.PrevisionsPaiementLot;
@@ -89,7 +91,8 @@ public class EcriturePieceAchat {
         d.setDocType(piece.nature());
         d.setReferenceType(piece.referenceType());
         d.setStkExpenseId(piece.frais());
-        d.setStlCurrencyId(conf.devise());
+        Generation g = piece.generation();
+        d.setStlCurrencyId(g == null || g.devise() == null ? conf.devise() : g.devise());
         d.setStrEntityId(conf.entite());
         d.setBuyDocumentStatusId(conf.statut());
         zeros(d);
@@ -107,10 +110,17 @@ public class EcriturePieceAchat {
         entete(d, piece, conf.module(), declencheur);
         d.setDescription(piece.description().apply(code));
         if (e != null && e.lot() != null && NatureDocumentAchat.INVOICE.name().equals(piece.nature())) {
-            retenuesDuLot(d);
+            retenuesDuLot(d, g != null);
+        }
+        if (g != null) {
+            d.setBuyQuoteId(g.devis());
+            d.setBuyOrderId(g.commande());
         }
         em.persist(d);
         ecrireContenu(d, piece, Map.of(), BigDecimal.ZERO);
+        if (g != null) {
+            lier(d, g);
+        }
         if (d.getBuyDocumentStatusId() != null && !NatureDocumentAchat.DELIVRY.name().equals(piece.nature())) {
             historique(d);
         }
@@ -178,17 +188,34 @@ public class EcriturePieceAchat {
         return delai != null && delai > 0 ? date.plusDays(delai) : date;
     }
 
-    /** Facture à lot : taux de retenue du lot et reste d'avance (OMRAN {@code GetMarketInfoForInvoice}, Q-6). */
-    private void retenuesDuLot(BuyDocument d) {
+    /**
+     * Facture à lot : reste d'avance ; taux de retenue du lot pour une facture générée seulement (OMRAN
+     * {@code GetMarketInfoForInvoice}, appelé par {@code GenateDocFromDocs} ; FEATURE-achat-generation.md Q-A).
+     */
+    private void retenuesDuLot(BuyDocument d, boolean generee) {
         PrjMarket lot = Objects.requireNonNull(em.find(PrjMarket.class, d.getPrjMarketId()));
-        d.setAdvanceRatio(zero(lot.getAdvanceRatio()));
-        d.setWarrantyRatio(zero(lot.getWarrantyRatio()));
-        d.setProportionRatio(zero(lot.getProportionRatio()));
-        d.setInsuranceDECRatio(zero(lot.getInsuranceDECRatio()));
-        d.setInsuranceTRCRatio(zero(lot.getInsuranceTRCRatio()));
+        if (generee) {
+            d.setAdvanceRatio(zero(lot.getAdvanceRatio()));
+            d.setWarrantyRatio(zero(lot.getWarrantyRatio()));
+            d.setProportionRatio(zero(lot.getProportionRatio()));
+            d.setInsuranceDECRatio(zero(lot.getInsuranceDECRatio()));
+            d.setInsuranceTRCRatio(zero(lot.getInsuranceTRCRatio()));
+        }
         Object[] sommes = (Object[]) em.createNativeQuery(RESTE_AVANCE).setParameter("lot", lot.getId()).getSingleResult();
         BigDecimal avances = new BigDecimal(sommes[0].toString());
         d.setAdvanceRest(avances.signum() == 0 ? BigDecimal.ZERO : avances.subtract(new BigDecimal(sommes[1].toString())));
+    }
+
+    /** OMRAN {@code Invoice.AfterInsert} : BL facturés par la pièce, une ligne {@code BuyOrderInvoice} par BC distinct (Q-E). */
+    private void lier(BuyDocument d, Generation g) {
+        g.livraisons().forEach(bl -> Objects.requireNonNull(em.find(BuyDocument.class, bl)).setBuyInvoiceId(d.getId()));
+        g.commandes().forEach(bc -> {
+            BuyOrderInvoice lien = new BuyOrderInvoice();
+            lien.setId(UUID.randomUUID());
+            lien.setBuyOrderId(bc);
+            lien.setBuyInvoiceId(d.getId());
+            em.persist(lien);
+        });
     }
 
     /** Lignes, montants et ventilations ; {@code existantes} : lignes de la pièce par id, celles absentes du corps supprimées. */
@@ -256,6 +283,9 @@ public class EcriturePieceAchat {
         l.setFodecRatio(zero(ligne.fodec()));
         l.setNotes(ligne.notes());
         l.setStlCategoryId(ligne.categorie());
+        if (ligne.bordereau() != null) {
+            l.setPrjMarketLineId(ligne.bordereau());
+        }
         l.setUserUpdate(d.getUserUpdate());
         l.setUserUpdateDateTime(d.getUserUpdateDateTime());
         return l;
