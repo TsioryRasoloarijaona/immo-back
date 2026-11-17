@@ -55,8 +55,34 @@ public record EntreesSimulation(
     public record Echeance(BigDecimal ratio, LocalDate date, int delai, String libelle) {
     }
 
-    /** Décompte facturé (multi-fournisseur : facture) : date, avancement cumulé, TTC. */
-    public record DecompteReel(LocalDate date, BigDecimal avancement, BigDecimal ttc) {
+    /** Décompte facturé (multi-fournisseur : facture, sans retenues) : date, avancement cumulé, TTC, retenues stockées. */
+    public record DecompteReel(LocalDate date, BigDecimal avancement, BigDecimal ttc, RetenuesStockees retenues) {
+    }
+
+    /**
+     * Retenue stockée d'un décompte réel (FEATURE-lot-previsions-reel.md C1) : taux, plafond (avance : Σ des avances
+     * datées au plus tard au décompte ; DEC / TRC : montant maximal, 0 = sans), montant, case « basé sur le montant ».
+     */
+    public record RetenueStockee(BigDecimal taux, BigDecimal plafond, BigDecimal montant, boolean surMontant) {
+
+        static final RetenueStockee AUCUNE = new RetenueStockee(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false);
+
+        /** Taux et plafond du décompte suivant, montants cumulés. */
+        RetenueStockee puis(RetenueStockee suivante) {
+            return new RetenueStockee(suivante.taux, suivante.plafond, montant.add(suivante.montant), suivante.surMontant);
+        }
+    }
+
+    public record RetenuesStockees(RetenueStockee avance, RetenueStockee garantie, RetenueStockee prorata,
+                                   RetenueStockee dec, RetenueStockee trc) {
+
+        public static final RetenuesStockees AUCUNES = new RetenuesStockees(RetenueStockee.AUCUNE, RetenueStockee.AUCUNE,
+                RetenueStockee.AUCUNE, RetenueStockee.AUCUNE, RetenueStockee.AUCUNE);
+
+        RetenuesStockees puis(RetenuesStockees s) {
+            return new RetenuesStockees(avance.puis(s.avance), garantie.puis(s.garantie), prorata.puis(s.prorata),
+                    dec.puis(s.dec), trc.puis(s.trc));
+        }
     }
 
     /** Avenant non facturé ou bon de commande à payer, repris tel quel. */
