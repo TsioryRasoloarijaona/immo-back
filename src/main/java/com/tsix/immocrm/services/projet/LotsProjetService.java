@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -336,6 +337,15 @@ public class LotsProjetService {
         return Set.copyOf(em.createQuery("select distinct w.prjMarketLineId from PrjWorkingOutLine w where w.prjMarketLineId in"
                 + " (select l.id from PrjMarketLine l where l.prjMarketId = :lot)", UUID.class).setParameter("lot", lot)
                 .getResultList());
+    }
+
+    /** Lignes définitives qu'on ne peut plus supprimer : citées par un décompte ou par une ligne d'avenant (FK NO_ACTION). */
+    Set<UUID> lignesCitees(UUID lot) {
+        Set<UUID> citees = new HashSet<>(lignesDecomptees(lot));
+        citees.addAll(em.createQuery("select distinct c.prjMarketLineId from PrjClauseLine c where c.prjMarketLineId in"
+                + " (select l.id from PrjMarketLine l where l.prjMarketId = :lot)", UUID.class).setParameter("lot", lot)
+                .getResultList());
+        return citees;
     }
 
     private Bordereau lireBordereau(UUID id, SourceBordereau source, Set<UUID> decomptees) {

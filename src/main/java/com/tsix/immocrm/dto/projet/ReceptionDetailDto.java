@@ -39,7 +39,7 @@ public record ReceptionDetailDto(
             @Schema(description = "PrjMarketReceptionCfgTier.PKey.") UUID id,
             @Schema(description = "Ordre.") Integer ordre,
             @Schema(description = "CfgTier.PKey.") UUID tiersId,
-            @Schema(description = "Libellé du tiers (CfgTier.Description).") String tiers
+            @Schema(description = "Nom du tiers : raison sociale, sinon description, sinon prénom et nom.") String tiers
     ) {
     }
 }

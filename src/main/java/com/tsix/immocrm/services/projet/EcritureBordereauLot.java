@@ -152,12 +152,12 @@ public class EcritureBordereauLot {
         }
     }
 
-    /** R9 : une ligne définitive citée par un décompte ne disparaît pas, ni seule ni avec son groupe. */
+    /** R9 : une ligne définitive citée par un décompte ou un avenant ne disparaît pas, ni seule ni avec son groupe. */
     private void refuserSuppressionsDecomptees(UUID lot, BordereauSaisieDto corps, Map<UUID, GroupeBordereauOmran> groupes,
                                                Map<UUID, LigneBordereauOmran> lignes) {
         Set<UUID> lignesGardees = corps.lignes().stream().map(LigneSaisieDto::id).collect(Collectors.toSet());
         Set<UUID> groupesGardes = corps.groupes().stream().map(GroupeSaisieDto::id).collect(Collectors.toSet());
-        List<LigneBordereauOmran> supprimees = lots.lignesDecomptees(lot).stream().filter(l -> !lignesGardees.contains(l))
+        List<LigneBordereauOmran> supprimees = lots.lignesCitees(lot).stream().filter(l -> !lignesGardees.contains(l))
                 .map(lignes::get).filter(Objects::nonNull).toList();
         if (!supprimees.isEmpty()) {
             boolean avecGroupe = supprimees.stream()

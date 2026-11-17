@@ -16,6 +16,7 @@ public class EcrituresLots implements TablesEcrites {
     public List<String> tables() {
         return List.of("PrjMarket", "PrjMarketLineGrouping", "PrjMarketLineGroupingEstimation", "PrjMarketLine",
                 "PrjMarketLineEstimation", "PrjMarketVentilationCategory", "PrjMarketPrevision", "PrjMarketUserPrevision",
-                "PrjMarketPaymentPrevision");
+                "PrjMarketPaymentPrevision", "PrjClause", "PrjClauseLine", "PrjMarketWarrantyLine", "PrjMarketReception",
+                "PrjMarketReceptionReserve", "PrjMarketReceptionCfgTier");
     }
 }

@@ -17,7 +17,7 @@ public record AvenantDetailDto(
         @Schema(description = "Date (DocDate).") LocalDate date,
         @Schema(description = "Référence interne (DocRef).") String referenceInterne,
         @Schema(description = "Notes.") String notes,
-        @Schema(description = "Fournisseur de l'avenant (CfgTier.Description), null sans fournisseur.") String fournisseur,
+        @Schema(description = "Nom du fournisseur de l'avenant (raison sociale, sinon description), null sans fournisseur.") String fournisseur,
         @Schema(description = "Retenue de garantie.") RetenueAvenantDto garantie,
         @Schema(description = "Retenue du compte prorata.") RetenueAvenantDto prorata,
         @Schema(description = "Assurance DEC.") RetenueAvenantDto assuranceDEC,
