@@ -116,13 +116,13 @@ public class SousFenetresLotService {
 
     public AvancesLotDto avances(UUID id) {
         Map<String, List<AvanceLotDto>> parReference = pieces(lots.visible(id).getId(), MARKET_ADVANCE, "WORKINGOUT_ADVANCE");
-        return new AvancesLotDto(parReference.get(MARKET_ADVANCE), parReference.get("WORKINGOUT_ADVANCE"));
+        return new AvancesLotDto(parReference.get(MARKET_ADVANCE), parReference.get("WORKINGOUT_ADVANCE"), false);
     }
 
     public List<AvoirLotDto> avoirs(UUID id) {
         return lignes(societesHabilitees(AVOIRS, lots.visible(id).getId())).stream().map(r -> new AvoirLotDto(uuid(r[0]), date(r[1]),
                 (String) r[2], (String) r[3], (String) r[4], (String) r[5], montant(r[6]), montant(r[7]), montant(r[8]),
-                (String) r[9])).toList();
+                (String) r[9], false)).toList();
     }
 
     public List<AvenantLotDto> avenants(UUID id) {
@@ -146,7 +146,7 @@ public class SousFenetresLotService {
         List<OptionGenreDto> genres = lignes(em.createNativeQuery(GENRES_RECEPTION)).stream()
                 .map(r -> new OptionGenreDto(uuid(r[0]), (String) r[1], vrai(r[2]))).toList();
         return new RemboursementsLotDto(echeances, receptions, parReference.get(MARKET_WARRANTY),
-                parReference.get("MARKET_PROPORTION"), dateDefinitive.du(lot), total, types, genres);
+                parReference.get("MARKET_PROPORTION"), dateDefinitive.du(lot), total, types, genres, false);
     }
 
     public PrevisionsLotDto previsions(UUID id) {
@@ -219,7 +219,7 @@ public class SousFenetresLotService {
             SoldeDocumentAchat solde = SoldeDocumentAchat.de(montant(r[6]), montant(r[7]));
             parReference.get(r[10]).add(new AvanceLotDto(uuid(r[0]), (String) r[1], uuidOuNull(r[2]),
                     (String) r[3], (String) r[4], date(r[5]), solde.montantAPayer(), solde.montantRegle(),
-                    solde.resteARegler(), (String) r[8], (String) r[9]));
+                    solde.resteARegler(), (String) r[8], (String) r[9], false, false));
         }
         return parReference;
     }

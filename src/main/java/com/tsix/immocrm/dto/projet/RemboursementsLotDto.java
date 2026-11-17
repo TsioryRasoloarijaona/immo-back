@@ -20,7 +20,9 @@ public record RemboursementsLotDto(
         @Schema(description = "Types de réception (PrjMarketReceptionType), liste de choix de la fiche réception.")
         List<OptionReceptionDto> typesReception,
         @Schema(description = "Genres de réception (PrjMarketReceptionKind), liste de choix de la fiche réception.")
-        List<OptionGenreDto> genresReception
+        List<OptionGenreDto> genresReception,
+        @Schema(description = "Droit MarketMonitoringList.toolAdvance : active Ajouter d'une restitution de RG (le prorata n'en exige pas).")
+        boolean droitPieces
 ) {
 
     @Schema(description = "Type de réception proposé à la saisie.")

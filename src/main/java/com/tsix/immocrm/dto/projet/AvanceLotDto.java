@@ -18,6 +18,10 @@ public record AvanceLotDto(
         @Schema(description = "Σ des règlements non annulés.") BigDecimal regle,
         @Schema(description = "Net à payer − réglé ; négatif possible.") BigDecimal reste,
         @Schema(description = "Code de la devise (StlCurrency.Code).") String deviseCode,
-        @Schema(description = "Notes de la pièce.") String notes
+        @Schema(description = "Notes de la pièce.") String notes,
+        @Schema(description = "Même règle que PUT …/pieces-a-payer/{pieceId} : drapeau de statut du lot, statut non verrouillé.")
+        boolean modifiable,
+        @Schema(description = "Même règle que DELETE …/pieces-a-payer/{pieceId} : droit, statut non verrouillé, aucun règlement.")
+        boolean supprimable
 ) {
 }

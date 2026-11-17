@@ -7,6 +7,8 @@ import java.util.List;
 @Schema(description = "Sous-fenêtre Avances du lot : deux grilles, par date décroissante puis code.")
 public record AvancesLotDto(
         @Schema(description = "Avances sur marché (ReferenceType MARKET_ADVANCE).") List<AvanceLotDto> surMarche,
-        @Schema(description = "Avances sur décompte (ReferenceType WORKINGOUT_ADVANCE).") List<AvanceLotDto> surDecompte
+        @Schema(description = "Avances sur décompte (ReferenceType WORKINGOUT_ADVANCE).") List<AvanceLotDto> surDecompte,
+        @Schema(description = "Droit MarketMonitoringList.toolAdvance : active Ajouter (avances et restitution de RG).")
+        boolean droitPieces
 ) {
 }

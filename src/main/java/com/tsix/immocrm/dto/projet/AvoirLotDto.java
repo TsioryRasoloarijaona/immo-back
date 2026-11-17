@@ -17,6 +17,8 @@ public record AvoirLotDto(
         @Schema(description = "Montant HT.") BigDecimal montantHT,
         @Schema(description = "Montant de TVA.") BigDecimal montantTVA,
         @Schema(description = "Montant TTC.") BigDecimal montantTTC,
-        @Schema(description = "Référence bureau d'ordre (OfficeOrderRef).") String referenceBureauOrdre
+        @Schema(description = "Référence bureau d'ordre (OfficeOrderRef).") String referenceBureauOrdre,
+        @Schema(description = "Même règle que DELETE …/avoirs/{avoirId} : droit RefundList.toolDelete, statut non verrouillé.")
+        boolean supprimable
 ) {
 }

@@ -48,6 +48,9 @@ public class EcrituresLotService {
             select count(m) from PrjMarket m where m.id = :id and (
              exists (select w from PrjWorkingOut w where w.prjMarket.id = :id)
              or exists (select d from BuyDocument d where d.prjMarketId = :id)
+             or exists (select c from PrjClause c where c.prjMarketId = :id)
+             or exists (select g from PrjMarketWarrantyLine g where g.prjMarketId = :id)
+             or exists (select r from PrjMarketReception r where r.prjMarketId = :id)
              or exists (select p from PrjProject p where p.manageProrataPrjMarketId = :id))""";
 
     private final LotsProjetService lots;
