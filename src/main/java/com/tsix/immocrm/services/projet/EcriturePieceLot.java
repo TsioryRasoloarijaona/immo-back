@@ -106,7 +106,10 @@ public class EcriturePieceLot {
     public void supprimerAvoir(UUID lotId, UUID avoir) {
         PrjMarket lot = lots.visible(lotId);
         lever(DroitsPieceLot.refusSuppressionAvoir(pieces.droits(), piece(lotId, avoir, true)));
-        suppression.supprimerContenu(em.find(BuyDocument.class, avoir));
+        BuyDocument d = em.find(BuyDocument.class, avoir);
+        UUID facture = d.getInvoiceSourceId();
+        suppression.supprimerContenu(d);
+        contenu.apresSuppressionAvoir(facture);
         apresSuppression(lot);
     }
 

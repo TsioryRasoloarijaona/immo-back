@@ -179,6 +179,10 @@ class ContenuPieceLot {
                 : BigDecimal.ZERO;
     }
 
+    void apresSuppressionAvoir(UUID factureSource) {
+        ecriture.recalculerNetAPayer(factureSource);
+    }
+
     /** R8 bis : dernier décompte du lot s'il n'est ni final ni facturé, sinon null. */
     private UUID decompteOuvert(UUID lot) {
         return em.createQuery(DERNIER_DECOMPTE, PrjWorkingOut.class).setParameter("lot", lot).setMaxResults(1)

@@ -122,10 +122,7 @@ public class EcriturePieceAchat {
     @Transactional(propagation = Propagation.MANDATORY)
     public BuyDocument modifier(BuyDocument d, PieceAchatACreer piece) {
         EnTete e = Objects.requireNonNull(piece.entete());
-        BigDecimal avoirs = NatureDocumentAchat.INVOICE.name().equals(d.getDocType())
-                ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
-                        .getSingleResult().toString())
-                : BigDecimal.ZERO;
+        BigDecimal avoirs = avoirs(d);
         UUID ancienLot = d.getPrjMarketId();
         entete(d, piece, e.module(), e.declencheur());
         List.of(BuyVentilationCategory.class, BuyVentilationExpense.class).forEach(v -> lire(v, d.getId()).forEach(em::remove));
@@ -262,6 +259,21 @@ public class EcriturePieceAchat {
         l.setUserUpdate(d.getUserUpdate());
         l.setUserUpdateDateTime(d.getUserUpdateDateTime());
         return l;
+    }
+
+    private BigDecimal avoirs(BuyDocument d) {
+        return NatureDocumentAchat.INVOICE.name().equals(d.getDocType())
+                ? new BigDecimal(em.createNativeQuery(AVOIRS_DE_LA_FACTURE).setParameter("facture", d.getId())
+                        .getSingleResult().toString())
+                : BigDecimal.ZERO;
+    }
+
+    /** OMRAN {@code Refund.UpdateInvoices} : net à payer de la facture source, relu après la suppression d'un avoir. */
+    public void recalculerNetAPayer(UUID facture) {
+        BuyDocument f = facture == null ? null : em.find(BuyDocument.class, facture);
+        if (f != null) {
+            f.setAmountToPay(NetAPayerAchat.calculer(zero(f.getAmountTTC()), composantes(f, avoirs(f))));
+        }
     }
 
     private static NetAPayerAchat.Composantes composantes(BuyDocument d, BigDecimal avoirs) {
