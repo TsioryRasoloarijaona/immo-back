@@ -39,7 +39,7 @@ public final class DecompteSimule {
         cumul = cumul.add(reel.ttc());
         stockees = stockees.puis(reel.retenues());
         RetenueStockee a = stockees.avance();
-        BigDecimal avance = a.surMontant() ? a.montant() : a.taux().multiply(cumul).min(a.plafond().max(ZERO));
+        BigDecimal avance = (a.surMontant() ? a.montant() : a.taux().multiply(cumul)).min(a.plafond().max(ZERO));
         netAvant = cumul.subtract(avance).subtract(stockee(stockees.garantie())).subtract(stockee(stockees.prorata()))
                 .subtract(stockee(stockees.dec())).subtract(stockee(stockees.trc()));
     }
@@ -71,6 +71,6 @@ public final class DecompteSimule {
 
     private static BigDecimal plafonne(BigDecimal ratio, BigDecimal montant, BigDecimal c) {
         BigDecimal retenue = ratio.multiply(c);
-        return montant.signum() != 0 ? retenue.min(montant) : retenue;
+        return montant.signum() == 0 ? retenue : retenue.min(montant);
     }
 }

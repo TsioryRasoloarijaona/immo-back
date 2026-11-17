@@ -107,7 +107,7 @@ public final class AlignementPrevisions {
     // Décalage OMRAN (Market.cs l.1985-1993) : jours moyens par mois entre les deux points, borné à la fin du mois de d.
     private static long decalage(LocalDate d, Planning p, Point avant, Point apres, long jours) {
         long mois = ChronoUnit.MONTHS.between(YearMonth.from(avant.date()), YearMonth.from(apres.date()));
-        long decalage = mois != 0 ? jours / mois : 0;
+        long decalage = mois == 0 ? 0 : jours / mois;
         if (d.equals(p.debut())) {
             return 0;
         }
