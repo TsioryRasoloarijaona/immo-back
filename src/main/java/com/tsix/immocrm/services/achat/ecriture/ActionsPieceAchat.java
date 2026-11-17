@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.achat.ecriture;
 import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
 import com.tsix.immocrm.dto.achat.ActionsPieceAchatDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
+import com.tsix.immocrm.dto.achat.GenerationPieceAchatDto;
 import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.buy.BuyDocumentStatus;
 import com.tsix.immocrm.entities.str.StrEntity;
@@ -11,8 +12,10 @@ import com.tsix.immocrm.exceptions.ForbiddenException;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /** Bloc {@code actions} de la fiche, tiré des mêmes règles que les écritures (FEATURE-achat-fiche-ecritures.md E-B6). */
 @Component
@@ -24,11 +27,14 @@ public class ActionsPieceAchat {
 
     private final DroitsPieceAchat droits;
     private final TransitionsPieceAchat transitions;
+    private final GenerationPieceAchat generation;
     private final EntityManager em;
 
-    public ActionsPieceAchat(DroitsPieceAchat droits, TransitionsPieceAchat transitions, EntityManager em) {
+    ActionsPieceAchat(DroitsPieceAchat droits, TransitionsPieceAchat transitions, GenerationPieceAchat generation,
+                      EntityManager em) {
         this.droits = droits;
         this.transitions = transitions;
+        this.generation = generation;
         this.em = em;
     }
 
@@ -40,7 +46,14 @@ public class ActionsPieceAchat {
         boolean aLot = d.getPrjMarketId() != null;
         return new ActionsPieceAchatDto(libre && droits.peutSupprimer(nature, aLot),
                 libre && estFacture(d) && droits.peutModifier(nature, false), transitions.permises(d),
-                refusModification(d, vue, aLot).isEmpty());
+                refusModification(d, vue, aLot).isEmpty(), generations(d, aLot));
+    }
+
+    /** G7 : cibles que le POST accepterait depuis cette seule pièce (droit de la cible, puis préconditions). */
+    private List<GenerationPieceAchatDto> generations(BuyDocument d, boolean aLot) {
+        return Stream.of(NatureDocumentAchat.ORDER, NatureDocumentAchat.DELIVRY, NatureDocumentAchat.INVOICE)
+                .filter(c -> droits.peutModifier(c.name(), aLot) && generation.permise(c, d))
+                .map(c -> new GenerationPieceAchatDto(c.name(), "Générer " + c.libelle())).toList();
     }
 
     /**

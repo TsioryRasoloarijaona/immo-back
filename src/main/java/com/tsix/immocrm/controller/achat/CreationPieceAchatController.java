@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Achat")
@@ -35,15 +36,18 @@ public class CreationPieceAchatController {
     }
 
     @GetMapping("/modele")
-    @Operation(summary = "Formulaire vierge pré-rempli d'une nouvelle pièce d'achat")
+    @Operation(summary = "Formulaire pré-rempli d'une nouvelle pièce d'achat, vierge ou généré depuis des pièces sources")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Le modèle pré-rempli."),
-            @ApiResponse(responseCode = "400", description = "Nature absente ou non prise en charge.", content = @Content),
+            @ApiResponse(responseCode = "400", content = @Content),
             @ApiResponse(responseCode = "403", description = "Sans le droit de créer cette nature.", content = @Content),
+            @ApiResponse(responseCode = "404", content = @Content),
+            @ApiResponse(responseCode = "409", content = @Content),
             @ApiResponse(responseCode = "500", content = @Content)})
     public ModelePieceAchatDto modele(@Parameter(description = "Nature : QUOTE, ORDER, DELIVRY ou INVOICE.",
-            example = "ORDER") @RequestParam(required = false) String nature) {
-        return saisie.modele(nature);
+            example = "ORDER") @RequestParam(required = false) String nature,
+                                      @RequestParam(required = false) List<UUID> sources) {
+        return saisie.modele(nature, sources);
     }
 
     @PostMapping
@@ -53,6 +57,7 @@ public class CreationPieceAchatController {
             @ApiResponse(responseCode = "400", content = @Content),
             @ApiResponse(responseCode = "403", description = "Sans le droit de créer cette nature.", content = @Content),
             @ApiResponse(responseCode = "404", content = @Content),
+            @ApiResponse(responseCode = "409", content = @Content),
             @ApiResponse(responseCode = "500", content = @Content)})
     public ResponseEntity<DocumentAchatDetailDto> creer(@RequestBody SaisiePieceAchatRequest corps) {
         DocumentAchatDetailDto piece = saisie.creer(corps);
