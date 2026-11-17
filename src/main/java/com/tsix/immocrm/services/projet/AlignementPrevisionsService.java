@@ -83,7 +83,7 @@ public class AlignementPrevisionsService {
             case "SYSTEME" -> ecarts.finSysteme();
             default -> null;
         };
-        if (fin != null && ecarts.dernierReel() != null && fin.isBefore(ecarts.dernierReel())) {
+        if (FIXEE.equals(corps.mode()) && fin != null && ecarts.dernierReel() != null && fin.isBefore(ecarts.dernierReel())) {
             throw new ConflictException("Veuillez sélectionnez une date supérieur ou égale à la date dérnière décompte / facture");
         }
         List<PointSaisieDto> points = AlignementPrevisions.aligner(e, fin == null ? ecarts.finActuelle() : fin).stream()

@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.projet;
 
+import com.tsix.immocrm.config.audit.EcouteurAuditOmran;
 import com.tsix.immocrm.dto.projet.LigneModeleDto;
 import com.tsix.immocrm.dto.projet.ModeleSimulationDetailDto;
 import com.tsix.immocrm.dto.projet.ModeleSimulationListItemDto;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,10 +40,12 @@ public class ModelesSimulationService {
 
     private final EntityManager em;
     private final DroitsOmran droits;
+    private final EcouteurAuditOmran audit;
 
-    public ModelesSimulationService(EntityManager em, DroitsOmran droits) {
+    public ModelesSimulationService(EntityManager em, DroitsOmran droits, EcouteurAuditOmran audit) {
         this.em = em;
         this.droits = droits;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -75,8 +79,17 @@ public class ModelesSimulationService {
     public ModeleSimulationDetailDto modifier(UUID id, ModeleSimulationSaisieDto corps) {
         PrjMarketPrevisionModel m = trouver(id);
         droits.exiger(DROIT_MODELES);
+        List<Object> avant = enTete(m);
         ecrire(m, corps);
+        if (avant.equals(enTete(m))) {
+            // Lignes non tracées : en-tête inchangé = aucune trace de l'écouteur, d'où le résumé (M7).
+            em.persist(audit.resume(m, id, "Lignes du modèle enregistrées"));
+        }
         return enregistrerLignes(m, corps.lignes());
+    }
+
+    private static List<Object> enTete(PrjMarketPrevisionModel m) {
+        return Arrays.asList(m.getCode(), m.getDescription(), m.getStlCategoryId());
     }
 
     public void supprimer(UUID id) {
