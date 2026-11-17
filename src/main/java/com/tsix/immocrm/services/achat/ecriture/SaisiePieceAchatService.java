@@ -65,10 +65,13 @@ public class SaisiePieceAchatService {
 
     /** Ordre : 400 nature, 404 société / projet / sources, 403 droit, 400 contenu, 409 génération ; séquence à l'écriture. */
     @Transactional
-    public DocumentAchatDetailDto creer(SaisiePieceAchatRequest corps) {
-        NatureDocumentAchat nature = LectureSaisieAchat.nature(corps.nature(), corps.sources());
-        UUID declencheur = corps.declencheurId() != null ? corps.declencheurId() : ecriture.employeDuCompte();
-        List<BuyDocument> docs = sources(nature, corps.sources());
+    public DocumentAchatDetailDto creer(SaisiePieceAchatRequest saisie) {
+        NatureDocumentAchat nature = LectureSaisieAchat.nature(saisie.nature(), saisie.sources());
+        UUID declencheur = saisie.declencheurId() != null ? saisie.declencheurId() : ecriture.employeDuCompte();
+        List<BuyDocument> docs = sources(nature, saisie.sources());
+        // lot d'un avoir = celui de sa facture, avant le droit qui en dépend (FEATURE-achat-avoirs.md R5, R8)
+        SaisiePieceAchatRequest corps = nature == NatureDocumentAchat.REFUND
+                ? saisie.avecLot(docs.getFirst().getPrjMarketId()) : saisie;
         PieceAchatACreer piece = lecture.piece(corps, nature, declencheur,
                 () -> droits.exigerModification(nature.name(), corps.lotId() != null), generation.bordereaux(docs));
         verifierIdsDeLignes(Set.of(), piece.lignes());
