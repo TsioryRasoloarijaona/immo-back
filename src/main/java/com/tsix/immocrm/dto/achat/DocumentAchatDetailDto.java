@@ -53,7 +53,9 @@ public record DocumentAchatDetailDto(
         @Schema(description = "Société de la pièce (CfgCompanyId).") UUID societeId,
         @Schema(description = "Module de la pièce (AdmModuleId).") UUID moduleId,
         @Schema(description = "Catégorie d'en-tête : celle de la ventilation si elle n'a qu'une part, sinon null.")
-        UUID categorieId) {
+        UUID categorieId,
+        @Schema(description = "Avoir financier (IsFinancialRefund) : vrai = ne réduit pas la facture source ; null si non "
+                + "renseigné.") Boolean avoirFinancier) {
 
     @Schema(description = "Ligne de la pièce (BuyDocumentLine) : colonnes stockées puis calculées (vue OMRAN BuyDocumentLineView).")
     public record LigneDocumentAchatDto(

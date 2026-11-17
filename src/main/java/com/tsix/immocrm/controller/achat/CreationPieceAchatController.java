@@ -44,14 +44,14 @@ public class CreationPieceAchatController {
             @ApiResponse(responseCode = "404", content = @Content),
             @ApiResponse(responseCode = "409", content = @Content),
             @ApiResponse(responseCode = "500", content = @Content)})
-    public ModelePieceAchatDto modele(@Parameter(description = "Nature : QUOTE, ORDER, DELIVRY ou INVOICE.",
-            example = "ORDER") @RequestParam(required = false) String nature,
+    public ModelePieceAchatDto modele(@Parameter(
+            description = "Nature : QUOTE, ORDER, DELIVRY, INVOICE, ou REFUND avec sources.", example = "ORDER") @RequestParam(required = false) String nature,
                                       @RequestParam(required = false) List<UUID> sources) {
         return saisie.modele(nature, sources);
     }
 
     @PostMapping
-    @Operation(summary = "Crée une pièce d'achat (devis, bon de commande, bon de livraison, facture)")
+    @Operation(summary = "Crée une pièce d'achat (devis, bon de commande, bon de livraison, facture, avoir généré)")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "La fiche de la pièce créée ; en-tête Location."),
             @ApiResponse(responseCode = "400", content = @Content),

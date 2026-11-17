@@ -135,7 +135,7 @@ class RequetesDocumentsAchat {
             + "d.AdvanceRatio, d.AdvanceAmount, d.AdvanceRest, d.WarrantyRatio, d.WarrantyAmount, d.InsuranceTRCRatio, "
             + "d.InsuranceTRCAmount, d.InsuranceDECRatio, d.InsuranceDECAmount, d.ProportionRatio, d.ProportionAmount, "
             + "d.RetainedAmount, d.WorkingOutAdvanceAmount, d.StockAmountToPay, d.ProrataRefundAmount, d.FluctuationsToPay, "
-            + "d.CfgCompanyId, d.AdmModuleId, (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(CAST(v.StlCategoryId AS varchar(36))) END "
+            + "d.CfgCompanyId, d.AdmModuleId, d.IsFinancialRefund, (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(CAST(v.StlCategoryId AS varchar(36))) END "
             + "FROM BuyVentilationCategory v WHERE v.BuyDocumentId = d.PKey) AS CategorieEnTete "
             + "FROM BuyDocument d LEFT JOIN CfgTier tr ON tr.PKey = d.CfgTierTriggerId WHERE d.PKey = :id";
 
@@ -204,7 +204,7 @@ class RequetesDocumentsAchat {
                     visible(c.bonCommandeId(), visibles), visibles.get(c.bonCommandeId()),
                     visible(c.factureSourceId(), visibles), visibles.get(c.factureSourceId()), o.recapTva(),
                     o.ventilationProjets(), o.bonsLivraison(), o.factures(), o.avoirs(), actions, c.societeId(),
-                    c.moduleId(), c.categorieId());
+                    c.moduleId(), c.categorieId(), c.avoirFinancier());
         }
 
         private static UUID visible(UUID id, Map<UUID, String> visibles) {
@@ -215,7 +215,8 @@ class RequetesDocumentsAchat {
     /** Colonnes d'en-tête propres à la fiche (E2), lues sans filtre : la pièce a déjà passé {@link #FICHE}. */
     record Complement(UUID declencheurId, String declencheurNom, LocalDate dateLivraisonSouhaitee, String note2,
                       boolean devisSelectionne, RetenuesAvancesAchatDto retenuesAvances, UUID devisOrigineId,
-                      UUID bonCommandeId, UUID factureSourceId, UUID societeId, UUID moduleId, UUID categorieId) {
+                      UUID bonCommandeId, UUID factureSourceId, UUID societeId, UUID moduleId, UUID categorieId,
+                      Boolean avoirFinancier) {
 
         List<UUID> references() {
             return Stream.of(devisOrigineId, bonCommandeId, factureSourceId).filter(Objects::nonNull).toList();
@@ -321,7 +322,7 @@ class RequetesDocumentsAchat {
                 rs.getBigDecimal("WorkingOutAdvanceAmount"), rs.getBigDecimal("StockAmountToPay"),
                 rs.getBigDecimal("ProrataRefundAmount"), rs.getBigDecimal("FluctuationsToPay")),
                 uuid(rs, "BuyQuoteId"), uuid(rs, "BuyOrderId"), uuid(rs, "InvoiceSourceId"), uuid(rs, "CfgCompanyId"),
-                uuid(rs, "AdmModuleId"), uuid(rs, "CategorieEnTete")));
+                uuid(rs, "AdmModuleId"), uuid(rs, "CategorieEnTete"), rs.getObject("IsFinancialRefund", Boolean.class)));
     }
 
     private static RetenueAchatDto retenue(ResultSet rs, String prefixe) throws SQLException {
