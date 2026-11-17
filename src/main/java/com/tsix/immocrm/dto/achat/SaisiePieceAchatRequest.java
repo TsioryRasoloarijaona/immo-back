@@ -57,10 +57,10 @@ public record SaisiePieceAchatRequest(
                 notes2, montantRegul, timbreFiscal, categorieId, lignes, ventilationProjets, sources, null, null, null);
     }
 
-    /** La même saisie sur le lot {@code lot} (lot d'un avoir figé en modification). */
-    public SaisiePieceAchatRequest avecLot(UUID lot) {
-        return new SaisiePieceAchatRequest(nature, dateDocument, dateEcheance, dateLivraisonSouhaitee, societeId, moduleId,
-                fournisseurId, projetId, lot, typeMarcheId, declencheurId, personneAContacter, referenceInterne,
+    /** La même saisie sur le lot, le fournisseur et la société donnés (ceux de la facture d'un avoir). */
+    public SaisiePieceAchatRequest pourAvoir(UUID lot, UUID fournisseur, UUID societe) {
+        return new SaisiePieceAchatRequest(nature, dateDocument, dateEcheance, dateLivraisonSouhaitee, societe, moduleId,
+                fournisseur, projetId, lot, typeMarcheId, declencheurId, personneAContacter, referenceInterne,
                 referenceBureauOrdre, notes, notes2, montantRegul, timbreFiscal, categorieId, lignes, ventilationProjets,
                 sources, montantHT, montantTVA, avoirFinancier);
     }

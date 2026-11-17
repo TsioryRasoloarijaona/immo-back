@@ -69,9 +69,8 @@ public class SaisiePieceAchatService {
         NatureDocumentAchat nature = LectureSaisieAchat.nature(saisie.nature(), saisie.sources());
         UUID declencheur = saisie.declencheurId() != null ? saisie.declencheurId() : ecriture.employeDuCompte();
         List<BuyDocument> docs = sources(nature, saisie.sources());
-        // lot d'un avoir = celui de sa facture, avant le droit qui en dépend (FEATURE-achat-avoirs.md R5, R8)
-        SaisiePieceAchatRequest corps = nature == NatureDocumentAchat.REFUND
-                ? saisie.avecLot(docs.getFirst().getPrjMarketId()) : saisie;
+        // lot, fournisseur, société d'un avoir = ceux de sa facture, avant le droit qui en dépend (FEATURE-achat-avoirs.md R5, R8, R14)
+        SaisiePieceAchatRequest corps = nature == NatureDocumentAchat.REFUND ? pourAvoir(saisie, docs.getFirst()) : saisie;
         PieceAchatACreer piece = lecture.piece(corps, nature, declencheur,
                 () -> droits.exigerModification(nature.name(), corps.lotId() != null), generation.bordereaux(docs));
         verifierIdsDeLignes(Set.of(), piece.lignes());
@@ -95,9 +94,8 @@ public class SaisiePieceAchatService {
         DocumentAchatListItemDto vue = fiche.visible(id)
                 .orElseThrow(() -> new ResourceNotFoundException(FicheAchatService.INTROUVABLE));
         BuyDocument d = Objects.requireNonNull(em.find(BuyDocument.class, id));
-        // le lot d'un avoir est celui de sa facture : jamais changé (FEATURE-achat-avoirs.md R5)
-        SaisiePieceAchatRequest corps = NatureDocumentAchat.REFUND.name().equals(d.getDocType())
-                ? saisie.avecLot(d.getPrjMarketId()) : saisie;
+        // lot, fournisseur, société d'un avoir : ceux de sa facture, jamais changés (FEATURE-achat-avoirs.md R5, R14)
+        SaisiePieceAchatRequest corps = NatureDocumentAchat.REFUND.name().equals(d.getDocType()) ? pourAvoir(saisie, d) : saisie;
         actions.refusModification(d, vue, corps.lotId() != null).ifPresent(refus -> {
             throw refus;
         });
@@ -109,6 +107,10 @@ public class SaisiePieceAchatService {
         ecriture.modifier(d, piece);
         em.flush();
         return fiche.fiche(id);
+    }
+
+    private static SaisiePieceAchatRequest pourAvoir(SaisiePieceAchatRequest saisie, BuyDocument piece) {
+        return saisie.pourAvoir(piece.getPrjMarketId(), piece.getCfgTierId(), piece.getCfgCompanyId());
     }
 
     /** Sources visibles du compte (même règle que la fiche), dans l'ordre ; une invisible = 404 (texte OMRAN si avoir). */
