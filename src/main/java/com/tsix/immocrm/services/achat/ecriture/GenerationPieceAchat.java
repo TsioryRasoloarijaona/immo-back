@@ -25,6 +25,7 @@ import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.DELIVRY;
 import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.INVOICE;
 import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.ORDER;
 import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.QUOTE;
+import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.REFUND;
 
 /**
  * Préconditions d'une génération (FEATURE-achat-generation.md G2, G3, G5 ; OMRAN {@code DocumentEdition.cs},
@@ -42,7 +43,8 @@ class GenerationPieceAchat {
             "BuyDelivery>INVOICE", "BuyInvoiceDebit",
             "PrjMarketMultiSupplierOrder>DELIVRY", "PrjMarketMultiSupplierDelivery",
             "PrjMarketMultiSupplierOrder>INVOICE", "PrjInvoiceDebitMultiSupplier",
-            "PrjMarketMultiSupplierDelivery>INVOICE", "PrjInvoiceDebitMultiSupplier");
+            "PrjMarketMultiSupplierDelivery>INVOICE", "PrjInvoiceDebitMultiSupplier",
+            "PrjInvoiceDebit>REFUND", "BuyRefundDebit");
     private static final String PARAMETRE = "SELECT COUNT(*) FROM AdmParamsBoolean WHERE Code = :code AND CodeValue = 1";
 
     private final EntityManager em;
@@ -67,6 +69,7 @@ class GenerationPieceAchat {
         boolean permise = memeNature && switch (cible) {
             case ORDER -> unique && source == QUOTE;
             case DELIVRY -> unique && source == ORDER;
+            case REFUND -> unique && source == INVOICE;
             default -> source == DELIVRY || unique && source == ORDER;
         };
         if (!permise) {
@@ -91,7 +94,12 @@ class GenerationPieceAchat {
     }
 
     SaisiePieceAchatRequest saisie(NatureDocumentAchat cible, List<BuyDocument> sources) {
-        return preremplissage.saisie(cible, sources);
+        return preremplissage.saisie(cible, sources, avoirFinancier(cible));
+    }
+
+    /** Case « Avoir financier » par défaut : {@code DefaultRefundIsFinancial} (faux si absent) ; null hors avoir (D3). */
+    private Boolean avoirFinancier(NatureDocumentAchat cible) {
+        return cible == REFUND ? parametre("DefaultRefundIsFinancial") : null;
     }
 
     /** Lignes de bordereau des sources : seules recopiables au POST (§3). */
@@ -174,7 +182,9 @@ class GenerationPieceAchat {
         UUID devis = QUOTE.name().equals(premiere.getDocType()) ? premiere.getId() : null;
         List<UUID> livraisons = facture && !depuisBc ? sources.stream().map(BuyDocument::getId).toList() : List.of();
         List<UUID> commandes = facture ? commandesSources.stream().filter(Objects::nonNull).toList() : List.of();
-        return new Generation(gestion, premiere.getStlCurrencyId(), devis, commande, livraisons, commandes);
+        UUID factureSource = cible == REFUND ? premiere.getId() : null;
+        return new Generation(gestion, premiere.getStlCurrencyId(), devis, commande, livraisons, commandes, factureSource,
+                avoirFinancier(cible));
     }
 
     private boolean validee(BuyDocument d) {

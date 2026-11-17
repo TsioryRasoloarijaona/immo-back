@@ -14,7 +14,8 @@ public enum NatureDocumentAchat {
     // séquence seule, sans gestion : créée depuis la fiche lot, jamais saisissable depuis la fiche Achat
     DOCUMENT_TO_PAY("Document à régler", null, "Document à régler entrant"),
     DELIVRY("Bon de livraison", "BuyDelivery", "Bon de livraison entrant"),
-    REFUND("Avoir", null, null);
+    // saisissable mais jamais créé librement : toujours généré depuis une facture (FEATURE-achat-avoirs.md D10)
+    REFUND("Avoir", "BuyRefundDebit", "Avoir fournisseur");
 
     private final String libelle;
     private final String gestion;
@@ -46,7 +47,7 @@ public enum NatureDocumentAchat {
                 .map(NatureDocumentAchat::libelle).orElse(docType);
     }
 
-    /** Nature créable et modifiable depuis la fiche (devis, BC, BL, facture) ; vide sinon. */
+    /** Nature créable et modifiable depuis la fiche (devis, BC, BL, facture, avoir) ; vide sinon. */
     public static Optional<NatureDocumentAchat> saisie(String docType) {
         return Arrays.stream(values()).filter(n -> n.gestion != null && n.name().equals(docType)).findFirst();
     }

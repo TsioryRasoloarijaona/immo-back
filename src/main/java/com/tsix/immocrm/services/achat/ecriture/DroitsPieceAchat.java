@@ -58,9 +58,10 @@ public class DroitsPieceAchat {
         exiger(peutModifier(nature, aLot));
     }
 
-    /** Natures saisissables dont le compte porte le code Achat « Nouveau » (jamais le code Projet › Lot). */
+    /** Natures saisissables hors avoir dont le compte porte le code Achat « Nouveau » (jamais le code Projet › Lot). */
     public List<String> naturesCreables() {
-        return Arrays.stream(NatureDocumentAchat.values()).filter(n -> NatureDocumentAchat.saisissable(n.name()))
+        return Arrays.stream(NatureDocumentAchat.values())
+                .filter(n -> n != NatureDocumentAchat.REFUND && NatureDocumentAchat.saisissable(n.name()))
                 .map(Enum::name).filter(n -> peutModifier(n, false)).toList();
     }
 

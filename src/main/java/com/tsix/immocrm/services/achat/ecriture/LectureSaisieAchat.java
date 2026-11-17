@@ -14,6 +14,7 @@ import com.tsix.immocrm.entities.prj.PrjProject;
 import com.tsix.immocrm.entities.stl.StlCategory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Avoir;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.EnTete;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Ligne;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer.Part;
@@ -49,10 +50,20 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
 
     private static final String MODULE_ACHAT = "BUY";
     private static final String CATEGORIE = "categorieId";
+    private static final String NATURE_NON_PRISE = "Nature non prise en charge";
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     static NatureDocumentAchat nature(String code) {
-        return NatureDocumentAchat.saisie(code).orElseThrow(() -> new InvalidRequestException("Nature non prise en charge"));
+        return NatureDocumentAchat.saisie(code).orElseThrow(() -> new InvalidRequestException(NATURE_NON_PRISE));
+    }
+
+    /** Nature d'une création : un avoir sans source n'est pas créable (FEATURE-achat-avoirs.md R8). */
+    static NatureDocumentAchat nature(String code, List<UUID> sources) {
+        NatureDocumentAchat n = nature(code);
+        if (n == NatureDocumentAchat.REFUND && (sources == null || sources.isEmpty())) {
+            throw new InvalidRequestException(NATURE_NON_PRISE);
+        }
+        return n;
     }
 
     ModelePieceAchatDto modele(NatureDocumentAchat nature, UUID declencheur) {
@@ -95,10 +106,12 @@ record LectureSaisieAchat(PerimetreProjetService perimetre, ConfigurationPieceAc
         List<Part> categories = categories(lignes, corps.categorieId(), lot);
         List<Part> projets = projets(corps);
         LocalDate date = corps.dateDocument();
+        boolean avoir = nature == NatureDocumentAchat.REFUND;
         EnTete e = new EnTete(corps.moduleId(), corps.projetId(), corps.lotId(), declencheur, date, corps.dateEcheance(),
                 corps.dateLivraisonSouhaitee(), texte(corps.referenceInterne()), texte(corps.personneAContacter()),
                 texte(corps.notes2()), texte(corps.referenceBureauOrdre()), zero(corps.montantRegul()),
-                zero(corps.timbreFiscal()));
+                zero(corps.timbreFiscal()), avoir ? new Avoir(zero(corps.montantHT()), zero(corps.montantTVA()),
+                corps.avoirFinancier()) : null);
         return new PieceAchatACreer(null, nature.gestion(), sansDepart(nature.gestion()), nature.name(), "", tiers,
                 corps.societeId(),
                 corps.typeMarcheId(), null, code -> "%s N° %s du %s".formatted(nature.libelle(), code, date.format(JOUR)),

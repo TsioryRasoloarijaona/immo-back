@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * Modèle d'une pièce générée (FEATURE-achat-generation.md G4, G5 ; OMRAN {@code DocumentBase.GenateDocFromDocs},
@@ -59,8 +60,12 @@ class PreremplissagePieceAchat {
         this.clock = clock;
     }
 
-    /** En-tête de la 1re source, sommes, date du jour, échéance recalculée d'une facture, ventilation projet de la 1re. */
-    SaisiePieceAchatRequest saisie(NatureDocumentAchat cible, List<BuyDocument> sources) {
+    /**
+     * En-tête de la 1re source, sommes, date du jour, échéance recalculée d'une facture, ventilation projet de la 1re.
+     * Avoir (OMRAN {@code Refund.cs:Create}) : toutes les lignes clonées, ni régul ni timbre ; facture sans ligne : HT,
+     * TVA et 1re catégorie ventilée recopiés. {@code avoirFinancier} : case par défaut, null hors avoir.
+     */
+    SaisiePieceAchatRequest saisie(NatureDocumentAchat cible, List<BuyDocument> sources, Boolean avoirFinancier) {
         BuyDocument p = sources.getFirst();
         LocalDate jour = LocalDate.now(clock);
         LocalDate echeance = cible == NatureDocumentAchat.INVOICE ? ecriture.echeance(jour,
@@ -69,19 +74,30 @@ class PreremplissagePieceAchat {
                         "SELECT v FROM BuyVentilationExpense v WHERE v.buyDocumentId = :piece", BuyVentilationExpense.class)
                 .setParameter("piece", p.getId()).getResultStream()
                 .map(v -> new PartVentilationAchat(v.getPrjProjectId(), v.getVentilationRate())).toList();
+        boolean avoir = cible == NatureDocumentAchat.REFUND;
+        List<LigneSaisieAchat> lignes = avoir ? lignesDe(p).map(l -> saisie(l, quantite(l.getQuantity()))).toList()
+                : lignes(cible, sources);
+        boolean sansLigne = avoir && lignes.isEmpty();
+        UUID categorie = sansLigne ? em.createQuery("SELECT v.stlCategoryId FROM BuyVentilationCategory v "
+                        + "WHERE v.buyDocumentId = :piece ORDER BY v.id ASC", UUID.class)
+                .setParameter("piece", p.getId()).setMaxResults(1).getResultStream().findFirst().orElse(null) : null;
         return new SaisiePieceAchatRequest(cible.name(), jour, echeance, jour, p.getCfgCompanyId(), p.getAdmModuleId(),
                 p.getCfgTierId(), p.getPrjProjectId(), p.getPrjMarketId(), p.getPrjMarketTypeId(), p.getCfgTierTriggerId(),
                 texte(p.getPersonToContact()), texte(p.getDocRef()), texte(p.getOfficeOrderRef()), texte(p.getNotes()),
-                texte(p.getNotes2()), somme(sources, BuyDocument::getAmountRegul),
-                somme(sources, BuyDocument::getFiscalStamp), null, lignes(cible, sources), projets,
-                sources.stream().map(BuyDocument::getId).toList());
+                texte(p.getNotes2()), avoir ? BigDecimal.ZERO : somme(sources, BuyDocument::getAmountRegul),
+                avoir ? BigDecimal.ZERO : somme(sources, BuyDocument::getFiscalStamp), categorie, lignes, projets,
+                sources.stream().map(BuyDocument::getId).toList(), sansLigne ? quantite(p.getAmountHT()) : null,
+                sansLigne ? quantite(p.getAmountVat()) : null, avoirFinancier);
+    }
+
+    private Stream<BuyDocumentLine> lignesDe(BuyDocument piece) {
+        return em.createQuery(LIGNES, BuyDocumentLine.class).setParameter("piece", piece.getId()).getResultStream();
     }
 
     /** Lignes de quantité non nulle fusionnées ; BL : restant à livrer du BC, lignes soldées omises (G5, Q-B). */
     List<LigneSaisieAchat> lignes(NatureDocumentAchat cible, List<BuyDocument> sources) {
         Map<Cle, LigneSaisieAchat> fusion = new LinkedHashMap<>();
-        sources.forEach(s -> em.createQuery(LIGNES, BuyDocumentLine.class).setParameter("piece", s.getId())
-                .getResultStream().filter(l -> quantite(l.getQuantity()).signum() != 0)
+        sources.forEach(s -> lignesDe(s).filter(l -> quantite(l.getQuantity()).signum() != 0)
                 .forEach(l -> fusion.merge(Cle.de(l), saisie(l, quantite(l.getQuantity())),
                         (a, b) -> avec(a, a.quantite().add(b.quantite())))));
         List<LigneSaisieAchat> lignes = List.copyOf(fusion.values());

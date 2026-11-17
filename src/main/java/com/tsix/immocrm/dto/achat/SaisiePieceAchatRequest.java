@@ -9,7 +9,8 @@ import java.util.UUID;
 
 @Schema(description = "Saisie d'une pièce d'achat (création ou modification) ; taux en fraction (0,2 = 20 %).")
 public record SaisiePieceAchatRequest(
-        @Schema(description = "Nature : QUOTE, ORDER, DELIVRY ou INVOICE ; ignorée en modification.", example = "ORDER")
+        @Schema(description = "Nature : QUOTE, ORDER, DELIVRY, INVOICE, ou REFUND avec sources ; ignorée en modification.",
+                example = "ORDER")
         String nature,
         @Schema(description = "Date de la pièce (DocDate), obligatoire.") LocalDate dateDocument,
         @Schema(description = "Échéance ; null = date + délai du lot, sinon du fournisseur.") LocalDate dateEcheance,
@@ -36,7 +37,33 @@ public record SaisiePieceAchatRequest(
         @Schema(description = "Ventilation des projets (PrjProject), taux en fraction ; obligatoire sans projetId.")
         List<PartVentilationAchat> ventilationProjets,
         @Schema(description = "Pièces sources d'une génération, dans l'ordre ; null ou vide = création libre ; ignoré en "
-                + "modification.") List<UUID> sources) {
+                + "modification.") List<UUID> sources,
+        @Schema(description = "Avoir sans ligne : total HT saisi (TTC = HT + TVA) ; ignoré avec des lignes ou hors avoir.")
+        BigDecimal montantHT,
+        @Schema(description = "Avoir sans ligne : total TVA saisi ; ignoré avec des lignes ou hors avoir.") BigDecimal montantTVA,
+        @Schema(description = "Avoir financier (IsFinancialRefund) ; null = valeur inchangée, paramètre par défaut à la "
+                + "création ; ignoré hors avoir.") Boolean avoirFinancier) {
+
+    /** Saisie sans les champs propres à l'avoir. */
+    public SaisiePieceAchatRequest(String nature, LocalDate dateDocument, LocalDate dateEcheance,
+                                   LocalDate dateLivraisonSouhaitee, UUID societeId, UUID moduleId, UUID fournisseurId,
+                                   UUID projetId, UUID lotId, UUID typeMarcheId, UUID declencheurId,
+                                   String personneAContacter, String referenceInterne, String referenceBureauOrdre,
+                                   String notes, String notes2, BigDecimal montantRegul, BigDecimal timbreFiscal,
+                                   UUID categorieId, List<LigneSaisieAchat> lignes,
+                                   List<PartVentilationAchat> ventilationProjets, List<UUID> sources) {
+        this(nature, dateDocument, dateEcheance, dateLivraisonSouhaitee, societeId, moduleId, fournisseurId, projetId,
+                lotId, typeMarcheId, declencheurId, personneAContacter, referenceInterne, referenceBureauOrdre, notes,
+                notes2, montantRegul, timbreFiscal, categorieId, lignes, ventilationProjets, sources, null, null, null);
+    }
+
+    /** La même saisie sur le lot, le fournisseur et la société donnés (ceux de la facture d'un avoir). */
+    public SaisiePieceAchatRequest pourAvoir(UUID lot, UUID fournisseur, UUID societe) {
+        return new SaisiePieceAchatRequest(nature, dateDocument, dateEcheance, dateLivraisonSouhaitee, societe, moduleId,
+                fournisseur, projetId, lot, typeMarcheId, declencheurId, personneAContacter, referenceInterne,
+                referenceBureauOrdre, notes, notes2, montantRegul, timbreFiscal, categorieId, lignes, ventilationProjets,
+                sources, montantHT, montantTVA, avoirFinancier);
+    }
 
     @Schema(description = "Ligne saisie d'une pièce d'achat (BuyDocumentLine).")
     public record LigneSaisieAchat(

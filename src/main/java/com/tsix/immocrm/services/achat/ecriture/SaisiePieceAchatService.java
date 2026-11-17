@@ -28,6 +28,8 @@ import java.util.UUID;
 @Service
 public class SaisiePieceAchatService {
 
+    private static final String FACTURE_INTROUVABLE = "La facture sélectionnée n'est pas présente dans notre référentiel !";
+
     private final FicheAchatService fiche;
     private final DroitsPieceAchat droits;
     private final ActionsPieceAchat actions;
@@ -51,8 +53,8 @@ public class SaisiePieceAchatService {
     /** Génération (FEATURE-achat-generation.md G1) : 400 nature, 404 sources, 403, 400 / 409 préconditions. */
     @Transactional(readOnly = true)
     public ModelePieceAchatDto modele(String nature, List<UUID> sources) {
-        NatureDocumentAchat n = LectureSaisieAchat.nature(nature);
-        List<BuyDocument> docs = sources(sources);
+        NatureDocumentAchat n = LectureSaisieAchat.nature(nature, sources);
+        List<BuyDocument> docs = sources(n, sources);
         droits.exigerModification(n.name(), !docs.isEmpty() && docs.getFirst().getPrjMarketId() != null);
         if (docs.isEmpty()) {
             return lecture.modele(n, ecriture.employeDuCompte());
@@ -63,10 +65,12 @@ public class SaisiePieceAchatService {
 
     /** Ordre : 400 nature, 404 société / projet / sources, 403 droit, 400 contenu, 409 génération ; séquence à l'écriture. */
     @Transactional
-    public DocumentAchatDetailDto creer(SaisiePieceAchatRequest corps) {
-        NatureDocumentAchat nature = LectureSaisieAchat.nature(corps.nature());
-        UUID declencheur = corps.declencheurId() != null ? corps.declencheurId() : ecriture.employeDuCompte();
-        List<BuyDocument> docs = sources(corps.sources());
+    public DocumentAchatDetailDto creer(SaisiePieceAchatRequest saisie) {
+        NatureDocumentAchat nature = LectureSaisieAchat.nature(saisie.nature(), saisie.sources());
+        UUID declencheur = saisie.declencheurId() != null ? saisie.declencheurId() : ecriture.employeDuCompte();
+        List<BuyDocument> docs = sources(nature, saisie.sources());
+        // lot, fournisseur, société d'un avoir = ceux de sa facture, avant le droit qui en dépend (FEATURE-achat-avoirs.md R5, R8, R14)
+        SaisiePieceAchatRequest corps = nature == NatureDocumentAchat.REFUND ? pourAvoir(saisie, docs.getFirst()) : saisie;
         PieceAchatACreer piece = lecture.piece(corps, nature, declencheur,
                 () -> droits.exigerModification(nature.name(), corps.lotId() != null), generation.bordereaux(docs));
         verifierIdsDeLignes(Set.of(), piece.lignes());
@@ -86,10 +90,12 @@ public class SaisiePieceAchatService {
 
     /** Ordre E-C5.1 : 404 pièce, 409 gérée ailleurs, 403, 409 lecture seule, 400 corps, 409 quantités du BC. */
     @Transactional
-    public DocumentAchatDetailDto modifier(UUID id, SaisiePieceAchatRequest corps) {
+    public DocumentAchatDetailDto modifier(UUID id, SaisiePieceAchatRequest saisie) {
         DocumentAchatListItemDto vue = fiche.visible(id)
                 .orElseThrow(() -> new ResourceNotFoundException(FicheAchatService.INTROUVABLE));
         BuyDocument d = Objects.requireNonNull(em.find(BuyDocument.class, id));
+        // lot, fournisseur, société d'un avoir : ceux de sa facture, jamais changés (FEATURE-achat-avoirs.md R5, R14)
+        SaisiePieceAchatRequest corps = NatureDocumentAchat.REFUND.name().equals(d.getDocType()) ? pourAvoir(saisie, d) : saisie;
         actions.refusModification(d, vue, corps.lotId() != null).ifPresent(refus -> {
             throw refus;
         });
@@ -103,10 +109,15 @@ public class SaisiePieceAchatService {
         return fiche.fiche(id);
     }
 
-    /** Sources visibles du compte (même règle que la fiche), dans l'ordre ; une seule invisible = 404. */
-    private List<BuyDocument> sources(List<UUID> ids) {
+    private static SaisiePieceAchatRequest pourAvoir(SaisiePieceAchatRequest saisie, BuyDocument piece) {
+        return saisie.pourAvoir(piece.getPrjMarketId(), piece.getCfgTierId(), piece.getCfgCompanyId());
+    }
+
+    /** Sources visibles du compte (même règle que la fiche), dans l'ordre ; une invisible = 404 (texte OMRAN si avoir). */
+    private List<BuyDocument> sources(NatureDocumentAchat cible, List<UUID> ids) {
+        String introuvable = cible == NatureDocumentAchat.REFUND ? FACTURE_INTROUVABLE : FicheAchatService.INTROUVABLE;
         return ids == null ? List.of() : ids.stream().distinct().map(id -> {
-            fiche.visible(id).orElseThrow(() -> new ResourceNotFoundException(FicheAchatService.INTROUVABLE));
+            fiche.visible(id).orElseThrow(() -> new ResourceNotFoundException(introuvable));
             BuyDocument source = Objects.requireNonNull(em.find(BuyDocument.class, id));
             em.refresh(source); // préconditions relues en base, pas dans le contexte d'une écriture native antérieure
             return source;

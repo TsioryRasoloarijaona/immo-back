@@ -165,6 +165,8 @@ public class BuyDocument extends AuditOmran {
     private Boolean isPropotionCharged;
     @Column(name = "IsAccounted")
     private Boolean isAccounted;
+    @Column(name = "IsFinancialRefund")
+    private Boolean isFinancialRefund;
     @Column(name = "LinesCount")
     private Integer linesCount;
 }
