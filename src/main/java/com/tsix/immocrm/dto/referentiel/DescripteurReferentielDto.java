@@ -20,6 +20,10 @@ public record DescripteurReferentielDto(
         @Schema(description = "Champs, dans l'ordre d'affichage.")
         List<ChampReferentielDto> champs,
         @Schema(description = "Vrai si le référentiel se lit seulement : POST, PATCH et DELETE répondent 409.")
-        boolean lectureSeule
+        boolean lectureSeule,
+        @Schema(description = "Vrai si l'appelant peut créer et modifier : droit OMRAN du référentiel, sinon rôle Administrateur.")
+        boolean peutEcrire,
+        @Schema(description = "Vrai si l'appelant peut supprimer : même règle que peutEcrire.")
+        boolean peutSupprimer
 ) {
 }

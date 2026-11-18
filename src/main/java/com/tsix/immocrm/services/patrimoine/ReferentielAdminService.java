@@ -8,6 +8,8 @@ import com.tsix.immocrm.domain.ReferentielAdmin.SousLignes;
 import com.tsix.immocrm.dto.referentiel.ChampReferentielDto;
 import com.tsix.immocrm.dto.referentiel.DescripteurReferentielDto;
 import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -90,10 +92,14 @@ public class ReferentielAdminService {
 
     public List<DescripteurReferentielDto> descripteurs() {
         return Arrays.stream(ReferentielAdmin.values())
-                .map(r -> new DescripteurReferentielDto(r.slug(), r.libelle(), r.famille().name(),
-                        r.proprieteTranche().isPresent(), r.codesProteges().stream().sorted().toList(),
-                        champs(r.champs(), r.cle(), r.sousLignes().orElse(null)), r.lectureSeule()))
+                .map(r -> descripteur(r, peutEcrire(r)))
                 .toList();
+    }
+
+    private DescripteurReferentielDto descripteur(ReferentielAdmin r, boolean peutEcrire) {
+        return new DescripteurReferentielDto(r.slug(), r.libelle(), r.famille().name(),
+                r.proprieteTranche().isPresent(), r.codesProteges().stream().sorted().toList(),
+                champs(r.champs(), r.cle(), r.sousLignes().orElse(null)), r.lectureSeule(), peutEcrire, peutEcrire);
     }
 
     public List<ReferentielItemDto> choix(String liste) {
@@ -241,6 +247,18 @@ public class ReferentielAdminService {
             droits.exiger(r.droit());
         }
         return r;
+    }
+
+    /** Écriture permise à l'appelant : droit OMRAN du référentiel s'il en a un, sinon rôle Administrateur ; jamais en lecture seule. */
+    private boolean peutEcrire(ReferentielAdmin r) {
+        if (r.lectureSeule()) {
+            return false;
+        }
+        if (r.droit() != null) {
+            return droits.parmi(r.droit()).contains(r.droit());
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> "ROLE_Administrateur".equals(a.getAuthority()));
     }
 
     /** Avant toute lecture du corps : un référentiel en lecture seule refuse toute écriture (409). */
