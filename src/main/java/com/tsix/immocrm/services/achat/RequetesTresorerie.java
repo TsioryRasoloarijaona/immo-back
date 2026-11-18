@@ -26,7 +26,7 @@ class RequetesTresorerie {
     private static final UUID AUCUN = new UUID(0, 0);
 
     private static final String LIGNE_VISIBLE = "((d.PKey IS NOT NULL AND " + RequetesDocumentsAchat.VISIBLE
-            + ") OR (lv.StlDocumentId IS NOT NULL AND :sansProjet = 1))";
+            + ") OR (lv.StlDocumentId IS NOT NULL AND :sansProjet = 1 AND sd.CfgCompanyId IN (:societes)))";
 
     private static final String JOUR_FILTRE = "CASE :dateSur WHEN 'ECHEANCE' THEN CAST(s.EcheanceDate AS date) "
             + "WHEN 'POINTAGE' THEN CAST(s.SettlementDate AS date) WHEN 'POINTAGE_REPORTE' THEN mv.Jour "

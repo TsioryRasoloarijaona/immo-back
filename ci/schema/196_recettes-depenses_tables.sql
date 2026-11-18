@@ -4,6 +4,15 @@ IF COL_LENGTH('dbo.StlDocumentLine', 'StlInvoiceLineId') IS NULL
 ALTER TABLE dbo.StlDocumentLine ADD StlInvoiceLineId uniqueidentifier NULL;
 GO
 
+-- Société et module de la pièce de recette (périmètre D4) ; déjà présents en CI (010_tables.sql).
+IF COL_LENGTH('dbo.StlDocument', 'CfgCompanyId') IS NULL
+ALTER TABLE dbo.StlDocument ADD CfgCompanyId uniqueidentifier NULL;
+GO
+
+IF COL_LENGTH('dbo.StlDocument', 'AdmModuleId') IS NULL
+ALTER TABLE dbo.StlDocument ADD AdmModuleId uniqueidentifier NULL;
+GO
+
 IF OBJECT_ID('dbo.StlVentilationCategory', 'U') IS NULL
 CREATE TABLE dbo.StlVentilationCategory (
     PKey uniqueidentifier NOT NULL,
