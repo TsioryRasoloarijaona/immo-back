@@ -11,6 +11,11 @@ IF COL_LENGTH(N'dbo.BulMeeting', N'UserCreateDateTime') IS NULL ALTER TABLE dbo.
 IF COL_LENGTH(N'dbo.BulMeeting', N'UserUpdate') IS NULL ALTER TABLE dbo.BulMeeting ADD UserUpdate nvarchar(255) NULL;
 IF COL_LENGTH(N'dbo.BulMeeting', N'UserUpdateDateTime') IS NULL ALTER TABLE dbo.BulMeeting ADD UserUpdateDateTime datetime NULL;
 IF COL_LENGTH(N'dbo.BulMeeting', N'BulMeetingTypeId') IS NULL ALTER TABLE dbo.BulMeeting ADD BulMeetingTypeId uniqueidentifier NULL;
+-- Niveaux de l'onglet Avancement : 165 n'a créé que PKey et CfgTrancheId.
+IF COL_LENGTH(N'dbo.CfgTrancheLevelingDefinition', N'Code') IS NULL
+    ALTER TABLE dbo.CfgTrancheLevelingDefinition ADD Code nvarchar(255) NULL;
+IF COL_LENGTH(N'dbo.CfgTrancheLevelingDefinition', N'Sorting') IS NULL
+    ALTER TABLE dbo.CfgTrancheLevelingDefinition ADD Sorting int NULL;
 GO
 IF OBJECT_ID(N'dbo.BulMeetingType', N'U') IS NULL
 CREATE TABLE dbo.BulMeetingType (PKey uniqueidentifier NOT NULL PRIMARY KEY, Sorting int NULL,
