@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +43,7 @@ public class PrevisionsChantierService {
     static final String DROIT = "Yes.Prj.Front.Definition.Project.ProjectList.BuildingPrevision";
     /** {@code decimal(26,6)} : 20 chiffres avant la virgule au plus. */
     private static final int CHIFFRES_ENTIERS = 20;
+    private static final int ECHELLE = 6;
     private static final int NOTES_MAX = 1000;
 
     private final PrjProjectRepository projets;
@@ -104,7 +106,11 @@ public class PrevisionsChantierService {
             throw new InvalidRequestException("lignes : la grille est obligatoire (liste vide pour tout supprimer).");
         }
         Set<UUID> vus = new HashSet<>();
-        for (LignePrevisionChantierSaisie s : saisie.lignes()) {
+        List<LignePrevisionChantierSaisie> lignes = saisie.lignes().stream()
+                .map(s -> new LignePrevisionChantierSaisie(s.typeTravauxId(), echelle(s.quantite()), echelle(s.prixUnitaireHT()),
+                        MontantsLot.pourcentage(echelle(MontantsLot.fraction(s.tva()))), s.notes()))
+                .toList();
+        for (LignePrevisionChantierSaisie s : lignes) {
             if (s.typeTravauxId() == null) {
                 throw new InvalidRequestException("typeTravauxId : le type de travaux est obligatoire.");
             }
@@ -121,7 +127,12 @@ public class PrevisionsChantierService {
                 throw new InvalidRequestException("notes : 1000 caractères au plus.");
             }
         }
-        return saisie.lignes();
+        return lignes;
+    }
+
+    /** Arrondi de la colonne {@code decimal(26,6)} appliqué avant la borne : la réponse du PUT = le GET suivant. */
+    private static BigDecimal echelle(BigDecimal valeur) {
+        return valeur == null ? null : valeur.setScale(ECHELLE, RoundingMode.HALF_UP);
     }
 
     private static void borne(BigDecimal valeur, String libelle) {
