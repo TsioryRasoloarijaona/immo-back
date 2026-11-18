@@ -394,6 +394,18 @@ public class LotsProjetService {
                 .orElseThrow(() -> new ResourceNotFoundException(LOT_INTROUVABLE));
     }
 
+    /** Lots d'un projet habilité inclus aux prévisions de paiement et de statut visible (FEATURE-n4-previsions-chantier.md). */
+    List<PrjMarket> lotsDesPrevisions(UUID projetId) {
+        Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
+        if (v.vide() || !v.projets().contains(projetId)) {
+            return List.of();
+        }
+        return v.lier(em.createQuery("select m from PrjMarket m join fetch m.prjProject left join fetch m.cfgSupplier left join fetch m.strStatus"
+                        + " where m.prjProject.id = :projet and m.prjProject.id in :projets and m.includedInPaymentPrevision = true"
+                        + STATUT_M + " order by m.code", PrjMarket.class))
+                .setParameter("projet", projetId).getResultList();
+    }
+
     /** Projet où l'appelant peut créer un lot : même règle que la liste (R3) ; 404 sinon. */
     PrjProject projetVisible(UUID projetId) {
         Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());

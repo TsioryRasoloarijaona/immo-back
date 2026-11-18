@@ -16,9 +16,11 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,13 +36,14 @@ import static java.math.BigDecimal.ZERO;
 @Component
 class LectureSimulationLot {
 
+    // Chaque requête rend le lot en 1ʳᵉ colonne (retirée par parLot) : une requête par table pour tous les lots.
     private static final String ECHEANCES = """
-            SELECT Ratio, EcheanceDate, Delay, Description FROM PrjMarketWarrantyLine
-            WHERE PrjMarketId = :lot ORDER BY Sorting ASC, EcheanceDate ASC""";
+            SELECT PrjMarketId, Ratio, EcheanceDate, Delay, Description FROM PrjMarketWarrantyLine
+            WHERE PrjMarketId IN (:lots) ORDER BY Sorting ASC, EcheanceDate ASC""";
 
     // P2 : décomptes facturés et leurs retenues stockées (C1, C3) ; multi-fournisseur : factures (seule leur date sert).
     private static final String DECOMPTES = """
-            SELECT w.PKey, w.DocDate, w.AmountTTC,
+            SELECT w.PrjMarketId, w.PKey, w.DocDate, w.AmountTTC,
                 w.AdvanceRatio, (SELECT SUM(a.AmountTTC) FROM BuyDocument a WHERE a.PrjMarketId = w.PrjMarketId
                     AND a.DocType = 'DOCUMENT_TO_PAY' AND a.ReferenceType = 'MARKET_ADVANCE'
                     AND CAST(a.DocDate AS date) <= CAST(w.DocDate AS date)), w.AdvanceAmount, w.AdvanceBasedOnAmount,
@@ -49,24 +52,24 @@ class LectureSimulationLot {
                 w.insuranceDECRatio, w.InsuranceDECAmountMax, w.insuranceDECAmount, w.DECBasedOnAmount,
                 w.insuranceTRCRatio, w.InsuranceTRCAmountMax, w.insuranceTRCAmount, w.TRCBasedOnAmount
             FROM PrjWorkingOut w
-            WHERE w.PrjMarketId = :lot AND w.BuyDocumentId IS NOT NULL AND w.DocDate IS NOT NULL
+            WHERE w.PrjMarketId IN (:lots) AND w.BuyDocumentId IS NOT NULL AND w.DocDate IS NOT NULL
             ORDER BY w.DocDate ASC, w.Sorting ASC""";
     private static final String FACTURES = """
-            SELECT PKey, DocDate, 0 FROM BuyDocument
-            WHERE PrjMarketId = :lot AND DocType = 'INVOICE' AND DocDate IS NOT NULL ORDER BY DocDate ASC""";
+            SELECT PrjMarketId, PKey, DocDate, 0 FROM BuyDocument
+            WHERE PrjMarketId IN (:lots) AND DocType = 'INVOICE' AND DocDate IS NOT NULL ORDER BY DocDate ASC""";
 
     private static final String AVANCES = """
-            SELECT AmountTTC FROM BuyDocument
-            WHERE PrjMarketId = :lot AND DocType = 'DOCUMENT_TO_PAY' AND ReferenceType = 'MARKET_ADVANCE'""";
+            SELECT PrjMarketId, AmountTTC FROM BuyDocument
+            WHERE PrjMarketId IN (:lots) AND DocType = 'DOCUMENT_TO_PAY' AND ReferenceType = 'MARKET_ADVANCE'""";
 
     private static final String AVENANTS = """
-            SELECT c.DocDate, c.AmountToPay FROM PrjClause c
-            WHERE c.PrjMarketId = :lot AND c.DocDate IS NOT NULL
+            SELECT c.PrjMarketId, c.DocDate, c.AmountToPay FROM PrjClause c
+            WHERE c.PrjMarketId IN (:lots) AND c.DocDate IS NOT NULL
               AND NOT EXISTS (SELECT 1 FROM BuyDocument f WHERE f.PrjClauseId = c.PKey AND f.DocType = 'INVOICE')""";
 
     // P10 : PrevisionAmount de BuyDocumentOrderView, recalculé sur les pièces liées (formules d'AgregatsBonCommande).
     private static final String BONS_COMMANDE = """
-            SELECT o.DocDate, o.Description, x.Prevision, o.AmountHT - ISNULL(f.H, 0), o.AmountTTC - ISNULL(f.T, 0)
+            SELECT o.PrjMarketId, o.DocDate, o.Description, x.Prevision, o.AmountHT - ISNULL(f.H, 0), o.AmountTTC - ISNULL(f.T, 0)
             FROM BuyDocument o
             JOIN BuyDocumentStatus s ON s.PKey = o.BuyDocumentStatusId AND s.IsOkForPayement = 1
             OUTER APPLY (SELECT SUM(d.AmountToPay) AS P FROM BuyDocument d
@@ -74,22 +77,16 @@ class LectureSimulationLot {
             OUTER APPLY (SELECT SUM(d.AmountToPay) AS P, SUM(d.AmountHT) AS H, SUM(d.AmountTTC) AS T FROM BuyDocument d
                          WHERE d.BuyOrderId = o.PKey AND d.DocType = 'INVOICE') f
             CROSS APPLY (SELECT ISNULL(o.AmountToPay, 0) - ISNULL(a.P, 0) - ISNULL(f.P, 0) AS Prevision) x
-            WHERE o.DocType = 'ORDER' AND o.PrjMarketId = :lot AND o.DocDate IS NOT NULL AND x.Prevision > 0""";
+            WHERE o.DocType = 'ORDER' AND o.PrjMarketId IN (:lots) AND o.DocDate IS NOT NULL AND x.Prevision > 0""";
 
     private final MontantsListeLots montants;
     private final AvancementDecomptes avancement;
     private final EntityManager em;
-    private final Clock clock;
 
-    LectureSimulationLot(MontantsListeLots montants, AvancementDecomptes avancement, EntityManager em, Clock clock) {
+    LectureSimulationLot(MontantsListeLots montants, AvancementDecomptes avancement, EntityManager em) {
         this.montants = montants;
         this.avancement = avancement;
         this.em = em;
-        this.clock = clock;
-    }
-
-    SimulationPaiementsLot.Estimation estimation(PrjMarket lot) {
-        return SimulationPaiementsLot.estimation(entrees(lot), LocalDate.now(clock));
     }
 
     List<SimulationPaiementsLot.Ligne> paiements(PrjMarket lot) {
@@ -97,34 +94,56 @@ class LectureSimulationLot {
     }
 
     EntreesSimulation entrees(PrjMarket lot) {
-        UUID id = lot.getId();
-        CalculLot calcul = Objects.requireNonNull(montants.calculer(List.of(lot)).get(id));
-        EntreesLot.Drapeaux d = calcul.drapeaux();
+        return Objects.requireNonNull(entrees(List.of(lot), montants.calculer(List.of(lot))).get(lot.getId()));
+    }
+
+    /** Entrées de plusieurs lots, une requête par table ; {@code calculs} = {@link MontantsListeLots#calculer} des mêmes lots. */
+    Map<UUID, EntreesSimulation> entrees(List<PrjMarket> lots, Map<UUID, CalculLot> calculs) {
+        List<UUID> ids = lots.stream().map(PrjMarket::getId).toList();
+        List<UUID> multi = ids.stream().filter(id -> calculs.get(id).drapeaux().multi()).toList();
+        List<UUID> simples = ids.stream().filter(id -> !multi.contains(id)).toList();
+        Map<UUID, AvancementDecomptes.Avancement> parDecompte = simples.isEmpty() ? Map.of() : avancement.parDecompte(simples);
+        Map<UUID, List<Point>> prevision = points(TablePoints.PREVISION, ids);
+        Map<UUID, List<Point>> base = points(TablePoints.BASE, ids);
+        Map<UUID, List<Echeance>> echeances = parLot(ECHEANCES, ids, r -> new Echeance(zero(montant(r[0])), date(r[1]),
+                r[2] instanceof Number n ? n.intValue() : 0, (String) r[3]));
+        Map<UUID, List<DecompteReel>> reels = new HashMap<>(reels(DECOMPTES, simples, parDecompte));
+        reels.putAll(reels(FACTURES, multi, Map.of()));
+        Map<UUID, List<BigDecimal>> avances = parLot(AVANCES, ids, r -> zero(montant(r[0])));
+        Map<UUID, List<LigneFixe>> avenants = parLot(AVENANTS, ids,
+                r -> new LigneFixe(date(r[0]), null, zero(montant(r[1])), ZERO, ZERO));
+        Map<UUID, List<LigneFixe>> commandes = parLot(BONS_COMMANDE, multi, r -> new LigneFixe(date(r[0]), (String) r[1],
+                zero(montant(r[2])), zero(montant(r[3])), zero(montant(r[4]))));
+        Map<UUID, EntreesSimulation> entrees = new HashMap<>();
+        for (PrjMarket lot : lots) {
+            UUID id = lot.getId();
+            CalculLot calcul = calculs.get(id);
+            EntreesLot.Drapeaux d = calcul.drapeaux();
+            entrees.put(id, new EntreesSimulation(new EntreesSimulation.Etat(d.multi(), d.annule(), d.annule() || d.termine(),
+                    d.gestionnaire(), d.blocage()), planning(lot), calcul.montantsPrevisions(), calcul.retenuesPrevisions(),
+                    prevision.getOrDefault(id, List.of()), base.getOrDefault(id, List.of()), echeances.getOrDefault(id, List.of()),
+                    reels.getOrDefault(id, List.of()), avances.getOrDefault(id, List.of()), avenants.getOrDefault(id, List.of()),
+                    commandes.getOrDefault(id, List.of())));
+        }
+        return entrees;
+    }
+
+    private static EntreesSimulation.Planning planning(PrjMarket lot) {
         LocalDate debutBase = jour(lot.getStartDateManual());
         int dureeBase = entier(lot.getDelayManual());
         LocalDate finBase = lot.getEndDateManual() != null || debutBase == null ? jour(lot.getEndDateManual())
                 : debutBase.plusDays(dureeBase);
-        EntreesSimulation.Planning planning = new EntreesSimulation.Planning(jour(lot.getStartDate()), entier(lot.getDelay()),
-                debutBase, dureeBase, finBase, jour(lot.getContractSignatureDate()), entier(lot.getPaymentDelay()),
-                lot.getWarrantyInMonths());
-        return new EntreesSimulation(new EntreesSimulation.Etat(d.multi(), d.annule(), d.annule() || d.termine(),
-                d.gestionnaire(), d.blocage()), planning, calcul.montantsPrevisions(), calcul.retenuesPrevisions(),
-                points(TablePoints.PREVISION, id), points(TablePoints.BASE, id),
-                lire(ECHEANCES, id, r -> new Echeance(zero(montant(r[0])), date(r[1]), r[2] instanceof Number n ? n.intValue() : 0,
-                        (String) r[3])),
-                d.multi() ? reels(FACTURES, id, Map.of()) : reels(DECOMPTES, id, avancement.parDecompte(List.of(id))),
-                lire(AVANCES, id, r -> zero(montant(r[0]))),
-                lire(AVENANTS, id, r -> new LigneFixe(date(r[0]), null, zero(montant(r[1])), ZERO, ZERO)),
-                d.multi() ? lire(BONS_COMMANDE, id, r -> new LigneFixe(date(r[0]), (String) r[1], zero(montant(r[2])),
-                        zero(montant(r[3])), zero(montant(r[4])))) : List.of());
+        return new EntreesSimulation.Planning(jour(lot.getStartDate()), entier(lot.getDelay()), debutBase, dureeBase, finBase,
+                jour(lot.getContractSignatureDate()), entier(lot.getPaymentDelay()), lot.getWarrantyInMonths());
     }
 
-    private List<Point> points(TablePoints table, UUID lot) {
-        return lire(table.lireSimulation, lot, r -> new Point(date(r[0]), zero(montant(r[1])), zero(montant(r[2]))));
+    private Map<UUID, List<Point>> points(TablePoints table, List<UUID> lots) {
+        return parLot(table.lireSimulation, lots, r -> new Point(date(r[0]), zero(montant(r[1])), zero(montant(r[2]))));
     }
 
-    private List<DecompteReel> reels(String sql, UUID lot, Map<UUID, AvancementDecomptes.Avancement> parDecompte) {
-        return lire(sql, lot, r -> {
+    private Map<UUID, List<DecompteReel>> reels(String sql, List<UUID> lots,
+                                                Map<UUID, AvancementDecomptes.Avancement> parDecompte) {
+        return parLot(sql, lots, r -> {
             AvancementDecomptes.Avancement a = parDecompte.get(uuid(r[0]));
             RetenuesStockees retenues = r.length > 3 ? new RetenuesStockees(retenue(r, 3), retenue(r, 7), retenue(r, 11),
                     retenue(r, 15), retenue(r, 19)) : RetenuesStockees.AUCUNES;
@@ -139,12 +158,20 @@ class LectureSimulationLot {
                 r[i + 3] instanceof Boolean b ? b : r[i + 3] instanceof Number n && n.intValue() != 0);
     }
 
-    private <T> List<T> lire(String sql, UUID lot, Function<Object[], T> ligne) {
-        List<?> brutes = em.createNativeQuery(sql).setParameter("lot", lot).getResultList();
-        return brutes.stream().map(b -> ligne.apply(b instanceof Object[] r ? r : new Object[]{b})).toList();
+    /** Lignes regroupées par lot (1ʳᵉ colonne, retirée), dans l'ordre de la requête ; aucune requête sans lot (IN () refusé). */
+    <T> Map<UUID, List<T>> parLot(String sql, List<UUID> lots, Function<Object[], T> ligne) {
+        Map<UUID, List<T>> parLot = new HashMap<>();
+        if (lots.isEmpty()) {
+            return parLot;
+        }
+        for (Object brute : em.createNativeQuery(sql).setParameter("lots", lots).getResultList()) {
+            Object[] r = (Object[]) brute;
+            parLot.computeIfAbsent(uuid(r[0]), k -> new ArrayList<>()).add(ligne.apply(Arrays.copyOfRange(r, 1, r.length)));
+        }
+        return parLot;
     }
 
-    private static LocalDate jour(LocalDateTime date) {
+    static LocalDate jour(LocalDateTime date) {
         return date == null ? null : date.toLocalDate();
     }
 
@@ -152,7 +179,7 @@ class LectureSimulationLot {
         return valeur == null ? 0 : valeur;
     }
 
-    private static BigDecimal zero(BigDecimal valeur) {
+    static BigDecimal zero(BigDecimal valeur) {
         return valeur == null ? ZERO : valeur;
     }
 }

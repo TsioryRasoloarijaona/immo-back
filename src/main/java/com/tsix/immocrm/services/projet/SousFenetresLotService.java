@@ -1,9 +1,9 @@
 package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.achat.SoldeDocumentAchat;
+import com.tsix.immocrm.domain.projet.AgregationPrevisionsProjet;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.NaturePieceLot;
-import com.tsix.immocrm.domain.projet.SimulationPaiementsLot;
 import com.tsix.immocrm.dto.projet.AvanceLotDto;
 import com.tsix.immocrm.dto.projet.AvancesLotDto;
 import com.tsix.immocrm.dto.projet.AvenantLotDto;
@@ -23,14 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.UUID;
 
 import static com.tsix.immocrm.services.projet.FacturesDecomptes.date;
@@ -77,35 +73,20 @@ public class SousFenetresLotService {
     private static final String TYPES_RECEPTION = "SELECT PKey, Description FROM PrjMarketReceptionType ORDER BY Code ASC";
     private static final String GENRES_RECEPTION = "SELECT PKey, Description, IsFinal FROM PrjMarketReceptionKind ORDER BY Code ASC";
 
-    private static final String PREVISIONS = """
-            SELECT PaymentDate, Amount, Achievement FROM PrjMarketPaymentPrevision
-            WHERE PrjMarketId = :lot AND PaymentDate IS NOT NULL""";
-
-    // Réel d'OMRAN (GetPaymentReal lit BuyDocumentToPayView, filtrée CanBePayed = 1) : hors avoirs, sans filtre société.
-    private static final String REEL = """
-            SELECT d.MaturityDate, d.AmountToPay FROM BuyDocument d
-            WHERE d.PrjMarketId = :lot AND d.CanBePayed = 1 AND d.DocType <> 'REFUND' AND d.MaturityDate IS NOT NULL""";
-
-    private static final String DECOMPTES_FACTURES = "select w.id, w.docDate from PrjWorkingOut w"
-            + " where w.prjMarket.id = :lot and w.buyDocument is not null and w.docDate is not null";
-
     private final LotsProjetService lots;
     private final DroitsPieceLot pieceLot;
-    private final AvancementDecomptes avancement;
     private final EntityManager em;
     private final DroitsOmran droits;
-    private final LectureSimulationLot simulation;
+    private final SeriesPrevisionsLots series;
     private final DateReceptionDefinitive dateDefinitive;
 
-    SousFenetresLotService(LotsProjetService lots, DroitsPieceLot pieceLot, AvancementDecomptes avancement,
-                           EntityManager em, DroitsOmran droits, LectureSimulationLot simulation,
-                           DateReceptionDefinitive dateDefinitive) {
+    SousFenetresLotService(LotsProjetService lots, DroitsPieceLot pieceLot, EntityManager em, DroitsOmran droits,
+                           SeriesPrevisionsLots series, DateReceptionDefinitive dateDefinitive) {
         this.lots = lots;
         this.pieceLot = pieceLot;
-        this.avancement = avancement;
         this.em = em;
         this.droits = droits;
-        this.simulation = simulation;
+        this.series = series;
         this.dateDefinitive = dateDefinitive;
     }
 
@@ -150,62 +131,11 @@ public class SousFenetresLotService {
 
     public PrevisionsLotDto previsions(UUID id) {
         PrjMarket lot = lots.visible(id);
-        boolean avecAvancement = !Boolean.TRUE.equals(lot.getIsMultiSupplier());
-        TreeMap<YearMonth, PointMois> points = new TreeMap<>();
-        SimulationPaiementsLot.Estimation estimation = simulation.estimation(lot);
-        estimation.lignes().forEach(l -> {
-            PointMois p = points.computeIfAbsent(YearMonth.from(l.date()), m -> new PointMois());
-            p.estimation = p.estimation.add(l.montant());
-        });
-        if (avecAvancement) {
-            // Points triés par date : la dernière valeur du mois l'emporte ; 0 après le début de base = null (E8).
-            LocalDate debutBase = DecomptesProjetService.jour(lot.getStartDateManual());
-            estimation.avancements().forEach(a -> points.computeIfAbsent(YearMonth.from(a.date()), m -> new PointMois())
-                    .avancementEstimation = a.avancement().signum() == 0 && debutBase != null && a.date().isAfter(debutBase)
-                    ? null : a.avancement());
-        }
-        for (Object[] r : lignes(duLot(PREVISIONS, lot.getId()))) {
-            PointMois p = points.computeIfAbsent(mois(r[0]), m -> new PointMois());
-            p.prevision = p.prevision.add(zero(montant(r[1])));
-            BigDecimal achevement = montant(r[2]);
-            if (avecAvancement && achevement != null && achevement.signum() >= 0) {
-                p.avancementPrevision = max(p.avancementPrevision, achevement);
-            }
-        }
-        for (Object[] r : lignes(duLot(REEL, lot.getId()))) {
-            PointMois p = points.computeIfAbsent(mois(r[0]), m -> new PointMois());
-            p.reel = p.reel.add(zero(montant(r[1])));
-        }
-        if (avecAvancement) {
-            avancementsReels(lot.getId(), points);
-        }
-        return serie(lot.getId(), points);
-    }
-
-    private void avancementsReels(UUID lot, TreeMap<YearMonth, PointMois> points) {
-        Map<UUID, AvancementDecomptes.Avancement> parDecompte = avancement.parDecompte(List.of(lot));
-        for (Object[] r : em.createQuery(DECOMPTES_FACTURES, Object[].class).setParameter("lot", lot).getResultList()) {
-            AvancementDecomptes.Avancement a = parDecompte.get(r[0]);
-            if (a != null) {
-                PointMois p = points.computeIfAbsent(YearMonth.from((LocalDateTime) r[1]), m -> new PointMois());
-                p.avancementReel = max(p.avancementReel, MontantsLot.fraction(a.avaPct()));
-            }
-        }
-    }
-
-    private PrevisionsLotDto serie(UUID lot, TreeMap<YearMonth, PointMois> points) {
-        boolean modifiable = DroitsPrevisionsLot.de(droits).saisir();
-        if (points.isEmpty()) {
-            return new PrevisionsLotDto(lot, null, modifiable, List.of());
-        }
-        List<PointPrevisionDto> mois = new ArrayList<>();
-        for (YearMonth m = points.firstKey().minusMonths(1); !m.isAfter(points.lastKey()); m = m.plusMonths(1)) {
-            PointMois p = points.getOrDefault(m, new PointMois());
-            // Sommes non arrondies : la moitié des montants prévus a plus de 2 décimales, Σ des mois = Σ de la table.
-            mois.add(new PointPrevisionDto(m.atDay(1), p.estimation, p.avancementEstimation, p.prevision, p.avancementPrevision, p.reel,
-                    p.avancementReel));
-        }
-        return new PrevisionsLotDto(lot, mois.getFirst().mois(), modifiable, mois);
+        // Sommes non arrondies : la moitié des montants prévus a plus de 2 décimales, Σ des mois = Σ de la table.
+        List<PointPrevisionDto> mois = new AgregationPrevisionsProjet(List.of(series.lire(List.of(lot)).getFirst().series()),
+                Map.of(lot.getId(), BigDecimal.ONE)).mois();
+        return new PrevisionsLotDto(lot.getId(), mois.isEmpty() ? null : mois.getFirst().mois(),
+                DroitsPrevisionsLot.de(droits).saisir(), mois);
     }
 
     /** Pièces DOCUMENT_TO_PAY du lot par ReferenceType (chaque type demandé présent, liste vide au besoin). */
@@ -236,23 +166,6 @@ public class SousFenetresLotService {
     private static List<Object[]> lignes(Query requete) {
         List<?> brutes = requete.getResultList();
         return brutes.stream().map(Object[].class::cast).toList();
-    }
-
-    private static final class PointMois {
-        private BigDecimal estimation = BigDecimal.ZERO;
-        private BigDecimal avancementEstimation;
-        private BigDecimal prevision = BigDecimal.ZERO;
-        private BigDecimal reel = BigDecimal.ZERO;
-        private BigDecimal avancementPrevision;
-        private BigDecimal avancementReel;
-    }
-
-    private static YearMonth mois(Object brut) {
-        return YearMonth.from(date(brut));
-    }
-
-    private static BigDecimal max(BigDecimal actuel, BigDecimal valeur) {
-        return actuel == null || valeur.compareTo(actuel) > 0 ? valeur : actuel;
     }
 
     private static BigDecimal zero(BigDecimal v) {

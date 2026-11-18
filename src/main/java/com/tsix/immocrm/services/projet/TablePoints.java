@@ -10,8 +10,8 @@ enum TablePoints {
             INSERT INTO PrjMarketPrevision (PKey, PrjMarketId, PointDate, PointAchivement, PointTime, PointPayment, PointAmount)
             VALUES (:id, :lot, :date, :avancement, :temps, :paiement, :montant)""",
             """
-            SELECT PointDate, PointAchivement, PointTime FROM PrjMarketPrevision
-            WHERE PrjMarketId = :lot AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC"""),
+            SELECT PrjMarketId, PointDate, PointAchivement, PointTime FROM PrjMarketPrevision
+            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC"""),
     BASE("""
             SELECT PKey, PointDate, PointAchivement, PointTime, PointPayment, PointAmount FROM PrjMarketUserPrevision
             WHERE PrjMarketId = :lot ORDER BY PointDate ASC""",
@@ -20,8 +20,8 @@ enum TablePoints {
             INSERT INTO PrjMarketUserPrevision (PKey, PrjMarketId, PointDate, PointAchivement, PointTime, PointPayment, PointAmount)
             VALUES (:id, :lot, :date, :avancement, :temps, :paiement, :montant)""",
             """
-            SELECT PointDate, PointAchivement, PointTime FROM PrjMarketUserPrevision
-            WHERE PrjMarketId = :lot AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""");
+            SELECT PrjMarketId, PointDate, PointAchivement, PointTime FROM PrjMarketUserPrevision
+            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""");
 
     final String lire;
     final String effacer;
