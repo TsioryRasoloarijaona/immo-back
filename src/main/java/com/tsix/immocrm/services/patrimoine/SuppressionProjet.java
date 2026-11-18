@@ -88,6 +88,12 @@ public record SuppressionProjet(EntityManager em, CfgProjectZoneRepository zones
         }
     }
 
+    /** 409 « Suppression impossible : <désignation> est utilisé par <n> <objets>. » (FEATURE-n8-nomenclature.md D3). */
+    public static ConflictException utilise(String designation, List<String> presents) {
+        return new ConflictException("Suppression impossible : %s est utilisé par %s."
+                .formatted(designation, String.join(", ", presents)));
+    }
+
     /** 409 listant chaque bloquant présent avec son nombre de lignes, sinon cascades puis suppression. */
     private void supprimer(Object entite, UUID id, String objet, List<Bloquant> bloquants, List<String> cascades) {
         List<String> presents = bloquants.stream()

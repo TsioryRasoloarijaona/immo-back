@@ -2,6 +2,7 @@ package com.tsix.immocrm.domain;
 
 import com.tsix.immocrm.entities.adm.AdmCountry;
 import com.tsix.immocrm.entities.adm.AdmSexType;
+import com.tsix.immocrm.entities.buy.BuyItemFamily;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolderStatusPaymentType;
@@ -40,7 +41,8 @@ public enum ReferenceAdmin {
     CATEGORIE_ARTICLE(StkItemCategory.class, "categories-article", null),
     PAYS(AdmCountry.class, "pays", null),
     TYPE_TIERS(CfgTierType.class, "types-tiers", null),
-    SEXE(AdmSexType.class, "sexes", null);
+    SEXE(AdmSexType.class, "sexes", null),
+    FAMILLE_ACHAT(BuyItemFamily.class, "familles-achat", null);
 
     private static final String CHOIX = "/api/referentiels-admin/choix/";
 
