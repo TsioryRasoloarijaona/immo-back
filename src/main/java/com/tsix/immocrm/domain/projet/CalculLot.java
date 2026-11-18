@@ -151,6 +151,18 @@ public final class CalculLot {
                 s(FAC_REMB_PRORATA), avancement, pourMulti);
     }
 
+    /** {@code PrevisionHT} de {@code PrjMarketMonitoringView} : poids du lot dans l'avancement d'un projet. */
+    public BigDecimal previsionHT() {
+        return premierNonNul(marcheAjuste.ht(), est.ht(), t.forfaitHT()).multiply(ratioAnnulation());
+    }
+
+    /** {@code PrevisionAmountToPay} de {@code PrjMarketMonitoringView} : TTC prévu − non remboursables + prorata remboursé. */
+    public BigDecimal previsionNetAPayer() {
+        BigDecimal nrr = premierNonNul(nonRemboursables(marcheAjuste.ttc()), nonRemboursables(est.ttc()));
+        return premierNonNul(marcheAjuste.ttc(), est.ttc(), t.forfaitTTC()).subtract(nrr).add(s(PREV_REMB_PRORATA))
+                .multiply(ratioAnnulation());
+    }
+
     public EntreesSimulation.Retenues retenuesPrevisions() {
         return new EntreesSimulation.Retenues(t.avance(), t.garantie(), t.prorata(), t.decRatio(), t.decMontant(), t.trcRatio(),
                 t.trcMontant(), s(AVANCE_DEC_VALIDEE).subtract(s(DEC_AVANCE_DECOMPTE)));
