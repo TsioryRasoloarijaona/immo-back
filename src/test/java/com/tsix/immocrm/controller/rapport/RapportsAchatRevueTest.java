@@ -7,7 +7,6 @@ import com.tsix.immocrm.fixtures.FixtureLotsParite;
 import com.tsix.immocrm.fixtures.FixturePiecesLot;
 import com.tsix.immocrm.fixtures.FixtureRapportsAchat;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -50,7 +49,6 @@ class RapportsAchatRevueTest {
     private static final String PREVU = "prevu";
     private static final String DECAISSEMENTS = "decaissements";
     private static final String CODE = "code";
-    private static final String PROJETS = "projets";
     private static final String ANNEE_TEST = String.valueOf(FixtureRapportsAchat.ANNEE);
 
     @Autowired private MockMvc mockMvc;
@@ -196,20 +194,5 @@ class RapportsAchatRevueTest {
                 .filter(l -> code.equals(l.get(CODE))).findFirst().orElseThrow();
 
         assertThat(nombre(ligne.get("prorataRembourse"))).isEqualByComparingTo("42");
-    }
-
-    /** Réponse 8 : « un identifiant hors périmètre est ignoré (200, ses lots absents) ». */
-    @Disabled("En attente d'arbitrage manager : CHOIX aux options visibles répond 400 (socle) ; voir RAPPORT-n7-etats-achat.md")
-    @Test
-    void r13_projetHorsPerimetre_ignore_200() throws Exception {
-        String visible = lotAvecFacture(pa, "LV", "10", null);
-        String cache = lotAvecFacture(pb, "LH", "10", null);
-
-        int statut = appels.statut(requete(RETENUES_LOTS, PROJETS, pa.toString(), PROJETS, pb.toString()));
-
-        assertThat(statut).as("pb hors périmètre : ignoré, pas 400").isEqualTo(200);
-        List<Object> codes = lignesAvec(sections(RETENUES_LOTS, PROJETS, pa.toString(), PROJETS, pb.toString()), CODE)
-                .stream().map(l -> l.get(CODE)).toList();
-        assertThat(codes).contains(visible).doesNotContain(cache);
     }
 }

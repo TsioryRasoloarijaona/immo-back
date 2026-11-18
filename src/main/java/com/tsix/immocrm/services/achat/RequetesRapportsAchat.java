@@ -25,7 +25,8 @@ import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.jour;
 
 /**
  * SQL natif des rapports Achat (FEATURE-n7-etats-achat.md R12, R14, R15) : toute pièce, prêt ou prévision de projet passe
- * par les prédicats de visibilité de {@link RequetesDocumentsAchat} (D3) ; seules les prévisions par catégorie n'en ont pas (Q4).
+ * par les prédicats de visibilité de {@link RequetesDocumentsAchat} (D3) ; les prévisions par catégorie, sans projet, par la
+ * seule société.
  */
 @Component
 class RequetesRapportsAchat {
@@ -39,7 +40,8 @@ class RequetesRapportsAchat {
 
     // R12 : (colonne, mois, montant) ; P = prévu, R = réel, D = décaissements.
     private static final String DEPENSES = "SELECT 'P' AS Colonne, PrevisionMonth AS Mois, SUM(PrevisionAmount) AS Montant "
-            + "FROM StlCategoryPrevision WHERE PrevisionYear = :annee GROUP BY PrevisionMonth "
+            + "FROM StlCategoryPrevision WHERE PrevisionYear = :annee AND CfgCompanyId IN (:societes) "
+            + "GROUP BY PrevisionMonth "
             + "UNION ALL SELECT 'P', d.PrevisionMonth, SUM(d.PrevisionAmount) FROM PrjPrevision d WHERE d.PrevisionYear = :annee "
             + "AND " + RequetesDocumentsAchat.PROJET_VISIBLE + "GROUP BY d.PrevisionMonth "
             + "UNION ALL SELECT 'P', MONTH(s.PaymentDate), SUM(s.AmountToPay)" + PRETS + "GROUP BY MONTH(s.PaymentDate) "
