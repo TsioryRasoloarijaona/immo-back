@@ -25,6 +25,9 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 import jakarta.persistence.TupleElement;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +49,7 @@ import java.util.stream.Stream;
 @Component
 public class LectureReunion {
 
+    static final String CHAMP_REUNION = "bulMeetingId";
     private static final String REUNION = "reunion";
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
 
@@ -68,11 +72,11 @@ public class LectureReunion {
 
     public ReunionFicheDto fiche(BulMeeting m) {
         UUID id = m.getId();
-        List<BulMeetingContact> maitres = lignes(BulMeetingContact.class, "bulMeetingId", List.of(id));
-        List<BulDelegate> delegues = lignes(BulDelegate.class, "bulMeetingId", List.of(id));
+        List<BulMeetingContact> maitres = lignes(BulMeetingContact.class, CHAMP_REUNION, List.of(id));
+        List<BulDelegate> delegues = lignes(BulDelegate.class, CHAMP_REUNION, List.of(id));
         List<BulDelegateContact> contacts = delegues.isEmpty() ? List.of()
                 : lignes(BulDelegateContact.class, "bulDelegateId", delegues.stream().map(BulDelegate::getId).toList());
-        List<BulMeetingLine> decisions = lignes(BulMeetingLine.class, "bulMeetingId", List.of(id));
+        List<BulMeetingLine> decisions = lignes(BulMeetingLine.class, CHAMP_REUNION, List.of(id));
         Map<UUID, String> tiers = libelles(CfgTier.class, Stream.of(
                 Stream.of(m.getCfgEmployeeId()),
                 maitres.stream().map(ContactReunionOmran::getContactId),
@@ -100,8 +104,8 @@ public class LectureReunion {
 
     /** R7 : 409 si une de ces décisions est reprise ({@code BulMeetingLineId}) par une autre réunion. */
     void refuserSiReprises(List<BulMeetingLine> decisions, UUID reunion) {
-        if (!decisions.isEmpty() && em.createQuery("""
-                        SELECT COUNT(l) FROM BulMeetingLine l WHERE l.bulMeetingLineId IN :decisions AND l.bulMeetingId <> :reunion""",
+        if (!decisions.isEmpty() && em.createQuery(
+                        "SELECT COUNT(l) FROM BulMeetingLine l WHERE l.bulMeetingLineId IN :decisions AND l.bulMeetingId <> :reunion",
                         Long.class)
                 .setParameter("decisions", decisions.stream().map(BulMeetingLine::getId).toList())
                 .setParameter(REUNION, reunion).getSingleResult() > 0) {
@@ -137,9 +141,11 @@ public class LectureReunion {
 
     /** Lignes de {@code classe} dont {@code propriete} est dans {@code parents}, par O.D.T. */
     <T> List<T> lignes(Class<T> classe, String propriete, Collection<UUID> parents) {
-        return em.createQuery("SELECT l FROM %s l WHERE l.%s IN :parents ORDER BY l.sorting ASC"
-                        .formatted(classe.getSimpleName(), propriete), classe)
-                .setParameter("parents", parents).getResultList();
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<T> q = cb.createQuery(classe);
+        Root<T> l = q.from(classe);
+        q.select(l).where(l.get(propriete).in(parents)).orderBy(cb.asc(l.get("sorting")));
+        return em.createQuery(q).getResultList();
     }
 
     private <T> Map<UUID, String> libelles(Class<T> classe, Stream<UUID> ids, Function<T, UUID> cle,
@@ -148,8 +154,10 @@ public class LectureReunion {
         if (cles.isEmpty()) {
             return Collections.emptyMap(); // pas Map.of() : get(null) y lève une NPE (lot ou tiers absent)
         }
-        return em.createQuery("SELECT o FROM %s o WHERE o.id IN :ids".formatted(classe.getSimpleName()), classe)
-                .setParameter("ids", cles).getResultList().stream()
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<T> q = cb.createQuery(classe);
+        Root<T> racine = q.from(classe);
+        return em.createQuery(q.select(racine).where(racine.get("id").in(cles))).getResultList().stream()
                 .collect(Collectors.toMap(cle, o -> Objects.toString(libelle.apply(o), "")));
     }
 

@@ -156,15 +156,15 @@ public class ReunionsService {
     public void supprimer(UUID id) {
         droits.exiger(SUPPRIMER);
         BulMeeting m = lecture.visible(id);
-        List<BulMeetingLine> decisions = lecture.lignes(BulMeetingLine.class, "bulMeetingId", List.of(id));
+        List<BulMeetingLine> decisions = lecture.lignes(BulMeetingLine.class, LectureReunion.CHAMP_REUNION, List.of(id));
         lecture.refuserSiReprises(decisions, id);
-        List<BulDelegate> delegues = lecture.lignes(BulDelegate.class, "bulMeetingId", List.of(id));
+        List<BulDelegate> delegues = lecture.lignes(BulDelegate.class, LectureReunion.CHAMP_REUNION, List.of(id));
         if (!delegues.isEmpty()) {
             ecriture.supprimer(lecture.lignes(BulDelegateContact.class, "bulDelegateId",
                     delegues.stream().map(BulDelegate::getId).toList()));
         }
         ecriture.supprimer(delegues);
-        ecriture.supprimer(lecture.lignes(BulMeetingContact.class, "bulMeetingId", List.of(id)));
+        ecriture.supprimer(lecture.lignes(BulMeetingContact.class, LectureReunion.CHAMP_REUNION, List.of(id)));
         ecriture.supprimer(decisions);
         ecriture.supprimer(em.createQuery(
                         "SELECT a FROM BulMeetingPrjProjectProgressCriteriaLine a WHERE a.bulMeetingId = :reunion",

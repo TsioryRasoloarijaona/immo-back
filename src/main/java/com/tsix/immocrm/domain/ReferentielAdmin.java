@@ -571,9 +571,10 @@ public enum ReferentielAdmin {
                 "AdmParamsGuid (valeurs par défaut)");
         static final List<ChampReferentiel> CODE_FIXE_LIBELLE = List.of(CODE_FIXE, DESCRIPTION);
         static final List<ChampReferentiel> TRI_CODE_FIXE = List.of(SORTING, CODE_FIXE, DESCRIPTION);
+        private static final String DESCRIPTION_CLE = "description";
         private static final ChampReferentiel PERSONNE = caseFixe("personnePhysique", "Personne physique", "isPerson");
         static final List<ChampReferentiel> PAYS = List.of(CODE_FIXE, texteFixe("isoAlpha3", "ISO alpha 3", "isoAlpha3"),
-                texte("description", "Nom français", "description", COURT).requis(),
+                texte(DESCRIPTION_CLE, "Nom français", DESCRIPTION_CLE, COURT).requis(),
                 texteFixe("nomAnglais", "Nom anglais", "descriptionAn"), texteFixe("nomIso", "Nom ISO", "isoName"),
                 texteFixe("codePays", "Code pays", "nationCode"), texteFixe("indicatif", "Indicatif tél.", "phoneCode"),
                 texteFixe("formatTelephone", "Format tél.", "phoneFormat"),
@@ -600,11 +601,11 @@ public enum ReferentielAdmin {
                 CATEGORIE_COMPTABLE, NOTES);
         private static final ChampReferentiel COULEUR = de("couleur", "Couleur", Type.COULEUR, "colorName");
         static final List<ChampReferentiel> TYPE_REUNION = List.of(SORTING.requis(),
-                texte("code", "Code", "code", 25).requis(), texte("description", "Description", "description", 25).requis());
+                texte("code", "Code", "code", 25).requis(), texte(DESCRIPTION_CLE, "Description", DESCRIPTION_CLE, 25).requis());
         static final List<ChampReferentiel> STATUT_RESERVE = List.of(SORTING, COULEUR, CODE, DESCRIPTION,
                 de("estFerme", "Est fermé", Type.BOOLEEN, "isClosed"));
         static final List<ChampReferentiel> PLAGE_COULEUR = List.of(SORTING.requis(), COULEUR.requis(),
-                texte("description", "Description", "description", COURT).requis(),
+                texte(DESCRIPTION_CLE, "Description", DESCRIPTION_CLE, COURT).requis(),
                 de("de", "De", Type.FRACTION, "startFrom"), de("a", "À", Type.FRACTION, "endTo"));
         /** PKey de {@code CfgTierType} FOU (OMRAN {@code CfgTierType.Supplier}), identique en production et en test. */
         static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
