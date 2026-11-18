@@ -12,9 +12,11 @@ import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
+import com.tsix.immocrm.services.droits.DroitsOmran;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.beans.BeanUtils;
@@ -49,6 +51,8 @@ public class ReferentielAdminService {
     private static final String CODE = "code";
     private static final String SORTING = "sorting";
     private static final String ANNEE = "annee";
+    /** Message OMRAN des écrans à droits (familles d'achat…), repris par les articles. */
+    public static final String CODE_EXISTANT = "Ce code existe déjà.";
     // EXEC n'ouvre pas la transaction implicite du pilote : sans BEGIN, sp_getapplock répond -999 si rien n'a encore
     // été lu ; le COMMIT/ROLLBACK du pilote (IF @@TRANCOUNT > 0) la referme.
     private static final String VERROU = """
@@ -71,13 +75,15 @@ public class ReferentielAdminService {
     private final TrancheVisibleRepository tranches;
     private final SuppressionProjet suppression;
     private final TracePatrimoine trace;
+    private final DroitsOmran droits;
 
     public ReferentielAdminService(EntityManager em, TrancheVisibleRepository tranches, SuppressionProjet suppression,
-                                   TracePatrimoine trace) {
+                                   TracePatrimoine trace, DroitsOmran droits) {
         this.em = em;
         this.tranches = tranches;
         this.suppression = suppression;
         this.trace = trace;
+        this.droits = droits;
     }
 
     // ------------------------------------------------------------------ lecture
@@ -128,7 +134,9 @@ public class ReferentielAdminService {
     @Transactional
     public Map<String, Object> creer(String slug, Map<String, Object> corps) {
         ReferentielAdmin r = ecrivable(slug);
-        Map<String, Object> valeurs = new HashMap<>(r.portee());
+        Map<String, Object> valeurs = new HashMap<>(r.defauts());
+        r.portee().forEach((k, v) -> valeurs.put(k, UUID.class.equals(BeanUtils.findPropertyType(k, r.classe()))
+                ? v : em.getReference(BeanUtils.findPropertyType(k, r.classe()), v)));
         valeurs.putAll(valeurs(r.champs(), r.classe(), corps, true));
         unicite(r, valeurs, null, null);
         Optional<List<Map<String, Object>>> enfants = enfantsSaisis(r, corps);
@@ -175,7 +183,8 @@ public class ReferentielAdminService {
         r.bloquants().forEach(b -> suppression.ajouterSiPresent(presents, b.jpql(), b.natif(), id,
                 "ligne(s) de " + b.table()));
         if (!presents.isEmpty()) {
-            throw new ConflictException("Suppression impossible : la ligne porte encore " + String.join(", ", presents) + ".");
+            Object code = bw.isReadableProperty(CODE) ? bw.getPropertyValue(CODE) : null;
+            throw SuppressionProjet.utilise(code == null ? r.libelle() : r.audit().libelle() + " " + code, presents);
         }
         // Écritures en attente d'abord : un refus vide la session (flushOuConflit), il ne doit emporter qu'elle.
         em.flush();
@@ -224,12 +233,18 @@ public class ReferentielAdminService {
 
     // ------------------------------------------------------------------ visibilité
 
-    private static ReferentielAdmin referentiel(String slug) {
-        return ReferentielAdmin.parSlug(slug).orElseThrow(() -> new ResourceNotFoundException("Référentiel inconnu : " + slug));
+    /** Référentiel gardé par un droit OMRAN : 403 sans lui, avant toute lecture (le contrôleur le laisse passer). */
+    private ReferentielAdmin referentiel(String slug) {
+        ReferentielAdmin r = ReferentielAdmin.parSlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Référentiel inconnu : " + slug));
+        if (r.droit() != null) {
+            droits.exiger(r.droit());
+        }
+        return r;
     }
 
     /** Avant toute lecture du corps : un référentiel en lecture seule refuse toute écriture (409). */
-    private static ReferentielAdmin ecrivable(String slug) {
+    private ReferentielAdmin ecrivable(String slug) {
         ReferentielAdmin r = referentiel(slug);
         if (r.lectureSeule()) {
             throw new ConflictException("Ce référentiel est en lecture seule.");
@@ -250,7 +265,7 @@ public class ReferentielAdminService {
     /** Règle R4 de la tranche portée ({@code TrancheVisibleRepository}) ; une ligne sans tranche est globale. */
     private boolean visible(ReferentielAdmin r, BeanWrapper bw, Map<UUID, Boolean> visibles) {
         boolean dansLaPortee = r.portee().entrySet().stream()
-                .allMatch(p -> Objects.equals(bw.getPropertyValue(p.getKey()), p.getValue()));
+                .allMatch(p -> Objects.equals(idDe(bw.getPropertyValue(p.getKey())), idDe(p.getValue())));
         UUID tranche = trancheDe(r, bw);
         return dansLaPortee && (tranche == null
                 || visibles.computeIfAbsent(tranche, t -> tranches.trancheVisible(t).isPresent()));
@@ -276,7 +291,10 @@ public class ReferentielAdminService {
         CriteriaQuery<T> q = cb.createQuery(classe);
         Root<T> racine = q.from(classe);
         q.select(racine).where(portee.entrySet().stream()
-                .map(p -> cb.equal(racine.get(p.getKey()), p.getValue())).toArray(Predicate[]::new));
+                .map(p -> {
+                    Path<Object> chemin = racine.get(p.getKey());
+                    return cb.equal(chemin.getJavaType() == UUID.class ? chemin : chemin.get(ID), p.getValue());
+                }).toArray(Predicate[]::new));
         return em.createQuery(q).getResultList();
     }
 
@@ -425,7 +443,8 @@ public class ReferentielAdminService {
         verrouiller(em, r.classe(), cle.toString(), r.libelle());
         q.select(cb.count(racine)).where(conditions.toArray(Predicate[]::new));
         if (em.createQuery(q).getSingleResult() > 0) {
-            throw new ConflictException("%s : une autre ligne a déjà %s.".formatted(r.libelle(), String.join(", ", doublon)));
+            throw new ConflictException(r.droit() != null ? CODE_EXISTANT
+                    : "%s : une autre ligne a déjà %s.".formatted(r.libelle(), String.join(", ", doublon)));
         }
     }
 
