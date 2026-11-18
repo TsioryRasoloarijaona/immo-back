@@ -41,7 +41,7 @@ public record FiltresTresorerie(
         Boolean comptabilise,
         @Parameter(description = "false : règlements annulés (CANCELED) exclus de la liste ; absent = true. Jamais dans les totaux.")
         Boolean inclureAnnules,
-        @Parameter(description = "Texte cherché dans la référence, la description, le tiers, le code reçu ou la référence externe.")
+        @Parameter(description = "Texte cherché dans la référence, la description, le tiers, le code reçu (règlement) ou la référence externe (pièce).")
         String recherche,
         @Parameter(description = "Page, à partir de 0 ; absent = 0.")
         Integer page,

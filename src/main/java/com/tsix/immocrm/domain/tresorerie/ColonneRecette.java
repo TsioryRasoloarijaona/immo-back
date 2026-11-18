@@ -78,6 +78,14 @@ public enum ColonneRecette {
     FICHE_PROPOSITION("ficheProposition", "Fiche de proposition", TEXTE, "E", ""),
     NOTES("notes", "Notes", TEXTE, "PE", "PE"),
     NOTES1("notes1", "Notes 2", TEXTE, "P", ""),
+    // Tranche, article et document lié : dérivés des pièces de vente / location (StlDocumentCfgTrancheView), vides en PRJ / BUY.
+    TRANCHE("tranche", "Tranche", TEXTE, "P", ""),
+    ARTICLE_CODE("articleCode", "Code article", TEXTE, "P", ""),
+    ARTICLE("article", "Article", TEXTE, "P", ""),
+    AVOIRS_CODES("avoirs", "Avoirs", TEXTE, "P", ""),
+    FACTURE_ORIGINE("factureOrigine", "Facture d'origine", TEXTE, "A", "P"),
+    DOCUMENT_LIE("documentLie", "Document lié", TEXTE, "P", ""),
+    CATEGORIE("categorie", "Catégorie", TEXTE, "P", ""),
     RS_REGLE("rsRegle", "RS réglée", BOOLEEN, "E", ""),
     DATE_REGLEMENT_RS("dateReglementRS", "Date de règlement RS", DATE, "E", ""),
     FICHE_RS("ficheRS", "Fiche RS", TEXTE, "E", ""),
@@ -91,8 +99,8 @@ public enum ColonneRecette {
     MODIFIE_PAR("modifiePar", "Modifié par", TEXTE, "PE", ""),
     MODIFIE_LE("modifieLe", "Modifié le", DATE, "PE", "");
 
-    /** P = pièces de recette ({@code StlDocument}), E = encaissements ({@code StlSettlement}). */
-    public enum Famille { PIECE, ENCAISSEMENT }
+    /** P = pièces de recette ({@code StlDocument}), E = encaissements ({@code StlSettlement}), A = avoirs seulement. */
+    public enum Famille { PIECE, ENCAISSEMENT, AVOIR }
 
     private final String cle;
     private final String libelle;

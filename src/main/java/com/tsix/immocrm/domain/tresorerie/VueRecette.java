@@ -44,6 +44,7 @@ public enum VueRecette {
     /** Colonnes de la grille OMRAN de la vue, dans l'ordre d'OMRAN. */
     public List<ColonneRecette> colonnes() {
         ColonneRecette.Famille famille = encaissements() ? ColonneRecette.Famille.ENCAISSEMENT : ColonneRecette.Famille.PIECE;
-        return Arrays.stream(ColonneRecette.values()).filter(c -> c.de(famille)).toList();
+        return Arrays.stream(ColonneRecette.values())
+                .filter(c -> c.de(famille) || (this == AVOIRS && c.de(ColonneRecette.Famille.AVOIR))).toList();
     }
 }

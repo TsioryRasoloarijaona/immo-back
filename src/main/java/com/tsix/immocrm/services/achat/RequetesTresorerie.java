@@ -32,7 +32,7 @@ class RequetesTresorerie {
             + "WHEN 'POINTAGE' THEN CAST(s.SettlementDate AS date) WHEN 'POINTAGE_REPORTE' THEN mv.Jour "
             + "ELSE CAST(s.DocDate AS date) END";
 
-    private static final String COLONNES_REGLEMENT = "SELECT s.PKey AS id, s.Code AS code, s.Description AS description, "
+    private static final String COLONNES_REGLEMENT = "SELECT s.PKey AS id, COALESCE(s.Code, s.ReceiptCode) AS code,s.Description AS description, "
             + "s.DocDate AS datePiece, s.EcheanceDate AS echeance, s.SettlementDate AS datePointage, "
             + "md.Origine AS dateMouvementOrigine, CAST(CASE WHEN mv.Jour <> md.Origine THEN 1 ELSE 0 END AS bit) "
             + "AS mouvementReporte, mv.Jour AS dateMouvement, MONTH(mv.Jour) AS moisMouvement, "
@@ -79,10 +79,11 @@ class RequetesTresorerie {
             + "LEFT JOIN PrjProject pp ON pp.PKey = d.PrjProjectId LEFT JOIN PrjMarket pm ON pm.PKey = d.PrjMarketId ";
 
     private static final String COLONNES_LIGNE = ", " + COLONNES_PIECE
-            + ", COALESCE(d.AmountToPay, sd.AmountToPay) AS MontantPiece, ca.Description AS Categorie ";
+            + ", COALESCE(d.AmountToPay, sd.AmountToPay) AS MontantPiece, "
+            + RequetesDocumentsAchat.CATEGORIES + " AS Categorie ";
 
     private static final String JOINTURES_LIGNE = "JOIN StlSettlementLine lv ON lv.StlSettlementId = s.PKey "
-            + JOINTURES_PIECE + "LEFT JOIN StlCategory ca ON ca.PKey = s.StlCategoryId ";
+            + JOINTURES_PIECE;
 
     /** Règlement visible : société habilitée ET (aucune ligne et sans-projet retenu, OU une ligne visible). */
     private static final String REGLEMENT_VISIBLE = "AND ((:sansProjet = 1 AND la.NbLignes = 0) OR EXISTS (SELECT 1 "
@@ -98,7 +99,8 @@ class RequetesTresorerie {
             + "AND (:comptabilise IS NULL OR ISNULL(s.IsAccounted, 0) = :comptabilise) "
             + "AND (:montantDe IS NULL OR s.Amount >= :montantDe) AND (:montantA IS NULL OR s.Amount <= :montantA) "
             + "AND (:inclureAnnules = 1 OR " + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + ") "
-            + "AND (:motif IS NULL OR s.Code LIKE :motif OR s.Description LIKE :motif OR ti.Description LIKE :motif) ";
+            + "AND (:motif IS NULL OR s.Code LIKE :motif OR s.Description LIKE :motif OR ti.Description LIKE :motif "
+            + "OR s.ReceiptCode LIKE :motif) ";
 
     private static final String TRI_REGLEMENT = "ORDER BY s.DocDate DESC, s.Code DESC";
 
@@ -117,7 +119,7 @@ class RequetesTresorerie {
 
     // StlDocument n'a pas de projet : la colonne nulle ajoutée laisse VISIBLE appliquer la règle « sans projet ».
     private static final String PIECES_RECETTE = "SELECT d.PKey AS id, "
-            + "d.PaymentAuthorizationDate AS dateAutorisationPaiement, d.DocType AS nature, d.Code AS code, "
+            + "d.PaymentAuthorizationDate AS dateAutorisationPaiement, en.Description AS nature,d.Code AS code, "
             + "d.Description AS description, d.DocDate AS datePiece, d.MaturityDate AS echeance, "
             + "d.IsAccounted AS comptabilise, co.Code AS societeCode, co.Description AS societe, cu.Code AS deviseCode, "
             + "cu.Description AS devise, mo.Description AS module, ti.Code AS tiersCode, ti.Description AS tiers, "
@@ -126,13 +128,22 @@ class RequetesTresorerie {
             + "d.AmountRefundedHT AS avoirHT, d.AmountRefundedVat AS avoirTVA, d.AmountRefundedTTC AS avoirTTC, "
             + "d.TotalHT AS totalHT, d.TotalVat AS totalTVA, d.TotalTTC AS totalTTC, d.AmountRegul AS regularisation, "
             + "d.FiscalStamp AS timbreFiscal, d.AmountToPay AS montantAPayer, (" + SoldeDocumentAchat.SQL_REGLE_RECETTE
-            + ") AS montantRegle, d.Notes AS notes, d.Notes1 AS notes1, bf.Code AS dossierAchatCode, "
+            + ") AS montantRegle, d.Notes AS notes, d.Notes1 AS notes1, "
+            + "(SELECT STRING_AGG(r.Code, ', ') FROM StlDocument r WHERE r.PKey IN (SELECT rl.StlDocumentId "
+            + "FROM StlDocumentLine rl JOIN StlDocumentLine il ON il.Pkey = rl.StlInvoiceLineId "
+            + "WHERE il.StlDocumentId = d.PKey)) AS avoirs, "
+            + "(SELECT STRING_AGG(f.Code, ', ') FROM StlDocument f WHERE f.PKey IN (SELECT il.StlDocumentId "
+            + "FROM StlDocumentLine il JOIN StlDocumentLine rl ON rl.StlInvoiceLineId = il.Pkey "
+            + "WHERE rl.StlDocumentId = d.PKey)) AS factureOrigine, "
+            + "(SELECT STRING_AGG(sc.Description, ', ') WITHIN GROUP (ORDER BY sc.Description ASC) "
+            + "FROM StlVentilationCategory v JOIN StlCategory sc ON sc.PKey = v.StlCategoryId "
+            + "WHERE v.StlDocumentId = d.PKey) AS categorie, bf.Code AS dossierAchatCode, "
             + "bf.Description AS dossierAchat, d.UserCreate AS creePar, d.UserCreateDateTime AS creeLe, "
             + "d.UserUpdate AS modifiePar, d.UserUpdateDateTime AS modifieLe "
             + "FROM (SELECT x.*, CAST(NULL AS uniqueidentifier) AS PrjProjectId FROM StlDocument x) d "
             + "JOIN AdmModule mo ON mo.PKey = d.AdmModuleId LEFT JOIN CfgCompany co ON co.PKey = d.CfgCompanyId "
             + "LEFT JOIN StlCurrency cu ON cu.PKey = d.StlCurrencyId LEFT JOIN CfgTier ti ON ti.PKey = d.CfgTierId "
-            + "LEFT JOIN BuyFolder bf ON bf.Pkey = d.BuyFolderId "
+            + "LEFT JOIN BuyFolder bf ON bf.Pkey = d.BuyFolderId LEFT JOIN StrEntity en ON en.PKey = d.StrEntityId "
             + "WHERE " + RequetesDocumentsAchat.VISIBLE + "AND d.DocType = :nature AND mo.Code = :module "
             + "AND (:du IS NULL OR CAST(CASE :dateSur WHEN 'ECHEANCE' THEN d.MaturityDate ELSE d.DocDate END AS date) "
             + ">= :du) AND (:au IS NULL OR CAST(CASE :dateSur WHEN 'ECHEANCE' THEN d.MaturityDate ELSE d.DocDate END "
@@ -140,7 +151,8 @@ class RequetesTresorerie {
             + "AND (:comptabilise IS NULL OR ISNULL(d.IsAccounted, 0) = :comptabilise) "
             + "AND (:montantDe IS NULL OR d.AmountToPay >= :montantDe) "
             + "AND (:montantA IS NULL OR d.AmountToPay <= :montantA) "
-            + "AND (:motif IS NULL OR d.Code LIKE :motif OR d.Description LIKE :motif OR ti.Description LIKE :motif) "
+            + "AND (:motif IS NULL OR d.Code LIKE :motif OR d.Description LIKE :motif OR ti.Description LIKE :motif "
+            + "OR d.DocRef LIKE :motif) "
             + "ORDER BY d.DocDate DESC, d.Code DESC";
 
     private final NamedParameterJdbcTemplate jdbc;

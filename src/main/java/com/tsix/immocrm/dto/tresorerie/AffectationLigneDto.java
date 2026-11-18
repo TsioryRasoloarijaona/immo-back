@@ -25,7 +25,7 @@ public record AffectationLigneDto(
         String banque,
         String compte,
         @Schema(description = "Code du module du règlement.", example = "PRJ") String module,
-        @Schema(description = "Catégorie de trésorerie (StlCategory) du règlement.") String categorie,
+        @Schema(description = "Catégories de la ventilation de la pièce, séparées par une virgule.") String categorie,
         String societe,
         @Schema(description = "Code du projet de la pièce.") String projet,
         @Schema(description = "Toujours null ici : tranche des pièces de vente, hors périmètre.") String tranche,

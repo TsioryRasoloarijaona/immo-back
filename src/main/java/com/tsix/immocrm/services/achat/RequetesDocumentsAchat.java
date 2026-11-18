@@ -69,7 +69,8 @@ class RequetesDocumentsAchat {
             + "OR (:sansProjet = 1 AND d.PrjProjectId IS NULL)) AND (:moduleProjet = 0 OR d.AdmModuleId IN "
             + "(SELECT am.PKey FROM AdmModule am WHERE am.Code = N'PRJ')) ";
 
-    private static final String CATEGORIES = "(SELECT STRING_AGG(sc.Description, ', ') WITHIN GROUP "
+    /** Catégories de la ventilation de la pièce {@code d}, une chaîne (NULL sans ventilation). */
+    static final String CATEGORIES = "(SELECT STRING_AGG(sc.Description, ', ') WITHIN GROUP "
             + "(ORDER BY sc.Description ASC) FROM BuyVentilationCategory v JOIN StlCategory sc ON sc.PKey = v.StlCategoryId "
             + "WHERE v.BuyDocumentId = d.PKey)";
 
