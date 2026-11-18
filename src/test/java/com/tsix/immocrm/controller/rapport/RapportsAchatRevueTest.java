@@ -4,6 +4,7 @@ import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.fixtures.FixtureAchat;
 import com.tsix.immocrm.fixtures.FixtureLotFiche;
 import com.tsix.immocrm.fixtures.FixtureLotsParite;
+import com.tsix.immocrm.fixtures.FixturePiecesLot;
 import com.tsix.immocrm.fixtures.FixtureRapportsAchat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -57,6 +58,7 @@ class RapportsAchatRevueTest {
     @Autowired private FixtureRapportsAchat fixture;
     @Autowired private FixtureLotsParite parite;
     @Autowired private FixtureLotFiche fiche;
+    @Autowired private FixturePiecesLot pieces;
 
     private AppelsRapports appels;
     private String jeton;
@@ -66,6 +68,7 @@ class RapportsAchatRevueTest {
     private UUID pb;
     private UUID p2;
     private AdmUser compte;
+    private UUID dernierLot;
 
     @BeforeEach
     void setUp() {
@@ -150,6 +153,7 @@ class RapportsAchatRevueTest {
         UUID statut = parite.statut(ENTREPRENEURS, "N7R-" + prefixe + "-" + jeton);
         String code = prefixe + "-" + jeton;
         UUID lot = parite.lot(projet, code, ENTREPRENEURS, statut);
+        dernierLot = lot;
         UUID facture = fiche.factureLot(lot, code + "-F", "800", "960");
         achat.poser(facture, "WarrantyAmount", new BigDecimal(retenue));
         if (remboursementProrata != null) {
@@ -171,6 +175,27 @@ class RapportsAchatRevueTest {
 
         assertThat(Objects.requireNonNullElse(nombre(ligne.get("prorataRembourse")), BigDecimal.ZERO))
                 .isEqualByComparingTo("42");
+    }
+
+    /**
+     * Discriminant du correctif : une pièce de remboursement de compte prorata (gestion F9091D83, {@code PROPORTION}) et une
+     * facture d'avenant B622 ne comptent pas ; l'ancienne source ({@code retenueGarantie().remboursement()}) rendait 42 + 500.
+     */
+    @Test
+    void r13_prorataRembourse_horsPieceRemboursementEtFactureAvenant() throws Exception {
+        String code = lotAvecFacture(pa, "LD", "10", "42");
+        UUID lot = dernierLot;
+        pieces.entite(FixturePiecesLot.GESTION_RCP, "PrjDocumentDebitMarketProrataRefund");
+        fiche.pieceLot(lot, code + "-R", "DOCUMENT_TO_PAY", FixturePiecesLot.MARKET_PROPORTION, FixturePiecesLot.GESTION_RCP,
+                new BigDecimal("500"), new BigDecimal("500"));
+        UUID avenant = fiche.pieceLot(lot, code + "-A", "INVOICE", null, FixtureLotFiche.ENTITE_FACTURE_AVENANT,
+                new BigDecimal("100"), new BigDecimal("120"));
+        achat.poser(avenant, "ProrataRefundAmount", new BigDecimal("7000"));
+
+        Map<String, Object> ligne = lignesAvec(sections(RETENUES_LOTS), CODE).stream()
+                .filter(l -> code.equals(l.get(CODE))).findFirst().orElseThrow();
+
+        assertThat(nombre(ligne.get("prorataRembourse"))).isEqualByComparingTo("42");
     }
 
     /** Réponse 8 : « un identifiant hors périmètre est ignoré (200, ses lots absents) ». */
