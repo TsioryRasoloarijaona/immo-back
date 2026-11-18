@@ -157,13 +157,7 @@ public class ReunionsService {
         droits.exiger(SUPPRIMER);
         BulMeeting m = lecture.visible(id);
         List<BulMeetingLine> decisions = lecture.lignes(BulMeetingLine.class, "bulMeetingId", List.of(id));
-        if (!decisions.isEmpty() && em.createQuery("""
-                        SELECT COUNT(l) FROM BulMeetingLine l WHERE l.bulMeetingLineId IN :decisions AND l.bulMeetingId <> :reunion""",
-                        Long.class)
-                .setParameter("decisions", decisions.stream().map(BulMeetingLine::getId).toList())
-                .setParameter(REUNION, id).getSingleResult() > 0) {
-            throw new ConflictException("Une décision de cette réunion est reprise par une réunion suivante.");
-        }
+        lecture.refuserSiReprises(decisions, id);
         List<BulDelegate> delegues = lecture.lignes(BulDelegate.class, "bulMeetingId", List.of(id));
         if (!delegues.isEmpty()) {
             ecriture.supprimer(lecture.lignes(BulDelegateContact.class, "bulDelegateId",

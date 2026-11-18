@@ -20,6 +20,7 @@ import com.tsix.immocrm.entities.bul.ContactReunionOmran;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.entities.prj.PrjProject;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import jakarta.persistence.EntityManager;
@@ -95,6 +96,17 @@ public class LectureReunion {
                                 .toList())).toList(),
                 decisions.stream().map(l -> decision(l, lots, tiers, observations)).toList(),
                 avancements(m));
+    }
+
+    /** R7 : 409 si une de ces décisions est reprise ({@code BulMeetingLineId}) par une autre réunion. */
+    void refuserSiReprises(List<BulMeetingLine> decisions, UUID reunion) {
+        if (!decisions.isEmpty() && em.createQuery("""
+                        SELECT COUNT(l) FROM BulMeetingLine l WHERE l.bulMeetingLineId IN :decisions AND l.bulMeetingId <> :reunion""",
+                        Long.class)
+                .setParameter("decisions", decisions.stream().map(BulMeetingLine::getId).toList())
+                .setParameter(REUNION, reunion).getSingleResult() > 0) {
+            throw new ConflictException("Décision reprise par une réunion suivante.");
+        }
     }
 
     /** Statuts de réserve par O.D.T. */

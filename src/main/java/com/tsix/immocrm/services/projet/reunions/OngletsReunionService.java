@@ -61,6 +61,9 @@ public class OngletsReunionService {
         BulMeeting m = reunion(id);
         List<UUID> contacts = corps.contactIds() == null ? List.of()
                 : corps.contactIds().stream().filter(Objects::nonNull).distinct().toList();
+        if (contacts.isEmpty()) {
+            throw new InvalidRequestException("Choisissez au moins un contact.");
+        }
         contacts.forEach(this::tiers);
         List<BulMeetingContact> presents = lecture.lignes(BulMeetingContact.class, REUNION, List.of(id));
         int ordre = presents.size();
@@ -179,7 +182,9 @@ public class OngletsReunionService {
 
     public ReunionFicheDto supprimerDecision(UUID id, UUID ligneId) {
         BulMeeting m = reunion(id);
-        ecriture.supprimer(List.of(ligne(BulMeetingLine.class, ligneId, BulMeetingLine::getBulMeetingId, id)));
+        List<BulMeetingLine> decision = List.of(ligne(BulMeetingLine.class, ligneId, BulMeetingLine::getBulMeetingId, id));
+        lecture.refuserSiReprises(decision, id);
+        ecriture.supprimer(decision);
         return fiche(m);
     }
 
