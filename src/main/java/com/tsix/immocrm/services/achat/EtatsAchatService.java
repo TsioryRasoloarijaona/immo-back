@@ -14,6 +14,7 @@ import com.tsix.immocrm.dto.achat.SuiviAvancesDto.TotauxSuiviAvancesDto;
 import com.tsix.immocrm.dto.achat.SuiviRetenuesDto;
 import com.tsix.immocrm.dto.achat.SuiviRetenuesDto.LigneSuiviRetenueDto;
 import com.tsix.immocrm.dto.achat.SuiviRetenuesDto.TotauxSuiviRetenuesDto;
+import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.achat.RequetesEtatsAchat.LigneSuivi;
 import com.tsix.immocrm.services.achat.RequetesEtatsAchat.LigneTva;
 import com.tsix.immocrm.services.droits.DroitsOmran;
@@ -101,8 +102,23 @@ public class EtatsAchatService {
                 new TotauxSuiviRetenuesDto(t.premier(), t.deuxieme(), t.troisieme()));
     }
 
+    /** Classeur d'un état : préfixe du fichier, titre, feuilles. */
+    public record Export(String fichier, String titre, List<FeuilleExport> feuilles) {
+    }
+
+    /** Export de l'état {@code etat} (segment de route) ; 404 si inconnu. */
+    public Export export(String etat, FiltresEtatsAchat f) {
+        return switch (etat) {
+            case "tva-deductible" -> new Export(etat, "État de la TVA déductible", exportTva(f));
+            case "avances" -> new Export("suivi-avances", "Suivi des avances", exportSuivi(SuiviAchat.AVANCES, f));
+            case "retenues-garantie" -> new Export("suivi-retenues-garantie", "Suivi des retenues de garantie",
+                    exportSuivi(SuiviAchat.RETENUES, f));
+            default -> throw new ResourceNotFoundException("État inconnu : " + etat);
+        };
+    }
+
     /** Feuilles DONNEES (lignes + Total) et PAR_MOIS de l'export de la TVA déductible. */
-    public List<FeuilleExport> exportTva(FiltresEtatsAchat f) {
+    private List<FeuilleExport> exportTva(FiltresEtatsAchat f) {
         EtatTvaDeductibleDto etat = tvaDeductible(f);
         TotauxTvaDeductibleDto t = etat.totaux();
         return List.of(new FeuilleExport(ExportTableur.FEUILLE, COLONNES_TVA, etat.lignes(),
@@ -111,7 +127,7 @@ public class EtatsAchatService {
     }
 
     /** Feuille DONNEES (lignes + Total) de l'export d'un suivi ; exige aussi le droit d'export. */
-    public List<FeuilleExport> exportSuivi(SuiviAchat suivi, FiltresEtatsAchat f) {
+    private List<FeuilleExport> exportSuivi(SuiviAchat suivi, FiltresEtatsAchat f) {
         droits.exiger(suivi.droitExport());
         List<LigneSuivi> lignes = suivi(suivi, f);
         Montants t = totaux(lignes);

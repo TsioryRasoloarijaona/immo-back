@@ -1,7 +1,6 @@
 package com.tsix.immocrm.controller.achat;
 
 import com.tsix.immocrm.domain.TypeExport;
-import com.tsix.immocrm.domain.achat.SuiviAchat;
 import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
 import com.tsix.immocrm.dto.achat.DocumentAchatListItemDto;
 import com.tsix.immocrm.dto.achat.EtatTvaDeductibleDto;
@@ -265,20 +264,24 @@ public class DocumentsAchatController {
         return etats.tvaDeductible(filtres);
     }
 
-    @GetMapping("/etats/tva-deductible/export")
-    @Operation(summary = "Export Excel de l'état de la TVA déductible : feuilles DONNEES (avec Total) et PAR_MOIS")
+    @GetMapping("/etats/{etat}/export")
+    @Operation(summary = "Export Excel d'un état : mêmes filtres et mêmes lignes, ligne Total")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx.",
+            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES (+ PAR_MOIS pour la TVA).",
                     content = @Content(schema = @Schema(type = "string", format = "binary"), mediaType = MIME_XLSX)),
             @ApiResponse(responseCode = "400", description = PERIODE_400 + " Format autre que xlsx.", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Droit OMRAN Yes.Buy.Front.Tdb.VatStatement absent.",
-                    content = @Content)
+            @ApiResponse(responseCode = "403", description = "Droit de l'écran absent (et .toolExport pour les suivis).",
+                    content = @Content),
+            @ApiResponse(responseCode = "404", description = "État inconnu.", content = @Content)
     })
-    public ResponseEntity<StreamingResponseBody> exporterTvaDeductible(
+    public ResponseEntity<StreamingResponseBody> exporterEtat(
+            @Parameter(description = "État exporté.", schema = @Schema(allowableValues = {"tva-deductible", "avances",
+                    "retenues-garantie"})) @PathVariable String etat,
             @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) @Parameter(example = ExportTableur.FORMAT_XLSX)
             String format, @ParameterObject @ModelAttribute FiltresEtatsAchat filtres) {
         ExportTableur.exigerXlsx(format);
-        return exportTableur.reponse("tva-deductible", "État de la TVA déductible", etats.exportTva(filtres));
+        EtatsAchatService.Export export = etats.export(etat, filtres);
+        return exportTableur.reponse(export.fichier(), export.titre(), export.feuilles());
     }
 
     @GetMapping("/etats/avances")
@@ -293,21 +296,6 @@ public class DocumentsAchatController {
         return etats.avances(filtres);
     }
 
-    @GetMapping("/etats/avances/export")
-    @Operation(summary = "Export Excel du suivi des avances : mêmes lignes, ligne Total")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
-                    content = @Content(schema = @Schema(type = "string", format = "binary"), mediaType = MIME_XLSX)),
-            @ApiResponse(responseCode = "400", description = PERIODE_400 + " Format autre que xlsx.", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Droit de l'écran ou son .toolExport absent.", content = @Content)
-    })
-    public ResponseEntity<StreamingResponseBody> exporterAvances(
-            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) @Parameter(example = ExportTableur.FORMAT_XLSX)
-            String format, @ParameterObject @ModelAttribute FiltresEtatsAchat filtres) {
-        ExportTableur.exigerXlsx(format);
-        return exportTableur.reponse("suivi-avances", "Suivi des avances", etats.exportSuivi(SuiviAchat.AVANCES, filtres));
-    }
-
     @GetMapping("/etats/retenues-garantie")
     @Operation(summary = "Suivi des retenues de garantie de la période : lignes et totaux hors pièces annulées")
     @ApiResponses({
@@ -318,22 +306,6 @@ public class DocumentsAchatController {
     })
     public SuiviRetenuesDto retenuesGarantie(@ParameterObject @ModelAttribute FiltresEtatsAchat filtres) {
         return etats.retenues(filtres);
-    }
-
-    @GetMapping("/etats/retenues-garantie/export")
-    @Operation(summary = "Export Excel du suivi des retenues de garantie : mêmes lignes, ligne Total")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Classeur .xlsx, feuille DONNEES.",
-                    content = @Content(schema = @Schema(type = "string", format = "binary"), mediaType = MIME_XLSX)),
-            @ApiResponse(responseCode = "400", description = PERIODE_400 + " Format autre que xlsx.", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Droit de l'écran ou son .toolExport absent.", content = @Content)
-    })
-    public ResponseEntity<StreamingResponseBody> exporterRetenuesGarantie(
-            @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) @Parameter(example = ExportTableur.FORMAT_XLSX)
-            String format, @ParameterObject @ModelAttribute FiltresEtatsAchat filtres) {
-        ExportTableur.exigerXlsx(format);
-        return exportTableur.reponse("suivi-retenues-garantie", "Suivi des retenues de garantie",
-                etats.exportSuivi(SuiviAchat.RETENUES, filtres));
     }
 
     @GetMapping("/fournisseurs/{fournisseurId}/position")
