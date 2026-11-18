@@ -286,6 +286,23 @@ public class LotsProjetService {
         return Objects.requireNonNull(montants.calculer(List.of(m)).get(id)).suivi();
     }
 
+    /** Lot et son onglet Suivi. */
+    public record SuiviLot(PrjMarket lot, SuiviLotDto suivi) {
+    }
+
+    /** Onglet Suivi de chaque lot visible des projets demandés (∩ périmètre ; vide = tous), triés par code. */
+    public List<SuiviLot> suivis(List<UUID> projetIds) {
+        Visibilite v = new Visibilite(perimetre.restreindre(projetIds), intervenant.statutsDeLotsEtProjets());
+        if (v.vide()) {
+            return List.of();
+        }
+        FiltresLots tous = new FiltresLots(List.of(), List.of(), null, null, null, null);
+        List<PrjMarket> marches = lots.findAll((root, q, cb) -> filtre(root, cb, tous, v), Sort.by("code"));
+        Map<UUID, CalculLot> calculs = montants.calculer(marches);
+        return marches.stream()
+                .map(m -> new SuiviLot(m, Objects.requireNonNull(calculs.get(m.getId())).suivi())).toList();
+    }
+
     private FicheEtendueLotDto fiche(PrjMarket m, CalculLot calcul) {
         StlCurrency devise = m.getStlCurrencyId() == null ? null : em.find(StlCurrency.class, m.getStlCurrencyId());
         StlSettlementType paiement = m.getStlSettlementTypeId() == null ? null

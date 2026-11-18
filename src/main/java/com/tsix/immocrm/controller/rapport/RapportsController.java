@@ -31,7 +31,7 @@ import java.util.List;
 public class RapportsController {
 
     private static final String FORMAT = "format";
-    private static final String MODULE = "Module : vente, patrimoine ou administration (Administrateur seul).";
+    private static final String MODULE = "Module : vente, patrimoine, achat ou administration (Administrateur seul).";
 
     private final ServiceRapports service;
     private final ExportTableur exportTableur;

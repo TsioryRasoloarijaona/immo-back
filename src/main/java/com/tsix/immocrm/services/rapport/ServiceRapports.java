@@ -119,7 +119,8 @@ public class ServiceRapports {
         List<ParametreRapportDto> parametres = o.rapport().parametres().stream()
                 .map(p -> parametre(p, o.module())).toList();
         return new DescripteurRapportDto(o.rapport().code(), o.module().slug(), libelle(o.ligne()), groupe(o.ligne()),
-                parametres, List.of(ExportTableur.FORMAT_XLSX, FORMAT_PDF));
+                parametres, o.module().pdf() ? List.of(ExportTableur.FORMAT_XLSX, FORMAT_PDF)
+                : List.of(ExportTableur.FORMAT_XLSX));
     }
 
     public ResultatRapportDto resultat(String slug, String code, Map<String, List<String>> recus) {
@@ -144,7 +145,9 @@ public class ServiceRapports {
 
     public Export exporterEcran(Ecran ecran, String format, Map<String, List<String>> recus) {
         Execution e = executer(ecran, recus);
-        FormatExport.lire(format);
+        if (FormatExport.lire(format) == FormatExport.PDF && !ecran.module().pdf()) {
+            throw new InvalidRequestException("Ce rapport ne s'exporte qu'en xlsx.");
+        }
         List<FeuilleExport> feuilles = e.resultat().sections().stream()
                 .map(s -> {
                     Map<String, Object> totaux = TotauxRapport.totaux(s);
