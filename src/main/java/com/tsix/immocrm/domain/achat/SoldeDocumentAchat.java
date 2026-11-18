@@ -14,9 +14,15 @@ import java.util.Collection;
 public record SoldeDocumentAchat(BigDecimal montantAPayer, BigDecimal montantRegle, BigDecimal resteARegler, boolean solde,
                                  boolean impaye) {
 
+    private static final String SQL_REGLE_DE = "SELECT SUM(l.Amount) FROM StlSettlementLine l "
+            + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId WHERE l.";
+
     /** Sous-requête scalaire du réglé d'une pièce, alias {@code d} = {@code BuyDocument} ; NULL sans ligne. */
-    public static final String SQL_REGLE = "SELECT SUM(l.Amount) FROM StlSettlementLine l "
-            + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId WHERE l.BuyDocumentId = d.PKey AND "
+    public static final String SQL_REGLE = SQL_REGLE_DE + "BuyDocumentId = d.PKey AND "
+            + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX;
+
+    /** Même réglé pour une pièce de recette, alias {@code d} = {@code StlDocument}. */
+    public static final String SQL_REGLE_RECETTE = SQL_REGLE_DE + "StlDocumentId = d.PKey AND "
             + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX;
 
     private static final BigDecimal TOLERANCE = new BigDecimal("0.05");
