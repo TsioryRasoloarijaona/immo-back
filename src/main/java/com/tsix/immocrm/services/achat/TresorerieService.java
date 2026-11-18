@@ -52,6 +52,7 @@ public class TresorerieService {
     private static final String DROIT_AFFECTATIONS_CREDIT = "Yes.Stl.Front.Credit.SettlementAffectationList";
     private static final Map<String, String> LIBELLES_STATUT = Map.of("IN_WORK", "En cours", "POINTED", "Pointé",
             "CANCELED", "Annulé", "NOTPAYED", "Impayé");
+    private static final String ID = "id";
     private static final String STATUT = "statutCode";
     private static final String MONTANT = "montant";
 
@@ -168,10 +169,10 @@ public class TresorerieService {
         String statut = texte(r, STATUT);
         LocalDate echeance = jour(r.get("echeance"));
         BigDecimal affecte = zero(montant(r, "Affecte"));
-        return new DecaissementLigneDto(uuid(r.get("id")), texte(r, "code"), texte(r, "description"),
+        return new DecaissementLigneDto(uuid(r.get(ID)), texte(r, "code"), texte(r, "description"),
                 jour(r.get("datePiece")), echeance, jour(r.get("datePointage")), jour(r.get("dateMouvement")),
                 texte(r, "type"), texte(r, "tiers"), texte(r, "banque"), texte(r, "compte"), statut,
-                LIBELLES_STATUT.get(statut), montant(r, MONTANT), affecte, resteAAffecter(r), texte(r, "societe"),
+                libelle(statut), montant(r, MONTANT), affecte, resteAAffecter(r), texte(r, "societe"),
                 vrai(r.get("comptabilise")), entier(r, "NbLignes") == 0, ConversionReglement.enRetard(echeance, statut, jour));
     }
 
@@ -188,9 +189,9 @@ public class TresorerieService {
 
     private static AffectationLigneDto affectation(Map<String, Object> r) {
         String statut = texte(r, STATUT);
-        return new AffectationLigneDto(uuid(r.get("LigneId")), uuid(r.get("id")), texte(r, "code"),
+        return new AffectationLigneDto(uuid(r.get("LigneId")), uuid(r.get(ID)), texte(r, "code"),
                 texte(r, "description"), jour(r.get("datePiece")), jour(r.get("echeance")), jour(r.get("datePointage")),
-                jour(r.get("dateMouvement")), texte(r, "codeRecu"), statut, LIBELLES_STATUT.get(statut),
+                jour(r.get("dateMouvement")), texte(r, "codeRecu"), statut, libelle(statut),
                 montant(r, MONTANT), texte(r, "tiers"), texte(r, "type"), texte(r, "banque"), texte(r, "compte"),
                 texte(r, "moduleCode"), texte(r, "Categorie"), texte(r, "societe"), texte(r, "Projet"), null, null,
                 texte(r, "Lot"), piece(r), montant(r, "MontantPiece"), montant(r, "MontantAffecte"), null, null);
@@ -204,7 +205,7 @@ public class TresorerieService {
     /** Ligne Recettes : {@code id} puis une entrée par colonne, les colonnes calculées en Java. */
     private static Map<String, Object> ligneRecette(Map<String, Object> r, List<ColonneRecette> colonnes) {
         Map<String, Object> ligne = new LinkedHashMap<>();
-        ligne.put("id", uuid(r.get("id")));
+        ligne.put(ID, uuid(r.get(ID)));
         colonnes.forEach(c -> ligne.put(c.cle(), c.calculee() ? calculee(c, r) : valeur(r.get(c.cle()), c.type())));
         return ligne;
     }
@@ -214,7 +215,7 @@ public class TresorerieService {
             case RESTE_A_REGLER -> SoldeDocumentAchat.de(montant(r, "montantAPayer"), montant(r, "montantRegle"))
                     .resteARegler();
             case RESTE_A_AFFECTER -> resteAAffecter(r);
-            default -> LIBELLES_STATUT.get(texte(r, STATUT));
+            default -> libelle(texte(r, STATUT));
         };
     }
 
@@ -223,6 +224,11 @@ public class TresorerieService {
             return jour(brute);
         }
         return type == TypeColonne.BOOLEEN && brute != null ? vrai(brute) : brute;
+    }
+
+    /** Statut NULL : pas de libellé ({@code Map.of} refuse une clé nulle). */
+    private static String libelle(String statut) {
+        return statut == null ? null : LIBELLES_STATUT.get(statut);
     }
 
     private static String texte(Map<String, Object> r, String cle) {

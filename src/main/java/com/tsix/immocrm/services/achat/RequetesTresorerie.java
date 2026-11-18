@@ -22,6 +22,9 @@ import java.util.UUID;
 @Component
 class RequetesTresorerie {
 
+    // SQL Server convertit la liste IN même court-circuitée : '' y ferait échouer la conversion en uniqueidentifier.
+    private static final UUID AUCUN = new UUID(0, 0);
+
     private static final String LIGNE_VISIBLE = "((d.PKey IS NOT NULL AND " + RequetesDocumentsAchat.VISIBLE
             + ") OR (lv.StlDocumentId IS NOT NULL AND :sansProjet = 1))";
 
@@ -66,16 +69,20 @@ class RequetesTresorerie {
     private static final String PIECE_DE_LA_LIGNE = "LEFT JOIN BuyDocument d ON d.PKey = lv.BuyDocumentId "
             + "LEFT JOIN StlDocument sd ON sd.PKey = lv.StlDocumentId ";
 
-    private static final String COLONNES_LIGNE = ", lv.PKey AS LigneId, lv.Amount AS MontantAffecte, "
+    private static final String COLONNES_PIECE = "lv.PKey AS LigneId, lv.Amount AS MontantAffecte, "
             + "COALESCE(d.PKey, sd.PKey) AS PieceId, COALESCE(d.DocType, sd.DocType) AS PieceType, "
-            + "COALESCE(d.Code, sd.Code) AS PieceCode, COALESCE(d.AmountToPay, sd.AmountToPay) AS MontantPiece, "
-            + "fo.Description AS Fournisseur, d.PrjProjectId AS ProjetId, pp.Code AS Projet, d.PrjMarketId AS LotId, "
-            + "pm.Code AS Lot, ca.Description AS Categorie ";
+            + "COALESCE(d.Code, sd.Code) AS PieceCode, fo.Description AS Fournisseur, d.PrjProjectId AS ProjetId, "
+            + "pp.Code AS Projet, d.PrjMarketId AS LotId, pm.Code AS Lot ";
+
+    private static final String JOINTURES_PIECE = PIECE_DE_LA_LIGNE
+            + "LEFT JOIN CfgTier fo ON fo.PKey = COALESCE(d.CfgTierId, sd.CfgTierId) "
+            + "LEFT JOIN PrjProject pp ON pp.PKey = d.PrjProjectId LEFT JOIN PrjMarket pm ON pm.PKey = d.PrjMarketId ";
+
+    private static final String COLONNES_LIGNE = ", " + COLONNES_PIECE
+            + ", COALESCE(d.AmountToPay, sd.AmountToPay) AS MontantPiece, ca.Description AS Categorie ";
 
     private static final String JOINTURES_LIGNE = "JOIN StlSettlementLine lv ON lv.StlSettlementId = s.PKey "
-            + PIECE_DE_LA_LIGNE + "LEFT JOIN CfgTier fo ON fo.PKey = COALESCE(d.CfgTierId, sd.CfgTierId) "
-            + "LEFT JOIN PrjProject pp ON pp.PKey = d.PrjProjectId LEFT JOIN PrjMarket pm ON pm.PKey = d.PrjMarketId "
-            + "LEFT JOIN StlCategory ca ON ca.PKey = s.StlCategoryId ";
+            + JOINTURES_PIECE + "LEFT JOIN StlCategory ca ON ca.PKey = s.StlCategoryId ";
 
     /** Règlement visible : société habilitée ET (aucune ligne et sans-projet retenu, OU une ligne visible). */
     private static final String REGLEMENT_VISIBLE = "AND ((:sansProjet = 1 AND la.NbLignes = 0) OR EXISTS (SELECT 1 "
@@ -105,12 +112,7 @@ class RequetesTresorerie {
             + "AND mo.Code IN ('PRJ', 'BUY') AND ISNULL(s.IsCredit, 0) = 0 AND s.CfgCompanyId IN (:societes) "
             + REGLEMENT_VISIBLE;
 
-    private static final String LIGNES_FICHE = "SELECT lv.PKey AS LigneId, lv.Amount AS MontantAffecte, "
-            + "COALESCE(d.PKey, sd.PKey) AS PieceId, COALESCE(d.DocType, sd.DocType) AS PieceType, "
-            + "COALESCE(d.Code, sd.Code) AS PieceCode, fo.Description AS Fournisseur, d.PrjProjectId AS ProjetId, "
-            + "pp.Code AS Projet, d.PrjMarketId AS LotId, pm.Code AS Lot FROM StlSettlementLine lv " + PIECE_DE_LA_LIGNE
-            + "LEFT JOIN CfgTier fo ON fo.PKey = COALESCE(d.CfgTierId, sd.CfgTierId) "
-            + "LEFT JOIN PrjProject pp ON pp.PKey = d.PrjProjectId LEFT JOIN PrjMarket pm ON pm.PKey = d.PrjMarketId "
+    private static final String LIGNES_FICHE = "SELECT " + COLONNES_PIECE + "FROM StlSettlementLine lv " + JOINTURES_PIECE
             + "WHERE lv.StlSettlementId = :id AND " + LIGNE_VISIBLE + " ORDER BY COALESCE(d.Code, sd.Code), lv.PKey";
 
     // StlDocument n'a pas de projet : la colonne nulle ajoutée laisse VISIBLE appliquer la règle « sans projet ».
@@ -177,7 +179,7 @@ class RequetesTresorerie {
                 .addValue("credit", credit ? 1 : 0)
                 .addValue("aujourdhui", jour, Types.DATE)
                 .addValue("sansType", f.typeIds().isEmpty() ? 1 : 0)
-                .addValue("types", f.typeIds().isEmpty() ? List.of("") : RequetesDocumentsAchat.textes(f.typeIds()))
+                .addValue("types", RequetesDocumentsAchat.textes(f.typeIds().isEmpty() ? List.of(AUCUN) : f.typeIds()))
                 .addValue("sansStatut", f.statuts().isEmpty() ? 1 : 0)
                 .addValue("statuts", f.statuts().isEmpty() ? List.of("") : f.statuts())
                 .addValue("compte", RequetesDocumentsAchat.texte(f.compteId()), Types.VARCHAR)
