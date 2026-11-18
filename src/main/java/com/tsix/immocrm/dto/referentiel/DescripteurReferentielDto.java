@@ -11,7 +11,7 @@ public record DescripteurReferentielDto(
         @Schema(description = "Libellé OMRAN du référentiel.", example = "Orientations")
         String libelle,
         @Schema(description = "Menu OMRAN où il se range.",
-                allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES", "TACHES", "TIERS", "PROJET"})
+                allowableValues = {"ARTICLES", "PROSPECTIONS_TERRAINS", "AUTRES", "TACHES", "TIERS", "PROJET", "ACHAT"})
         String famille,
         @Schema(description = "Vrai si chaque ligne porte une tranche : la liste accepte trancheId (et global).")
         boolean parTranche,
@@ -20,6 +20,10 @@ public record DescripteurReferentielDto(
         @Schema(description = "Champs, dans l'ordre d'affichage.")
         List<ChampReferentielDto> champs,
         @Schema(description = "Vrai si le référentiel se lit seulement : POST, PATCH et DELETE répondent 409.")
-        boolean lectureSeule
+        boolean lectureSeule,
+        @Schema(description = "Vrai si l'appelant peut créer et modifier : droit OMRAN du référentiel, sinon rôle Administrateur.")
+        boolean peutEcrire,
+        @Schema(description = "Vrai si l'appelant peut supprimer : même règle que peutEcrire.")
+        boolean peutSupprimer
 ) {
 }

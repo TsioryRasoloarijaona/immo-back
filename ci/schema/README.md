@@ -118,6 +118,7 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/170_projets-config-parite_tables.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/182_lot-ecritures_tables.sql"
 sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/191_lot-avenants_tables.sql"
+sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/schema/194_n8-nomenclature_tables.sql"
 ```
 
 `170_decomptes-parite_tables.sql` : en local, appliqué tel quel (`-i`), sans `171_decomptes-parite_fk.sql`.

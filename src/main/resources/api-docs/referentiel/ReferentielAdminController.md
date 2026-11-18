@@ -4,6 +4,9 @@
 connecté et en écriture pour l'Administrateur. Une seule implémentation pilotée par le descripteur de chaque
 référentiel (`GET /api/referentiels-admin`) : une ligne lue ou écrite est un objet JSON dont les clés sont les `nom`
 des champs, plus `id`. Hors portée des clés d'API (403). Voir `FEATURE-patrimoine-referentiels.md`.
+Famille `ACHAT` (familles, sous-familles d'article d'achat, natures fournisseur, `FEATURE-n8-nomenclature.md`) : chaque
+référentiel est gardé par son droit OMRAN (`AdmRight`), exigé en lecture comme en écriture (403 sans lui), au lieu du
+rôle Administrateur ; l'Administrateur a tous les droits.
 
 ## descripteurs
 
@@ -32,8 +35,11 @@ Tous les champs obligatoires du descripteur sont requis ; une clé hors descript
 400 nommant le champ), une tranche inconnue ou d'une entité inactive → 404 ; `FRACTION` entre 0 et 1 ; `OPERATEUR`
 0 (sans contrôle), 1 (`>=`) ou 2 (`>`). Unicité : une autre ligne de même clé (code ; nature + code pour catégories et
 types ; tranche + code pour les présentations ; tranche + année pour les quotes-parts ; tranche + statut pour les
-seuils, une tranche absente comptant comme une valeur) → 409. Un seuil est toujours écrit pour les dossiers de vente
-et son statut doit être un statut de dossier de vente (sinon 400).
+seuils, une tranche absente comptant comme une valeur) → 409 ; quand la clé comprend le code, le `detail` est « Ce code
+existe déjà. ». Un seuil est toujours écrit pour les dossiers de vente et son statut doit être un statut de dossier de
+vente (sinon 400). Un champ absent prend sa valeur par défaut : O.D.T. (`sorting`) 1 pour les familles et
+sous-familles d'achat, 0 pour les natures fournisseur. Une nature fournisseur est toujours écrite avec le type de tiers
+fournisseur ; les natures des autres types n'existent pas pour ce slug (404).
 
 ## modifierLigne
 
@@ -52,4 +58,6 @@ contrainte), et quand la base effacerait en cascade des données d'article : tra
 contenances d'article, catégories et types d'une nature (le `detail` nomme la table enfant et le nombre de lignes).
 Seule exception : les contenances d'un type de présentation partent avec lui. Tiers : refusée aussi pour un pays qui
 a des villes, une ville d'une prospection, un type de relation d'un contact, et un pays ou une forme sociale valeur
-par défaut (`AdmParamsGuid`).
+par défaut (`AdmParamsGuid`). Achat : une famille citée par une sous-famille, une sous-famille citée par un article,
+une nature fournisseur citée par un tiers. Le `detail` d'un refus pour lignes citantes est « Suppression impossible :
+<libellé> <code> est utilisé par <n> ligne(s) de <table> (…). ».

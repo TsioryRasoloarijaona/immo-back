@@ -5,6 +5,7 @@ import com.tsix.immocrm.dto.referentiel.ReferentielItemDto;
 import com.tsix.immocrm.services.patrimoine.ReferentielAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,12 +31,15 @@ import java.util.UUID;
 @RequestMapping("/api/referentiels-admin")
 public class ReferentielAdminController {
 
-    private static final String ADMIN = "hasRole('Administrateur')";
+    // Un référentiel gardé par un droit OMRAN (ReferentielAdmin.droit) est contrôlé par le service, rôle ignoré.
+    private static final String ADMIN = "hasRole('Administrateur') "
+            + "or T(com.tsix.immocrm.domain.ReferentielAdmin).gardeParDroit(#table)";
     private static final String TABLE = "/{table}";
     private static final String LIGNE = "/{table}/{id}";
     private static final String SLUG = "Slug du référentiel (voir GET /api/referentiels-admin).";
     private static final String ID = "PKey de la ligne.";
-    private static final String PAS_ADMIN = "L'appelant n'a pas le rôle Administrateur.";
+    private static final String PAS_ADMIN = "Sans le rôle Administrateur, ou sans le droit OMRAN du référentiel qui en a un.";
+    private static final String SANS_DROIT = "Référentiel gardé par un droit OMRAN que l'appelant n'a pas.";
     private static final String INTROUVABLE = "Slug inconnu, ligne inconnue, hors écran ou d'une tranche non visible.";
     private static final String INVALIDE = "Champ inconnu ou non modifiable, obligatoire manquant, valeur ou référence invalide.";
     private static final String CONFLIT = "Doublon de la clé d'unicité, code d'une ligne protégée modifié, ou référentiel en lecture seule.";
@@ -68,6 +72,7 @@ public class ReferentielAdminController {
     @Operation(summary = "Lignes d'un référentiel")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Lignes visibles, clés = noms des champs du descripteur."),
+            @ApiResponse(responseCode = "403", description = SANS_DROIT, content = @Content),
             @ApiResponse(responseCode = "404", description = "Slug inconnu, ou tranche filtrée inconnue ou non visible.")
     })
     public List<Map<String, Object>> lignes(
@@ -85,6 +90,7 @@ public class ReferentielAdminController {
     @Operation(summary = "Une ligne d'un référentiel")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "La ligne."),
+            @ApiResponse(responseCode = "403", description = SANS_DROIT, content = @Content),
             @ApiResponse(responseCode = "404", description = INTROUVABLE)
     })
     public Map<String, Object> ligne(@Parameter(description = SLUG) @PathVariable String table,
