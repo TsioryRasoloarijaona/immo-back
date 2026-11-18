@@ -16,6 +16,9 @@ import com.tsix.immocrm.entities.adm.AdmSocialForm;
 import com.tsix.immocrm.entities.adm.AdmTaskPriority;
 import com.tsix.immocrm.entities.adm.AdmTaskType;
 import com.tsix.immocrm.entities.adm.AdmTierTitle;
+import com.tsix.immocrm.entities.bul.BulMeetingType;
+import com.tsix.immocrm.entities.bul.BulObservationStatus;
+import com.tsix.immocrm.entities.bul.PrjMeetingConfigColor;
 import com.tsix.immocrm.entities.buy.BuyItemFamily;
 import com.tsix.immocrm.entities.buy.BuyItemUnderFamily;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
@@ -273,6 +276,41 @@ public enum ReferentielAdmin {
                             "StkExpenseType (types de frais)", true),
                     new Bloquant("SELECT COUNT(*) FROM BuyDocumentWorkFlowDocumentToAttach WHERE PrjMarketTypeId = :id",
                             "BuyDocumentWorkFlowDocumentToAttach (pièces à joindre)", true));
+        }
+    },
+    // Configuration des réunions de chantier (FEATURE-n1-reunions-chantier.md D7, R2, R7), aussi sous /api/projet/config.
+    TYPES_REUNION("types-reunion", "Types des réunions", Famille.PROJET, BulMeetingType.class,
+            new Audit("Yes.Prj.Config.BulMeetingType", "Type de réunion"), Colonnes.TYPE_REUNION, Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Prj.Front.Config.BulMeetingType";
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(m) FROM BulMeeting m WHERE m.bulMeetingTypeId = :id",
+                    "BulMeeting (réunions)"));
+        }
+    },
+    STATUTS_RESERVES("statuts-reserves", "Statuts des réserves", Famille.PROJET, BulObservationStatus.class,
+            new Audit("Yes.Prj.Config.BulObservationStatus", "Statut de réserve"), Colonnes.STATUT_RESERVE,
+            Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Prj.Front.Config.BulObservationStatusList";
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(l) FROM BulMeetingLine l WHERE l.bulObservationStatusId = :id",
+                    "BulMeetingLine (décisions)"));
+        }
+    },
+    PLAGES_COULEURS("plages-couleurs", "Plages des couleurs", Famille.PROJET, PrjMeetingConfigColor.class,
+            new Audit("Yes.Prj.Config.PrjMeetingConfigColor", "Plage de couleur"), Colonnes.PLAGE_COULEUR, List.of()) {
+        @Override
+        public String droit() {
+            return "Yes.Prj.Front.Config.PrjMeetingConfigColor";
         }
     },
     // Nomenclature d'achat (FEATURE-n8-nomenclature.md D1-D6) : gardée par les droits OMRAN, pas par le rôle.
@@ -533,9 +571,10 @@ public enum ReferentielAdmin {
                 "AdmParamsGuid (valeurs par défaut)");
         static final List<ChampReferentiel> CODE_FIXE_LIBELLE = List.of(CODE_FIXE, DESCRIPTION);
         static final List<ChampReferentiel> TRI_CODE_FIXE = List.of(SORTING, CODE_FIXE, DESCRIPTION);
+        private static final String DESCRIPTION_CLE = "description";
         private static final ChampReferentiel PERSONNE = caseFixe("personnePhysique", "Personne physique", "isPerson");
         static final List<ChampReferentiel> PAYS = List.of(CODE_FIXE, texteFixe("isoAlpha3", "ISO alpha 3", "isoAlpha3"),
-                texte("description", "Nom français", "description", COURT).requis(),
+                texte(DESCRIPTION_CLE, "Nom français", DESCRIPTION_CLE, COURT).requis(),
                 texteFixe("nomAnglais", "Nom anglais", "descriptionAn"), texteFixe("nomIso", "Nom ISO", "isoName"),
                 texteFixe("codePays", "Code pays", "nationCode"), texteFixe("indicatif", "Indicatif tél.", "phoneCode"),
                 texteFixe("formatTelephone", "Format tél.", "phoneFormat"),
@@ -560,6 +599,14 @@ public enum ReferentielAdmin {
         static final List<ChampReferentiel> SOUS_FAMILLE_ACHAT = List.of(SORTING, CODE, DESCRIPTION,
                 reference("familleId", "Famille", "buyItemFamily", ReferenceAdmin.FAMILLE_ACHAT).requis(),
                 CATEGORIE_COMPTABLE, NOTES);
+        private static final ChampReferentiel COULEUR = de("couleur", "Couleur", Type.COULEUR, "colorName");
+        static final List<ChampReferentiel> TYPE_REUNION = List.of(SORTING.requis(),
+                texte("code", "Code", "code", 25).requis(), texte(DESCRIPTION_CLE, "Description", DESCRIPTION_CLE, 25).requis());
+        static final List<ChampReferentiel> STATUT_RESERVE = List.of(SORTING, COULEUR, CODE, DESCRIPTION,
+                de("estFerme", "Est fermé", Type.BOOLEEN, "isClosed"));
+        static final List<ChampReferentiel> PLAGE_COULEUR = List.of(SORTING.requis(), COULEUR.requis(),
+                texte(DESCRIPTION_CLE, "Description", DESCRIPTION_CLE, COURT).requis(),
+                de("de", "De", Type.FRACTION, "startFrom"), de("a", "À", Type.FRACTION, "endTo"));
         /** PKey de {@code CfgTierType} FOU (OMRAN {@code CfgTierType.Supplier}), identique en production et en test. */
         static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
 

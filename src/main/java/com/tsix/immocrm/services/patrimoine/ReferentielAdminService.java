@@ -441,6 +441,9 @@ public class ReferentielAdminService {
      * transaction, sérialise les écritures concurrentes de même clé (FEATURE-patrimoine-referentiels.md §8.2).
      */
     private void unicite(ReferentielAdmin r, Map<String, Object> valeurs, BeanWrapper actuel, UUID id) {
+        if (r.cle().isEmpty()) {
+            return;
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Long> q = cb.createQuery(Long.class);
         Root<?> racine = q.from(r.classe());
