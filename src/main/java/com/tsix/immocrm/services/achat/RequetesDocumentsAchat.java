@@ -64,9 +64,14 @@ class RequetesDocumentsAchat {
     private static final String DOC_DATE = "DocDate";
     private static final UUID AUCUN = new UUID(0, 0);
 
+    /** Projet visible d'une ligne {@code d} (partie projet de {@link #VISIBLE}) : prévisions de projet. */
+    static final String PROJET_VISIBLE = "(d.PrjProjectId IN (:projets) OR (:sansProjet = 1 AND d.PrjProjectId IS NULL)) ";
+
+    /** Société et projet visibles d'une ligne {@code d} sans module : prêts. */
+    static final String SOCIETE_PROJET_VISIBLES = "d.CfgCompanyId IN (:societes) AND " + PROJET_VISIBLE;
+
     /** Seul prédicat de visibilité d'une pièce {@code d} (R3, R4, R5), lié par {@link #parametres}. */
-    static final String VISIBLE = "d.CfgCompanyId IN (:societes) AND (d.PrjProjectId IN (:projets) "
-            + "OR (:sansProjet = 1 AND d.PrjProjectId IS NULL)) AND (:moduleProjet = 0 OR d.AdmModuleId IN "
+    static final String VISIBLE = SOCIETE_PROJET_VISIBLES + "AND (:moduleProjet = 0 OR d.AdmModuleId IN "
             + "(SELECT am.PKey FROM AdmModule am WHERE am.Code = N'PRJ')) ";
 
     /** Catégories de la ventilation de la pièce {@code d}, une chaîne (NULL sans ventilation). */

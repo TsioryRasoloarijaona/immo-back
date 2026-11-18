@@ -439,9 +439,13 @@ class RapportsPdfTest {
     private record SectionDeRapport(Rapport rapport, Map<String, Object> section) {
     }
 
+    /** Rapports des modules qui s'exportent en PDF (achat : xlsx seul, FEATURE-n7-etats-achat.md Q3). */
     private List<Rapport> tousLesRapports() {
         List<Rapport> rapports = new ArrayList<>();
         for (ModuleRapport module : ModuleRapport.values()) {
+            if (!module.pdf()) {
+                continue;
+            }
             rapports.addAll(registre.duModule(module).values());
         }
         rapports.sort(Comparator.comparing((Rapport r) -> r.module().name()).thenComparing(Rapport::code));
