@@ -29,9 +29,9 @@ public record EtatTvaDeductibleDto(
             @Schema(description = "Quantité de la ligne, null si sansLignes.") BigDecimal quantite,
             @Schema(description = "Prix unitaire HT de la ligne, null si sansLignes.") BigDecimal prixUnitaireHT,
             @Schema(description = "Remise en pourcentage (DiscountRatio × 100), null si sansLignes.") BigDecimal remisePct,
-            @Schema(description = "Montant HT, arrondi à 2 décimales.") BigDecimal montantHT,
+            @Schema(description = "Montant HT exact, non arrondi.") BigDecimal montantHT,
             @Schema(description = "Taux de TVA en pourcentage (VatRatio × 100).") BigDecimal tauxTvaPct,
-            @Schema(description = "Montant TVA = montant HT × taux, arrondi à 2 décimales.") BigDecimal montantTva,
+            @Schema(description = "Montant TVA = montant HT × taux, exact, non arrondi.") BigDecimal montantTva,
             @Schema(description = "Vrai pour une facture sans ligne : montants lus sur l'en-tête (AmountHT, AmountVat).")
             boolean sansLignes) {
     }

@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.achat;
 
 import com.tsix.immocrm.domain.TypeExport;
+import com.tsix.immocrm.domain.achat.MontantTvaLigne;
 import com.tsix.immocrm.domain.achat.SuiviAchat;
 import com.tsix.immocrm.domain.achat.SuiviAchat.Montants;
 import com.tsix.immocrm.dto.achat.EtatTvaDeductibleDto;
@@ -166,7 +167,9 @@ public class EtatsAchatService {
         return lignes.stream().map(l -> l.ligne().factureId()).distinct().count();
     }
 
+    /** Σ des montants exacts des lignes, arrondie une seule fois (comme OMRAN, R1). */
     private static BigDecimal somme(List<LigneTva> lignes, Function<LigneTvaDeductibleDto, BigDecimal> montant) {
-        return lignes.stream().map(l -> montant.apply(l.ligne())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return MontantTvaLigne.arrondi(lignes.stream().map(l -> montant.apply(l.ligne()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 }
