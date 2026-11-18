@@ -46,7 +46,7 @@ public class RetenuesLotsRapport extends RapportAchat {
             new Montant("trcFacturee", "TRC", FACTURE, s -> s.retenues().assuranceTrc().facture().total()),
             new Montant("retenueForfaitaireFacturee", "Retenue forfaitaire", FACTURE,
                     s -> s.retenues().facture().retenueForfaitaire()),
-            new Montant("prorataRembourse", "Prorata remboursé", null, s -> s.retenueGarantie().remboursement()));
+            new Montant("prorataRembourse", "Prorata remboursé", null, s -> s.colonnes().factures().remboursement()));
 
     private final LotsProjetService lots;
     private final RequetesRapportsAchat requetes;
