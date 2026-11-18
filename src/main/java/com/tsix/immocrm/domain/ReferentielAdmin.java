@@ -16,6 +16,8 @@ import com.tsix.immocrm.entities.adm.AdmSocialForm;
 import com.tsix.immocrm.entities.adm.AdmTaskPriority;
 import com.tsix.immocrm.entities.adm.AdmTaskType;
 import com.tsix.immocrm.entities.adm.AdmTierTitle;
+import com.tsix.immocrm.entities.buy.BuyItemFamily;
+import com.tsix.immocrm.entities.buy.BuyItemUnderFamily;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
@@ -272,10 +274,72 @@ public enum ReferentielAdmin {
                     new Bloquant("SELECT COUNT(*) FROM BuyDocumentWorkFlowDocumentToAttach WHERE PrjMarketTypeId = :id",
                             "BuyDocumentWorkFlowDocumentToAttach (pièces à joindre)", true));
         }
+    },
+    // Nomenclature d'achat (FEATURE-n8-nomenclature.md D1-D6) : gardée par les droits OMRAN, pas par le rôle.
+    FAMILLES_ACHAT("familles-achat", "Familles", Famille.ACHAT, BuyItemFamily.class,
+            new Audit("Yes.Buy.Config.BuyItemFamily", "Famille"), Colonnes.FAMILLE_ACHAT, Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Buy.Front.Config.BuyItemFamily";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Colonnes.TRI_UN;
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(s) FROM BuyItemUnderFamily s WHERE s.buyItemFamily.id = :id",
+                    "BuyItemUnderFamily (sous-familles)"));
+        }
+    },
+    SOUS_FAMILLES_ACHAT("sous-familles-achat", "Sous-familles", Famille.ACHAT, BuyItemUnderFamily.class,
+            new Audit("Yes.Buy.Config.BuyItemUnderFamily", "Sous-Famille"), Colonnes.SOUS_FAMILLE_ACHAT,
+            Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Buy.Front.Config.BuyItemUnderFamily";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Colonnes.TRI_UN;
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(a) FROM BuyItem a WHERE a.buyItemUnderFamily.id = :id",
+                    "BuyItem (articles)"));
+        }
+    },
+    /** Natures du seul type de tiers fournisseur ; les autres restent sous {@link #NATURES_TIERS}. */
+    NATURES_FOURNISSEUR("natures-fournisseur", "Natures fournisseur", Famille.ACHAT, CfgTierKind.class,
+            new Audit("Yes.Buy.Config.CfgTierKind", "Nature tier"), List.of(SORTING, CODE, DESCRIPTION),
+            Colonnes.CLE_NATURE_TIERS) {
+        @Override
+        public String droit() {
+            return "Yes.Buy.Front.Config.CfgTierKind";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Map.of(SORTING.propriete(), 0);
+        }
+
+        @Override
+        public Map<String, Object> portee() {
+            return Map.of(Colonnes.CLE_NATURE_TIERS.getLast(), Colonnes.TYPE_FOURNISSEUR);
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(t) FROM CfgTier t WHERE t.cfgTierKind.id = :id", "CfgTier (tiers)"));
+        }
     };
 
     public enum Famille {
-        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES, TIERS, PROJET
+        ARTICLES, PROSPECTIONS_TERRAINS, AUTRES, TACHES, TIERS, PROJET, ACHAT
     }
 
     /** {@code ObjectType} et {@code ObjectTypeLabel} écrits dans {@code AdmWebHistorics}. */
@@ -373,9 +437,24 @@ public enum ReferentielAdmin {
         return famille == Famille.TIERS;
     }
 
-    /** Valeurs imposées à la création et seules lignes visibles (propriété → valeur). */
+    /** Valeurs imposées à la création et seules lignes visibles (propriété → PKey, colonne ou entité visée). */
     public Map<String, Object> portee() {
         return Map.of();
+    }
+
+    /** Valeurs d'une création quand le corps n'en porte pas (propriété → valeur). */
+    public Map<String, Object> defauts() {
+        return Map.of();
+    }
+
+    /** Code {@code AdmRight} exigé en lecture et en écriture ; null = lecture libre, écriture Administrateur. */
+    public String droit() {
+        return null;
+    }
+
+    /** Vrai si le référentiel est gardé par un droit OMRAN : le rôle Administrateur n'est alors plus exigé. */
+    public static boolean gardeParDroit(String slug) {
+        return parSlug(slug).map(r -> r.droit() != null).orElse(false);
     }
 
     /** Propriété de la tranche portée par la ligne (visibilité R4), sinon vide. */
@@ -476,6 +555,13 @@ public enum ReferentielAdmin {
         static final List<ChampReferentiel> PIECE_IDENTITE = List.of(SORTING, CODE_FIXE, DESCRIPTION, PERSONNE);
         static final List<ChampReferentiel> PROFESSION = List.of(CODE_FIXE, DESCRIPTION,
                 caseFixe("avecSalaire", "Avec salaire", "isWithSalary"));
+        static final Map<String, Object> TRI_UN = Map.of(SORTING.propriete(), 1);
+        static final List<ChampReferentiel> FAMILLE_ACHAT = List.of(SORTING, CODE, DESCRIPTION, CATEGORIE_COMPTABLE, NOTES);
+        static final List<ChampReferentiel> SOUS_FAMILLE_ACHAT = List.of(SORTING, CODE, DESCRIPTION,
+                reference("familleId", "Famille", "buyItemFamily", ReferenceAdmin.FAMILLE_ACHAT).requis(),
+                CATEGORIE_COMPTABLE, NOTES);
+        /** PKey de {@code CfgTierType} FOU (OMRAN {@code CfgTierType.Supplier}), identique en production et en test. */
+        static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
 
         private static ChampReferentiel texteFixe(String nom, String libelle, String propriete) {
             return texte(nom, libelle, propriete, COURT).fixe();
