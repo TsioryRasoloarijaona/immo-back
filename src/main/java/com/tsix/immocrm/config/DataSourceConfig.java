@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -141,6 +142,19 @@ public class DataSourceConfig {
         proxy.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
         proxy.afterPropertiesSet();
         return proxy;
+    }
+
+    /** Publier {@link #jdbcLecture} fait reculer l'autoconfiguration : sans ce bean, tout JDBC non qualifié lirait la copie. */
+    @Bean
+    @Primary
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
+    @Bean
+    @Primary
+    public NamedParameterJdbcTemplate namedParameterJdbcTemplate(JdbcTemplate jdbcTemplate) {
+        return new NamedParameterJdbcTemplate(jdbcTemplate);
     }
 
     /** Seul accès en écriture à la copie : via l'aiguillage, une transaction d'écriture irait à la source. */
