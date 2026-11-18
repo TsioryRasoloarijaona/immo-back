@@ -62,6 +62,7 @@ class RequetesDocumentsAchat {
     private static final String CODE = "Code";
     private static final String DESCRIPTION = "Description";
     private static final String DOC_DATE = "DocDate";
+    private static final String NOTES = "Notes";
     private static final UUID AUCUN = new UUID(0, 0);
 
     /** Projet visible d'une ligne {@code d} (partie projet de {@link #VISIBLE}) : prévisions de projet. */
@@ -297,7 +298,7 @@ class RequetesDocumentsAchat {
 
     Optional<Entete> entete(PerimetreAchat perimetre, UUID declencheur, UUID id) {
         return jdbc.query(FICHE, restreints(perimetre, declencheur).addValue(ID, id.toString()), (rs, n) -> new Entete(piece(rs),
-                        chaine(rs, "Notes"), rs.getBigDecimal("AmountRegul"), rs.getBigDecimal("FiscalStamp"),
+                        chaine(rs, NOTES), rs.getBigDecimal("AmountRegul"), rs.getBigDecimal("FiscalStamp"),
                         rs.getBoolean("IsValidatedOnAccounting"), chaine(rs, "EntiteCode"),
                         chaine(rs, "EntiteDescription"), horodatage(rs, "UserCreateDateTime"), chaine(rs, "UserCreate"),
                         horodatage(rs, "UserUpdateDateTime"), chaine(rs, "UserUpdate")))
@@ -353,7 +354,7 @@ class RequetesDocumentsAchat {
                 chaine(rs, "Unity"), quantite, prix, pourcent(tva), pourcent(remise), chaine(rs, CODE),
                 pourcent(fodec == null ? BigDecimal.ZERO : fodec), rs.getBigDecimal("UnitPriceTTC"),
                 calcul.prixUnitaireHTNet(), calcul.totalHT(), calcul.totalTVA(), calcul.totalTTC(),
-                uuid(rs, "StlCategoryId"), chaine(rs, "Notes"));
+                uuid(rs, "StlCategoryId"), chaine(rs, NOTES));
     }
 
     List<VentilationProjetAchatDto> ventilationProjets(UUID id) {
@@ -369,7 +370,7 @@ class RequetesDocumentsAchat {
     List<HistoriqueDocumentAchatDto> historique(UUID id) {
         return jdbc.query(HISTORIQUE, Map.of(ID, id.toString()), (rs, n) -> new HistoriqueDocumentAchatDto(
                 horodatage(rs, DOC_DATE), chaine(rs, CODE), chaine(rs, DESCRIPTION), chaine(rs, "Utilisateur"),
-                chaine(rs, "Notes"), chaine(rs, "Transition")));
+                chaine(rs, NOTES), chaine(rs, "Transition")));
     }
 
     List<ReglementDocumentAchatDto> reglements(UUID id) {

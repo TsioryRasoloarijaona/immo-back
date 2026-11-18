@@ -54,7 +54,9 @@ class RequetesRapportsAchat {
             + "JOIN AdmModule m ON m.PKey = s.AdmModuleId WHERE m.Code IN ('BUY', 'PRJ') AND "
             + StatutReglement.SQL_COMPTE_DANS_LES_TOTAUX + " AND s.CfgCompanyId IN (:societes) "
             + "AND YEAR(ISNULL(s.EcheanceDate, s.SettlementDate)) = :annee "
-            + "GROUP BY MONTH(ISNULL(s.EcheanceDate, s.SettlementDate))";
+            + "AND NOT EXISTS (SELECT 1 FROM StlSettlementLine sl JOIN BuyDocument d ON d.PKey = sl.BuyDocumentId "
+            + "WHERE sl.StlSettlementId = s.PKey AND d.PrjProjectId IS NOT NULL AND NOT " + RequetesDocumentsAchat.PROJET_VISIBLE
+            + ") GROUP BY MONTH(ISNULL(s.EcheanceDate, s.SettlementDate))";
 
     // R14 : reste = commandé − Σ livré des BL de ce BC de code ≤ code du BL courant (RANGE inclut les BL de même code).
     private static final String BONS = "SELECT lc.Code AS CodeArticle, lc.Description AS Designation, d.Code AS CodeBC, "
@@ -69,8 +71,9 @@ class RequetesRapportsAchat {
             + "AND (:codeBC IS NULL OR d.Code LIKE :codeBC) AND (:codeArticle IS NULL OR lc.Code LIKE :codeArticle) "
             + "ORDER BY d.DocDate ASC, d.Code ASC, lc.Sorting ASC, b.Code ASC";
 
+    // Groupé par prêt (PKey), pas par libellé : deux prêts homonymes restent deux lignes.
     private static final String ECHEANCES = "SELECT d.Description, MONTH(s.PaymentDate) AS Mois, SUM(s.AmountToPay) AS Montant"
-            + PRETS + "GROUP BY d.Description, MONTH(s.PaymentDate) ORDER BY d.Description ASC, Mois ASC";
+            + PRETS + "GROUP BY d.PKey, d.Description, MONTH(s.PaymentDate) ORDER BY d.Description ASC, d.PKey ASC, Mois ASC";
 
     /** Montant d'une source R12 pour un mois (1–12). */
     record MontantMois(String colonne, int mois, BigDecimal montant) {

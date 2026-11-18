@@ -15,7 +15,11 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.chaine;
 import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.jour;
@@ -48,6 +52,9 @@ class RequetesEtatsAchat {
             + JOINTURES + "LEFT JOIN BuyDocumentLine l ON l.BuyDocumentId = d.PKey " + FILTRES
             + "AND d.DocType = 'INVOICE' ORDER BY d.DocDate ASC, d.Code ASC, d.PKey ASC, l.Sorting ASC";
 
+    private static final Map<SuiviAchat, String> SUIVIS = Arrays.stream(SuiviAchat.values())
+            .collect(Collectors.toUnmodifiableMap(Function.identity(), RequetesEtatsAchat::requeteSuivi));
+
     /** Ligne de TVA et drapeau « statut validé en comptabilité » (R4). */
     record LigneTva(LigneTvaDeductibleDto ligne, boolean validee) {
     }
@@ -67,15 +74,20 @@ class RequetesEtatsAchat {
     }
 
     List<LigneSuivi> suivi(SuiviAchat suivi, PerimetreAchat perimetre, FiltresEtatsAchat f) {
-        String sql = PIECE + "e.Description AS Nature, m.Description AS Lot, d.PrjMarketId, "
+        MapSqlParameterSource p = parametres(perimetre, f)
+                .addValue("natures", RequetesDocumentsAchat.textes(suivi.natures()));
+        return jdbc.query(SUIVIS.get(suivi), p, (rs, n) -> lignesSuivi(suivi, rs)).stream().flatMap(List::stream)
+                .toList();
+    }
+
+    /** Requête d'un suivi, assemblée une fois des seuls fragments SQL constants de l'énumération. */
+    private static String requeteSuivi(SuiviAchat suivi) {
+        return PIECE + "e.Description AS Nature, m.Description AS Lot, d.PrjMarketId, "
                 + "ISNULL(d.AmountToPay, 0) AS APayer, ISNULL(d.AmountRegul, 0) AS Regul, "
                 + suivi.montantSigne() + " AS Montant, CASE WHEN " + suivi.condition() + " THEN 1 ELSE 0 END AS BlocA, "
                 + "CASE WHEN d.StrEntityId IN (:natures) THEN 1 ELSE 0 END AS BlocB" + JOINTURES + FILTRES
                 + "AND (" + suivi.condition() + " OR d.StrEntityId IN (:natures)) "
                 + "ORDER BY d.DocDate ASC, d.Code ASC, d.PKey ASC";
-        MapSqlParameterSource p = parametres(perimetre, f)
-                .addValue("natures", RequetesDocumentsAchat.textes(suivi.natures()));
-        return jdbc.query(sql, p, (rs, n) -> lignesSuivi(suivi, rs)).stream().flatMap(List::stream).toList();
     }
 
     private static MapSqlParameterSource parametres(PerimetreAchat perimetre, FiltresEtatsAchat f) {

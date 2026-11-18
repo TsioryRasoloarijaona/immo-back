@@ -59,17 +59,20 @@ public class DocumentsAchatController {
     private static final String AGREGATS = "agregats.";
     private static final String MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String PERIODE_400 = "du ou au absent ou mal formé, du après au, filtre mal formé.";
+    private static final String REGLE = "Réglé";
+    private static final ColonneFixe FOURNISSEUR = ColonneFixe.texte("fournisseurNom", "Fournisseur");
+    private static final ColonneFixe SOCIETE = ColonneFixe.texte("societeCode", "Société");
 
     private static final List<ColonneFixe> COLONNES_EXPORT = List.of(ColonneFixe.texte("code", "N°"),
             ColonneFixe.texte("natureLibelle", "Nature"), ColonneFixe.de("dateDocument", "Date", TypeExport.DATE),
             ColonneFixe.de("dateEcheance", "Échéance", TypeExport.DATE), ColonneFixe.texte("reference", "Référence"),
-            ColonneFixe.texte("description", "Description"), ColonneFixe.texte("fournisseurNom", "Fournisseur"),
+            ColonneFixe.texte("description", "Description"), FOURNISSEUR,
             ColonneFixe.texte("projetCode", "Projet"), ColonneFixe.texte("lotCode", "Lot"),
-            ColonneFixe.texte("societeCode", "Société"), ColonneFixe.texte("statutDescription", "Statut"),
+            SOCIETE, ColonneFixe.texte("statutDescription", "Statut"),
             ColonneFixe.de("montantHT", "HT", TypeExport.MONTANT), ColonneFixe.de("montantTVA", "TVA", TypeExport.MONTANT),
             ColonneFixe.de("montantTTC", "TTC", TypeExport.MONTANT),
             ColonneFixe.de("montantAPayer", "À payer", TypeExport.MONTANT),
-            ColonneFixe.de("montantRegle", "Réglé", TypeExport.MONTANT),
+            ColonneFixe.de("montantRegle", REGLE, TypeExport.MONTANT),
             ColonneFixe.de("resteARegler", "Reste", TypeExport.MONTANT),
             ColonneFixe.texte("societeNom", "Entité"), ColonneFixe.texte("moduleLibelle", "Module"),
             ColonneFixe.texte("typeLotLibelle", "Type"), ColonneFixe.de("archive", "Archivé", TypeExport.BOOLEEN),
@@ -95,20 +98,20 @@ public class DocumentsAchatController {
             ColonneFixe.texte(AGREGATS + "facturesCodes", "Factures"), ColonneFixe.texte(AGREGATS + "devisCode", "Devis"));
 
     private static final List<ColonneFixe> COLONNES_SOLDES = List.of(
-            ColonneFixe.texte("fournisseurNom", "Fournisseur"), ColonneFixe.texte("societeCode", "Société"),
+            FOURNISSEUR, SOCIETE,
             ColonneFixe.de("nombrePieces", "Pièces", TypeExport.NOMBRE),
             ColonneFixe.de("montantAPayer", "À payer", TypeExport.MONTANT),
-            ColonneFixe.de("montantRegle", "Réglé", TypeExport.MONTANT),
+            ColonneFixe.de("montantRegle", REGLE, TypeExport.MONTANT),
             ColonneFixe.de("resteARegler", "Reste", TypeExport.MONTANT),
             ColonneFixe.de("nombreValideesARegler", "Validées à régler", TypeExport.NOMBRE),
             ColonneFixe.de("resteValideARegler", "Reste validé", TypeExport.MONTANT),
             ColonneFixe.de("montantADeduire", "À déduire", TypeExport.MONTANT));
 
     private static final List<ColonneFixe> COLONNES_POSITIONS = List.of(
-            ColonneFixe.texte("fournisseurNom", "Fournisseur"), ColonneFixe.texte("societeCode", "Société"),
+            FOURNISSEUR, SOCIETE,
             ColonneFixe.de("soldeDebut", "Solde début", TypeExport.MONTANT),
             ColonneFixe.de("netAPayer", "Net à payer", TypeExport.MONTANT),
-            ColonneFixe.de("regle", "Réglé", TypeExport.MONTANT),
+            ColonneFixe.de("regle", REGLE, TypeExport.MONTANT),
             ColonneFixe.de("soldeFin", "Solde fin", TypeExport.MONTANT));
 
     /** Montant de l'objet {@code agregats} (bons de commande ; vide pour les autres pièces). */
