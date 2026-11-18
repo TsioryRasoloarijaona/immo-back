@@ -48,6 +48,18 @@ Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/soldes`, sans l
 
 Mêmes filtres et mêmes lignes que `GET /api/achat/fournisseurs/positions`, sans la ligne de total.
 
+## tvaDeductible
+
+Écran OMRAN « Etat de la TVA déductible » (FEATURE-n7-etats-achat.md R1-R4). Factures (`DocType = 'INVOICE'`) **visibles** (même règle que la liste : société habilitée et projet habilité ou sans projet, aucune exemption de rôle ; OMRAN n'en applique aucune) datées de `du` à `au` inclus (`DocDate < au + 1 jour`) ; avoirs non déduits. Une ligne par ligne de facture : montant HT = (PU − PU × remise) × quantité, montant TVA = HT × taux, arrondis à 2 décimales. Une facture **sans ligne** (invisible d'OMRAN) donne une ligne `sansLignes = true` lue sur l'en-tête (`AmountHT`, `AmountVat`, taux = TVA / HT). Une facture dont le statut est de type « Annulation » est listée (`annulee = true`) mais exclue de `parMois` et des totaux. `montantTvaValidee` = TVA des factures dont le statut est validé en comptabilité (`IsValidatedOnAccounting`), `montantTvaEnAttente` = le reste. `tiers`, `projet`, `lot` filtrent comme pour les suivis.
+
+## avances
+
+Écran OMRAN « Suivi des avances » (`BuyMonitoringAdvanceView` recalculée sur les tables, FEATURE-n7-etats-achat.md R5). Pièces visibles (règle de la liste) datées de `du` à `au` inclus. Une pièce peut donner deux lignes : si `AdvanceAmount` ou `WorkingOutAdvanceAmount` est non nul, une ligne `amortissement` = leur somme (négative pour un avoir) ; si sa nature (`StrEntityId`) est une avance (sur marché, sur décompte, sur commande, sur commande multi-fournisseur), une ligne `avance` = `AmountToPay`, `ajustement` = `AmountRegul`. Pièces annulées listées (`annulee = true`), exclues des totaux. `tiers`, `projet`, `lot` : texte contenu dans le nom du fournisseur, le code ou la description du projet, du lot. Pièce sans fournisseur gardée (colonne vide). Tri par date puis code.
+
+## retenuesGarantie
+
+Écran OMRAN « Suivi des retenues de garantie » (`BuyMonitoringWarrantyView` recalculée, FEATURE-n7-etats-achat.md R6). Mêmes pièces, filtres et tri que `GET /api/achat/etats/avances`. Si `WarrantyAmount` est non nul, une ligne `retenue` = ce montant (négatif pour un avoir) ; si la nature est une restitution de retenue de garantie, une ligne `penalite` = `AmountRegul`, `rembourse` = `AmountToPay` (la pénalité n'entre pas dans le cumul de retenue). Pièces annulées listées, exclues des totaux.
+
 ## lignesPosition
 
 Mouvements visibles du fournisseur dans la société `societeId`, datés de `du` à `au` inclus (bornes absentes = ouvertes), triés par date puis code ; mêmes règles de mouvement et de visibilité que `GET /api/achat/fournisseurs/positions`. `societeIds`, `search` et `masquerResteZero` sont ignorés. Sans `du`, Σ des lignes au crédit − Σ des lignes au débit (`aPayer` pour une pièce, `reglement` pour un règlement) = `soldeFin` de la ligne de solde. Fournisseur inconnu, d'un autre type ou société non habilitée : liste vide.
