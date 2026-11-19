@@ -11,7 +11,7 @@ import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 
-/** Type de travaux (journée travaillée) ; les colonnes {@code Unity1}, {@code UnitPriceHT1}, {@code VatRatio1} ne sont pas lues. */
+/** Type de travaux (journée travaillée) : ses unités, prix et TVA sont recopiés dans le jour à son choix. */
 @Getter
 @Entity
 @Immutable
@@ -27,4 +27,20 @@ public class GrhWorkedDayType extends CodeLibelleOmran {
 
     @Column(name = "VatRatio", precision = 26, scale = 6)
     private BigDecimal vatRatio;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "Unity1")
+    private String unity1;
+
+    @Column(name = "UnitPriceHT1", precision = 26, scale = 6)
+    private BigDecimal unitPriceHT1;
+
+    @Column(name = "VatRatio1", precision = 26, scale = 6)
+    private BigDecimal vatRatio1;
+
+    @Size(max = 255)
+    @Nationalized
+    @Column(name = "GroupDescription")
+    private String groupDescription;
 }
