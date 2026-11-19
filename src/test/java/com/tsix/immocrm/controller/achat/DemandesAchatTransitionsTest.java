@@ -314,7 +314,7 @@ class DemandesAchatTransitionsTest {
             s.assertThat(String.valueOf(ligne.get(STATUT_ID))).isEqualToIgnoringCase(id(c.depouil()));
             s.assertThat(String.valueOf(ligne.get("StrConfigEntityId"))).isEqualToIgnoringCase(id(c.entite()));
             s.assertThat(String.valueOf(ligne.get("AdmUserId"))).isEqualToIgnoringCase(id(restreint.getId()));
-            s.assertThat(ligne.get(NOTES_COL)).isNull();
+            s.assertThat(ligne.get(NOTES_COL)).isEqualTo(""); // décision 14 : '' et non NULL
         });
     }
 
@@ -374,7 +374,7 @@ class DemandesAchatTransitionsTest {
         Reponse r = appels.executer(qRestreint, dia, corps().avec(TRANSITION_ID, lancer).avec(NOTES, "Ignoree " + c.jeton()));
 
         assertThat(r.statut()).as(r.corps()).isEqualTo(200);
-        assertThat(fixture.historique(dia)).hasSize(1).extracting(l -> l.get(NOTES_COL)).containsOnlyNulls();
+        assertThat(fixture.historique(dia)).hasSize(1).extracting(l -> l.get(NOTES_COL)).containsExactly(""); // décision 14
     }
 
     @Test

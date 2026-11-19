@@ -2,6 +2,7 @@ package com.tsix.immocrm.controller.achat;
 
 import com.tsix.immocrm.controller.achat.DemandesAchatAppels.Reponse;
 import com.tsix.immocrm.entities.adm.AdmUser;
+import com.tsix.immocrm.fixtures.FixtureAchat;
 import com.tsix.immocrm.fixtures.FixtureDemandesAchat;
 import com.tsix.immocrm.fixtures.FixtureDemandesAchat.Cadre;
 import org.assertj.core.api.SoftAssertions;
@@ -42,16 +43,19 @@ class DemandesAchatLectureTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private FixtureDemandesAchat fixture;
+    @Autowired private FixtureAchat achat;
 
     private DemandesAchatAppels appels;
     private Cadre c;
+    private AdmUser libre;
     private RequestPostProcessor qLibre;
 
     @BeforeEach
     void setUp() {
         appels = new DemandesAchatAppels(mockMvc);
         c = fixture.cadre("LE");
-        qLibre = qui(fixture.libre(c, "n6.le.libre." + c.jeton(), TOUS_LES_DROITS));
+        libre = fixture.libre(c, "n6.le.libre." + c.jeton(), TOUS_LES_DROITS);
+        qLibre = qui(libre);
     }
 
     private UUID dia(String suffixe, UUID statut) {
@@ -268,6 +272,24 @@ class DemandesAchatLectureTest {
 
         assertThat(r.statut()).as(r.corps()).isEqualTo(200);
         assertThat(r.ids(IDS)).contains(id(parDescription), id(parNotes)).doesNotContain(id(autre));
+    }
+
+    @Test
+    void decision15_projetIdsEtSansProjet_union() throws Exception {
+        UUID projetQ = fixture.projetDe(c, "Q-" + c.jeton());
+        achat.habiliter(libre, projetQ);
+        UUID surP = dia("L26", c.prep());
+        UUID sansProjet = dia("L27", c.prep());
+        fixture.sansProjet(sansProjet);
+        UUID surQ = dia("L28", c.prep());
+        fixture.poser(DEMANDE, surQ, "PrjProjectId", projetQ);
+
+        Reponse r = appels.lister(qLibre, "projetIds", id(c.projet()), "sansProjet", "true");
+        Reponse temoin = appels.lister(qLibre);
+
+        assertThat(r.statut()).as(r.corps()).isEqualTo(200);
+        assertThat(r.ids(IDS)).isNotEmpty().contains(id(surP), id(sansProjet)).doesNotContain(id(surQ));
+        assertThat(temoin.ids(IDS)).contains(id(surQ));
     }
 
     @Test

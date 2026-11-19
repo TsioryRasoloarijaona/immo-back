@@ -170,6 +170,18 @@ class DemandesAchatEcritureTest {
     }
 
     @Test
+    void d4_decision13_compteurContinueDUneAnneeALAutre() throws Exception {
+        String annee = "%02d/".formatted(LocalDate.now(ZoneId.of("Africa/Casablanca")).getYear() % 100);
+        fixture.demande(c, "25/00172", c.prep());
+        String description = description("D4A");
+
+        Reponse r = appels.creer(qLibre, saisie(description, c.procedure()));
+
+        assertThat(r.statut()).as(r.corps()).isEqualTo(201);
+        assertThat(creees(description)).extracting(l -> l.get("Code")).containsExactly(annee + "00173");
+    }
+
+    @Test
     void r2_statutDeDepart_premierNouveauVisibleDuCompte() throws Exception {
         UUID prep2 = fixture.statut(c.entite(), "PREP2-" + c.jeton(), TYPE_NOUVEAU, 5, true);
         AdmUser restreint = fixture.restreintSansStatut(c, "n6.ec.dep." + c.jeton(), TOUS_LES_DROITS);
