@@ -169,7 +169,7 @@ class ModificationsProjetTest {
         List<String> liste = ids(MARS + "&trancheId=" + trancheNonHabilitee.getId(), qui);
 
         assertThat(temoin).contains(enCours.toString());
-        assertThat(liste).doesNotContain(horsTranche.toString());
+        assertThat(liste).isEmpty();
     }
 
     @Test
