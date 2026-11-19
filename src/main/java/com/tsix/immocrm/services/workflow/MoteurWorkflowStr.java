@@ -113,7 +113,7 @@ public record MoteurWorkflowStr(StrStatusRepository statuts, StrWorkFlowReposito
         boolean avecDate = Boolean.TRUE.equals(w.getWithUserDate());
         LocalDateTime maintenant = LocalDateTime.now(clock);
         historiser(o, "%s: %s=>%s(%s & %s)".formatted(w.getDescription(), libelle(depart), libelle(cible), loginCourant(), second),
-                w, commentaire || avecDate ? e.notes() : null,
+                w, commentaire || avecDate ? e.notes() : "",
                 avecDate && e.dateUtilisateur() != null ? e.dateUtilisateur() : maintenant);
     }
 

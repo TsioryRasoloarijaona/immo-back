@@ -15,7 +15,7 @@ public record FiltresDemandesAchat(
         List<UUID> societeIds,
         @Parameter(description = "Projets (PrjProject.PKey), paramètre répété ; un projet non habilité est ignoré.")
         List<UUID> projetIds,
-        @Parameter(description = "true : demandes sans projet seulement.")
+        @Parameter(description = "true : sans projet seulement ; avec projetIds : ces projets OU sans projet.")
         Boolean sansProjet,
         @Parameter(description = "Procédure d'achat (BuySelectionKind.PKey).")
         UUID procedureId,

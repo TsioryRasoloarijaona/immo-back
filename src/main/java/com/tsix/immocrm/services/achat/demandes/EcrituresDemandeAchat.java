@@ -251,12 +251,12 @@ class EcrituresDemandeAchat {
         return Champs.de(utilisateur.courant().compte(), AdmUser::getCfgEmployee, CfgTier::getId);
     }
 
-    /** D4 : {@code yy/} + plus grand numéro de l'année + 1, sous verrou jusqu'à la fin de la transaction. */
+    /** D4 / décision 13 : {@code yy/} de l'année + plus grand numéro toutes années confondues + 1, sous verrou. */
     private String codeLibre() {
         String prefixe = "%02d/".formatted(LocalDate.now(clock).getYear() % 100);
         Number max = (Number) em.createNativeQuery("SELECT MAX(CAST(SUBSTRING(Code, 4, 5) AS int)) FROM BuySelection "
                         + "WITH (UPDLOCK, HOLDLOCK) WHERE Code LIKE :motif")
-                .setParameter("motif", prefixe + "[0-9][0-9][0-9][0-9][0-9]").getSingleResult();
+                .setParameter("motif", "[0-9][0-9]/[0-9][0-9][0-9][0-9][0-9]").getSingleResult();
         return prefixe + "%05d".formatted(max == null ? 1 : max.intValue() + 1);
     }
 

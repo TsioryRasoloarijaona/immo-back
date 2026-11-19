@@ -15,6 +15,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.str.StrHistoryRepository;
 import com.tsix.immocrm.services.dossier.workflow.IntervenantCourant;
 import com.tsix.immocrm.services.droits.DroitsOmran;
+import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import com.tsix.immocrm.services.workflow.MoteurWorkflowStr;
 import com.tsix.immocrm.utils.Champs;
@@ -128,7 +129,10 @@ public class DemandesAchatService {
 
     private List<DemandeAchatLigne> lignes(FiltresDemandesAchat f) {
         boolean confidentiel = droits.parmi(CONFIDENTIEL).contains(CONFIDENTIEL);
-        return lecture.liste(perimetres.achat(f.projetIds()).deSocietes(f.societeIds()), f).stream()
+        PerimetreAchat base = perimetres.achat(f.projetIds()).deSocietes(f.societeIds());
+        PerimetreAchat retenu = Boolean.TRUE.equals(f.sansProjet())
+                ? new PerimetreAchat(base.societes(), base.projets(), true, false) : base;
+        return lecture.liste(retenu, f).stream()
                 .filter(statutVisible())
                 .filter(d -> confidentiel || !d.confidentielle())
                 .map(DemandesAchatService::ligne)

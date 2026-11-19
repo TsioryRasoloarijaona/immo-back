@@ -112,7 +112,7 @@ class LectureDemandesAchat {
                 .addValue("module", f.moduleId() == null ? null : f.moduleId().toString(), Types.VARCHAR)
                 .addValue("tousStatuts", f.statutIds().isEmpty() ? 1 : 0)
                 .addValue("statuts", f.statutIds().isEmpty() ? List.of(new UUID(0, 0).toString()) : f.statutIds().stream().map(UUID::toString).toList())
-                .addValue("sansProjetSeul", Boolean.TRUE.equals(f.sansProjet()) ? 1 : 0)
+                .addValue("sansProjetSeul", Boolean.TRUE.equals(f.sansProjet()) && f.projetIds().isEmpty() ? 1 : 0)
                 .addValue("champ", f.champDate(), Types.VARCHAR)
                 .addValue("du", f.du() == null ? null : Date.valueOf(f.du()), Types.DATE)
                 .addValue("au", f.au() == null ? null : Date.valueOf(f.au()), Types.DATE)
