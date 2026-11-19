@@ -222,7 +222,9 @@ public class LotsProjetService {
         return permises.stream().map(w -> {
             StrStatus cible = cibles.get(w.getStatusToId());
             return new TransitionLotDto(w.getId(), w.getDescription(), w.getStatusToId(),
-                    Champs.de(cible, StrStatus::getDescription), Champs.de(cible, StrStatus::getColorName));
+                    Champs.de(cible, StrStatus::getDescription), Champs.de(cible, StrStatus::getColorName),
+                    Boolean.TRUE.equals(w.getWithComment()), Boolean.TRUE.equals(w.getWithUserDate()),
+                    Boolean.TRUE.equals(w.getWithPassword()));
         }).toList();
     }
 
