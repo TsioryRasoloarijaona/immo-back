@@ -93,6 +93,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/champs-specifiques/**").hasRole(ADMINISTRATEUR)
                         .requestMatchers("/api/rapports/administration", "/api/rapports/administration/**")
                         .hasRole(ADMINISTRATEUR)
+                        // Lecture du nivellement : tout compte qui voit le projet, périmètre vérifié par le service.
+                        .requestMatchers(HttpMethod.GET, "/api/projet/config/projets/*/nivellement").authenticated()
                         .requestMatchers("/api/projet/config/projets", "/api/projet/config/projets/**",
                                 "/api/projet/config/referentiels")
                         .hasRole(ADMINISTRATEUR)
