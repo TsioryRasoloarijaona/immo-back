@@ -98,10 +98,11 @@ public class DemandesAchatService {
         ecritures.supprimer(id);
     }
 
-    /** Transitions : aucun droit, les intervenants seulement (D7). */
+    /** Aucun droit propre aux transitions (D7), mais la lecture : la réponse porte la fiche. */
     @Transactional(readOnly = true)
     public List<TransitionDemandeAchat> transitions(UUID id) {
         visible(id);
+        droits.exiger(LECTURE);
         List<StrWorkFlow> permises = moteur.permises(ecritures.demande(id));
         Map<UUID, StrStatus> cibles = moteur.cibles(permises);
         return permises.stream().map(w -> transition(w, cibles.get(w.getStatusToId()))).toList();
@@ -110,6 +111,7 @@ public class DemandesAchatService {
     @Transactional
     public DemandeAchatFiche executer(UUID id, ExecutionTransitionDemandeAchat execution) {
         visible(id);
+        droits.exiger(LECTURE);
         ecritures.executer(id, execution);
         return relire(id);
     }

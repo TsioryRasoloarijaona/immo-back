@@ -133,10 +133,10 @@ class EcrituresDemandeAchat {
 
     /** R12 ; hook Fin succès : la génération du bordereau du lot (R20) n'existe pas encore. */
     void executer(UUID id, ExecutionTransitionDemandeAchat e) {
-        BuySelection d = derniere(id);
         if (e == null || e.transitionId() == null) {
             throw new InvalidRequestException("transitionId : obligatoire");
         }
+        BuySelection d = derniere(id);
         moteur.executer(d, new MoteurWorkflowStr.Execution(e.transitionId(), e.notes(), e.dateUtilisateur(), e.secondValideur()),
                 cible -> {
                     if (MoteurWorkflowStr.TYPE_FIN_SUCCES.equals(cible.getStrStatusTypeId()) && lotNonMulti(d)) {
