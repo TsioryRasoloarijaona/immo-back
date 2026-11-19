@@ -60,7 +60,9 @@ final class AppelsTravauxChantier {
             corps.put("projetId", projet.toString());
         }
         corps.put("typeId", type.toString());
-        corps.put("zoneId", zone.toString());
+        if (zone != null) {
+            corps.put("zoneId", zone.toString());
+        }
         corps.put("date", date.toString());
         corps.put("quantite", 3);
         corps.put("quantite1", 2);

@@ -102,9 +102,9 @@ class TravauxChantierEcritureTest {
                 () -> assertThat(colonne("CAST(CfgProjectZoneId AS varchar(36))", code)).isEqualToIgnoringCase(zone.toString()));
     }
 
-    /** R1 : société, type, zone, date, quantité, quantité 1 obligatoires ; 400 qui nomme le champ, rien d'écrit. */
+    /** R1 : société, type, date, quantité, quantité 1 obligatoires (la zone est facultative) ; 400 qui nomme le champ, rien d'écrit. */
     @ParameterizedTest(name = "{0}")
-    @CsvSource({"societeId, société|entité", "typeId, type", "zoneId, zone", "date, date", "quantite, quantité",
+    @CsvSource({"societeId, société|entité", "typeId, type", "date, date", "quantite, quantité",
             "quantite1, quantité 1"})
     void r1_obligatoireManquant_400(String champ, String libelles) throws Exception {
         String code = "O-" + jeton;
@@ -119,6 +119,36 @@ class TravauxChantierEcritureTest {
                 .containsAnyOf(java.util.stream.Stream.concat(java.util.stream.Stream.of(champ.toLowerCase()),
                         java.util.Arrays.stream(libelles.split("\\|"))).toArray(String[]::new));
         assertThat(fixture.compter(PAR_CODE, code)).isZero();
+    }
+
+    /** R1 : zone facultative, absente => 201 et CfgProjectZoneId NULL. */
+    @Test
+    void r1_zoneAbsente_201_colonneNulle() throws Exception {
+        String code = "ZN-" + jeton;
+        Map<String, Object> sansZone = corps(code);
+        sansZone.remove("zoneId");
+
+        Reponse r = appels.creer(sansZone, editeur);
+
+        assertThat(r.statut()).as(r.corps()).isEqualTo(201);
+        assertThat(fixture.compter(PAR_CODE, code)).isEqualTo(1);
+        assertThat(colonne("CAST(CfgProjectZoneId AS varchar(36))", code)).isNull();
+    }
+
+    /** R1 : zone fournie mais inconnue => 400, rien d'écrit (témoin 201 avec la zone valide). */
+    @Test
+    void r1_zoneInconnue_400_rienEcrit() throws Exception {
+        String code = "ZU-" + jeton;
+        String codeTemoin = "ZT-" + jeton;
+        Map<String, Object> inconnue = corps(code);
+        inconnue.put("zoneId", UUID.randomUUID().toString());
+
+        Reponse r = appels.creer(inconnue, editeur);
+        Reponse temoin = appels.creer(corps(codeTemoin), editeur);
+
+        assertThat(r.statut()).as(r.corps()).isEqualTo(400);
+        assertThat(fixture.compter(PAR_CODE, code)).isZero();
+        assertThat(temoin.statut()).as(temoin.corps()).isEqualTo(201);
     }
 
     /** D7 : {@code Code} libre, non unique (aucune séquence). */
