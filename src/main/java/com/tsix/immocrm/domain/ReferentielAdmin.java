@@ -21,6 +21,7 @@ import com.tsix.immocrm.entities.bul.BulObservationStatus;
 import com.tsix.immocrm.entities.bul.PrjMeetingConfigColor;
 import com.tsix.immocrm.entities.buy.BuyItemFamily;
 import com.tsix.immocrm.entities.buy.BuyItemUnderFamily;
+import com.tsix.immocrm.entities.cfg.CfgGanttTaskType;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
@@ -28,6 +29,8 @@ import com.tsix.immocrm.entities.cfg.CfgTrancheStanding;
 import com.tsix.immocrm.entities.cfg.CfgTrancheStatus;
 import com.tsix.immocrm.entities.lnd.LndLevel;
 import com.tsix.immocrm.entities.lnd.LndVocation;
+import com.tsix.immocrm.entities.prj.PrjMarketReceptionKind;
+import com.tsix.immocrm.entities.prj.PrjMarketReceptionType;
 import com.tsix.immocrm.entities.prj.PrjMarketType;
 import com.tsix.immocrm.entities.stk.StkBuilding;
 import com.tsix.immocrm.entities.stk.StkContenance;
@@ -374,6 +377,62 @@ public enum ReferentielAdmin {
         public List<Bloquant> bloquants() {
             return List.of(new Bloquant("SELECT COUNT(t) FROM CfgTier t WHERE t.cfgTierKind.id = :id", "CfgTier (tiers)"));
         }
+    },
+    // Configuration du module Projet (FEATURE-n9-planification.md R1-R3, D5) : O.D.T. absent = 1.
+    TYPES_RECEPTION("types-reception", "Types réception", Famille.PROJET, PrjMarketReceptionType.class,
+            new Audit("Yes.Prj.Config.PrjMarketReceptionType", "Type du reception lot"), Colonnes.TRI_CODE,
+            Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Prj.Front.Config.PrjMarketReceptionTypeList";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Colonnes.TRI_UN;
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(Colonnes.receptions("SELECT COUNT(*) FROM PrjMarketReception WHERE PrjMarketReceptionTypeId = :id"));
+        }
+    },
+    NATURES_RECEPTION("natures-reception", "Natures réception", Famille.PROJET, PrjMarketReceptionKind.class,
+            new Audit("Yes.Prj.Config.PrjMarketReceptionKind", "Nature du reception lot"), Colonnes.NATURE_RECEPTION,
+            Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Prj.Front.Config.PrjMarketReceptionKindList";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Colonnes.TRI_UN;
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(Colonnes.receptions("SELECT COUNT(*) FROM PrjMarketReception WHERE PrjMarketReceptionKindId = :id"));
+        }
+    },
+    // « types-tache » est AdmTaskType (Administration) : slug propre au Gantt.
+    TYPES_TACHE_PLANIFICATION("types-tache-planification", "Type de tâche", Famille.PROJET, CfgGanttTaskType.class,
+            new Audit("Yes.Cfg.Gantt.CfgGanttTaskType", "Type de tâche"), Colonnes.TRI_CODE, Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Cfg.Front.Gantt.GanttTaskType";
+        }
+
+        @Override
+        public Map<String, Object> defauts() {
+            return Colonnes.TRI_UN;
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(*) FROM CfgGanttTask WHERE CfgGanttTaskTypeId = :id",
+                    "CfgGanttTask (tâches de planification)", true));
+        }
     };
 
     public enum Famille {
@@ -609,6 +668,13 @@ public enum ReferentielAdmin {
                 de("de", "De", Type.FRACTION, "startFrom"), de("a", "À", Type.FRACTION, "endTo"));
         /** PKey de {@code CfgTierType} FOU (OMRAN {@code CfgTierType.Supplier}), identique en production et en test. */
         static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
+        static final List<ChampReferentiel> TRI_CODE = List.of(SORTING, CODE, DESCRIPTION);
+        static final List<ChampReferentiel> NATURE_RECEPTION = List.of(SORTING, CODE, DESCRIPTION,
+                de("estDefinitive", "Est une réception définitive", Type.BOOLEEN, "isFinal"));
+
+        static Bloquant receptions(String sql) {
+            return new Bloquant(sql, "PrjMarketReception (réceptions de lot)", true);
+        }
 
         private static ChampReferentiel texteFixe(String nom, String libelle, String propriete) {
             return texte(nom, libelle, propriete, COURT).fixe();
