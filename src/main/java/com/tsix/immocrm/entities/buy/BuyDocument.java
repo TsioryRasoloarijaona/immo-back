@@ -157,6 +157,8 @@ public class BuyDocument extends AuditOmran {
 
     @Column(name = "IsSelected")
     private Boolean isSelected;
+    @Column(name = "IsRejected")
+    private Boolean isRejected;
     @Column(name = "IsClosed")
     private Boolean isClosed;
     @Column(name = "CanBePayed")

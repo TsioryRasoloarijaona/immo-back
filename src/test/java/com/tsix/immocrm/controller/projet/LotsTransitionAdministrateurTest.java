@@ -51,6 +51,7 @@ class LotsTransitionAdministrateurTest {
     private UUID statutA;
     private UUID t1;
     private UUID t2;
+    private UUID bc;
     private UUID lot;
 
     @BeforeEach
@@ -64,7 +65,7 @@ class LotsTransitionAdministrateurTest {
         UUID statutC = parite.statut(ENTREPRENEURS, "TAC-" + jeton);
         t1 = parite.transition(ENTREPRENEURS, statutA, statutB, "T1 " + jeton);
         t2 = parite.transition(ENTREPRENEURS, statutA, statutC, "T2 " + jeton);
-        parite.transition(ENTREPRENEURS, statutB, statutC, "B>C " + jeton);
+        bc = parite.transition(ENTREPRENEURS, statutB, statutC, "B>C " + jeton);
         lot = parite.lot(projet, "TAL-" + jeton, ENTREPRENEURS, statutA);
     }
 
@@ -177,20 +178,23 @@ class LotsTransitionAdministrateurTest {
         });
     }
 
-    // ------------------------------------------------------------------ rôle exempté : toutes les sortantes
+    // ------------------------------------------------------------------ rôle exempté : séquence libre (N6 R11, Q1)
 
+    // Arrivée C : T2 et B>C au même Sorting (10) → la première par Code (« B>C » < « T2 ») la représente.
     @Test
-    void e7_administrateurAvecUnRoleWithSequenceFreeRestriction0_toutesLesSortantes() throws Exception {
+    void r11_administrateurAvecUnRoleWithSequenceFreeRestriction0_unePremiereParArriveeSortingPuisCode() throws Exception {
         AdmUser compte = administrateur("libre", false, t1);
         fiche.roleLibreEnPlus(compte, "LIBRE-TRA-" + jeton);
         RequestPostProcessor qui = enAdministrateur(compte);
 
         Reponse get = appels.transitions(qui, lot);
-        Reponse post = appels.executer(qui, lot, t2);
+        Reponse refus = appels.executer(qui, lot, t2);
+        Reponse post = appels.executer(qui, lot, bc);
 
         SoftAssertions.assertSoftly(s -> {
             s.assertThat(get.statut()).as(get.corps()).isEqualTo(200);
-            s.assertThat(get.ids(IDS)).containsExactlyInAnyOrder(t1.toString(), t2.toString());
+            s.assertThat(get.ids(IDS)).contains(t1.toString(), bc.toString()).doesNotContain(t2.toString());
+            s.assertThat(refus.statut()).as(refus.corps()).isEqualTo(409);
             s.assertThat(post.statut()).as(post.corps()).isEqualTo(200);
         });
     }

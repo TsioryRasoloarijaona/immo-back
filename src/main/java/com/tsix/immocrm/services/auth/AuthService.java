@@ -17,6 +17,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -47,19 +48,10 @@ public class AuthService {
      * mot de passe faux : ne jamais révéler lequel.
      */
     public LoginResult connexion(String username, String password) {
-        if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
-            throw new UnauthorizedException(IDENTIFIANTS_INVALIDES);
-        }
-
-        AdmUser user = userRepository.findByCode(username).orElseThrow(() -> new UnauthorizedException(IDENTIFIANTS_INVALIDES));
-        if (Boolean.TRUE.equals(user.getDisabled())) {
-            throw new UnauthorizedException(IDENTIFIANTS_INVALIDES);
-        }
+        AdmUser user = verifierIdentifiants(username, password)
+                .orElseThrow(() -> new UnauthorizedException(IDENTIFIANTS_INVALIDES));
         AppUserCredential credential = credentialRepository.findByAdmUserId(user.getId())
                 .orElseThrow(() -> new UnauthorizedException(IDENTIFIANTS_INVALIDES));
-        if (!passwordEncoder.matches(password, credential.getPasswordHash())) {
-            throw new UnauthorizedException(IDENTIFIANTS_INVALIDES);
-        }
 
         List<String> roles = userRoleRepository.findByAdmUserId(user.getId()).stream()
                 .map(ur -> ur.getAdmRole() != null ? ur.getAdmRole().getCode() : null)
@@ -74,6 +66,17 @@ public class AuthService {
                 mustChangePassword, profileCompleted, credential.getTokenVersion());
 
         return new LoginResult(token, toUtilisateurCourantDto(user, roles, mustChangePassword, profileCompleted));
+    }
+
+    /** Compte actif dont le mot de passe Arpent correspond ; vide sinon, sans dire pourquoi (connexion et second valideur). */
+    public Optional<AdmUser> verifierIdentifiants(String login, String motDePasse) {
+        if (!StringUtils.hasText(login) || !StringUtils.hasText(motDePasse)) {
+            return Optional.empty();
+        }
+        return userRepository.findByCode(login)
+                .filter(u -> !Boolean.TRUE.equals(u.getDisabled()))
+                .filter(u -> credentialRepository.findByAdmUserId(u.getId())
+                        .filter(c -> passwordEncoder.matches(motDePasse, c.getPasswordHash())).isPresent());
     }
 
     /** Périmètre jamais embarqué dans le JWT, qui survit à une réaffectation ({@code FEATURE-perimetre-commercial.md} §6.1). */

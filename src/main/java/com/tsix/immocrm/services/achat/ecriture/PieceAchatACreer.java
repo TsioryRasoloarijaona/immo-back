@@ -48,10 +48,10 @@ public record PieceAchatACreer(String module, String gestion, String sansDepart,
 
     /**
      * Pièce générée : gestion d'arrivée, devise de la 1re source, liens écrits ({@code BuyQuoteId}, {@code BuyOrderId}),
-     * BL facturés ({@code BuyInvoiceId}) et BC d'une ligne {@code BuyOrderInvoice} chacun.
+     * BL facturés ({@code BuyInvoiceId}) et BC d'une ligne {@code BuyOrderInvoice} chacun ; {@code selection} = DIA de la 1re source.
      */
     public record Generation(String gestion, UUID devise, UUID devis, UUID commande, List<UUID> livraisons,
-                             List<UUID> commandes, UUID factureSource, Boolean avoirFinancier) {
+                             List<UUID> commandes, UUID factureSource, Boolean avoirFinancier, UUID selection) {
     }
 
     /** En-tête saisi ; textes et montants déjà normalisés ('' et 0) ; {@code avoir} null hors avoir. */

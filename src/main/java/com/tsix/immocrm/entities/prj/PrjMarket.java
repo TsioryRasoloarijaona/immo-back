@@ -5,6 +5,7 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.stl.StlCategory;
 import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrStatus;
+import com.tsix.immocrm.services.workflow.ObjetWorkflow;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -25,7 +26,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "PrjMarket")
-public class PrjMarket extends AuditOmran {
+public class PrjMarket extends AuditOmran implements ObjetWorkflow {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "PrjProjectId")
     private PrjProject prjProject;
