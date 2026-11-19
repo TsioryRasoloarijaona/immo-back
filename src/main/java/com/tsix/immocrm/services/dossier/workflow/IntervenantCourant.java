@@ -64,10 +64,24 @@ public class IntervenantCourant {
      */
     public Optional<Set<UUID>> statutsDeLotsEtProjets() {
         Intervenant utilisateur = courant();
-        if (!utilisateur.roleIds().isEmpty() && intervenerRepository.rolesSansRestriction(utilisateur.roleIds()) > 0) {
+        if (libre(utilisateur)) {
             return Optional.empty();
         }
         return Optional.of(StatutsVisibles.visibles(utilisateur, intervenerRepository.deTousStatuts()));
+    }
+
+    /** Un de ses rôles a {@code AdmRole.WithSequenceFreeRestriction = 0} (NULL = restreint) ; sans rôle : restreint. */
+    public boolean libre(Intervenant intervenant) {
+        return !intervenant.roleIds().isEmpty() && intervenerRepository.rolesSansRestriction(intervenant.roleIds()) > 0;
+    }
+
+    /** Le compte donné comme intervenant (rôles de {@code AdmUserRole} seulement). */
+    public Intervenant de(UUID admUserId) {
+        Set<UUID> roles = new HashSet<>();
+        for (Object[] role : intervenerRepository.rolesDe(admUserId)) {
+            roles.add((UUID) role[0]);
+        }
+        return new Intervenant(admUserId, roles, false);
     }
 
     /**

@@ -21,6 +21,7 @@ import com.tsix.immocrm.entities.bul.BulObservationStatus;
 import com.tsix.immocrm.entities.bul.PrjMeetingConfigColor;
 import com.tsix.immocrm.entities.buy.BuyItemFamily;
 import com.tsix.immocrm.entities.buy.BuyItemUnderFamily;
+import com.tsix.immocrm.entities.buy.BuySelectionKind;
 import com.tsix.immocrm.entities.cfg.CfgGanttTaskType;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
@@ -433,6 +434,19 @@ public enum ReferentielAdmin {
             return List.of(new Bloquant("SELECT COUNT(*) FROM CfgGanttTask WHERE CfgGanttTaskTypeId = :id",
                     "CfgGanttTask (tâches de planification)", true));
         }
+    },
+    PROCEDURES_ACHAT("procedures-achat", "Procédures d'achat", Famille.ACHAT, BuySelectionKind.class,
+            new Audit("Yes.Buy.Config.BuySelectionKind", "Procédure d'achat"), Colonnes.PROCEDURE_ACHAT, Colonnes.CLE_CODE) {
+        @Override
+        public String droit() {
+            return "Yes.Buy.Front.Config.BuySelectionKind";
+        }
+
+        @Override
+        public List<Bloquant> bloquants() {
+            return List.of(new Bloquant("SELECT COUNT(d) FROM BuySelection d WHERE d.procedure.id = :id",
+                    "BuySelection (demandes internes d'achat)"));
+        }
     };
 
     public enum Famille {
@@ -669,6 +683,12 @@ public enum ReferentielAdmin {
         /** PKey de {@code CfgTierType} FOU (OMRAN {@code CfgTierType.Supplier}), identique en production et en test. */
         static final UUID TYPE_FOURNISSEUR = UUID.fromString("00685105-DFD9-497B-8830-DBF0FBE91668");
         static final List<ChampReferentiel> TRI_CODE = List.of(SORTING, CODE, DESCRIPTION);
+        static final List<ChampReferentiel> PROCEDURE_ACHAT = List.of(CODE, DESCRIPTION,
+                de("montantMax", "Montant max", Type.DECIMAL, "maxAmount"),
+                reference("entiteId", "Entité fonctionnelle", "strEntityManagment", ReferenceAdmin.ENTITE_ACHAT),
+                de("confidentielle", "Confidentielle", Type.BOOLEEN, "isConfidential"),
+                de("multiFournisseur", "Multi-fournisseur", Type.BOOLEEN, "isMultiSupplier"),
+                de("sansVerification", "Sans vérification sur le montant max", Type.BOOLEEN, "isWithoutVerification"), NOTES);
         static final List<ChampReferentiel> NATURE_RECEPTION = List.of(SORTING, CODE, DESCRIPTION,
                 de("estDefinitive", "Est une réception définitive", Type.BOOLEEN, "isFinal"));
 

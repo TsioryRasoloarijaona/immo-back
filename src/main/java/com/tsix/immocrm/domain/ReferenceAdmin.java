@@ -12,6 +12,7 @@ import com.tsix.immocrm.entities.stk.StkContenance;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.stk.StkKind;
 import com.tsix.immocrm.entities.stl.StlCategory;
+import com.tsix.immocrm.entities.str.StrEntity;
 import com.tsix.immocrm.entities.str.StrStatus;
 
 import java.util.Arrays;
@@ -42,7 +43,14 @@ public enum ReferenceAdmin {
     PAYS(AdmCountry.class, "pays", null),
     TYPE_TIERS(CfgTierType.class, "types-tiers", null),
     SEXE(AdmSexType.class, "sexes", null),
-    FAMILLE_ACHAT(BuyItemFamily.class, "familles-achat", null);
+    FAMILLE_ACHAT(BuyItemFamily.class, "familles-achat", null),
+    /** Entités fonctionnelles des demandes internes d'achat (FEATURE-n6-demandes-achat.md « Procédures »). */
+    ENTITE_ACHAT(StrEntity.class, "entites-achat", null) {
+        @Override
+        public Predicate<Object> accepte() {
+            return o -> o instanceof StrEntity e && e.getCode() != null && e.getCode().startsWith("BuyCallOfTender");
+        }
+    };
 
     private static final String CHOIX = "/api/referentiels-admin/choix/";
 

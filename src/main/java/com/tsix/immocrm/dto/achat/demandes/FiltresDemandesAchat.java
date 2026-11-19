@@ -21,6 +21,8 @@ public record FiltresDemandesAchat(
         UUID procedureId,
         @Parameter(description = "Statuts (StrStatus.PKey), paramètre répété.")
         List<UUID> statutIds,
+        @Parameter(description = "Module (AdmModule.PKey).")
+        UUID moduleId,
         @Parameter(description = "Date portée par du / au : une des 14 clés OMRAN (défaut DocDate) ; clé inconnue = 400.",
                 example = "DocDate")
         String champDate,
