@@ -48,6 +48,7 @@ public record MoteurWorkflowStr(StrStatusRepository statuts, StrWorkFlowReposito
     public static final String CREATION = "Création";
     public static final UUID TYPE_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
     public static final UUID TYPE_FIN_SUCCES = UUID.fromString("D572CE4B-A4DD-4F38-8998-359EAB5A9FCA");
+    public static final UUID TYPE_ANNULATION = UUID.fromString("A9E040DB-533F-4744-AE9A-1425793ADEA0");
     private static final String IDENTIFIANTS_INCORRECTS = "Login ou mot de passe incorrecte !";
 
     /** Une transition exécutée : {@code dateUtilisateur} et {@code second} facultatifs. */

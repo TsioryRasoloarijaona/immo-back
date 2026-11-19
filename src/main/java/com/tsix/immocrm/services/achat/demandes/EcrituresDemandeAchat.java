@@ -53,14 +53,16 @@ class EcrituresDemandeAchat {
     private final PerimetreProjetService perimetres;
     private final UtilisateurAffiche utilisateur;
     private final Clock clock;
+    private final GenerationBordereauLot generation;
 
     EcrituresDemandeAchat(EntityManager em, MoteurWorkflowStr moteur, PerimetreProjetService perimetres,
-                          UtilisateurAffiche utilisateur, Clock clock) {
+                          UtilisateurAffiche utilisateur, Clock clock, GenerationBordereauLot generation) {
         this.em = em;
         this.moteur = moteur;
         this.perimetres = perimetres;
         this.utilisateur = utilisateur;
         this.clock = clock;
+        this.generation = generation;
     }
 
     BuySelection demande(UUID id) {
@@ -83,12 +85,17 @@ class EcrituresDemandeAchat {
         d.setStrStatus(depart);
         d.setCfgCompanyId(r.societeId());
         appliquer(d, r);
+        persister(d);
+        return d.getId();
+    }
+
+    /** Nouvelle DIA écrite avec sa ligne d'historique « Création » (création, R18, R19). */
+    void persister(BuySelection d) {
         d.setUserCreate(utilisateur.courant().nom());
         d.setUserCreateDateTime(LocalDateTime.now(clock));
         em.persist(d);
         moteur.historiser(d, MoteurWorkflowStr.CREATION, null, null);
         em.flush();
-        return d.getId();
     }
 
     /** R5 : procédure changée seulement en statut Nouveau ; nouvelle entité → statut de départ, sans historique. */
@@ -131,7 +138,7 @@ class EcrituresDemandeAchat {
         em.flush();
     }
 
-    /** R12 ; hook Fin succès : la génération du bordereau du lot (R20) n'existe pas encore. */
+    /** R12 ; hook Fin succès sur un lot non multi : génération du bordereau définitif du lot (R20). */
     void executer(UUID id, ExecutionTransitionDemandeAchat e) {
         if (e == null || e.transitionId() == null) {
             throw new InvalidRequestException("transitionId : obligatoire");
@@ -139,8 +146,10 @@ class EcrituresDemandeAchat {
         BuySelection d = derniere(id);
         moteur.executer(d, new MoteurWorkflowStr.Execution(e.transitionId(), e.notes(), e.dateUtilisateur(), e.secondValideur()),
                 cible -> {
-                    if (MoteurWorkflowStr.TYPE_FIN_SUCCES.equals(cible.getStrStatusTypeId()) && lotNonMulti(d)) {
-                        throw new ConflictException("Génération du bordereau du lot non disponible");
+                    PrjMarket lot = d.getPrjMarketId() == null ? null : em.find(PrjMarket.class, d.getPrjMarketId());
+                    if (MoteurWorkflowStr.TYPE_FIN_SUCCES.equals(cible.getStrStatusTypeId()) && lot != null
+                            && !Boolean.TRUE.equals(lot.getIsMultiSupplier())) {
+                        generation.generer(d, lot);
                     }
                 });
         d.setUserUpdate(utilisateur.courant().nom());
@@ -148,13 +157,8 @@ class EcrituresDemandeAchat {
         em.flush();
     }
 
-    private boolean lotNonMulti(BuySelection d) {
-        return d.getPrjMarketId() != null
-                && !Boolean.TRUE.equals(Champs.de(em.find(PrjMarket.class, d.getPrjMarketId()), PrjMarket::getIsMultiSupplier));
-    }
-
     /** R7 : une DIA qui n'est plus la dernière de son groupe est en lecture seule. */
-    private BuySelection derniere(UUID id) {
+    BuySelection derniere(UUID id) {
         BuySelection d = demande(id);
         if (!Boolean.TRUE.equals(d.getIsTheLast())) {
             throw new ConflictException("Cette demande n'est plus la dernière de son groupe : elle est en lecture seule.");
@@ -187,27 +191,33 @@ class EcrituresDemandeAchat {
         return procedure;
     }
 
-    /** R6 : la procédure attendue pour le montant (plus petit plafond qui le couvre, sinon le plus grand) ne doit pas la dépasser. */
+    /** R6 : la procédure attendue pour le montant ne doit pas dépasser la procédure choisie. */
     private void verifierMontant(BuySelectionKind procedure, BigDecimal ttc) {
         if (Boolean.TRUE.equals(procedure.getIsWithoutVerification())) {
             return;
         }
-        BigDecimal montant = Objects.requireNonNullElse(ttc, BigDecimal.ZERO);
-        BigDecimal attendue = Optional.ofNullable(em.createQuery("select min(k.maxAmount) from BuySelectionKind k where k.maxAmount >= :m",
-                        BigDecimal.class).setParameter("m", montant).getSingleResult())
-                .orElseGet(() -> em.createQuery("select max(k.maxAmount) from BuySelectionKind k", BigDecimal.class).getSingleResult());
+        BigDecimal attendue = procedureParMontant(Objects.requireNonNullElse(ttc, BigDecimal.ZERO))
+                .map(BuySelectionKind::getMaxAmount).orElse(null);
         if (attendue != null && attendue.compareTo(Objects.requireNonNullElse(procedure.getMaxAmount(), BigDecimal.ZERO)) > 0) {
             throw new InvalidRequestException("La procédure d'achat selectionnée ne gère pas le montant estimé pour cette demande d'achat");
         }
     }
 
+    /** {@code BuySelectionKind.SelectKindByAmount} : plus petit plafond qui couvre le montant, sinon le plus grand (R6, R18). */
+    Optional<BuySelectionKind> procedureParMontant(BigDecimal montant) {
+        List<BuySelectionKind> parPlafond = em.createQuery("select k from BuySelectionKind k order by k.maxAmount, k.code",
+                BuySelectionKind.class).getResultList();
+        return parPlafond.stream().filter(k -> k.getMaxAmount() != null && k.getMaxAmount().compareTo(montant) >= 0).findFirst()
+                .or(() -> parPlafond.stream().reduce((a, b) -> b));
+    }
+
     /** R3. */
-    private static StrEntity entiteDe(BuySelectionKind procedure) {
+    static StrEntity entiteDe(BuySelectionKind procedure) {
         return Optional.ofNullable(procedure.getStrEntityManagment()).orElseThrow(() -> new InvalidRequestException(SANS_STATUT));
     }
 
     /** R2 : premier statut Nouveau visible de l'appelant. */
-    private StrStatus depart(StrEntity entite) {
+    StrStatus depart(StrEntity entite) {
         return moteur.statutDeDepart(entite.getId()).orElseThrow(() -> new ForbiddenException(
                 "Vous n'avez pas les droits sur les états de création de l'entité '%s' !".formatted(entite.getDescription())));
     }
@@ -242,17 +252,17 @@ class EcrituresDemandeAchat {
         d.setContractSignatureDate(debut(dates.signatureMarche()));
     }
 
-    private UUID moduleAchat() {
+    UUID moduleAchat() {
         return em.createQuery("select m.id from AdmModule m where m.code = 'BUY' order by m.id", UUID.class).setMaxResults(1)
                 .getResultStream().findFirst().orElse(null);
     }
 
-    private UUID employeCourant() {
+    UUID employeCourant() {
         return Champs.de(utilisateur.courant().compte(), AdmUser::getCfgEmployee, CfgTier::getId);
     }
 
     /** D4 / décision 13 : {@code yy/} de l'année + plus grand numéro toutes années confondues + 1, sous verrou. */
-    private String codeLibre() {
+    String codeLibre() {
         String prefixe = "%02d/".formatted(LocalDate.now(clock).getYear() % 100);
         Number max = (Number) em.createNativeQuery("SELECT MAX(CAST(SUBSTRING(Code, 4, 5) AS int)) FROM BuySelection "
                         + "WITH (UPDLOCK, HOLDLOCK) WHERE Code LIKE :motif")

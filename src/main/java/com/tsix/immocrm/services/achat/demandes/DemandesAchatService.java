@@ -140,12 +140,12 @@ public class DemandesAchatService {
     }
 
     /** D5 : société, projet et statut visibles ; sinon 404, avant tout contrôle de droit. */
-    private DemandeAchatFiche visible(UUID id) {
+    DemandeAchatFiche visible(UUID id) {
         return lecture.fiche(id, perimetres.achat(List.of())).filter(statutVisible())
                 .orElseThrow(() -> new ResourceNotFoundException("Demande interne d'achat introuvable : " + id));
     }
 
-    private DemandeAchatFiche relire(UUID id) {
+    DemandeAchatFiche relire(UUID id) {
         return lecture.fiche(id, perimetres.achat(List.of())).orElseThrow();
     }
 
