@@ -42,7 +42,6 @@ class SaisieJourTravaille {
         Map<String, Object> obligatoires = new LinkedHashMap<>();
         obligatoires.put("société (societeId)", c.societeId());
         obligatoires.put("type (typeId)", c.typeId());
-        obligatoires.put("zone (zoneId)", c.zoneId());
         obligatoires.put("date (date)", c.date());
         obligatoires.put("quantité (quantite)", c.quantite());
         obligatoires.put("quantité 1 (quantite1)", c.quantite1());

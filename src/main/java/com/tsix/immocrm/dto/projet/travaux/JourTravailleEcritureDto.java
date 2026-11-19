@@ -22,7 +22,7 @@ public record JourTravailleEcritureDto(
         @Schema(description = "Personnel (CfgTier.PKey).") UUID employeId,
         @Schema(description = "Client (CfgTier.PKey).") UUID clientId,
         @Schema(description = "Niveau de nivellement (CfgTrancheLevelingDefinition.PKey).") UUID niveauId,
-        @Schema(description = "Zone (CfgProjectZone.PKey). Obligatoire.") UUID zoneId,
+        @Schema(description = "Zone (CfgProjectZone.PKey). Facultative.") UUID zoneId,
         @Schema(description = "Article (BuyItem.PKey).") UUID articleId,
         @Schema(description = "Quantité. Obligatoire.") BigDecimal quantite,
         @Schema(description = "Quantité 1. Obligatoire.") BigDecimal quantite1,
