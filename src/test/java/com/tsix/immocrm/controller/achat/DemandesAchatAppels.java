@@ -90,6 +90,30 @@ final class DemandesAchatAppels {
         return envoyer(get(RACINE + "/" + id + "/historique").with(qui));
     }
 
+    // ------------------------------------------------------------------ N6b : sous-ressources de la DIA ({@code RACINE/{id}/…})
+
+    Reponse lire(RequestPostProcessor qui, UUID id, String sousChemin) throws Exception {
+        return envoyer(get(RACINE + "/" + id + sousChemin).with(qui));
+    }
+
+    Reponse poster(RequestPostProcessor qui, UUID id, String sousChemin, CorpsJson corps) throws Exception {
+        return envoyer(post(RACINE + "/" + id + sousChemin).with(qui).contentType(MediaType.APPLICATION_JSON).content(corps.json()));
+    }
+
+    Reponse remplacer(RequestPostProcessor qui, UUID id, String sousChemin, CorpsJson corps) throws Exception {
+        return envoyer(put(RACINE + "/" + id + sousChemin).with(qui).contentType(MediaType.APPLICATION_JSON).content(corps.json()));
+    }
+
+    Reponse retirer(RequestPostProcessor qui, UUID id, String sousChemin) throws Exception {
+        return envoyer(delete(RACINE + "/" + id + sousChemin).with(qui));
+    }
+
+    /** R18 : {@code POST /api/projet/lots/{id}/demandes-achat}. */
+    Reponse creerDepuisLot(RequestPostProcessor qui, UUID lot, CorpsJson corps) throws Exception {
+        return envoyer(post("/api/projet/lots/" + lot + "/demandes-achat").with(qui).contentType(MediaType.APPLICATION_JSON)
+                .content(corps.json()));
+    }
+
     static CorpsJson secondValideur(String login, String motDePasse) {
         return corps().avec("login", login).avec("motDePasse", motDePasse);
     }
