@@ -48,7 +48,7 @@ class LectureDemandesAchat {
              d.PaymentDelay, d.Notes, d.TextLetterSelection, d.IsTheLast, d.LaunchOfTenderDate, d.WithdrawalTenderDocumentsDate,
              d.TenderMaturityDate, d.TendersResortDate, d.BidOpeningDate, d.TendersReportDate, d.TenderDate, d.ContractSignatureDate,
              s.PKey AS StatutId, s.Description AS StatutLib, s.ColorName, s.StrStatusTypeId, s.BoolField001, s.BoolField002,
-             s.BoolField003, s.BoolField004, k.IsConfidential, m.IsMultiSupplier,
+             s.BoolField003, s.BoolField004, k.IsConfidential, m.IsMultiSupplier, k.IsMultiSupplier AS ProcedureMulti,
              k.PKey AS ProcedureId, k.Code AS ProcedureCode, k.Description AS ProcedureLib,
              c.PKey AS SocieteId, c.Code AS SocieteCode, c.Description AS SocieteLib,
              p.PKey AS ProjetId, p.Code AS ProjetCode, p.Description AS ProjetLib,
@@ -132,9 +132,12 @@ class LectureDemandesAchat {
         boolean derniere = rs.getBoolean("IsTheLast");
         boolean lotMulti = rs.getBoolean("IsMultiSupplier");
         String statut = rs.getString("StatutId");
+        boolean offres = derniere && rs.getBoolean("BoolField003");
+        boolean selection = derniere && rs.getBoolean("BoolField004");
+        boolean commandeParLot = lotMulti || rs.getString("LotId") == null;
         PhasesDemandeAchat phases = new PhasesDemandeAchat(derniere && rs.getBoolean("BoolField001"),
-                derniere && rs.getBoolean("BoolField002"), derniere && rs.getBoolean("BoolField003"),
-                derniere && rs.getBoolean("BoolField004") && !lotMulti);
+                derniere && rs.getBoolean("BoolField002"), offres, selection && !lotMulti,
+                selection && rs.getBoolean("ProcedureMulti") && commandeParLot, offres || selection);
         DatesDemandeAchat dates = new DatesDemandeAchat(jour(rs, "LaunchOfTenderDate"), jour(rs, "WithdrawalTenderDocumentsDate"),
                 jour(rs, "TenderMaturityDate"), jour(rs, "TendersResortDate"), jour(rs, "BidOpeningDate"),
                 jour(rs, "TendersReportDate"), jour(rs, "TenderDate"), jour(rs, "ContractSignatureDate"));

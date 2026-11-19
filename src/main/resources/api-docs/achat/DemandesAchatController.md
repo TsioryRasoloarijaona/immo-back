@@ -50,7 +50,7 @@ Compte restreint : transitions qui partent du statut stocké, ayant un intervena
 
 ## executerTransition
 
-Même calcul que la liste des transitions. Ordre des refus : 404 → 403 (lecture) → 400 `transitionId` absent → 409 (lecture seule, transition non proposée) → 400 / 403 second valideur → 400 commentaire → 409 (arrivée de type Terminé avec succès sur une demande à lot non multi-fournisseur). Historique : `<transition>: <départ de la transition>=><arrivée>(<login> & <login du second>)` ; notes conservées seulement si la transition exige un commentaire ou une date. Mot de passe du second jamais conservé ni renvoyé.
+Même calcul que la liste des transitions. Ordre des refus : 404 → 403 (lecture) → 400 `transitionId` absent → 409 (lecture seule, transition non proposée) → 400 / 403 second valideur → 400 commentaire → 409 (clôture avec succès, ci-dessous). Arrivée de type Terminé avec succès sur une demande à lot non multi-fournisseur : le bordereau définitif du lot est remplacé par celui de la demande (groupes gardant leurs ids, lignes hors stock), prix unitaire HT de chaque ligne = celui après remise de la ligne de même code de l'offre sélectionnée, aussi reporté sur la demande ; le lot reçoit le fournisseur, le mode et le délai de paiement et les 8 dates d'appel d'offre de la demande. Historique : `<transition>: <départ de la transition>=><arrivée>(<login> & <login du second>)` ; notes conservées seulement si la transition exige un commentaire ou une date. Mot de passe du second jamais conservé ni renvoyé.
 
 ### reponse 400
 
@@ -62,7 +62,7 @@ Droit de lecture manquant ; second valideur identique à l'appelant (« Le 2ème
 
 ### reponse 409
 
-Transition non proposée à l'appelant (le corps porte `transitionsAutorisees`), demande non dernière, ou génération du bordereau du lot non disponible.
+Transition non proposée à l'appelant (le corps porte `transitionsAutorisees`), demande non dernière ; clôture avec succès sans offre sélectionnée (« Aucune offre n'est sélectionnée ! »), code de ligne présent d'un seul côté entre le bordereau et l'offre (« Il y a une erreur au niveaux du bordereau de dépouillement ! »), ligne ou groupe du lot cité par un décompte.
 
 ## historique
 
