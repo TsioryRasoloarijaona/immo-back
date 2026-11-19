@@ -190,11 +190,11 @@ class OffresDemandeAchat {
                 .map(r -> bonCommande((BuyDocument) r[0], (CfgTier) r[1], (BuyDocumentStatus) r[2])).toList();
     }
 
-    /** {@code CanSelectDeSelectQuote} pour un lot non multi : ni décompte, ni affectation de décomposition (Q-b3). */
+    /** {@code CanSelectDeSelectQuote} : lot exigé (OMRAN {@code toolSelectQuote}), ni décompte, ni affectation de décomposition (Q-b3). */
     private void verifierMarche(BuySelection d) {
         UUID lot = d.getPrjMarketId();
         if (lot == null) {
-            return;
+            throw new ConflictException("Vous ne pouvez pas sélectionnez/désélectionnez une offre d'une demande sans lot.");
         }
         if (compter("SELECT COUNT(*) FROM PrjWorkingOut WHERE PrjMarketId = :lot", lot) > 0) {
             throw new ConflictException(MARCHE + "contenant des décomptes !");

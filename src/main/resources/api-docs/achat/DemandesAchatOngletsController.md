@@ -46,7 +46,7 @@ Ordre des refus : 404 → 403 (`…toolDeleteQuote`) → 409 : demande non derni
 
 ## selectionnerOffre
 
-Ordre des refus : 404 → 403 (`…toolSelectDeselectQuote`) → 409 : demande non dernière, hors phase sélection (`BoolField004`, jamais ouverte pour un lot multi-fournisseur), lot ayant un décompte ou des affectations de décomposition, fournisseur écarté. Seule cette offre reste sélectionnée ; fournisseur de la demande = celui de l'offre ; délai de paiement = celui du fournisseur si celui de la demande est nul ou négatif.
+Ordre des refus : 404 → 403 (`…toolSelectDeselectQuote`) → 409 : demande non dernière, hors phase sélection (`BoolField004`, jamais ouverte pour un lot multi-fournisseur), demande sans lot, lot ayant un décompte ou des affectations de décomposition, fournisseur écarté. Seule cette offre reste sélectionnée ; fournisseur de la demande = celui de l'offre ; délai de paiement = celui du fournisseur si celui de la demande est nul ou négatif.
 
 ## deselectionnerOffres
 
