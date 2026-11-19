@@ -38,7 +38,8 @@ public class ModificationsProjetService {
             SELECT m.PKey, m.ComFolderId, m.Status, m.DemandDate, COALESCE(tr.Description, tr.Code),
                 COALESCE(cat.Description, cat.Code), COALESCE(ty.Description, ty.Code), i.Code,
                 COALESCE(b.Description, b.Code), f.Sorting, m.Description, %s,
-                COALESCE(NULLIF(c.Phone, N''), NULLIF(c.Phone1, N''), NULLIF(c.Phone2, N'')), st.Description,
+                COALESCE(NULLIF(c.Mobile, N''), NULLIF(c.Phone, N''), NULLIF(c.Phone1, N''), NULLIF(c.Phone2, N'')),
+                st.Description,
                 m.TechnicalValidationDate, m.CustomerValidationDate, m.Cost, m.CommercialAmountHT, m.CommercialAmount,
                 m.Notes
             FROM ComModification m

@@ -20,7 +20,7 @@ public record ModificationProjetLigneDto(
         @Schema(description = "Étage (StkFloor.Sorting), null si absent.") Integer etage,
         @Schema(description = "Description de la demande.") String description,
         @Schema(description = "Acquéreur (CfgTier du dossier), null si absent.") String acquereur,
-        @Schema(description = "Premier téléphone renseigné de l'acquéreur (fixe, autres, mobile).") String telephone,
+        @Schema(description = "Premier téléphone renseigné de l'acquéreur (mobile, fixe, autres).") String telephone,
         @Schema(description = "Statut du dossier de vente (StrStatus.Description).") String etatDossier,
         @Schema(description = "Date de validation technique.") LocalDate dateValidationTechnique,
         @Schema(description = "Date de validation client.") LocalDate dateValidationClient,
