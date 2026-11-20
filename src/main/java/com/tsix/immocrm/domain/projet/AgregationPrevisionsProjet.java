@@ -47,11 +47,18 @@ public final class AgregationPrevisionsProjet {
 
     private final List<SeriesLot> lots;
     private final Map<UUID, BigDecimal> poids;
+    private final boolean ajustee;
 
     /** {@code poids} : lots non multi-fournisseurs seulement (voir {@link #poids(Map)}). */
     public AgregationPrevisionsProjet(List<SeriesLot> lots, Map<UUID, BigDecimal> poids) {
+        this(lots, poids, false);
+    }
+
+    /** {@code ajustee} : l'avancement des lots est l'ajusté de R7-ter, évalué à chaque mois (jamais masqué si un lot en a un). */
+    public AgregationPrevisionsProjet(List<SeriesLot> lots, Map<UUID, BigDecimal> poids, boolean ajustee) {
         this.lots = lots;
         this.poids = poids;
+        this.ajustee = ajustee;
     }
 
     /** R7 : HT prévisionnel / Σ ; Σ = 0 → poids 0. */
@@ -79,7 +86,7 @@ public final class AgregationPrevisionsProjet {
         List<PointPrevisionDto> mois = new ArrayList<>();
         for (YearMonth m = sommes.firstKey().minusMonths(1); !m.isAfter(sommes.lastKey()); m = m.plusMonths(1)) {
             BigDecimal[] v = sommes.getOrDefault(m, zeros());
-            mois.add(new PointPrevisionDto(m.atDay(1), v[0], auMois(AVANCEMENTS.get(0), m), v[1], auMois(AVANCEMENTS.get(1), m),
+            mois.add(new PointPrevisionDto(m.atDay(1), v[0], auMois(AVANCEMENTS.get(0), m), v[1], prevision(m),
                     v[2], auMois(AVANCEMENTS.get(2), m)));
         }
         return mois;
@@ -150,6 +157,13 @@ public final class AgregationPrevisionsProjet {
             return BigDecimal.ONE;
         }
         return valeur(serie, YearMonth.from(aujourdhui));
+    }
+
+    private BigDecimal prevision(YearMonth m) {
+        if (ajustee && lots.stream().anyMatch(s -> !s.avancementPrevision().isEmpty())) {
+            return valeur(AVANCEMENTS.get(1), m);
+        }
+        return auMois(AVANCEMENTS.get(1), m);
     }
 
     /** Point du graphe : null si aucun lot n'a de valeur ce mois-là, sinon la somme pondérée (R7). */
