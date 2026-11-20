@@ -37,7 +37,7 @@ public class AccesPlanification {
 
     static final String DROIT_GANTT = "Yes.Cfg.Front.Gantt.GanttProject";
     static final String DROIT_VERSION = "Yes.Prj.Front.Tdb.ProjectPrevision.toolSaveVersion";
-    static final String ABSENTE = "PLANIFICATION_ABSENTE";
+    static final String CODE_ABSENTE ="PLANIFICATION_ABSENTE";
     static final String MESSAGE_ABSENTE = "Aucune planification n'est définie pour le projet en cours !";
     private static final String ID = "id";
 
@@ -83,14 +83,14 @@ public class AccesPlanification {
     }
 
     Optional<CfgGanttProject> principale(UUID projetId) {
-        return em.createQuery("""
-                        SELECT p FROM CfgGanttProject p WHERE p.objectId = :projet AND p.versionDate IS NULL ORDER BY p.id ASC""",
+        return em.createQuery(
+                        "SELECT p FROM CfgGanttProject p WHERE p.objectId = :projet AND p.versionDate IS NULL ORDER BY p.id ASC",
                         CfgGanttProject.class)
                 .setParameter("projet", projetId).setMaxResults(1).getResultStream().findFirst();
     }
 
     static ResourceNotFoundException absente() {
-        return new ResourceNotFoundException(MESSAGE_ABSENTE, ABSENTE);
+        return new ResourceNotFoundException(MESSAGE_ABSENTE, CODE_ABSENTE);
     }
 
     static NaturePlanification nature(CfgGanttProject p) {
@@ -111,8 +111,8 @@ public class AccesPlanification {
     // ------------------------------------------------------------------ lectures
 
     List<CfgGanttTask> taches(UUID planification) {
-        return em.createQuery("""
-                        SELECT t FROM CfgGanttTask t WHERE t.cfgGanttProjectId = :id ORDER BY t.sorting ASC, t.code ASC""",
+        return em.createQuery(
+                        "SELECT t FROM CfgGanttTask t WHERE t.cfgGanttProjectId = :id ORDER BY t.sorting ASC, t.code ASC",
                         CfgGanttTask.class)
                 .setParameter(ID, planification).getResultList();
     }

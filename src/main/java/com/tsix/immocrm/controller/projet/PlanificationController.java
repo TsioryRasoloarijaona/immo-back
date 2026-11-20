@@ -49,8 +49,8 @@ public class PlanificationController {
     private static final String MODELES = "/planification/modeles";
     private static final String MODELE = MODELES + "/{id}";
     private static final String PLANIFICATION = "/planification/{id}";
-    private static final String TACHES = PLANIFICATION + "/taches";
-    private static final String TACHE = TACHES + "/{tacheId}";
+    private static final String CHEMIN_TACHES = PLANIFICATION + "/taches";
+    private static final String TACHE = CHEMIN_TACHES + "/{tacheId}";
     private static final String INTERVENANTS = PLANIFICATION + "/intervenants";
     private static final String INTERVENANT = INTERVENANTS + "/{intervenantId}";
     private static final String DU_PROJET = "/projets/{projetId}/planification";
@@ -142,7 +142,7 @@ public class PlanificationController {
 
     // ------------------------------------------------------------------ tâches
 
-    @PostMapping(TACHES)
+    @PostMapping(CHEMIN_TACHES)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Ajoute une tâche racine ou une sous-tâche")
     @ApiResponse(responseCode = "400", description = SAISIE, content = @Content)
@@ -176,7 +176,7 @@ public class PlanificationController {
         return taches.supprimerTache(id, tacheId);
     }
 
-    @PutMapping(TACHES + "/ordre")
+    @PutMapping(CHEMIN_TACHES + "/ordre")
     @Operation(summary = "Réordonne les sœurs d'un même parent")
     @ApiResponse(responseCode = "400", description = "La liste n'est pas exactement l'ensemble des sœurs d'un parent.",
             content = @Content)

@@ -52,8 +52,8 @@ public class PlanificationService {
 
     @Transactional(readOnly = true)
     public List<PlanificationListItemDto> listerModeles() {
-        return em.createQuery("""
-                        SELECT p FROM CfgGanttProject p WHERE p.objectId IS NULL AND p.versionDate IS NULL ORDER BY p.code ASC""",
+        return em.createQuery(
+                        "SELECT p FROM CfgGanttProject p WHERE p.objectId IS NULL AND p.versionDate IS NULL ORDER BY p.code ASC",
                         CfgGanttProject.class)
                 .getResultStream().map(AccesPlanification::ligne).toList();
     }

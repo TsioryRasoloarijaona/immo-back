@@ -66,8 +66,8 @@ public class ClonagePlanification {
     /** Code unique parmi toutes les planifications (modèles, projets, versions) ; {@code id} = la ligne modifiée. */
     void verifierCodeLibre(String code, UUID id) {
         ReferentielAdminService.verrouiller(em, CfgGanttProject.class, code, "Planification");
-        long pris = em.createQuery("""
-                        SELECT COUNT(p) FROM CfgGanttProject p WHERE LOWER(TRIM(p.code)) = LOWER(:code) AND p.id <> :id""",
+        long pris = em.createQuery(
+                        "SELECT COUNT(p) FROM CfgGanttProject p WHERE LOWER(TRIM(p.code)) = LOWER(:code) AND p.id <> :id",
                         Long.class)
                 .setParameter("code", code.trim()).setParameter("id", id == null ? new UUID(0, 0) : id).getSingleResult();
         if (pris > 0) {
