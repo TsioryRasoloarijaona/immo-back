@@ -15,4 +15,9 @@ public interface StrWorkFlowRepository extends JpaRepository<StrWorkFlow, UUID> 
     @Query("SELECT w FROM StrWorkFlow w WHERE w.strConfigEntityId = :entite AND w.statusFromId = :depuis "
             + "AND w.statusToId IS NOT NULL AND w.statusToId <> :depuis ORDER BY w.sorting ASC, w.code ASC")
     List<StrWorkFlow> sortantes(UUID entite, UUID depuis);
+
+    /** Séquence libre ({@code GetNextWorkFlowList}, utilisateur libre) : toute l'entité, départ et arrivée renseignés et distincts. */
+    @Query("SELECT w FROM StrWorkFlow w WHERE w.strConfigEntityId = :entite AND w.statusFromId IS NOT NULL "
+            + "AND w.statusToId IS NOT NULL AND w.statusToId <> w.statusFromId ORDER BY w.sorting ASC, w.code ASC")
+    List<StrWorkFlow> deLEntite(UUID entite);
 }

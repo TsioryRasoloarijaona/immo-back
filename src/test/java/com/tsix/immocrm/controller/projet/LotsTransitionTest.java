@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * E7, R7 — FEATURE-lots-liste-parite.md. Statuts de test A, B, C du genre Entrepreneurs ; transitions A→B, A→C, B→C ; lot
- * sur A. Compte libre (rôle {@code WithSequenceFreeRestriction = 0}) : toutes les transitions partant de A. Compte restreint
+ * sur A. Compte libre (rôle {@code WithSequenceFreeRestriction = 0}) : séquence libre N6 R11 (une transition par arrivée). Compte restreint
  * (drapeau à 1) : intervenant de son rôle sur le statut A (visibilité) et sur la seule transition A→B
  * ({@code StrWorkFlowIntervener}, {@code StrStatus.cs:GetNextWorkFlowList}).
  */
@@ -85,12 +85,15 @@ class LotsTransitionTest {
 
     // ------------------------------------------------------------------ GET transitions
 
+    // N6 R11 (Q1) : toutes les transitions du genre (dont celles de prod), une par arrivée, arrivée ≠ statut courant ;
+    // arrivée C : « A>C » précède « B>C » par Code (même Sorting).
     @Test
-    void e7_compteLibre_transitionsPartantDuStatutActuel() throws Exception {
+    void r11_compteLibre_unePremiereParArrivee_horsStatutActuel() throws Exception {
         Reponse r = appels.transitions(qLibre, lot);
 
         assertThat(r.statut()).as(r.corps()).isEqualTo(200);
-        assertThat(r.ids(IDS)).containsExactlyInAnyOrder(ab.toString(), ac.toString()).doesNotContain(bc.toString());
+        assertThat(r.ids(IDS)).contains(ab.toString(), ac.toString()).doesNotContain(bc.toString());
+        assertThat(r.ids("$[*].statutArriveeId")).isNotEmpty().doesNotHaveDuplicates().doesNotContain(statutA.toString());
     }
 
     @Test
@@ -150,8 +153,9 @@ class LotsTransitionTest {
         s.assertAll();
     }
 
+    // N6 R11 : B>C n'est pas proposée (A>C représente l'arrivée C), donc refusée.
     @Test
-    void e7_transitionNePartantPasDuStatutActuel_409_statutInchange() throws Exception {
+    void r11_compteLibre_transitionNonRepresentanteDeSonArrivee_409_statutInchange() throws Exception {
         Reponse r = appels.executer(qLibre, lot, bc);
 
         SoftAssertions.assertSoftly(s -> {

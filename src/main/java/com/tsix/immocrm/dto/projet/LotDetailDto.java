@@ -52,6 +52,8 @@ public record LotDetailDto(
         @Schema(description = "Dernière modification (UserUpdateDateTime).") LocalDateTime dateModification,
         @Schema(description = "Auteur de la dernière modification (UserUpdate).") String modifiePar,
         @Schema(description = "Onglet Général : marché, estimations, coûts prévisionnel et réel.") GeneralLotDto general,
-        @JsonUnwrapped FicheEtendueLotDto fiche
+        @JsonUnwrapped FicheEtendueLotDto fiche,
+        @Schema(description = "Statut du lot ouvrant l'ajout d'une DIA (BoolField005) ; droit et autres DIA contrôlés au POST.")
+        boolean peutAjouterDia
 ) {
 }

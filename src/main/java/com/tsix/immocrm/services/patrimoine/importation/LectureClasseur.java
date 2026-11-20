@@ -25,7 +25,7 @@ import java.util.Set;
  * Lecture durcie d'un classeur importé (FEATURE-patrimoine-import-export.md §1.2) : taille, octets magiques, bornes POI
  * ({@code config/ImportSecurise}), une feuille, 1 000 lignes de données au plus. Cellule vide = valeur absente.
  */
-final class LectureClasseur {
+public final class LectureClasseur {
 
     static final long TAILLE_MAX = 10L * 1024 * 1024;
     static final int LIGNES_MAX = 1000;
@@ -37,14 +37,14 @@ final class LectureClasseur {
     }
 
     /** Une ligne de données : n° de ligne Excel et valeurs non vides par en-tête (String, BigDecimal, LocalDateTime, Boolean). */
-    record LigneLue(int numero, Map<String, Object> valeurs) {
+    public record LigneLue(int numero, Map<String, Object> valeurs) {
     }
 
     /** {@code nom} = feuille lue, {@code feuilles} = toutes celles du classeur (analyse de l'import générique). */
-    record Feuille(String nom, List<String> feuilles, Set<String> entetes, List<LigneLue> lignes) {
+    public record Feuille(String nom, List<String> feuilles, Set<String> entetes, List<LigneLue> lignes) {
     }
 
-    static Feuille lire(MultipartFile fichier, String nomFeuille) {
+    public static Feuille lire(MultipartFile fichier, String nomFeuille) {
         if (fichier.getSize() > TAILLE_MAX) {
             throw new ClasseurTropGrosException("Le fichier dépasse la taille admise de 10 Mo.");
         }

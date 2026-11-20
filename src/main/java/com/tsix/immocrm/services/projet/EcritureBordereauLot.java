@@ -101,6 +101,16 @@ public class EcritureBordereauLot {
         DroitsBordereau.refus(droits, lot, t.estimatif()).ifPresent(refus -> {
             throw refus;
         });
+        remplacer(lot, corps, t);
+    }
+
+    /** Clôture d'une demande d'achat (R20, FEATURE-n6-demandes-achat.md) : sans contrôle de visibilité ni de droit sur le lot. */
+    public void remplacerDefinitif(PrjMarket lot, BordereauSaisieDto corps) {
+        remplacer(lot, corps, DEFINITIF);
+    }
+
+    private void remplacer(PrjMarket lot, BordereauSaisieDto corps, Tables t) {
+        UUID id = lot.getId();
         ValidationBordereau.valider(corps, t.estimatif(), this::categoriesExistantes);
         Map<UUID, GroupeBordereauOmran> groupes = enBase(t.groupes(), GroupeBordereauOmran.class, id);
         Map<UUID, LigneBordereauOmran> lignes = enBase(t.lignes(), LigneBordereauOmran.class, id);

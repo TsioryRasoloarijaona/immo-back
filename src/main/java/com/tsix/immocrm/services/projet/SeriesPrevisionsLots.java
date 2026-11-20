@@ -2,11 +2,13 @@ package com.tsix.immocrm.services.projet;
 
 import com.tsix.immocrm.domain.projet.AgregationPrevisionsProjet.Montant;
 import com.tsix.immocrm.domain.projet.AgregationPrevisionsProjet.SeriesLot;
+import com.tsix.immocrm.domain.projet.AlignementPrevisions;
 import com.tsix.immocrm.domain.projet.CalculLot;
 import com.tsix.immocrm.domain.projet.EntreesSimulation;
 import com.tsix.immocrm.domain.projet.MontantsLot;
 import com.tsix.immocrm.domain.projet.SimulationPaiementsLot;
 import com.tsix.immocrm.entities.prj.PrjMarket;
+import com.tsix.immocrm.entities.str.StrStatus;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
@@ -45,8 +47,13 @@ class SeriesPrevisionsLots {
     private static final String DECOMPTES_FACTURES = "select w.prjMarket.id, w.id, w.docDate from PrjWorkingOut w"
             + " where w.prjMarket.id in :lots and w.buyDocument is not null and w.docDate is not null";
 
-    /** Un lot lu : son calcul (montants de base) et ses séries. */
-    record Lot(PrjMarket marche, CalculLot calcul, SeriesLot series) {
+    /** Un lot lu : son calcul (montants de base), ses séries (fiche lot) et son avancement ajusté pour le projet (R7-bis). */
+    record Lot(PrjMarket marche, CalculLot calcul, SeriesLot series, NavigableMap<YearMonth, BigDecimal> avancementAjuste) {
+
+        SeriesLot seriesProjet() {
+            return new SeriesLot(series.lot(), series.description(), series.estimation(), series.previsions(), series.reel(),
+                    series.avancementEstimation(), avancementAjuste, series.avancementReel(), series.debut(), series.fin());
+        }
     }
 
     private final MontantsListeLots montants;
@@ -79,9 +86,34 @@ class SeriesPrevisionsLots {
         LocalDate aujourdhui = LocalDate.now(clock);
         return lots.stream().map(m -> {
             UUID id = m.getId();
-            return new Lot(m, calculs.get(id), series(m, entrees.get(id), aujourdhui, previsions.getOrDefault(id, List.of()),
-                    reels.getOrDefault(id, List.of()), avancementsReels.getOrDefault(id, new TreeMap<>())));
+            CalculLot calcul = calculs.get(id);
+            EntreesSimulation e = entrees.get(id);
+            return new Lot(m, calcul, series(m, e, aujourdhui, previsions.getOrDefault(id, List.of()),
+                    reels.getOrDefault(id, List.of()), avancementsReels.getOrDefault(id, new TreeMap<>())),
+                    avancementAjuste(m, e, calcul));
         }).toList();
+    }
+
+    /** R7-bis : {@code Market.GetAchievmentPrevisionAtDate} au 1ᵉʳ de chaque mois, du début du lot au mois suivant sa fin. */
+    private static NavigableMap<YearMonth, BigDecimal> avancementAjuste(PrjMarket m, EntreesSimulation e, CalculLot calcul) {
+        NavigableMap<YearMonth, BigDecimal> parMois = new TreeMap<>();
+        if (multi(m) || e.planning().debut() == null) {
+            return parMois;
+        }
+        BigDecimal plafond = resilieEtAnnule(m) ? calcul.avancementFacture() : null;
+        YearMonth fin = YearMonth.from(e.planning().fin()).plusMonths(1);
+        for (YearMonth mois = YearMonth.from(e.planning().debut()); !mois.isAfter(fin); mois = mois.plusMonths(1)) {
+            BigDecimal v = AlignementPrevisions.prevuA(mois.atDay(1), e);
+            parMois.put(mois, plafond == null ? v : v.min(plafond));
+        }
+        return parMois;
+    }
+
+    // IsCancellation && IsResiliation de PrjMarketMonitoringView ; IsCancellation est faux sur un lot clôturé (Market.cs).
+    private static boolean resilieEtAnnule(PrjMarket m) {
+        StrStatus s = m.getStrStatus();
+        return s != null && Boolean.TRUE.equals(s.getAnnulation()) && MontantsListeLots.TYPE_RESILIE.equals(s.getStrStatusTypeId())
+                && !Boolean.TRUE.equals(m.getIsClosed());
     }
 
     private static SeriesLot series(PrjMarket m, EntreesSimulation e, LocalDate aujourdhui, List<Object[]> lignesP,

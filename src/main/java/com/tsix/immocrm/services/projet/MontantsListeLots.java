@@ -34,7 +34,7 @@ class MontantsListeLots {
     private static final Somme[] SOMMES = Somme.values();
 
     // StrStatusType des lots terminés (IsTerminated) ; le deuxième est aussi la résiliation (CancelRatio).
-    private static final UUID TYPE_RESILIE = UUID.fromString("22B7D73E-2A8F-4A74-839D-29F1DE329B97");
+    static final UUID TYPE_RESILIE = UUID.fromString("22B7D73E-2A8F-4A74-839D-29F1DE329B97");
     private static final Set<UUID> TYPES_TERMINES = Set.of(UUID.fromString("A9E040DB-533F-4744-AE9A-1425793ADEA0"),
             TYPE_RESILIE, UUID.fromString("D572CE4B-A4DD-4F38-8998-359EAB5A9FCA"));
 

@@ -107,8 +107,9 @@ class LotsRevueSecondeTest {
         });
     }
 
+    // N6 R11 + R13 (Q1) : compte libre → transition WithPassword proposée, avecSecondValideur ; sans second valideur → 400.
     @Test
-    void transitionASecondValideur_jamaisProposee_executee409() throws Exception {
+    void transitionASecondValideur_proposeeAvecSecondValideur_executeeSansSecond400() throws Exception {
         UUID depart = fixture.statut(ENTREPRENEURS, "RV2A-" + jeton);
         UUID lot = fixture.lot(projet, "RV2T-" + jeton, ENTREPRENEURS, depart);
         UUID t = fixture.transition(ENTREPRENEURS, depart, fixture.statut(ENTREPRENEURS, "RV2B-" + jeton), "RV2W-" + jeton);
@@ -121,8 +122,11 @@ class LotsRevueSecondeTest {
         SoftAssertions.assertSoftly(s -> {
             s.assertThat(liste.statut()).isEqualTo(200);
             List<String> ids = JsonPath.read(liste.corps(), "$[*].id");
-            s.assertThat(ids).doesNotContain(t.toString());
-            s.assertThat(execution.statut()).as(execution.corps()).isEqualTo(409);
+            s.assertThat(ids).contains(t.toString());
+            List<Object> drapeaux = JsonPath.read(liste.corps(), "$[?(@.id == '" + t + "')].avecSecondValideur");
+            s.assertThat(drapeaux).containsExactly(true);
+            s.assertThat(execution.statut()).as(execution.corps()).isEqualTo(400);
+            s.assertThat(execution.corps()).contains("Login ou mot de passe incorrecte !");
         });
     }
 

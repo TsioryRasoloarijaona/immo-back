@@ -11,6 +11,9 @@ public record TransitionLotDto(
         @Schema(description = "Statut d'arrivée (StrStatus.PKey).") UUID statutArriveeId,
         @Schema(description = "Libellé du statut d'arrivée.") String statutArriveeLibelle,
         @Schema(description = "Nom de couleur .NET du statut d'arrivée, null si absent.", example = "LimeGreen")
-        String statutArriveeCouleur
+        String statutArriveeCouleur,
+        @Schema(description = "Commentaire obligatoire (WithComment).") boolean avecCommentaire,
+        @Schema(description = "Date utilisateur demandée (WithUserDate).") boolean avecDateUtilisateur,
+        @Schema(description = "Identifiants d'un second utilisateur exigés (WithPassword).") boolean avecSecondValideur
 ) {
 }
