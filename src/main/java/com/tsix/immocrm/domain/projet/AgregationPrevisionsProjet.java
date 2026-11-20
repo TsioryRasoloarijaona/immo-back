@@ -69,7 +69,9 @@ public final class AgregationPrevisionsProjet {
             cumuler(sommes, s.estimation(), 0);
             cumuler(sommes, s.previsions(), 1);
             cumuler(sommes, s.reel(), 2);
-            AVANCEMENTS.forEach(a -> a.apply(s).keySet().forEach(m -> sommes.computeIfAbsent(m, k -> zeros())));
+            // L'avancement ajusté ne crée aucun mois (R7-bis) : côté lot, ses mois sont déjà ceux des lignes P.
+            Stream.of(s.avancementEstimation(), s.avancementReel())
+                    .forEach(a -> a.keySet().forEach(m -> sommes.computeIfAbsent(m, k -> zeros())));
         }
         if (sommes.isEmpty()) {
             return List.of();

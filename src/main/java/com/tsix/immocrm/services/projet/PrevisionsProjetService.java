@@ -114,7 +114,7 @@ public class PrevisionsProjetService {
         lus.stream().filter(l -> !Boolean.TRUE.equals(l.marche().getIsMultiSupplier()))
                 .forEach(l -> ht.put(l.marche().getId(), l.calcul().previsionHT()));
         AgregationPrevisionsProjet agregation = new AgregationPrevisionsProjet(
-                lus.stream().map(SeriesPrevisionsLots.Lot::series).toList(), AgregationPrevisionsProjet.poids(ht));
+                lus.stream().map(SeriesPrevisionsLots.Lot::seriesProjet).toList(), AgregationPrevisionsProjet.poids(ht));
         LocalDate aujourdhui = LocalDate.now(clock);
         return new PrevisionsProjetDto(projetId, projet.getDescription(), aujourdhui, agregation.totaux(aujourdhui),
                 agregation.mois(), lus.stream().map(PrevisionsProjetService::ligne).toList(), agregation.decaissements(),

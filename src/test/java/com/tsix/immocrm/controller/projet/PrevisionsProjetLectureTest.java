@@ -387,7 +387,10 @@ class PrevisionsProjetLectureTest {
 
     // ------------------------------------------------------------------ R3 : une seule source de calcul
 
-    /** R3 : projet à 1 lot (estimation, P et R) → {@code mois} du projet = {@code mois} du lot, champ à champ. */
+    /**
+     * R3 : projet à 1 lot (estimation, P et R) → {@code mois} du projet = {@code mois} du lot, champ à champ, sauf l'avancement
+     * ajusté (R7-bis : prévu au 1ᵉʳ du mois côté projet, max {@code Achievement} côté lot).
+     */
     @Test
     void r3_projetAUnLot_moisEgauxAuxMoisDuLot() throws Exception {
         UUID projet = projet("PP1");
@@ -401,9 +404,14 @@ class PrevisionsProjetLectureTest {
         Reponse duLot = new AppelsProjet(mockMvc).lire(qui, AppelsProjet.LOTS + "/" + lot + "/previsions");
 
         assertThat(duLot.statut()).as(duLot.corps()).isEqualTo(200);
-        List<Map<String, String>> attendus = normaliser(duLot.valeur(MOIS));
+        List<Map<String, String>> attendus = sansAvancementAjuste(normaliser(duLot.valeur(MOIS)));
         assertThat(attendus).isNotEmpty();
-        assertThat(normaliser(r.valeur(MOIS))).isEqualTo(attendus);
+        assertThat(sansAvancementAjuste(normaliser(r.valeur(MOIS)))).isEqualTo(attendus);
+    }
+
+    private static List<Map<String, String>> sansAvancementAjuste(List<Map<String, String>> points) {
+        points.forEach(p -> p.remove("avancementPrevision"));
+        return points;
     }
 
     /** Points du graphe, nombres ramenés à leur écriture canonique ({@code 400.000000} = {@code 400}). */
