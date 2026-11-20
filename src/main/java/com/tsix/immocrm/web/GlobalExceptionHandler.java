@@ -83,7 +83,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        if (ex.code() != null) {
+            probleme.setProperty("code", ex.code());
+        }
+        return probleme;
     }
 
     @ExceptionHandler(InvalidRequestException.class)
