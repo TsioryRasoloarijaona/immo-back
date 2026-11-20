@@ -52,7 +52,7 @@ import java.util.stream.Stream;
 
 /** SQL natif des pièces d'achat : aucune entité {@code Prj*} dans ce lot (FEATURE-achat-lecture-factures.md §4). */
 @Component
-class RequetesDocumentsAchat {
+public class RequetesDocumentsAchat {
 
     private static final BigDecimal CENT = BigDecimal.valueOf(100);
     private static final String MONTANT = "Amount";
@@ -69,7 +69,7 @@ class RequetesDocumentsAchat {
     static final String PROJET_VISIBLE = "(d.PrjProjectId IN (:projets) OR (:sansProjet = 1 AND d.PrjProjectId IS NULL)) ";
 
     /** Société et projet visibles d'une ligne {@code d} sans module : prêts. */
-    static final String SOCIETE_PROJET_VISIBLES = "d.CfgCompanyId IN (:societes) AND " + PROJET_VISIBLE;
+    public static final String SOCIETE_PROJET_VISIBLES ="d.CfgCompanyId IN (:societes) AND " + PROJET_VISIBLE;
 
     /** Seul prédicat de visibilité d'une pièce {@code d} (R3, R4, R5), lié par {@link #parametres}. */
     static final String VISIBLE = SOCIETE_PROJET_VISIBLES + "AND (:moduleProjet = 0 OR d.AdmModuleId IN "
@@ -245,7 +245,7 @@ class RequetesDocumentsAchat {
     }
 
     /** Paramètres de {@link #VISIBLE} ; une liste vide devient un UUID qui ne désigne rien (SQL Server refuse IN ()). */
-    static MapSqlParameterSource parametres(PerimetreAchat perimetre) {
+    public static MapSqlParameterSource parametres(PerimetreAchat perimetre) {
         return new MapSqlParameterSource("societes", nonVide(perimetre.societes()))
                 .addValue(PROJETS, nonVide(perimetre.projets()))
                 .addValue("sansProjet", perimetre.sansProjet() ? 1 : 0)

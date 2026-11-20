@@ -76,7 +76,7 @@ public final class AlignementPrevisions {
     }
 
     /** {@code GetAchievmentPrevisionAtDate} : avancement prévu à la date {@code d} (points redatés début + durée × temps). */
-    static BigDecimal prevuA(LocalDate d, EntreesSimulation e) {
+    public static BigDecimal prevuA(LocalDate d, EntreesSimulation e) {
         Planning p = e.planning();
         if (d.isBefore(p.debut())) {
             return ZERO;

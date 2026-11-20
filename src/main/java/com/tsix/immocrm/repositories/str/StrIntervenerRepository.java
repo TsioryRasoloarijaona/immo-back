@@ -16,6 +16,11 @@ public interface StrIntervenerRepository extends JpaRepository<StrIntervener, UU
             + "AND (wi.withPassword IS NULL OR wi.withPassword = false)")
     List<Object[]> deTransitions(Collection<UUID> transitions);
 
+    /** Intervenants « second valideur » ({@code StrWorkFlowIntervener.WithPassword = 1}) ; tuple [StrWorkFlowId, intervenant]. */
+    @Query("SELECT wi.strWorkFlowId, i FROM StrWorkFlowIntervener wi, StrIntervener i "
+            + "WHERE i.id = wi.strIntervenerId AND wi.strWorkFlowId IN :transitions AND wi.withPassword = true")
+    List<Object[]> secondsValideurs(Collection<UUID> transitions);
+
     /** Intervenants des statuts d'une entité ; tuple [StrStatusId, intervenant]. */
     @Query("SELECT si.strStatusId, i FROM StrStatusIntervener si, StrIntervener i, StrStatus s "
             + "WHERE i.id = si.strIntervenerId AND s.id = si.strStatusId AND s.strConfigEntityId = :entite")

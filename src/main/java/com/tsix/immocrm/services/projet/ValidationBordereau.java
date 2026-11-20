@@ -18,7 +18,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /** Corps d'un bordereau entier (FEATURE-lot-ecritures.md R4, R5) : toute erreur = 400. */
-final class ValidationBordereau {
+public final class ValidationBordereau {
 
     static final int TEXTE = 255;
     private static final int UNITE = 50;
@@ -32,7 +32,7 @@ final class ValidationBordereau {
     }
 
     /** {@code categoriesExistantes} reçoit les catégories citées et rend celles qui existent. */
-    static void valider(BordereauSaisieDto corps, boolean estimatif, UnaryOperator<Set<UUID>> categoriesExistantes) {
+    public static void valider(BordereauSaisieDto corps, boolean estimatif, UnaryOperator<Set<UUID>> categoriesExistantes) {
         if (corps == null || !sansNul(corps.groupes()) || !sansNul(corps.lignes())) {
             throw new InvalidRequestException("groupes, lignes : listes obligatoires, sans élément nul");
         }

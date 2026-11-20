@@ -184,7 +184,7 @@ class GenerationPieceAchat {
         List<UUID> commandes = facture ? commandesSources.stream().filter(Objects::nonNull).toList() : List.of();
         UUID factureSource = cible == REFUND ? premiere.getId() : null;
         return new Generation(gestion, premiere.getStlCurrencyId(), devis, commande, livraisons, commandes, factureSource,
-                avoirFinancier(cible));
+                avoirFinancier(cible), premiere.getBuySelectionId());
     }
 
     private boolean validee(BuyDocument d) {

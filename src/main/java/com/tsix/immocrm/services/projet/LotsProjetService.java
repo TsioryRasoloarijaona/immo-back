@@ -222,7 +222,9 @@ public class LotsProjetService {
         return permises.stream().map(w -> {
             StrStatus cible = cibles.get(w.getStatusToId());
             return new TransitionLotDto(w.getId(), w.getDescription(), w.getStatusToId(),
-                    Champs.de(cible, StrStatus::getDescription), Champs.de(cible, StrStatus::getColorName));
+                    Champs.de(cible, StrStatus::getDescription), Champs.de(cible, StrStatus::getColorName),
+                    Boolean.TRUE.equals(w.getWithComment()), Boolean.TRUE.equals(w.getWithUserDate()),
+                    Boolean.TRUE.equals(w.getWithPassword()));
         }).toList();
     }
 
@@ -278,7 +280,13 @@ public class LotsProjetService {
                 jour(m.getWithdrawalTenderDocumentsDate()), jour(m.getTenderMaturityDate()), jour(m.getBidOpeningDate()),
                 jour(m.getTenderDate()), jour(m.getContractSignatureDate()), jour(m.getServiceOrderDate()),
                 jour(m.getWorkLaunchDate()), m.getUserCreateDateTime(), m.getUserCreate(), m.getUserUpdateDateTime(),
-                m.getUserUpdate(), calcul.general(), fiche(m, calcul));
+                m.getUserUpdate(), calcul.general(), fiche(m, calcul), peutAjouterDia(m));
+    }
+
+    /** Statut du lot « avec DIA » ({@code StrStatus.BoolField005}) : seule règle de R18 ; lu en base, l'entité statut est partagée. */
+    public boolean peutAjouterDia(PrjMarket m) {
+        return m.getStrStatus() != null && em.createNativeQuery("SELECT BoolField005 FROM StrStatus WHERE PKey = :id")
+                .setParameter("id", m.getStrStatus().getId()).getResultList().contains(Boolean.TRUE);
     }
 
     public SuiviLotDto suivi(UUID id) {
@@ -387,7 +395,7 @@ public class LotsProjetService {
     }
 
     /** Seule lecture d'un lot par id (fiche, bordereau, création de décompte) : 404 hors projet habilité ou statut visible. */
-    PrjMarket visible(UUID id) {
+    public PrjMarket visible(UUID id) {
         Visibilite v = new Visibilite(perimetre.projetsVisibles(), intervenant.statutsDeLotsEtProjets());
         return (v.vide() ? Optional.<PrjMarket>empty() : lots.findByIdAndPrjProjectIdIn(id, v.projets()))
                 .filter(v::voit)

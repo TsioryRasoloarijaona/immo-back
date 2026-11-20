@@ -112,6 +112,7 @@ public class EcriturePieceAchat {
             d.setBuyQuoteId(g.devis());
             d.setBuyOrderId(g.commande());
             d.setInvoiceSourceId(g.factureSource());
+            d.setBuySelectionId(g.selection()); // OMRAN DocumentBase.GenateDocFromDocs : BC d'une offre rattaché à sa DIA
             d.setIsFinancialRefund(g.avoirFinancier()); // défaut, remplacé par la case saisie dans entete()
         }
         entete(d, piece, conf.module(), declencheur);

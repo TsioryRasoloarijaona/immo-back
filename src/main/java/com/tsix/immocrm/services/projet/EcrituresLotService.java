@@ -174,7 +174,7 @@ public class EcrituresLotService {
             throw new InvalidRequestException("transitionId : obligatoire");
         }
         PrjMarket m = lots.visible(id);
-        transitions.executer(m, d.transitionId(), d.notes());
+        transitions.executer(m, d);
         m.setUserUpdate(utilisateur.courant().nom());
         m.setUserUpdateDateTime(LocalDateTime.now(clock));
         em.flush();
