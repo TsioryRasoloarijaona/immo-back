@@ -12,7 +12,6 @@ import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
-import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,16 +36,16 @@ public class PlanificationService {
     private final EntityManager em;
     private final AccesPlanification acces;
     private final ClonagePlanification clonage;
-    private final PerimetreProjetService perimetre;
+    private final LotsProjetService lots;
     private final TracePatrimoine trace;
     private final Clock clock;
 
     public PlanificationService(EntityManager em, AccesPlanification acces, ClonagePlanification clonage,
-                                PerimetreProjetService perimetre, TracePatrimoine trace, Clock clock) {
+                                LotsProjetService lots, TracePatrimoine trace, Clock clock) {
         this.em = em;
         this.acces = acces;
         this.clonage = clonage;
-        this.perimetre = perimetre;
+        this.lots = lots;
         this.trace = trace;
         this.clock = clock;
     }
@@ -161,13 +160,8 @@ public class PlanificationService {
 
     @Transactional(readOnly = true)
     public List<TachePlanificationDto> tachesDuLot(UUID lotId) {
-        List<?> projets = em.createNativeQuery("SELECT CAST(PrjProjectId AS nvarchar(36)) FROM PrjMarket WHERE PKey = :id")
-                .setParameter("id", lotId).getResultList();
-        UUID projet = projets.isEmpty() || projets.get(0) == null ? null : UUID.fromString((String) projets.get(0));
-        if (!perimetre.estVisible(projet)) {
-            throw new ResourceNotFoundException("Lot introuvable : " + lotId);
-        }
-        CfgGanttProject p = acces.principale(projet).orElseThrow(AccesPlanification::absente);
+        CfgGanttProject p = acces.principale(lots.visible(lotId).getPrjProject().getId())
+                .orElseThrow(AccesPlanification::absente);
         return AccesPlanification.dtos(acces.taches(p.getId())).stream().filter(t -> lotId.equals(t.lotId())).toList();
     }
 

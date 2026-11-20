@@ -52,4 +52,4 @@ Corps `{modeleId}`. Copie le modèle vers le projet : code « <code du projet> -
 
 ## listerTachesLot
 
-Tâches de la planification du projet du lot rattachées à ce lot (`PrjMarketId`). Planification absente : même 404 `PLANIFICATION_ABSENTE` que `lirePlanificationProjet`.
+Tâches de la planification du projet du lot rattachées à ce lot (`PrjMarketId`). Lot lu comme sa fiche : hors projet habilité ou statut invisible = 404. Planification absente : même 404 `PLANIFICATION_ABSENTE` que `lirePlanificationProjet`.
