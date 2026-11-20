@@ -1,6 +1,9 @@
 package com.tsix.immocrm.services.projet.travaux;
 
+import com.tsix.immocrm.dto.projet.travaux.ExecutionTransitionJourTravailleDto;
 import com.tsix.immocrm.dto.projet.travaux.FiltresTravaux;
+import com.tsix.immocrm.dto.projet.travaux.HistoriqueJourTravailleDto;
+import com.tsix.immocrm.dto.projet.travaux.TransitionJourTravailleDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleEcritureDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleFicheDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleLigneDto;
@@ -40,17 +43,19 @@ public class TravauxChantierService {
     private final DroitsOmran droits;
     private final PerimetreProjetService perimetre;
     private final StatutsJourTravaille statuts;
+    private final TransitionsJourTravaille workflow;
     private final LectureTravaux lecture;
     private final SaisieJourTravaille saisie;
     private final ReferencesPatrimoine references;
 
     public TravauxChantierService(EntityManager em, DroitsOmran droits, PerimetreProjetService perimetre,
-                                  StatutsJourTravaille statuts, LectureTravaux lecture, SaisieJourTravaille saisie,
+                                  TransitionsJourTravaille workflow, LectureTravaux lecture, SaisieJourTravaille saisie,
                                   ReferencesPatrimoine references) {
         this.em = em;
         this.droits = droits;
         this.perimetre = perimetre;
-        this.statuts = statuts;
+        this.statuts = workflow.statuts();
+        this.workflow = workflow;
         this.lecture = lecture;
         this.saisie = saisie;
         this.references = references;
@@ -87,6 +92,7 @@ public class TravauxChantierService {
         jour.setStrStatusId(depart.getId());
         saisie.appliquer(jour, corps);
         saisie.persister(jour);
+        workflow.creation(jour);
         return fiche(jour);
     }
 
@@ -103,7 +109,33 @@ public class TravauxChantierService {
     @Transactional
     public void supprimer(UUID id) {
         droits.exiger(SUPPRIMER);
-        em.remove(lecture.visible(id));
+        GrhWorkedDay jour = lecture.visible(id);
+        workflow.verifierSuppression(jour);
+        em.remove(jour);
+    }
+
+    /** Aucun droit propre aux transitions (R-N2b-1) : la lecture suffit. */
+    public List<TransitionJourTravailleDto> transitions(UUID id) {
+        return workflow.permises(lisible(id));
+    }
+
+    @Transactional
+    public JourTravailleFicheDto executer(UUID id, ExecutionTransitionJourTravailleDto execution) {
+        GrhWorkedDay jour = lisible(id);
+        workflow.executer(jour, execution);
+        saisie.marquer(jour);
+        return fiche(jour);
+    }
+
+    public List<HistoriqueJourTravailleDto> historique(UUID id) {
+        return workflow.historique(lisible(id).getId());
+    }
+
+    /** R-N2b-1 : 404 (jour invisible) avant le 403 (droit de lecture). */
+    private GrhWorkedDay lisible(UUID id) {
+        GrhWorkedDay jour = lecture.visible(id);
+        droits.exiger(LIRE);
+        return jour;
     }
 
     private JourTravailleFicheDto fiche(GrhWorkedDay j) {

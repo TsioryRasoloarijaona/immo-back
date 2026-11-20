@@ -20,6 +20,15 @@ class TravauxChantierOrdreRemonteeTest {
                 .isLessThan(rang("AdmWebHistorics"));
     }
 
+    /** R-N2b-11 : les lignes {@code StrHistory} des transitions remontent après le jour travaillé, avant l'audit. */
+    @Test
+    void r11_historiqueDesStatuts_apresLeJourTravaille_avantLAudit() {
+        assertThat(rang("StrHistory"))
+                .isLessThan(CollecteurLignesEcrites.ORDRE_CLES_ETRANGERES.size())
+                .isGreaterThan(rang("GrhWorkedDay"))
+                .isLessThan(rang("AdmWebHistorics"));
+    }
+
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"GrhWorkedDayType", "CfgProjectZone", "CfgTrancheLevelingDefinition", "PrjProject", "StrStatus"})
     void jourTravaille_apresSonParent_connu(String parent) {

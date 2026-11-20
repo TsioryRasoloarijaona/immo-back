@@ -1,6 +1,9 @@
 package com.tsix.immocrm.controller.projet;
 
+import com.tsix.immocrm.dto.projet.travaux.ExecutionTransitionJourTravailleDto;
 import com.tsix.immocrm.dto.projet.travaux.FiltresTravaux;
+import com.tsix.immocrm.dto.projet.travaux.HistoriqueJourTravailleDto;
+import com.tsix.immocrm.dto.projet.travaux.TransitionJourTravailleDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleEcritureDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleFicheDto;
 import com.tsix.immocrm.dto.projet.travaux.JourTravailleLigneDto;
@@ -97,7 +100,42 @@ public class TravauxChantierController {
     @ApiResponse(responseCode = "403", description = "Sans le droit OMRAN Yes.Prj.Front.Bul.GrhWorkedDayView.toolDelete.",
             content = @Content)
     @ApiResponse(responseCode = "404", description = INCONNU, content = @Content)
+    @ApiResponse(responseCode = "409", description = "Statut sans CanDelete et appelant restreint (message OMRAN).",
+            content = @Content)
     public void supprimerJourTravaille(@Parameter(description = ID_JOUR) @PathVariable UUID id) {
         service.supprimer(id);
+    }
+
+    @GetMapping("/{id}/transitions")
+    @Operation(summary = "Transitions de statut que l'appelant peut exécuter (vide si aucune)")
+    @ApiResponse(responseCode = "200", description = "Transitions permises, même calcul que le POST.")
+    @ApiResponse(responseCode = "403", description = SANS_DROIT_LIRE, content = @Content)
+    @ApiResponse(responseCode = "404", description = INCONNU, content = @Content)
+    public List<TransitionJourTravailleDto> transitionsJourTravaille(@Parameter(description = ID_JOUR) @PathVariable UUID id) {
+        return service.transitions(id);
+    }
+
+    @PostMapping("/{id}/transitions")
+    @Operation(summary = "Exécute une transition de statut ; renvoie la fiche relue")
+    @ApiResponse(responseCode = "200", description = "Fiche relue au nouveau statut, même s'il n'est plus visible de l'appelant.")
+    @ApiResponse(responseCode = "400", description = "transitionId absent, commentaire manquant ou identifiants du second faux.",
+            content = @Content)
+    @ApiResponse(responseCode = "403", description = "Sans droit de lecture, ou second valideur non habilité / identique.",
+            content = @Content)
+    @ApiResponse(responseCode = "404", description = INCONNU, content = @Content)
+    @ApiResponse(responseCode = "409", description = "Transition non permise ; transitionsAutorisees = codes des statuts permis.",
+            content = @Content)
+    public JourTravailleFicheDto executerTransitionJourTravaille(@Parameter(description = ID_JOUR) @PathVariable UUID id,
+            @RequestBody(required = false) ExecutionTransitionJourTravailleDto execution) {
+        return service.executer(id, execution);
+    }
+
+    @GetMapping("/{id}/historique")
+    @Operation(summary = "Historique des statuts (StrHistory), le plus récent d'abord")
+    @ApiResponse(responseCode = "200", description = "Lignes d'historique ; vide si aucune.")
+    @ApiResponse(responseCode = "403", description = SANS_DROIT_LIRE, content = @Content)
+    @ApiResponse(responseCode = "404", description = INCONNU, content = @Content)
+    public List<HistoriqueJourTravailleDto> historiqueJourTravaille(@Parameter(description = ID_JOUR) @PathVariable UUID id) {
+        return service.historique(id);
     }
 }
