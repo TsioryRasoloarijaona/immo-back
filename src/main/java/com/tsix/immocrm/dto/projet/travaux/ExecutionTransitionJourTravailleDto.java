@@ -10,7 +10,7 @@ import java.util.UUID;
 public record ExecutionTransitionJourTravailleDto(
         @Schema(description = "id d'une TransitionJourTravailleDto du GET.", requiredMode = Schema.RequiredMode.REQUIRED)
         UUID transitionId,
-        @Schema(description = "Commentaire (StrHistory.Notes) ; obligatoire quand avecCommentaire.") String notes,
+        @Schema(description = "StrHistory.Notes ; obligatoire si avecCommentaire, ignoré sauf avecCommentaire ou avecDateUtilisateur.") String notes,
         @Schema(description = "StrHistory.UserDate quand avecDateUtilisateur ; absente = l'instant de l'exécution.")
         LocalDateTime dateUtilisateur,
         @Schema(description = "Identifiants du second utilisateur quand avecSecondValideur.") SecondValideur secondValideur) {
