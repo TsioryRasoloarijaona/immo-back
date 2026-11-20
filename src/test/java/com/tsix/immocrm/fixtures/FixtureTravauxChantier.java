@@ -6,6 +6,7 @@ import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import jakarta.persistence.EntityManager;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -18,6 +19,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -50,6 +52,14 @@ public class FixtureTravauxChantier {
     public static final UUID VALIDEE = UUID.fromString("E1C7EF84-A951-4F22-AEB9-EDC143EA044D");
     public static final UUID ANNULEE = UUID.fromString("5EC87BB4-E549-4180-A2CF-CF74034A0875");
     public static final UUID REJETEE = UUID.fromString("DF8AFD3E-0A98-47D3-92FB-567DA2D343E5");
+
+    // Transitions de prod (N2b, mesurées le 20/11) : aucune exigence, aucun intervenant
+    public static final UUID T_DEMANDE = UUID.fromString("05BEB173-B516-47CE-BACF-9C1699C84549");
+    public static final UUID T_VALIDATION = UUID.fromString("09DBFB4F-95A2-4783-911B-0D8718342398");
+    public static final UUID T_ANNULATION = UUID.fromString("BD4630E8-08AC-4EF3-949F-99DCD41BA51E");
+    public static final UUID T_REJET = UUID.fromString("23926D6E-2E29-41C7-8B8C-1F43A0277327");
+    public static final List<UUID> TOUTES_LES_TRANSITIONS = List.of(T_DEMANDE, T_VALIDATION, T_ANNULATION, T_REJET);
+    public static final List<UUID> TOUS_LES_STATUTS = List.of(EN_COURS, DEMANDE_VALIDATION, VALIDEE, ANNULEE, REJETEE);
 
     private static final UUID TYPE_NOUVEAU = UUID.fromString("1004DFA9-D4C9-4C61-A3AF-44F174A76D53");
     private static final UUID TYPE_INTERMEDIAIRE = UUID.fromString("B53E0A4F-3D67-4BF9-8C0E-B24155865FD6");
@@ -100,15 +110,17 @@ public class FixtureTravauxChantier {
     private final FixtureDossierVente vente;
     private final FixtureProjetLots lots;
     private final FixtureVisibiliteOmran visibilite;
+    private final PasswordEncoder encodeur;
 
     public FixtureTravauxChantier(EntityManager em, JdbcTemplate jdbc, DataSource dataSource, FixtureDossierVente vente,
-                                  FixtureProjetLots lots, FixtureVisibiliteOmran visibilite) {
+                                  FixtureProjetLots lots, FixtureVisibiliteOmran visibilite, PasswordEncoder encodeur) {
         this.em = em;
         this.jdbc = jdbc;
         this.dataSource = dataSource;
         this.vente = vente;
         this.lots = lots;
         this.visibilite = visibilite;
+        this.encodeur = encodeur;
     }
 
     /** Colonnes (autocommit, durables) puis workflow de l'entité (dans la transaction du test). */
@@ -148,6 +160,89 @@ public class FixtureTravauxChantier {
         statut(entite, VALIDEE, "Validée", 60, TYPE_SUCCES, "Green");
         statut(entite, ANNULEE, "Annulée", 100, TYPE_ANNULATION, "DimGray");
         statut(entite, REJETEE, "Rejetée", 110, TYPE_ECHEC, "DimGray");
+        // Code = libellé et CanDelete comme en prod (seul « En cours » est supprimable par un restreint, R-N2b-7)
+        for (UUID s : TOUS_LES_STATUTS) {
+            jdbc.update("UPDATE StrStatus SET Code = Description, CanDelete = ? WHERE PKey = ?", EN_COURS.equals(s),
+                    s.toString());
+        }
+        transition(entite, T_DEMANDE, "Demande de validation", EN_COURS, DEMANDE_VALIDATION, 10);
+        transition(entite, T_VALIDATION, "Validation", DEMANDE_VALIDATION, VALIDEE, 20);
+        transition(entite, T_ANNULATION, "Annulation", EN_COURS, ANNULEE, 100);
+        transition(entite, T_REJET, "Rejet", DEMANDE_VALIDATION, REJETEE, 120);
+    }
+
+    private void transition(UUID entite, UUID id, String libelle, UUID depuis, UUID vers, int ordre) {
+        jdbc.update("""
+                IF NOT EXISTS (SELECT 1 FROM StrWorkFlow WHERE PKey = ?)
+                    INSERT INTO StrWorkFlow (PKey, StatusFromId, StatusToId, Sorting, Code, Description, WithComment,
+                        WithPassword, WithUserDate, WithAutomaticTransition, StrConfigEntityId)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?)""",
+                id.toString(), id.toString(), depuis.toString(), vers.toString(), ordre, libelle, libelle, entite.toString());
+    }
+
+    /** {@code WithComment}, {@code WithPassword}, {@code WithUserDate} de la transition (0 / 4 en prod : posés par le test). */
+    public void exigences(UUID transition, boolean commentaire, boolean motDePasse, boolean dateUtilisateur) {
+        maj("UPDATE StrWorkFlow SET WithComment = ?, WithPassword = ?, WithUserDate = ? WHERE PKey = ?",
+                commentaire, motDePasse, dateUtilisateur, transition.toString());
+    }
+
+    /** Intervenant « rôle » de la transition ; {@code motDePasse} = {@code StrWorkFlowIntervener.WithPassword} (second valideur). */
+    public void intervenantTransition(UUID transition, UUID role, boolean motDePasse) {
+        UUID intervenant = UUID.randomUUID();
+        UUID entite = entite();
+        maj("""
+                INSERT INTO StrIntervener (PKey, Code, Description, AdmRoleId, AdmUserId, StrConfigEntityId)
+                VALUES (?, ?, N'Intervenant travaux', ?, NULL, ?)""",
+                intervenant.toString(), "GRH-" + intervenant.toString().substring(0, 8), role.toString(), entite.toString());
+        maj("INSERT INTO StrWorkFlowIntervener (PKey, StrIntervenerId, StrWorkFlowId, WithPassword) VALUES (?, ?, ?, ?)",
+                UUID.randomUUID().toString(), intervenant.toString(), transition.toString(), motDePasse);
+    }
+
+    /** Transition d'une autre entité {@code StrEntity} (2 statuts propres) : jamais permise sur un jour travaillé. */
+    public UUID transitionEtrangere(String code) {
+        UUID entite = UUID.randomUUID();
+        UUID depuis = UUID.randomUUID();
+        UUID vers = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        maj("INSERT INTO StrEntity (PKey, Code, Description) VALUES (?, ?, ?)", entite.toString(), "ETR-" + code, "ETR-" + code);
+        for (UUID s : List.of(depuis, vers)) {
+            maj("""
+                    INSERT INTO StrStatus (PKey, Code, Description, Sorting, StrConfigEntityId, StrStatusTypeId, ColorName, CanDelete)
+                    VALUES (?, ?, ?, 10, ?, ?, N'Red', 1)""",
+                    s.toString(), "S-" + s.toString().substring(0, 8), "S-" + code, entite.toString(), TYPE_NOUVEAU.toString());
+        }
+        transition(entite, id, "Etrangère " + code, depuis, vers, 10);
+        return id;
+    }
+
+    /** Identifiants Arpent ({@code AppUserCredential}, BCrypt) du compte : second valideur. */
+    public void identifiants(AdmUser compte, String motDePasse) {
+        maj("""
+                INSERT INTO AppUserCredential (PKey, AdmUserId, PasswordHash, MustChangePassword, ProfileCompleted, TokenVersion,
+                    UserCreateDateTime) VALUES (?, ?, ?, 0, 1, 0, ?)""",
+                UUID.randomUUID().toString(), compte.getId().toString(), encodeur.encode(motDePasse),
+                Timestamp.valueOf(LocalDateTime.of(2026, 1, 15, 10, 0)));
+    }
+
+    /** Ligne {@code StrHistory} posée en SQL sur le jour, datée (ordre de {@code GET …/historique}). */
+    public void ligneHistorique(UUID jour, UUID statut, String description, LocalDateTime date) {
+        maj("""
+                INSERT INTO StrHistory (PKey, DocDate, Description, Notes, ObjectId, AdmUserDescription, StrStatusId,
+                    StrConfigEntityId, UserDate) VALUES (?, ?, ?, N'', ?, N'Compte historique', ?, ?, ?)""",
+                UUID.randomUUID().toString(), Timestamp.valueOf(date), description, jour.toString(), statut.toString(),
+                entite().toString(), Timestamp.valueOf(date));
+    }
+
+    /** Lignes {@code StrHistory} du jour, plus ancienne d'abord. */
+    public List<Map<String, Object>> historique(UUID jour) {
+        flush();
+        return jdbc.queryForList("SELECT * FROM StrHistory WHERE ObjectId = ? ORDER BY DocDate ASC", jour.toString());
+    }
+
+    /** {@code GrhWorkedDay.StrStatusId} en majuscules. */
+    public String statutDe(UUID jour) {
+        String s = lire("SELECT CAST(StrStatusId AS varchar(36)) FROM GrhWorkedDay WHERE Pkey = ?", jour);
+        return s == null ? null : s.toUpperCase();
     }
 
     private void typeStatut(UUID id, String libelle, int ordre) {
@@ -193,6 +288,24 @@ public class FixtureTravauxChantier {
         }
         flush();
         return new Compte(user, roleId, FixtureDossierVente.connecte(user, role));
+    }
+
+    /** N2b : compte restreint qui voit ces statuts et intervient (sans mot de passe) sur ces transitions, habilité sur le projet. */
+    public Compte restreint(String jeton, UUID projet, List<UUID> statuts, List<UUID> transitions, String... droits) {
+        Compte c = compte(jeton, true, List.of(projet), droits);
+        statuts.forEach(s -> intervenant(s, c.role()));
+        transitions.forEach(t -> intervenantTransition(t, c.role(), false));
+        flush();
+        return c;
+    }
+
+    /** Ids JSON (minuscules) mis en majuscules, pour comparer aux constantes. */
+    public static List<String> majuscules(List<String> ids) {
+        return ids.stream().map(String::toUpperCase).toList();
+    }
+
+    public static String majuscules(UUID id) {
+        return id.toString().toUpperCase();
     }
 
     /** Intervenant « rôle » d'un statut de l'entité : le statut devient visible des porteurs du rôle. */

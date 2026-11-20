@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.tsix.immocrm.fixtures.FixtureTravauxChantier.TRAVAUX;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -76,6 +77,48 @@ final class AppelsTravauxChantier {
 
     Reponse modifier(UUID jour, Map<String, Object> corps, RequestPostProcessor qui) throws Exception {
         return envoyer(put(TRAVAUX + "/" + jour), corps, qui);
+    }
+
+    // ------------------------------------------------------------------ N2b : transitions de statut
+
+    static final String TRANSITION_ID = "transitionId";
+
+    /** Corps {@code ExecutionTransitionJourTravaille} réduit à {@code transitionId}. */
+    static Map<String, Object> execution(UUID transition) {
+        Map<String, Object> corps = new LinkedHashMap<>();
+        corps.put(TRANSITION_ID, transition.toString());
+        return corps;
+    }
+
+    static Map<String, Object> secondValideur(String login, String motDePasse) {
+        Map<String, Object> corps = new LinkedHashMap<>();
+        corps.put("login", login);
+        corps.put("motDePasse", motDePasse);
+        return corps;
+    }
+
+    Reponse fiche(UUID jour, RequestPostProcessor qui) throws Exception {
+        return appeler(get(TRAVAUX + "/" + jour), qui);
+    }
+
+    Reponse supprimer(UUID jour, RequestPostProcessor qui) throws Exception {
+        return appeler(delete(TRAVAUX + "/" + jour), qui);
+    }
+
+    Reponse transitions(UUID jour, RequestPostProcessor qui) throws Exception {
+        return appeler(get(TRAVAUX + "/" + jour + "/transitions"), qui);
+    }
+
+    Reponse executer(UUID jour, Map<String, Object> corps, RequestPostProcessor qui) throws Exception {
+        return envoyer(post(TRAVAUX + "/" + jour + "/transitions"), corps, qui);
+    }
+
+    Reponse executer(UUID jour, UUID transition, RequestPostProcessor qui) throws Exception {
+        return executer(jour, execution(transition), qui);
+    }
+
+    Reponse historique(UUID jour, RequestPostProcessor qui) throws Exception {
+        return appeler(get(TRAVAUX + "/" + jour + "/historique"), qui);
     }
 
     /** Ids de {@code GET /travaux-chantier?<filtres>} ; échoue si le statut n'est pas 200. */
