@@ -232,8 +232,8 @@ public class TachesPlanificationService {
         if (creation || c.code() != null) {
             PlanificationService.texte(c.code(), "Le code");
         }
-        if (c.description() != null && c.description().length() > 255) {
-            throw new InvalidRequestException("La description fait 255 caractères au plus.");
+        if (c.description() != null) {
+            PlanificationService.texte(c.description(), "La description");
         }
         PlanificationService.notes(c.notes());
         if (c.tiersId() != null && em.find(CfgTier.class, c.tiersId()) == null) {

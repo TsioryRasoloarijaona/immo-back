@@ -45,10 +45,6 @@ final class TachesEditees {
         return taches.containsKey(id);
     }
 
-    Collection<CfgGanttTask> toutes() {
-        return taches.values();
-    }
-
     List<CfgGanttTask> enfants(UUID parent) {
         return taches.values().stream().filter(t -> Objects.equals(t.getParentId(), parent)).toList();
     }
