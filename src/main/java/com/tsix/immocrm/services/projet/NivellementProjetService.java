@@ -157,8 +157,10 @@ public class NivellementProjetService {
         Map<UUID, UUID> parents = new HashMap<>();
         noeuds.forEach(n -> parents.put(n.getId(), n.getParentId()));
         int profondeur = 1;
-        for (UUID courant = parentId; courant != null && profondeur <= max; courant = parents.get(courant)) {
+        UUID courant = parentId;
+        while (courant != null && profondeur <= max) {
             profondeur++;
+            courant = parents.get(courant);
         }
         return profondeur;
     }

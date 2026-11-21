@@ -94,6 +94,7 @@ public class ProjetConfigService {
             new Reference("SELECT COUNT(*) FROM PrjAchivementVersion WHERE PrjProjectId = :id", "version(s) d'avancement"),
             new Reference("SELECT COUNT(*) FROM PrjCoefficientCost WHERE PrjProjectId = :id", "coefficient(s) de coût"),
             new Reference("SELECT COUNT(*) FROM PrjGanttTask WHERE PrjProjectId = :id", "tâche(s) de planning"),
+            new Reference("SELECT COUNT(*) FROM CfgGanttProject WHERE ObjectId = :id", "planification(s)"),
             new Reference("SELECT COUNT(*) FROM PrjPrevision WHERE PrjProjectId = :id", "prévision(s)"),
             new Reference("SELECT COUNT(*) FROM PrjPrevisionVersion WHERE PrjProjectId = :id", "version(s) de prévision"),
             new Reference("SELECT COUNT(*) FROM PrjProjectAchievementPrevision WHERE PrjProjectId = :id",

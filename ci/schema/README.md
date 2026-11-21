@@ -122,7 +122,9 @@ sqlcmd -S localhost,49687 -U <user> -P <pwd> -d yesRemsTest -C -I -b -i "ci/sche
 ```
 
 `199_n9_planification.sql` : en local, déjà appliqué par `FixtureReferentielsPlanification.tables()` (sauf la FK
-`CfgGanttTask` → `CfgGanttTaskType`, CI seulement) ; tel quel (`-i`) sinon.
+`CfgGanttTask` → `CfgGanttTaskType`, CI seulement) ; tel quel (`-i`) sinon. N9b y ajoute `CfgGanttProject` et
+`CfgGanttOwner` (créées en local par `FixturePlanification.tables()`, **sans FK**) et, en CI seulement, les FK
+Task → Project et Owner → Project `ON DELETE CASCADE`, Project → version principale : le code supprime lui-même les enfants.
 
 `170_decomptes-parite_tables.sql` : en local, appliqué tel quel (`-i`), sans `171_decomptes-parite_fk.sql`.
 

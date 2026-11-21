@@ -43,3 +43,27 @@ IF OBJECT_ID(N'dbo.CfgGanttTask_CfgGanttTaskType_FK1', N'F') IS NULL
 ALTER TABLE dbo.CfgGanttTask ADD CONSTRAINT CfgGanttTask_CfgGanttTaskType_FK1
     FOREIGN KEY (CfgGanttTaskTypeId) REFERENCES dbo.CfgGanttTaskType (PKey);
 GO
+IF OBJECT_ID(N'dbo.CfgGanttProject', N'U') IS NULL
+CREATE TABLE dbo.CfgGanttProject (PKey uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(255) NULL,
+    Description nvarchar(255) NULL, StartDate datetime NULL, VersionDate datetime NULL, Notes nvarchar(1000) NULL,
+    UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL,
+    CfgGanttProjectMainVersionId uniqueidentifier NULL, ObjectId uniqueidentifier NULL, StrEntityObjectId uniqueidentifier NULL);
+GO
+IF OBJECT_ID(N'dbo.CfgGanttOwner', N'U') IS NULL
+CREATE TABLE dbo.CfgGanttOwner (PKey uniqueidentifier NOT NULL PRIMARY KEY, Visible bit NULL,
+    CfgGanttProjectId uniqueidentifier NULL, CfgTierId uniqueidentifier NULL,
+    UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL, UserUpdateDateTime datetime NULL,
+    Code nvarchar(255) NULL, Description nvarchar(255) NULL, Notes nvarchar(1000) NULL);
+GO
+IF OBJECT_ID(N'dbo.CfgGanttProject__CfgGanttProjectMainVersion_FK1', N'F') IS NULL
+ALTER TABLE dbo.CfgGanttProject ADD CONSTRAINT CfgGanttProject__CfgGanttProjectMainVersion_FK1
+    FOREIGN KEY (CfgGanttProjectMainVersionId) REFERENCES dbo.CfgGanttProject (PKey);
+GO
+IF OBJECT_ID(N'dbo.CfgGanttTask__CfgGanttProject_FK1', N'F') IS NULL
+ALTER TABLE dbo.CfgGanttTask ADD CONSTRAINT CfgGanttTask__CfgGanttProject_FK1
+    FOREIGN KEY (CfgGanttProjectId) REFERENCES dbo.CfgGanttProject (PKey) ON DELETE CASCADE;
+GO
+IF OBJECT_ID(N'dbo.CfgGanttOwner__CfgGanttProject_FK1', N'F') IS NULL
+ALTER TABLE dbo.CfgGanttOwner ADD CONSTRAINT CfgGanttOwner__CfgGanttProject_FK1
+    FOREIGN KEY (CfgGanttProjectId) REFERENCES dbo.CfgGanttProject (PKey) ON DELETE CASCADE;
+GO
