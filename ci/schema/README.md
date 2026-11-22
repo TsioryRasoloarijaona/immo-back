@@ -135,6 +135,9 @@ appliquer le script tel quel (`-i`) pour les colonnes `Code` / `Sorting` de `Cfg
 
 `200_travaux-chantier.sql` : en local, les colonnes de `GrhWorkedDay` sont ajoutées par `FixtureTravauxChantier` ; le script tel quel (`-i`) est sans effet de plus.
 
+`202_saisie-reglements_tables.sql` : en local, la table est créée par `FixtureDecaissements.saisie()` ; tel quel (`-i`)
+sinon, sans `203_saisie-reglements_fk.sql` (CI seulement : le code supprime lui-même l'historique avant le règlement).
+
 `165_projet-config.sql` : en local, seulement ses `CREATE TABLE` (une commande `-Q` par table), sans ses clés étrangères.
 
 Les clés de `121_terrains_fk.sql` restent CI : `yesRemsTest` n'a aucune FK, les contrôles qui en dépendent (suppression

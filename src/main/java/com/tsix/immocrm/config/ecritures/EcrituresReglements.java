@@ -13,6 +13,6 @@ public class EcrituresReglements implements TablesEcrites {
 
     @Override
     public List<String> tables() {
-        return List.of("StlSettlement", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument");
+        return List.of("StlSettlement", "StlSettlementHistory", "StlSettlementLine", "StlQuote", "StlQuoteItem", "StlQuoteDocument");
     }
 }

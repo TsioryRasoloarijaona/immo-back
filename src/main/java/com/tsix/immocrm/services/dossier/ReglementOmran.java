@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.dossier;
 
+import com.tsix.immocrm.entities.cfg.CfgCompany;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stl.StlSettlement;
@@ -9,6 +10,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 import static java.util.Objects.requireNonNullElse;
 
@@ -31,8 +33,13 @@ public class ReglementOmran {
     }
 
     public void completer(StlSettlement reglement, ComFolder folder) {
+        completer(reglement, SocieteDossier.de(folder), references.moduleCommercial());
+    }
+
+    /** Règlement hors vente (Projet, Achat) : société et module de la fiche. */
+    public void completer(StlSettlement reglement, CfgCompany societe, UUID module) {
         boolean credit = !Boolean.FALSE.equals(reglement.getIsCredit());
-        reglement.setAdmModuleId(references.moduleCommercial());
+        reglement.setAdmModuleId(module);
         reglement.setStrEntityId(references.entiteReglement(credit));
         reglement.setStlCurrencyId(references.deviseParDefaut());
         reglement.setStlCurrencyAffectationId(reglement.getStlCurrencyId());
@@ -49,7 +56,7 @@ public class ReglementOmran {
         reglement.setCategory(CATEGORIE);
         reglement.setItemNumber(NON_DEFINI);
         reglement.setItemDescription(NON_DEFINI);
-        reglement.setCfgCompany(SocieteDossier.de(folder));
+        reglement.setCfgCompany(societe);
         if (reglement.getEcheanceDate() == null) {
             reglement.setEcheanceDate(reglement.getDocDate());
         }

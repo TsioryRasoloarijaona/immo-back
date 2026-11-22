@@ -31,8 +31,7 @@ public class StlSettlementLine {
     @JoinColumn(name = "ComDocumentId")
     private ComDocument comDocument;
 
-    // Lu seulement (Projet + Achat) : aucun écrivain Arpent ne règle encore une pièce d'achat.
-    @Column(name = "BuyDocumentId", insertable = false, updatable = false)
+    @Column(name = "BuyDocumentId")
     private UUID buyDocumentId;
 
     @Size(max = 255)
