@@ -71,17 +71,17 @@ public class PrevisionsProjetService {
 
     private final DroitsOmran droits;
     private final PerimetreProjetService perimetre;
-    private final LotsProjetService lots;
+    private final LotsProjetService lotsProjet;
     private final SeriesPrevisionsLots series;
     private final ExportTableur tableur;
     private final EntityManager em;
     private final Clock clock;
 
-    PrevisionsProjetService(DroitsOmran droits, PerimetreProjetService perimetre, LotsProjetService lots,
+    PrevisionsProjetService(DroitsOmran droits, PerimetreProjetService perimetre, LotsProjetService lotsProjet,
                             SeriesPrevisionsLots series, ExportTableur tableur, EntityManager em, Clock clock) {
         this.droits = droits;
         this.perimetre = perimetre;
-        this.lots = lots;
+        this.lotsProjet = lotsProjet;
         this.series = series;
         this.tableur = tableur;
         this.em = em;
@@ -109,7 +109,7 @@ public class PrevisionsProjetService {
         if (projet == null) {
             throw new ResourceNotFoundException("Projet introuvable");
         }
-        List<SeriesPrevisionsLots.Lot> lus = series.lire(lots.lotsDesPrevisions(projetId));
+        List<SeriesPrevisionsLots.Lot> lus = series.lire(lotsProjet.lotsDesPrevisions(projetId));
         Map<UUID, BigDecimal> ht = new HashMap<>();
         lus.stream().filter(l -> !Boolean.TRUE.equals(l.marche().getIsMultiSupplier()))
                 .forEach(l -> ht.put(l.marche().getId(), l.calcul().previsionHT()));

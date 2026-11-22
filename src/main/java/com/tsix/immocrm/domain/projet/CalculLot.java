@@ -156,6 +156,11 @@ public final class CalculLot {
         return premierNonNul(marcheAjuste.ht(), est.ht(), t.forfaitHT()).multiply(ratioAnnulation());
     }
 
+    /** {@code PrevisionTTC} de {@code PrjMarketMonitoringView}, pendant TTC de {@link #previsionHT()}. */
+    public BigDecimal previsionTTC() {
+        return premierNonNul(marcheAjuste.ttc(), est.ttc(), t.forfaitTTC()).multiply(ratioAnnulation());
+    }
+
     /** {@code PrevisionAmountToPay} de {@code PrjMarketMonitoringView} : TTC prévu − non remboursables + prorata remboursé. */
     public BigDecimal previsionNetAPayer() {
         BigDecimal nrr = premierNonNul(nonRemboursables(marcheAjuste.ttc()), nonRemboursables(est.ttc()));
@@ -350,8 +355,8 @@ public final class CalculLot {
         return avoirs.plus(stockAvoirs).plus(fluctuationsAvoirs);
     }
 
-    /** {@code CancelRatio} : lot annulé ou résilié = avancement décompté, sinon 1. */
-    private BigDecimal ratioAnnulation() {
+    /** {@code CancelRatio} de {@code PrjMarketMonitoringView} : avancement décompté si le lot est annulé, sinon 1. */
+    public BigDecimal ratioAnnulation() {
         return d.annule() ? avancementDecompte() : BigDecimal.ONE;
     }
 
