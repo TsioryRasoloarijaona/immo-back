@@ -33,11 +33,11 @@ import java.util.function.Predicate;
 @Service
 public class DemandesAchatService {
 
-    private static final String LECTURE = "Yes.Buy.Front.CallOfTender.BuySelectionList";
-    private static final String NOUVEAU = LECTURE + ".toolNew";
-    private static final String SUPPRIMER = LECTURE + ".toolDelete";
-    private static final String EXPORTER = LECTURE + ".toolExport";
-    private static final String CONFIDENTIEL = LECTURE + ".IsConfidential";
+    private static final String DROIT_LECTURE = "Yes.Buy.Front.CallOfTender.BuySelectionList";
+    private static final String NOUVEAU = DROIT_LECTURE + ".toolNew";
+    private static final String SUPPRIMER = DROIT_LECTURE + ".toolDelete";
+    private static final String EXPORTER = DROIT_LECTURE + ".toolExport";
+    private static final String CONFIDENTIEL = DROIT_LECTURE + ".IsConfidential";
 
     private final LectureDemandesAchat lecture;
     private final EcrituresDemandeAchat ecritures;
@@ -61,20 +61,20 @@ public class DemandesAchatService {
 
     @Transactional(readOnly = true)
     public List<DemandeAchatLigne> liste(FiltresDemandesAchat filtres) {
-        droits.exiger(LECTURE);
+        droits.exiger(DROIT_LECTURE);
         return lignes(filtres);
     }
 
     @Transactional(readOnly = true)
     public List<DemandeAchatLigne> export(FiltresDemandesAchat filtres) {
-        droits.exiger(LECTURE, EXPORTER);
+        droits.exiger(DROIT_LECTURE, EXPORTER);
         return lignes(filtres);
     }
 
     @Transactional(readOnly = true)
     public DemandeAchatFiche fiche(UUID id) {
         DemandeAchatFiche f = visible(id);
-        droits.exiger(LECTURE);
+        droits.exiger(DROIT_LECTURE);
         return f;
     }
 
@@ -103,7 +103,7 @@ public class DemandesAchatService {
     @Transactional(readOnly = true)
     public List<TransitionDemandeAchat> transitions(UUID id) {
         visible(id);
-        droits.exiger(LECTURE);
+        droits.exiger(DROIT_LECTURE);
         List<StrWorkFlow> permises = moteur.permises(ecritures.demande(id));
         Map<UUID, StrStatus> cibles = moteur.cibles(permises);
         return permises.stream().map(w -> transition(w, cibles.get(w.getStatusToId()))).toList();
@@ -112,7 +112,7 @@ public class DemandesAchatService {
     @Transactional
     public DemandeAchatFiche executer(UUID id, ExecutionTransitionDemandeAchat execution) {
         visible(id);
-        droits.exiger(LECTURE);
+        droits.exiger(DROIT_LECTURE);
         ecritures.executer(id, execution);
         return relire(id);
     }
@@ -120,7 +120,7 @@ public class DemandesAchatService {
     @Transactional(readOnly = true)
     public List<HistoriqueDemandeAchat> historique(UUID id) {
         visible(id);
-        droits.exiger(LECTURE);
+        droits.exiger(DROIT_LECTURE);
         return historiques.findByObjectIdInOrderByDocDateDesc(List.of(id)).stream()
                 .map(h -> new HistoriqueDemandeAchat(h.getDocDate(), h.getAdmUserDescription(), h.getDescription(), h.getNotes(),
                         h.getUserDate()))

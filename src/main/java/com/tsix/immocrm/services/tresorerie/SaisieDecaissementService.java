@@ -140,7 +140,9 @@ public class SaisieDecaissementService {
         BigDecimal masque = CalculReglement.affecte(lignes.stream().filter(l -> !visibles.contains(l.getId()))
                 .map(StlSettlementLine::getAmount).toList());
         Entete entete = entete(saisie, reglement);
-        BigDecimal affecte = validerLignes(saisie, entete, id, reglement.getStlCurrencyId(), masque);
+        // règlement sans devise (saisi hors CRM) : la devise de référence est celle par défaut
+        UUID devise = requireNonNullElse(reglement.getStlCurrencyId(), outils.references().deviseParDefaut());
+        BigDecimal affecte = validerLignes(saisie, entete, id, devise, masque);
 
         BigDecimal resteAvant = CalculReglement.resteAAffecter(reglement.getAmount(),
                 CalculReglement.affecte(lignes.stream().map(StlSettlementLine::getAmount).toList()));
@@ -235,8 +237,10 @@ public class SaisieDecaissementService {
         }
         CfgCompany societe = societe(saisie.societeId());
         StlSettlementType type = trouver(StlSettlementType.class, requis(saisie.typeId(), "typeId est requis"), "Type");
-        CfgTier fournisseur = trouver(CfgTier.class, requis(saisie.fournisseurId(), "fournisseurId est requis"),
-                "Fournisseur");
+        CfgTier fournisseur = em.find(CfgTier.class, requis(saisie.fournisseurId(), "fournisseurId est requis"));
+        if (fournisseur == null) {
+            throw new ResourceNotFoundException("Fournisseur introuvable : " + saisie.fournisseurId());
+        }
         LocalDate jourDocument = requireNonNullElse(saisie.dateDocument(), LocalDate.now(outils.clock()));
         LocalDate jourEcheance = requireNonNullElse(saisie.dateEcheance(), jourDocument);
         if (jourEcheance.isBefore(jourDocument)) {
@@ -284,7 +288,7 @@ public class SaisieDecaissementService {
     private CfgCompany societe(UUID societeId) {
         requis(societeId, "societeId est requis");
         if (!perimetres.achat(List.of()).societes().contains(societeId)) {
-            throw new InvalidRequestException("Société non habilitée : " + societeId);
+            throw new ResourceNotFoundException("Société non habilitée : " + societeId);
         }
         return trouver(CfgCompany.class, societeId, "Société");
     }

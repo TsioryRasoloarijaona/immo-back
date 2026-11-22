@@ -16,7 +16,9 @@ public record DecaissementFicheDto(
         @Schema(description = "Lignes d'affectation dont la pièce est visible, tri par code de pièce.")
         List<LigneDecaissementDto> lignes,
         @Schema(description = "Nombre de lignes d'affectation masquées (pièce d'un projet ou d'une société non habilités).")
-        int lignesMasquees) {
+        int lignesMasquees,
+        @Schema(description = "Corps qu'un PUT renverrait tel quel : lignes visibles seulement, module nul s'il est inconnu.")
+        SaisieDecaissementDto saisie) {
 
     @Schema(description = "Une affectation du décaissement à une pièce.")
     public record LigneDecaissementDto(
