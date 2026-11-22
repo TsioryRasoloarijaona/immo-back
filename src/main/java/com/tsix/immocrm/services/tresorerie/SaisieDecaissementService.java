@@ -105,7 +105,7 @@ public class SaisieDecaissementService {
         ModuleTresorerie module = requis(saisie.module(), "module est requis");
         UUID moduleId = requis(requetes.module(module.name()), "Module introuvable : " + module);
         Entete entete = entete(saisie, null);
-        validerLignes(saisie, entete, null, outils.references().deviseParDefaut(), BigDecimal.ZERO);
+        validerLignes(saisie, entete, null, outils.references().deviseParDefaut(), moduleId, BigDecimal.ZERO);
 
         StlSettlement reglement = new StlSettlement();
         reglement.setId(UUID.randomUUID());
@@ -142,7 +142,7 @@ public class SaisieDecaissementService {
         Entete entete = entete(saisie, reglement);
         // règlement sans devise (saisi hors CRM) : la devise de référence est celle par défaut
         UUID devise = requireNonNullElse(reglement.getStlCurrencyId(), outils.references().deviseParDefaut());
-        BigDecimal affecte = validerLignes(saisie, entete, id, devise, masque);
+        BigDecimal affecte = validerLignes(saisie, entete, id, devise, reglement.getAdmModuleId(), masque);
 
         BigDecimal resteAvant = CalculReglement.resteAAffecter(reglement.getAmount(),
                 CalculReglement.affecte(lignes.stream().map(StlSettlementLine::getAmount).toList()));
@@ -226,11 +226,31 @@ public class SaisieDecaissementService {
                 .toList();
     }
 
-    private Entete entete(SaisieDecaissementDto saisie, StlSettlement existant) {
-        StatutReglement statut = requireNonNullElse(saisie.statut(), StatutReglement.IN_WORK);
+    /** PUT : statut absent = statut existant ; un règlement annulé reste annulé (pas de réactivation). */
+    private static StatutReglement statut(StatutReglement saisi, StlSettlement existant) {
+        StatutReglement avant = existant == null ? null : StatutReglement.lireCode(existant.getStatus()).orElse(null);
+        StatutReglement statut = requireNonNullElse(saisi, requireNonNullElse(avant, StatutReglement.IN_WORK));
+        if (avant == StatutReglement.CANCELED && statut == StatutReglement.CANCELED) {
+            return statut;
+        }
+        if (avant == StatutReglement.CANCELED) {
+            throw new InvalidRequestException("Un règlement annulé ne peut pas être réactivé.");
+        }
         if (!STATUTS_SAISIS.contains(statut)) {
             throw new InvalidRequestException("Statut non saisissable : " + statut);
         }
+        return statut;
+    }
+
+    private CfgTier payeur(UUID payeurId, CfgTier fournisseur, StlSettlement existant) {
+        if (payeurId != null) {
+            return trouver(CfgTier.class, payeurId, "Payeur");
+        }
+        return existant == null ? fournisseur : requireNonNullElse(existant.getTierPayer(), fournisseur);
+    }
+
+    private Entete entete(SaisieDecaissementDto saisie, StlSettlement existant) {
+        StatutReglement statut = statut(saisie.statut(), existant);
         BigDecimal montant = requis(saisie.montant(), "montant est requis");
         if (montant.signum() <= 0) {
             throw new InvalidRequestException("montant doit être strictement positif");
@@ -255,7 +275,7 @@ public class SaisieDecaissementService {
                 && requetes.referencePrise(reference, type.getId(), saisie.compteId(), idDe(existant, StlSettlement::getId))) {
             throw new ConflictException("Cette référence existe déjà pour ce type et ce compte : " + reference);
         }
-        CfgTier payeur = saisie.payeurId() == null ? fournisseur : trouver(CfgTier.class, saisie.payeurId(), "Payeur");
+        CfgTier payeur = payeur(saisie.payeurId(), fournisseur, existant);
         return new Entete(statut, societe, type, fournisseur, payeur, tiers(saisie.banqueId(), "Banque"),
                 tiers(saisie.notaireId(), "Notaire"), tiers(saisie.tiersAutruiId(), "Tiers autrui"), compte, montant,
                 jourDocument.atStartOfDay(), jourEcheance.atStartOfDay(), datePointage, reference);
@@ -314,7 +334,7 @@ public class SaisieDecaissementService {
 
     /** Σ des lignes saisies + masquées ; 400 sur chaque règle de ligne (R-a…R-d, reste des pièces). */
     private BigDecimal validerLignes(SaisieDecaissementDto saisie, Entete entete, UUID reglementId, UUID devise,
-                                     BigDecimal masque) {
+                                     UUID module, BigDecimal masque) {
         List<LigneSaisieDecaissementDto> lignes = saisie.lignes();
         if (lignes.isEmpty() && masque.signum() == 0
                 && !outils.droits().parmi(DROIT_SANS_AFFECTATION).contains(DROIT_SANS_AFFECTATION)) {
@@ -333,7 +353,7 @@ public class SaisieDecaissementService {
         Map<UUID, PieceSaisie> pieces = requetes.pieces(perimetres.achat(List.of()), ids, reglementId).stream()
                 .collect(Collectors.toMap(PieceSaisie::id, Function.identity()));
         for (LigneSaisieDecaissementDto ligne : lignes) {
-            verifierLigne(ligne, pieces.get(ligne.pieceId()), entete, devise);
+            verifierLigne(ligne, pieces.get(ligne.pieceId()), entete, devise, module);
         }
         BigDecimal affecte = CalculReglement.affecte(lignes.stream().map(LigneSaisieDecaissementDto::montant).toList())
                 .add(masque);
@@ -343,9 +363,16 @@ public class SaisieDecaissementService {
         return affecte;
     }
 
-    private static void verifierLigne(LigneSaisieDecaissementDto ligne, PieceSaisie piece, Entete entete, UUID devise) {
+    private static void verifierLigne(LigneSaisieDecaissementDto ligne, PieceSaisie piece, Entete entete, UUID devise,
+                                      UUID module) {
         if (piece == null) {
             throw new ResourceNotFoundException("Pièce d'achat introuvable : " + ligne.pieceId());
+        }
+        if (!Objects.equals(piece.societeId(), entete.societe().getId())) {
+            throw new InvalidRequestException("La pièce " + piece.code() + " n'appartient pas à la société du règlement.");
+        }
+        if (!Objects.equals(piece.moduleId(), module)) {
+            throw new InvalidRequestException("La pièce " + piece.code() + " n'est pas du module du règlement.");
         }
         if (!Objects.equals(piece.fournisseurId(), entete.fournisseur().getId())) {
             throw new InvalidRequestException("La pièce " + piece.code() + " n'est pas du fournisseur du règlement.");

@@ -28,7 +28,7 @@ public class RequetesSaisieDecaissement {
     /** Pièce d'achat visible, avec son réglé hors annulés et hors le règlement en cours. */
     public record PieceSaisie(UUID id, String code, LocalDate dateDocument, LocalDate dateEcheance, String description,
                               UUID fournisseurId, UUID societeId, UUID deviseId, String deviseCode, BigDecimal aPayer,
-                              BigDecimal regle) {
+                              BigDecimal regle, UUID moduleId) {
 
         public BigDecimal resteAPayer() {
             return SoldeDocumentAchat.de(aPayer, regle).resteARegler();
@@ -39,9 +39,10 @@ public class RequetesSaisieDecaissement {
     private static final String REGLEMENT = "reglement";
     private static final String PKEY = "PKey";
     private static final String CODE = "Code";
+    private static final String DESCRIPTION = "Description";
 
     private static final String PIECES = "SELECT d.PKey, d.Code, d.DocDate, d.MaturityDate, d.Description, d.CfgTierId, "
-            + "d.CfgCompanyId, d.StlCurrencyId, cur.Code AS DeviseCode, d.AmountToPay, COALESCE(("
+            + "d.CfgCompanyId, d.AdmModuleId, d.StlCurrencyId, cur.Code AS DeviseCode, d.AmountToPay, COALESCE(("
             + SoldeDocumentAchat.SQL_REGLE + " AND l.StlSettlementId <> :reglement), 0) AS Regle "
             + "FROM BuyDocument d LEFT JOIN StlCurrency cur ON cur.PKey = d.StlCurrencyId "
             + "LEFT JOIN AdmModule mo ON mo.PKey = d.AdmModuleId WHERE " + RequetesDocumentsAchat.VISIBLE;
@@ -129,7 +130,7 @@ public class RequetesSaisieDecaissement {
 
     public List<TypeDecaissementDto> types() {
         return jdbc.query(TYPES, (rs, n) -> new TypeDecaissementDto(uuid(rs, PKEY), rs.getString(CODE),
-                rs.getString("Description"), rs.getBoolean("IsReferenceMandatory"), rs.getBoolean("IsReferenceUnique"),
+                rs.getString(DESCRIPTION), rs.getBoolean("IsReferenceMandatory"), rs.getBoolean("IsReferenceUnique"),
                 rs.getBoolean("IsBankMandatory"), rs.getBoolean("IsLawyerMandatory"), rs.getBoolean("IsTierUnique"),
                 rs.getBoolean("IsNotContabilized")));
     }
@@ -139,7 +140,7 @@ public class RequetesSaisieDecaissement {
             return List.of();
         }
         return jdbc.query(SOCIETES, Map.of("societes", RequetesDocumentsAchat.textes(societes)),
-                (rs, n) -> new SocieteDecaissementDto(uuid(rs, PKEY), rs.getString(CODE), rs.getString("Description")));
+                (rs, n) -> new SocieteDecaissementDto(uuid(rs, PKEY), rs.getString(CODE), rs.getString(DESCRIPTION)));
     }
 
     public List<CompteDecaissementDto> comptes(Collection<UUID> societes) {
@@ -163,9 +164,9 @@ public class RequetesSaisieDecaissement {
 
     private static PieceSaisie piece(ResultSet rs) throws SQLException {
         return new PieceSaisie(uuid(rs, PKEY), rs.getString(CODE), jour(rs, "DocDate"), jour(rs, "MaturityDate"),
-                rs.getString("Description"), uuid(rs, "CfgTierId"), uuid(rs, "CfgCompanyId"), uuid(rs, "StlCurrencyId"),
+                rs.getString(DESCRIPTION), uuid(rs, "CfgTierId"), uuid(rs, "CfgCompanyId"), uuid(rs, "StlCurrencyId"),
                 rs.getString("DeviseCode"), Objects.requireNonNullElse(rs.getBigDecimal("AmountToPay"), BigDecimal.ZERO),
-                Objects.requireNonNullElse(rs.getBigDecimal("Regle"), BigDecimal.ZERO));
+                Objects.requireNonNullElse(rs.getBigDecimal("Regle"), BigDecimal.ZERO), uuid(rs, "AdmModuleId"));
     }
 
     private static String texte(UUID id) {
