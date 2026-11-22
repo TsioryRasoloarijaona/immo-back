@@ -110,7 +110,11 @@ class RequetesTresorerie {
     private static final String AFFECTATIONS = COLONNES_REGLEMENT + COLONNES_LIGNE + SOURCE_REGLEMENT + JOINTURES_LIGNE
             + FILTRES_REGLEMENT + "AND " + LIGNE_VISIBLE + " " + TRI_REGLEMENT + ", lv.PKey";
 
-    private static final String FICHE = COLONNES_REGLEMENT + SOURCE_REGLEMENT + "WHERE s.PKey = :id "
+    private static final String FICHE = COLONNES_REGLEMENT + ", s.CfgCompanyId AS societeId, "
+            + "s.StlSettlementTypeId AS typeId, s.StlAccountId AS compteId, s.CfgBankId AS banqueId, "
+            + "s.TierId AS fournisseurId, s.TierPayerId AS payeurId, s.CfgLawyerId AS notaireId, "
+            + "s.CfgTierOtherId AS tiersAutruiId, s.Code AS reference "
+            + SOURCE_REGLEMENT + "WHERE s.PKey = :id "
             + "AND mo.Code IN ('PRJ', 'BUY') AND ISNULL(s.IsCredit, 0) = 0 AND s.CfgCompanyId IN (:societes) "
             + REGLEMENT_VISIBLE;
 

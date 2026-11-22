@@ -1,5 +1,7 @@
 package com.tsix.immocrm.domain.tresorerie;
 
+import com.tsix.immocrm.domain.achat.CalculReglement;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -25,8 +27,7 @@ public final class ConversionReglement {
 
     /** {@code AmountBase × multiplicateur − Σ lignes} ; montants absents = 0. */
     public static BigDecimal resteAAffecter(BigDecimal base, BigDecimal valeur, Integer unite, BigDecimal affecte) {
-        BigDecimal converti = nonNul(base).multiply(multiplicateur(valeur, unite));
-        return converti.subtract(nonNul(affecte));
+        return CalculReglement.resteAAffecter(nonNul(base).multiply(multiplicateur(valeur, unite)), affecte);
     }
 
     /** Échéance ≤ {@code aujourdhui} et statut ≠ POINTED (NULL compris). */

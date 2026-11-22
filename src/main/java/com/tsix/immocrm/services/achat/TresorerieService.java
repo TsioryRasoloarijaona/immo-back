@@ -13,6 +13,9 @@ import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto.LigneDecaissementDto
 import com.tsix.immocrm.dto.tresorerie.DecaissementLigneDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.DateTresorerie;
+import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.ModuleTresorerie;
+import com.tsix.immocrm.dto.tresorerie.LigneSaisieDecaissementDto;
+import com.tsix.immocrm.dto.tresorerie.SaisieDecaissementDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.SensTresorerie;
 import com.tsix.immocrm.dto.tresorerie.ListeTresorerieDto;
 import com.tsix.immocrm.dto.tresorerie.PieceTresorerieDto;
@@ -33,6 +36,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,8 +95,26 @@ public class TresorerieService {
                 .orElseThrow(() -> new ResourceNotFoundException("Décaissement introuvable : " + id));
         List<LigneDecaissementDto> lignes = requetes.lignesFiche(perimetre, id).stream()
                 .map(TresorerieService::ligneFiche).toList();
-        return new DecaissementFicheDto(decaissement(r, jour), texte(r, "notes"), texte(r, "codeRecu"),
-                texte(r, "deviseCode"), lignes, entier(r, "NbLignes") - lignes.size());
+        DecaissementFicheDto fiche = new DecaissementFicheDto(decaissement(r, jour), texte(r, "notes"),
+                texte(r, "codeRecu"), texte(r, "deviseCode"), lignes, entier(r, "NbLignes") - lignes.size(), null);
+        return new DecaissementFicheDto(fiche.decaissement(), fiche.notes(), fiche.codeRecu(), fiche.devise(), lignes,
+                fiche.lignesMasquees(), saisie(r, fiche));
+    }
+
+    private static SaisieDecaissementDto saisie(Map<String, Object> r, DecaissementFicheDto fiche) {
+        DecaissementLigneDto d = fiche.decaissement();
+        String moduleCode = texte(r, "moduleCode");
+        ModuleTresorerie module = Arrays.stream(ModuleTresorerie.values())
+                .filter(m -> m.name().equals(moduleCode)).findFirst().orElse(null);
+        List<LigneSaisieDecaissementDto> affectations = fiche.lignes().stream()
+                .map(l -> new LigneSaisieDecaissementDto(l.piece() == null ? null : l.piece().id(), l.montantAffecte()))
+                .toList();
+        return new SaisieDecaissementDto(module, uuid(r.get("societeId")), d.datePiece(), d.echeance(),
+                uuid(r.get("typeId")), texte(r, "reference"), uuid(r.get("compteId")), uuid(r.get("banqueId")),
+                d.montant(), uuid(r.get("fournisseurId")), uuid(r.get("payeurId")), uuid(r.get("notaireId")),
+                uuid(r.get("tiersAutruiId")), fiche.notes(), d.datePointage(),
+                StatutReglement.lireCode(d.statut()).orElse(null), fiche.codeRecu(),
+                texte(r, "ficheProposition"), texte(r, "ficheRS"), affectations);
     }
 
     public ListeTresorerieDto<AffectationLigneDto, TotauxAffectationsDto> affectations(SensTresorerie sens,

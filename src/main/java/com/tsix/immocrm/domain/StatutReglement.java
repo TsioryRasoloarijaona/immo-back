@@ -17,7 +17,9 @@ public enum StatutReglement {
 
     IN_WORK,
     POINTED,
-    CANCELED;
+    CANCELED,
+    // « Impayé(e) » de la fiche de décaissement OMRAN : saisi sans transition (FEATURE-n3bis-saisie-reglements.md, Q1).
+    NOTPAYED;
 
     private static final Map<StatutReglement, Set<StatutReglement>> TRANSITIONS =
             new EnumMap<>(StatutReglement.class);
