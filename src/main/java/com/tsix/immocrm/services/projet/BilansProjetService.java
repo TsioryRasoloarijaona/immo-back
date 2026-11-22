@@ -199,11 +199,24 @@ public class BilansProjetService {
     // ------------------------------------------------------------------ arbre (R10)
 
     private Map<UUID, List<Categorie>> enfantsParParent() {
-        Map<UUID, List<Categorie>> parParent = new HashMap<>();
-        for (Object o : em.createNativeQuery("SELECT PKey, Description, ParentId, Sorting FROM StlCategory").getResultList()) {
+        List<Object[]> lignes = new ArrayList<>();
+        Map<UUID, Boolean> credit = new HashMap<>();
+        for (Object o : em.createNativeQuery("SELECT PKey, Description, ParentId, Sorting, IsCredit FROM StlCategory")
+                .getResultList()) {
             Object[] r = (Object[]) o;
+            lignes.add(r);
+            credit.put(uuid(r[0]), Boolean.TRUE.equals(r[4]));
+        }
+        // OMRAN : racines de dépense (IsCredit = 0) seules ; sous un parent, seuls les enfants de même IsCredit.
+        Map<UUID, List<Categorie>> parParent = new HashMap<>();
+        for (Object[] r : lignes) {
+            UUID parent = uuid(r[2]);
+            Boolean attendu = parent == null ? Boolean.FALSE : credit.get(parent);
+            if (!credit.get(uuid(r[0])).equals(attendu)) {
+                continue;
+            }
             Integer ordre = r[3] == null ? null : ((Number) r[3]).intValue();
-            parParent.computeIfAbsent(uuid(r[2]), k -> new ArrayList<>())
+            parParent.computeIfAbsent(parent, k -> new ArrayList<>())
                     .add(new Categorie(uuid(r[0]), (String) r[1], ordre));
         }
         Comparator<Categorie> tri = Comparator.comparing(Categorie::ordre, Comparator.nullsLast(Comparator.naturalOrder()))
@@ -217,18 +230,18 @@ public class BilansProjetService {
                 .filter(Objects::nonNull).toList();
     }
 
-    /** Parent = sa catégorie + ses descendants ; null (masqué) si les 8 colonnes valent 0. */
+    /** Parent = sa catégorie + ses descendants ; null (masqué) si lui et tous ses descendants valent 0 partout. */
     private static NoeudBilanDto noeud(Categorie c, int niveau, Arbre a) {
         List<NoeudBilanDto> enfants = noeuds(c.id(), niveau + 1, a);
         BigDecimal[] total = a.montants().getOrDefault(c.id(), zeros()).clone();
+        if (enfants.isEmpty() && Arrays.stream(total).allMatch(x -> x.signum() == 0)) {
+            return null;
+        }
         for (NoeudBilanDto e : enfants) {
             BigDecimal[] t = a.cumuls().get(e.categorieId());
             for (int i = 0; i < N; i++) {
                 total[i] = total[i].add(t[i]);
             }
-        }
-        if (Arrays.stream(total).allMatch(x -> x.signum() == 0)) {
-            return null;
         }
         a.cumuls().put(c.id(), total);
         Map<String, BigDecimal> valeurs = new LinkedHashMap<>();

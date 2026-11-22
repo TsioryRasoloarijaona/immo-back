@@ -355,7 +355,6 @@ public final class CalculLot {
         return avoirs.plus(stockAvoirs).plus(fluctuationsAvoirs);
     }
 
-    /** {@code CancelRatio} : lot annulé ou résilié = avancement décompté, sinon 1. */
     /** {@code CancelRatio} de {@code PrjMarketMonitoringView} : avancement décompté si le lot est annulé, sinon 1. */
     public BigDecimal ratioAnnulation() {
         return d.annule() ? avancementDecompte() : BigDecimal.ONE;

@@ -111,6 +111,11 @@ public class FixtureBilansProjet {
      */
     public UUID lotTermine(String code, UUID projet, boolean annule) {
         UUID statut = parite.statut(ENTREPRENEURS, "BILS-" + code + "-" + jeton);
+        maj("""
+                IF NOT EXISTS (SELECT 1 FROM StrStatusType WHERE PKey = ?)
+                    INSERT INTO StrStatusType (PKey, Code, Description, Sorting)
+                    VALUES (?, N'Terminé avec succès', N'Terminé avec succès', 3)""",
+                s(FixtureAchat.ETAT_TERMINE_SUCCES), s(FixtureAchat.ETAT_TERMINE_SUCCES));
         maj("UPDATE StrStatus SET StrStatusTypeId = ?, BoolField002 = ? WHERE PKey = ?",
                 s(annule ? null : FixtureAchat.ETAT_TERMINE_SUCCES), annule, s(statut));
         return parite.lot(projet, "BIL-" + code + "-" + jeton, ENTREPRENEURS, statut);
