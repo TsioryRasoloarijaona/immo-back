@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
 
@@ -55,16 +54,16 @@ public class TresorerieProjetController {
         return service.cellule(filtres, mois, noeud);
     }
 
-    @GetMapping("/export")
     @Operation(summary = "Export Excel de l'arbre de la Trésorerie projet, mêmes filtres que l'arbre")
-    @ApiResponse(responseCode = "200", description = "Classeur .xlsx.",
-            content = @Content(schema = @Schema(type = "string", format = "binary"),
-                    mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-    public ResponseEntity<StreamingResponseBody> exporter(
+    @GetMapping("/export")
+    @ApiResponse(description = "Classeur .xlsx.", responseCode = "200", content = @Content(
+            schema = @Schema(type = "string", format = "binary"),
+            mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    public ResponseEntity<byte[]> exporter(
             @Parameter(example = ExportTableur.FORMAT_XLSX)
             @RequestParam(defaultValue = ExportTableur.FORMAT_XLSX) String format,
             @ParameterObject @ModelAttribute FiltresTresorerieProjet filtres) {
         ExportTableur.exigerXlsx(format);
-        return exportTableur.reponse("tresorerie-projet", "Trésorerie projet", service.feuillesExport(filtres));
+        return exportTableur.reponseEnMemoire("tresorerie-projet", "Trésorerie projet", service.feuillesExport(filtres));
     }
 }

@@ -108,10 +108,11 @@ class MontantsListeLots {
             FROM PrjClause WHERE PrjMarketId IN (:lots) GROUP BY PrjMarketId""", Somme.AV_HT);
 
     // F = facture de décompte, FA = facture d'avenant (genre B622), A = avoir, C = commande validée, G = pièce de RG ;
-    // un genre NULL est exclu comme dans la vue (NOT IN / <>). Régularisations : hors pièces de RG.
+    // facture sans genre = facture de décompte (toujours renseigné en production). Régularisations : hors pièces de RG.
     private static final Requete PIECES = new Requete("""
             WITH P AS (
-                SELECT d.*, IIF(d.DocType = 'INVOICE' AND d.StrEntityId <> 'E7999F70-7507-40D9-AA78-A2825C42B622', 1, 0) AS F,
+                SELECT d.*, IIF(d.DocType = 'INVOICE' AND (d.StrEntityId IS NULL
+                        OR d.StrEntityId <> 'E7999F70-7507-40D9-AA78-A2825C42B622'), 1, 0) AS F,
                     IIF(d.DocType = 'INVOICE' AND d.StrEntityId = 'E7999F70-7507-40D9-AA78-A2825C42B622', 1, 0) AS FA,
                     IIF(d.DocType = 'REFUND', 1, 0) AS A, IIF(d.DocType = 'ORDER' AND s.IsOkForPayement = 1, 1, 0) AS C,
                     IIF(d.StrEntityId IN ('A71B4F91-AEFC-4C70-87F7-82A6C7365CB5', 'E7999F70-7507-40D9-AA78-A2825C42B602'), 1, 0) AS G,
