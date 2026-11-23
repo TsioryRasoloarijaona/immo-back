@@ -8,12 +8,12 @@ import com.tsix.immocrm.domain.rapport.TypeColonne;
 import com.tsix.immocrm.dto.projet.NoeudBilanDto;
 import com.tsix.immocrm.entities.prj.PrjMarket;
 import com.tsix.immocrm.services.projet.LotsProjetService.LotCalcule;
-import com.tsix.immocrm.services.projet.MontantsBilanCategories.Pieces;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,20 +68,24 @@ public class BilanCategoriesRapport extends RapportProjet {
     public ResultatRapport executer(ContexteRapport contexte) {
         List<UUID> demandes = projetsDemandes(contexte);
         Set<UUID> projets = sources.perimetre().restreindre(demandes);
-        List<LotCalcule> lots = projets.isEmpty() ? List.of() : lots(demandes);
         Map<UUID, BigDecimal[]> montants = new HashMap<>();
         if (!projets.isEmpty()) {
             bilans.faisabilite(projets, true, (categorie, m) -> ajouter(montants, categorie, FAISABILITE, m, N));
-        }
-        if (!lots.isEmpty()) {
-            List<UUID> ids = lots.stream().map(l -> l.lot().getId()).toList();
-            List<Pieces> lignes = pieces.pieces(ids);
-            lignes.forEach(p -> {
-                ajouter(montants, p.categorie(), CUMUL, p.cumul(), N);
-                ajouter(montants, p.categorie(), A_PAYER, p.aPayer(), N);
-                ajouter(montants, p.categorie(), REGLE, p.regle(), N);
-            });
-            estimations(lots, bilans.ventilations(projets), montants);
+            Map<UUID, List<Object[]>> ventilations = bilans.ventilations(projets);
+            // Lot d'un projet commun réparti par tranche (branche C) : estimations comme N5a, pièces non réparties → exclues.
+            Set<UUID> projetsDesLots = new HashSet<>(demandes);
+            ventilations.values().forEach(l -> l.forEach(r -> projetsDesLots.add(uuid(r[1]))));
+            List<LotCalcule> lots = lots(demandes.isEmpty() ? demandes : List.copyOf(projetsDesLots));
+            List<UUID> ids = lots.stream().filter(l -> projets.contains(l.lot().getPrjProject().getId()))
+                    .map(l -> l.lot().getId()).toList();
+            if (!ids.isEmpty()) {
+                pieces.pieces(ids).forEach(p -> {
+                    ajouter(montants, p.categorie(), CUMUL, p.cumul(), N);
+                    ajouter(montants, p.categorie(), A_PAYER, p.aPayer(), N);
+                    ajouter(montants, p.categorie(), REGLE, p.regle(), N);
+                });
+            }
+            estimations(lots, ventilations, montants);
         }
         montants.values().forEach(v -> v[RESTE] = v[A_PAYER].subtract(v[REGLE]));
         List<Map<String, Object>> sortie = new ArrayList<>();
