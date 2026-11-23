@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -63,6 +64,7 @@ public class BilansProjetService {
             new ColonneBilanDto("previsions", "PRÉVISIONS"),
             new ColonneBilanDto("coutPrevisionnel", "COÛT PRÉVISIONNEL"),
             new ColonneBilanDto("coutReel", "COÛT RÉEL"));
+    private static final List<String> CODES = COLONNES.stream().map(ColonneBilanDto::code).toList();
     private static final int N = COLONNES.size();
     private static final List<ColonneFixe> COLONNES_EXPORT = Stream.of(
             Stream.of(ColonneFixe.texte(LIBELLE, "Libellé"), ColonneFixe.de(NIVEAU, "Niveau", NOMBRE)),
@@ -119,7 +121,7 @@ public class BilansProjetService {
         if (projets.isEmpty()) {
             throw new InvalidRequestException("Veuillez sélectionner au moins un projet !");
         }
-        Arbre a = new Arbre(enfantsParParent(), montants(projets, Boolean.TRUE.equals(filtres.ttc())),
+        Arbre a = new Arbre(enfantsParParent(), montants(projets, Boolean.TRUE.equals(filtres.ttc())), CODES,
                 index(filtres.colonne1()), index(filtres.colonne2()), new HashMap<>());
         return new BilanProjetDto(COLONNES, noeuds(null, 0, a), filtres.colonne1(), filtres.colonne2(),
                 Boolean.TRUE.equals(filtres.ttc()));
@@ -143,20 +145,13 @@ public class BilansProjetService {
 
     private Map<UUID, BigDecimal[]> montants(Set<UUID> projets, boolean ttc) {
         Map<UUID, BigDecimal[]> parCategorie = new HashMap<>();
-        for (Object o : em.createNativeQuery(SQL_FAISABILITE).setParameter(PROJETS, projets).getResultList()) {
-            Object[] r = (Object[]) o;
-            ajouter(parCategorie, uuid(r[0]), 0, decimal(ttc ? r[2] : r[1]));
-        }
-        Map<UUID, List<Object[]>> ventilations = new HashMap<>();
-        Set<UUID> projetsDesLots = new HashSet<>();
-        for (Object o : em.createNativeQuery(SQL_LOTS).setParameter(PROJETS, projets).getResultList()) {
-            Object[] r = (Object[]) o;
-            ventilations.computeIfAbsent(uuid(r[0]), k -> new ArrayList<>()).add(r);
-            projetsDesLots.add(uuid(r[1]));
-        }
+        faisabilite(projets, ttc, (categorie, montant) -> ajouter(parCategorie, categorie, 0, montant, N));
+        Map<UUID, List<Object[]>> ventilations = ventilations(projets);
         if (ventilations.isEmpty()) {
             return parCategorie;
         }
+        Set<UUID> projetsDesLots = new HashSet<>();
+        ventilations.values().forEach(l -> l.forEach(r -> projetsDesLots.add(uuid(r[1]))));
         List<PrjMarket> lots = em.createQuery("select m from PrjMarket m where m.prjProject.id in :projets", PrjMarket.class)
                 .setParameter(PROJETS, projetsDesLots).getResultList().stream()
                 .filter(m -> ventilations.containsKey(m.getId())).toList();
@@ -165,15 +160,33 @@ public class BilansProjetService {
             for (Object[] r : ventilations.getOrDefault(lot, List.of())) {
                 BigDecimal taux = decimal(r[3]);
                 for (int i = 1; i < N; i++) {
-                    ajouter(parCategorie, uuid(r[2]), i, valeurs[i].multiply(taux));
+                    ajouter(parCategorie, uuid(r[2]), i, valeurs[i].multiply(taux), N);
                 }
             }
         });
         return parCategorie;
     }
 
+    /** Étude de faisabilité par catégorie (branche A), HT ou TTC. */
+    void faisabilite(Set<UUID> projets, boolean ttc, BiConsumer<UUID, BigDecimal> cible) {
+        for (Object o : em.createNativeQuery(SQL_FAISABILITE).setParameter(PROJETS, projets).getResultList()) {
+            Object[] r = (Object[]) o;
+            cible.accept(uuid(r[0]), decimal(ttc ? r[2] : r[1]));
+        }
+    }
+
+    /** Lignes de ventilation par lot (branches B et C) : [lot, projet, catégorie, taux]. */
+    Map<UUID, List<Object[]>> ventilations(Set<UUID> projets) {
+        Map<UUID, List<Object[]>> parLot = new HashMap<>();
+        for (Object o : em.createNativeQuery(SQL_LOTS).setParameter(PROJETS, projets).getResultList()) {
+            Object[] r = (Object[]) o;
+            parLot.computeIfAbsent(uuid(r[0]), k -> new ArrayList<>()).add(r);
+        }
+        return parLot;
+    }
+
     /** Colonnes 2 à 8 d'un lot ; {@code CancelRatio} multiplie tout sauf le Marché (déjà appliqué aux estimations par general()). */
-    private static BigDecimal[] colonnesLot(CalculLot c, boolean ttc) {
+    static BigDecimal[] colonnesLot(CalculLot c, boolean ttc) {
         Function<TrioDto, BigDecimal> v = ttc ? TrioDto::ttc : TrioDto::ht;
         BigDecimal ratio = c.ratioAnnulation();
         var g = c.general();
@@ -182,16 +195,17 @@ public class BilansProjetService {
                 v.apply(c.coutPrevisionnel().total()).multiply(ratio), v.apply(c.coutReel().total()).multiply(ratio)};
     }
 
-    private static void ajouter(Map<UUID, BigDecimal[]> parCategorie, UUID categorie, int colonne, BigDecimal montant) {
+    static void ajouter(Map<UUID, BigDecimal[]> parCategorie, UUID categorie, int colonne, BigDecimal montant,
+                        int taille) {
         if (categorie == null || montant == null) {
             return;
         }
-        BigDecimal[] v = parCategorie.computeIfAbsent(categorie, k -> zeros());
+        BigDecimal[] v = parCategorie.computeIfAbsent(categorie, k -> zeros(taille));
         v[colonne] = v[colonne].add(montant);
     }
 
-    private static BigDecimal[] zeros() {
-        BigDecimal[] v = new BigDecimal[N];
+    private static BigDecimal[] zeros(int n) {
+        BigDecimal[] v = new BigDecimal[n];
         Arrays.fill(v, ZERO);
         return v;
     }
@@ -225,6 +239,11 @@ public class BilansProjetService {
         return parParent;
     }
 
+    /** Arbre des catégories pour des montants indexés comme {@code codes} (racines de dépense, nœuds nuls masqués). */
+    List<NoeudBilanDto> arbre(Map<UUID, BigDecimal[]> montants, List<String> codes) {
+        return noeuds(null, 0, new Arbre(enfantsParParent(), montants, codes, ABSENTE, ABSENTE, new HashMap<>()));
+    }
+
     private static List<NoeudBilanDto> noeuds(UUID parent, int niveau, Arbre a) {
         return a.enfants().getOrDefault(parent, List.of()).stream().map(c -> noeud(c, niveau, a))
                 .filter(Objects::nonNull).toList();
@@ -233,20 +252,21 @@ public class BilansProjetService {
     /** Parent = sa catégorie + ses descendants ; null (masqué) si lui et tous ses descendants valent 0 partout. */
     private static NoeudBilanDto noeud(Categorie c, int niveau, Arbre a) {
         List<NoeudBilanDto> enfants = noeuds(c.id(), niveau + 1, a);
-        BigDecimal[] total = a.montants().getOrDefault(c.id(), zeros()).clone();
+        int n = a.codes().size();
+        BigDecimal[] total = a.montants().getOrDefault(c.id(), zeros(n)).clone();
         if (enfants.isEmpty() && Arrays.stream(total).allMatch(x -> x.signum() == 0)) {
             return null;
         }
         for (NoeudBilanDto e : enfants) {
             BigDecimal[] t = a.cumuls().get(e.categorieId());
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < n; i++) {
                 total[i] = total[i].add(t[i]);
             }
         }
         a.cumuls().put(c.id(), total);
         Map<String, BigDecimal> valeurs = new LinkedHashMap<>();
-        for (int i = 0; i < N; i++) {
-            valeurs.put(COLONNES.get(i).code(), arrondi(total[i]));
+        for (int i = 0; i < n; i++) {
+            valeurs.put(a.codes().get(i), arrondi(total[i]));
         }
         BigDecimal ecart = a.i1() == ABSENTE || a.i2() == ABSENTE ? ZERO : arrondi(total[a.i1()].subtract(total[a.i2()]));
         return new NoeudBilanDto(c.id(), c.libelle(), niveau, valeurs, ecart, enfants);
@@ -269,7 +289,7 @@ public class BilansProjetService {
     }
 
     /** {@code cumuls} : totaux bruts des nœuds affichés, lus par leur parent. */
-    private record Arbre(Map<UUID, List<Categorie>> enfants, Map<UUID, BigDecimal[]> montants, int i1, int i2,
-                         Map<UUID, BigDecimal[]> cumuls) {
+    private record Arbre(Map<UUID, List<Categorie>> enfants, Map<UUID, BigDecimal[]> montants, List<String> codes,
+                         int i1, int i2, Map<UUID, BigDecimal[]> cumuls) {
     }
 }
