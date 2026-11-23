@@ -276,12 +276,12 @@ public final class CalculLot {
     }
 
     /**
-     * {@code OfferedAmountToPay} : marché (facturé − avoirs si annulé) − retenues non remboursables du bordereau, sans
-     * garde « bordereau nul » contrairement à {@link #nonRemboursables}, + prorata du projet (lot gestionnaire).
+     * {@code OfferedAmountToPay} : bordereau − retenues non remboursables, sans garde « bordereau nul » contrairement à
+     * {@link #nonRemboursables}, + prorata du projet. Pas de bascule « annulé » ici : la vue la limite à la colonne marché.
      */
     public BigDecimal offertAPayer() {
-        BigDecimal prix = d.annule() ? factures.moins(avoirs).ttc() : marcheAjuste.ttc();
-        return prix.subtract(retenuesSur(marcheAjuste.ttc())).add(s(OFFERT_REMB_PRORATA));
+        BigDecimal bordereau = marcheAjuste.ttc();
+        return bordereau.subtract(retenuesSur(bordereau)).add(s(OFFERT_REMB_PRORATA));
     }
 
     /** {@code DueAmountToPay − AmountSettled}, voir FEATURE-n5b-c-etat-marches.md R3. */
