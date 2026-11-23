@@ -157,9 +157,12 @@ class MontantsListeLots {
             WHERE Rang = 1""", Somme.DEVIS_HT);
 
     // Lot gestionnaire du compte prorata : prorata prévu de tous les lots du projet (bordereau, sinon estimation, sinon
-    // forfait) et prorata facturé du projet. Les autres lots n'ont pas de ligne (0).
+    // forfait) et prorata facturé du projet ; puis OffredProportionRefund (bordereaux seuls) et EstimatedProportionRefundManual
+    // (forfaits seuls) de l'état des marchés. Les autres lots n'ont pas de ligne (0).
     private static final Requete PRORATA_PROJET = new Requete("""
-            SELECT g.PKey, SUM(ISNULL(x.ProportionRatio, 0) * COALESCE(l.T, e.T, x.EstimatedPriceTTCManual)), MAX(f.P)
+            SELECT g.PKey, SUM(ISNULL(x.ProportionRatio, 0) * COALESCE(l.T, e.T, x.EstimatedPriceTTCManual)), MAX(f.P),
+                SUM(ISNULL(x.ProportionRatio, 0) * ISNULL(l.T, 0)),
+                SUM(ISNULL(x.ProportionRatio, 0) * ISNULL(x.EstimatedPriceTTCManual, 0))
             FROM PrjMarket g
             JOIN PrjProject p ON p.PKey = g.PrjProjectId AND p.ManageProrataPrjMarketId = g.PKey
             JOIN PrjMarket x ON x.PrjProjectId = g.PrjProjectId

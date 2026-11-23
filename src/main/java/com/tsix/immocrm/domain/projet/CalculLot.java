@@ -255,11 +255,58 @@ public final class CalculLot {
         return arrondi(t.prorata().multiply(base.ttc()));
     }
 
+    /** {@code ExtraAmount + ClausesAmount} de l'état des marchés : supplémentaires facturés et avenants prévus, TTC. */
+    public BigDecimal supplementairesEtAvenants() {
+        return supplementairesFactures.ttc().add(avenants.ttc());
+    }
+
+    /** {@code AmountSettled} : Σ des lignes de règlement des pièces du lot, pièces annulées comprises. */
+    public BigDecimal regle() {
+        return s(REGLE);
+    }
+
+    /** {@code InvoiceTotalRetainedLineAmount} : retenues des factures (travaux à ne pas payer). */
+    public BigDecimal retenuesFactures() {
+        return s(FAC_RETENUE);
+    }
+
+    /** {@code InvoiceExtraAmountTTC} : supplémentaires facturés TTC (numérateur du ratio de l'état des marchés). */
+    public BigDecimal supplementairesFacturesTTC() {
+        return supplementairesFactures.ttc();
+    }
+
+    /**
+     * {@code OfferedAmountToPay} : bordereau − retenues non remboursables, sans garde « bordereau nul » contrairement à
+     * {@link #nonRemboursables}, + prorata du projet. Pas de bascule « annulé » ici : la vue la limite à la colonne marché.
+     */
+    public BigDecimal offertAPayer() {
+        BigDecimal bordereau = marcheAjuste.ttc();
+        return bordereau.subtract(retenuesSur(bordereau)).add(s(OFFERT_REMB_PRORATA));
+    }
+
+    /** {@code DueAmountToPay − AmountSettled}, voir FEATURE-n5b-c-etat-marches.md R3. */
+    public BigDecimal resteAPayer() {
+        return offertAPayer().add(fluctuationsDecomptes.ttc()).add(supplementaires.ttc()).add(depassements.ttc())
+                .subtract(nrrTravauxSup()).add(s(DEC_REMB_PRORATA)).subtract(s(RETENUES_FORFAIT)).subtract(regle());
+    }
+
+    /** {@code WarrantyAmount} (R.G. prévue) : avenants + taux × (marché d'origine, dépassements et extras facturés). */
+    public BigDecimal retenueGarantiePrevue() {
+        BigDecimal taux = t.garantie();
+        return s(AV_RG).add(taux.multiply(marche.ttc())).add(taux.multiply(depassementsFactures.ttc()))
+                .add(d.retenueSurSupplementaires() ? taux.multiply(supplementairesFactures.ttc()) : ZERO);
+    }
+
+    /** {@code EstimatedAmountToPayManual} : forfait − non remboursables + prorata du projet (gestionnaire), × CancelRatio. */
+    public BigDecimal estimationAPayer() {
+        return t.forfaitTTC().subtract(nonRemboursables(t.forfaitTTC())).add(s(ESTIM_REMB_PRORATA))
+                .multiply(ratioAnnulation());
+    }
+
     private RetenueGarantieDto retenueGarantie() {
         BigDecimal taux = t.garantie();
         BigDecimal retenue = s(FAC_RG).add(s(FAV_RG));
-        BigDecimal factureesPrevues = s(AV_RG).add(taux.multiply(marche.ttc())).add(taux.multiply(depassementsFactures.ttc()))
-                .add(d.retenueSurSupplementaires() ? taux.multiply(supplementairesFactures.ttc()) : ZERO);
+        BigDecimal factureesPrevues = retenueGarantiePrevue();
         BigDecimal reste = d.blocage() ? ZERO : retenue.subtract(s(RG_PENALITE)).subtract(s(RG_RESTITUEE));
         return new RetenueGarantieDto(pourcentage(taux), sur(taux, t.forfaitTTC()), sur(taux, est.ttc()),
                 arrondi(taux.multiply(marcheAjuste.ttc())), arrondi(s(AV_RG)), arrondi(factureesPrevues), arrondi(retenue),
@@ -302,16 +349,22 @@ public final class CalculLot {
 
     /** {@code OfferedNRR + ExtraNRR + OverNRR + ClausesNRR} + retenues forfaitaires, pénalité et blocage de RG. */
     private BigDecimal previsionNRR() {
-        BigDecimal ratios = t.prorata().add(t.decRatio()).add(t.trcRatio());
-        BigDecimal extras = d.retenueSurSupplementaires() ? ratios.multiply(supplementaires.ttc()) : ZERO;
-        return nonRemboursables(marcheAjuste.ttc()).add(extras).add(ratios.multiply(depassements.ttc()))
+        return nonRemboursables(marcheAjuste.ttc()).add(nrrTravauxSup())
                 .add(somme(AV_PRORATA, AV_DEC, AV_TRC, RETENUES_FORFAIT, RG_PENALITE)).add(blocageDecomptes());
     }
 
+    /** {@code ExtraNRRAmount + OverNRRAmount} : ratios seuls (jamais les montants DEC/TRC) ; extras si le lot l'applique. */
+    private BigDecimal nrrTravauxSup() {
+        BigDecimal ratios = t.prorata().add(t.decRatio()).add(t.trcRatio());
+        BigDecimal extras = d.retenueSurSupplementaires() ? ratios.multiply(supplementaires.ttc()) : ZERO;
+        return extras.add(ratios.multiply(depassements.ttc()));
+    }
+
     private BigDecimal nonRemboursables(BigDecimal ttc) {
-        if (ttc.signum() == 0) {
-            return ZERO;
-        }
+        return ttc.signum() == 0 ? ZERO : retenuesSur(ttc);
+    }
+
+    private BigDecimal retenuesSur(BigDecimal ttc) {
         return t.prorata().multiply(ttc).add(assurance(t.decMontant(), t.decRatio(), ttc))
                 .add(assurance(t.trcMontant(), t.trcRatio(), ttc));
     }
