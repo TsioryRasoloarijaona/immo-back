@@ -75,7 +75,7 @@ abstract class RapportProjet implements Rapport {
 
     /** R1–R3 : sans projet, ou sans aucun projet habilité parmi ceux demandés → 400. */
     List<LotCalcule> lotsExiges(ContexteRapport contexte) {
-        List<UUID> demandes = projets(contexte);
+        List<UUID> demandes = projetsDemandes(contexte);
         if (demandes.isEmpty() || sources.perimetre().restreindre(demandes).isEmpty()) {
             throw new InvalidRequestException(MESSAGE_SANS_PROJET);
         }
@@ -95,7 +95,7 @@ abstract class RapportProjet implements Rapport {
                 .toList();
     }
 
-    static List<UUID> projets(ContexteRapport contexte) {
+    static List<UUID> projetsDemandes(ContexteRapport contexte) {
         try {
             return contexte.choix(PROJETS).stream().map(UUID::fromString).toList();
         } catch (IllegalArgumentException e) {

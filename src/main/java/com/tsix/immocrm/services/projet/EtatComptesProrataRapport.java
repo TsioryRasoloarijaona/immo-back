@@ -33,7 +33,7 @@ public class EtatComptesProrataRapport extends RapportProjet {
 
     @Override
     public ResultatRapport executer(ContexteRapport contexte) {
-        List<LotCalcule> lots = lots(projets(contexte));
+        List<LotCalcule> lots = lots(projetsDemandes(contexte));
         List<Map<String, Object>> retenues = lots.stream().map(l -> {
             Map<String, Object> ligne = ligne(l.lot(), l.lot().getPrjProject().getDescription());
             ligne.put("taux", MontantsLot.pourcentage(l.lot().getProportionRatio()));
@@ -69,7 +69,7 @@ public class EtatComptesProrataRapport extends RapportProjet {
                     Map<String, Object> ligne = ligne(l.lot(), l.lot().getPrjProject().getCode());
                     ligne.put(DECOMPTE, w.getDescription());
                     ligne.put("date", w.getDocDate() == null ? null : w.getDocDate().toLocalDate());
-                    ligne.put("rembourse", w.getProrataRefundAmount());
+                    ligne.put("rembourse", MontantsLot.arrondi(w.getProrataRefundAmount()));
                     return ligne;
                 }).toList();
     }

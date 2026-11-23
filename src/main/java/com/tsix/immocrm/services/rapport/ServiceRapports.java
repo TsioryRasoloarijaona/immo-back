@@ -164,7 +164,7 @@ public class ServiceRapports {
         return new Export(ecran.code(), ecran.libelle(), filtres(ecran, e), feuilles);
     }
 
-    /** Paramètres appliqués (donc réduits au visible), valeurs lisibles, puis les avertissements du résultat. */
+    /** Paramètres appliqués (valeurs demandées telles quelles, non réduites au visible), valeurs lisibles, puis les avertissements du résultat. */
     private List<String> filtres(Ecran ecran, Execution e) {
         List<String> lignes = new ArrayList<>();
         for (ParametreRapport p : ecran.parametres()) {

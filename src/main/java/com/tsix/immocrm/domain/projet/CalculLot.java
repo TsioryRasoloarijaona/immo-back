@@ -146,7 +146,7 @@ public final class CalculLot {
                 premierNonNul(avanceMarche, t.avance().multiply(est.ttc()), t.avance().multiply(t.forfaitTTC())).multiply(ratio),
                 premierNonNul(t.garantie().multiply(marcheAjuste.ttc()), t.garantie().multiply(est.ttc()),
                         t.garantie().multiply(t.forfaitTTC())).multiply(ratio),
-                s(PREV_REMB_PRORATA).multiply(ratio), marcheAjuste.ttc().signum() != 0 ? marcheAjuste.ttc() : est.ttc(),
+                s(PREV_REMB_PRORATA).multiply(ratio), marcheAjuste.ttc().signum() == 0 ? est.ttc() : marcheAjuste.ttc(),
                 cout.ht(), cout.ttc(), coutRetenueGarantie(), coutPrevisionnel().remboursement(), s(RG_VALIDEE),
                 s(FAC_REMB_PRORATA), avancement, pourMulti);
     }
@@ -317,7 +317,7 @@ public final class CalculLot {
     }
 
     private static BigDecimal assurance(BigDecimal montant, BigDecimal ratio, BigDecimal base) {
-        return montant.signum() != 0 ? montant : ratio.multiply(base);
+        return montant.signum() == 0 ? ratio.multiply(base) : montant;
     }
 
     private BigDecimal decomptesNRR() {
