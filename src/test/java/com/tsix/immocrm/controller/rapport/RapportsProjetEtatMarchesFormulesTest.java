@@ -323,7 +323,8 @@ class RapportsProjetEtatMarchesFormulesTest {
 
     /**
      * R5 : estimation 1000 HT = 1200 TTC − (prorata 0,02 × 1200 + DEC montant 10 prioritaire + TRC 0,01 × 1200) = 1154 sans
-     * fournisseur ; le même lot avec fournisseur → 0. resteTotal = resteMarches (0, pas de bordereau) + resteEstimations.
+     * fournisseur ; le même lot avec fournisseur → 0. resteTotal = resteMarches + resteEstimations, où resteMarches = −10 :
+     * la vue retranche le montant DEC fixe même sans bordereau (PrjMarketMonitoringView, OfferedAmountToPay).
      */
     @Test
     void r5_resteEstimations_netSansFournisseur_zeroAvecFournisseur() throws Exception {
@@ -341,9 +342,9 @@ class RapportsProjetEtatMarchesFormulesTest {
 
         SoftAssertions sa = new SoftAssertions();
         egal(sa, ls, RESTE_ESTIMATIONS, "1154");
-        egal(sa, ls, RESTE_TOTAL, "1154");
+        egal(sa, ls, RESTE_TOTAL, "1144");
         egal(sa, lf, RESTE_ESTIMATIONS, ZERO);
-        egal(sa, lf, RESTE_TOTAL, ZERO);
+        egal(sa, lf, RESTE_TOTAL, "-10");
         sa.assertAll();
     }
 

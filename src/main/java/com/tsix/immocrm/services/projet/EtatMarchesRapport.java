@@ -40,6 +40,9 @@ public class EtatMarchesRapport extends RapportProjet {
     private static final String TOTAL_MARCHE = "totalMarche";
     private static final String TOTAL_MARCHE_M2 = "totalMarcheM2";
     private static final String ECART = "ecart";
+    // Termes du ratio, sommés dans le groupe mais hors colonnes.
+    private static final String EXTRAS_FACTURES = "extrasFactures";
+    private static final String OFFERT = "offertAPayer";
     private static final List<ColonneRapport> COLONNES = List.of(
             ColonneRapport.texte(TYPE_LOT, "Type de lot"), ColonneRapport.texte(CATEGORIE, "Catégorie"),
             montant(ESTIMATION, "Estimation de base TTC"),
@@ -114,7 +117,15 @@ public class EtatMarchesRapport extends RapportProjet {
         m.put("retenueRestituee", rg.restituee());
         m.put("retenueResteARestituer", rg.reste());
         m.put("travauxNonPayes", c.retenuesFactures());
-        // partie 2 : resteAPayer, retenueGarantie, resteMarches, resteEstimations, resteTotal (R3-R5)
+        BigDecimal reste = c.resteAPayer();
+        BigDecimal resteEstimations = l.lot().getCfgSupplier() == null ? c.estimationAPayer() : ZERO;
+        m.put("resteAPayer", reste);
+        m.put("resteMarches", reste);
+        m.put("resteEstimations", resteEstimations);
+        m.put("resteTotal", reste.add(resteEstimations));
+        m.put("retenueGarantie", c.retenueGarantiePrevue());
+        m.put(EXTRAS_FACTURES, c.supplementairesFacturesTTC());
+        m.put(OFFERT, c.offertAPayer());
         m.replaceAll((nom, v) -> Objects.requireNonNullElse(v, ZERO));
         return m;
     }
@@ -126,7 +137,9 @@ public class EtatMarchesRapport extends RapportProjet {
 
     private static Map<String, Object> ligne(List<String> cle, Map<String, BigDecimal> g) {
         g.put(ECART, g.getOrDefault(MARCHE, ZERO).subtract(g.getOrDefault(ESTIMATION, ZERO)));
-        g.put(RATIO, ZERO); // partie 2 : Σ ExtraAmount / Σ OfferedAmountToPay du groupe
+        BigDecimal offert = g.getOrDefault(OFFERT, ZERO);
+        g.put(RATIO, offert.signum() == 0 ? ZERO
+                : g.getOrDefault(EXTRAS_FACTURES, ZERO).divide(offert, MathContext.DECIMAL64));
         Map<String, Object> ligne = new LinkedHashMap<>();
         ligne.put(TYPE_LOT, cle.getFirst());
         ligne.put(CATEGORIE, cle.getLast());
