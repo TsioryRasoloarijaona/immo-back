@@ -255,6 +255,21 @@ public final class CalculLot {
         return arrondi(t.prorata().multiply(base.ttc()));
     }
 
+    /** {@code ExtraAmount + ClausesAmount} de l'état des marchés : supplémentaires facturés et avenants prévus, TTC. */
+    public BigDecimal supplementairesEtAvenants() {
+        return supplementairesFactures.ttc().add(avenants.ttc());
+    }
+
+    /** {@code AmountSettled} : Σ des lignes de règlement des pièces du lot, pièces annulées comprises. */
+    public BigDecimal regle() {
+        return s(REGLE);
+    }
+
+    /** {@code InvoiceTotalRetainedLineAmount} : retenues des factures (travaux à ne pas payer). */
+    public BigDecimal retenuesFactures() {
+        return s(FAC_RETENUE);
+    }
+
     private RetenueGarantieDto retenueGarantie() {
         BigDecimal taux = t.garantie();
         BigDecimal retenue = s(FAC_RG).add(s(FAV_RG));
