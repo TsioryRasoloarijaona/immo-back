@@ -285,6 +285,7 @@ class RapportsProjetBilanVisibiliteTest {
         bilans.ligneEstimation(lot, "R3DE-" + c.jeton(), "1", "500");
         fixture.marche(lot, "EstimatedPriceTTC", new BigDecimal("600"));
         bilans.devis(lot, projet, "R3DV", "2400", LocalDate.of(2026, 2, 10), true);
+        bilans.ligneDefinitive(lot, "R3DB", "2", "500");
         AdmUser compte = comptes.compte("N5D-" + c.jeton(), false, bilans.societe(), projet);
         AdmUser lecteur = bilans.compte("r3d", true, projet);
 
@@ -296,9 +297,12 @@ class RapportsProjetBilanVisibiliteTest {
         assertThat(l).as("ligne D").hasSize(1);
         SoftAssertions sa = new SoftAssertions();
         sa.assertThat(montant(l.getFirst(), ESTIMATION_BASE)).as("non nul").isCloseTo(new BigDecimal("1200"), within(PRECISION));
-        for (String colonne : List.of(ESTIMATION_BASE, ESTIMATION_CONFIDENTIELLE, MARCHE)) {
-            List<Object> valeurs = JsonPath.read(n5a, "$..[?(@.categorieId == '" + d + "')].valeurs." + colonne);
-            sa.assertThat(valeurs).as("N5a %s", colonne).hasSize(1);
+        Map<String, String> colonnes = Map.of(ESTIMATION_BASE, ESTIMATION_BASE,
+                ESTIMATION_CONFIDENTIELLE, ESTIMATION_CONFIDENTIELLE, MARCHE, "marcheAjuste");
+        for (Map.Entry<String, String> e : colonnes.entrySet()) {
+            String colonne = e.getKey();
+            List<Object> valeurs = JsonPath.read(n5a, "$..[?(@.categorieId == '" + d + "')].valeurs." + e.getValue());
+            sa.assertThat(valeurs).as("N5a %s", e.getValue()).hasSize(1);
             if (valeurs.size() == 1) {
                 sa.assertThat(montant(l.getFirst(), colonne)).as("R1 %s = N5a TTC", colonne)
                         .isCloseTo(new BigDecimal(String.valueOf(valeurs.getFirst())), within(PRECISION));

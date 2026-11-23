@@ -8,7 +8,6 @@ import com.tsix.immocrm.domain.rapport.SectionRapport;
 import com.tsix.immocrm.domain.rapport.TypeColonne;
 import com.tsix.immocrm.domain.rapport.TypeParametre;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
-import com.tsix.immocrm.services.projet.LotsProjetService.LotCalcule;
 import com.tsix.immocrm.services.rapport.vente.commercial.PeriodesRapport;
 import org.springframework.stereotype.Component;
 

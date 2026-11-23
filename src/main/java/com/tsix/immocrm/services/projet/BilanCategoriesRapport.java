@@ -100,7 +100,7 @@ public class BilanCategoriesRapport extends RapportProjet {
                 List.of())), List.of());
     }
 
-    /** Estimation de base, confidentielle et marché TTC × taux du lot ; lot résilié : son cumul travaux total (D5). */
+    /** Estimation de base, confidentielle et marché ajusté TTC × taux du lot ; lot résilié : son cumul travaux total (D5). */
     private void estimations(List<LotCalcule> lots, Map<UUID, List<Object[]>> ventilations,
                              Map<UUID, BigDecimal[]> montants) {
         List<UUID> resilies = lots.stream().map(LotCalcule::lot).filter(BilanCategoriesRapport::resilie)
@@ -113,7 +113,7 @@ public class BilanCategoriesRapport extends RapportProjet {
                 valeurs = new BigDecimal[]{cumul, cumul, cumul};
             } else {
                 BigDecimal[] colonnes = BilansProjetService.colonnesLot(l.calcul(), true);
-                valeurs = new BigDecimal[]{colonnes[1], colonnes[2], colonnes[3]};
+                valeurs = new BigDecimal[]{colonnes[1], colonnes[2], colonnes[4]};
             }
             for (Object[] r : ventilations.getOrDefault(l.lot().getId(), List.of())) {
                 BigDecimal taux = decimal(r[3]);

@@ -91,6 +91,7 @@ class RapportsProjetBilanTest {
         s.estimationBase(lot, "1000");
         s.estimationConfidentielle(lot, "LE", "500");
         s.marche(lot, c.pa1(), "LD", "2400");
+        bilans.ligneDefinitive(lot, "LB", "2", "500");
         UUID piece = s.piece(lot, c.pa1(), "LF", "1000", "800", true);
         s.ventilerPiece(piece, k1, "0.4");
         s.ventilerPiece(piece, k2, "0.6");
@@ -202,8 +203,9 @@ class RapportsProjetBilanTest {
     }
 
     @Test
-    void r1_marche_offeredPriceTtc_foisTaux() throws Exception {
-        colonne(MARCHE, "600", "1800", "2400");
+    void r1_marche_marcheAjusteTtc_foisTaux() throws Exception {
+        // bordereau 2 × 500 HT = 1200 TTC, différent du devis retenu (2400)
+        colonne(MARCHE, "300", "900", "1200");
     }
 
     @Test
