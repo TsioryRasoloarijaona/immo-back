@@ -12,7 +12,9 @@ public enum ModuleRapport {
     /** Réservé à l'Administrateur par règle d'URL ({@code SecurityConfig}). */
     ADMINISTRATION("administration", List.of("Yes.Adm.Front.Tdb.Reports"), false, true, true),
     /** Écran + xlsx seulement, pas de PDF (FEATURE-n7-etats-achat.md Q3). */
-    ACHAT("achat", List.of("Yes.Buy.Front.Tdb.Reports"), false, false, false);
+    ACHAT("achat", List.of("Yes.Buy.Front.Tdb.Reports"), false, false, false),
+    /** Écran + xlsx seulement (FEATURE-n5b-rapports-projet.md D1). */
+    PROJET("projet", List.of("Yes.Prj.Front.Tdb.Reports"), false, false, false);
 
     private final String slug;
     private final List<String> types;

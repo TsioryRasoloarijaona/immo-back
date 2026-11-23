@@ -29,7 +29,7 @@ import static com.tsix.immocrm.services.achat.RequetesDocumentsAchat.jour;
  * seule société.
  */
 @Component
-class RequetesRapportsAchat {
+public class RequetesRapportsAchat {
 
     private static final String ANNEE = "annee";
     private static final String MONTANT = "Montant";
@@ -104,7 +104,7 @@ class RequetesRapportsAchat {
     }
 
     /** {@code CHOIX} facultatif dont les options sont les projets visibles (un projet hors périmètre = 400). */
-    ParametreRapport projets(String nom, String libelle, boolean multiple) {
+    public ParametreRapport projets(String nom, String libelle, boolean multiple) {
         Set<UUID> ids = perimetre.projetsVisibles();
         List<Option> options = ids.isEmpty() ? List.of() : documents.projets(ids).stream()
                 .map(p -> new Option(p.id().toString(), Objects.toString(p.description(), p.code()))).toList();

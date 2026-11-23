@@ -16,6 +16,11 @@ public interface Rapport {
     /** Paramètres acceptés, dans l'ordre d'affichage ; relus à chaque requête. */
     List<ParametreRapport> parametres();
 
+    /** Paramètres contre lesquels la requête est validée ; par défaut ceux affichés ({@code affiches} = {@link #parametres()}). */
+    default List<ParametreRapport> parametresAcceptes(List<ParametreRapport> affiches) {
+        return affiches;
+    }
+
     /** Lecture seule ; ne lit que les tranches de {@link ContexteRapport#tranchesVisibles()}. */
     ResultatRapport executer(ContexteRapport contexte);
 }

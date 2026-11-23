@@ -300,6 +300,15 @@ public class LotsProjetService {
 
     /** Onglet Suivi de chaque lot visible des projets demandés (∩ périmètre ; vide = tous), triés par code. */
     public List<SuiviLot> suivis(List<UUID> projetIds) {
+        return calcules(projetIds).stream().map(l -> new SuiviLot(l.lot(), l.calcul().suivi())).toList();
+    }
+
+    /** Lot et son calcul complet (rapports Projet, FEATURE-n5b-rapports-projet.md D4). */
+    public record LotCalcule(PrjMarket lot, CalculLot calcul) {
+    }
+
+    /** Chaque lot visible des projets demandés (∩ périmètre ; vide = tous) et son calcul, triés par code. */
+    public List<LotCalcule> calcules(List<UUID> projetIds) {
         Visibilite v = new Visibilite(perimetre.restreindre(projetIds), intervenant.statutsDeLotsEtProjets());
         if (v.vide()) {
             return List.of();
@@ -308,7 +317,7 @@ public class LotsProjetService {
         List<PrjMarket> marches = lots.findAll((root, q, cb) -> filtre(root, cb, tous, v), Sort.by("code"));
         Map<UUID, CalculLot> calculs = montants.calculer(marches);
         return marches.stream()
-                .map(m -> new SuiviLot(m, Objects.requireNonNull(calculs.get(m.getId())).suivi())).toList();
+                .map(m -> new LotCalcule(m, Objects.requireNonNull(calculs.get(m.getId())))).toList();
     }
 
     private FicheEtendueLotDto fiche(PrjMarket m, CalculLot calcul) {

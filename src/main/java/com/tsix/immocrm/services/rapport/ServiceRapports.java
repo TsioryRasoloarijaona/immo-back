@@ -85,13 +85,20 @@ public class ServiceRapports {
      * sans {@code AdmReportData} ni droits par rôle.
      */
     public record Ecran(ModuleRapport module, String code, String libelle, List<ParametreRapport> parametres,
-                        Function<ContexteRapport, ResultatRapport> executer) {
+                        Function<ContexteRapport, ResultatRapport> executer, List<ParametreRapport> acceptes) {
+
+        public Ecran(ModuleRapport module, String code, String libelle, List<ParametreRapport> parametres,
+                     Function<ContexteRapport, ResultatRapport> executer) {
+            this(module, code, libelle, parametres, executer, parametres);
+        }
     }
 
     private record Ouverture(ModuleRapport module, Rapport rapport, AdmReportData ligne) {
 
         Ecran ecran() {
-            return new Ecran(module, rapport.code(), libelle(ligne), rapport.parametres(), rapport::executer);
+            List<ParametreRapport> affiches = rapport.parametres();
+            return new Ecran(module, rapport.code(), libelle(ligne), affiches, rapport::executer,
+                    rapport.parametresAcceptes(affiches));
         }
     }
 
@@ -199,7 +206,7 @@ public class ServiceRapports {
     }
 
     private Execution executer(Ecran ecran, Map<String, List<String>> recus) {
-        List<ParametreRapport> parametres = ecran.parametres();
+        List<ParametreRapport> parametres = ecran.acceptes();
         Map<String, List<String>> valeurs = ParametresRapport.valider(parametres, recus);
         List<UUID> tranchesRetenues = tranches.retenues(ecran.module(), ids(parametres, valeurs, TypeParametre.TRANCHES));
         List<UUID> commerciauxDemandes = ids(parametres, valeurs, TypeParametre.COMMERCIAUX);

@@ -230,6 +230,31 @@ public final class CalculLot {
         return new BlocAvanceDto(prevu[0], prevu[1], prevu[2], prevu[3], arrondi(s(validee)), r, a, r.subtract(a));
     }
 
+    // ------------------------------------------------------------------ rapports Projet (FEATURE-n5b-rapports-projet.md)
+
+    public BigDecimal retenueDecomptee() {
+        return arrondi(s(DEC_RG));
+    }
+
+    /** {@code −Σ AmountRegul} des restitutions : positive. */
+    public BigDecimal penaliteRg() {
+        return arrondi(s(RG_PENALITE));
+    }
+
+    public BigDecimal prorataDecompte() {
+        return arrondi(s(DEC_PRORATA));
+    }
+
+    /** {@code CostProportionAmount} TTC, mêmes trois cas que {@link #coutPrevisionnel()} : terminé, sans marché, en cours. */
+    public BigDecimal prorataPrevisionnel() {
+        if (d.termine()) {
+            return arrondi(somme(FAC_PRORATA, FAV_PRORATA));
+        }
+        Paire base = marcheAjuste.ht().signum() == 0 ? est
+                : marcheAjuste.plus(depassements).plus(supplementaires).plus(avenants);
+        return arrondi(t.prorata().multiply(base.ttc()));
+    }
+
     private RetenueGarantieDto retenueGarantie() {
         BigDecimal taux = t.garantie();
         BigDecimal retenue = s(FAC_RG).add(s(FAV_RG));
