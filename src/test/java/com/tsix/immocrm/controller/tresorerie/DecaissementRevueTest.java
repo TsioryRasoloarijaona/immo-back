@@ -82,6 +82,7 @@ class DecaissementRevueTest {
         UUID piece = tresorerie.piece(s.code("-FS2"), s.autreSociete(), projet, s.c().fournisseur(),
                 s.c().fournisseurNom(), s.c().modulePrj(), "1000");
         achat.poser(piece, "StlCurrencyId", s.devise());
+        achat.poser(piece, "BuyDocumentStatusId", achat.statut("ST" + s.code("-FS2"), true, false, 1));
 
         Reponse r = appels.creer(qui, corps(s, s.code("-R"), "500", List.of(ligne(piece, "300"))));
 
