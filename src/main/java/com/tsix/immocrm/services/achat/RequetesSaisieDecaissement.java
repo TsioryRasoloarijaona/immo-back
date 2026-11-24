@@ -28,7 +28,7 @@ public class RequetesSaisieDecaissement {
     /** Pièce d'achat visible, avec son réglé hors annulés et hors le règlement en cours. */
     public record PieceSaisie(UUID id, String code, LocalDate dateDocument, LocalDate dateEcheance, String description,
                               UUID fournisseurId, UUID societeId, UUID deviseId, String deviseCode, BigDecimal aPayer,
-                              BigDecimal regle, UUID moduleId) {
+                              BigDecimal regle, UUID moduleId, String moduleCode, boolean okPourPaiement) {
 
         public BigDecimal resteAPayer() {
             return SoldeDocumentAchat.de(aPayer, regle).resteARegler();
@@ -42,14 +42,20 @@ public class RequetesSaisieDecaissement {
     private static final String DESCRIPTION = "Description";
 
     private static final String PIECES = "SELECT d.PKey, d.Code, d.DocDate, d.MaturityDate, d.Description, d.CfgTierId, "
-            + "d.CfgCompanyId, d.AdmModuleId, d.StlCurrencyId, cur.Code AS DeviseCode, d.AmountToPay, COALESCE(("
+            + "d.CfgCompanyId, d.AdmModuleId, mo.Code AS ModuleCode, bs.IsOkForPayement, d.StlCurrencyId, "
+            + "cur.Code AS DeviseCode, d.AmountToPay, COALESCE(("
             + SoldeDocumentAchat.SQL_REGLE + " AND l.StlSettlementId <> :reglement), 0) AS Regle "
             + "FROM BuyDocument d LEFT JOIN StlCurrency cur ON cur.PKey = d.StlCurrencyId "
-            + "LEFT JOIN AdmModule mo ON mo.PKey = d.AdmModuleId WHERE " + RequetesDocumentsAchat.VISIBLE;
+            + "LEFT JOIN AdmModule mo ON mo.PKey = d.AdmModuleId "
+            + "LEFT JOIN BuyDocumentStatus bs ON bs.PKey = d.BuyDocumentStatusId WHERE " + RequetesDocumentsAchat.VISIBLE;
 
     private static final String PIECES_PAR_ID = PIECES + "AND d.PKey IN (:ids)";
 
-    private static final String PIECES_A_AFFECTER = PIECES + "AND d.CfgTierId = :fournisseur "
+    // Verrou de mise à jour tenu jusqu'au commit : deux saisies sur une même pièce relisent son reste l'une après l'autre.
+    private static final String VERROUILLER = "SELECT PKey FROM BuyDocument WITH (UPDLOCK, ROWLOCK) "
+            + "WHERE PKey IN (:ids) ORDER BY PKey ASC";
+
+    private static final String PIECES_A_AFFECTER = PIECES + "AND bs.IsOkForPayement = 1 AND d.CfgTierId = :fournisseur "
             + "AND d.CfgCompanyId = :societe AND mo.Code = :module ORDER BY d.DocDate, d.Code";
 
     private static final String VIREMENT_INTERNE = "SELECT COUNT(*) FROM StlSettlement "
@@ -93,6 +99,12 @@ public class RequetesSaisieDecaissement {
         return jdbc.query(PIECES_PAR_ID, RequetesDocumentsAchat.parametres(perimetre)
                 .addValue("ids", RequetesDocumentsAchat.textes(ids)).addValue(REGLEMENT, texte(reglement)),
                 (rs, n) -> piece(rs));
+    }
+
+    public void verrouiller(Collection<UUID> ids) {
+        if (!ids.isEmpty()) {
+            jdbc.queryForList(VERROUILLER, Map.of("ids", RequetesDocumentsAchat.textes(ids)), String.class);
+        }
     }
 
     public List<PieceSaisie> piecesAAffecter(PerimetreAchat perimetre, String module, UUID fournisseur, UUID societe,
@@ -166,7 +178,8 @@ public class RequetesSaisieDecaissement {
         return new PieceSaisie(uuid(rs, PKEY), rs.getString(CODE), jour(rs, "DocDate"), jour(rs, "MaturityDate"),
                 rs.getString(DESCRIPTION), uuid(rs, "CfgTierId"), uuid(rs, "CfgCompanyId"), uuid(rs, "StlCurrencyId"),
                 rs.getString("DeviseCode"), Objects.requireNonNullElse(rs.getBigDecimal("AmountToPay"), BigDecimal.ZERO),
-                Objects.requireNonNullElse(rs.getBigDecimal("Regle"), BigDecimal.ZERO), uuid(rs, "AdmModuleId"));
+                Objects.requireNonNullElse(rs.getBigDecimal("Regle"), BigDecimal.ZERO), uuid(rs, "AdmModuleId"),
+                rs.getString("ModuleCode"), rs.getBoolean("IsOkForPayement"));
     }
 
     private static String texte(UUID id) {

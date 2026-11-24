@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,9 @@ public class SaisieDecaissementService {
     private static final String MSG_POINTE = "Vous ne pouvez pas supprimer un règlement pointé en comptabilité !";
     private static final String MSG_AFFECTATIONS = "Vous ne pouvez pas supprimer un règlement avec des affectations !";
     private static final String MSG_VIREMENT = "Ce règlement provient d'un virement interne : modifiez le virement.";
+    private static final String MSG_NON_VALIDEE =
+            "Vous ne pouvez pas effectuer un paiement sur une pièce qui n'est pas validée !";
+    private static final String MSG_PIECE_INTROUVABLE = "Pièce d'achat introuvable : ";
     private static final List<StatutReglement> STATUTS_SAISIS =
             List.of(StatutReglement.IN_WORK, StatutReglement.POINTED, StatutReglement.NOTPAYED);
 
@@ -226,6 +230,34 @@ public class SaisieDecaissementService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public SaisieDecaissementDto proposition(UUID pieceId) {
+        requis(pieceId, "pieceId est requis");
+        PieceSaisie piece = requetes.pieces(perimetres.achat(List.of()), Set.of(pieceId), null).stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PIECE_INTROUVABLE + pieceId));
+        ModuleTresorerie module = Arrays.stream(ModuleTresorerie.values())
+                .filter(m -> m.name().equals(piece.moduleCode())).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PIECE_INTROUVABLE + pieceId));
+        outils.droits().exiger(DROIT, DROIT_CREER);
+        exigerValidee(piece);
+        LocalDate jour = LocalDate.now(outils.clock());
+        // G-c comme OMRAN : la ligne vaut le reste même s'il est nul, l'enregistrement la refusera.
+        return new SaisieDecaissementDto(module, piece.societeId(), jour, jour, null, null, null, null,
+                piece.resteAPayer(), piece.fournisseurId(), piece.fournisseurId(), null, null, null, null,
+                StatutReglement.IN_WORK, null, null, null,
+                List.of(new LigneSaisieDecaissementDto(piece.id(), piece.resteAPayer())));
+    }
+
+    @Transactional(readOnly = true)
+    public SaisieDecaissementDto copie(UUID id) {
+        SaisieDecaissementDto s = tresorerie.decaissement(id).saisie();
+        outils.droits().exiger(DROIT, DROIT_CREER);
+        // Comme Settlement.Copy d'OMRAN : référence, reçu, P.P et C.R.A.S vidés, aucune ligne copiée.
+        return new SaisieDecaissementDto(s.module(), s.societeId(), s.dateDocument(), s.dateEcheance(), s.typeId(),
+                null, s.compteId(), s.banqueId(), s.montant(), s.fournisseurId(), s.payeurId(), s.notaireId(),
+                s.tiersAutruiId(), s.notes(), s.dateDecaissement(), s.statut(), null, null, null, List.of());
+    }
+
     /** PUT : statut absent = statut existant ; un règlement annulé reste annulé (pas de réactivation). */
     private static StatutReglement statut(StatutReglement saisi, StlSettlement existant) {
         StatutReglement avant = existant == null ? null : StatutReglement.lireCode(existant.getStatus()).orElse(null);
@@ -350,6 +382,7 @@ public class SaisieDecaissementService {
                 throw new InvalidRequestException("La pièce " + ligne.pieceId() + " est affectée deux fois.");
             }
         }
+        requetes.verrouiller(ids);
         Map<UUID, PieceSaisie> pieces = requetes.pieces(perimetres.achat(List.of()), ids, reglementId).stream()
                 .collect(Collectors.toMap(PieceSaisie::id, Function.identity()));
         for (LigneSaisieDecaissementDto ligne : lignes) {
@@ -366,8 +399,9 @@ public class SaisieDecaissementService {
     private static void verifierLigne(LigneSaisieDecaissementDto ligne, PieceSaisie piece, Entete entete, UUID devise,
                                       UUID module) {
         if (piece == null) {
-            throw new ResourceNotFoundException("Pièce d'achat introuvable : " + ligne.pieceId());
+            throw new ResourceNotFoundException(MSG_PIECE_INTROUVABLE + ligne.pieceId());
         }
+        exigerValidee(piece);
         if (!Objects.equals(piece.societeId(), entete.societe().getId())) {
             throw new InvalidRequestException("La pièce " + piece.code() + " n'appartient pas à la société du règlement.");
         }
@@ -383,6 +417,13 @@ public class SaisieDecaissementService {
         if (CalculReglement.depasse(piece.resteAPayer(), ligne.montant())) {
             throw new InvalidRequestException("Le montant affecté à la pièce " + piece.code()
                     + " dépasse son reste à payer (" + piece.resteAPayer().toPlainString() + ").");
+        }
+    }
+
+    /** G-a : statut de pièce sans « OK pour paiement » (ou pièce sans statut) = non validée. */
+    private static void exigerValidee(PieceSaisie piece) {
+        if (!piece.okPourPaiement()) {
+            throw new InvalidRequestException(MSG_NON_VALIDEE);
         }
     }
 

@@ -176,6 +176,7 @@ class DecaissementModificationTest {
         UUID piece = tresorerie.piece(s.code("-FS2"), s.autreSociete(), projet, s.c().fournisseur(),
                 s.c().fournisseurNom(), s.c().modulePrj(), "1000");
         achat.poser(piece, "StlCurrencyId", s.devise());
+        achat.poser(piece, "BuyDocumentStatusId", achat.statut("ST" + s.code("-FS2"), true, false, 1));
         Map<String, Object> corps = corps(s, reference, "500", List.of(ligne(piece, "300")));
         corps.put("societeId", s.autreSociete());
         corps.put("compteId", s.compteAutreSociete());
