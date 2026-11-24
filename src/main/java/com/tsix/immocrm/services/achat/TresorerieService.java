@@ -14,6 +14,7 @@ import com.tsix.immocrm.dto.tresorerie.DecaissementLigneDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.DateTresorerie;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.ModuleTresorerie;
+import com.tsix.immocrm.dto.tresorerie.LigneRetenueDto;
 import com.tsix.immocrm.dto.tresorerie.LigneSaisieDecaissementDto;
 import com.tsix.immocrm.dto.tresorerie.SaisieDecaissementDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.SensTresorerie;
@@ -29,6 +30,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.droits.DroitsOmran;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
+import com.tsix.immocrm.services.tresorerie.RetenuesDecaissement;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,13 +66,15 @@ public class TresorerieService {
     private final PerimetreProjetService perimetres;
     private final DroitsOmran droits;
     private final Clock clock;
+    private final RetenuesDecaissement retenues;
 
     public TresorerieService(RequetesTresorerie requetes, PerimetreProjetService perimetres, DroitsOmran droits,
-                             Clock clock) {
+                             Clock clock, RetenuesDecaissement retenues) {
         this.requetes = requetes;
         this.perimetres = perimetres;
         this.droits = droits;
         this.clock = clock;
+        this.retenues = retenues;
     }
 
     public ListeTresorerieDto<DecaissementLigneDto, TotauxDecaissementsDto> decaissements(FiltresTresorerie filtres) {
@@ -98,10 +102,11 @@ public class TresorerieService {
         DecaissementFicheDto fiche = new DecaissementFicheDto(decaissement(r, jour), texte(r, "notes"),
                 texte(r, "codeRecu"), texte(r, "deviseCode"), lignes, entier(r, "NbLignes") - lignes.size(), null);
         return new DecaissementFicheDto(fiche.decaissement(), fiche.notes(), fiche.codeRecu(), fiche.devise(), lignes,
-                fiche.lignesMasquees(), saisie(r, fiche));
+                fiche.lignesMasquees(), saisie(r, fiche, retenues.lire(id)));
     }
 
-    private static SaisieDecaissementDto saisie(Map<String, Object> r, DecaissementFicheDto fiche) {
+    private static SaisieDecaissementDto saisie(Map<String, Object> r, DecaissementFicheDto fiche,
+                                                List<LigneRetenueDto> retenues) {
         DecaissementLigneDto d = fiche.decaissement();
         String moduleCode = texte(r, "moduleCode");
         ModuleTresorerie module = Arrays.stream(ModuleTresorerie.values())
@@ -114,7 +119,7 @@ public class TresorerieService {
                 montant(r, "montantBase"), uuid(r.get("fournisseurId")), uuid(r.get("payeurId")),
                 uuid(r.get("notaireId")), uuid(r.get("tiersAutruiId")), fiche.notes(), d.datePointage(),
                 StatutReglement.lireCode(d.statut()).orElse(null), fiche.codeRecu(),
-                texte(r, "ficheProposition"), texte(r, "ficheRS"), affectations, null,
+                texte(r, "ficheProposition"), texte(r, "ficheRS"), affectations, retenues,
                 vrai(r.get("rsRegle")), jour(r.get("dateReglementRS")), d.montant(), zero(montant(r, "montantRS")),
                 zero(montant(r, "tauxRS")));
     }
