@@ -226,6 +226,16 @@ public class SaisieDecaissementService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public SaisieDecaissementDto proposition(UUID pieceId) {
+        throw new UnsupportedOperationException(String.valueOf(pieceId));
+    }
+
+    @Transactional(readOnly = true)
+    public SaisieDecaissementDto copie(UUID id) {
+        throw new UnsupportedOperationException(String.valueOf(id));
+    }
+
     /** PUT : statut absent = statut existant ; un règlement annulé reste annulé (pas de réactivation). */
     private static StatutReglement statut(StatutReglement saisi, StlSettlement existant) {
         StatutReglement avant = existant == null ? null : StatutReglement.lireCode(existant.getStatus()).orElse(null);

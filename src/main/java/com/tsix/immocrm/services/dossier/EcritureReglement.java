@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.StatutReglement;
+import com.tsix.immocrm.domain.achat.CalculReglement;
 import com.tsix.immocrm.dto.dossier.AffectationReglementRequest;
 import com.tsix.immocrm.dto.dossier.CreerReglementRequest;
 import com.tsix.immocrm.entities.cfg.CfgTier;
@@ -73,7 +74,7 @@ public class EcritureReglement {
         EnTeteValidee valide = validerEnTete(folder, entete);
         List<LigneAffectee> lignes = affectations.valider(folder.getId(), repartition, List.of(), decaissement);
         BigDecimal affecte = AffectationsReglement.somme(lignes);
-        if (affecte.compareTo(valide.montant()) > 0) {
+        if (CalculReglement.depasse(valide.montant(), affecte)) {
             throw new InvalidRequestException("Le reste à affecter doit être >= 0 : les affectations ("
                     + affecte.toPlainString() + ") dépassent le montant du règlement ("
                     + valide.montant().toPlainString() + ")");
@@ -146,7 +147,7 @@ public class EcritureReglement {
                                             Collection<UUID> dejaAffectees, BigDecimal resteAAffecter) {
         List<LigneAffectee> lignes = affectations.valider(dossierId, repartition, dejaAffectees);
         BigDecimal affecte = AffectationsReglement.somme(lignes);
-        if (affecte.compareTo(resteAAffecter) > 0) {
+        if (CalculReglement.depasse(resteAAffecter, affecte)) {
             throw new InvalidRequestException("Les affectations (" + affecte.toPlainString()
                     + ") dépassent le reste à affecter (" + resteAAffecter.toPlainString() + ")");
         }

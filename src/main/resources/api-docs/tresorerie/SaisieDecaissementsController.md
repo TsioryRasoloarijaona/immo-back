@@ -37,5 +37,20 @@ le choix de société.
 ## piecesAAffecter
 
 Pièces d'achat (`BuyDocument`) du module, du fournisseur et de la société, visibles par le compte connecté, dont le
-reste à payer est > 0. `regle` exclut les règlements annulés et, avec `reglementId`, les lignes de ce règlement (cas de la
+reste à payer est > 0 et dont le statut est validé pour paiement (`BuyDocumentStatus.IsOkForPayement = 1`, comme le
+sélecteur OMRAN). `regle` exclut les règlements annulés et, avec `reglementId`, les lignes de ce règlement (cas de la
 modification).
+
+## proposition
+
+« Générer à partir de » d'OMRAN : rend un décaissement **prérempli, non enregistré**, à partir d'une pièce d'achat (facture
+ou pièce à payer). Module, société, fournisseur (= payeur) et devise sont ceux de la pièce ; une seule ligne
+`{pieceId, montant = reste à payer}` et `montant` = ce reste ; date pièce = date d'échéance = aujourd'hui ; statut `IN_WORK` ;
+type, compte, référence et pointage vides. Une pièce soldée n'est pas refusée : la ligne vaut le reste (0 ou négatif) et
+l'enregistrement la refusera. L'utilisateur complète la fiche puis l'enregistre par `POST /decaissements`.
+
+## copie
+
+« Copier » d'OMRAN : rend la saisie d'un règlement visible, **non enregistrée**, avec tous ses champs (statut et date de
+pointage compris) sauf la référence, le code reçu et les codes P.P / C.R.A.S, vidés, et **sans aucune ligne
+d'affectation**. Permise sur un règlement de virement interne. L'utilisateur l'enregistre par `POST /decaissements`.

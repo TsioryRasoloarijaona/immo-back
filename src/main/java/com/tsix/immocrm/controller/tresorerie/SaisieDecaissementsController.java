@@ -104,4 +104,25 @@ public class SaisieDecaissementsController {
             @RequestParam(required = false) UUID reglementId) {
         return service.piecesAAffecter(module, fournisseurId, societeId, reglementId);
     }
+
+    @GetMapping("/proposition")
+    @Operation(summary = "Décaissement prérempli depuis une pièce d'achat (non enregistré)")
+    @ApiResponse(responseCode = "200", description = "Saisie préremplie, à enregistrer par POST /decaissements.")
+    @ApiResponse(responseCode = "400", description = "Pièce non validée pour paiement (statut sans IsOkForPayement).",
+            content = @Content)
+    @ApiResponse(responseCode = "403", description = REFUS, content = @Content)
+    @ApiResponse(responseCode = "404", description = "Pièce d'achat inconnue ou invisible.", content = @Content)
+    public SaisieDecaissementDto proposition(
+            @Parameter(description = "Pièce d'achat à régler (BuyDocument.PKey).") @RequestParam UUID pieceId) {
+        return service.proposition(pieceId);
+    }
+
+    @GetMapping("/{id}/copie")
+    @Operation(summary = "Copie d'un décaissement visible (non enregistrée)")
+    @ApiResponse(responseCode = "200", description = "Saisie copiée, à enregistrer par POST /decaissements.")
+    @ApiResponse(responseCode = "403", description = REFUS, content = @Content)
+    @ApiResponse(responseCode = "404", description = "Règlement inconnu ou invisible.", content = @Content)
+    public SaisieDecaissementDto copie(@Parameter(description = ID) @PathVariable UUID id) {
+        return service.copie(id);
+    }
 }
