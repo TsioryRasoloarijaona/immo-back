@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.sequence;
 
 import com.tsix.immocrm.entities.adm.AdmSequence;
 import com.tsix.immocrm.exceptions.ConfigurationManquanteException;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.repositories.adm.AdmSequenceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -63,8 +64,25 @@ public class GenerateurCodeSequence {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public String suivantSelonLigne(String codeSequence) {
-        AdmSequence s = sequenceRepository.findPourIncrementByCode(codeSequence).orElseThrow(
-                () -> new ConfigurationManquanteException("Séquence « " + codeSequence + " » absente d'AdmSequence."));
+        return formater(sequenceRepository.findPourIncrementByCode(codeSequence).orElseThrow(
+                () -> new ConfigurationManquanteException("Séquence « " + codeSequence + " » absente d'AdmSequence.")));
+    }
+
+    /** Comme {@link #suivantSelonLigne}, ligne désignée par sa clé ; absente → 409 {@code messageAbsente}. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String suivantParId(UUID id, String messageAbsente) {
+        return formater(sequenceRepository.findPourIncrementById(id)
+                .orElseThrow(() -> new ConflictException(messageAbsente)));
+    }
+
+    /** Comme {@link #suivantSelonLigne}, ligne {@code TypeCode} de la société ; absente → 409 {@code messageAbsente}. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String suivantParType(String typeCode, UUID societeId, String messageAbsente) {
+        return formater(sequenceRepository.findPourIncrementByTypeCode(typeCode, societeId)
+                .orElseThrow(() -> new ConflictException(messageAbsente)));
+    }
+
+    private String formater(AdmSequence s) {
         int prochain = Objects.requireNonNullElse(s.getSeqValue(), 0) + 1;
         s.setSeqValue(prochain);
         sequenceRepository.save(s);

@@ -28,6 +28,7 @@ import com.tsix.immocrm.services.achat.TresorerieService;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
+import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.services.tresorerie.RetenuesDecaissement.Retenues;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,9 @@ public class SaisieDecaissementService {
     private static final String MSG_NON_VALIDEE =
             "Vous ne pouvez pas effectuer un paiement sur une pièce qui n'est pas validée !";
     private static final String MSG_PIECE_INTROUVABLE = "Pièce d'achat introuvable : ";
+    private static final String MSG_SANS_SEQUENCE = "Aucune séquence de code n'est configurée";
+    private static final UUID SEQUENCE_PP = UUID.fromString("60C4F768-BE0C-49AA-A5FD-F784D28F2F0A");
+    private static final String SEQUENCE_CRAS = "RSSheetCode";
     private static final List<StatutReglement> STATUTS_SAISIS =
             List.of(StatutReglement.IN_WORK, StatutReglement.POINTED, StatutReglement.NOTPAYED);
 
@@ -88,16 +92,19 @@ public class SaisieDecaissementService {
     private final PerimetreProjetService perimetres;
     private final OutilsSaisieDecaissement outils;
     private final RetenuesDecaissement retenues;
+    private final GenerateurCodeSequence sequences;
     private final EntityManager em;
 
     public SaisieDecaissementService(TresorerieService tresorerie, RequetesSaisieDecaissement requetes,
                                      PerimetreProjetService perimetres, OutilsSaisieDecaissement outils,
-                                     RetenuesDecaissement retenues, EntityManager em) {
+                                     RetenuesDecaissement retenues, GenerateurCodeSequence sequences,
+                                     EntityManager em) {
         this.tresorerie = tresorerie;
         this.requetes = requetes;
         this.perimetres = perimetres;
         this.outils = outils;
         this.retenues = retenues;
+        this.sequences = sequences;
         this.em = em;
     }
 
@@ -125,6 +132,9 @@ public class SaisieDecaissementService {
         reglement.setUserCreateDateTime(maintenant);
         appliquer(reglement, entete, saisie, auteur, maintenant);
         outils.reglementOmran().completer(reglement, entete.societe(), moduleId);
+        // completer met "" (encaissements) ; au décaissement, codes NULL tant que les POST ne les attribuent pas (RS-o)
+        reglement.setPropositionSheetCode(null);
+        reglement.setRSSheetCode(null);
         retenues.poser(reglement, entete.montant(), r, saisie.rsDeclaree(), saisie.dateDeclarationRs());
         em.persist(reglement);
         retenues.ecrire(reglement.getId(), r, auteur, maintenant);
@@ -227,11 +237,33 @@ public class SaisieDecaissementService {
     }
 
     public CodeFeuilleDto codeFeuillePaiement(UUID id) {
-        throw new UnsupportedOperationException("code P.P : partie B");
+        StlSettlement reglement = reglementPourCode(id);
+        if (vide(reglement.getPropositionSheetCode())) {
+            reglement.setPropositionSheetCode(sequences.suivantParId(SEQUENCE_PP, MSG_SANS_SEQUENCE + "."));
+            em.flush();
+        }
+        return new CodeFeuilleDto(reglement.getPropositionSheetCode());
     }
 
     public CodeFeuilleDto codeFeuilleRs(UUID id) {
-        throw new UnsupportedOperationException("code C.R.A.S : partie B");
+        StlSettlement reglement = reglementPourCode(id);
+        if (vide(reglement.getRSSheetCode())) {
+            UUID societe = idDe(reglement.getCfgCompany(), CfgCompany::getId);
+            reglement.setRSSheetCode(sequences.suivantParType(SEQUENCE_CRAS, societe,
+                    MSG_SANS_SEQUENCE + " pour cette société."));
+            em.flush();
+        }
+        return new CodeFeuilleDto(reglement.getRSSheetCode());
+    }
+
+    private StlSettlement reglementPourCode(UUID id) {
+        tresorerie.decaissement(id);
+        outils.droits().exiger(DROIT_CREER);
+        return em.find(StlSettlement.class, id);
+    }
+
+    private static boolean vide(String code) {
+        return code == null || code.isBlank();
     }
 
     @Transactional(readOnly = true)
