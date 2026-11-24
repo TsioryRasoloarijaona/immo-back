@@ -110,10 +110,23 @@ public class FixtureDecaissements {
         return piece(s, suffixe, projet, s.c().fournisseur(), s.c().modulePrj(), montant);
     }
 
+    /** Pièce au statut validé pour paiement ({@code IsOkForPayement = 1}, G-e de FEATURE-n3bis-b1-reglements.md). */
     public UUID piece(Saisie s, String suffixe, UUID projet, UUID fournisseur, UUID module, String montant) {
+        return piece(s, suffixe, projet, fournisseur, module, montant, true);
+    }
+
+    /** Facture du cadre dont le statut a {@code IsOkForPayement = 0} (G-a / G-e). */
+    public UUID pieceNonValidee(Saisie s, String suffixe, UUID projet, String montant) {
+        return piece(s, suffixe, projet, s.c().fournisseur(), s.c().modulePrj(), montant, false);
+    }
+
+    private UUID piece(Saisie s, String suffixe, UUID projet, UUID fournisseur, UUID module, String montant,
+                       boolean valideePourPaiement) {
         UUID id = tresorerie.piece(s.code(suffixe), s.c().societe(), projet, fournisseur, "Fournisseur " + suffixe,
                 module, montant);
         achat.poser(id, "StlCurrencyId", s.devise());
+        achat.poser(id, "BuyDocumentStatusId",
+                achat.statut("ST" + s.code(suffixe), valideePourPaiement, false, valideePourPaiement ? 1 : 0));
         return id;
     }
 
