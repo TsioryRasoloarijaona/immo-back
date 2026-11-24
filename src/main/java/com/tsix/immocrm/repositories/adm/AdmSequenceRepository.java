@@ -18,4 +18,12 @@ public interface AdmSequenceRepository extends JpaRepository<AdmSequence, UUID> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM AdmSequence s WHERE s.code = :code")
     Optional<AdmSequence> findPourIncrementByCode(@Param("code") String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM AdmSequence s WHERE s.id = :id")
+    Optional<AdmSequence> findPourIncrementById(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM AdmSequence s WHERE s.typeCode = :type AND s.cfgCompanyId = :societe")
+    Optional<AdmSequence> findPourIncrementByTypeCode(@Param("type") String typeCode, @Param("societe") UUID societeId);
 }

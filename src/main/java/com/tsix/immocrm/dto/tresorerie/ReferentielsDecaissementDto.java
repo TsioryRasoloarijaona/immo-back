@@ -12,7 +12,11 @@ public record ReferentielsDecaissementDto(
         @Schema(description = "Comptes des sociétés habilitées, tri par code.") List<CompteDecaissementDto> comptes,
         @Schema(description = "Code de la devise par défaut (paramètre DefaultCurrency).", example = "MAD") String devise,
         @Schema(description = "Statuts proposés à la saisie : IN_WORK, POINTED, NOTPAYED.") List<String> statuts,
-        @Schema(description = "Droits OMRAN du compte connecté sur l'écran.") DroitsDecaissementDto droits) {
+        @Schema(description = "Droits OMRAN du compte connecté sur l'écran.") DroitsDecaissementDto droits,
+        @Schema(description = "Types de retenue, tous avec anneeRas ; le front filtre sur l'année de la date pièce.")
+        List<TypeRetenueDto> typesRetenue,
+        @Schema(description = "Paramètre ManageRS : faux = onglet des retenues masqué et retenues refusées (409).")
+        boolean gestionRs) {
 
     @Schema(description = "Type de règlement (StlSettlementType).")
     public record TypeDecaissementDto(

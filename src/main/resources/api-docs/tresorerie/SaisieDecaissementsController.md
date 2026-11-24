@@ -4,8 +4,13 @@
 
 Crée un règlement débit (`IsCredit = 0`) du module PRJ ou BUY et ses affectations aux pièces d'achat
 (`StlSettlementLine.BuyDocumentId`). Exige la lecture de l'écran et `toolNew`. Ordre des refus : 404 (société, fournisseur,
-compte ou pièce inconnus ou invisibles) → 403 → 400 → 409. Montant du règlement > 0 ; `Amount = AmountBase`, sans retenue à
-la source ni timbre. Une ligne d'historique `StlSettlementHistory` est écrite. Refus 400, messages OMRAN : aucune ligne
+compte ou pièce inconnus ou invisibles) → 403 → 400 → 409. Montant brut du règlement (`AmountBase`) > 0 ; retenues à la
+source (`retenues`, lignes `StlDeduction`) : `AmountRS` = Σ des lignes, net `Amount = AmountBase − AmountRS`, `RsRatio =
+AmountRS / AmountBase` (0 si brut nul) ; pas de timbre. `retenues` absent et `ManageRS = 1` : une ligne automatique du
+fournisseur (`CfgTier.RsRatio ≠ 0`) ; `[]` = aucune retenue. `retenues` non vide avec `ManageRS = 0` : 409 « La retenue à
+la source n'est pas activée. » ; ligne à montant retenu 0 : 400 « Vous devez corriger le montant ou supprimer la ligne ! ».
+Les codes P.P / C.R.A.S du corps sont ignorés (attribués par leurs POST). Une ligne d'historique `StlSettlementHistory`
+est écrite. Refus 400, messages OMRAN : aucune ligne
 sans `CanSaveWithoutAffectation` (R-a), Σ lignes > montant (R-b), ligne à 0 (R-c), devise de pièce différente (R-d), date
 de pointage sans compte (R-e), échéance < date pièce (R-f), pointage sans statut POINTED (R-g), POINTED sans pointage
 (R-h), référence / notaire / compte obligatoires selon le type (R-k), statut CANCELED, pièce d'un autre fournisseur, pièce
@@ -54,3 +59,16 @@ l'enregistrement la refusera. L'utilisateur complète la fiche puis l'enregistre
 « Copier » d'OMRAN : rend la saisie d'un règlement visible, **non enregistrée**, avec tous ses champs (statut et date de
 pointage compris) sauf la référence, le code reçu et les codes P.P / C.R.A.S, vidés, et **sans aucune ligne
 d'affectation**. Permise sur un règlement de virement interne. L'utilisateur l'enregistre par `POST /decaissements`.
+
+## codeFeuillePaiement
+
+Bouton « P.P. » d'OMRAN. N'enregistre pas la fiche (le front l'enregistre d'abord). Si `PropositionSheetCode` est vide,
+l'attribue depuis la séquence globale de la proposition de paiement (`AdmSequence`, format `aa/00000`, ex. `26/00001`) ;
+un code existant n'est jamais réécrit et est rendu tel quel. Exige la lecture de l'écran et `toolNew` ; ordre 404 → 403.
+**Écart à OMRAN** : séquence absente → 409 « Aucune séquence de code n'est configurée. » (OMRAN laisse le code vide).
+
+## codeFeuilleRs
+
+Bouton « C.R.A.S. » d'OMRAN. Même fonctionnement que le code P.P, avec la séquence `RSSheetCode` **de la société du
+règlement** (format `aa` + 3 chiffres, ex. `26001`). **Écart à OMRAN** : société sans séquence → 409 « Aucune séquence de
+code n'est configurée pour cette société. » (OMRAN rend un code NULL, sans erreur).

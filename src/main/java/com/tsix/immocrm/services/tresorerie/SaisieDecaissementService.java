@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.tresorerie;
 
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.domain.achat.CalculReglement;
+import com.tsix.immocrm.dto.tresorerie.CodeFeuilleDto;
 import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto;
 import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto.LigneDecaissementDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.ModuleTresorerie;
@@ -27,6 +28,8 @@ import com.tsix.immocrm.services.achat.TresorerieService;
 import com.tsix.immocrm.services.perimetre.PerimetreAchat;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.perimetre.PerimetreProjetService;
+import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
+import com.tsix.immocrm.services.tresorerie.RetenuesDecaissement.Retenues;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +81,9 @@ public class SaisieDecaissementService {
     private static final String MSG_NON_VALIDEE =
             "Vous ne pouvez pas effectuer un paiement sur une pièce qui n'est pas validée !";
     private static final String MSG_PIECE_INTROUVABLE = "Pièce d'achat introuvable : ";
+    private static final String MSG_SANS_SEQUENCE = "Aucune séquence de code n'est configurée";
+    private static final UUID SEQUENCE_PP = UUID.fromString("60C4F768-BE0C-49AA-A5FD-F784D28F2F0A");
+    private static final String SEQUENCE_CRAS = "RSSheetCode";
     private static final List<StatutReglement> STATUTS_SAISIS =
             List.of(StatutReglement.IN_WORK, StatutReglement.POINTED, StatutReglement.NOTPAYED);
 
@@ -85,15 +91,20 @@ public class SaisieDecaissementService {
     private final RequetesSaisieDecaissement requetes;
     private final PerimetreProjetService perimetres;
     private final OutilsSaisieDecaissement outils;
+    private final RetenuesDecaissement retenues;
+    private final GenerateurCodeSequence sequences;
     private final EntityManager em;
 
     public SaisieDecaissementService(TresorerieService tresorerie, RequetesSaisieDecaissement requetes,
                                      PerimetreProjetService perimetres, OutilsSaisieDecaissement outils,
+                                     RetenuesDecaissement retenues, GenerateurCodeSequence sequences,
                                      EntityManager em) {
         this.tresorerie = tresorerie;
         this.requetes = requetes;
         this.perimetres = perimetres;
         this.outils = outils;
+        this.retenues = retenues;
+        this.sequences = sequences;
         this.em = em;
     }
 
@@ -110,6 +121,7 @@ public class SaisieDecaissementService {
         UUID moduleId = requis(requetes.module(module.name()), "Module introuvable : " + module);
         Entete entete = entete(saisie, null);
         validerLignes(saisie, entete, null, outils.references().deviseParDefaut(), moduleId, BigDecimal.ZERO);
+        Retenues r = retenues.preparer(saisie.retenues(), null, entete.fournisseur(), entete.montant());
 
         StlSettlement reglement = new StlSettlement();
         reglement.setId(UUID.randomUUID());
@@ -120,7 +132,12 @@ public class SaisieDecaissementService {
         reglement.setUserCreateDateTime(maintenant);
         appliquer(reglement, entete, saisie, auteur, maintenant);
         outils.reglementOmran().completer(reglement, entete.societe(), moduleId);
+        // completer met "" (encaissements) ; au décaissement, codes NULL tant que les POST ne les attribuent pas (RS-o)
+        reglement.setPropositionSheetCode(null);
+        reglement.setRSSheetCode(null);
+        retenues.poser(reglement, entete.montant(), r, saisie.rsDeclaree(), saisie.dateDeclarationRs());
         em.persist(reglement);
+        retenues.ecrire(reglement.getId(), r, auteur, maintenant);
         ecrireLignes(reglement, saisie.lignes(), auteur, maintenant);
         historiser(reglement, maintenant, auteur);
         em.flush();
@@ -148,7 +165,9 @@ public class SaisieDecaissementService {
         UUID devise = requireNonNullElse(reglement.getStlCurrencyId(), outils.references().deviseParDefaut());
         BigDecimal affecte = validerLignes(saisie, entete, id, devise, reglement.getAdmModuleId(), masque);
 
-        BigDecimal resteAvant = CalculReglement.resteAAffecter(reglement.getAmount(),
+        Retenues r = retenues.preparer(saisie.retenues(), id, entete.fournisseur(), entete.montant());
+        BigDecimal resteAvant = CalculReglement.resteAAffecter(
+                requireNonNullElse(reglement.getAmountBase(), reglement.getAmount()),
                 CalculReglement.affecte(lignes.stream().map(StlSettlementLine::getAmount).toList()));
         boolean comptaChange = !egal(resteAvant, CalculReglement.resteAAffecter(entete.montant(), affecte))
                 || !Objects.equals(reglement.getSettlementDate(), entete.datePointage())
@@ -164,6 +183,8 @@ public class SaisieDecaissementService {
         reglement.setCfgCompany(entete.societe());
         reglement.setAmountBase(entete.montant());
         reglement.setAmountBaseConverted(entete.montant());
+        retenues.poser(reglement, entete.montant(), r, saisie.rsDeclaree(), saisie.dateDeclarationRs());
+        retenues.ecrire(id, r, auteur, maintenant);
         if (comptaChange) {
             reglement.setIsAccounted(false);
         }
@@ -189,6 +210,8 @@ public class SaisieDecaissementService {
         if (!lignes(id).isEmpty()) {
             throw new ConflictException(MSG_AFFECTATIONS);
         }
+        retenues.supprimer(id);
+        em.flush();
         List<String> tables = requetes.tablesQuiReferencent(id);
         if (!tables.isEmpty()) {
             throw new ConflictException("Ce règlement est référencé par " + String.join(", ", tables)
@@ -209,7 +232,38 @@ public class SaisieDecaissementService {
                 requetes.comptes(societes), requetes.devise(outils.references().deviseParDefaut()),
                 STATUTS_SAISIS.stream().map(StatutReglement::name).toList(),
                 new DroitsDecaissementDto(droits.contains(DROIT_CREER), droits.contains(DROIT_SUPPRIMER),
-                        droits.contains(DROIT_SANS_AFFECTATION), droits.contains(DROIT_SOCIETE)));
+                        droits.contains(DROIT_SANS_AFFECTATION), droits.contains(DROIT_SOCIETE)),
+                retenues.types(), retenues.gestionRs());
+    }
+
+    public CodeFeuilleDto codeFeuillePaiement(UUID id) {
+        StlSettlement reglement = reglementPourCode(id);
+        if (vide(reglement.getPropositionSheetCode())) {
+            reglement.setPropositionSheetCode(sequences.suivantParId(SEQUENCE_PP, MSG_SANS_SEQUENCE + "."));
+            em.flush();
+        }
+        return new CodeFeuilleDto(reglement.getPropositionSheetCode());
+    }
+
+    public CodeFeuilleDto codeFeuilleRs(UUID id) {
+        StlSettlement reglement = reglementPourCode(id);
+        if (vide(reglement.getRSSheetCode())) {
+            UUID societe = idDe(reglement.getCfgCompany(), CfgCompany::getId);
+            reglement.setRSSheetCode(sequences.suivantParType(SEQUENCE_CRAS, societe,
+                    MSG_SANS_SEQUENCE + " pour cette société."));
+            em.flush();
+        }
+        return new CodeFeuilleDto(reglement.getRSSheetCode());
+    }
+
+    private StlSettlement reglementPourCode(UUID id) {
+        tresorerie.decaissement(id);
+        outils.droits().exiger(DROIT_CREER);
+        return em.find(StlSettlement.class, id);
+    }
+
+    private static boolean vide(String code) {
+        return code == null || code.isBlank();
     }
 
     @Transactional(readOnly = true)
@@ -245,7 +299,8 @@ public class SaisieDecaissementService {
         return new SaisieDecaissementDto(module, piece.societeId(), jour, jour, null, null, null, null,
                 piece.resteAPayer(), piece.fournisseurId(), piece.fournisseurId(), null, null, null, null,
                 StatutReglement.IN_WORK, null, null, null,
-                List.of(new LigneSaisieDecaissementDto(piece.id(), piece.resteAPayer())));
+                List.of(new LigneSaisieDecaissementDto(piece.id(), piece.resteAPayer())), null, false, null,
+                piece.resteAPayer(), BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     @Transactional(readOnly = true)
@@ -255,7 +310,8 @@ public class SaisieDecaissementService {
         // Comme Settlement.Copy d'OMRAN : référence, reçu, P.P et C.R.A.S vidés, aucune ligne copiée.
         return new SaisieDecaissementDto(s.module(), s.societeId(), s.dateDocument(), s.dateEcheance(), s.typeId(),
                 null, s.compteId(), s.banqueId(), s.montant(), s.fournisseurId(), s.payeurId(), s.notaireId(),
-                s.tiersAutruiId(), s.notes(), s.dateDecaissement(), s.statut(), null, null, null, List.of());
+                s.tiersAutruiId(), s.notes(), s.dateDecaissement(), s.statut(), null, null, null, List.of(),
+                null, false, null, s.montant(), BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     /** PUT : statut absent = statut existant ; un règlement annulé reste annulé (pas de réactivation). */
@@ -437,8 +493,6 @@ public class SaisieDecaissementService {
         reglement.setStatus(entete.statut().name());
         reglement.setAmount(entete.montant());
         reglement.setReceiptCode(saisie.codeRecu());
-        reglement.setPropositionSheetCode(saisie.codeFeuillePaiement());
-        reglement.setRSSheetCode(saisie.codeFeuilleRs());
         reglement.setStlSettlementType(entete.type());
         reglement.setTier(entete.fournisseur());
         reglement.setTierPayer(entete.payeur());

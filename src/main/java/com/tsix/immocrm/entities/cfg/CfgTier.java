@@ -348,6 +348,9 @@ public class CfgTier {
     @Column(name = "RsRatio", precision = 26, scale = 6)
     private BigDecimal rsRatio;
 
+    @Column(name = "StlDeductionTypeId")
+    private UUID stlDeductionTypeId;
+
     @Column(name = "IsFundReader")
     private Boolean isFundReader;
 

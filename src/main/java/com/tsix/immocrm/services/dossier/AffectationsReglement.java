@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.dossier;
 
 import com.tsix.immocrm.domain.MontantRestant;
+import com.tsix.immocrm.domain.achat.CalculReglement;
 import com.tsix.immocrm.dto.dossier.AffectationReglementRequest;
 import com.tsix.immocrm.entities.com.ComDocument;
 import com.tsix.immocrm.entities.com.ComSettlementCategory;
@@ -93,7 +94,7 @@ public class AffectationsReglement {
                     : " est due par le client : elle ne reçoit qu'un encaissement"));
         }
         BigDecimal reste = resteDu(echeance, decaissement);
-        if (montant.compareTo(reste) > 0) {
+        if (CalculReglement.depasse(reste, montant)) {
             throw new InvalidRequestException("montant (" + montant.toPlainString() + ") dépasse le reste à payer "
                     + "de l'échéance " + libelle(echeance) + " (" + reste.toPlainString() + ")");
         }
