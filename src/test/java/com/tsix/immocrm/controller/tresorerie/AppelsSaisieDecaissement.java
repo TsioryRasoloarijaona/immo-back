@@ -71,6 +71,38 @@ final class AppelsSaisieDecaissement {
         return ligne;
     }
 
+    /** Ligne de retenue pilotée par le taux (fraction, T6 de FEATURE-n3bis-b2a-retenue.md). */
+    static Map<String, Object> retenueTaux(UUID type, String base, String taux) {
+        Map<String, Object> retenue = retenue(type, base);
+        retenue.put("taux", new BigDecimal(taux));
+        return retenue;
+    }
+
+    /** Ligne de retenue pilotée par le montant RS. */
+    static Map<String, Object> retenueMontant(UUID type, String base, String montantRs) {
+        Map<String, Object> retenue = retenue(type, base);
+        retenue.put("montantRs", new BigDecimal(montantRs));
+        return retenue;
+    }
+
+    private static Map<String, Object> retenue(UUID type, String base) {
+        Map<String, Object> retenue = new LinkedHashMap<>();
+        retenue.put("typeRetenueId", type);
+        retenue.put("base", new BigDecimal(base));
+        return retenue;
+    }
+
+    /** {@code POST /decaissements/{id}/<route>} sans corps (codes de feuille, RS-m / RS-n). */
+    Reponse attribuer(RequestPostProcessor qui, UUID id, String route) throws Exception {
+        return envoyer(post(DECAISSEMENTS + "/{id}/" + route, id).with(qui));
+    }
+
+    /** POST d'attribution avec un corps JSON (RS-o : le corps est ignoré). */
+    Reponse attribuer(RequestPostProcessor qui, UUID id, String route, Map<String, Object> corps) throws Exception {
+        return envoyer(post(DECAISSEMENTS + "/{id}/" + route, id).with(qui).contentType(MediaType.APPLICATION_JSON)
+                .content(json(corps)));
+    }
+
     Reponse creer(RequestPostProcessor qui, Map<String, Object> corps) throws Exception {
         return envoyer(post(DECAISSEMENTS).with(qui).contentType(MediaType.APPLICATION_JSON).content(json(corps)));
     }

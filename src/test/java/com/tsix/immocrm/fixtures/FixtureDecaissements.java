@@ -192,6 +192,165 @@ public class FixtureDecaissements {
         return achat.nombre(table, colonne, id);
     }
 
+    // --- Lot b2a : retenue à la source et codes de feuille (FEATURE-n3bis-b2a-retenue.md) ---
+
+    public static final String MANAGE_RS = "ManageRS";
+    public static final UUID SEQUENCE_PP = UUID.fromString("60C4F768-BE0C-49AA-A5FD-F784D28F2F0A");
+    public static final String CODE_SEQUENCE_PP = "Proposition de paiement";
+    public static final String CODE_SEQUENCE_CRAS = "Certificat de retenue à la source";
+    public static final String TYPE_SEQUENCE_CRAS = "RSSheetCode";
+    private static final String P_CODE = "code";
+    private static final String P_SOCIETE = "societe";
+    private static final String P_VALEUR = "valeur";
+
+    // Présentes en CI (010_tables.sql), absentes de yesRemsTest.
+    private static final String TABLE_TYPE_RETENUE = """
+            IF OBJECT_ID('dbo.StlDeductionType', 'U') IS NULL
+                CREATE TABLE dbo.StlDeductionType (PKey uniqueidentifier NOT NULL PRIMARY KEY, Sorting int NULL,
+                    Code nvarchar(255) NULL, Description nvarchar(255) NULL, RASYear int NULL, RASValue decimal(26, 6) NULL,
+                    IsDeduction bit NULL, IsDeductionTva bit NULL, IsOther bit NULL, Notes nvarchar(1000) NULL,
+                    UserCreate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdate nvarchar(255) NULL,
+                    UserUpdateDateTime datetime NULL)""";
+    private static final String TABLE_RETENUE = """
+            IF OBJECT_ID('dbo.StlDeduction', 'U') IS NULL
+                CREATE TABLE dbo.StlDeduction (PKey uniqueidentifier NOT NULL PRIMARY KEY, AmountBase decimal(26, 6) NULL,
+                    RsRatio decimal(26, 6) NULL, AmountRS decimal(26, 6) NULL, Amount decimal(26, 6) NULL,
+                    StlSettlementId uniqueidentifier NULL, Notes nvarchar(max) NULL, UserCreate nvarchar(255) NULL,
+                    UserUpdate nvarchar(255) NULL, UserCreateDateTime datetime NULL, UserUpdateDateTime datetime NULL,
+                    StlDeductionTypeId uniqueidentifier NULL)""";
+
+    /** {@code StlDeductionType} et {@code StlDeduction} créées si absentes (idempotent). */
+    public void tablesRetenue() {
+        executer(em.createNativeQuery(TABLE_TYPE_RETENUE));
+        executer(em.createNativeQuery(TABLE_RETENUE));
+    }
+
+    /** Type de retenue ({@code StlDeductionType}) sans année RAS. */
+    public UUID typeRetenue(String code, String taux) {
+        return typeRetenue(code, taux, null);
+    }
+
+    /** Type de retenue ({@code IsDeduction = 1}, Sorting 1), taux en fraction, année RAS nulle permise. */
+    public UUID typeRetenue(String code, String taux, Integer anneeRas) {
+        tablesRetenue();
+        UUID id = UUID.randomUUID();
+        executer(em.createNativeQuery("""
+                        INSERT INTO StlDeductionType (PKey, Sorting, Code, Description, RASYear, RASValue, IsDeduction,
+                            IsDeductionTva, IsOther)
+                        VALUES (:id, 1, :code, :code, :annee, :taux, 1, 0, 0)""")
+                .setParameter(P_ID, id).setParameter(P_CODE, code).setParameter("annee", anneeRas)
+                .setParameter("taux", new BigDecimal(taux)));
+        return id;
+    }
+
+    /** Paramètre {@code ManageRS}. */
+    public void gestionRs(boolean active) {
+        achat.parametreBooleen(MANAGE_RS, active);
+    }
+
+    /** Le fournisseur du cadre porte une retenue ({@code CfgTier.RsRatio}, {@code StlDeductionTypeId}). */
+    public void fournisseurAvecRs(Saisie s, UUID type, String taux) {
+        executer(em.createNativeQuery("UPDATE CfgTier SET RsRatio = :taux, StlDeductionTypeId = :type WHERE PKey = :id")
+                .setParameter(P_ID, s.c().fournisseur()).setParameter("taux", new BigDecimal(taux))
+                .setParameter("type", type));
+        em.clear();
+    }
+
+    /** Séquence P.P (PKey de prod, sans société, {@code 21/%05d}) à la valeur donnée ; les autres lignes P.P retirées. */
+    public void sequencePp(int valeur) {
+        executer(em.createNativeQuery("DELETE FROM AdmSequence WHERE Code = :code AND PKey <> :id")
+                .setParameter(P_CODE, CODE_SEQUENCE_PP).setParameter(P_ID, SEQUENCE_PP));
+        executer(em.createNativeQuery("""
+                        IF NOT EXISTS (SELECT 1 FROM AdmSequence WHERE PKey = :id)
+                            INSERT INTO AdmSequence (PKey, Code, SeqYear, SeqYearNumber, SeqValue, SeqValueNumber, Separator,
+                                BasedOnSystemYear, CfgCompanyId, TypeCode, SeqPrefix, SeqSuffix)
+                            VALUES (:id, :code, 2021, 2, 0, 5, N'/', 0, NULL, NULL, N'', N'')""")
+                .setParameter(P_ID, SEQUENCE_PP).setParameter(P_CODE, CODE_SEQUENCE_PP));
+        executer(em.createNativeQuery("""
+                        UPDATE AdmSequence SET Code = :code, SeqValue = :valeur, SeqYear = 2021, SeqYearNumber = 2,
+                            SeqValueNumber = 5, Separator = N'/', BasedOnSystemYear = 0, CfgCompanyId = NULL, TypeCode = NULL,
+                            SeqPrefix = N'', SeqSuffix = N''
+                        WHERE PKey = :id""")
+                .setParameter(P_ID, SEQUENCE_PP).setParameter(P_CODE, CODE_SEQUENCE_PP).setParameter(P_VALEUR, valeur));
+    }
+
+    /** Aucune séquence P.P en base. */
+    public void sansSequencePp() {
+        executer(em.createNativeQuery("DELETE FROM AdmSequence WHERE PKey = :id OR Code = :code")
+                .setParameter(P_ID, SEQUENCE_PP).setParameter(P_CODE, CODE_SEQUENCE_PP));
+    }
+
+    /** Séquence C.R.A.S de la société ({@code TypeCode = RSSheetCode}, {@code 21%03d}), remplacée. */
+    public void sequenceCras(UUID societe, int valeur) {
+        sansSequenceCras(societe);
+        executer(em.createNativeQuery("""
+                        INSERT INTO AdmSequence (PKey, Code, SeqYear, SeqYearNumber, SeqValue, SeqValueNumber, Separator,
+                            BasedOnSystemYear, CfgCompanyId, TypeCode, SeqPrefix, SeqSuffix)
+                        VALUES (:id, :code, 2021, 2, :valeur, 3, N'', 0, :societe, :type, N'', N'')""")
+                .setParameter(P_ID, UUID.randomUUID()).setParameter(P_CODE, CODE_SEQUENCE_CRAS)
+                .setParameter(P_VALEUR, valeur).setParameter(P_SOCIETE, societe).setParameter("type", TYPE_SEQUENCE_CRAS));
+    }
+
+    /** Aucune séquence C.R.A.S pour la société. */
+    public void sansSequenceCras(UUID societe) {
+        executer(em.createNativeQuery("DELETE FROM AdmSequence WHERE TypeCode = :type AND CfgCompanyId = :societe")
+                .setParameter("type", TYPE_SEQUENCE_CRAS).setParameter(P_SOCIETE, societe));
+    }
+
+    /** {@code SeqValue} de la séquence P.P. */
+    public int valeurSequencePp() {
+        return entier(achat.lire("SELECT SeqValue AS v FROM AdmSequence WHERE PKey = :id", SEQUENCE_PP));
+    }
+
+    /** {@code SeqValue} de la séquence C.R.A.S de la société. */
+    public int valeurSequenceCras(UUID societe) {
+        return entier(achat.lire("SELECT SeqValue AS v FROM AdmSequence WHERE TypeCode = N'" + TYPE_SEQUENCE_CRAS
+                + "' AND CfgCompanyId = :id", societe));
+    }
+
+    private static int entier(List<Map<String, Object>> lignes) {
+        if (lignes.size() != 1) {
+            throw new AssertionError("Séquence : " + lignes.size() + " ligne(s) en base");
+        }
+        return ((Number) lignes.get(0).get("v")).intValue();
+    }
+
+    /** Codes de feuille posés en base, contexte vidé. */
+    public void poserCodes(UUID reglement, String codePp, String codeCras) {
+        achat.poserSur(REGLEMENT, reglement, "PropositionSheetCode", codePp);
+        achat.poserSur(REGLEMENT, reglement, "RSSheetCode", codeCras);
+        em.clear();
+    }
+
+    /** Lignes {@code StlDeduction} du règlement, par base croissante. */
+    public List<Map<String, Object>> retenuesEnBase(UUID reglement) {
+        return achat.lire("""
+                SELECT CAST(StlDeductionTypeId AS varchar(36)) AS type, AmountBase AS base, RsRatio AS taux,
+                    AmountRS AS montantRs, Amount AS montant
+                FROM StlDeduction WHERE StlSettlementId = :id ORDER BY AmountBase ASC""", reglement);
+    }
+
+    /** Montants RS et codes de feuille de la ligne {@code StlSettlement}. */
+    public Map<String, Object> rsEnBase(UUID reglement) {
+        List<Map<String, Object>> lignes = achat.lire("""
+                SELECT Amount AS montant, AmountBase AS base, AmountRS AS montantRs, RsRatio AS taux,
+                    PropositionSheetCode AS codePp, RSSheetCode AS codeCras
+                FROM StlSettlement WHERE PKey = :id""", reglement);
+        if (lignes.size() != 1) {
+            throw new AssertionError("Règlement " + reglement + " : " + lignes.size() + " ligne(s) en base");
+        }
+        return lignes.get(0);
+    }
+
+    /** Codes de feuille ({@code codePp}, {@code codeCras}) du règlement. */
+    public Map<String, Object> codesEnBase(UUID reglement) {
+        Map<String, Object> rs = rsEnBase(reglement);
+        Map<String, Object> codes = new java.util.LinkedHashMap<>();
+        codes.put("codePp", rs.get("codePp"));
+        codes.put("codeCras", rs.get("codeCras"));
+        return codes;
+    }
+
     public static String texte(UUID id) {
         return id.toString().toUpperCase();
     }
