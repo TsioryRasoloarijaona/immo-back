@@ -20,7 +20,8 @@ public record SaisieDecaissementDto(
         @Schema(description = "Référence (Code) ; obligatoire ou unique selon le type.") String reference,
         @Schema(description = "Compte (StlAccount.PKey) de la société du règlement.") UUID compteId,
         @Schema(description = "Banque (CfgBankId).") UUID banqueId,
-        @Schema(description = "Montant du règlement (AmountBase = Amount), > 0.", example = "800") BigDecimal montant,
+        @Schema(description = "Montant brut du règlement (AmountBase), > 0 ; le net est montantNet.", example = "800")
+        BigDecimal montant,
         @Schema(description = "Fournisseur (TierId, CfgTier.PKey) ; requis.") UUID fournisseurId,
         @Schema(description = "Tiers payeur (TierPayerId) ; absent = fournisseur.") UUID payeurId,
         @Schema(description = "Notaire / avocat (CfgLawyerId) ; obligatoire selon le type.") UUID notaireId,
@@ -30,12 +31,25 @@ public record SaisieDecaissementDto(
         LocalDate dateDecaissement,
         @Schema(description = "IN_WORK, POINTED ou NOTPAYED ; CANCELED refusé (400).") StatutReglement statut,
         @Schema(description = "Code reçu (ReceiptCode).") String codeRecu,
-        @Schema(description = "Code feuille de proposition de paiement (PropositionSheetCode).") String codeFeuillePaiement,
-        @Schema(description = "Code feuille de retenue à la source (RSSheetCode).") String codeFeuilleRs,
+        @Schema(description = "Sortie seule : code P.P (PropositionSheetCode), attribué par POST …/code-feuille-paiement.")
+        String codeFeuillePaiement,
+        @Schema(description = "Sortie seule : code C.R.A.S (RSSheetCode), attribué par POST …/code-feuille-rs.")
+        String codeFeuilleRs,
         @Schema(description = "Affectations ; au PUT, remplacent les lignes visibles (les lignes masquées sont gardées).")
-        List<LigneSaisieDecaissementDto> lignes) {
+        List<LigneSaisieDecaissementDto> lignes,
+        @Schema(description = "Retenues ; absent = lignes gardées (PUT) ou ligne du fournisseur (POST) ; [] = aucune.")
+        List<LigneRetenueDto> retenues,
+        @Schema(description = "RS déclarée (RSAmountSettled).") Boolean rsDeclaree,
+        @Schema(description = "Date de déclaration de la RS (RSSettlementDate) ; mise à null si rsDeclaree est faux.")
+        LocalDate dateDeclarationRs,
+        @Schema(description = "Sortie seule : net (Amount) = montant − montantRs.", example = "720") BigDecimal montantNet,
+        @Schema(description = "Sortie seule : total retenu (AmountRS) = Σ des lignes de retenue.", example = "80")
+        BigDecimal montantRs,
+        @Schema(description = "Sortie seule : montantRs / montant en fraction (RsRatio), 0 si montant nul.", example = "0.1")
+        BigDecimal tauxRs) {
 
     public SaisieDecaissementDto {
         lignes = lignes == null ? List.of() : List.copyOf(lignes);
+        retenues = retenues == null ? null : List.copyOf(retenues);
     }
 }

@@ -111,10 +111,12 @@ public class TresorerieService {
                 .toList();
         return new SaisieDecaissementDto(module, uuid(r.get("societeId")), d.datePiece(), d.echeance(),
                 uuid(r.get("typeId")), texte(r, "reference"), uuid(r.get("compteId")), uuid(r.get("banqueId")),
-                d.montant(), uuid(r.get("fournisseurId")), uuid(r.get("payeurId")), uuid(r.get("notaireId")),
-                uuid(r.get("tiersAutruiId")), fiche.notes(), d.datePointage(),
+                montant(r, "montantBase"), uuid(r.get("fournisseurId")), uuid(r.get("payeurId")),
+                uuid(r.get("notaireId")), uuid(r.get("tiersAutruiId")), fiche.notes(), d.datePointage(),
                 StatutReglement.lireCode(d.statut()).orElse(null), fiche.codeRecu(),
-                texte(r, "ficheProposition"), texte(r, "ficheRS"), affectations);
+                texte(r, "ficheProposition"), texte(r, "ficheRS"), affectations, null,
+                vrai(r.get("rsRegle")), jour(r.get("dateReglementRS")), d.montant(), zero(montant(r, "montantRS")),
+                zero(montant(r, "tauxRS")));
     }
 
     public ListeTresorerieDto<AffectationLigneDto, TotauxAffectationsDto> affectations(SensTresorerie sens,

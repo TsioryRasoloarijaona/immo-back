@@ -1,5 +1,6 @@
 package com.tsix.immocrm.controller.tresorerie;
 
+import com.tsix.immocrm.dto.tresorerie.CodeFeuilleDto;
 import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.ModuleTresorerie;
 import com.tsix.immocrm.dto.tresorerie.PieceAAffecterDto;
@@ -124,5 +125,26 @@ public class SaisieDecaissementsController {
     @ApiResponse(responseCode = "404", description = "Règlement inconnu ou invisible.", content = @Content)
     public SaisieDecaissementDto copie(@Parameter(description = ID) @PathVariable UUID id) {
         return service.copie(id);
+    }
+
+    @PostMapping("/{id}/code-feuille-paiement")
+    @Operation(summary = "Attribuer le code de proposition de paiement (P.P)")
+    @ApiResponse(responseCode = "200", description = "Code P.P existant, ou attribué s'il était vide.")
+    @ApiResponse(responseCode = "403", description = REFUS, content = @Content)
+    @ApiResponse(responseCode = "404", description = "Règlement inconnu ou invisible.", content = @Content)
+    @ApiResponse(responseCode = "409", description = "Aucune séquence de code n'est configurée.", content = @Content)
+    public CodeFeuilleDto codeFeuillePaiement(@Parameter(description = ID) @PathVariable UUID id) {
+        return service.codeFeuillePaiement(id);
+    }
+
+    @PostMapping("/{id}/code-feuille-rs")
+    @Operation(summary = "Attribuer le code de certificat de retenue à la source (C.R.A.S)")
+    @ApiResponse(responseCode = "200", description = "Code C.R.A.S existant, ou attribué s'il était vide.")
+    @ApiResponse(responseCode = "403", description = REFUS, content = @Content)
+    @ApiResponse(responseCode = "404", description = "Règlement inconnu ou invisible.", content = @Content)
+    @ApiResponse(responseCode = "409", description = "Aucune séquence de code n'est configurée pour cette société.",
+            content = @Content)
+    public CodeFeuilleDto codeFeuilleRs(@Parameter(description = ID) @PathVariable UUID id) {
+        return service.codeFeuilleRs(id);
     }
 }

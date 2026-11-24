@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.tresorerie;
 
 import com.tsix.immocrm.domain.StatutReglement;
 import com.tsix.immocrm.domain.achat.CalculReglement;
+import com.tsix.immocrm.dto.tresorerie.CodeFeuilleDto;
 import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto;
 import com.tsix.immocrm.dto.tresorerie.DecaissementFicheDto.LigneDecaissementDto;
 import com.tsix.immocrm.dto.tresorerie.FiltresTresorerie.ModuleTresorerie;
@@ -209,7 +210,16 @@ public class SaisieDecaissementService {
                 requetes.comptes(societes), requetes.devise(outils.references().deviseParDefaut()),
                 STATUTS_SAISIS.stream().map(StatutReglement::name).toList(),
                 new DroitsDecaissementDto(droits.contains(DROIT_CREER), droits.contains(DROIT_SUPPRIMER),
-                        droits.contains(DROIT_SANS_AFFECTATION), droits.contains(DROIT_SOCIETE)));
+                        droits.contains(DROIT_SANS_AFFECTATION), droits.contains(DROIT_SOCIETE)),
+                List.of(), false);
+    }
+
+    public CodeFeuilleDto codeFeuillePaiement(UUID id) {
+        throw new UnsupportedOperationException("code P.P : partie B");
+    }
+
+    public CodeFeuilleDto codeFeuilleRs(UUID id) {
+        throw new UnsupportedOperationException("code C.R.A.S : partie B");
     }
 
     @Transactional(readOnly = true)
@@ -245,7 +255,8 @@ public class SaisieDecaissementService {
         return new SaisieDecaissementDto(module, piece.societeId(), jour, jour, null, null, null, null,
                 piece.resteAPayer(), piece.fournisseurId(), piece.fournisseurId(), null, null, null, null,
                 StatutReglement.IN_WORK, null, null, null,
-                List.of(new LigneSaisieDecaissementDto(piece.id(), piece.resteAPayer())));
+                List.of(new LigneSaisieDecaissementDto(piece.id(), piece.resteAPayer())), null, false, null,
+                piece.resteAPayer(), BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     @Transactional(readOnly = true)
@@ -255,7 +266,8 @@ public class SaisieDecaissementService {
         // Comme Settlement.Copy d'OMRAN : référence, reçu, P.P et C.R.A.S vidés, aucune ligne copiée.
         return new SaisieDecaissementDto(s.module(), s.societeId(), s.dateDocument(), s.dateEcheance(), s.typeId(),
                 null, s.compteId(), s.banqueId(), s.montant(), s.fournisseurId(), s.payeurId(), s.notaireId(),
-                s.tiersAutruiId(), s.notes(), s.dateDecaissement(), s.statut(), null, null, null, List.of());
+                s.tiersAutruiId(), s.notes(), s.dateDecaissement(), s.statut(), null, null, null, List.of(),
+                null, false, null, s.montant(), BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     /** PUT : statut absent = statut existant ; un règlement annulé reste annulé (pas de réactivation). */
