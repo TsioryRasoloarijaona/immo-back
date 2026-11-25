@@ -115,8 +115,9 @@ Copie un lot visible : nouveau code de la séquence « Market » (incrémentée 
 « Création ». Comme OMRAN, le bordereau de la source (lignes et groupes) devient le bordereau **estimatif** de la copie :
 l'estimatif pour un lot multi-fournisseur ; sinon le définitif, ou l'estimatif s'il n'a aucune ligne. Le définitif de la
 copie est vide. Hors multi-fournisseur, fournisseur, dates d'appel d'offres et de marché et résiliation sont vidés, et
-l'estimation manuelle reçoit l'estimation de la source (Σ estimatif, sinon forfait). Prévisions, retenues et lignes de
-stock ne sont pas copiées. Droit `toolNew` (Entrepreneurs) ou `toolNewMultiSupplier` (autres genres) ;
+l'estimation manuelle reçoit l'estimation de la source (Σ estimatif, sinon forfait). Les points de prévision (prévision
+et base) sont recopiés à l'identique ; hors multi-fournisseur, les échéances de RG aussi, sans date d'échéance. Les
+prévisions de paiement sont recalculées. Décomptes, avances et lignes de stock ne sont pas copiés. Droit `toolNew` (Entrepreneurs) ou `toolNewMultiSupplier` (autres genres) ;
 ordre des refus : 403 si l'appelant n'a aucun des deux, 404, puis 403 si le droit du genre du lot manque.
 
 ## demandesAchat

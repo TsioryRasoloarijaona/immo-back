@@ -11,7 +11,11 @@ enum TablePoints {
             VALUES (:id, :lot, :date, :avancement, :temps, :paiement, :montant)""",
             """
             SELECT PrjMarketId, PointDate, PointAchivement, PointTime FROM PrjMarketPrevision
-            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC"""),
+            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""",
+            """
+            INSERT INTO PrjMarketPrevision (PKey, PrjMarketId, PointDate, PointAchivement, PointTime, PointPayment, PointAmount)
+            SELECT NEWID(), :copie, PointDate, PointAchivement, PointTime, PointPayment, PointAmount FROM PrjMarketPrevision
+            WHERE PrjMarketId = :lot"""),
     BASE("""
             SELECT PKey, PointDate, PointAchivement, PointTime, PointPayment, PointAmount FROM PrjMarketUserPrevision
             WHERE PrjMarketId = :lot ORDER BY PointDate ASC""",
@@ -21,17 +25,23 @@ enum TablePoints {
             VALUES (:id, :lot, :date, :avancement, :temps, :paiement, :montant)""",
             """
             SELECT PrjMarketId, PointDate, PointAchivement, PointTime FROM PrjMarketUserPrevision
-            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""");
+            WHERE PrjMarketId IN (:lots) AND PointDate IS NOT NULL AND PointAchivement IS NOT NULL ORDER BY PointDate ASC""",
+            """
+            INSERT INTO PrjMarketUserPrevision (PKey, PrjMarketId, PointDate, PointAchivement, PointTime, PointPayment, PointAmount)
+            SELECT NEWID(), :copie, PointDate, PointAchivement, PointTime, PointPayment, PointAmount FROM PrjMarketUserPrevision
+            WHERE PrjMarketId = :lot""");
 
     final String lire;
     final String effacer;
     final String inserer;
     final String lireSimulation;
+    final String copier;
 
-    TablePoints(String lire, String effacer, String inserer, String lireSimulation) {
+    TablePoints(String lire, String effacer, String inserer, String lireSimulation, String copier) {
         this.lire = lire;
         this.effacer = effacer;
         this.inserer = inserer;
         this.lireSimulation = lireSimulation;
+        this.copier = copier;
     }
 }
