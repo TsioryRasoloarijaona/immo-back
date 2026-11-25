@@ -43,6 +43,15 @@ public final class ColonnesBordereauExcel {
         return Objects.toString(l.valeurs().get(colonne), null);
     }
 
+    /** Code lu comme un code : une cellule numérique 12 donne « 12 », pas « 12.0 ». */
+    public static String code(LigneLue l, String colonne) {
+        Object v = l.valeurs().get(colonne);
+        if (v instanceof BigDecimal n) {
+            return n.stripTrailingZeros().toPlainString();
+        }
+        return v == null ? null : v.toString().strip();
+    }
+
     public static BigDecimal nombre(LigneLue l, String colonne) {
         Object v = l.valeurs().get(colonne);
         if (v == null || v instanceof BigDecimal) {
