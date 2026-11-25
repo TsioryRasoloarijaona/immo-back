@@ -48,7 +48,9 @@ public record EnregistrerDecompteRequest(
             @Schema(description = "PrjWorkingOutLine.Pkey ; null pour une ligne de l'aperçu « lignes rechargées ».") UUID id,
             @Schema(description = "Ligne de bordereau (PrjMarketLine.PKey).") UUID ligneMarcheId,
             @Schema(description = "Quantité saisie (QuantityOrigin) ; null = inchangée.") BigDecimal quantiteSaisie,
-            @Schema(description = "Coefficient ; null = inchangé (1 pour une ligne rechargée).") BigDecimal coefficient
+            @Schema(description = "Coefficient ; null = inchangé (1 pour une ligne rechargée).") BigDecimal coefficient,
+            @Schema(description = "Avancement cumulé en % (84.5 = 84,5 %, > 100 = dépassement) ; exclusif de quantiteSaisie.",
+                    example = "84.5") BigDecimal avancement
     ) {
     }
 }
