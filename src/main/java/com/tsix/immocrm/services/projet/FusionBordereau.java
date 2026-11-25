@@ -124,7 +124,7 @@ final class FusionBordereau {
         BigDecimal fodec = montant(l, FODEC);
         BigDecimal pu = montant(l, PU_HT);
         if (pu.signum() == 0) {
-            pu = horsTaxes(montant(l, PU_TTC), tva, fodec);
+            pu = horsTaxes(l, tva, fodec);
         }
         lignes.put(a.id(), new LigneSaisieDto(a.id(), parent == null ? a.groupeId() : groupe(parent), ou(odt(l), a.ordre()),
                 a.code(), ou(texte(l, DESCRIPTION), a.designation()), ou(texte(l, UNITE), a.unite()), montant(l, QUANTITE),
@@ -172,9 +172,12 @@ final class FusionBordereau {
                 l.prixUnitaireHT(), l.tauxTVA(), l.tauxFODEC(), l.categorieId(), l.ponderation(), l.notes());
     }
 
-    // R4 + D2 : TVA et FODEC en pourcentage.
-    private static BigDecimal horsTaxes(BigDecimal ttc, BigDecimal tva, BigDecimal fodec) {
-        return ttc.divide(BigDecimal.ONE.add(tva.movePointLeft(2)), MathContext.DECIMAL128)
+    // R4 + D2 : TVA et FODEC en pourcentage ; bornes contrôlées ici, ValidationBordereau passe après la division.
+    private static BigDecimal horsTaxes(LigneLue l, BigDecimal tva, BigDecimal fodec) {
+        if (tva.signum() < 0 || fodec.signum() < 0) {
+            throw new InvalidRequestException("Ligne %d : TVA et FODEC doivent être positifs".formatted(l.numero()));
+        }
+        return montant(l, PU_TTC).divide(BigDecimal.ONE.add(tva.movePointLeft(2)), MathContext.DECIMAL128)
                 .divide(BigDecimal.ONE.add(fodec.movePointLeft(2)), 6, RoundingMode.HALF_UP);
     }
 

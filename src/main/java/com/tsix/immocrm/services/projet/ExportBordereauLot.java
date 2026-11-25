@@ -81,7 +81,7 @@ public class ExportBordereauLot {
                 groupes.stream().filter(g -> !g.stock()).map(g -> new Rangee(g.ordre(), g.code(), g.description(), UNITE_GROUPE,
                         null, null, null, null, null, null, g.notes(), codes.get(g.parentId()))),
                 lignes.stream().map(l -> rangee(l, codes.get(l.groupeId())))).toList();
-        return tableur.reponseEnMemoire("BDP_" + lot.getCode(), "Bordereau du lot",
+        return tableur.reponseEnMemoire("BDP_" + Objects.toString(lot.getDescription(), lot.getCode()), "Bordereau du lot",
                 List.of(new FeuilleExport(ExportTableur.FEUILLE, COLONNES, rangees, null)));
     }
 
