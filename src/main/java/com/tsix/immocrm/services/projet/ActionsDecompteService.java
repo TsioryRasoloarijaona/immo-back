@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.IdentityHashMap;
@@ -51,6 +52,7 @@ import static com.tsix.immocrm.services.projet.VerrouDecompte.SUPPRIMER;
 public class ActionsDecompteService {
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final int ECHELLE_SAISIE = 10;
 
     private final DecomptesProjetService lecture;
     private final LotsProjetService lots;
@@ -72,7 +74,7 @@ public class ActionsDecompteService {
         this.previsions = previsions;
     }
 
-    /** {@code W:NewWorkingOut} l.1950-2035 ; ni lignes (lot sans décomposition) ni lignes d'appro (aucun PrjStockLine). */
+    /** {@code W:NewWorkingOut} l.1950-2061 : lignes rechargées du bordereau ({@code W:ReloadLines}), pas de lignes d'appro. */
     public DecompteDetailDto creer(UUID lotId, CreerDecompteRequest demande) {
         PrjMarket lot = lots.visible(lotId);
         verrou.exiger(MODIFIER);
@@ -103,6 +105,7 @@ public class ActionsDecompteService {
         w.setCode(ecriture.codeSuivant());
         libeller(w);
         ecriture.creer(w);
+        remplacerLignes(w, recharger(w).lignes());
         calculerEtEcrire(w);
         return lecture.decompte(w.getId());
     }
@@ -119,16 +122,19 @@ public class ActionsDecompteService {
         CfgTier tiers = demande.fournisseurId() == null ? w.getCfgTier() : donnees.tiers(demande.fournisseurId());
         List<LigneSaisie> saisies = demande.lignes() == null ? List.of() : demande.lignes();
         boolean rechargees = saisies.stream().anyMatch(s -> s.id() == null);
-        List<PrjWorkingOutLine> cibles = rechargees ? recharger(w).lignes()
+        List<PrjMarketLine> bordereau = donnees.bordereau(lot.getId());
+        List<PrjWorkingOutLine> cibles = rechargees ? donnees.lignesRechargees(w, bordereau)
                 : donnees.enfants(PrjWorkingOutLine.class, w.getId());
         Map<PrjWorkingOutLine, LigneSaisie> parLigne = associer(cibles, saisies, rechargees);
+        Map<UUID, BigDecimal> quantitesMarche = quantitesMarche(bordereau);
+        parLigne.replaceAll((l, s) -> depuisAvancement(lot, l, s, quantitesMarche));
         w.setDocDate(date);
         w.setCfgTier(tiers);
         libeller(w);
         appliquerSaisie(w, demande);
         parLigne.forEach((l, s) -> {
             boolean changee = fixerQuantite(lot, l, s.quantiteSaisie() == null ? l.getQuantityOrigin() : s.quantiteSaisie(),
-                    s.coefficient() == null ? l.getCoefficient() : s.coefficient());
+                    coefficient(l, s));
             if (changee && !rechargees) {
                 ecriture.modifier(l);
             }
@@ -338,8 +344,48 @@ public class ActionsDecompteService {
 
     private Rechargement recharger(PrjWorkingOut w) {
         List<PrjMarketLine> bordereau = donnees.bordereau(w.getPrjMarket().getId());
-        return new Rechargement(donnees.lignesRechargees(w, bordereau),
-                bordereau.stream().collect(Collectors.toMap(PrjMarketLine::getId, m -> z(m.getQuantity()), (a, b) -> a)));
+        return new Rechargement(donnees.lignesRechargees(w, bordereau), quantitesMarche(bordereau));
+    }
+
+    private static Map<UUID, BigDecimal> quantitesMarche(List<PrjMarketLine> bordereau) {
+        return bordereau.stream().collect(Collectors.toMap(PrjMarketLine::getId, m -> z(m.getQuantity()), (a, b) -> a));
+    }
+
+    private static BigDecimal coefficient(PrjWorkingOutLine l, LigneSaisie s) {
+        BigDecimal coef = s.coefficient() == null ? l.getCoefficient() : s.coefficient();
+        return coef == null ? BigDecimal.ONE : coef;
+    }
+
+    /**
+     * {@code WL} l.210-243 : avancement % → cumul visé C = % × quantité du marché, puis la quantité saisie que
+     * {@link #fixerQuantite} (son inverse exact) ramène à ce cumul ; voir FEATURE-lc5-decompte-avancement.md R2-R4.
+     */
+    private static LigneSaisie depuisAvancement(PrjMarket lot, PrjWorkingOutLine l, LigneSaisie s,
+                                                Map<UUID, BigDecimal> quantitesMarche) {
+        BigDecimal avancement = s.avancement();
+        if (avancement == null) {
+            return s;
+        }
+        if (s.quantiteSaisie() != null) {
+            throw new InvalidRequestException("Saisir soit la quantité, soit l'avancement.");
+        }
+        if (avancement.signum() < 0) {
+            throw new InvalidRequestException("L'avancement ne peut pas être négatif.");
+        }
+        BigDecimal marche = z(quantitesMarche.get(l.getPrjMarketLineId()));
+        if (marche.signum() == 0 && avancement.signum() != 0) {
+            throw new InvalidRequestException("Avancement impossible : quantité du marché nulle.");
+        }
+        BigDecimal coef = coefficient(l, s);
+        if (coef.signum() == 0) {
+            throw new InvalidRequestException("Avancement impossible : coefficient nul.");
+        }
+        BigDecimal cible = avancement.multiply(marche).movePointLeft(2);
+        BigDecimal ancienne = z(l.getQuantityOld());
+        BigDecimal saisie = Boolean.TRUE.equals(lot.getExecutedQuantityBasedInsert())
+                ? cible.subtract(ancienne).divide(coef, ECHELLE_SAISIE, RoundingMode.HALF_UP)
+                : cible.divide(coef, ECHELLE_SAISIE, RoundingMode.HALF_UP).subtract(ancienne);
+        return new LigneSaisie(s.id(), s.ligneMarcheId(), saisie, s.coefficient(), null);
     }
 
     /** {@code W:ReloadLines} écrit : les lignes du décompte sont remplacées. */
