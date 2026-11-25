@@ -10,6 +10,7 @@ import com.tsix.immocrm.entities.prj.PrjMarketLine;
 import com.tsix.immocrm.entities.prj.PrjMarketLineEstimation;
 import com.tsix.immocrm.entities.prj.PrjMarketLineGrouping;
 import com.tsix.immocrm.entities.prj.PrjMarketLineGroupingEstimation;
+import com.tsix.immocrm.entities.prj.PrjMarketWarrantyLine;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -88,7 +89,14 @@ public class CopieLot {
         groupes.forEach(g -> cles.put(g.getId(), UUID.randomUUID()));
         groupes.forEach(g -> em.persist(groupe(g, cles, copie)));
         lignes.forEach(l -> em.persist(ligne(l, cles, copie)));
+        if (!multi) {
+            em.createQuery("FROM PrjMarketWarrantyLine WHERE prjMarketId = :lot", PrjMarketWarrantyLine.class)
+                    .setParameter("lot", id).getResultList().forEach(g -> em.persist(garantie(g, copie)));
+        }
         em.flush();
+        for (TablePoints t : TablePoints.values()) {
+            em.createNativeQuery(t.copier).setParameter("copie", copie).setParameter("lot", id).executeUpdate();
+        }
         previsions.recalculer(copie);
         return lots.lot(copie);
     }
@@ -146,6 +154,20 @@ public class CopieLot {
         l.setPrjMarketId(copie);
         l.setIsStock(false);
         return l;
+    }
+
+    /** {@code CopyChildren} l.2871-2877 : échéance de RG recopiée, date d'échéance remise à NULL. */
+    private PrjMarketWarrantyLine garantie(PrjMarketWarrantyLine source, UUID copie) {
+        PrjMarketWarrantyLine g = new PrjMarketWarrantyLine();
+        g.setId(UUID.randomUUID());
+        g.setUserCreate(utilisateur.courant().nom());
+        g.setUserCreateDateTime(LocalDateTime.now(clock));
+        g.setSorting(source.getSorting());
+        g.setDescription(source.getDescription());
+        g.setDelay(source.getDelay());
+        g.setRatio(source.getRatio());
+        g.setPrjMarketId(copie);
+        return g;
     }
 
     private <T> List<T> duLot(Class<T> classe, UUID lot) {
