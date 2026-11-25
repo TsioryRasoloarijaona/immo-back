@@ -7,7 +7,6 @@ import com.tsix.immocrm.dto.projet.GroupeSaisieDto;
 import com.tsix.immocrm.dto.projet.LigneSaisieDto;
 import com.tsix.immocrm.entities.buy.BuySelectionGroup;
 import com.tsix.immocrm.entities.buy.BuySelectionLine;
-import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.patrimoine.importation.LectureClasseur;
 import com.tsix.immocrm.services.projet.ValidationBordereau;
@@ -27,10 +26,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.nombre;
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.reference;
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.texte;
 
 /** Bordereau d'une DIA ({@code BuySelectionGroup} / {@code BuySelectionLine}) : lecture, saisie, import, export et copies. */
 @Component
@@ -188,27 +190,6 @@ class BordereauDemandeAchat {
     private String codeCategorie(UUID id) {
         return id == null ? null : em.createQuery("select c.code from StlCategory c where c.id = :id", String.class)
                 .setParameter("id", id).getResultStream().findFirst().orElse(null);
-    }
-
-    private static UUID reference(LectureClasseur.LigneLue l, String colonne, Map<String, UUID> parCode) {
-        String code = texte(l, colonne);
-        if (code == null) {
-            return null;
-        }
-        return Optional.ofNullable(parCode.get(code)).orElseThrow(() -> new InvalidRequestException(
-                "Ligne %d : %s « %s » inconnu(e)".formatted(l.numero(), colonne.toLowerCase(), code)));
-    }
-
-    private static String texte(LectureClasseur.LigneLue l, String colonne) {
-        return Objects.toString(l.valeurs().get(colonne), null);
-    }
-
-    private static BigDecimal nombre(LectureClasseur.LigneLue l, String colonne) {
-        Object v = l.valeurs().get(colonne);
-        if (v == null || v instanceof BigDecimal) {
-            return (BigDecimal) v;
-        }
-        throw new InvalidRequestException("Ligne %d : %s doit être un nombre".formatted(l.numero(), colonne));
     }
 
     private static BigDecimal pourcent(BigDecimal fraction) {
