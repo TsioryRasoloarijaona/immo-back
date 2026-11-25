@@ -26,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.IdentityHashMap;
@@ -52,7 +51,7 @@ import static com.tsix.immocrm.services.projet.VerrouDecompte.SUPPRIMER;
 public class ActionsDecompteService {
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final int ECHELLE_SAISIE = 10;
+    private static final BigDecimal AVANCEMENT_MAX = BigDecimal.valueOf(10_000);
 
     private final DecomptesProjetService lecture;
     private final LotsProjetService lots;
@@ -372,19 +371,14 @@ public class ActionsDecompteService {
         if (avancement.signum() < 0) {
             throw new InvalidRequestException("L'avancement ne peut pas être négatif.");
         }
+        if (avancement.compareTo(AVANCEMENT_MAX) > 0) {
+            throw new InvalidRequestException("Avancement trop grand.");
+        }
         BigDecimal marche = z(quantitesMarche.get(l.getPrjMarketLineId()));
         if (marche.signum() == 0 && avancement.signum() != 0) {
             throw new InvalidRequestException("Avancement impossible : quantité du marché nulle.");
         }
-        BigDecimal coef = coefficient(l, s);
-        if (coef.signum() == 0) {
-            throw new InvalidRequestException("Avancement impossible : coefficient nul.");
-        }
-        BigDecimal cible = avancement.multiply(marche).movePointLeft(2);
-        BigDecimal ancienne = z(l.getQuantityOld());
-        BigDecimal saisie = Boolean.TRUE.equals(lot.getExecutedQuantityBasedInsert())
-                ? cible.subtract(ancienne).divide(coef, ECHELLE_SAISIE, RoundingMode.HALF_UP)
-                : cible.divide(coef, ECHELLE_SAISIE, RoundingMode.HALF_UP).subtract(ancienne);
+        BigDecimal saisie = avancement.multiply(marche).movePointLeft(2).subtract(z(l.getQuantityOld()));
         return new LigneSaisie(s.id(), s.ligneMarcheId(), saisie, s.coefficient(), null);
     }
 
