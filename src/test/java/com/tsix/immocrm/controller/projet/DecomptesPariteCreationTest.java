@@ -112,7 +112,7 @@ class DecomptesPariteCreationTest {
 
     /** §4 : valeurs initiales {@code W:NewWorkingOut} l.1950-2029. */
     @Test
-    void creation_nominal_sortingSuivant_docRefNotesCodeTiersRatiosFluctuations_sansLigne() throws Exception {
+    void creation_nominal_sortingSuivant_docRefNotesCodeTiersRatiosFluctuations_lignesDuBordereau() throws Exception {
         decomptes.poser("PrjMarket", lot, "AdvanceRatio", new BigDecimal("0.05"), "ProportionRatio", new BigDecimal("0.02"),
                 "InsuranceDECRatio", new BigDecimal("0.01"), "InsuranceTRCRatio", new BigDecimal("0.03"), "StockPileRatio",
                 new BigDecimal("0.5"));
@@ -140,7 +140,7 @@ class DecomptesPariteCreationTest {
             s.assertThat(nombre(n, "FluctuationsOld")).isEqualByComparingTo("250");
             s.assertThat(nombre(n, "Fluctuations")).isEqualByComparingTo("250");
             s.assertThat(n.get("FinalWorkingOut")).isNotEqualTo(Boolean.TRUE);
-            s.assertThat(lignesDe(n.get("id"))).isZero();
+            s.assertThat(lignesDe(n.get("id"))).as("LC5 R1 : une ligne par ligne du bordereau").isEqualTo(1);
         });
     }
 
