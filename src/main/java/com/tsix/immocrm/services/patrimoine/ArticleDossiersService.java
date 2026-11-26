@@ -107,9 +107,13 @@ public class ArticleDossiersService {
 
     /**
      * Visibilité des dossiers de location et de syndic (sans entité) : par la tranche de l'article, un article sans
-     * programme est visible de tous. Seule règle, partagée avec l'onglet Historique.
+     * programme est visible de tous. Seule règle, partagée avec l'onglet Historique. Agence : jamais, ces dossiers
+     * ne sont rattachés à aucune agence (FEATURE-agences-vente.md §4).
      */
     boolean dansLePerimetre(StkItem article) {
+        if (perimetreService.vendeursAgenceCourante().isPresent()) {
+            return false;
+        }
         UUID projet = Champs.de(article.getStkHierarchy(), CfgTranche::getCfgProject, CfgProject::getId);
         return perimetreService.perimetreCourant().map(ids -> projet == null || ids.contains(projet)).orElse(true);
     }

@@ -52,6 +52,18 @@ public class DashboardService {
         this.prospectionService = prospectionService;
     }
 
+    private List<Object[]> lignesDossiers(@Nullable List<UUID> projets, boolean agence, @Nullable UUID trancheId) {
+        List<Object[]> rows = projets != null ? folderRepository.findDashboardProjectionDansPerimetre(projets)
+                : folderRepository.findDashboardProjection();
+        if (agence) {
+            rows = garder(rows, idsDossiersVisibles());
+        }
+        if (trancheId != null) {
+            rows = garder(rows, dossierService.idsDossiersDeTranche(trancheId));
+        }
+        return rows;
+    }
+
     /**
      * Pas de {@code Specification} ici : le périmètre s'applique <b>à chaque agrégat</b>, à la main
      * ({@code FEATURE-perimetre-commercial.md} §6.6). La tranche restreint les mêmes lignes aux ids de
@@ -59,16 +71,8 @@ public class DashboardService {
      */
     public DashboardDto get(@Nullable UUID trancheId) {
         Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
-        List<Object[]> rows = perimetre
-                .map(folderRepository::findDashboardProjectionDansPerimetre)
-                .orElseGet(folderRepository::findDashboardProjection);
         boolean agence = perimetreService.vendeursAgenceCourante().isPresent();
-        if (agence) {
-            rows = garder(rows, idsDossiersVisibles());
-        }
-        if (trancheId != null) {
-            rows = garder(rows, dossierService.idsDossiersDeTranche(trancheId));
-        }
+        List<Object[]> rows = lignesDossiers(perimetre.orElse(null), agence, trancheId);
         LocalDateTime now = LocalDateTime.now(clock);
 
         Map<String, Long> parEtape = new LinkedHashMap<>();

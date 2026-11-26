@@ -36,6 +36,11 @@ public interface ComDocumentRepository extends JpaRepository<ComDocument, UUID>,
             "GROUP BY f.cfgCustomer.id")
     List<Object[]> sumAmountGroupedByClientId(List<UUID> clientIds);
 
+    /** Tuple : [cfgCustomerId, total des échéances] des seuls dossiers donnés (déjà filtrés par l'appelant). */
+    @Query("SELECT f.cfgCustomer.id, SUM(d.amount) FROM ComDocument d JOIN d.comFolder f "
+            + "WHERE f.id IN :dossierIds GROUP BY f.cfgCustomer.id")
+    List<Object[]> sumAmountGroupedByClientIdDesDossiers(List<UUID> dossierIds);
+
     /**
      * Bloc A de {@code /api/dashboard/annuel} : [mois, somme, nombre] des sommes <em>dues</em>, pas encaissées.
      * Frais exclus : le légataire écrit {@code (… OR IsSaleExpense=1) AND IsSaleExpense=0}, on reprend l'effet
