@@ -3,6 +3,7 @@ package com.tsix.immocrm.controller.achat;
 import com.tsix.immocrm.dto.achat.demandes.BonCommandeDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.DemandeAchatFiche;
 import com.tsix.immocrm.dto.achat.demandes.FournisseurDemandeAchat;
+import com.tsix.immocrm.dto.achat.demandes.ImportOffreDemandeAchatDto;
 import com.tsix.immocrm.dto.achat.demandes.ModaliteDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.OffreDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.PrixLigneOffre;
@@ -182,6 +183,21 @@ public class DemandesAchatOngletsController {
         return service.modifierOffre(id, oid, prix);
     }
 
+    @PostMapping(value = "/offres/{oid}/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Importe les prix d'une offre depuis un classeur au format de l'export du bordereau")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Offre relue et décompte des rangées."),
+            @ApiResponse(responseCode = "400", content = @Content),
+            @ApiResponse(responseCode = "403", content = @Content),
+            @ApiResponse(responseCode = "404", content = @Content),
+            @ApiResponse(responseCode = "409", content = @Content)
+    })
+    public ImportOffreDemandeAchatDto importerOffre(@Parameter(description = ID_DEMANDE) @PathVariable UUID id,
+                                                   @Parameter(description = ID_OFFRE) @PathVariable UUID oid,
+                                                   @RequestPart("fichier") MultipartFile fichier) {
+        return service.importerOffre(id, oid, fichier);
+    }
+
     @DeleteMapping("/offres/{oid}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Supprime une offre non sélectionnée")
@@ -205,8 +221,10 @@ public class DemandesAchatOngletsController {
             @ApiResponse(responseCode = "409", content = @Content)
     })
     public DemandeAchatFiche selectionnerOffre(@Parameter(description = ID_DEMANDE) @PathVariable UUID id,
-                                               @Parameter(description = ID_OFFRE) @PathVariable UUID oid) {
-        return service.selectionnerOffre(id, oid);
+                                               @Parameter(description = ID_OFFRE) @PathVariable UUID oid,
+                                               @Parameter(description = "Confirme le choix de l'offre la plus disante ; défaut false.")
+                                               @RequestParam(defaultValue = "false") boolean confirme) {
+        return service.selectionnerOffre(id, oid, confirme);
     }
 
     @DeleteMapping("/offres/selection")

@@ -14,17 +14,18 @@ public final class ColonnesBordereauExcel {
 
     // En-têtes OMRAN du bordereau du lot (export et import).
     static final String ODT = "O.D.T.";
-    static final String CODE = "Code";
+    public static final String CODE = "Code";
     static final String DESCRIPTION = "Description";
-    static final String UNITE = "Unité";
+    public static final String UNITE = "Unité";
     static final String QUANTITE = "Quantité";
-    static final String PU_HT = "P.U. HT";
+    public static final String PU_HT = "P.U. HT";
     static final String TVA = "TVA";
-    static final String FODEC = "FODEC";
+    public static final String REMISE = "Remise";
+    public static final String FODEC = "FODEC";
     static final String PU_TTC = "P.U. TTC";
     static final String NOTES = "Notes";
     static final String CODE_GROUPE = "Code groupe";
-    static final String UNITE_GROUPE = "GROUPE";
+    public static final String UNITE_GROUPE = "GROUPE";
 
     private ColonnesBordereauExcel() {
     }
@@ -44,7 +45,7 @@ public final class ColonnesBordereauExcel {
     }
 
     /** Code lu comme un code : une cellule numérique 12 donne « 12 », pas « 12.0 ». */
-    public static String code(LigneLue l, String colonne) {
+    public static String lireCode(LigneLue l, String colonne) {
         Object v = l.valeurs().get(colonne);
         if (v instanceof BigDecimal n) {
             return n.stripTrailingZeros().toPlainString();
