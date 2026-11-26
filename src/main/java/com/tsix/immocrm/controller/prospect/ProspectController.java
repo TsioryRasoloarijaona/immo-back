@@ -100,6 +100,7 @@ public class ProspectController {
     }
 
     @GetMapping("/{id}")
+    @ApiResponse(responseCode = "404", description = "Aucun prospect avec cet id, ou fiche hors de l'agence du compte.")
     public ProspectDetailDto findById(@PathVariable UUID id) {
         return prospectService.findById(id);
     }
