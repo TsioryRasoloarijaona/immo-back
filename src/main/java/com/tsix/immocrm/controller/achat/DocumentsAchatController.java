@@ -19,6 +19,7 @@ import com.tsix.immocrm.dto.common.PageDto;
 import com.tsix.immocrm.services.achat.DocumentsAchatService;
 import com.tsix.immocrm.services.achat.EtatsAchatService;
 import com.tsix.immocrm.services.achat.FicheAchatService;
+import com.tsix.immocrm.services.achat.PaiementApprouveService;
 import com.tsix.immocrm.services.achat.PositionsFournisseursService;
 import com.tsix.immocrm.services.achat.SoldesFournisseursService;
 import com.tsix.immocrm.web.export.ColonneFixe;
@@ -37,6 +38,9 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -125,16 +129,19 @@ public class DocumentsAchatController {
     private final ExportTableur exportTableur;
     private final PositionsFournisseursService positionsFournisseurs;
     private final EtatsAchatService etats;
+    private final PaiementApprouveService paiementsApprouves;
 
     public DocumentsAchatController(DocumentsAchatService service, FicheAchatService fiches,
                                     SoldesFournisseursService soldesFournisseurs, ExportTableur exportTableur,
-                                    PositionsFournisseursService positionsFournisseurs, EtatsAchatService etats) {
+                                    PositionsFournisseursService positionsFournisseurs, EtatsAchatService etats,
+                                    PaiementApprouveService paiementsApprouves) {
         this.service = service;
         this.fiches = fiches;
         this.soldesFournisseurs = soldesFournisseurs;
         this.exportTableur = exportTableur;
         this.positionsFournisseurs = positionsFournisseurs;
         this.etats = etats;
+        this.paiementsApprouves = paiementsApprouves;
     }
 
     @GetMapping("/referentiels")
@@ -199,6 +206,26 @@ public class DocumentsAchatController {
     public DocumentAchatDetailDto fiche(@Parameter(description = "Id de la pièce (BuyDocument.PKey).")
                                         @PathVariable UUID id) {
         return fiches.fiche(id);
+    }
+
+    @GetMapping("/documents/{id}/paiement-approuve.pdf")
+    @Operation(summary = "Impression « Paiement approuvé » d'une facture d'achat (PDF inline)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF.", content = @Content(mediaType = "application/pdf")),
+            @ApiResponse(responseCode = "403", description = "Droit Yes.Stl.Front.Debit.InvoiceList.toolPrint absent.",
+                    content = @Content),
+            @ApiResponse(responseCode = "404", description = "Pièce introuvable ou hors périmètre (même règle que la fiche).",
+                    content = @Content),
+            @ApiResponse(responseCode = "409", description = "La pièce n'est pas une facture d'achat.", content = @Content)
+    })
+    public ResponseEntity<byte[]> paiementApprouve(@Parameter(description = "Id de la facture (BuyDocument.PKey).")
+                                                   @PathVariable UUID id) {
+        PaiementApprouveService.Impression impression = paiementsApprouves.imprimer(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename("paiement-approuve-" + impression.code().replace('/', '-') + ".pdf").build().toString())
+                .body(impression.pdf());
     }
 
     @GetMapping("/fournisseurs/soldes")
