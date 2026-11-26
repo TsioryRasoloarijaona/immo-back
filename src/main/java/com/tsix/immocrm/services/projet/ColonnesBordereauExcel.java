@@ -14,17 +14,18 @@ public final class ColonnesBordereauExcel {
 
     // En-têtes OMRAN du bordereau du lot (export et import).
     static final String ODT = "O.D.T.";
-    static final String CODE = "Code";
+    public static final String CODE = "Code";
     static final String DESCRIPTION = "Description";
-    static final String UNITE = "Unité";
+    public static final String UNITE = "Unité";
     static final String QUANTITE = "Quantité";
-    static final String PU_HT = "P.U. HT";
+    public static final String PU_HT = "P.U. HT";
     static final String TVA = "TVA";
-    static final String FODEC = "FODEC";
+    public static final String REMISE = "Remise";
+    public static final String FODEC = "FODEC";
     static final String PU_TTC = "P.U. TTC";
     static final String NOTES = "Notes";
     static final String CODE_GROUPE = "Code groupe";
-    static final String UNITE_GROUPE = "GROUPE";
+    public static final String UNITE_GROUPE = "GROUPE";
 
     private ColonnesBordereauExcel() {
     }

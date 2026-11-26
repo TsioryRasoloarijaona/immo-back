@@ -26,6 +26,7 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -115,34 +116,49 @@ class OffresDemandeAchat {
         if (prix == null || prix.stream().anyMatch(Objects::isNull)) {
             throw new InvalidRequestException("lignes : liste obligatoire, sans élément nul");
         }
-        Map<UUID, BuyDocumentLine> lignes = em.createQuery("select l from BuyDocumentLine l where l.buyDocumentId = :id",
-                BuyDocumentLine.class).setParameter("id", oid).getResultStream()
+        Map<UUID, BuyDocumentLine> lignes = lignes(oid).stream()
                 .collect(Collectors.toMap(BuyDocumentLine::getId, Function.identity()));
         for (PrixLigneOffre p : prix) {
-            BigDecimal remise = Objects.requireNonNullElse(p.remise(), BigDecimal.ZERO);
             if (p.ligneId() == null || !lignes.containsKey(p.ligneId())) {
                 throw new InvalidRequestException("ligneId : ligne inconnue de ce devis");
             }
-            if (p.prixUnitaireHT() == null || p.prixUnitaireHT().signum() < 0 || remise.signum() < 0
-                    || remise.compareTo(BigDecimal.ONE) > 0) {
-                throw new InvalidRequestException("prixUnitaireHT positif ou nul, remise entre 0 et 1");
-            }
+            verifierPrix(p.prixUnitaireHT(), Objects.requireNonNullElse(p.remise(), BigDecimal.ZERO));
         }
-        if (Boolean.TRUE.equals(o.getIsRejected())) {
-            throw new ConflictException("Vous ne pouvez pas modifier une offre écartée.");
-        }
+        verifierNonEcartee(o);
         prix.forEach(p -> {
             BuyDocumentLine l = lignes.get(p.ligneId());
             l.setUnitPriceHT(p.prixUnitaireHT());
             l.setDiscountRatio(Objects.requireNonNullElse(p.remise(), BigDecimal.ZERO));
-            l.setUnitPriceTTC(montants(l).prixTTC());
         });
-        MontantsPieceAchat.Totaux t = MontantsPieceAchat.totaux(lignes.values().stream().map(OffresDemandeAchat::montants).toList());
+        return recalculer(dia, o, lignes.values());
+    }
+
+    List<BuyDocumentLine> lignes(UUID oid) {
+        return em.createQuery("select l from BuyDocumentLine l where l.buyDocumentId = :id", BuyDocumentLine.class)
+                .setParameter("id", oid).getResultList();
+    }
+
+    static void verifierPrix(BigDecimal prixUnitaireHT, BigDecimal remise) {
+        if (prixUnitaireHT == null || prixUnitaireHT.signum() < 0 || remise.signum() < 0 || remise.compareTo(BigDecimal.ONE) > 0) {
+            throw new InvalidRequestException("prixUnitaireHT positif ou nul, remise entre 0 et 1");
+        }
+    }
+
+    static void verifierNonEcartee(BuyDocument o) {
+        if (Boolean.TRUE.equals(o.getIsRejected())) {
+            throw new ConflictException("Vous ne pouvez pas modifier une offre écartée.");
+        }
+    }
+
+    /** P.U. TTC de chaque ligne et totaux HT / TVA / TTC du devis, puis offre relue. */
+    OffreDemandeAchat recalculer(UUID dia, BuyDocument o, Collection<BuyDocumentLine> lignes) {
+        lignes.forEach(l -> l.setUnitPriceTTC(montants(l).prixTTC()));
+        MontantsPieceAchat.Totaux t = MontantsPieceAchat.totaux(lignes.stream().map(OffresDemandeAchat::montants).toList());
         o.setAmountHT(t.ht());
         o.setAmountVat(t.tva());
         o.setAmountTTC(t.ttc());
         em.flush();
-        return offres(dia, true).stream().filter(x -> x.id().equals(oid)).findFirst().orElseThrow();
+        return offres(dia, true).stream().filter(x -> x.id().equals(o.getId())).findFirst().orElseThrow();
     }
 
     void supprimer(UUID dia, UUID oid) {
@@ -154,7 +170,7 @@ class OffresDemandeAchat {
     }
 
     /** {@code SelectQuote} : seule cette offre sélectionnée ; fournisseur et, à défaut, délai de paiement de la DIA. */
-    void selectionner(BuySelection d, UUID oid) {
+    void selectionner(BuySelection d, UUID oid, boolean confirme) {
         BuyDocument o = offre(d.getId(), oid);
         verifierMarche(d);
         boolean ecarte = Boolean.TRUE.equals(o.getIsRejected()) || preselection.duTiers(d.getId(), o.getCfgTierId())
@@ -162,8 +178,14 @@ class OffresDemandeAchat {
         if (ecarte) {
             throw new ConflictException("Vous ne pouvez pas selectionnez l'offre d'un fournisseur écarté.");
         }
-        em.createQuery(OFFRES, BuyDocument.class).setParameter("id", d.getId()).getResultList()
-                .forEach(x -> x.setIsSelected(x.getId().equals(oid)));
+        List<BuyDocument> toutes = em.createQuery(OFFRES, BuyDocument.class).setParameter("id", d.getId()).getResultList();
+        BigDecimal montant = Objects.requireNonNullElse(o.getAmountToPay(), BigDecimal.ZERO);
+        boolean plusDisante = toutes.size() >= 2 && toutes.stream()
+                .allMatch(x -> Objects.requireNonNullElse(x.getAmountToPay(), BigDecimal.ZERO).compareTo(montant) <= 0);
+        if (plusDisante && !confirme) {
+            throw new ConflictException("Voulez vous continuer avec l'offre la plus disante ?", "OFFRE_LA_PLUS_DISANTE");
+        }
+        toutes.forEach(x -> x.setIsSelected(x.getId().equals(oid)));
         CfgTier tiers = o.getCfgTierId() == null ? null : em.find(CfgTier.class, o.getCfgTierId());
         d.setCfgTier(tiers);
         if ((d.getPaymentDelay() == null || d.getPaymentDelay() <= 0) && tiers != null) {
@@ -175,7 +197,11 @@ class OffresDemandeAchat {
     /** {@code DeSelectQuote} : toutes désélectionnées, bordereau de la DIA vidé, fournisseur retiré ; le lot est intact. */
     void deselectionner(BuySelection d) {
         verifierMarche(d);
-        em.createQuery(OFFRES, BuyDocument.class).setParameter("id", d.getId()).getResultList().forEach(x -> x.setIsSelected(false));
+        List<BuyDocument> toutes = em.createQuery(OFFRES, BuyDocument.class).setParameter("id", d.getId()).getResultList();
+        if (toutes.stream().noneMatch(x -> Boolean.TRUE.equals(x.getIsSelected()))) {
+            throw new ConflictException("Vous ne pouvez pas désélectionner une offre non sélectionnée.");
+        }
+        toutes.forEach(x -> x.setIsSelected(false));
         d.setCfgTier(null);
         em.flush();
         bordereau.vider(d.getId());
@@ -195,6 +221,15 @@ class OffresDemandeAchat {
         UUID lot = d.getPrjMarketId();
         if (lot == null) {
             throw new ConflictException("Vous ne pouvez pas sélectionnez/désélectionnez une offre d'une demande sans lot.");
+        }
+        PrjMarket marche = em.find(PrjMarket.class, lot);
+        if (marche != null && Boolean.TRUE.equals(marche.getIsMultiSupplier())) {
+            if (compter("SELECT COUNT(*) FROM BuyDocument WHERE BuySelectionId = :lot AND (DocType IS NULL OR DocType <> 'QUOTE')",
+                    d.getId()) > 0) {
+                throw new ConflictException("Vous ne pouvez pas sélectionnez/désélectionnez une offre pour un lot multi-fournisseur "
+                        + "contenant des documents affectés à cet appel d'offre !");
+            }
+            return;
         }
         if (compter("SELECT COUNT(*) FROM PrjWorkingOut WHERE PrjMarketId = :lot", lot) > 0) {
             throw new ConflictException(MARCHE + "contenant des décomptes !");

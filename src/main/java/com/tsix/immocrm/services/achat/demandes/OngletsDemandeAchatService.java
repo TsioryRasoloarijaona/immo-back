@@ -121,12 +121,12 @@ public class OngletsDemandeAchatService {
     @Transactional
     public ImportOffreDemandeAchatDto importerOffre(UUID id, UUID oid, MultipartFile fichier) {
         ecriture(id, AJOUT_OFFRE, PhasesDemandeAchat::offres);
-        throw new UnsupportedOperationException("R7 : import des prix d'une offre à implémenter");
+        return ImportOffreDemandeAchat.importer(offres, id, oid, fichier);
     }
 
     @Transactional
     public DemandeAchatFiche selectionnerOffre(UUID id, UUID oid, boolean confirme) {
-        offres.selectionner(ecriture(id, SELECTION_OFFRE, PhasesDemandeAchat::selection), oid);
+        offres.selectionner(ecriture(id, SELECTION_OFFRE, PhasesDemandeAchat::selection), oid, confirme);
         return demandes.fiche(id);
     }
 
