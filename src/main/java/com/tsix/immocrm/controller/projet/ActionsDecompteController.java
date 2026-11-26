@@ -59,7 +59,7 @@ public class ActionsDecompteController {
     @PutMapping("/decomptes/{id}")
     @Operation(summary = "Enregistrer un décompte (saisie puis recalcul de toutes les colonnes)")
     @ApiResponse(responseCode = "200", description = "Fiche relue après écriture.")
-    @ApiResponse(responseCode = "400", description = "Date antérieure au décompte précédent ou à l'ordre de service du lot.",
+    @ApiResponse(responseCode = "400", description = "Date antérieure au précédent / à l'ordre de service, ou extra / retenue invalide.",
             content = @Content)
     @ApiResponse(responseCode = "409", description = VERROU, content = @Content)
     public DecompteDetailDto enregistrer(@Parameter(description = ID_DECOMPTE) @PathVariable UUID id,

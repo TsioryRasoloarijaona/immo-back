@@ -39,8 +39,40 @@ public record EnregistrerDecompteRequest(
         @Schema(description = "Régularisation (AmountRegul).") BigDecimal regularisation,
         @Schema(description = "Dernier décompte du lot (FinalWorkingOut).") Boolean dernier,
         @Schema(description = "Lignes ; null = inchangées ; une ligne sans id = lignes rechargées depuis le bordereau.")
-        List<LigneSaisie> lignes
+        List<LigneSaisie> lignes,
+        @Schema(description = "Travaux supplémentaires, état final : null = inchangés ; sans id = créé ; absent = supprimé.")
+        List<ExtraSaisie> extras,
+        @Schema(description = "Retenues forfaitaires, état final : null = inchangées ; sans id = créée ; absente = supprimée.")
+        List<RetenueSaisie> retenues
 ) {
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @Schema(name = "ExtraDecompteSaisie", description = "Travail supplémentaire saisi (PrjWorkingOutLineExtra).")
+    public record ExtraSaisie(
+            @Schema(description = "PrjWorkingOutLineExtra.Pkey ; null = nouvelle ligne.") UUID id,
+            @Schema(description = "Ligne du bordereau définitif du lot, recopiée à la création (sauf FODEC) ; inconnue → 400.")
+            UUID ligneMarcheId,
+            @Schema(description = "Code.") String code,
+            @Schema(description = "Désignation, obligatoire (copiée du bordereau pour une nouvelle ligne basée sur le BDP).")
+            String designation,
+            @Schema(description = "Unité.") String unite,
+            @Schema(description = "Quantité, négative acceptée ; null = 0.") BigDecimal quantite,
+            @Schema(description = "Prix unitaire HT.") BigDecimal prixUnitaireHT,
+            @Schema(description = "Taux de TVA en pourcentage (20 = 20 %).", example = "20") BigDecimal tauxTVA,
+            @Schema(description = "Taux de FODEC en pourcentage ; null = 0, jamais copié du bordereau.") BigDecimal tauxFODEC,
+            @Schema(description = "Notes.") String notes,
+            @Schema(description = "Catégorie (StlCategory.PKey) ; null = catégorie du lot.") UUID categorieId
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @Schema(name = "RetenueDecompteSaisie", description = "Retenue forfaitaire saisie (PrjWorkingOutRetainedLine).")
+    public record RetenueSaisie(
+            @Schema(description = "PrjWorkingOutRetainedLine.PKey ; null = nouvelle retenue.") UUID id,
+            @Schema(description = "Libellé, obligatoire, 500 caractères au plus.") String libelle,
+            @Schema(description = "Montant, déduit du net à payer (retenues non remboursables).") BigDecimal montant
+    ) {
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     @Schema(name = "LigneDecompteSaisie", description = "Quantité saisie d'une ligne de décompte.")

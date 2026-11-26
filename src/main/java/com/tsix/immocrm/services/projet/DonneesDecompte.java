@@ -50,6 +50,10 @@ public class DonneesDecompte {
         return t;
     }
 
+    public boolean categorieExiste(UUID id) {
+        return em.find(com.tsix.immocrm.entities.stl.StlCategory.class, id) != null;
+    }
+
     public List<PrjMarketLine> bordereau(UUID lot) {
         return em.createQuery("select m from PrjMarketLine m where m.prjMarketId = :lot order by m.sorting", PrjMarketLine.class)
                 .setParameter(LOT, lot).getResultList();

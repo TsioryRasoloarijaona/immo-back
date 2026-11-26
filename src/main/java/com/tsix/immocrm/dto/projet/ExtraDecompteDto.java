@@ -14,6 +14,11 @@ public record ExtraDecompteDto(
         @Schema(description = "Prix unitaire HT.") BigDecimal prixUnitaireHT,
         @Schema(description = "Taux de TVA en pourcentage.") BigDecimal tauxTVA,
         @Schema(description = "Quantité × prix unitaire HT.") BigDecimal montantHT,
-        @Schema(description = "Quantité × prix unitaire TTC.") BigDecimal montantTTC
+        @Schema(description = "PU HT × (1 + FODEC) × quantité × (1 + TVA), arrondi à 2 décimales (même calcul qu'ExtraAmount).") BigDecimal montantTTC,
+        @Schema(description = "Code.") String code,
+        @Schema(description = "Notes.") String notes,
+        @Schema(description = "Catégorie (StlCategory.PKey).") UUID categorieId,
+        @Schema(description = "Ligne du bordereau d'origine (PrjMarketLine.PKey) ; null pour une ligne libre.") UUID ligneMarcheId,
+        @Schema(description = "Taux de FODEC en pourcentage.") BigDecimal tauxFODEC
 ) {
 }
