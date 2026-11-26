@@ -136,7 +136,7 @@ class LectureDemandesAchat {
         boolean selection = derniere && rs.getBoolean("BoolField004");
         boolean commandeParLot = lotMulti || rs.getString("LotId") == null;
         PhasesDemandeAchat phases = new PhasesDemandeAchat(derniere && rs.getBoolean("BoolField001"),
-                derniere && rs.getBoolean("BoolField002"), offres, selection && !lotMulti,
+                derniere && rs.getBoolean("BoolField002"), offres, selection,
                 selection && rs.getBoolean("ProcedureMulti") && commandeParLot, offres || selection);
         DatesDemandeAchat dates = new DatesDemandeAchat(jour(rs, "LaunchOfTenderDate"), jour(rs, "WithdrawalTenderDocumentsDate"),
                 jour(rs, "TenderMaturityDate"), jour(rs, "TendersResortDate"), jour(rs, "BidOpeningDate"),

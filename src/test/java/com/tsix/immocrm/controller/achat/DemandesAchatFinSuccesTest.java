@@ -134,7 +134,7 @@ class DemandesAchatFinSuccesTest {
 
         assertThat(r.statut()).as(r.corps()).isEqualTo(409);
         SoftAssertions.assertSoftly(a -> {
-            a.assertThat(r.valeur(DETAIL)).isEqualTo(CODE_INTROUVABLE);
+            a.assertThat(String.valueOf(r.valeur(DETAIL))).startsWith(CODE_INTROUVABLE).contains("A2"); // LC7 D1 : code nommé
             a.assertThat(statutStocke(s.dia())).isEqualTo(maj(c.depouil()));
             a.assertThat(codesLignesLotApresRefus(s.lot())).containsExactly("OLD-CA");
             a.assertThat(b.lignesApresRefus(LIGNE_DIA, s.a1().toString()).getFirst().get(PU_HT))

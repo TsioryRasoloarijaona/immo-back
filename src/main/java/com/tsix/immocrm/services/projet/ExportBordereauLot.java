@@ -32,6 +32,7 @@ import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.ODT;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.PU_HT;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.PU_TTC;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.QUANTITE;
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.REMISE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.TVA;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE_GROUPE;
@@ -43,7 +44,7 @@ public class ExportBordereauLot {
     private static final List<ColonneFixe> COLONNES = List.of(ColonneFixe.de("odt", ODT, TypeExport.NOMBRE),
             ColonneFixe.texte("code", CODE), ColonneFixe.texte("description", DESCRIPTION), ColonneFixe.texte("unite", UNITE),
             ColonneFixe.de("quantite", QUANTITE, TypeExport.NOMBRE), ColonneFixe.de("prixUnitaireHT", PU_HT, TypeExport.NOMBRE),
-            ColonneFixe.de("tva", TVA, TypeExport.NOMBRE), ColonneFixe.texte("remise", "Remise"),
+            ColonneFixe.de("tva", TVA, TypeExport.NOMBRE), ColonneFixe.texte("remise", REMISE),
             ColonneFixe.de("fodec", FODEC, TypeExport.NOMBRE), ColonneFixe.de("prixUnitaireTTC", PU_TTC, TypeExport.NOMBRE),
             ColonneFixe.texte("notes", NOTES), ColonneFixe.texte("codeGroupe", CODE_GROUPE));
 
