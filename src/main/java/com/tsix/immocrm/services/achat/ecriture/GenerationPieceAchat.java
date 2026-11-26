@@ -32,7 +32,7 @@ import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.REFUND;
  * {@code Invoice.cs:Create}) : 400 cible non générable, puis 409 ; seule règle du modèle, du POST et des actions.
  */
 @Component
-class GenerationPieceAchat {
+public class GenerationPieceAchat {
 
     // Paires (gestion source › nature cible) → gestion d'arrivée mesurées en prod (G3)
     private static final Map<String, String> PAIRES = Map.of(
@@ -98,7 +98,7 @@ class GenerationPieceAchat {
     }
 
     /** Case « Avoir financier » par défaut : {@code DefaultRefundIsFinancial} (faux si absent) ; null hors avoir (D3). */
-    private Boolean avoirFinancier(NatureDocumentAchat cible) {
+    public Boolean avoirFinancier(NatureDocumentAchat cible) {
         return cible == REFUND ? parametre("DefaultRefundIsFinancial") : null;
     }
 
