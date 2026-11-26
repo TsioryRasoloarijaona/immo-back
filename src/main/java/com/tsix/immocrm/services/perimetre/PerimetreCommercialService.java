@@ -130,6 +130,29 @@ public class PerimetreCommercialService {
         return !RoleAgence.porte(codes) && RolesExemptesPerimetre.exempte(codes);
     }
 
+    /** Rôle Agence du compte courant lu en base, vendeur et projets ignorés (FEATURE-agences-vente.md R-V9). */
+    public boolean estAgenceCourant() {
+        return agenceCourante();
+    }
+
+    /** Même règle lue sur la source : les écrans d'administration n'y empruntent aucune connexion de la copie. */
+    @Transactional
+    public boolean estAgenceCourantSurSource() {
+        return agenceCourante();
+    }
+
+    private boolean agenceCourante() {
+        return admUserIdCourant().map(id -> RoleAgence.porte(agenceDuCompte.roles(id))).orElse(false);
+    }
+
+    /** Projets d'un compte agence ({@code [AUCUN]} s'il est incomplet) ; absent pour le siège, jamais restreint ici. */
+    public Optional<List<UUID>> projetsAgenceCourante() {
+        return admUserIdCourant().flatMap(id -> {
+            List<String> roles = agenceDuCompte.roles(id);
+            return RoleAgence.porte(roles) ? perimetreDe(id, roles) : Optional.empty();
+        });
+    }
+
     /** Vendeurs de l'agence du compte courant ; absent pour un compte du siège (FEATURE-agences-vente.md §4). */
     public Optional<List<UUID>> vendeursAgenceCourante() {
         return admUserIdCourant().flatMap(agenceDuCompte::vendeurs);

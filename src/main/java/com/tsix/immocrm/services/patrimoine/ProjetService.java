@@ -21,6 +21,7 @@ import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
 import com.tsix.immocrm.repositories.cfg.CfgCompanyRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTrancheRepository;
+import com.tsix.immocrm.services.perimetre.AgenceDuCompte;
 import com.tsix.immocrm.utils.Champs;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,16 +68,23 @@ public class ProjetService {
     }
 
     /** Entités actives par {@code CfgCompany.IsActive} ; {@code search} : code, libellé, ville, entité, sans casse. */
-    public Page<ProjetListItemDto> findAll(String search, Pageable pageable) {
-        return projectRepository.rechercher(motif(search), pageable).map(ProjetService::toListItem);
+    /** {@code projetsAgence} : {@code PerimetreCommercialService.projetsAgenceCourante()}, absent = aucune restriction. */
+    public Page<ProjetListItemDto> findAll(String search, Optional<List<UUID>> projetsAgence, Pageable pageable) {
+        return projectRepository.rechercher(motif(search), projetsAgence.isPresent(),
+                        projetsAgence.orElse(List.of(AgenceDuCompte.AUCUN)), pageable)
+                .map(ProjetService::toListItem);
     }
 
     public ProjetDetailDto findById(UUID id) {
         return toDetail(visible(id));
     }
 
-    public Page<TrancheListItemDto> findTranches(UUID projetId, Pageable pageable) {
+    /** Programme hors des projets de l'agence = 404, comme une fiche invisible. */
+    public Page<TrancheListItemDto> findTranches(UUID projetId, Optional<List<UUID>> projetsAgence, Pageable pageable) {
         visible(projetId);
+        if (projetsAgence.filter(ids -> !ids.contains(projetId)).isPresent()) {
+            throw new ResourceNotFoundException(INTROUVABLE + projetId);
+        }
         Set<ColonneTranche> colonnes = ColonneTranche.resoudre(null);
         return trancheRepository.findByCfgProjectId(projetId, pageable).map(t -> TrancheService.toListItem(t, colonnes));
     }

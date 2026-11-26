@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.auth;
 
+import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.dto.auth.UtilisateurCourantDto;
 import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
@@ -93,7 +94,8 @@ public class AuthService {
                 mustChangePassword,
                 profileCompleted,
                 !projets.isEmpty(),
-                projets
+                projets,
+                RoleAgence.porte(roles)
         );
     }
 

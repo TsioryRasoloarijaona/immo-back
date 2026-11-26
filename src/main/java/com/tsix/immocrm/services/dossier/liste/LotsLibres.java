@@ -84,7 +84,12 @@ public class LotsLibres {
         p.add(cb.or(cb.isNull(article.get("isUnderItem")), cb.isFalse(article.get("isUnderItem"))));
         p.add(VisibiliteEntites.depuisProjet(j.projet, cb));
         Optional<List<UUID>> perimetre = perimetreService.perimetreCourant();
-        perimetre.ifPresent(ids -> p.add(cb.or(j.projet.get("id").in(ids), cb.isNull(j.projet.get("id")))));
+        perimetre.ifPresent(ids -> {
+            Predicate dansPerimetre = j.projet.get("id").in(ids);
+            // Lot sans projet : visible du siège (§6.4), jamais d'une agence (FEATURE-agences-vente.md R-V4).
+            p.add(perimetreService.estAgenceCourant()
+                    ? dansPerimetre : cb.or(dansPerimetre, cb.isNull(j.projet.get("id"))));
+        });
         if (filtres.projet() != null) {
             p.add(cb.equal(j.projet.get("id"), filtres.projet()));
         }
