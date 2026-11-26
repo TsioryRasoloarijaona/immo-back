@@ -60,15 +60,64 @@ final class EcritureExtrasDecompte {
                 ecriture.supprimer(extras.supprimes());
                 int rang = 1;
                 for (Paire<ExtraSaisie, PrjWorkingOutLineExtra> p : extras.paires()) {
-                    ecrireExtra(w, p, rang++);
+                    ecrireExtra(p, rang++);
                 }
             }
             if (retenues != null) {
                 ecriture.supprimer(retenues.supprimes());
                 int rang = 1;
                 for (Paire<RetenueSaisie, PrjWorkingOutRetainedLine> p : retenues.paires()) {
-                    ecrireRetenue(w, p, rang++);
+                    ecrireRetenue(p, rang++);
                 }
+            }
+        }
+
+        private void ecrireExtra(Paire<ExtraSaisie, PrjWorkingOutLineExtra> p, int rang) {
+            ExtraSaisie s = p.saisie();
+            PrjWorkingOutLineExtra e = p.existant() == null ? new PrjWorkingOutLineExtra() : p.existant();
+            PrjMarketLine m = p.modele();
+            if (m == null) {
+                e.setCode(s.code());
+                e.setDescription(s.designation());
+                e.setUnity(s.unite());
+                e.setNotes(s.notes());
+                e.setUnitPriceHT(s.prixUnitaireHT());
+                e.setVatRatio(ratio(s.tauxTVA()));
+                e.setStlCategoryId(s.categorieId() == null ? categorieDuLot(w.getPrjMarket()) : s.categorieId());
+            } else {
+                e.setCode(m.getCode());
+                e.setDescription(m.getDescription());
+                e.setUnity(m.getUnity());
+                e.setNotes(m.getNotes());
+                e.setUnitPriceHT(m.getUnitPriceHT());
+                e.setVatRatio(m.getVatRatio());
+                e.setStlCategoryId(m.getStlCategoryId() == null ? categorieDuLot(w.getPrjMarket()) : m.getStlCategoryId());
+                e.setPrjMarketLineId(m.getId());
+            }
+            e.setSorting(rang);
+            e.setQuantity(Objects.requireNonNullElse(s.quantite(), BigDecimal.ZERO));
+            e.setFodecRatio(ratio(Objects.requireNonNullElse(s.tauxFODEC(), BigDecimal.ZERO)));
+            e.setUnitPriceTTC(Objects.requireNonNullElse(e.getUnitPriceHT(), BigDecimal.ZERO)
+                    .multiply(BigDecimal.ONE.add(Objects.requireNonNullElse(e.getVatRatio(), BigDecimal.ZERO)))
+                    .setScale(6, RoundingMode.HALF_UP));
+            if (p.existant() == null) {
+                e.setId(UUID.randomUUID());
+                e.setPrjWorkingOutId(w.getId());
+                ecriture.creer(e);
+            } else {
+                ecriture.modifier(e);
+            }
+        }
+
+        private void ecrireRetenue(Paire<RetenueSaisie, PrjWorkingOutRetainedLine> p, int rang) {
+            PrjWorkingOutRetainedLine r = p.existant() == null ? new PrjWorkingOutRetainedLine() : p.existant();
+            r.setDescription(p.saisie().libelle());
+            r.setAmount(p.saisie().montant());
+            r.setSorting(rang);
+            if (p.existant() == null) {
+                r.setId(UUID.randomUUID());
+                r.setPrjWorkingOutId(w.getId());
+                ecriture.creerSansAudit(r);
             }
         }
     }
@@ -80,7 +129,11 @@ final class EcritureExtrasDecompte {
                     .collect(Collectors.toMap(PrjMarketLine::getId, Function.identity(), (a, b) -> a));
             e = rapprocher(donnees.enfants(PrjWorkingOutLineExtra.class, w.getId()), PrjWorkingOutLineExtra::getId,
                     extras, ExtraSaisie::id, "Travail supplémentaire inconnu : ",
-                    (s, existant) -> modele(s, existant, bordereau));
+                    (s, existant) -> {
+                        verifierBornes(s);
+                        verifierCategorie(s);
+                        return modele(s, existant, bordereau);
+                    });
         }
         Rapprochement<RetenueSaisie, PrjWorkingOutRetainedLine> r = null;
         if (retenues != null) {
@@ -116,6 +169,25 @@ final class EcritureExtrasDecompte {
         return new Rapprochement<>(paires, existants.stream().filter(x -> !gardes.contains(x)).toList());
     }
 
+    private static void borner(String valeur, int max, String champ) {
+        if (valeur != null && valeur.length() > max) {
+            throw new InvalidRequestException("Champ « " + champ + " » trop long (" + max + " caractères au plus).");
+        }
+    }
+
+    private static void verifierBornes(ExtraSaisie s) {
+        borner(s.code(), 255, "code");
+        borner(s.unite(), 255, "unité");
+        borner(s.designation(), 255, "désignation");
+        borner(s.notes(), 1000, "notes");
+    }
+
+    private void verifierCategorie(ExtraSaisie s) {
+        if (s.categorieId() != null && !donnees.categorieExiste(s.categorieId())) {
+            throw new InvalidRequestException("Catégorie inconnue : " + s.categorieId() + ".");
+        }
+    }
+
     /** R3 : seule une nouvelle ligne est recopiée du bordereau définitif du lot ; R2 : désignation obligatoire. */
     private static PrjMarketLine modele(ExtraSaisie s, PrjWorkingOutLineExtra existant, Map<UUID, PrjMarketLine> bordereau) {
         PrjMarketLine m = null;
@@ -140,55 +212,6 @@ final class EcritureExtrasDecompte {
             throw new InvalidRequestException("Libellé de retenue forfaitaire trop long (" + LIBELLE_MAX + " caractères au plus).");
         }
         return null;
-    }
-
-    private void ecrireExtra(PrjWorkingOut w, Paire<ExtraSaisie, PrjWorkingOutLineExtra> p, int rang) {
-        ExtraSaisie s = p.saisie();
-        PrjWorkingOutLineExtra e = p.existant() == null ? new PrjWorkingOutLineExtra() : p.existant();
-        PrjMarketLine m = p.modele();
-        if (m == null) {
-            e.setCode(s.code());
-            e.setDescription(s.designation());
-            e.setUnity(s.unite());
-            e.setNotes(s.notes());
-            e.setUnitPriceHT(s.prixUnitaireHT());
-            e.setVatRatio(ratio(s.tauxTVA()));
-            e.setStlCategoryId(s.categorieId() == null ? categorieDuLot(w.getPrjMarket()) : s.categorieId());
-        } else {
-            e.setCode(m.getCode());
-            e.setDescription(m.getDescription());
-            e.setUnity(m.getUnity());
-            e.setNotes(m.getNotes());
-            e.setUnitPriceHT(m.getUnitPriceHT());
-            e.setVatRatio(m.getVatRatio());
-            e.setStlCategoryId(m.getStlCategoryId() == null ? categorieDuLot(w.getPrjMarket()) : m.getStlCategoryId());
-            e.setPrjMarketLineId(m.getId());
-        }
-        e.setSorting(rang);
-        e.setQuantity(Objects.requireNonNullElse(s.quantite(), BigDecimal.ZERO));
-        e.setFodecRatio(ratio(Objects.requireNonNullElse(s.tauxFODEC(), BigDecimal.ZERO)));
-        e.setUnitPriceTTC(Objects.requireNonNullElse(e.getUnitPriceHT(), BigDecimal.ZERO)
-                .multiply(BigDecimal.ONE.add(Objects.requireNonNullElse(e.getVatRatio(), BigDecimal.ZERO)))
-                .setScale(6, RoundingMode.HALF_UP));
-        if (p.existant() == null) {
-            e.setId(UUID.randomUUID());
-            e.setPrjWorkingOutId(w.getId());
-            ecriture.creer(e);
-        } else {
-            ecriture.modifier(e);
-        }
-    }
-
-    private void ecrireRetenue(PrjWorkingOut w, Paire<RetenueSaisie, PrjWorkingOutRetainedLine> p, int rang) {
-        PrjWorkingOutRetainedLine r = p.existant() == null ? new PrjWorkingOutRetainedLine() : p.existant();
-        r.setDescription(p.saisie().libelle());
-        r.setAmount(p.saisie().montant());
-        r.setSorting(rang);
-        if (p.existant() == null) {
-            r.setId(UUID.randomUUID());
-            r.setPrjWorkingOutId(w.getId());
-            ecriture.creerSansAudit(r);
-        }
     }
 
     private static UUID categorieDuLot(PrjMarket lot) {

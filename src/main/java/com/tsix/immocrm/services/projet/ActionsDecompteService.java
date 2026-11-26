@@ -128,7 +128,7 @@ public class ActionsDecompteService {
                 : donnees.enfants(PrjWorkingOutLine.class, w.getId());
         Map<PrjWorkingOutLine, LigneSaisie> parLigne = associer(cibles, saisies, rechargees);
         Map<UUID, BigDecimal> quantitesMarche = quantitesMarche(bordereau);
-        parLigne.replaceAll((l, s) -> depuisAvancement(lot, l, s, quantitesMarche));
+        parLigne.replaceAll((l, s) -> depuisAvancement(l, s, quantitesMarche));
         EcritureExtrasDecompte.Plan enfants = extras.preparer(w, demande.extras(), demande.retenues());
         w.setDocDate(date);
         w.setCfgTier(tiers);
@@ -363,8 +363,7 @@ public class ActionsDecompteService {
      * {@code WL} l.210-243 : avancement % → cumul visé C = % × quantité du marché, puis la quantité saisie que
      * {@link #fixerQuantite} (son inverse exact) ramène à ce cumul ; voir FEATURE-lc5-decompte-avancement.md R2-R4.
      */
-    private static LigneSaisie depuisAvancement(PrjMarket lot, PrjWorkingOutLine l, LigneSaisie s,
-                                                Map<UUID, BigDecimal> quantitesMarche) {
+    private static LigneSaisie depuisAvancement(PrjWorkingOutLine l, LigneSaisie s, Map<UUID, BigDecimal> quantitesMarche) {
         BigDecimal avancement = s.avancement();
         if (avancement == null) {
             return s;
