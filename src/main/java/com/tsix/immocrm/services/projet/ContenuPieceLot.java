@@ -43,7 +43,7 @@ class ContenuPieceLot {
     // Gestions OMRAN de la restitution de RG : lot (B602) et bon de commande multi-fournisseur (A71B4F91).
     private static final String RESTITUTIONS_RG = DU_LOT
             + "StrEntityId IN ('E7999F70-7507-40D9-AA78-A2825C42B602', 'A71B4F91-AEFC-4C70-87F7-82A6C7365CB5')";
-    private static final String VENTILATION = "select v.stlCategoryId, v.ventilationRate from PrjMarketVentilationCategory v"
+    static final String VENTILATION ="select v.stlCategoryId, v.ventilationRate from PrjMarketVentilationCategory v"
             + " where v.prjMarketId = :lot order by v.ventilationRate asc";
     private static final String DERNIER_DECOMPTE = "select w from PrjWorkingOut w where w.prjMarket.id = :lot"
             + " order by w.sorting desc";

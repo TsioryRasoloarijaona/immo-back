@@ -99,7 +99,7 @@ public record PieceAchatACreer(String module, String gestion, String sansDepart,
                     categorie, notes);
         }
 
-        MontantsPieceAchat.Ligne montants() {
+        public MontantsPieceAchat.Ligne montants() {
             return new MontantsPieceAchat.Ligne(quantite, Objects.requireNonNullElse(prix, BigDecimal.ZERO), remise, fodec,
                     tva);
         }
