@@ -67,7 +67,7 @@ public final class LectureExport {
     public static List<String> codesDesLignes(List<List<Object>> lignes, List<String> candidats) {
         return lignes.stream().skip(1)
                 .filter(l -> !l.isEmpty() && !"Total".equals(l.get(0)))
-                .map(l -> l.stream().filter(candidats::contains).map(String.class::cast).findFirst().orElse(SANS_CODE))
+                .map(l -> l.stream().filter(c -> c instanceof String s && candidats.contains(s)).map(String.class::cast).findFirst().orElse(SANS_CODE))
                 .toList();
     }
 

@@ -82,7 +82,7 @@ abstract class ImportTiers extends ImportGenerique<CfgTier> {
 
     @Override
     protected Predicate portee(CriteriaBuilder cb, Root<CfgTier> racine) {
-        return cb.equal(racine.get("cfgTierType").get("code"), famille.codeType());
+        return TiersService.dansLaFamille(cb, racine, famille);
     }
 
     @Override

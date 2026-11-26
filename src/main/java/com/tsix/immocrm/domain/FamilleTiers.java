@@ -6,18 +6,26 @@ import java.util.Optional;
 
 /** Familles de l'écran Tiers : segment d'URL, {@code CfgTierType.Code}, filtre Nature de la liste et forme de la fiche. */
 public enum FamilleTiers {
+
     FOURNISSEURS("fournisseurs", "FOU", true),
     CONTACTS("contacts", "CNT", false),
     BANQUES("banques", "BAN", false, Fiche.REDUITE, "DefaultSocialFormForBANK"),
     ORGANISMES("organismes", "ORG", false, Fiche.REDUITE, "DefaultSocialFormForORGANISM"),
-    PERSONNELS("personnels", "EMP", false, Fiche.PHYSIQUE, null);
+    PERSONNELS("personnels", "EMP", false, Fiche.PHYSIQUE, null),
+    // Type CNT et nature AGV : la famille « contacts » exclut cette nature (FEATURE-agences-vente.md R-V6).
+    AGENCES("agences", "CNT", false, Fiche.COMPLETE, null, "AGV");
+
+    private static final String DESCRIPTION = "description";
+    private static final String MOBILE = "mobile";
+    private static final String PHONE = "phone";
+    private static final String E_MAIL = "eMail";
 
     /** Forme de saisie : champs écrits (service), catalogue d'import, colonnes cherchées, origine du code. */
     public enum Fiche {
-        COMPLETE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail", "ice")),
-        REDUITE(true, List.of("code", "description", "mobile", "phone", "phone1", "phone2", "fax", "eMail", "webSite",
+        COMPLETE(false, List.of("code", DESCRIPTION, "socialReason", MOBILE, PHONE, E_MAIL, "ice")),
+        REDUITE(true, List.of("code", DESCRIPTION, MOBILE, PHONE, "phone1", "phone2", "fax", E_MAIL, "webSite",
                 "notes", "address")),
-        PHYSIQUE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail"));
+        PHYSIQUE(false, List.of("code", DESCRIPTION, "socialReason", MOBILE, PHONE, E_MAIL));
 
         private final boolean codeSaisi;
         private final List<String> colonnesCherchees;
@@ -41,17 +49,49 @@ public enum FamilleTiers {
     private final boolean filtreNature;
     private final Fiche fiche;
     private final String parametreFormeSociale;
+    private final String codeNature;
 
     FamilleTiers(String segment, String codeType, boolean filtreNature) {
         this(segment, codeType, filtreNature, Fiche.COMPLETE, null);
     }
 
     FamilleTiers(String segment, String codeType, boolean filtreNature, Fiche fiche, String parametreFormeSociale) {
+        this(segment, codeType, filtreNature, fiche, parametreFormeSociale, null);
+    }
+
+    FamilleTiers(String segment, String codeType, boolean filtreNature, Fiche fiche, String parametreFormeSociale,
+                 String codeNature) {
         this.segment = segment;
         this.codeType = codeType;
         this.filtreNature = filtreNature;
         this.fiche = fiche;
         this.parametreFormeSociale = parametreFormeSociale;
+        this.codeNature = codeNature;
+    }
+
+    /** {@code CfgTierKind.Code} imposé à la famille ; absent = toute nature du type, sauf {@link #naturesExclues()}. */
+    public Optional<String> codeNature() {
+        return Optional.ofNullable(codeNature);
+    }
+
+    /** Natures du même type réservées à une autre famille. */
+    public List<String> naturesExclues() {
+        if (codeNature != null) {
+            return List.of();
+        }
+        return Arrays.stream(values()).filter(f -> f.codeNature != null && f.codeType.equals(codeType))
+                .map(f -> f.codeNature).toList();
+    }
+
+    /** Seule définition de l'appartenance d'un tiers (type, nature) à la famille ; les requêtes en reprennent les termes. */
+    public boolean contient(String typeDuTiers, String natureDuTiers) {
+        if (!codeType.equals(typeDuTiers)) {
+            return false;
+        }
+        if (codeNature != null) {
+            return codeNature.equals(natureDuTiers);
+        }
+        return natureDuTiers == null || !naturesExclues().contains(natureDuTiers);
     }
 
     public static Optional<FamilleTiers> depuis(String segment) {

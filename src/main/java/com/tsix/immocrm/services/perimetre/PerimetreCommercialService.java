@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.perimetre;
 
+import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.domain.RolesExemptesPerimetre;
 import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
@@ -20,7 +21,6 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmUserHabilitationRepository;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
-import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.cfg.CfgProjectRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
@@ -61,7 +61,7 @@ public class PerimetreCommercialService {
     private static final String COM_FOLDER = "comFolder";
 
     private final AdmUserHabilitationRepository habilitationRepository;
-    private final AdmUserRoleRepository userRoleRepository;
+    private final AgenceDuCompte agenceDuCompte;
     private final AdmUserRepository userRepository;
     private final CfgProjectRepository projectRepository;
     private final ComFolderRepository folderRepository;
@@ -69,14 +69,14 @@ public class PerimetreCommercialService {
     private final StlSettlementRepository settlementRepository;
 
     public PerimetreCommercialService(AdmUserHabilitationRepository habilitationRepository,
-                                       AdmUserRoleRepository userRoleRepository,
+                                       AgenceDuCompte agenceDuCompte,
                                        AdmUserRepository userRepository,
                                        CfgProjectRepository projectRepository,
                                        ComFolderRepository folderRepository,
                                        ComProspectionRepository prospectionRepository,
                                        StlSettlementRepository settlementRepository) {
         this.habilitationRepository = habilitationRepository;
-        this.userRoleRepository = userRoleRepository;
+        this.agenceDuCompte = agenceDuCompte;
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.folderRepository = folderRepository;
@@ -95,23 +95,54 @@ public class PerimetreCommercialService {
     }
 
     public Optional<List<UUID>> perimetreDe(UUID admUserId) {
-        if (admUserId == null || estExempte(admUserId)) {
+        return admUserId == null ? Optional.empty() : perimetreDe(admUserId, agenceDuCompte.roles(admUserId));
+    }
+
+    /**
+     * Un compte agence est toujours restreint : sans projet ou incomplet, {@code [AUCUN]} (R-V1, R-V5, R-INS3),
+     * qu'un {@code IN} lit comme « rien » chez tous les appelants.
+     */
+    private Optional<List<UUID>> perimetreDe(UUID admUserId, List<String> roles) {
+        boolean agence = RoleAgence.porte(roles);
+        if (!agence && RolesExemptesPerimetre.exempte(roles)) {
             return Optional.empty();
         }
         List<UUID> projetIds = habilitationRepository.findProjetIdsByAdmUserId(admUserId).stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
+        if (agence) {
+            boolean incomplet = projetIds.isEmpty()
+                    || agenceDuCompte.vendeursDeLAgence(admUserId).contains(AgenceDuCompte.AUCUN);
+            return Optional.of(incomplet ? List.of(AgenceDuCompte.AUCUN) : projetIds);
+        }
         return projetIds.isEmpty() ? Optional.empty() : Optional.of(projetIds);
     }
 
-    /** Rôles lus dans {@code AdmUserRole}, jamais {@code AdmUser.WebRoleId} : les deux divergent (§6.2). */
+    /** Rôles lus dans {@code AdmUserRole}, jamais {@code AdmUser.WebRoleId} (§6.2) ; agence ⇒ jamais exempté (R-V3). */
     public boolean estExempte(UUID admUserId) {
-        List<String> codes = userRoleRepository.findByAdmUserId(admUserId).stream()
-                .map(ur -> ur.getAdmRole() != null ? ur.getAdmRole().getCode() : null)
-                .filter(Objects::nonNull)
-                .toList();
-        return RolesExemptesPerimetre.exempte(codes);
+        List<String> codes = agenceDuCompte.roles(admUserId);
+        return !RoleAgence.porte(codes) && RolesExemptesPerimetre.exempte(codes);
+    }
+
+    /** Vendeurs de l'agence du compte courant ; absent pour un compte du siège (FEATURE-agences-vente.md §4). */
+    public Optional<List<UUID>> vendeursAgenceCourante() {
+        return admUserIdCourant().flatMap(agenceDuCompte::vendeurs);
+    }
+
+    /**
+     * « Projet visible » du compte courant, lu une fois : projet nul visible (§6.4) sauf pour une agence (R-V4),
+     * sinon dans le périmètre.
+     */
+    public java.util.function.Predicate<UUID> projetVisible() {
+        Optional<UUID> compte = admUserIdCourant();
+        if (compte.isEmpty()) {
+            return projetId -> true;
+        }
+        List<String> roles = agenceDuCompte.roles(compte.get());
+        boolean agence = RoleAgence.porte(roles);
+        Optional<List<UUID>> projets = perimetreDe(compte.get(), roles);
+        return projetId -> projetId == null ? !agence : projets.map(ids -> ids.contains(projetId)).orElse(true);
     }
 
     /**

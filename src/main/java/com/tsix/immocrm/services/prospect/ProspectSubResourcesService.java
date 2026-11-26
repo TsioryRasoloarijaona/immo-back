@@ -28,6 +28,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
+import com.tsix.immocrm.services.perimetre.GardeLienVendeurAgence;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -61,6 +62,7 @@ public class ProspectSubResourcesService {
     private final PerimetreCommercialService perimetreService;
     private final ProspectService prospectService;
     private final AuteurStatutDossier auteurStatut;
+    private final GardeLienVendeurAgence gardeVendeur;
 
     public ProspectSubResourcesService(CfgTierRepository tierRepository,
                                         ComProspectionRepository prospectionRepository,
@@ -72,7 +74,9 @@ public class ProspectSubResourcesService {
                                         CfgRelationTypeRepository relationTypeRepository,
                                         PerimetreCommercialService perimetreService,
                                         ProspectService prospectService,
-                                        AuteurStatutDossier auteurStatut) {
+                                        AuteurStatutDossier auteurStatut,
+                                        GardeLienVendeurAgence gardeVendeur) {
+        this.gardeVendeur = gardeVendeur;
         this.perimetreService = perimetreService;
         this.auteurStatut = auteurStatut;
         this.tierRepository = tierRepository;
@@ -192,6 +196,7 @@ public class ProspectSubResourcesService {
                 // Même chemin que POST /api/prospects : code séquentiel + drapeaux hérités posés.
                 : prospectService.createEntity(request.nouveauContact());
 
+        gardeVendeur.verifier(relationType, prospectId, contact.getId());
         CfgTierContact link = new CfgTierContact();
         link.setId(UUID.randomUUID());
         link.setCfgTier(prospect);

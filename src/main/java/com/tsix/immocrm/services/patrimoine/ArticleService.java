@@ -22,7 +22,8 @@ import com.tsix.immocrm.entities.stk.StkPresentationType;
 import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
+import com.tsix.immocrm.services.perimetre.ArticlesVisibles;
+import org.springframework.data.jpa.domain.Specification;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -51,18 +52,18 @@ public class ArticleService {
     public static final String VOCATION_PROJET = "PROJET";
 
     private final StkItemRepository stkItemRepository;
-    private final TrancheVisibleRepository trancheRepository;
+    private final ArticlesVisibles articles;
     private final EcritureArticle ecriture;
     private final FicheArticle fiche;
     private final ContenancesArticle contenances;
     private final SuppressionArticle suppression;
     private final LignesArticle lignes;
 
-    public ArticleService(StkItemRepository stkItemRepository, TrancheVisibleRepository trancheRepository,
+    public ArticleService(StkItemRepository stkItemRepository, ArticlesVisibles articles,
                           EcritureArticle ecriture, FicheArticle fiche,
                           ContenancesArticle contenances, SuppressionArticle suppression, LignesArticle lignes) {
         this.stkItemRepository = stkItemRepository;
-        this.trancheRepository = trancheRepository;
+        this.articles = articles;
         this.ecriture = ecriture;
         this.fiche = fiche;
         this.contenances = contenances;
@@ -84,7 +85,7 @@ public class ArticleService {
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
         var spec = StkItemSpecifications.build(new FiltresArticle(List.of(trancheId), null, false, effectiveStatut,
                 categorieIds, typeIds, null, false, entiteId, natureId, vocationId, etageId,
-                prixDe, prixA, surfaceDe, surfaceA, false, null, null));
+                prixDe, prixA, surfaceDe, surfaceA, false, null, null)).and(articles.filtre());
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = lignes.dossiers(page.getContent());
         Map<UUID, BigDecimal> superficies = lignes.superficies(page.getContent());
@@ -93,7 +94,7 @@ public class ArticleService {
 
     /** {@code /api/articles} et {@code /api/sous-articles}, entités actives : {@code statut} absent = tous. */
     public Page<LigneArticleDto> lister(FiltresArticle filtres, Set<ColonneArticle> colonnes, Pageable pageable) {
-        Page<StkItem> page = stkItemRepository.findAll(StkItemSpecifications.build(filtres), pageable);
+        Page<StkItem> page = stkItemRepository.findAll(StkItemSpecifications.build(filtres).and(articles.filtre()), pageable);
         return lignes.de(page, colonnes);
     }
 
@@ -187,19 +188,18 @@ public class ArticleService {
 
     /** Seule recherche par id des routes de l'article et de ses sous-ressources (R4). */
     StkItem charger(UUID id) {
-        return stkItemRepository.findVisible(id)
+        return articles.trouver(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
     }
 
     private void exigerTrancheVisible(UUID trancheId) {
-        if (trancheRepository.trancheVisible(trancheId).isEmpty()) {
-            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
-        }
+        articles.exigerTranche(trancheId);
     }
 
     private ArticleDetailDto toDetail(StkItem item) {
         UUID id = item.getId();
-        List<StkItem> sousArticlesItems = stkItemRepository.findByParentId(id);
+        Specification<StkItem> enfants = (root, query, cb) -> cb.equal(root.get("parent").get("id"), id);
+        List<StkItem> sousArticlesItems = stkItemRepository.findAll(enfants.and(articles.filtre()));
         Map<UUID, ComFolder> dossiers = lignes.dossiers(Stream.concat(Stream.of(item), sousArticlesItems.stream()).toList());
         BigDecimal superficieSousArticles = sousArticlesItems.stream()
                 .map(StkItem::getArea).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -306,7 +306,8 @@ public class ArticleService {
                                                        List<UUID> categorieIds, List<UUID> typeIds, Pageable pageable) {
         charger(articleId);
         StatutArticle effectiveStatut = requireNonNullElse(statut, StatutArticle.DISPONIBLE);
-        var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds);
+        var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds)
+                .and(articles.filtre());
         Page<StkItem> page = stkItemRepository.findAll(spec, pageable);
         Map<UUID, ComFolder> dossiers = lignes.dossiers(page.getContent());
         Map<UUID, BigDecimal> superficies = lignes.superficies(page.getContent());

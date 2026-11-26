@@ -103,16 +103,16 @@ public class OngletsTiersService {
             from RntFolder x left join x.strStatus st""" + DETAIL_ARTICLE + " where x.cfgCustomerId = :tiers";
 
     private final EntityManager em;
-    private final TiersService tiers;
+    private final TiersService tiersService;
 
     public OngletsTiersService(EntityManager em, TiersService tiers) {
         this.em = em;
-        this.tiers = tiers;
+        this.tiersService = tiers;
     }
 
     @Transactional(readOnly = true)
     public PageDto<LigneOngletTiers> lister(String famille, UUID id, String onglet, int page, int size) {
-        FamilleTiers f = tiers.verifier(famille, id);
+        FamilleTiers f = tiersService.verifier(famille, id);
         Onglet o = Arrays.stream(Onglet.values()).filter(x -> x.segment.equals(onglet)).findFirst()
                 .filter(x -> prevu(f, x))
                 .orElseThrow(() -> new ResourceNotFoundException("Onglet inconnu pour cette famille : " + onglet));
@@ -121,7 +121,7 @@ public class OngletsTiersService {
 
     private static boolean prevu(FamilleTiers famille, Onglet onglet) {
         return switch (famille) {
-            case FOURNISSEURS, CONTACTS -> onglet != Onglet.CONGES;
+            case FOURNISSEURS, CONTACTS, AGENCES -> onglet != Onglet.CONGES;
             case PERSONNELS -> true;
             case BANQUES, ORGANISMES -> false;
         };

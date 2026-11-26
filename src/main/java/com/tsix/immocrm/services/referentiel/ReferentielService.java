@@ -80,7 +80,7 @@ import com.tsix.immocrm.repositories.com.ComProspectionProfileRepository;
 import com.tsix.immocrm.repositories.stk.StkBuildingRepository;
 import com.tsix.immocrm.repositories.stk.StkFloorRepository;
 import com.tsix.immocrm.repositories.stk.StkItemCategoryRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.perimetre.ArticlesVisibles;
 import com.tsix.immocrm.repositories.stk.StkItemTypeRepository;
 import com.tsix.immocrm.repositories.stk.StkKindRepository;
 import com.tsix.immocrm.repositories.stk.StkVocationRepository;
@@ -146,7 +146,7 @@ public class ReferentielService {
     private final ComSettlementCategoryRepository settlementCategoryRepository;
     private final CfgProjectRepository projectRepository;
     private final CfgTrancheRepository trancheRepository;
-    private final StkItemRepository stkItemRepository;
+    private final ArticlesVisibles articles;
     private final AdmRoleRepository roleRepository;
     private final StlSettlementTypeRepository settlementTypeRepository;
     private final CfgTierRepository tierRepository;
@@ -190,7 +190,7 @@ public class ReferentielService {
                                ComSettlementCategoryRepository settlementCategoryRepository,
                                CfgProjectRepository projectRepository,
                                CfgTrancheRepository trancheRepository,
-                               StkItemRepository stkItemRepository,
+                               ArticlesVisibles articles,
                                AdmRoleRepository roleRepository,
                                StlSettlementTypeRepository settlementTypeRepository,
                                CfgTierRepository tierRepository,
@@ -231,7 +231,7 @@ public class ReferentielService {
         this.settlementCategoryRepository = settlementCategoryRepository;
         this.projectRepository = projectRepository;
         this.trancheRepository = trancheRepository;
-        this.stkItemRepository = stkItemRepository;
+        this.articles = articles;
         this.roleRepository = roleRepository;
         this.settlementTypeRepository = settlementTypeRepository;
         this.tierRepository = tierRepository;
@@ -542,27 +542,27 @@ public class ReferentielService {
      */
     public List<ArticleListItemDto> articles(UUID trancheId, StatutArticle statut,
                                               List<UUID> categorieIds, List<UUID> typeIds) {
-        if (trancheRepository.trancheVisible(trancheId).isEmpty()) {
-            throw new ResourceNotFoundException("Tranche introuvable: " + trancheId);
-        }
+        articles.exigerTranche(trancheId);
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;
-        var spec = StkItemSpecifications.build(trancheId, null, true, effectiveStatut, categorieIds, typeIds);
+        var spec = StkItemSpecifications.build(trancheId, null, true, effectiveStatut, categorieIds, typeIds)
+                .and(articles.filtre());
         if (categorieIds == null || categorieIds.isEmpty()) {
             spec = spec.and(StkItemSpecifications.horsAnnexes());
         }
-        return stkItemRepository.findAll(spec).stream()
+        return articles.items().findAll(spec).stream()
                 .map(item -> ArticleService.toListItem(item, Collections.emptyMap(), Collections.emptyMap()))
                 .toList();
     }
 
     public List<ArticleListItemDto> sousArticles(UUID articleId, StatutArticle statut,
                                                   List<UUID> categorieIds, List<UUID> typeIds) {
-        if (stkItemRepository.findVisible(articleId).isEmpty()) {
+        if (articles.trouver(articleId).isEmpty()) {
             throw new ResourceNotFoundException("Article introuvable: " + articleId);
         }
         StatutArticle effectiveStatut = statut != null ? statut : StatutArticle.DISPONIBLE;
-        var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds);
-        return stkItemRepository.findAll(spec).stream()
+        var spec = StkItemSpecifications.build(null, articleId, false, effectiveStatut, categorieIds, typeIds)
+                .and(articles.filtre());
+        return articles.items().findAll(spec).stream()
                 .map(item -> ArticleService.toListItem(item, Collections.emptyMap(), Collections.emptyMap()))
                 .toList();
     }

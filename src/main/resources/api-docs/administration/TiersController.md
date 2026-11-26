@@ -1,6 +1,6 @@
 # TiersController
 
-Fournisseurs (`CfgTierType` FOU), contacts (CNT), banques (BAN), organismes (ORG) et personnels (EMP) d'OMRAN, une famille par segment d'URL : une autre valeur répond 404, un identifiant d'un autre type aussi. Aucune donnée de paie n'est lue ni écrite. Réservé à l'Administrateur. Voir `instructions/FEATURE-admin-tiers.md`, `instructions/FEATURE-admin-banques-organismes.md` et `instructions/FEATURE-admin-personnels.md`.
+Fournisseurs (`CfgTierType` FOU), contacts (CNT), banques (BAN), organismes (ORG) et personnels (EMP) d'OMRAN, plus les agences de vente (type CNT, nature `CfgTierKind` AGV, voir `instructions/FEATURE-agences-vente.md` §3), une famille par segment d'URL : une autre valeur répond 404, un identifiant d'un autre type aussi. Aucune donnée de paie n'est lue ni écrite. Réservé à l'Administrateur. Voir `instructions/FEATURE-admin-tiers.md`, `instructions/FEATURE-admin-banques-organismes.md` et `instructions/FEATURE-admin-personnels.md`.
 
 ## lister
 

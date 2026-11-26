@@ -97,7 +97,7 @@ public class TiersController {
     })
     public PageDto<LigneTiersDto> lister(
             @Parameter(description = "Famille.", schema = @Schema(allowableValues = {"fournisseurs", "contacts", "banques",
-                    "organismes", "personnels"}))
+                    "organismes", "personnels", "agences"}))
             @PathVariable String famille,
             @ParameterObject @ModelAttribute FiltresTiers filtres,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1_000_000)

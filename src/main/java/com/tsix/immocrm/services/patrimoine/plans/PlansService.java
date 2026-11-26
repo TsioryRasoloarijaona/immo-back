@@ -4,6 +4,7 @@ import com.tsix.immocrm.dto.patrimoine.plans.PlanArticleDto;
 import com.tsix.immocrm.dto.patrimoine.plans.PlanDto;
 import com.tsix.immocrm.dto.patrimoine.plans.TraceDto;
 import com.tsix.immocrm.dto.patrimoine.plans.TrancheAvecPlansDto;
+import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkHierarchyPlan;
@@ -22,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /** Lectures des plans (FEATURE-patrimoine-plans.md §2) ; toutes passent par {@link AccesPlans}. */
@@ -48,9 +49,9 @@ public class PlansService {
     }
 
     public List<TrancheAvecPlansDto> tranchesAvecPlans() {
-        Optional<List<UUID>> projets = perimetre.perimetreCourant();
+        Predicate<UUID> projetVisible = perimetre.projetVisible();
         return plans.tranchesVisiblesAvecPlans().stream()
-                .filter(l -> AccesPlans.dansPerimetre(projets, (UUID) l[3]))
+                .filter(l -> projetVisible.test((UUID) l[3]))
                 .map(l -> new TrancheAvecPlansDto((UUID) l[0], (String) l[1], (String) l[2], (String) l[4],
                         ((Number) l[5]).longValue()))
                 .toList();
@@ -75,7 +76,24 @@ public class PlansService {
         StkHierarchyPlan plan = acces.plan(planId);
         List<TraceArticle> lignes = traces.tracesDuPlan(plan.getStkFloorId(), plan.getStkHierarchyId());
         Map<UUID, ComFolder> occupants = occupants(lignes.stream().map(TraceArticle::getArticleId).distinct().toList());
-        return lignes.stream().map(l -> trace(l, occupants.get(l.getArticleId()))).toList();
+        Predicate<ComFolder> horsAgence = horsAgence();
+        return lignes.stream().map(l -> {
+            ComFolder occupant = occupants.get(l.getArticleId());
+            return occupant != null && horsAgence.test(occupant) ? indisponible(l) : trace(l, occupant);
+        }).toList();
+    }
+
+    /** R-V2b : dossier dont le vendeur n'est pas de l'agence du compte ; jamais pour le siège. */
+    private Predicate<ComFolder> horsAgence() {
+        return perimetre.vendeursAgenceCourante()
+                .<Predicate<ComFolder>>map(vendeurs -> dossier ->
+                        !vendeurs.contains(Champs.de(dossier, ComFolder::getCfgCommercial, CfgTier::getId)))
+                .orElse(dossier -> false);
+    }
+
+    private static TraceDto indisponible(TraceArticle ligne) {
+        return new TraceDto(ligne.getArticleId(), ligne.getCode(), ligne.getD(), null, "Indisponible", null, null, null,
+                Boolean.TRUE.equals(ligne.getSousArticle()), false, true);
     }
 
     public List<PlanArticleDto> plansDeLArticle(UUID articleId) {
@@ -100,7 +118,7 @@ public class PlansService {
                 Champs.de(statut, StrStatus::getCode), Champs.de(statut, StrStatus::getDescription),
                 Champs.de(statut, StrStatus::getColorName), Champs.de(occupant, ComFolder::getId),
                 occupant == null ? null : TierNomFormatter.nom(occupant.getCfgCustomer()),
-                Boolean.TRUE.equals(ligne.getSousArticle()), occupant == null);
+                Boolean.TRUE.equals(ligne.getSousArticle()), occupant == null, false);
     }
 
     private static ResourceNotFoundException imageIntrouvable(UUID planId) {

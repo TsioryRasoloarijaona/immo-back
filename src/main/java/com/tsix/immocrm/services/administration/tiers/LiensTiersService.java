@@ -11,6 +11,7 @@ import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.CfgTierContactRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
+import com.tsix.immocrm.services.perimetre.GardeLienVendeurAgence;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,9 +27,11 @@ public class LiensTiersService {
     private final CfgTierRepository tiers;
     private final CfgTierContactRepository liens;
     private final TracePatrimoine traces;
+    private final GardeLienVendeurAgence garde;
 
     public LiensTiersService(EntityManager em, CfgTierRepository tiers, CfgTierContactRepository liens,
-                             TracePatrimoine traces) {
+                             TracePatrimoine traces, GardeLienVendeurAgence garde) {
+        this.garde = garde;
         this.em = em;
         this.tiers = tiers;
         this.liens = liens;
@@ -52,6 +55,7 @@ public class LiensTiersService {
         if (liens.existsByCfgTierIdAndCfgContactId(tiersId, contact.getId())) {
             throw new ConflictException("Ce contact est déjà lié à ce tiers.");
         }
+        garde.verifier(relation, tiersId, contact.getId());
         TracePatrimoine.Trace trace = traces.maintenant();
         CfgTierContact lien = new CfgTierContact();
         lien.setId(UUID.randomUUID());

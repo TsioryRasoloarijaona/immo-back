@@ -29,6 +29,7 @@ import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.hibernate.exception.ConstraintViolationException;
@@ -65,9 +66,10 @@ public class TiersService {
             "notes", SELECT_DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code",
             "journaux", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from ActJournal x order by x.code");
-    private static final Sort TRI = Sort.by("code", "id");
+    private static final String KIND = "cfgTierKind";
+    private static final Sort TRI =Sort.by("code", "id");
     private static final List<String> LIBELLES_LISTE =
-            List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
+            List.of(KIND, "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
 
     private final EntityManager em;
     private final CfgTierRepository tiers;
@@ -119,7 +121,9 @@ public class TiersService {
 
     @Transactional(readOnly = true)
     public List<NatureTiersDto> natures(String famille) {
-        return natures.findByCfgTierTypeCodeOrderBySortingAsc(famille(famille).codeType()).stream()
+        FamilleTiers f = famille(famille);
+        return natures.findByCfgTierTypeCodeOrderBySortingAsc(f.codeType()).stream()
+                .filter(n -> f.contient(f.codeType(), n.getCode()))
                 .map(n -> new NatureTiersDto(n.getId(), n.getCode(), n.getDescription())).toList();
     }
 
@@ -219,8 +223,22 @@ public class TiersService {
 
     private CfgTier trouver(FamilleTiers famille, UUID id) {
         return tiers.findById(id)
-                .filter(t -> t.getCfgTierType() != null && famille.codeType().equals(t.getCfgTierType().getCode()))
+                .filter(t -> t.getCfgTierType() != null && famille.contient(t.getCfgTierType().getCode(),
+                        t.getCfgTierKind() == null ? null : t.getCfgTierKind().getCode()))
                 .orElseThrow(() -> new ResourceNotFoundException("Tiers introuvable : " + id));
+    }
+
+    /** Critère SQL de {@link FamilleTiers#contient} : type, puis nature imposée ou natures exclues. */
+    public static Predicate dansLaFamille(CriteriaBuilder cb, Root<CfgTier> racine, FamilleTiers famille) {
+        Predicate type = cb.equal(racine.get("cfgTierType").get("code"), famille.codeType());
+        List<String> exclues = famille.naturesExclues();
+        if (famille.codeNature().isEmpty() && exclues.isEmpty()) {
+            return type;
+        }
+        Path<String> nature = racine.join(KIND,JoinType.LEFT).get("code");
+        Predicate natureAdmise = famille.codeNature().map(c -> cb.equal(nature, c))
+                .orElseGet(() -> cb.or(cb.isNull(nature), cb.not(nature.in(exclues))));
+        return cb.and(type, natureAdmise);
     }
 
     private static Specification<CfgTier> specification(FamilleTiers famille, FiltresTiers filtres) {
@@ -229,12 +247,12 @@ public class TiersService {
                 LIBELLES_LISTE.forEach(a -> racine.fetch(a, JoinType.LEFT));
             }
             List<Predicate> conditions = new ArrayList<>();
-            conditions.add(cb.equal(racine.get("cfgTierType").get("code"), famille.codeType()));
+            conditions.add(dansLaFamille(cb, racine, famille));
             if (StringUtils.hasText(filtres.recherche())) {
                 conditions.add(recherche(racine, cb, famille, filtres.recherche()));
             }
             if (famille.filtreNature() && filtres.natureId() != null) {
-                conditions.add(cb.equal(racine.get("cfgTierKind").get("id"), filtres.natureId()));
+                conditions.add(cb.equal(racine.get(KIND).get("id"), filtres.natureId()));
             }
             return cb.and(conditions.toArray(Predicate[]::new));
         };

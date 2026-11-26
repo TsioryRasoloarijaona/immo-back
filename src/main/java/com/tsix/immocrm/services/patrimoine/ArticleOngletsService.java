@@ -8,7 +8,7 @@ import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.str.StrFolderStatusHistory;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.perimetre.ArticlesVisibles;
 import com.tsix.immocrm.repositories.str.StrFolderStatusHistoryRepository;
 import com.tsix.immocrm.services.dossier.AuteurStatutDossier;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -45,7 +45,7 @@ public class ArticleOngletsService {
             LEFT JOIN StkItem n ON n.PKey = p.StkItemId
             WHERE (p.StkItemId = :id OR p.StkOldItemId = :id) AND p.IsLegalized = 1""";
 
-    private final StkItemRepository itemRepository;
+    private final ArticlesVisibles articles;
     private final ProspectionService prospectionService;
     private final ArticleDossiersService dossiersService;
     private final StrFolderStatusHistoryRepository historyRepository;
@@ -53,11 +53,11 @@ public class ArticleOngletsService {
     private final AuteurStatutDossier auteurStatut;
     private final EntityManager entityManager;
 
-    public ArticleOngletsService(StkItemRepository itemRepository, ProspectionService prospectionService,
+    public ArticleOngletsService(ArticlesVisibles articles, ProspectionService prospectionService,
                                  ArticleDossiersService dossiersService, StrFolderStatusHistoryRepository historyRepository,
                                  PerimetreCommercialService perimetreService, AuteurStatutDossier auteurStatut,
                                  EntityManager entityManager) {
-        this.itemRepository = itemRepository;
+        this.articles = articles;
         this.prospectionService = prospectionService;
         this.dossiersService = dossiersService;
         this.historyRepository = historyRepository;
@@ -98,7 +98,7 @@ public class ArticleOngletsService {
     }
 
     private StkItem article(UUID id) {
-        return itemRepository.findVisible(id).orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
+        return articles.trouver(id).orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id));
     }
 
     /** Transfert légalisé → « TRANSFERT PRODUIT : ancien => nouveau », le préfixe de détail d'OMRAN. */
