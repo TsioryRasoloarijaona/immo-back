@@ -217,7 +217,7 @@ class PaiementApprouvePdfTest {
     // R3 : pièce visible qui n'est pas une facture (BC) → 409 avec le message du spec ; témoin 200 sur une facture.
     @Test
     void r3_pieceNonFacture_409_message() throws Exception {
-        UUID bonCommande = piece("-BC", FixtureAchat.BON_COMMANDE, "1200");
+        UUID bonCommande = piece("-BC", FixtureAchat.BON_LIVRAISON, "1200");
         UUID facture = piece("-F", FixtureAchat.FACTURE, "1200");
 
         MockHttpServletResponse refuse = imprimer(bonCommande, compte);
@@ -259,7 +259,7 @@ class PaiementApprouvePdfTest {
     // R2 ordre : non-facture ET sans droit → 403 (pas 409).
     @Test
     void r2_ordre_nonFactureSansDroit_403() throws Exception {
-        UUID bonCommande = piece("-BC", FixtureAchat.BON_COMMANDE, "1200");
+        UUID bonCommande = piece("-BC", FixtureAchat.BON_LIVRAISON, "1200");
         AdmUser sansDroit = compteHabilite("SN");
 
         MockHttpServletResponse refuse = imprimer(bonCommande, sansDroit);
