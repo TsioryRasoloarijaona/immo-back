@@ -110,11 +110,16 @@ public class FacturationDecompteService {
         UUID categorieLot = Champs.de(lot.getStlCategory(), StlCategory::getId);
         List<Ligne> lignes = new ArrayList<>(lignes(id, categorieLot));
         lignes.addAll(extras(id, categorieLot));
-        BigDecimal ttc = MontantsPieceAchat.totaux(lignes.stream().map(Ligne::montants).toList()).ttc();
+        // D2 : sans ligne ni extra, la facture reprend HT / TTC d'en-tête du décompte (parité OMRAN).
+        BigDecimal ht = z(w.getAmountHT());
+        Avoir enTete = lignes.isEmpty() ? new Avoir(ht, z(w.getAmountTTC()).subtract(ht), null) : null;
+        BigDecimal ttc = enTete != null ? enTete.ht().add(enTete.tva())
+                : MontantsPieceAchat.totaux(lignes.stream().map(Ligne::montants).toList()).ttc();
         List<Part> categories = parts(ventilation, ttc);
         LocalDate date = Objects.requireNonNullElseGet(w.getDocDate(), () -> LocalDateTime.now(clock)).toLocalDate();
         EnTete e = new EnTete(configuration.module("PRJ"), lot.getPrjProject().getId(), lot.getId(),
-                ecriture.employeDuCompte(), date, null, null, "", "", "", "", z(w.getAmountRegul()), BigDecimal.ZERO);
+                ecriture.employeDuCompte(), date, null, null, "", "", "", "", z(w.getAmountRegul()), BigDecimal.ZERO,
+                enTete);
         CfgTier tiers = w.getCfgTier() != null ? w.getCfgTier() : lot.getCfgSupplier();
         BuyDocument d = ecriture.creer(new PieceAchatACreer(null, GESTION_DECOMPTE, SANS_DEPART.formatted(GESTION_DECOMPTE),
                 INVOICE.name(), null, tiers, Champs.de(lot.getPrjProject().getCfgCompany(), CfgCompany::getId),
