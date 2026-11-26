@@ -1,5 +1,10 @@
 package com.tsix.immocrm.services.achat;
 
+import com.tsix.immocrm.domain.achat.NatureDocumentAchat;
+import com.tsix.immocrm.dto.achat.DocumentAchatDetailDto;
+import com.tsix.immocrm.exceptions.ConflictException;
+import com.tsix.immocrm.services.achat.document.PaiementApprouvePdfRenderer;
+import com.tsix.immocrm.services.droits.DroitsOmran;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,11 +15,34 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PaiementApprouveService {
 
+    static final String DROIT_IMPRESSION = "Yes.Stl.Front.Debit.InvoiceList.toolPrint";
+    private static final String NON_FACTURE = "L'impression Paiement approuvé est réservée aux factures d'achat";
+
+    private final FicheAchatService fiches;
+    private final DroitsOmran droits;
+    private final RequetesDocumentsAchat requetes;
+    private final PaiementApprouvePdfRenderer renderer;
+
+    public PaiementApprouveService(FicheAchatService fiches, DroitsOmran droits, RequetesDocumentsAchat requetes,
+                                   PaiementApprouvePdfRenderer renderer) {
+        this.fiches = fiches;
+        this.droits = droits;
+        this.requetes = requetes;
+        this.renderer = renderer;
+    }
+
     /** PDF rendu et code de la pièce (nom du fichier). */
     public record Impression(String code, byte[] pdf) {
     }
 
+    /** Ordre des refus : 404 (fiche invisible) → 403 (droit) → 409 (nature). */
     public Impression imprimer(UUID id) {
-        throw new UnsupportedOperationException(id.toString());
+        DocumentAchatDetailDto fiche = fiches.fiche(id);
+        droits.exiger(DROIT_IMPRESSION);
+        if (!NatureDocumentAchat.INVOICE.name().equals(fiche.document().nature())) {
+            throw new ConflictException(NON_FACTURE);
+        }
+        return new Impression(fiche.document().code(),
+                renderer.rendre(fiche, requetes.reglementsPaiementApprouve(id)));
     }
 }

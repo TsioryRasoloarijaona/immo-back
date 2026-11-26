@@ -181,6 +181,16 @@ public class RequetesDocumentsAchat {
             + "WHERE l.StlSettlementId = s.PKey AND p.BuyOrderId = :id "
             + "AND (p.ReferenceType = 'ORDER_ADVANCE' OR p.DocType = 'INVOICE')) ORDER BY s.DocDate, s.Code";
 
+    /** Règlements de la facture ∪ ceux de l'avance (DOCUMENT_TO_PAY) de son BC : SQL du rapport OMRAN « Paiement Approuvé ». */
+    private static final String REGLEMENTS_IMPRIMES = "SELECT COALESCE(s.SettlementDate, s.EcheanceDate) AS DateReglement, "
+            + "s.Description, s.AmountBase, l.Amount FROM StlSettlementLine l "
+            + "JOIN StlSettlement s ON s.PKey = l.StlSettlementId WHERE l.BuyDocumentId = :id UNION ALL "
+            + "SELECT COALESCE(s.SettlementDate, s.EcheanceDate), CONCAT(s.Description, ' (avance B.C.)'), s.AmountBase, "
+            + "l.Amount FROM StlSettlementLine l JOIN StlSettlement s ON s.PKey = l.StlSettlementId "
+            + "JOIN BuyDocument dtp ON dtp.PKey = l.BuyDocumentId AND dtp.DocType = 'DOCUMENT_TO_PAY' "
+            + "JOIN BuyDocument bc ON bc.PKey = dtp.BuyOrderId AND bc.DocType = 'ORDER' "
+            + "JOIN BuyDocument f ON f.BuyOrderId = bc.PKey AND f.PKey = :id ORDER BY DateReglement";
+
     private static final String STATUTS = "SELECT PKey, Code, Description, IsOkForPayement, IsValidatedOnAccounting, "
             + "Sorting FROM BuyDocumentStatus ORDER BY Sorting, Code";
 
@@ -389,6 +399,16 @@ public class RequetesDocumentsAchat {
                     rs.getInt("Annule") == 1, etat, pointage, p.prevue(), p.reporte(), p.reportee(),
                     rs.getBigDecimal("AmountBase"));
         });
+    }
+
+    /** Règlement imprimé sur « Paiement Approuvé » : date de pointage à défaut d'échéance, montant brut, affectation. */
+    public record LigneReglementImprime(LocalDate date, String description, BigDecimal montant, BigDecimal affectation) {
+    }
+
+    List<LigneReglementImprime> reglementsPaiementApprouve(UUID id) {
+        return jdbc.query(REGLEMENTS_IMPRIMES, Map.of(ID, id.toString()), (rs, n) -> new LigneReglementImprime(
+                jour(rs, "DateReglement"), chaine(rs, DESCRIPTION), rs.getBigDecimal("AmountBase"),
+                rs.getBigDecimal(MONTANT)));
     }
 
     List<StatutAchatDto> statuts() {
