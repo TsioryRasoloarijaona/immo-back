@@ -1,6 +1,7 @@
 package com.tsix.immocrm.services.achat.ecriture;
 
 import com.tsix.immocrm.domain.achat.MontantsPieceAchat;
+import com.tsix.immocrm.entities.buy.BuyDocument;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 
 import java.math.BigDecimal;
@@ -8,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 /**
@@ -18,11 +20,21 @@ import java.util.function.UnaryOperator;
  * @param sansDepart message de l'erreur 500 quand le workflow de la gestion n'a pas de statut de départ
  * @param entete     en-tête saisi par la fiche (FEATURE-achat-fiche-creation.md) ; null = commissions, frais de terrain
  * @param generation liens d'une pièce générée depuis d'autres (FEATURE-achat-generation.md G6) ; null = création libre
+ * @param retenues   retenues recopiées avant le calcul du net (facture de décompte) ; null = celles du lot
  */
 public record PieceAchatACreer(String module, String gestion, String sansDepart, String nature, String referenceType,
                                CfgTier tiers, UUID societe, UUID typeMarche, UUID frais,
                                UnaryOperator<String> description, String notes, List<Ligne> lignes,
-                               List<Part> categories, List<Part> projets, EnTete entete, Generation generation) {
+                               List<Part> categories, List<Part> projets, EnTete entete, Generation generation,
+                               Consumer<BuyDocument> retenues) {
+
+    public PieceAchatACreer(String module, String gestion, String sansDepart, String nature, String referenceType,
+                            CfgTier tiers, UUID societe, UUID typeMarche, UUID frais,
+                            UnaryOperator<String> description, String notes, List<Ligne> lignes,
+                            List<Part> categories, List<Part> projets, EnTete entete, Generation generation) {
+        this(module, gestion, sansDepart, nature, referenceType, tiers, societe, typeMarche, frais, description, notes,
+                lignes, categories, projets, entete, generation, null);
+    }
 
     public PieceAchatACreer(String module, String gestion, String sansDepart, String nature, String referenceType,
                             CfgTier tiers, UUID societe, UUID typeMarche, UUID frais,
@@ -43,7 +55,7 @@ public record PieceAchatACreer(String module, String gestion, String sansDepart,
     /** La même pièce, générée : gestion d'arrivée et liens de {@code g}. */
     PieceAchatACreer generee(Generation g, String sansDepartGeneree) {
         return new PieceAchatACreer(module, g.gestion(), sansDepartGeneree, nature, referenceType, tiers, societe,
-                typeMarche, frais, description, notes, lignes, categories, projets, entete, g);
+                typeMarche, frais, description, notes, lignes, categories, projets, entete, g, retenues);
     }
 
     /**

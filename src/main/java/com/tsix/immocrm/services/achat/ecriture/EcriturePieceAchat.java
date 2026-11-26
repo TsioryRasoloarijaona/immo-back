@@ -120,6 +120,9 @@ public class EcriturePieceAchat {
         if (e != null && e.lot() != null && NatureDocumentAchat.INVOICE.name().equals(piece.nature())) {
             retenuesDuLot(d, g != null);
         }
+        if (piece.retenues() != null) {
+            piece.retenues().accept(d);
+        }
         em.persist(d);
         ecrireContenu(d, piece, Map.of(), BigDecimal.ZERO);
         if (g != null) {
