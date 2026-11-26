@@ -23,8 +23,10 @@ import com.tsix.immocrm.entities.adm.AdmTierTitle;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
+import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmCountryRepository;
@@ -63,6 +65,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -77,6 +80,7 @@ public class ProspectService {
     private static final int PLAFOND_DOUBLONS = 50;
     /** Un téléphone se compare sur ses 9 derniers chiffres — la normalisation de la hotline. */
     private static final int CHIFFRES_TELEPHONE = 9;
+    private static final String MESSAGE_DOUBLON_HORS_AGENCE = "Ce prospect est déjà suivi, contactez le siège";
 
     private final CfgTierRepository tierRepository;
     // Tranches d'intérêt : fiche seulement (une requête par ligne en liste), d'où leur absence de
@@ -98,6 +102,7 @@ public class ProspectService {
     private final GenerateurCodeSequence generateurCode;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
+    private final PerimetreCommercialService perimetre;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -116,7 +121,9 @@ public class ProspectService {
                             NumeroTelephoneSupport numeroSupport,
                             GenerateurCodeSequence generateurCode,
                             UtilisateurAffiche utilisateurAffiche,
-                            Clock clock) {
+                            Clock clock,
+                            PerimetreCommercialService perimetre) {
+        this.perimetre = perimetre;
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
         this.trancheRepository = trancheRepository;
@@ -163,13 +170,55 @@ public class ProspectService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return tierRepository.findAll(spec, pageable).map(t -> toListItem(t, colonnes));
+        return tierRepository.findAll(spec.and(perimetre.filtreProspects()), pageable).map(t -> toListItem(t, colonnes));
     }
 
     public ProspectDetailDto findById(UUID id) {
-        return tierRepository.findById(id)
-                .map(this::toDetail)
+        return toDetail(prospectVisible(id));
+    }
+
+    /** Seule lecture d'un prospect / client par id : 404 s'il est inconnu ou invisible du compte (V6). */
+    public CfgTier prospectVisible(UUID id) {
+        return tierRepository.findOne(perimetre.filtreProspects().and((root, query, cb) -> cb.equal(root.get("id"), id)))
                 .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + id));
+    }
+
+    /** Les tiers de {@code tiers} visibles du compte (V6), dans leur ordre ; tels quels pour le siège. */
+    private List<CfgTier> visibles(List<CfgTier> tiers) {
+        if (tiers.isEmpty() || perimetre.vendeursAgenceCourante().isEmpty()) {
+            return tiers;
+        }
+        List<UUID> ids = tiers.stream().map(CfgTier::getId).toList();
+        Set<UUID> visibles = tierRepository.findAll(perimetre.filtreProspects()
+                        .and((root, query, cb) -> root.get("id").in(ids))).stream()
+                .map(CfgTier::getId).collect(Collectors.toSet());
+        return tiers.stream().filter(t -> visibles.contains(t.getId())).toList();
+    }
+
+    /**
+     * R-V2 (R-V8) : une agence qui saisit la CIN, le mobile ou le fixe d'un prospect / client qu'elle ne voit pas
+     * reçoit un 409 sans aucune donnée de la fiche existante, même avec {@code ignorerDoublons}.
+     */
+    private void refuserDoublonHorsAgence(CreerProspectRequest request) {
+        if (perimetre.vendeursAgenceCourante().isEmpty()) {
+            return;
+        }
+        List<CfgTier> memeIdentite = new ArrayList<>();
+        String numeroPiece = request.pieceIdentite() == null ? ""
+                : chaine(request.pieceIdentite().numero()).trim().toLowerCase(Locale.ROOT);
+        if (!numeroPiece.isEmpty()) {
+            memeIdentite.addAll(tierRepository.findByNumeroPiece(numeroPiece));
+        }
+        for (String telephone : List.of(critereTelephone(request.mobile()), critereTelephone(request.telephone()))) {
+            if (!telephone.isEmpty()) {
+                memeIdentite.addAll(tierRepository.findByNormalizedPhone(telephone));
+            }
+        }
+        List<CfgTier> candidats = List.copyOf(memeIdentite.stream().filter(ProspectService::estProspectOuClient)
+                .collect(Collectors.toMap(CfgTier::getId, t -> t, (a, b) -> a)).values());
+        if (visibles(candidats).size() < candidats.size()) {
+            throw new ConflictException(MESSAGE_DOUBLON_HORS_AGENCE);
+        }
     }
 
     @Transactional
@@ -187,6 +236,7 @@ public class ProspectService {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
+        refuserDoublonHorsAgence(request);
         // 409 tant que l'appelant n'a pas confirmé « nouveau contact » (FEATURE-doublons-prospect-projet.md §2).
         if (!Boolean.TRUE.equals(request.ignorerDoublons())) {
             List<ProspectDoublonDto> doublons = rechercherDoublons(request.prenom(), request.nom(),
@@ -233,7 +283,7 @@ public class ProspectService {
         if (cle.isEmpty() && tel1.isEmpty() && tel2.isEmpty() && mail.isEmpty()) {
             return List.of();
         }
-        return tierRepository.trouverDoublons(cle, tel1, tel2, mail, PageRequest.of(0, PLAFOND_DOUBLONS)).stream()
+        return visibles(tierRepository.trouverDoublons(cle, tel1, tel2, mail, PageRequest.of(0, PLAFOND_DOUBLONS))).stream()
                 .map(t -> toDoublon(t, cle, tel1, tel2, mail))
                 .filter(d -> !d.criteres().isEmpty())
                 .sorted(Comparator.comparingInt((ProspectDoublonDto d) -> d.criteres().size()).reversed()
@@ -328,8 +378,7 @@ public class ProspectService {
 
     @Transactional
     public ProspectDetailDto update(UUID id, ModifierProspectRequest request) {
-        CfgTier tier = tierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + id));
+        CfgTier tier = prospectVisible(id);
 
         applyFields(tier, ChampsProspect.de(request));
 

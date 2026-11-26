@@ -9,7 +9,10 @@ import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.com.ComActionMessageRepository;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.services.prospection.ProspectionService;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.TierNomFormatter;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -22,12 +25,18 @@ import java.util.List;
 public class CalendrierService {
 
     private final ComActionMessageRepository actionMessageRepository;
+    private final PerimetreCommercialService perimetreService;
 
-    public CalendrierService(ComActionMessageRepository actionMessageRepository) {
+    public CalendrierService(ComActionMessageRepository actionMessageRepository,
+                             PerimetreCommercialService perimetreService) {
         this.actionMessageRepository = actionMessageRepository;
+        this.perimetreService = perimetreService;
     }
 
-    /** Visibilité par entité portée par la requête {@code findEvenementsVisibles}, pas par ce service. */
+    /**
+     * Visibilité par entité portée par la requête {@code findEvenementsVisibles} ; un compte agence passe par
+     * {@code filtreInteractions} (FEATURE-agences-vente.md R-V8).
+     */
     public List<EvenementCalendrierDto> evenements(LocalDateTime debut, LocalDateTime fin) {
         if (debut == null || fin == null) {
             throw new InvalidRequestException("debut et fin sont requis");
@@ -35,11 +44,17 @@ public class CalendrierService {
         if (fin.isBefore(debut)) {
             throw new InvalidRequestException("fin doit être postérieure ou égale à debut");
         }
-        return actionMessageRepository
-                .findEvenementsVisibles(debut, fin)
-                .stream()
+        List<ComActionMessage> evenements = perimetreService.vendeursAgenceCourante().isPresent()
+                ? actionMessageRepository.findAll(perimetreService.filtreInteractions().and(entre(debut, fin)),
+                        Sort.by(Sort.Direction.ASC, "admEvent.startHour"))
+                : actionMessageRepository.findEvenementsVisibles(debut, fin);
+        return evenements.stream()
                 .map(CalendrierService::toEvenementDto)
                 .toList();
+    }
+
+    private static Specification<ComActionMessage> entre(LocalDateTime debut, LocalDateTime fin) {
+        return (root, query, cb) -> cb.between(root.join("admEvent").get("startHour"), debut, fin);
     }
 
     private static EvenementCalendrierDto toEvenementDto(ComActionMessage m) {

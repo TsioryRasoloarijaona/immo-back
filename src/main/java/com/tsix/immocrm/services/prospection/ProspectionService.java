@@ -289,7 +289,7 @@ public class ProspectionService {
      */
     public long compterProspections(UUID trancheId, Boolean ouvertes) {
         return prospectionRepository.count(specProspections(new CriteresListe(null, null, null,
-                List.of(trancheId), false, PeriodeListe.AUCUNE, null, ouvertes), null)
+                trancheId == null ? List.of() : List.of(trancheId), false, PeriodeListe.AUCUNE, null, ouvertes), null)
                 .and(perimetreService.filtreProspections()));
     }
 
@@ -678,8 +678,7 @@ public class ProspectionService {
     @Transactional
     public ProspectionDetailDto creerProspection(CreerProspectionRequest request) {
         Requis.champ(request.prospectId(), "prospectId est requis");
-        CfgTier prospect = tierRepository.findById(request.prospectId())
-                .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + request.prospectId()));
+        CfgTier prospect = prospectDeLaCreation(request.prospectId());
 
         // texteLibre() : une note blanche est refusée comme une note absente.
         String notes = Requis.champ(texteLibre(request.notes()), "notes est requis (champ Notes)");
@@ -711,6 +710,15 @@ public class ProspectionService {
         enregistrerHistorique(prospection.getId(), TypeActionRecente.PROSPECTION_CREEE,
                 "prospect " + TierNomFormatter.nom(prospect));
         return detailEnrichi(prospection);
+    }
+
+    /** Agence : prospect invisible ⇒ 404 (V6), avant tout 409 qui trahirait son existence. Siège : inconnu ⇒ 400. */
+    private CfgTier prospectDeLaCreation(UUID prospectId) {
+        if (perimetreService.vendeursAgenceCourante().isPresent()) {
+            return prospectService.prospectVisible(prospectId);
+        }
+        return tierRepository.findById(prospectId)
+                .orElseThrow(() -> new InvalidRequestException("Prospect (CfgTier) introuvable: " + prospectId));
     }
 
     private void rattacherReferentiels(ComProspection prospection, CreerProspectionRequest request) {

@@ -80,6 +80,9 @@ public class HotlineService {
         if (normalise.isEmpty()) {
             throw new InvalidRequestException("Le paramètre 'telephone' ne contient aucun chiffre exploitable");
         }
+        if (agence()) {
+            return assembler("TELEPHONE", telephoneBrut, normalise, null, List.of(), List.of(), false);
+        }
 
         List<CfgTier> tiers = tierRepository.findByNormalizedPhone(normalise);
 
@@ -105,6 +108,9 @@ public class HotlineService {
             throw new InvalidRequestException(
                     "Le paramètre 'nom' doit contenir au moins " + LONGUEUR_MIN_NOM + " caractères");
         }
+        if (agence()) {
+            return assembler("NOM", null, null, nomBrut, List.of(), List.of(), false);
+        }
         String motif = "%" + terme + "%";
 
         List<CfgTier> trouves = tierRepository.rechercherParNom(motif, FICHES_MAX_PAR_NOM + 1);
@@ -118,6 +124,11 @@ public class HotlineService {
                 .orElseGet(() -> prospectionRepository.rechercherPreProspectionsParNom(motif, HISTORIQUE_LIMIT));
 
         return assembler("NOM", null, null, nomBrut, tiers, preProspections, tronque);
+    }
+
+    /** Hotline vide pour un compte agence, même pour ses propres prospects (R-V8, V5). */
+    private boolean agence() {
+        return perimetreService.vendeursAgenceCourante().isPresent();
     }
 
     /** Commun aux deux recherches, dont l'exclusion des doublons ci-dessous. */

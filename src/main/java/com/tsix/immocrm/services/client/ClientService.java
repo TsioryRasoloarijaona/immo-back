@@ -10,6 +10,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import jakarta.persistence.criteria.Join;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -44,10 +46,13 @@ public class ClientService {
     private final ComFolderRepository folderRepository;
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
+    private final PerimetreCommercialService perimetre;
 
     public ClientService(CfgTierRepository tierRepository, ComFolderRepository folderRepository,
                           ComDocumentRepository documentRepository,
-                          StlSettlementLineRepository settlementLineRepository) {
+                          StlSettlementLineRepository settlementLineRepository,
+                          PerimetreCommercialService perimetre) {
+        this.perimetre = perimetre;
         this.tierRepository = tierRepository;
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
@@ -96,31 +101,55 @@ public class ClientService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Page<CfgTier> page = tierRepository.findAll(spec, pageable);
+        Page<CfgTier> page = tierRepository.findAll(spec.and(perimetre.filtreProspects()), pageable);
         // Page vide : pas de requête d'agrégat sur un « IN () ».
         return page.isEmpty() ? page.map(t -> toDto(t, 0, BigDecimal.ZERO, BigDecimal.ZERO)) : enrichirAvecAgregats(page);
     }
 
     private Page<ClientListItemDto> enrichirAvecAgregats(Page<CfgTier> page) {
         List<UUID> clientIds = page.getContent().stream().map(CfgTier::getId).toList();
+        if (perimetre.vendeursAgenceCourante().isPresent()) {
+            return enrichirPourUneAgence(page, clientIds);
+        }
 
         Map<UUID, Integer> nbDossiersParClient = new HashMap<>();
         for (Object[] row : folderRepository.countGroupedByClientId(clientIds)) {
             nbDossiersParClient.put((UUID) row[0], ((Long) row[1]).intValue());
         }
-        Map<UUID, BigDecimal> aPayerParClient = new HashMap<>();
-        for (Object[] row : documentRepository.sumAmountGroupedByClientId(clientIds)) {
-            aPayerParClient.put((UUID) row[0], (BigDecimal) row[1]);
-        }
-        Map<UUID, BigDecimal> regleParClient = new HashMap<>();
-        for (Object[] row : settlementLineRepository.sumAmountGroupedByClientId(clientIds)) {
-            regleParClient.put((UUID) row[0], (BigDecimal) row[1]);
-        }
+        return avecAgregats(page, nbDossiersParClient, documentRepository.sumAmountGroupedByClientId(clientIds),
+                settlementLineRepository.sumAmountGroupedByClientId(clientIds));
+    }
 
+    /** Agence : agrégats sur ses seuls dossiers, ceux de {@code filtreDossiers()} (FEATURE-agences-vente.md §4). */
+    private Page<ClientListItemDto> enrichirPourUneAgence(Page<CfgTier> page, List<UUID> clientIds) {
+        Specification<ComFolder> deCesClients = (root, query, cb) -> root.get("cfgCustomer").get("id").in(clientIds);
+        List<ComFolder> dossiers = folderRepository.findAll(perimetre.filtreDossiers().and(deCesClients));
+        Map<UUID, Integer> nbDossiersParClient = new HashMap<>();
+        dossiers.forEach(f -> nbDossiersParClient.merge(f.getCfgCustomer().getId(), 1, Integer::sum));
+        if (dossiers.isEmpty()) {
+            return avecAgregats(page, nbDossiersParClient, List.of(), List.of());
+        }
+        List<UUID> dossierIds = dossiers.stream().map(ComFolder::getId).toList();
+        return avecAgregats(page, nbDossiersParClient, documentRepository.sumAmountGroupedByClientIdDesDossiers(dossierIds),
+                settlementLineRepository.sumAmountGroupedByClientIdDesDossiers(dossierIds));
+    }
+
+    private static Page<ClientListItemDto> avecAgregats(Page<CfgTier> page, Map<UUID, Integer> nbDossiersParClient,
+                                                        List<Object[]> aPayer, List<Object[]> regle) {
+        Map<UUID, BigDecimal> aPayerParClient = sommesParClient(aPayer);
+        Map<UUID, BigDecimal> regleParClient = sommesParClient(regle);
         return page.map(t -> toDto(t,
                 nbDossiersParClient.getOrDefault(t.getId(), 0),
                 aPayerParClient.getOrDefault(t.getId(), BigDecimal.ZERO),
                 regleParClient.getOrDefault(t.getId(), BigDecimal.ZERO)));
+    }
+
+    private static Map<UUID, BigDecimal> sommesParClient(List<Object[]> lignes) {
+        Map<UUID, BigDecimal> parClient = new HashMap<>();
+        for (Object[] row : lignes) {
+            parClient.put((UUID) row[0], Objects.requireNonNullElse((BigDecimal) row[1], BigDecimal.ZERO));
+        }
+        return parClient;
     }
 
     private static ClientListItemDto toDto(CfgTier t, int nbDossiers, BigDecimal totalAPayer, BigDecimal totalRegle) {

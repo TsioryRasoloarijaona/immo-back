@@ -2,6 +2,9 @@
 
 ## findAll
 
+**Compte agence** : seulement les fiches ayant au moins une prospection ou un dossier de son agence
+(`FEATURE-agences-vente.md` V6) ; idem pour l'export, la fiche et ses sous-ressources (404 sinon).
+
 ### param colonnes
 
 Colonnes a serialiser, repetable ou separees par des virgules. Absent : les 10 colonnes historiques.
@@ -43,7 +46,8 @@ identiques (`000000000`), email sans `@` (`-`, `nd`). **Un homonyme au contact d
 courant** (237 groupes sur 244 dans les données réelles) : la liste est là pour que l'utilisateur
 tranche, pas pour refuser. Tri : le plus de critères d'abord, puis les plus récentes ; 50 au plus.
 **Vide = aucune fiche ne correspond.** Pas de périmètre commercial : les prospects n'y sont pas
-soumis.
+soumis, sauf pour un **compte agence**, qui ne reçoit que les fiches ayant au moins une prospection
+ou un dossier de son agence (`FEATURE-agences-vente.md` V6).
 
 Le même contrôle est appliqué par `POST /api/prospects` et `POST
 /api/pre-prospections/{id}/creer-prospect` (409 sauf `ignorerDoublons: true`). Voir
@@ -82,6 +86,10 @@ Des fiches prospect/client existantes portent le même nom, téléphone ou email
 `ProspectDoublonDto` avec leurs `criteres` — l'écran demande « est-ce l'une de ces personnes ? » et
 renvoie avec `ignorerDoublons: true` pour un nouveau contact. Voir
 `FEATURE-doublons-prospect-projet.md` §2.
+
+**Compte agence** : si une fiche existante au même CIN, mobile ou téléphone fixe n'a aucune
+prospection ni aucun dossier de son agence, 409 **sans** `doublons`, `detail` = « Ce prospect est déjà
+suivi, contactez le siège » ; `ignorerDoublons: true` ne le contourne pas (`FEATURE-agences-vente.md` R-V2).
 
 ## update
 

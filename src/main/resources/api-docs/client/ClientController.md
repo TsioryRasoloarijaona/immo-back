@@ -10,6 +10,9 @@ Les tiers portant au moins un dossier de vente sur une entité juridique en expl
 agrégats calculés côté serveur (nombre de dossiers, total à payer, total réglé). Une page vide
 signifie qu'aucun client ne correspond, pas une erreur.
 
+**Compte agence** : seulement les tiers ayant au moins une prospection ou un dossier de son agence ;
+la fiche et `/dossiers` d'un autre tiers répondent 404 (`FEATURE-agences-vente.md` V6).
+
 **Filtre par tranche** (`trancheId`, réservé aux administrateurs) : seuls les clients ayant au moins
 un dossier dans cette tranche — même règle d'appartenance que `GET /api/dossiers?trancheId=` (un
 article lié ou l'article principal du dossier dans la tranche). Les agrégats (`nombreDossiers`,

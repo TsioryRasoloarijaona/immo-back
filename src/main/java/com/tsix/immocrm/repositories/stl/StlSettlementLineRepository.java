@@ -84,6 +84,12 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
             " GROUP BY f.cfgCustomer.id")
     List<Object[]> sumAmountGroupedByClientId(List<UUID> clientIds);
 
+    /** Tuple : [cfgCustomerId, montantRegle] des seuls dossiers donnés (déjà filtrés par l'appelant). */
+    @Query("SELECT f.cfgCustomer.id, SUM(l.amount) FROM StlSettlementLine l "
+            + "JOIN l.stlSettlement st JOIN l.comDocument d JOIN d.comFolder f "
+            + "WHERE f.id IN :dossierIds" + COMPTE + " GROUP BY f.cfgCustomer.id")
+    List<Object[]> sumAmountGroupedByClientIdDesDossiers(List<UUID> dossierIds);
+
     /** Tri par date du règlement, celui du tableau "FolderLines" de la Fiche Trop Perçu du légataire. */
     @Query("SELECT l FROM StlSettlementLine l JOIN l.comDocument d " +
             "WHERE d.comFolder.id = :dossierId " +

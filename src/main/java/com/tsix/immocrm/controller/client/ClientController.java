@@ -67,6 +67,7 @@ public class ClientController {
     }
 
     @GetMapping("/{id}")
+    @ApiResponse(responseCode = "404", description = "Aucun tier avec cet id, ou client hors de l'agence du compte.")
     public ProspectDetailDto findById(@PathVariable UUID id) {
         return prospectService.findById(id);
     }

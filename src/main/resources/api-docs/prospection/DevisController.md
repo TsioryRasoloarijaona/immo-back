@@ -18,6 +18,8 @@ celles sans tranche, dont le projet ne se résout pas). Ce filtre s'ajoute aux f
 demander explicitement une `trancheId` hors périmètre renvoie une page vide, pas une erreur.
 `sommePrixVenteTTCPage` porte donc sur les seules lignes visibles.
 
+**Compte agence** : seulement les offres dont la prospection est de son agence (`FEATURE-agences-vente.md` V7).
+
 ### param trancheId
 
 Id(s) de tranche (CfgTranche.id). Répéter le paramètre pour plusieurs tranches
