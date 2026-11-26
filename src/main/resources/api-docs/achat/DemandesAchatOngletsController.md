@@ -40,17 +40,21 @@ Ordre des refus : 404 → 403 (`…toolAddQuote`) → 409 (demande non dernière
 
 Le corps liste les lignes à changer (`ligneId` = ligne de ce devis). Ordre des refus : 404 (demande) → 403 (`…toolAddQuote`) → 409 (demande non dernière, hors phase offres) → 404 (devis d'une autre demande) → 400 (ligne inconnue, prix négatif, remise hors de 0..1) → 409 (offre écartée). Totaux du devis recalculés.
 
+## importerOffre
+
+Multipart `fichier` (.xlsx au format de l'export du bordereau du lot : en-têtes lus par nom, `Code` obligatoire ; `P.U. HT`, `Remise` et `FODEC` lus, en pourcentage pour `Remise` et `FODEC` ; rangées d'unité `GROUPE` ignorées). Chaque rangée met à jour la ligne de l'offre de même code (cellule vide = valeur inchangée) ; un code absent de l'offre est ignoré et compté dans `codesIgnores` ; une ligne de l'offre absente du fichier reste inchangée. Mêmes droits, refus et totaux que `modifierOffre` ; 400 aussi pour un fichier illisible ou sans colonne `Code`. Aucune écriture si une rangée est refusée.
+
 ## supprimerOffre
 
 Ordre des refus : 404 → 403 (`…toolDeleteQuote`) → 409 : demande non dernière, hors phase offres, offre sélectionnée.
 
 ## selectionnerOffre
 
-Ordre des refus : 404 → 403 (`…toolSelectDeselectQuote`) → 409 : demande non dernière, hors phase sélection (`BoolField004`, jamais ouverte pour un lot multi-fournisseur), demande sans lot, lot ayant un décompte ou des affectations de décomposition, fournisseur écarté. Seule cette offre reste sélectionnée ; fournisseur de la demande = celui de l'offre ; délai de paiement = celui du fournisseur si celui de la demande est nul ou négatif.
+Ordre des refus : 404 → 403 (`…toolSelectDeselectQuote`) → 409 : demande non dernière, hors phase sélection (`BoolField004`), demande sans lot ; lot non multi-fournisseur ayant un décompte ou des affectations de décomposition ; lot multi-fournisseur ayant un document autre qu'une offre rattaché à la demande ; fournisseur écarté. Puis, si la demande a au moins 2 offres (écartées comprises) et que le net à payer (`AmountToPay`) de l'offre choisie égale leur maximum, 409 avec `code = "OFFRE_LA_PLUS_DISANTE"` et le message « Voulez vous continuer avec l'offre la plus disante ? » tant que `confirme` ≠ `true`. Seule cette offre reste sélectionnée ; fournisseur de la demande = celui de l'offre ; délai de paiement = celui du fournisseur si celui de la demande est nul ou négatif.
 
 ## deselectionnerOffres
 
-Mêmes droits et refus que la sélection (sans le fournisseur écarté). Toutes les offres désélectionnées, bordereau de la demande vidé (groupes et lignes), fournisseur de la demande retiré ; le bordereau du lot reste intact.
+Mêmes droits et refus que la sélection (sans le fournisseur écarté ni la confirmation), plus 409 « Vous ne pouvez pas désélectionner une offre non sélectionnée. » si aucune offre n'est sélectionnée. Toutes les offres désélectionnées, bordereau de la demande vidé (groupes et lignes), fournisseur de la demande retiré ; le bordereau du lot reste intact.
 
 ## comparaison
 

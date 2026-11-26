@@ -278,6 +278,7 @@ class DemandesAchatOffresTest {
         UUID tb = tiers("SELB");
         demandes.poser("CfgTier", tb, "PaymentDelay", 45);
         UUID oa = b.offre(dia, ta, c.code("OSELA"), true);
+        achat.montants(oa, "100", "100", "100"); // LC7 R6 : ob n'est pas la plus disante
         UUID ob = b.offre(dia, tb, c.code("OSELB"), false);
 
         Reponse r = appels.poster(qLibre, dia, selection(ob), corps());
@@ -317,6 +318,7 @@ class DemandesAchatOffresTest {
         b.preselection(dia, retenu, DEPOT);
         UUID oEcartee = b.offre(dia, ecarte, c.code("OSECA"), false);
         achat.poser(oEcartee, "IsRejected", true);
+        achat.montants(oEcartee, "100", "100", "100"); // LC7 R6 : le témoin n'est pas la plus disante
         UUID oRetenue = b.offre(dia, retenu, c.code("OSECB"), false);
 
         Reponse refus = appels.poster(qLibre, dia, selection(oEcartee), corps());
@@ -352,20 +354,17 @@ class DemandesAchatOffresTest {
     }
 
     @Test
-    void r8_selection_lotMulti_409() throws Exception {
+    void r1_selection_lotMultiSansBonDeCommande_200() throws Exception {
+        // LC7 R1 : un lot multi-fournisseur sans pièce non devis rattachée ne bloque plus la sélection
         UUID dia = dia("SLM", c.prep());
         b.lotDe(c, dia, "LSLM-" + c.jeton(), true);
         UUID o = b.offre(dia, tiers("SLM"), c.code("OSLM"), false);
-        UUID diaTemoin = dia("SLN", c.prep());
-        b.lotDe(c, diaTemoin, "LSLN-" + c.jeton(), false);
-        UUID oTemoin = b.offre(diaTemoin, tiers("SLN"), c.code("OSLN"), false);
 
-        Reponse refus = appels.poster(qLibre, dia, selection(o), corps());
-        Reponse temoin = appels.poster(qLibre, diaTemoin, selection(oTemoin), corps());
+        Reponse r = appels.poster(qLibre, dia, selection(o), corps());
 
         SoftAssertions.assertSoftly(s -> {
-            s.assertThat(refus.statut()).as(refus.corps()).isEqualTo(409);
-            s.assertThat(temoin.statut()).as(temoin.corps()).isBetween(200, 299);
+            s.assertThat(r.statut()).as(r.corps()).isEqualTo(200);
+            s.assertThat(b.lignes(OFFRE, o.toString()).getFirst()).containsEntry(SELECTIONNEE, true);
         });
     }
 

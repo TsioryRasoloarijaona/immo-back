@@ -128,7 +128,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        if (ex.code() != null) {
+            probleme.setProperty("code", ex.code());
+        }
+        return probleme;
     }
 
     /** Référentiel du légataire incomplet (ex. statut RESERVATION absent) : défaut d'installation, pas de saisie. */

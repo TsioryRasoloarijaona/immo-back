@@ -16,12 +16,14 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** R20 : clôture d'une DIA à lot non multi = bordereau définitif du lot régénéré (OMRAN {@code GenerateLinesForMarket}). */
 @Component
@@ -46,14 +48,17 @@ class GenerationBordereauLot {
                         order by b.code""", BuyDocument.class)
                 .setParameter("id", d.getId()).setMaxResults(1).getResultStream().findFirst()
                 .orElseThrow(() -> new ConflictException("Aucune offre n'est sélectionnée !"));
-        Map<String, BigDecimal> prix = em.createQuery("select l from BuyDocumentLine l where l.buyDocumentId = :id",
-                        BuyDocumentLine.class).setParameter("id", offre.getId()).getResultStream()
-                .collect(Collectors.toMap(l -> cle(l.getCode()), GenerationBordereauLot::apresRemise, (a, b) -> a));
         List<BuySelectionLine> lignes = bordereau.lignes(d.getId());
-        Set<String> codes = lignes.stream().map(l -> cle(l.getCode())).collect(Collectors.toSet());
-        if (!codes.equals(prix.keySet())) {
-            throw new ConflictException(CODE_INTROUVABLE);
-        }
+        Set<String> codes = uniques(lignes.stream().map(l -> cle(l.getCode())).toList());
+        List<BuyDocumentLine> lignesOffre = em.createQuery("select l from BuyDocumentLine l where l.buyDocumentId = :id",
+                BuyDocumentLine.class).setParameter("id", offre.getId()).getResultList();
+        uniques(lignesOffre.stream().map(l -> cle(l.getCode())).toList());
+        Map<String, BigDecimal> prix = lignesOffre.stream()
+                .collect(Collectors.toMap(l -> cle(l.getCode()), GenerationBordereauLot::apresRemise));
+        Stream.concat(codes.stream().filter(c -> !prix.containsKey(c)), prix.keySet().stream().filter(c -> !codes.contains(c)))
+                .sorted().findFirst().ifPresent(c -> {
+                    throw new ConflictException(CODE_INTROUVABLE + " " + c);
+                });
         bordereauLot.remplacerDefinitif(lot, new BordereauSaisieDto(
                 bordereau.groupes(d.getId()).stream().map(g -> new GroupeSaisieDto(g.getId(), g.getParentId(), g.getSorting(),
                         g.getCode(), g.getDescription(), g.getNotes())).toList(),
@@ -80,6 +85,15 @@ class GenerationBordereauLot {
     /** {@code AmountHTAfterDiscount} : PU HT × (1 − remise). */
     private static BigDecimal apresRemise(BuyDocumentLine l) {
         return zero(l.getUnitPriceHT()).multiply(BigDecimal.ONE.subtract(zero(l.getDiscountRatio())));
+    }
+
+    /** R4 ({@code BuySelection.Verif}) : l'appariement par code exige des codes uniques. */
+    private static Set<String> uniques(List<String> codes) {
+        Set<String> vus = new HashSet<>();
+        codes.stream().filter(c -> !vus.add(c)).findFirst().ifPresent(c -> {
+            throw new ConflictException("Le code %s doit être unique pour les lignes du bordereaux !".formatted(c));
+        });
+        return vus;
     }
 
     private static String cle(String code) {

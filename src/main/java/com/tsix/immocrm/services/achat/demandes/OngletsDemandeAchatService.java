@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.achat.demandes;
 import com.tsix.immocrm.dto.achat.demandes.BonCommandeDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.DemandeAchatFiche;
 import com.tsix.immocrm.dto.achat.demandes.FournisseurDemandeAchat;
+import com.tsix.immocrm.dto.achat.demandes.ImportOffreDemandeAchatDto;
 import com.tsix.immocrm.dto.achat.demandes.ModaliteDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.OffreDemandeAchat;
 import com.tsix.immocrm.dto.achat.demandes.PhasesDemandeAchat;
@@ -118,8 +119,14 @@ public class OngletsDemandeAchatService {
     }
 
     @Transactional
-    public DemandeAchatFiche selectionnerOffre(UUID id, UUID oid) {
-        offres.selectionner(ecriture(id, SELECTION_OFFRE, PhasesDemandeAchat::selection), oid);
+    public ImportOffreDemandeAchatDto importerOffre(UUID id, UUID oid, MultipartFile fichier) {
+        ecriture(id, AJOUT_OFFRE, PhasesDemandeAchat::offres);
+        return ImportOffreDemandeAchat.importer(offres, id, oid, fichier);
+    }
+
+    @Transactional
+    public DemandeAchatFiche selectionnerOffre(UUID id, UUID oid, boolean confirme) {
+        offres.selectionner(ecriture(id, SELECTION_OFFRE, PhasesDemandeAchat::selection), oid, confirme);
         return demandes.fiche(id);
     }
 
