@@ -8,6 +8,8 @@ import com.tsix.immocrm.services.droits.DroitsOmran;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.UUID;
 
 /** Impression « Paiement approuvé » d'une facture d'achat (FEATURE-lc8b-paiement-approuve.md). */
@@ -33,6 +35,20 @@ public class PaiementApprouveService {
 
     /** PDF rendu et code de la pièce (nom du fichier). */
     public record Impression(String code, byte[] pdf) {
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Impression i && Objects.equals(code, i.code) && Arrays.equals(pdf, i.pdf);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hashCode(code) + Arrays.hashCode(pdf);
+        }
+
+        @Override
+        public String toString() {
+            return "Impression[code=" + code + ", pdf=" + (pdf == null ? 0 : pdf.length) + " octets]";
+        }
     }
 
     /** Ordre des refus : 404 (fiche invisible) → 403 (droit) → 409 (nature). */
