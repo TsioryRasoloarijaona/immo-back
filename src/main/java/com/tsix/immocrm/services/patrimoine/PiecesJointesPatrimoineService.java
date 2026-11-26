@@ -8,7 +8,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.services.patrimoine.prospectionterrain.ProspectionTerrainService;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.cfg.TrancheVisibleRepository;
-import com.tsix.immocrm.repositories.stk.StkItemRepository;
+import com.tsix.immocrm.services.perimetre.ArticlesVisibles;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.services.piecejointe.PieceJointeSupport;
 import com.tsix.immocrm.services.piecejointe.PorteurDepot;
@@ -27,16 +27,16 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PiecesJointesPatrimoineService {
 
-    private final StkItemRepository itemRepository;
+    private final ArticlesVisibles articles;
     private final TrancheVisibleRepository trancheRepository;
     private final ProjetService projetService;
     private final PieceJointeSupport support;
     private final ProspectionTerrainService prospectionTerrainService;
 
-    public PiecesJointesPatrimoineService(StkItemRepository itemRepository, TrancheVisibleRepository trancheRepository,
+    public PiecesJointesPatrimoineService(ArticlesVisibles articles, TrancheVisibleRepository trancheRepository,
                                           ProjetService projetService, PieceJointeSupport support,
                                           ProspectionTerrainService prospectionTerrainService) {
-        this.itemRepository = itemRepository;
+        this.articles = articles;
         this.trancheRepository = trancheRepository;
         this.projetService = projetService;
         this.support = support;
@@ -70,7 +70,7 @@ public class PiecesJointesPatrimoineService {
     /** Porteur visible (R4, 404 sinon), avec la {@code Category} et la {@code CategoryDescription} d'OMRAN. */
     PorteurDepot porteur(String segment, UUID id) {
         return switch (segment) {
-            case "articles" -> article(itemRepository.findVisible(id)
+            case "articles" -> article(articles.trouver(id)
                     .orElseThrow(() -> new ResourceNotFoundException("Article introuvable: " + id)));
             case "tranches" -> {
                 CfgTranche t = trancheRepository.exigerVisible(id);
