@@ -16,7 +16,11 @@ final class ListeBlancheAgence {
     private static final Set<String> TOUTES = Set.of();
     private static final Set<String> GET = Set.of("GET");
     private static final Set<String> POST = Set.of("POST");
-    private static final Set<String> POST_DELETE = Set.of("POST", "DELETE");
+    private static final Set<String> GET_POST_DELETE = Set.of("GET", "POST", "DELETE");
+    private static final String ONGLETS_DOSSIER = "fiche|historique|montants|echeancier|reglements|pieces-jointes"
+            + "|payeurs|actions|compteurs|visites-techniques";
+    private static final String COLONNES_CACHEES = "encaissements|impayes|suivi-actions|etat-des-ventes"
+            + "|suivi-affectations|suivi-commerciaux";
 
     private record Regle(Set<String> methodes, PathPattern motif) {
         boolean couvre(String methode, PathContainer chemin) {
@@ -51,12 +55,24 @@ final class ListeBlancheAgence {
             regle(GET, "/api/tranches/*"),
             regle(GET, "/api/tranches/*/articles"),
             regle(GET, "/api/tranches/*/fiche.pdf"),
-            // Dossiers : lectures, documents en lot, photo du chèque ; aucune autre écriture
-            regle(GET, "/api/dossiers/**"),
+            // Dossiers : liste, fiche et ses onglets, documents, photo du chèque ; ni désistement ni autre écriture
+            regle(GET, "/api/dossiers"),
+            regle(GET, "/api/dossiers/*"),
+            regle(GET, "/api/dossiers/*/{onglet:" + ONGLETS_DOSSIER + "}"),
+            regle(GET, "/api/dossiers/*/echeancier/*/reglements"),
+            regle(GET, "/api/dossiers/*/pieces-jointes/*/fichier"),
+            regle(GET, "/api/dossiers/*/documents/*"),
+            regle(GET, "/api/dossiers/*/reglements/*/documents/*"),
             regle(POST, "/api/dossiers/documents/*"),
-            regle(POST_DELETE, "/api/dossiers/*/reglements/*/pieces-jointes/**"),
+            regle(GET_POST_DELETE, "/api/dossiers/*/reglements/*/pieces-jointes/**"),
             // Listes déroulantes
             regle(GET, "/api/referentiels/**"));
+
+    // Écrans cachés servis sous un préfixe ouvert : refusés avant la liste blanche.
+    private static final List<Regle> REFUS = List.of(
+            regle(POST, "/api/prospections/*/transformer"),
+            regle(GET, "/api/referentiels/colonnes/{ecran:" + COLONNES_CACHEES + "}"),
+            regle(GET, "/api/referentiels/motifs-desistement"));
 
     private ListeBlancheAgence() {
     }
@@ -64,7 +80,8 @@ final class ListeBlancheAgence {
     /** {@code motif} = motif de route Spring ({@code /api/dossiers/{id}}) : un {@code *} y couvre une variable. */
     static boolean autorise(String methode, String motif) {
         PathContainer chemin = PathContainer.parsePath(motif);
-        return REGLES.stream().anyMatch(r -> r.couvre(methode, chemin));
+        return REFUS.stream().noneMatch(r -> r.couvre(methode, chemin))
+                && REGLES.stream().anyMatch(r -> r.couvre(methode, chemin));
     }
 
     private static Regle regle(Set<String> methodes, String motif) {

@@ -17,6 +17,8 @@ import java.util.List;
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
+    private static final String TOUTE_L_API = "/api/**";
+
     private final RoutesFermeesAgenceInterceptor routesFermeesAgenceInterceptor;
     private final PerimetreInterceptor perimetreInterceptor;
     private final SuiviUtilisateursInterceptor suiviUtilisateursInterceptor;
@@ -36,11 +38,11 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // En premier : le 403 agence passe avant le 404 de périmètre (FEATURE-agences-vente.md R-V9).
-        registry.addInterceptor(routesFermeesAgenceInterceptor).addPathPatterns("/api/**");
+        registry.addInterceptor(routesFermeesAgenceInterceptor).addPathPatterns(TOUTE_L_API);
         registry.addInterceptor(perimetreInterceptor)
                 .addPathPatterns("/api/dossiers/**", "/api/prospections/**",
                         "/api/pre-prospections/**", "/api/encaissements/**");
-        registry.addInterceptor(suiviUtilisateursInterceptor).addPathPatterns("/api/**");
+        registry.addInterceptor(suiviUtilisateursInterceptor).addPathPatterns(TOUTE_L_API);
     }
 
     /**
@@ -58,7 +60,7 @@ public class CorsConfig implements WebMvcConfigurer {
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        source.registerCorsConfiguration(TOUTE_L_API, config);
         return source;
     }
 }
