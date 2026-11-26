@@ -150,13 +150,14 @@ class OffresDemandeAchat {
         }
     }
 
-    /** P.U. TTC de chaque ligne et totaux HT / TVA / TTC du devis, puis offre relue. */
+    /** P.U. TTC de chaque ligne, totaux HT / TVA / TTC et net à payer du devis (comparé par R6), puis offre relue. */
     OffreDemandeAchat recalculer(UUID dia, BuyDocument o, Collection<BuyDocumentLine> lignes) {
         lignes.forEach(l -> l.setUnitPriceTTC(montants(l).prixTTC()));
         MontantsPieceAchat.Totaux t = MontantsPieceAchat.totaux(lignes.stream().map(OffresDemandeAchat::montants).toList());
         o.setAmountHT(t.ht());
         o.setAmountVat(t.tva());
         o.setAmountTTC(t.ttc());
+        ecriture.recalculerNetAPayer(o.getId());
         em.flush();
         return offres(dia, true).stream().filter(x -> x.id().equals(o.getId())).findFirst().orElseThrow();
     }
