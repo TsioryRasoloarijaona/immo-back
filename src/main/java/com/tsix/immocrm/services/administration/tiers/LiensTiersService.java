@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.administration.tiers;
 
+import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.dto.administration.tiers.LienTiersDto;
 import com.tsix.immocrm.dto.administration.tiers.LienTiersRequest;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
@@ -51,6 +52,11 @@ public class LiensTiersService {
         CfgRelationType relation = relation(corps.relationTypeId());
         if (liens.existsByCfgTierIdAndCfgContactId(tiersId, contact.getId())) {
             throw new ConflictException("Ce contact est déjà lié à ce tiers.");
+        }
+        if (relation != null && RoleAgence.RELATION_VENDEUR.equals(relation.getCode())
+                && liens.existsByCfgContactIdAndCfgRelationTypeCodeAndCfgTierIdNot(contact.getId(),
+                RoleAgence.RELATION_VENDEUR, tiersId)) {
+            throw new ConflictException("Ce vendeur est déjà lié à une autre agence.");
         }
         TracePatrimoine.Trace trace = traces.maintenant();
         CfgTierContact lien = new CfgTierContact();

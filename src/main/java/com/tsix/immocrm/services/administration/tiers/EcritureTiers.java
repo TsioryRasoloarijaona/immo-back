@@ -20,6 +20,7 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierKind;
 import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.entities.stl.StlCurrency;
+import com.tsix.immocrm.exceptions.ConfigurationManquanteException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.ConstraintViolation;
@@ -139,11 +140,23 @@ record EcritureTiers(EntityManager em, Validator validator) {
     }
 
     CfgTierKind nature(UUID id, FamilleTiers famille) {
+        if (id == null && famille.codeNature().isPresent()) {
+            return natureImposee(famille, famille.codeNature().orElseThrow());
+        }
         CfgTierKind nature = ref(CfgTierKind.class, id, "natureId");
-        if (nature != null && !estDuType(nature.getCfgTierType(), famille.codeType())) {
+        if (nature != null && (!estDuType(nature.getCfgTierType(), famille.codeType())
+                || !famille.contient(famille.codeType(), nature.getCode()))) {
             throw inconnue("natureId");
         }
         return nature;
+    }
+
+    private CfgTierKind natureImposee(FamilleTiers famille, String code) {
+        return em.createQuery("select k from CfgTierKind k where k.code = :code and k.cfgTierType.code = :type"
+                        + " order by k.id", CfgTierKind.class)
+                .setParameter("code", code).setParameter("type", famille.codeType()).setMaxResults(1)
+                .getResultStream().findFirst()
+                .orElseThrow(() -> new ConfigurationManquanteException("Nature de tiers absente : " + code));
     }
 
     private CfgTier banque(UUID id) {

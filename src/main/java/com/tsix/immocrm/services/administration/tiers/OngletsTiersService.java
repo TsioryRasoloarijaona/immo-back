@@ -121,7 +121,7 @@ public class OngletsTiersService {
 
     private static boolean prevu(FamilleTiers famille, Onglet onglet) {
         return switch (famille) {
-            case FOURNISSEURS, CONTACTS -> onglet != Onglet.CONGES;
+            case FOURNISSEURS, CONTACTS, AGENCES -> onglet != Onglet.CONGES;
             case PERSONNELS -> true;
             case BANQUES, ORGANISMES -> false;
         };
