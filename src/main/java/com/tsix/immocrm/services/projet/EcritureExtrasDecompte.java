@@ -102,7 +102,10 @@ final class EcritureExtrasDecompte {
         Map<UUID, E> parId = existants.stream().collect(Collectors.toMap(idExistant, Function.identity(), (a, b) -> a));
         List<Paire<S, E>> paires = new ArrayList<>();
         for (S s : saisies) {
-            UUID id = idSaisie.apply(Objects.requireNonNull(s, "Ligne vide."));
+            if (s == null) {
+                throw new InvalidRequestException("Ligne vide.");
+            }
+            UUID id = idSaisie.apply(s);
             E existant = id == null ? null : parId.get(id);
             if (id != null && existant == null) {
                 throw new InvalidRequestException(inconnu + id + ".");
