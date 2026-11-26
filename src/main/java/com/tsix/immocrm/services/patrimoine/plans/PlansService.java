@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -48,9 +47,9 @@ public class PlansService {
     }
 
     public List<TrancheAvecPlansDto> tranchesAvecPlans() {
-        Optional<List<UUID>> projets = perimetre.perimetreCourant();
+        java.util.function.Predicate<UUID> projetVisible = perimetre.projetVisible();
         return plans.tranchesVisiblesAvecPlans().stream()
-                .filter(l -> AccesPlans.dansPerimetre(projets, (UUID) l[3]))
+                .filter(l -> projetVisible.test((UUID) l[3]))
                 .map(l -> new TrancheAvecPlansDto((UUID) l[0], (String) l[1], (String) l[2], (String) l[4],
                         ((Number) l[5]).longValue()))
                 .toList();
