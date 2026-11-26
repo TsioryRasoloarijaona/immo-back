@@ -23,6 +23,7 @@ import com.tsix.immocrm.entities.stk.StkVocation;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.services.perimetre.ArticlesVisibles;
+import org.springframework.data.jpa.domain.Specification;
 import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -197,7 +198,8 @@ public class ArticleService {
 
     private ArticleDetailDto toDetail(StkItem item) {
         UUID id = item.getId();
-        List<StkItem> sousArticlesItems = stkItemRepository.findByParentId(id);
+        Specification<StkItem> enfants = (root, query, cb) -> cb.equal(root.get("parent").get("id"), id);
+        List<StkItem> sousArticlesItems = stkItemRepository.findAll(enfants.and(articles.filtre()));
         Map<UUID, ComFolder> dossiers = lignes.dossiers(Stream.concat(Stream.of(item), sousArticlesItems.stream()).toList());
         BigDecimal superficieSousArticles = sousArticlesItems.stream()
                 .map(StkItem::getArea).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
