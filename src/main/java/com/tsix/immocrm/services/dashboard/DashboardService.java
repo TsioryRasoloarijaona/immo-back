@@ -4,6 +4,7 @@ import com.tsix.immocrm.domain.StatutDossier;
 import com.tsix.immocrm.dto.dashboard.DashboardDto;
 import com.tsix.immocrm.dto.dashboard.EtapeCountDto;
 import com.tsix.immocrm.dto.dashboard.RelanceDto;
+import com.tsix.immocrm.entities.com.ComFolder;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.services.dossier.DossierService;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -60,9 +62,12 @@ public class DashboardService {
         List<Object[]> rows = perimetre
                 .map(folderRepository::findDashboardProjectionDansPerimetre)
                 .orElseGet(folderRepository::findDashboardProjection);
+        boolean agence = perimetreService.vendeursAgenceCourante().isPresent();
+        if (agence) {
+            rows = garder(rows, idsDossiersVisibles());
+        }
         if (trancheId != null) {
-            Set<UUID> dossiersDeLaTranche = dossierService.idsDossiersDeTranche(trancheId);
-            rows = rows.stream().filter(row -> dossiersDeLaTranche.contains(row[0])).toList();
+            rows = garder(rows, dossierService.idsDossiersDeTranche(trancheId));
         }
         LocalDateTime now = LocalDateTime.now(clock);
 
@@ -109,7 +114,7 @@ public class DashboardService {
 
         long prospectionsOuvertes;
         long prospectionsTotal;
-        if (trancheId != null) {
+        if (trancheId != null || agence) {
             prospectionsOuvertes = prospectionService.compterProspections(trancheId, Boolean.TRUE);
             prospectionsTotal = prospectionService.compterProspections(trancheId, null);
         } else {
@@ -123,6 +128,17 @@ public class DashboardService {
 
         return new DashboardDto(valeurPipeline, panierMoyen, dossiersParEtape, relancesEnRetard,
                 prospectionsOuvertes, prospectionsTotal);
+    }
+
+    private static List<Object[]> garder(List<Object[]> rows, Set<UUID> ids) {
+        return rows.stream().filter(row -> ids.contains(row[0])).toList();
+    }
+
+    /** Agence : mêmes lignes que sa liste de dossiers (R-V8), la projection ne filtrant que par projet. */
+    private Set<UUID> idsDossiersVisibles() {
+        return folderRepository.findAll(perimetreService.filtreDossiers()).stream()
+                .map(ComFolder::getId)
+                .collect(Collectors.toSet());
     }
 
     /** Une relance sans {@code ValidityDate} n'est jamais en retard ; si les deux le sont, la plus ancienne. */

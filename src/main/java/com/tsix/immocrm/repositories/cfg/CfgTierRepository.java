@@ -38,6 +38,10 @@ public interface CfgTierRepository extends JpaRepository<CfgTier, UUID>, JpaSpec
             + "OR right(replace(replace(replace(replace(replace(replace(coalesce(t.mobile, ''), ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '+', ''), 9) = :normalizedPhone")
     List<CfgTier> findByNormalizedPhone(@Param("normalizedPhone") String normalizedPhone);
 
+    /** Numéro de pièce d'identité (CIN), sans casse ni espaces de bord ; {@code numero} attendu en minuscules. */
+    @Query("SELECT t FROM CfgTier t WHERE lower(trim(t.iDNumber)) = :numero")
+    List<CfgTier> findByNumeroPiece(@Param("numero") String numero);
+
     /**
      * Trois colonnes : l'ordre des mots de {@code Description} n'est pas garanti. Native pour {@code COLLATE} :
      * la base est en {@code French_CI_AS}, « Hejer » ne trouverait pas « Héjér ». {@code limite} borne le

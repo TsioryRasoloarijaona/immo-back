@@ -289,7 +289,7 @@ public class ProspectionService {
      */
     public long compterProspections(UUID trancheId, Boolean ouvertes) {
         return prospectionRepository.count(specProspections(new CriteresListe(null, null, null,
-                List.of(trancheId), false, PeriodeListe.AUCUNE, null, ouvertes), null)
+                trancheId == null ? List.of() : List.of(trancheId), false, PeriodeListe.AUCUNE, null, ouvertes), null)
                 .and(perimetreService.filtreProspections()));
     }
 

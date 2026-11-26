@@ -91,9 +91,7 @@ public class ProspectSubResourcesService {
     }
 
     private void requireProspect(UUID id) {
-        if (!tierRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Prospect introuvable: " + id);
-        }
+        prospectService.prospectVisible(id);
     }
 
     /**
@@ -175,8 +173,7 @@ public class ProspectSubResourcesService {
     }
 
     private ContactProspectDto creerContact(UUID prospectId, CreerContactProspectRequest request) {
-        CfgTier prospect = tierRepository.findById(prospectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prospect introuvable: " + prospectId));
+        CfgTier prospect = prospectService.prospectVisible(prospectId);
         if (request.relationTypeId() == null) {
             throw new InvalidRequestException("relationTypeId est requis");
         }

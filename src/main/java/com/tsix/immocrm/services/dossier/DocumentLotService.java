@@ -13,7 +13,6 @@ import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -93,17 +92,14 @@ public class DocumentLotService {
 
     /**
      * Échoue au premier id inconnu plutôt que de l'ignorer. Ids dans le <b>corps</b>, hors de portée
-     * de {@code PerimetreInterceptor} (URL seulement) : le périmètre est vérifié à la main, 404 hors périmètre.
+     * de {@code PerimetreInterceptor} (URL seulement) : le périmètre de <b>tous</b> les ids est vérifié avant le
+     * premier rendu (404), sinon un refus métier sur un id visible masquerait l'id hors périmètre.
      */
     private byte[] genererLot(List<UUID> dossierIds, Function<UUID, byte[]> genererUnDocument) {
         if (dossierIds == null || dossierIds.isEmpty()) {
             throw new InvalidRequestException("dossierIds est requis et ne peut pas être vide");
         }
-        List<byte[]> documents = new ArrayList<>(dossierIds.size());
-        for (UUID dossierId : dossierIds) {
-            perimetreService.verifierAccesDossier(dossierId);
-            documents.add(genererUnDocument.apply(dossierId));
-        }
-        return pdfMerger.merge(documents);
+        dossierIds.forEach(perimetreService::verifierAccesDossier);
+        return pdfMerger.merge(dossierIds.stream().map(genererUnDocument).toList());
     }
 }

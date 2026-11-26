@@ -10,6 +10,7 @@ import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.repositories.com.ComDocumentRepository;
 import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementLineRepository;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import com.tsix.immocrm.services.tranche.AppartenanceTranche;
 import jakarta.persistence.criteria.Join;
@@ -44,10 +45,13 @@ public class ClientService {
     private final ComFolderRepository folderRepository;
     private final ComDocumentRepository documentRepository;
     private final StlSettlementLineRepository settlementLineRepository;
+    private final PerimetreCommercialService perimetre;
 
     public ClientService(CfgTierRepository tierRepository, ComFolderRepository folderRepository,
                           ComDocumentRepository documentRepository,
-                          StlSettlementLineRepository settlementLineRepository) {
+                          StlSettlementLineRepository settlementLineRepository,
+                          PerimetreCommercialService perimetre) {
+        this.perimetre = perimetre;
         this.tierRepository = tierRepository;
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
@@ -96,7 +100,7 @@ public class ClientService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Page<CfgTier> page = tierRepository.findAll(spec, pageable);
+        Page<CfgTier> page = tierRepository.findAll(spec.and(perimetre.filtreProspects()), pageable);
         // Page vide : pas de requête d'agrégat sur un « IN () ».
         return page.isEmpty() ? page.map(t -> toDto(t, 0, BigDecimal.ZERO, BigDecimal.ZERO)) : enrichirAvecAgregats(page);
     }

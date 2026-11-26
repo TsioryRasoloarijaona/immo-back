@@ -6,6 +6,7 @@ import com.tsix.immocrm.dto.perimetre.ProjetPerimetreDto;
 import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.adm.AdmUserHabilitation;
 import com.tsix.immocrm.entities.cfg.CfgProject;
+import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTranche;
 import com.tsix.immocrm.entities.com.ComActionMessage;
 import com.tsix.immocrm.entities.com.ComDocument;
@@ -26,6 +27,7 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.com.ComProspectionRepository;
 import com.tsix.immocrm.repositories.stl.StlSettlementRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.prospection.DiscriminantPreProspection;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -34,6 +36,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -59,6 +62,8 @@ public class PerimetreCommercialService {
     private static final String STK_HIERARCHY = "stkHierarchy";
     private static final String CFG_PROJECT = "cfgProject";
     private static final String COM_FOLDER = "comFolder";
+    private static final String COM_PROSPECTION = "comProspection";
+    private static final String CFG_COMMERCIAL = "cfgCommercial";
 
     private final AdmUserHabilitationRepository habilitationRepository;
     private final AgenceDuCompte agenceDuCompte;
@@ -177,12 +182,16 @@ public class PerimetreCommercialService {
      * est une FK vers {@code CfgTranche} malgré son nom (§4). Jointures LEFT : le NULL reste visible (§6.4).
      */
     public Specification<ComFolder> filtreDossiers() {
-        Optional<List<UUID>> perimetre = perimetreCourant();
+        return filtreDossiers(porteeCourante());
+    }
+
+    private static Specification<ComFolder> filtreDossiers(Portee portee) {
         return (root, query, cb) -> {
             Join<ComFolder, StkItem> article = root.join(STK_ITEM, JoinType.LEFT);
             Join<StkItem, CfgTranche> tranche = article.join(STK_HIERARCHY, JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
-            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
+            return portee.appliquer(VisibiliteEntites.depuisProjet(projet, cb), projet.get("id"),
+                    root.get(CFG_COMMERCIAL).get("id"), cb);
         };
     }
 
@@ -222,40 +231,63 @@ public class PerimetreCommercialService {
      * Une pré-prospection n'a jamais de commercial : seul le projet peut la restreindre (§5).
      */
     public Specification<ComProspection> filtreProspections() {
-        return filtreParTranche(STK_HIERARCHY);
+        return filtreProspections(porteeCourante());
+    }
+
+    /** Agence : une pré-prospection reste invisible, même assignée à un de ses vendeurs (R-V8, V5). */
+    private static Specification<ComProspection> filtreProspections(Portee portee) {
+        return (root, query, cb) -> {
+            Join<ComProspection, CfgProject> projet = root.join(STK_HIERARCHY, JoinType.LEFT)
+                    .join(CFG_PROJECT, JoinType.LEFT);
+            Predicate filtre = portee.appliquer(VisibiliteEntites.depuisProjet(projet, cb), projet.get("id"),
+                    root.get(CFG_COMMERCIAL).get("id"), cb);
+            return portee.agence() ? cb.and(filtre, DiscriminantPreProspection.nEstPasPreProspection(root, query, cb))
+                    : filtre;
+        };
     }
 
     /** Ligne portée par une association directe vers {@code CfgTranche} : projet par la tranche, jointures LEFT. */
     public <T> Specification<T> filtreParTranche(String associationTranche) {
-        Optional<List<UUID>> perimetre = perimetreCourant();
+        Portee portee = porteeCourante();
         return (root, query, cb) -> {
             Join<T, CfgTranche> tranche = root.join(associationTranche, JoinType.LEFT);
             Join<CfgTranche, CfgProject> projet = tranche.join(CFG_PROJECT, JoinType.LEFT);
-            return combine(VisibiliteEntites.depuisProjet(projet, cb), projet, perimetre, cb);
+            return portee.appliquer(VisibiliteEntites.depuisProjet(projet, cb), projet.get("id"), null, cb);
         };
     }
 
     /**
      * Visible si une ligne au moins vise un dossier d'un projet du périmètre, ou si aucune ligne ne
-     * résout de projet (§6.4).
+     * résout de projet (§6.4). Agence : une ligne au moins sur un dossier de l'agence (R-V8).
      */
     public Specification<StlSettlement> filtreEncaissements() {
-        Optional<List<UUID>> perimetre = perimetreCourant();
+        return filtreEncaissements(porteeCourante());
+    }
+
+    private static Specification<StlSettlement> filtreEncaissements(Portee portee) {
         return (root, query, cb) -> {
             // Visibilité par la FK société directe (exacte, voir VisibiliteEntites) ; le périmètre,
             // lui, passe par les lignes.
             Predicate visible = VisibiliteEntites.depuisSocieteDirecte(root, "cfgCompany", cb);
-            if (perimetre.isEmpty()) {
+            if (portee.projets().isEmpty()) {
                 return visible;
             }
-            List<UUID> projetIds = perimetre.get();
+            List<UUID> projetIds = portee.projets().get();
 
             Subquery<UUID> dansPerimetre = query.subquery(UUID.class);
             var ligne = dansPerimetre.from(StlSettlementLine.class);
+            var dossier = ligne.get("comDocument").get(COM_FOLDER);
+            Predicate ligneDansPerimetre = dossier.get(STK_ITEM).get(STK_HIERARCHY).get(CFG_PROJECT).get("id")
+                    .in(projetIds);
+            if (portee.agence()) {
+                ligneDansPerimetre = cb.and(ligneDansPerimetre,
+                        dossier.get(CFG_COMMERCIAL).get("id").in(portee.vendeurs()));
+            }
             dansPerimetre.select(ligne.get("id")).where(cb.and(
-                    cb.equal(ligne.get("stlSettlement"), root),
-                    ligne.get("comDocument").get(COM_FOLDER).get(STK_ITEM)
-                            .get(STK_HIERARCHY).get(CFG_PROJECT).get("id").in(projetIds)));
+                    cb.equal(ligne.get("stlSettlement"), root), ligneDansPerimetre));
+            if (portee.agence()) {
+                return cb.and(visible, cb.exists(dansPerimetre));
+            }
 
             Subquery<UUID> avecProjet = query.subquery(UUID.class);
             var ligne2 = avecProjet.from(StlSettlementLine.class);
@@ -273,7 +305,19 @@ public class PerimetreCommercialService {
      * n'en a pas besoin : {@code PerimetreInterceptor} contrôle déjà la prospection porteuse.
      */
     public Specification<StlQuote> filtreDevis() {
-        return filtreParTranche("cfgTranche");
+        Portee portee = porteeCourante();
+        if (!portee.agence()) {
+            return filtreParTranche("cfgTranche");
+        }
+        // Agence : par la prospection de l'offre (R-V8, V7), même règle que la liste des prospections.
+        return (root, query, cb) -> {
+            Subquery<UUID> visibles = query.subquery(UUID.class);
+            Root<ComProspection> prospection = visibles.from(ComProspection.class);
+            visibles.select(prospection.get("id")).where(
+                    cb.equal(prospection.get("id"), root.get(COM_PROSPECTION).get("id")),
+                    filtreProspections(portee).toPredicate(prospection, query, cb));
+            return cb.exists(visibles);
+        };
     }
 
     /**
@@ -281,9 +325,9 @@ public class PerimetreCommercialService {
      * seulement une fois les deux chemins épuisés (§9ter.3). Jointures LEFT pour garder les orphelines.
      */
     public Specification<ComActionMessage> filtreInteractions() {
-        Optional<List<UUID>> perimetre = perimetreCourant();
+        Portee portee = porteeCourante();
         return (root, query, cb) -> {
-            Join<ComActionMessage, ComProspection> prospection = root.join("comProspection", JoinType.LEFT);
+            Join<ComActionMessage, ComProspection> prospection = root.join(COM_PROSPECTION, JoinType.LEFT);
             Join<ComProspection, CfgTranche> trancheProspection = prospection.join(STK_HIERARCHY, JoinType.LEFT);
             Join<CfgTranche, CfgProject> projetProspection = trancheProspection.join(CFG_PROJECT, JoinType.LEFT);
 
@@ -295,23 +339,76 @@ public class PerimetreCommercialService {
             // coalesce = "prospection d'abord, dossier ensuite" ; NULL = les deux chemins épuisés.
             Expression<UUID> projet = cb.coalesce(projetProspection.get("id"), projetDossier.get("id"));
             Predicate visible = VisibiliteEntites.depuisDeuxProjets(projetProspection, projetDossier, cb);
-            if (perimetre.isEmpty()) {
-                return visible;
+            if (!portee.agence()) {
+                return portee.appliquer(visible, projet, null, cb);
             }
-            return cb.and(visible, cb.or(projet.in(perimetre.get()), cb.isNull(projet)));
+            Expression<UUID> commercial = cb.coalesce(prospection.get(CFG_COMMERCIAL).get("id"),
+                    dossier.get(CFG_COMMERCIAL).get("id"));
+            return cb.and(portee.appliquer(visible, projet, commercial, cb),
+                    cb.or(cb.isNull(prospection.get("id")),
+                            DiscriminantPreProspection.nEstPasPreProspection(prospection, query, cb)));
         };
     }
 
     /**
-     * Visibilité (toujours) puis périmètre (si restreint) sur la <b>même</b> jointure : deux
-     * {@code Specification} combinées dupliqueraient les {@code LEFT JOIN} en SQL.
+     * Prospects et clients (V6) : siège sans filtre ; agence = au moins une prospection ou un dossier (client) visible
+     * par {@link #filtreProspections()} / {@link #filtreDossiers()}. Un prospect suivi par personne est invisible.
      */
-    private static Predicate combine(Predicate visibilite, Join<?, CfgProject> projet,
-                                     Optional<List<UUID>> perimetre, CriteriaBuilder cb) {
-        return perimetre
-                .map(projetIds -> cb.and(visibilite,
-                        cb.or(projet.get("id").in(projetIds), cb.isNull(projet.get("id")))))
-                .orElse(visibilite);
+    public Specification<CfgTier> filtreProspects() {
+        Portee portee = porteeCourante();
+        if (!portee.agence()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> {
+            Subquery<UUID> prospections = query.subquery(UUID.class);
+            Root<ComProspection> prospection = prospections.from(ComProspection.class);
+            prospections.select(prospection.get("id")).where(cb.equal(prospection.get("cfgProspect"), root),
+                    filtreProspections(portee).toPredicate(prospection, query, cb));
+            Subquery<UUID> dossiers = query.subquery(UUID.class);
+            Root<ComFolder> dossier = dossiers.from(ComFolder.class);
+            dossiers.select(dossier.get("id")).where(cb.equal(dossier.get("cfgCustomer"), root),
+                    filtreDossiers(portee).toPredicate(dossier, query, cb));
+            return cb.or(cb.exists(prospections), cb.exists(dossiers));
+        };
+    }
+
+    /**
+     * Projets du périmètre (vide = non restreint) et, pour un compte agence, les vendeurs de son agence (vide = siège),
+     * lus une fois par filtre.
+     */
+    private record Portee(Optional<List<UUID>> projets, List<UUID> vendeurs) {
+
+        boolean agence() {
+            return !vendeurs.isEmpty();
+        }
+
+        /**
+         * Visibilité puis périmètre sur la <b>même</b> jointure (deux {@code Specification} dupliqueraient les
+         * {@code LEFT JOIN}). Siège : projet nul visible (§6.4) ; agence : projet nul invisible (R-V4) et, quand
+         * {@code commercial} est fourni, commercial de l'agence, commercial nul invisible (R-V8).
+         */
+        Predicate appliquer(Predicate visibilite, Expression<UUID> projet, Expression<UUID> commercial,
+                            CriteriaBuilder cb) {
+            if (projets.isEmpty()) {
+                return visibilite;
+            }
+            Predicate dansProjets = projet.in(projets.get());
+            if (!agence()) {
+                return cb.and(visibilite, cb.or(dansProjets, cb.isNull(projet)));
+            }
+            return commercial == null ? cb.and(visibilite, dansProjets)
+                    : cb.and(visibilite, dansProjets, cb.isNotNull(commercial), commercial.in(vendeurs));
+        }
+    }
+
+    private Portee porteeCourante() {
+        Optional<UUID> compte = admUserIdCourant();
+        if (compte.isEmpty()) {
+            return new Portee(Optional.empty(), List.of());
+        }
+        List<String> roles = agenceDuCompte.roles(compte.get());
+        List<UUID> vendeurs = RoleAgence.porte(roles) ? agenceDuCompte.vendeursDeLAgence(compte.get()) : List.of();
+        return new Portee(perimetreDe(compte.get(), roles), vendeurs);
     }
 
     // ---------------------------------------------------------------- contrôle d'accès par id
@@ -321,37 +418,51 @@ public class PerimetreCommercialService {
      * le filtre se contourne par les ids. Hors périmètre ou masqué ⇒ 404, jamais 403 (§6.5).
      */
     public void verifierAccesDossier(UUID dossierId) {
-        verifier(projetIds -> folderRepository.existsDansPerimetre(dossierId, projetIds),
+        Portee portee = porteeCourante();
+        verifier(portee, () -> existeParmi(folderRepository, filtreDossiers(portee), dossierId),
+                projetIds -> folderRepository.existsDansPerimetre(dossierId, projetIds),
                 () -> folderRepository.existsVisible(dossierId),
                 "Dossier introuvable: " + dossierId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour une prospection ou une pré-prospection. */
     public void verifierAccesProspection(UUID prospectionId) {
-        verifier(projetIds -> prospectionRepository.existsDansPerimetre(prospectionId, projetIds),
+        Portee portee = porteeCourante();
+        verifier(portee, () -> existeParmi(prospectionRepository, filtreProspections(portee), prospectionId),
+                projetIds -> prospectionRepository.existsDansPerimetre(prospectionId, projetIds),
                 () -> prospectionRepository.existsVisible(prospectionId),
                 "Prospection introuvable: " + prospectionId);
     }
 
     /** Idem {@link #verifierAccesDossier} pour un encaissement (règlement). */
     public void verifierAccesEncaissement(UUID encaissementId) {
-        verifier(projetIds -> settlementRepository.existsDansPerimetre(encaissementId, projetIds),
+        Portee portee = porteeCourante();
+        verifier(portee, () -> existeParmi(settlementRepository, filtreEncaissements(portee), encaissementId),
+                projetIds -> settlementRepository.existsDansPerimetre(encaissementId, projetIds),
                 () -> settlementRepository.existsVisible(encaissementId),
                 "Encaissement introuvable: " + encaissementId);
     }
 
     /**
      * Toujours une requête, même sans périmètre : la visibilité par entité vaut pour tous
-     * ({@code FEATURE-visibilite-transversale-entites.md} R4). « Dans le périmètre » porte déjà les deux.
+     * ({@code FEATURE-visibilite-transversale-entites.md} R4). Agence : la règle de la liste (R-V8).
      */
-    private void verifier(java.util.function.Predicate<List<UUID>> dansPerimetre,
-                          java.util.function.BooleanSupplier visible, String messageSiAbsent) {
-        boolean autorise = perimetreCourant()
-                .map(dansPerimetre::test)
-                .orElseGet(visible::getAsBoolean);
+    private static void verifier(Portee portee, java.util.function.BooleanSupplier visibleAgence,
+                                 java.util.function.Predicate<List<UUID>> dansPerimetre,
+                                 java.util.function.BooleanSupplier visible, String messageSiAbsent) {
+        boolean autorise;
+        if (portee.agence()) {
+            autorise = visibleAgence.getAsBoolean();
+        } else {
+            autorise = portee.projets().map(dansPerimetre::test).orElseGet(visible::getAsBoolean);
+        }
         if (!autorise) {
             throw new ResourceNotFoundException(messageSiAbsent);
         }
+    }
+
+    private static <T> boolean existeParmi(JpaSpecificationExecutor<T> depot, Specification<T> filtre, UUID id) {
+        return depot.exists(filtre.and((root, query, cb) -> cb.equal(root.get("id"), id)));
     }
 
     // ---------------------------------------------------------------- contrôle d'accès en écriture

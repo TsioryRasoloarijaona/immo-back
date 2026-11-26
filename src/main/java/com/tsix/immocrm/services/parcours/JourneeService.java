@@ -85,6 +85,9 @@ public class JourneeService {
     // ---------------------------------------------------------------- nouveaux leads
 
     private BlocLeadsDto nouveauxLeads(@Nullable UUID commercial, LocalDate aujourdhui) {
+        if (perimetreService.vendeursAgenceCourante().isPresent()) {
+            return new BlocLeadsDto(0, java.util.List.of()); // agence : aucun lead (FEATURE-agences-vente.md R-V8, V5)
+        }
         Specification<ComProspection> spec = perimetreService.filtreProspections()
                 .and(LignesParcours.aTrier(commercial, aujourdhui.minusMonths(LignesParcours.MOIS_RECENTS)))
                 .and(LignesParcours.nonTraitee());
