@@ -10,6 +10,7 @@ import com.tsix.immocrm.dto.patrimoine.ZoneProjetEcritureDto;
 import com.tsix.immocrm.services.patrimoine.ProjetService;
 import com.tsix.immocrm.services.patrimoine.fiche.FichePdf;
 import com.tsix.immocrm.services.patrimoine.fiche.FichesPatrimoine;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.web.export.ColonneFixe;
 import com.tsix.immocrm.web.export.DemandeExport;
 import com.tsix.immocrm.web.export.ExportListe;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.tsix.immocrm.domain.TypeExport.DATE;
@@ -79,20 +81,23 @@ public class ProjetController {
     private final ProjetService projetService;
     private final ExportListe export;
     private final FichePdf fichePdf;
+    private final PerimetreCommercialService perimetre;
 
-    public ProjetController(ProjetService projetService, ExportListe export, FichePdf fichePdf) {
+    public ProjetController(ProjetService projetService, ExportListe export, FichePdf fichePdf,
+                            PerimetreCommercialService perimetre) {
         this.projetService = projetService;
         this.export = export;
         this.fichePdf = fichePdf;
+        this.perimetre = perimetre;
     }
 
     @GetMapping
-    @Operation(summary = "Liste paginée des programmes des entités actives (colonnes de la liste OMRAN)")
+    @Operation(summary = "Liste paginée des programmes des entités actives ; compte agence : ses projets affectés seulement")
     public PageDto<ProjetListItemDto> findAll(
             @Parameter(description = RECHERCHE)
             @RequestParam(required = false) String search,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(projetService.findAll(search, pageable));
+        return PageDto.of(projetService.findAll(search, perimetre.projetsAgenceCourante(), pageable));
     }
 
     @GetMapping("/export")
@@ -103,7 +108,7 @@ public class ProjetController {
             @Parameter(description = RECHERCHE) @RequestParam(required = false) String search,
             @Parameter(hidden = true) @SortDefault(sort = "userCreateDateTime", direction = Sort.Direction.DESC) Sort sort) {
         return export.reponse(demande, "projets", "Programmes", ColonneFixe.choisir(demande.colonnes(), COLONNES_EXPORT),
-                () -> LignesExport.toutes(sort, page -> projetService.findAll(search, page)));
+                () -> LignesExport.toutes(sort, page -> projetService.findAll(search, Optional.empty(), page)));
     }
 
     @GetMapping("/{id}")
@@ -203,11 +208,11 @@ public class ProjetController {
 
     @GetMapping("/{id}/tranches")
     @Operation(summary = "Tranches d'un programme")
-    @ApiResponse(responseCode = "404", description = INTROUVABLE)
+    @ApiResponse(responseCode = "404", description = "Programme introuvable, ou hors des projets affectés d'un compte agence.")
     public PageDto<TrancheListItemDto> findTranches(
             @Parameter(description = "Id du programme (CfgProject.PKey).") @PathVariable UUID id,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "userCreateDateTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return PageDto.of(projetService.findTranches(id, pageable));
+        return PageDto.of(projetService.findTranches(id, perimetre.projetsAgenceCourante(), pageable));
     }
 
     @PostMapping

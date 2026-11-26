@@ -18,7 +18,10 @@ final class ListeBlancheAgence {
     private static final Set<String> POST = Set.of("POST");
     private static final Set<String> GET_POST_DELETE = Set.of("GET", "POST", "DELETE");
     private static final String ONGLETS_DOSSIER = "fiche|historique|montants|echeancier|reglements|pieces-jointes"
-            + "|payeurs|actions|compteurs|visites-techniques";
+            + "|payeurs|actions|compteurs|visites-techniques|cadeaux|modifications|modalite-paiement|sous-articles"
+            + "|acquereurs";
+    // Choix des onglets d'administration de la tranche, servis sous /api/tranches/{id} sans id.
+    private static final String CHOIX_TRANCHE = "terrains-disponibles|categories-frais|entites-finalisation";
     private static final String COLONNES_CACHEES = "encaissements|impayes|suivi-actions|etat-des-ventes"
             + "|suivi-affectations|suivi-commerciaux";
 
@@ -55,11 +58,17 @@ final class ListeBlancheAgence {
             regle(GET, "/api/tranches/*"),
             regle(GET, "/api/tranches/*/articles"),
             regle(GET, "/api/tranches/*/fiche.pdf"),
+            // Formulaire de prospection : programmes et tranches du périmètre agence (ProjetService)
+            regle(GET, "/api/projets"),
+            regle(GET, "/api/projets/*/tranches"),
             // Dossiers : liste, fiche et ses onglets, documents, photo du chèque ; ni désistement ni autre écriture
             regle(GET, "/api/dossiers"),
             regle(GET, "/api/dossiers/*"),
             regle(GET, "/api/dossiers/*/{onglet:" + ONGLETS_DOSSIER + "}"),
             regle(GET, "/api/dossiers/*/echeancier/*/reglements"),
+            regle(GET, "/api/dossiers/*/echeancier/schema"),
+            regle(GET, "/api/dossiers/*/statut/etapes-suivantes"),
+            regle(GET, "/api/dossiers/*/cadeaux/{choix:catalogue|raisons}"),
             regle(GET, "/api/dossiers/*/pieces-jointes/*/fichier"),
             regle(GET, "/api/dossiers/*/documents/*"),
             regle(GET, "/api/dossiers/*/reglements/*/documents/*"),
@@ -71,6 +80,7 @@ final class ListeBlancheAgence {
     // Écrans cachés servis sous un préfixe ouvert : refusés avant la liste blanche.
     private static final List<Regle> REFUS = List.of(
             regle(POST, "/api/prospections/*/transformer"),
+            regle(GET, "/api/tranches/{choix:" + CHOIX_TRANCHE + "}"),
             regle(GET, "/api/referentiels/colonnes/{ecran:" + COLONNES_CACHEES + "}"),
             regle(GET, "/api/referentiels/motifs-desistement"));
 

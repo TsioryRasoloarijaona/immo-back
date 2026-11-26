@@ -145,6 +145,14 @@ public class PerimetreCommercialService {
         return admUserIdCourant().map(id -> RoleAgence.porte(agenceDuCompte.roles(id))).orElse(false);
     }
 
+    /** Projets d'un compte agence ({@code [AUCUN]} s'il est incomplet) ; absent pour le siège, jamais restreint ici. */
+    public Optional<List<UUID>> projetsAgenceCourante() {
+        return admUserIdCourant().flatMap(id -> {
+            List<String> roles = agenceDuCompte.roles(id);
+            return RoleAgence.porte(roles) ? perimetreDe(id, roles) : Optional.empty();
+        });
+    }
+
     /** Vendeurs de l'agence du compte courant ; absent pour un compte du siège (FEATURE-agences-vente.md §4). */
     public Optional<List<UUID>> vendeursAgenceCourante() {
         return admUserIdCourant().flatMap(agenceDuCompte::vendeurs);
