@@ -100,7 +100,7 @@ public class PlansService {
                 Champs.de(statut, StrStatus::getCode), Champs.de(statut, StrStatus::getDescription),
                 Champs.de(statut, StrStatus::getColorName), Champs.de(occupant, ComFolder::getId),
                 occupant == null ? null : TierNomFormatter.nom(occupant.getCfgCustomer()),
-                Boolean.TRUE.equals(ligne.getSousArticle()), occupant == null);
+                Boolean.TRUE.equals(ligne.getSousArticle()), occupant == null, false);
     }
 
     private static ResourceNotFoundException imageIntrouvable(UUID planId) {

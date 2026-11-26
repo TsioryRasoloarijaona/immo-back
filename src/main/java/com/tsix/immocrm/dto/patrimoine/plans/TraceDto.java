@@ -17,6 +17,8 @@ public record TraceDto(
         @Schema(description = "Nom du client du dossier occupant ; null si libre.") String client,
         @Schema(description = "Vrai si l'article est un sous-article (StkItem.IsUnderItem) : pas de prospection.")
         boolean estSousArticle,
-        @Schema(description = "Vrai si aucun dossier actif n'occupe l'article.") boolean libre
+        @Schema(description = "Vrai si aucun dossier actif n'occupe l'article.") boolean libre,
+        @Schema(description = "Vrai pour un compte agence si le lot est occupé hors de son agence : statut, couleur, dossier, "
+                + "client à null.") boolean indisponible
 ) {
 }
