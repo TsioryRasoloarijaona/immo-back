@@ -60,6 +60,7 @@ public class ActionsDecompteService {
     private final EcritureDecompte ecriture;
     private final ReferencesOmran references;
     private final PrevisionsPaiementLot previsions;
+    private final EcritureExtrasDecompte extras;
 
     public ActionsDecompteService(DecomptesProjetService lecture, LotsProjetService lots, VerrouDecompte verrou,
                                   DonneesDecompte donnees, EcritureDecompte ecriture, ReferencesOmran references,
@@ -71,6 +72,7 @@ public class ActionsDecompteService {
         this.ecriture = ecriture;
         this.references = references;
         this.previsions = previsions;
+        this.extras = new EcritureExtrasDecompte(donnees, ecriture);
     }
 
     /** {@code W:NewWorkingOut} l.1950-2061 : lignes rechargées du bordereau ({@code W:ReloadLines}), pas de lignes d'appro. */
@@ -127,6 +129,7 @@ public class ActionsDecompteService {
         Map<PrjWorkingOutLine, LigneSaisie> parLigne = associer(cibles, saisies, rechargees);
         Map<UUID, BigDecimal> quantitesMarche = quantitesMarche(bordereau);
         parLigne.replaceAll((l, s) -> depuisAvancement(lot, l, s, quantitesMarche));
+        EcritureExtrasDecompte.Plan enfants = extras.preparer(w, demande.extras(), demande.retenues());
         w.setDocDate(date);
         w.setCfgTier(tiers);
         libeller(w);
@@ -141,6 +144,7 @@ public class ActionsDecompteService {
         if (rechargees) {
             remplacerLignes(w, cibles);
         }
+        enfants.appliquer();
         calculerEtEcrire(w);
         return lecture.decompte(id);
     }

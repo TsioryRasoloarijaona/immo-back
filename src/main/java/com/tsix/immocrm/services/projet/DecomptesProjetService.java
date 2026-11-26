@@ -221,7 +221,8 @@ public class DecomptesProjetService {
         return donnees.enfants(PrjWorkingOutLineExtra.class, decompte).stream()
                 .map(e -> new ExtraDecompteDto(e.getId(), e.getDescription(), e.getUnity(), e.getQuantity(), e.getUnitPriceHT(),
                         MontantsLot.pourcentage(e.getVatRatio()), MontantsLot.applique(e.getQuantity(), e.getUnitPriceHT()),
-                        MontantsLot.applique(e.getQuantity(), e.getUnitPriceTTC())))
+                        MontantsLot.applique(e.getQuantity(), e.getUnitPriceTTC()), e.getCode(), e.getNotes(),
+                        e.getStlCategoryId(), e.getPrjMarketLineId(), MontantsLot.pourcentage(e.getFodecRatio())))
                 .toList();
     }
 

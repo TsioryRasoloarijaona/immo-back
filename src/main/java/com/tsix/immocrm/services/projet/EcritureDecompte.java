@@ -54,6 +54,12 @@ public class EcritureDecompte {
         entite.setUserUpdateDateTime(LocalDateTime.now(clock));
     }
 
+    /** Table sans colonnes d'audit (ex. PrjWorkingOutRetainedLine). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void creerSansAudit(Object entite) {
+        em.persist(entite);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void supprimer(Collection<?> entites) {
         entites.forEach(em::remove);
