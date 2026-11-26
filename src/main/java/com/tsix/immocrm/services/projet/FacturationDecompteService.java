@@ -77,17 +77,19 @@ public class FacturationDecompteService {
     private final EcriturePieceAchat ecriture;
     private final ConfigurationPieceAchat configuration;
     private final GenerationPieceAchat generation;
+    private final PrevisionsPaiementLot previsions;
     private final EntityManager em;
     private final Clock clock;
 
     public FacturationDecompteService(DecomptesProjetService lecture, VerrouDecompte verrou, EcriturePieceAchat ecriture,
                                       ConfigurationPieceAchat configuration, GenerationPieceAchat generation,
-                                      EntityManager em, Clock clock) {
+                                      PrevisionsPaiementLot previsions, EntityManager em, Clock clock) {
         this.lecture = lecture;
         this.verrou = verrou;
         this.ecriture = ecriture;
         this.configuration = configuration;
         this.generation = generation;
+        this.previsions = previsions;
         this.em = em;
         this.clock = clock;
     }
@@ -123,6 +125,8 @@ public class FacturationDecompteService {
             d.setStlCurrencyId(lot.getStlCurrencyId());
         }
         w.setBuyDocument(d);
+        // apresPiece (écrivain) ignore les factures : R8 recalcule ici, une fois le décompte lié.
+        previsions.recalculer(lot.getId());
         return dto(d);
     }
 
@@ -149,6 +153,9 @@ public class FacturationDecompteService {
                 SANS_DEPART.formatted(REFUND.gestion()), REFUND.name(), null, tiers, f.getCfgCompanyId(),
                 f.getPrjMarketTypeId(), null, code -> NUMERO.formatted(REFUND.libelle(), code),
                 Objects.toString(f.getNotes(), ""), lignes, categories, projets, e, g));
+        if (f.getPrjMarketId() != null) {
+            previsions.recalculer(f.getPrjMarketId());
+        }
         return dto(a);
     }
 
