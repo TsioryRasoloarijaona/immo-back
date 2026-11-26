@@ -31,6 +31,9 @@ public record UtilisateurCourantDto(
 
         boolean perimetreRestreint,
 
-        List<ProjetPerimetreDto> projetsAutorises
+        List<ProjetPerimetreDto> projetsAutorises,
+
+        @Schema(description = "Vrai si le compte porte le rôle Agence (lu en base) : seuls les écrans agence lui sont ouverts.")
+        boolean agence
 ) {
 }

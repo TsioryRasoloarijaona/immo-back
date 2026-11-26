@@ -1,5 +1,6 @@
 package com.tsix.immocrm.services.auth;
 
+import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.dto.auth.ChangerMotDePasseRequest;
 import com.tsix.immocrm.dto.auth.CompleterProfilRequest;
 import com.tsix.immocrm.dto.auth.UtilisateurCourantDto;
@@ -156,7 +157,8 @@ public class MonCompteService {
                 Boolean.TRUE.equals(credential.getMustChangePassword()),
                 Boolean.TRUE.equals(credential.getProfileCompleted()),
                 !projets.isEmpty(),
-                projets
+                projets,
+                RoleAgence.porte(roles)
         );
     }
 }

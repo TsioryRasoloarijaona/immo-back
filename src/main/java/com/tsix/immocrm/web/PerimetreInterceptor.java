@@ -3,18 +3,13 @@ package com.tsix.immocrm.web;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
-import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 
 import java.io.IOException;
 import java.net.URI;
@@ -36,13 +31,11 @@ public class PerimetreInterceptor implements HandlerInterceptor {
             Set.of("dossiers", "prospections", "pre-prospections", "encaissements");
 
     private final PerimetreCommercialService perimetreService;
-    private final ObjectProvider<RequestMappingHandlerAdapter> handlerAdapter;
-    private volatile HttpMessageConverter<Object> convertisseurProbleme;
+    private final ReponseProbleme reponseProbleme;
 
-    public PerimetreInterceptor(PerimetreCommercialService perimetreService,
-                                 ObjectProvider<RequestMappingHandlerAdapter> handlerAdapter) {
+    public PerimetreInterceptor(PerimetreCommercialService perimetreService, ReponseProbleme reponseProbleme) {
         this.perimetreService = perimetreService;
-        this.handlerAdapter = handlerAdapter;
+        this.reponseProbleme = reponseProbleme;
     }
 
     @Override
@@ -91,9 +84,8 @@ public class PerimetreInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 404 écrit par le convertisseur de Spring (même enveloppe que {@link GlobalExceptionHandler}), sans exception
-     * (qui deviendrait un 500). {@code instance} = la collection, pas le chemin : l'id invalide est une chaîne
-     * arbitraire de l'appelant, à ne jamais renvoyer telle quelle.
+     * {@code instance} = la collection, pas le chemin : l'id invalide est une chaîne arbitraire de l'appelant,
+     * à ne jamais renvoyer telle quelle.
      */
     private void refuser(String collection, HttpServletResponse response) throws IOException {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(
@@ -101,26 +93,7 @@ public class PerimetreInterceptor implements HandlerInterceptor {
         // Spring pose lui-même `instance` quand un @ExceptionHandler renvoie un ProblemDetail
         // (AbstractMessageConverterMethodProcessor) ; hors de ce chemin, c'est à nous de le faire.
         probleme.setInstance(URI.create("/api/" + collection));
-
-        response.setStatus(HttpStatus.NOT_FOUND.value());
-        convertisseurProbleme().write(probleme, MediaType.APPLICATION_PROBLEM_JSON,
-                new ServletServerHttpResponse(response));
-    }
-
-    /** Résolu paresseusement : injecter l'adapter directement crée un cycle (intercepteur enregistré par un WebMvcConfigurer). */
-    @SuppressWarnings("unchecked")
-    private HttpMessageConverter<Object> convertisseurProbleme() {
-        HttpMessageConverter<Object> convertisseur = this.convertisseurProbleme;
-        if (convertisseur == null) {
-            convertisseur = handlerAdapter.getObject().getMessageConverters().stream()
-                    .filter(c -> c.canWrite(ProblemDetail.class, MediaType.APPLICATION_PROBLEM_JSON))
-                    .map(c -> (HttpMessageConverter<Object>) c)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Aucun HttpMessageConverter ne sait écrire un ProblemDetail en application/problem+json"));
-            this.convertisseurProbleme = convertisseur;
-        }
-        return convertisseur;
+        reponseProbleme.ecrire(probleme, response);
     }
 
     /** {@code "{id}"} ou {@code "{id:regex}"} → {@code "id"}. */

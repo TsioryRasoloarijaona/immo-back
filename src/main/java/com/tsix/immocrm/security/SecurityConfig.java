@@ -3,7 +3,9 @@ package com.tsix.immocrm.security;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import com.tsix.immocrm.web.RoutesFermeesAgenceInterceptor;
 import jakarta.servlet.DispatcherType;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,11 +42,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
+    private final ObjectProvider<RoutesFermeesAgenceInterceptor> routesFermeesAgence;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          ApiKeyAuthenticationFilter apiKeyAuthenticationFilter) {
+                          ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
+                          ObjectProvider<RoutesFermeesAgenceInterceptor> routesFermeesAgence) {
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.routesFermeesAgence = routesFermeesAgence;
     }
 
     @Bean
@@ -69,8 +74,11 @@ public class SecurityConfig {
                 // Invisible sous MockMvc (pas de dispatch ERROR) ; voir AccesRefuseTest, qui passe par le vrai cookie.
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
-                        .accessDeniedHandler((request, response, denied) ->
-                                response.setStatus(HttpStatus.FORBIDDEN.value())))
+                        .accessDeniedHandler((request, response, denied) -> {
+                            if (!routesFermeesAgence.getObject().refuserSiAgence(response)) {
+                                response.setStatus(HttpStatus.FORBIDDEN.value());
+                            }
+                        }))
                 .authorizeHttpRequests(auth -> auth
                         // Un préflight CORS ne porte jamais le cookie : sans cette règle, tout appel cross-origin casse.
                         .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()

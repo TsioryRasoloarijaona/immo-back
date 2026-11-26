@@ -17,11 +17,14 @@ import java.util.List;
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
+    private final RoutesFermeesAgenceInterceptor routesFermeesAgenceInterceptor;
     private final PerimetreInterceptor perimetreInterceptor;
     private final SuiviUtilisateursInterceptor suiviUtilisateursInterceptor;
 
-    public CorsConfig(PerimetreInterceptor perimetreInterceptor,
+    public CorsConfig(RoutesFermeesAgenceInterceptor routesFermeesAgenceInterceptor,
+                      PerimetreInterceptor perimetreInterceptor,
                       SuiviUtilisateursInterceptor suiviUtilisateursInterceptor) {
+        this.routesFermeesAgenceInterceptor = routesFermeesAgenceInterceptor;
         this.perimetreInterceptor = perimetreInterceptor;
         this.suiviUtilisateursInterceptor = suiviUtilisateursInterceptor;
     }
@@ -32,6 +35,8 @@ public class CorsConfig implements WebMvcConfigurer {
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // En premier : le 403 agence passe avant le 404 de périmètre (FEATURE-agences-vente.md R-V9).
+        registry.addInterceptor(routesFermeesAgenceInterceptor).addPathPatterns("/api/**");
         registry.addInterceptor(perimetreInterceptor)
                 .addPathPatterns("/api/dossiers/**", "/api/prospections/**",
                         "/api/pre-prospections/**", "/api/encaissements/**");
