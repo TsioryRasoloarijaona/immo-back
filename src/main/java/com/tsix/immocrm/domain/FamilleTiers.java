@@ -6,6 +6,7 @@ import java.util.Optional;
 
 /** Familles de l'écran Tiers : segment d'URL, {@code CfgTierType.Code}, filtre Nature de la liste et forme de la fiche. */
 public enum FamilleTiers {
+
     FOURNISSEURS("fournisseurs", "FOU", true),
     CONTACTS("contacts", "CNT", false),
     BANQUES("banques", "BAN", false, Fiche.REDUITE, "DefaultSocialFormForBANK"),
@@ -14,12 +15,17 @@ public enum FamilleTiers {
     // Type CNT et nature AGV : la famille « contacts » exclut cette nature (FEATURE-agences-vente.md R-V6).
     AGENCES("agences", "CNT", false, Fiche.COMPLETE, null, "AGV");
 
+    private static final String DESCRIPTION = "description";
+    private static final String MOBILE = "mobile";
+    private static final String PHONE = "phone";
+    private static final String E_MAIL = "eMail";
+
     /** Forme de saisie : champs écrits (service), catalogue d'import, colonnes cherchées, origine du code. */
     public enum Fiche {
-        COMPLETE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail", "ice")),
-        REDUITE(true, List.of("code", "description", "mobile", "phone", "phone1", "phone2", "fax", "eMail", "webSite",
+        COMPLETE(false, List.of("code", DESCRIPTION, "socialReason", MOBILE, PHONE, E_MAIL, "ice")),
+        REDUITE(true, List.of("code", DESCRIPTION, MOBILE, PHONE, "phone1", "phone2", "fax", E_MAIL, "webSite",
                 "notes", "address")),
-        PHYSIQUE(false, List.of("code", "description", "socialReason", "mobile", "phone", "eMail"));
+        PHYSIQUE(false, List.of("code", DESCRIPTION, "socialReason", MOBILE, PHONE, E_MAIL));
 
         private final boolean codeSaisi;
         private final List<String> colonnesCherchees;

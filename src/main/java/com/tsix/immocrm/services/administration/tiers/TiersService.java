@@ -66,9 +66,10 @@ public class TiersService {
             "notes", SELECT_DTO + "(x.id, x.code, x.code, x.rang) from AdmRank x order by x.rang, x.code",
             "journaux", SELECT_DTO + "(x.id, x.code, x.description, cast(null as Integer)) "
                     + "from ActJournal x order by x.code");
-    private static final Sort TRI = Sort.by("code", "id");
+    private static final String KIND = "cfgTierKind";
+    private static final Sort TRI =Sort.by("code", "id");
     private static final List<String> LIBELLES_LISTE =
-            List.of("cfgTierKind", "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
+            List.of(KIND, "admCountry", "admCountryResidence", "admLiability", "admNationality", "admProfession");
 
     private final EntityManager em;
     private final CfgTierRepository tiers;
@@ -234,7 +235,7 @@ public class TiersService {
         if (famille.codeNature().isEmpty() && exclues.isEmpty()) {
             return type;
         }
-        Path<String> nature = racine.join("cfgTierKind", JoinType.LEFT).get("code");
+        Path<String> nature = racine.join(KIND,JoinType.LEFT).get("code");
         Predicate natureAdmise = famille.codeNature().map(c -> cb.equal(nature, c))
                 .orElseGet(() -> cb.or(cb.isNull(nature), cb.not(nature.in(exclues))));
         return cb.and(type, natureAdmise);
@@ -251,7 +252,7 @@ public class TiersService {
                 conditions.add(recherche(racine, cb, famille, filtres.recherche()));
             }
             if (famille.filtreNature() && filtres.natureId() != null) {
-                conditions.add(cb.equal(racine.get("cfgTierKind").get("id"), filtres.natureId()));
+                conditions.add(cb.equal(racine.get(KIND).get("id"), filtres.natureId()));
             }
             return cb.and(conditions.toArray(Predicate[]::new));
         };
