@@ -45,7 +45,7 @@ public final class ColonnesBordereauExcel {
     }
 
     /** Code lu comme un code : une cellule numérique 12 donne « 12 », pas « 12.0 ». */
-    public static String code(LigneLue l, String colonne) {
+    public static String lireCode(LigneLue l, String colonne) {
         Object v = l.valeurs().get(colonne);
         if (v instanceof BigDecimal n) {
             return n.stripTrailingZeros().toPlainString();

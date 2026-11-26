@@ -22,7 +22,7 @@ import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.PU_HT;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.REMISE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE_GROUPE;
-import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.code;
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.lireCode;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.nombre;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.texte;
 
@@ -47,7 +47,7 @@ final class ImportOffreDemandeAchat {
         List<Prix> aEcrire = new ArrayList<>();
         int ignores = 0;
         for (LigneLue l : feuille.lignes()) {
-            String c = code(l, CODE);
+            String c = lireCode(l, CODE);
             if (c == null || UNITE_GROUPE.equals(texte(l, UNITE))) {
                 continue;
             }

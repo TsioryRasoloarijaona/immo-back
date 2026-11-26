@@ -225,7 +225,7 @@ class OffresDemandeAchat {
         }
         PrjMarket marche = em.find(PrjMarket.class, lot);
         if (marche != null && Boolean.TRUE.equals(marche.getIsMultiSupplier())) {
-            if (compter("SELECT COUNT(*) FROM BuyDocument WHERE BuySelectionId = :lot AND (DocType IS NULL OR DocType <> 'QUOTE')",
+            if (compter("SELECT COUNT(*) FROM BuyDocument WHERE BuySelectionId = :lot AND DocType <> 'QUOTE'",
                     d.getId()) > 0) {
                 throw new ConflictException("Vous ne pouvez pas sélectionnez/désélectionnez une offre pour un lot multi-fournisseur "
                         + "contenant des documents affectés à cet appel d'offre !");

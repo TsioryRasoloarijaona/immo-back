@@ -36,7 +36,7 @@ import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.QUANTITE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.TVA;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.UNITE_GROUPE;
-import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.code;
+import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.lireCode;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.nombre;
 import static com.tsix.immocrm.services.projet.ColonnesBordereauExcel.texte;
 
@@ -82,7 +82,7 @@ final class FusionBordereau {
     private void controler(List<LigneLue> lues, List<LigneLue> groupesLus, List<LigneLue> lignesLues) {
         Set<String> vus = new HashSet<>();
         for (LigneLue l : lues) {
-            String code = code(l, CODE);
+            String code = lireCode(l, CODE);
             if (code == null) {
                 throw new InvalidRequestException("Ligne %d : le code est obligatoire".formatted(l.numero()));
             }
@@ -109,7 +109,7 @@ final class FusionBordereau {
     private void rattacherGroupe(LigneLue l) {
         String code = codeLu(l);
         GroupeSaisieDto g = groupes.get(groupeParCode.get(code));
-        String parent = ou(code(l, CODE_GROUPE), prefixe(code));
+        String parent = ou(lireCode(l, CODE_GROUPE), prefixe(code));
         if (parent != null && !parent.equals(code)) {
             groupes.put(g.id(), new GroupeSaisieDto(g.id(), groupe(parent), g.ordre(), g.code(), g.description(), g.notes()));
         }
@@ -120,7 +120,7 @@ final class FusionBordereau {
         String code = codeLu(l);
         List<UUID> ids = lignesParCode.getOrDefault(code, List.of());
         LigneSaisieDto a = ids.isEmpty() ? nouvelleLigne(code) : lignes.get(ids.get(0));
-        String parent = ou(code(l, CODE_GROUPE), prefixe(code));
+        String parent = ou(lireCode(l, CODE_GROUPE), prefixe(code));
         BigDecimal tva = montant(l, TVA);
         BigDecimal fodec = montant(l, FODEC);
         BigDecimal pu = montant(l, PU_HT);
@@ -193,7 +193,7 @@ final class FusionBordereau {
 
     // Le code est contrôlé non nul en passe 1.
     private static String codeLu(LigneLue l) {
-        return Objects.requireNonNull(code(l, CODE), CODE);
+        return Objects.requireNonNull(lireCode(l, CODE), CODE);
     }
 
     private static String prefixe(String code) {
