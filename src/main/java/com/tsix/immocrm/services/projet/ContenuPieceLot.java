@@ -115,9 +115,9 @@ class ContenuPieceLot {
         EnTete e = new EnTete(configuration.module(MODULE), lot.getPrjProject().getId(), lot.getId(),
                 ecriture.employeDuCompte(), corps.date(), corps.echeance(), null, reference(lot, nature), "", "", "",
                 regul(nature, corps), BigDecimal.ZERO);
-        BuyDocument d = ecriture.creer(piece(lot, nature, corps, montant, e, lot.getCfgSupplier(),
-                Champs.de(lot.getPrjProject().getCfgCompany(), CfgCompany::getId),
-                Champs.de(lot.getPrjMarketType(), PrjMarketType::getId)));
+        BuyDocument d = ecriture.creer(piece(lot, nature, corps, montant, e,
+                new Origine(lot.getCfgSupplier(), Champs.de(lot.getPrjProject().getCfgCompany(), CfgCompany::getId),
+                        Champs.de(lot.getPrjMarketType(), PrjMarketType::getId))));
         if (nature.avance() && lot.getStlCurrencyId() != null) {
             d.setStlCurrencyId(lot.getStlCurrencyId());
         }
@@ -135,12 +135,15 @@ class ContenuPieceLot {
                 corps.echeance(), null, d.getDocRef(), d.getPersonToContact(), d.getNotes2(), d.getOfficeOrderRef(),
                 regul(nature, corps), z(d.getFiscalStamp()));
         CfgTier tiers = d.getCfgTierId() == null ? null : em.find(CfgTier.class, d.getCfgTierId());
-        ecriture.modifier(d, piece(lot, nature, corps, montant, e, tiers, d.getCfgCompanyId(), d.getPrjMarketTypeId()));
+        ecriture.modifier(d, piece(lot, nature, corps, montant, e,
+                new Origine(tiers, d.getCfgCompanyId(), d.getPrjMarketTypeId())));
         recalculerReste(d.getPrjWorkingOutId(), lot.getId());
     }
 
+    private record Origine(CfgTier tiers, UUID societe, UUID typeMarche) { }
+
     private PieceAchatACreer piece(PrjMarket lot, NaturePieceLot nature, PieceLotSaisieDto corps, BigDecimal montant,
-                                   EnTete e, CfgTier tiers, UUID societe, UUID typeMarche) {
+                                   EnTete e, Origine origine) {
         List<Ligne> lignes = new ArrayList<>();
         List<Part> categories = new ArrayList<>();
         BigDecimal tva = z(lot.getDefaultVat());
@@ -162,7 +165,7 @@ class ContenuPieceLot {
         }
         return new PieceAchatACreer(null, nature.gestion(),
                 "La gestion %s n'a aucun statut de départ « Nouveau ».".formatted(nature.gestion()), DOCUMENT_TO_PAY,
-                nature.name(), tiers, societe, typeMarche, null, code -> "%s N° %s".formatted(nature.libelleLigne(), code),
+                nature.name(), origine.tiers(), origine.societe(), origine.typeMarche(), null, code -> "%s N° %s".formatted(nature.libelleLigne(), code),
                 Objects.requireNonNullElse(corps.notes(), ""), lignes, categories, List.of(), e);
     }
 

@@ -44,7 +44,7 @@ public class FacturesDecompteController {
     @PostMapping("/avoir")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Générer un avoir fournisseur qui reprend la facture du décompte (plusieurs avoirs possibles)")
-    @ApiResponse(responseCode = "201", description = "Avoir créé ; la facture d'origine n'est pas modifiée.")
+    @ApiResponse(responseCode = "201", description = "Avoir créé ; net à payer de la facture réduit du TTC de l'avoir si non financier.")
     @ApiResponse(responseCode = "409", description = "Décompte sans facture : aucun avoir possible.", content = @Content)
     public FactureGenereeDto avoir(@Parameter(description = ID_DECOMPTE) @PathVariable UUID id) {
         return service.avoir(id);

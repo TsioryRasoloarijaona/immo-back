@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static com.tsix.immocrm.domain.achat.NatureDocumentAchat.INVOICE;
@@ -147,7 +148,7 @@ public class FacturationDecompteService {
                 .getResultStream().map(FacturationDecompteService::clone).toList();
         BigDecimal ttc = z(f.getAmountTTC());
         List<Part> categories = ventilations(CATEGORIES_FACTURE, f, taux -> ttc.multiply(taux));
-        List<Part> projets = ventilations(PROJETS_FACTURE, f, Function.identity());
+        List<Part> projets = ventilations(PROJETS_FACTURE, f, UnaryOperator.identity());
         EnTete e = new EnTete(f.getAdmModuleId(), f.getPrjProjectId(), f.getPrjMarketId(), ecriture.employeDuCompte(),
                 LocalDate.now(clock), null, null, "", "", "", "", BigDecimal.ZERO, BigDecimal.ZERO,
                 new Avoir(z(f.getAmountHT()), z(f.getAmountVat()), null));
@@ -212,7 +213,7 @@ public class FacturationDecompteService {
                 .map(v -> new Part((UUID) v[0], ttc.multiply(z((BigDecimal) v[1])))).toList();
     }
 
-    private List<Part> ventilations(String requete, BuyDocument f, Function<BigDecimal, BigDecimal> montant) {
+    private List<Part> ventilations(String requete, BuyDocument f, UnaryOperator<BigDecimal> montant) {
         return em.createQuery(requete, Object[].class).setParameter("f", f.getId()).getResultStream()
                 .filter(v -> v[0] != null).map(v -> new Part((UUID) v[0], montant.apply(z((BigDecimal) v[1])))).toList();
     }
