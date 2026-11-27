@@ -32,7 +32,7 @@ public class StatutsVisibles implements StatutsVisiblesListe {
 
     @Override
     public Optional<Set<UUID>> pourUtilisateurCourant() {
-        return pour(intervenantCourant.courant());
+        return pour(intervenantCourant.pourVisibilite());
     }
 
     public Optional<Set<UUID>> pour(Intervenant utilisateur) {
