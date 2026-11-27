@@ -49,7 +49,7 @@ public class DossierEditionService {
             "envoiNotairePrevisionnel", "envoiNotaire", "minute", "remiseClesEffective");
     /** Volet résiliation obligatoire d'un dossier sorti ({@code Sale.cs:BeforeUpdate}). */
     private static final Set<String> ANNULATION_OBLIGATOIRE = Set.of("annulationDate", "annulationCauses");
-    private static final String MESSAGE_SORTI = "Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.";
+    public static final String MESSAGE_SORTI ="Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.";
     private static final String MESSAGE_ANNULATION = """
             Dans le cas de la résilation / annulation d'un dossier, il faut s'assurer des points suivant dans le \
             volet de résiliation :
