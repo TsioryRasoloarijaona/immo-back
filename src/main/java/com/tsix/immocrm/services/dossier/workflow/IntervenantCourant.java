@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.dossier.workflow;
 
 import com.tsix.immocrm.repositories.str.StrIntervenerRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
+import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,12 +23,15 @@ public class IntervenantCourant {
 
     static final String ROLE_ADMINISTRATEUR = "Administrateur";
     static final String DROIT_SEUIL = "Yes.Com.Front.Sales.Monitoring.toolVerifyThreshold";
+    private static final String ROLE_COMMERCIAL = "Commercial";
     private static final String PREFIXE_ROLE = "ROLE_";
 
     private final StrIntervenerRepository intervenerRepository;
+    private final PerimetreCommercialService perimetre;
 
-    public IntervenantCourant(StrIntervenerRepository intervenerRepository) {
+    public IntervenantCourant(StrIntervenerRepository intervenerRepository, PerimetreCommercialService perimetre) {
         this.intervenerRepository = intervenerRepository;
+        this.perimetre = perimetre;
     }
 
     public Intervenant courant() {
@@ -59,11 +63,25 @@ public class IntervenantCourant {
     }
 
     /**
+     * Pour les statuts visibles seulement : un compte agence compte aussi le rôle Commercial (résolu par code).
+     * Jamais pour agir : les transitions restent sur {@link #courant()} (FEATURE-agences-correctifs-passe.md R-S1, R-S2).
+     */
+    public Intervenant pourVisibilite() {
+        Intervenant utilisateur = courant();
+        if (!perimetre.estAgenceCourant()) {
+            return utilisateur;
+        }
+        Set<UUID> roleIds = new HashSet<>(utilisateur.roleIds());
+        roleIds.addAll(intervenerRepository.rolesParCode(List.of(ROLE_COMMERCIAL)));
+        return new Intervenant(utilisateur.admUserId(), roleIds, utilisateur.administrateur());
+    }
+
+    /**
      * Statuts de lot et de projet visibles de l'appelant (FEATURE-visibilite-omran.md R1, R7) : vide = un de ses rôles a
      * {@code WithSequenceFreeRestriction = 0} ; sinon les statuts liés à son rôle ou à lui, même règle que les dossiers.
      */
     public Optional<Set<UUID>> statutsDeLotsEtProjets() {
-        Intervenant utilisateur = courant();
+        Intervenant utilisateur = pourVisibilite();
         if (libre(utilisateur)) {
             return Optional.empty();
         }
