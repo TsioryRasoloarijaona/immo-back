@@ -42,10 +42,13 @@ public class AgencesDesVendeurs {
         this.liens = liens;
     }
 
-    /** Vendeur → agence, une requête ; un vendeur lié à deux agences garde la première (id croissant). */
+    /** Vendeur → agence, une requête ; seuls les tiers {@link #estAgence} comptent ; premier lien gardé (id croissant). */
     public Map<UUID, Agence> carte() {
         Map<UUID, Agence> carte = new HashMap<>();
         for (Object[] lien : liens.liensDuType(RoleAgence.RELATION_VENDEUR)) {
+            if (!FamilleTiers.AGENCES.contient((String) lien[3], (String) lien[4])) {
+                continue;
+            }
             carte.putIfAbsent((UUID) lien[0], new Agence((UUID) lien[1], (String) lien[2]));
         }
         return carte;

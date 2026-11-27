@@ -142,8 +142,11 @@ public class GenerationCommissions {
         if (date == null) {
             return Issue.ignore(RaisonIgnoree.SANS_DATE);
         }
+        // Concrétisation : une ligne au nom du vendeur compte aussi quand le bénéficiaire est devenu son agence (D1).
+        UUID vendeur = ctx.type() == TypeCommission.CONCRETISATION ? Champs.de(f.getCfgCommercial(), CfgTier::getId) : null;
         if (existantes.stream().anyMatch(l -> ctx.type().libelle().equals(l.getCommissionType())
-                && personne.getId().equals(l.getCfgEmployeeId()))) {
+                && (personne.getId().equals(l.getCfgEmployeeId()) || l.getCfgEmployeeId() != null
+                && l.getCfgEmployeeId().equals(vendeur)))) {
             return Issue.ignore(RaisonIgnoree.DEJA_GENERE);
         }
         StkItem article = f.getStkItem();
