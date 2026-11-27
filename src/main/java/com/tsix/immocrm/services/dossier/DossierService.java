@@ -270,7 +270,9 @@ public class DossierService {
 
         CfgTranche tranche = principal.getStkHierarchy();
         AnnexesPrix annexesPrix = new AnnexesPrix(annexes, prixAnnexes);
-        creationAgence.verifierPlancher(agence, request.prix(), prixDeReference(principal, annexesPrix));
+        // Plancher d'agence toujours sur le catalogue : une offre ne l'abaisse pas (décision 9).
+        creationAgence.verifierPlancher(agence, request.prix(),
+                prixDeReference(principal, new AnnexesPrix(annexes, PrixSousArticles.CATALOGUE)));
         appliquerMontantsCreation(folder, principal, annexesPrix, tranche, request);
         // Dernier contrôle, sur le prix calculé : les écritures (tiers, compteur du code) ne commencent qu'après.
         BigDecimal prixApresRemise = folder.getPriceAfterDiscount();

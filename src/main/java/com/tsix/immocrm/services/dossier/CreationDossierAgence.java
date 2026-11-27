@@ -62,7 +62,13 @@ public record CreationDossierAgence(PerimetreCommercialService perimetre, Articl
 
     /** R-D4 : une agence vend au moins au total de référence du lot et de ses annexes. */
     public void verifierPlancher(Optional<Rattachement> agence, BigDecimal prix, BigDecimal plancher) {
-        if (agence.isPresent() && prix != null && prix.compareTo(plancher) < 0) {
+        if (agence.isEmpty()) {
+            return;
+        }
+        if (plancher.signum() <= 0) {
+            throw new InvalidRequestException("Ce lot n'a pas de prix de référence : la vente passe par le siège");
+        }
+        if (prix != null && prix.compareTo(plancher) < 0) {
             throw new InvalidRequestException("Le prix ne peut pas être inférieur au prix de référence (%s)"
                     .formatted(plancher.toPlainString()));
         }

@@ -227,8 +227,10 @@ public class ProspectService {
 
     @Transactional
     public ProspectDetailDto create(CreerProspectRequest request) {
+        // Doublons (409) avant la première prospection d'agence (400 R-D7), tout avant la première écriture.
+        verifierCreation(request);
         Optional<AgenceDuCompte.Rattachement> agence = premiereProspection.verifier(request.prospection());
-        CfgTier tier = creerEntite(request);
+        CfgTier tier = ecrireEntite(request);
         agence.ifPresent(r -> premiereProspection.creer(tier, request.prospection(), r));
         return toDetail(tier);
     }
@@ -236,10 +238,11 @@ public class ProspectService {
     /** Comme {@link #create}, mais rend l'entité — sert aussi {@code POST /api/pre-prospections/{id}/creer-prospect}. */
     @Transactional
     public CfgTier createEntity(CreerProspectRequest request) {
-        return creerEntite(request);
+        verifierCreation(request);
+        return ecrireEntite(request);
     }
 
-    private CfgTier creerEntite(CreerProspectRequest request) {
+    private void verifierCreation(CreerProspectRequest request) {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
@@ -252,7 +255,9 @@ public class ProspectService {
                 throw new DoublonsProspectException(doublons);
             }
         }
+    }
 
+    private CfgTier ecrireEntite(CreerProspectRequest request) {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);
