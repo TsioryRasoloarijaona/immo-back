@@ -49,6 +49,7 @@ public class DossierEditionService {
             "envoiNotairePrevisionnel", "envoiNotaire", "minute", "remiseClesEffective");
     /** Volet résiliation obligatoire d'un dossier sorti ({@code Sale.cs:BeforeUpdate}). */
     private static final Set<String> ANNULATION_OBLIGATOIRE = Set.of("annulationDate", "annulationCauses");
+    public static final String MESSAGE_SORTI ="Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.";
     private static final String MESSAGE_ANNULATION = """
             Dans le cas de la résilation / annulation d'un dossier, il faut s'assurer des points suivant dans le \
             volet de résiliation :
@@ -115,7 +116,7 @@ public class DossierEditionService {
         prix.verifierVerrou(dossier, r, PlafondRemise.niveauDe(roles));
         boolean sorti = DossierSorti.estSorti(dossier);
         if (sorti && !EnumSet.of(GroupeEdition.ANNULATION).containsAll(groupes)) {
-            throw new ConflictException("Dossier annulé ou désisté : seul l'onglet Annulation est modifiable.");
+            throw new ConflictException(MESSAGE_SORTI);
         }
         if (sorti && aVider.stream().anyMatch(ANNULATION_OBLIGATOIRE::contains)) {
             throw new InvalidRequestException(MESSAGE_ANNULATION);
@@ -136,11 +137,31 @@ public class DossierEditionService {
             OrdreDatesDossier.verifier(dossier);
         }
         if (!modifies.isEmpty()) {
-            workflow.verifierEnregistrement(dossier);
-            ecriture.signer(dossier);
-            historique.evenement(dossier, tronquer("Modification : " + String.join(", ", modifies)));
+            enregistrer(dossier, "Modification : " + String.join(", ", modifies));
         }
         return new DossierModifieDto(ficheService.fiche(dossierId), List.copyOf(modifies), ecart, archivees);
+    }
+
+    /** Remise interne accordée par un valideur (FEATURE-agences-vente.md A3) : 404, 409 si dossier sorti. */
+    @Transactional
+    public void accorderRemise(UUID dossierId, BigDecimal taux) {
+        ComFolder dossier = ecriture.charger(dossierId);
+        if (DossierSorti.estSorti(dossier)) {
+            throw new ConflictException(MESSAGE_SORTI);
+        }
+        prix.accorder(dossier, taux, PlafondRemise.Niveau.DEUXIEME);
+        enregistrer(dossier, "Remise accordée : " + taux.stripTrailingZeros().toPlainString() + " %");
+    }
+
+    /** Taux de remise actuel du dossier, en %. */
+    public BigDecimal tauxRemise(ComFolder dossier) {
+        return prix.tauxActuel(dossier);
+    }
+
+    private void enregistrer(ComFolder dossier, String evenement) {
+        workflow.verifierEnregistrement(dossier);
+        ecriture.signer(dossier);
+        historique.evenement(dossier, tronquer(evenement));
     }
 
     private void appliquerClient(ComFolder dossier, ModifierDossierRequest r, List<String> modifies) {

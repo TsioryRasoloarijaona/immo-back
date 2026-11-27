@@ -39,12 +39,14 @@ class PrixEdition {
     private final ComFolderItemRepository folderItemRepository;
     private final ComDocumentRepository documentRepository;
     private final EcritureDossier ecriture;
+    private final ValidationRemise validation;
 
     PrixEdition(ComFolderItemRepository folderItemRepository, ComDocumentRepository documentRepository,
-                EcritureDossier ecriture) {
+                EcritureDossier ecriture, ValidationRemise validation) {
         this.folderItemRepository = folderItemRepository;
         this.documentRepository = documentRepository;
         this.ecriture = ecriture;
+        this.validation = validation;
     }
 
     static boolean touchePrix(ModifierDossierRequest r) {
@@ -90,13 +92,37 @@ class PrixEdition {
         BigDecimal tva = r.tva() != null ? r.tva() : actuelle.tva();
         BigDecimal ancienMontant = zero(f.getDiscountAmount());
         BigDecimal montant = montantRemise(r, actuelle, tva, ancienMontant);
+        return appliquerRemise(f, sousArticles, saisie(actuelle, tva, montant), niveau, forcer);
+    }
 
-        RecalculPrixDossier.Resultat resultat = RecalculPrixDossier.calculer(saisie(actuelle, tva, montant));
+    /** Remise interne accordée ({@code taux} en %) : remplace la remise existante, sans plafond pour un valideur. */
+    void accorder(ComFolder f, BigDecimal taux, PlafondRemise.Niveau niveau) {
+        List<ComFolderItem> sousArticles = sousArticles(f);
+        RecalculPrixDossier.Saisie actuelle = depuisPrixStocke(f, sousArticles);
+        BigDecimal montant = RecalculPrixDossier.calculer(actuelle).totalHT().multiply(taux)
+                .divide(CENT, ECHELLE, RoundingMode.HALF_UP);
+        appliquerRemise(f, sousArticles, saisie(actuelle, actuelle.tva(), montant), niveau, true);
+    }
+
+    /** Taux de remise actuel du dossier, en %. */
+    BigDecimal tauxActuel(ComFolder f) {
+        return RecalculPrixDossier.calculer(depuisPrixStocke(f, sousArticles(f))).remise()
+                .multiply(CENT).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Plafond contrôlé seulement si le montant change, avant tout setter ; {@code forcerDemande} ne lève le plafond
+     * que pour un compte {@link ValidationRemise#sansPlafond()}.
+     */
+    private boolean appliquerRemise(ComFolder f, List<ComFolderItem> sousArticles, RecalculPrixDossier.Saisie saisie,
+                                    PlafondRemise.Niveau niveau, boolean forcerDemande) {
+        BigDecimal montant = saisie.remiseMontantHT();
+        RecalculPrixDossier.Resultat resultat = RecalculPrixDossier.calculer(saisie);
         if (montant.compareTo(resultat.totalHT()) > 0) {
             throw new InvalidRequestException("La remise dépasse le total HT avant remise.");
         }
-        boolean remiseChangee = montant.compareTo(ancienMontant) != 0;
-        if (remiseChangee && !forcer) {
+        boolean remiseChangee = montant.compareTo(zero(f.getDiscountAmount())) != 0;
+        if (remiseChangee && !(forcerDemande && validation.sansPlafond())) {
             verifierPlafond(f.getStkItem(), resultat.remise(), niveau);
         }
         appliquer(resultat, f, sousArticles);
