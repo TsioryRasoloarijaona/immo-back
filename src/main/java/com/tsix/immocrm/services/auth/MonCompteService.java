@@ -158,7 +158,8 @@ public class MonCompteService {
                 Boolean.TRUE.equals(credential.getProfileCompleted()),
                 !projets.isEmpty(),
                 projets,
-                RoleAgence.porte(roles)
+                RoleAgence.porte(roles),
+                false // TODO A3 ValidationRemise
         );
     }
 }

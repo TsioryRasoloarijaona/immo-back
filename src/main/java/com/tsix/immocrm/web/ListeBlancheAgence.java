@@ -16,6 +16,7 @@ final class ListeBlancheAgence {
     private static final Set<String> TOUTES = Set.of();
     private static final Set<String> GET = Set.of("GET");
     private static final Set<String> POST = Set.of("POST");
+    private static final Set<String> GET_POST = Set.of("GET", "POST");
     private static final Set<String> GET_POST_DELETE = Set.of("GET", "POST", "DELETE");
     private static final String ONGLETS_DOSSIER = "fiche|historique|montants|echeancier|reglements|pieces-jointes"
             + "|payeurs|actions|compteurs|visites-techniques|cadeaux|modifications|modalite-paiement|sous-articles"
@@ -75,6 +76,9 @@ final class ListeBlancheAgence {
             regle(POST, "/api/dossiers/documents/*"),
             regle(POST, "/api/dossiers"),
             regle(GET_POST_DELETE, "/api/dossiers/*/reglements/*/pieces-jointes/**"),
+            // Demandes de remise du dossier ; la file du siège et les décisions restent fermées (R-R3)
+            regle(GET_POST, "/api/dossiers/*/demandes-remise"),
+            regle(POST, "/api/demandes-remise/*/annulation"),
             // Listes déroulantes
             regle(GET, "/api/referentiels/**"));
 

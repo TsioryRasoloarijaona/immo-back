@@ -95,7 +95,8 @@ public class AuthService {
                 profileCompleted,
                 !projets.isEmpty(),
                 projets,
-                RoleAgence.porte(roles)
+                RoleAgence.porte(roles),
+                false // TODO A3 ValidationRemise
         );
     }
 

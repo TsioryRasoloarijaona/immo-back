@@ -14,6 +14,6 @@ public class EcrituresApplication implements TablesEcrites {
     @Override
     public List<String> tables() {
         return List.of("AppFileObject", "AppNotification", "AppModeleImage", "AppModeleDocument",
-                "AppModeleDocumentVersion", "SpecificFunction");
+                "AppModeleDocumentVersion", "SpecificFunction", "AppDemandeRemise");
     }
 }
