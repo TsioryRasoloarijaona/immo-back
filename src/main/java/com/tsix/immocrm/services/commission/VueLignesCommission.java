@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.commission;
 import com.tsix.immocrm.dto.commission.LigneCommissionCalculeeDto;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComCommissionLine;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
@@ -61,7 +62,8 @@ public class VueLignesCommission {
         BigDecimal regle = regles.getOrDefault(l.getId(), BigDecimal.ZERO);
         return new LigneCommissionCalculeeDto(l.getId(), CalculCommission.jour(l.getDocDate()), l.getCommissionType(),
                 montant, l.getCalculationMethod(), l.getComFolderId(), (String) r[1], nom(r[2]), (String) r[3],
-                (String) r[4], (String) r[5], (String) r[6], (String) r[7], l.getCfgEmployeeId(), nom(r[8]), regle,
+                (String) r[4], (String) r[5], (String) r[6], (String) r[7], l.getCfgEmployeeId(), nom(r[8]),
+                r[8] instanceof CfgTier t && AgencesDesVendeurs.estAgence(t), regle,
                 montant.subtract(regle), l.getBuyDocumentId(), (String) r[9], l.getBuyDocumentId() == null);
     }
 

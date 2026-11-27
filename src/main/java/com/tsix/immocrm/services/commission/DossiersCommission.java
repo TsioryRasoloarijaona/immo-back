@@ -12,6 +12,8 @@ import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.entities.str.StrStatus;
 import com.tsix.immocrm.repositories.com.ComCommissionLineRepository;
 import com.tsix.immocrm.services.commission.DatesCommission.Finalisations;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs.Agence;
 import com.tsix.immocrm.services.rapport.LotsTranches;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
@@ -44,14 +46,16 @@ public class DossiersCommission {
     private final DatesCommission dates;
     private final ComCommissionLineRepository lignes;
     private final SoldesCommission soldes;
+    private final AgencesDesVendeurs agences;
     private final EntityManager em;
 
     public DossiersCommission(CommissionsVisibles visibles, DatesCommission dates, ComCommissionLineRepository lignes,
-                              SoldesCommission soldes, EntityManager em) {
+                              SoldesCommission soldes, AgencesDesVendeurs agences, EntityManager em) {
         this.visibles = visibles;
         this.dates = dates;
         this.lignes = lignes;
         this.soldes = soldes;
+        this.agences = agences;
         this.em = em;
     }
 
@@ -68,7 +72,9 @@ public class DossiersCommission {
         Map<UUID, BigDecimal> regles = soldes.reglesParLigne(duLot);
         Map<UUID, List<ComCommissionLine>> parDossier = duLot.stream()
                 .collect(Collectors.groupingBy(ComCommissionLine::getComFolderId));
-        return dossiers.stream().map(f -> dto(f, fin, parDossier.getOrDefault(f.getId(), List.of()), regles)).toList();
+        Map<UUID, Agence> carte = agences.carte();
+        return dossiers.stream().map(f -> dto(f, fin, parDossier.getOrDefault(f.getId(), List.of()), regles,
+                AgencesDesVendeurs.de(carte, f.getCfgCommercial()))).toList();
     }
 
     /** Une date de dossier écrite hors JPA dans la même transaction ne se voit pas sur l'entité déjà chargée. */
@@ -99,14 +105,16 @@ public class DossiersCommission {
     }
 
     private DossierCommissionDto dto(ComFolder f, Finalisations fin, List<ComCommissionLine> duDossier,
-                                     Map<UUID, BigDecimal> regles) {
+                                     Map<UUID, BigDecimal> regles, Agence agence) {
         StkItem article = f.getStkItem();
         SoldesCommission.Solde solde = SoldesCommission.solde(duDossier, regles);
+        boolean deLAgence = agence.id() != null;
         return new DossierCommissionDto(f.getId(), f.getCode(), Champs.de(f.getStrStatus(), StrStatus::getDescription),
                 article.getCode(), article.getDescription(),
                 Champs.de(article.getStkItemCategory(), StkItemCategory::getDescription),
                 VueLignesCommission.nom(f.getCfgCustomer()),
                 id(f.getCfgCommercial()), VueLignesCommission.nom(f.getCfgCommercial()), externe(f.getCfgCommercial()),
+                deLAgence, deLAgence ? agence.libelle() : null,
                 id(f.getCfgSaleManager()), VueLignesCommission.nom(f.getCfgSaleManager()), externe(f.getCfgSaleManager()),
                 id(f.getCfgSaleManager2Id()), VueLignesCommission.nom(f.getCfgSaleManager2Id()),
                 externe(f.getCfgSaleManager2Id()),

@@ -14,6 +14,7 @@ public record DocumentCommissionDto(
         LocalDate date,
         @Schema(description = "Tiers du document : la personne commissionnée.") UUID commercialId,
         String commercial,
+        @Schema(description = "Vrai si le tiers du document est une agence de vente (nature AGV).") boolean beneficiaireAgence,
         @Schema(description = "Montant TTC du document ; Σ des lignes visibles si une ligne est d'une tranche invisible.")
         BigDecimal montant,
         @Schema(description = "Réglé du document (annulés exclus) ; au prorata des lignes visibles si le document est partiel.")

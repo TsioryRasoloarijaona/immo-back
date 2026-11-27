@@ -18,6 +18,9 @@ public record DossierCommissionDto(
         UUID commercialId,
         String commercial,
         @Schema(description = "Le commercial est un prestataire (CfgTier.IsExtern).") boolean commercialExterne,
+        @Schema(description = "Le commercial est vendeur d'une agence : la Concrétisation est due à l'agence.")
+        boolean beneficiaireAgence,
+        @Schema(description = "Libellé de l'agence du commercial (lien « Vendeur d'agence ») ; null = siège.") String agence,
         UUID gestionnaireId,
         String gestionnaire,
         @Schema(description = "Le gestionnaire est un prestataire.") boolean gestionnaireExterne,

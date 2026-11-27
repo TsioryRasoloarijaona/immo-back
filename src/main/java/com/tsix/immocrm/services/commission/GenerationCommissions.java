@@ -15,16 +15,17 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.entities.stk.StkItemCategory;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.com.ComCommissionLineRepository;
-import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.commission.CalculCommission.Fait;
 import com.tsix.immocrm.services.commission.CalculCommission.Montant;
+import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs.Agence;
 import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -57,27 +58,29 @@ public class GenerationCommissions {
         }
     }
 
+    /** {@code agences} : vendeur → agence, lue une fois (Concrétisation seulement, R-K1). */
     private record Contexte(UUID trancheId, TypeCommission type, String colonne, List<ComSalesCommission> regles,
-                            String auteur, LocalDateTime maintenant) {
+                            Map<UUID, Agence> agences, String auteur, LocalDateTime maintenant) {
     }
 
     private final CommissionsVisibles visibles;
     private final DatesCommission dates;
     private final ComCommissionLineRepository lignes;
     private final VueLignesCommission vue;
-    private final UtilisateurAffiche utilisateur;
+    private final AgencesDesVendeurs agences;
+    private final TracePatrimoine traces;
     private final EntityManager em;
-    private final Clock clock;
 
     public GenerationCommissions(CommissionsVisibles visibles, DatesCommission dates, ComCommissionLineRepository lignes,
-                                 VueLignesCommission vue, UtilisateurAffiche utilisateur, EntityManager em, Clock clock) {
+                                 VueLignesCommission vue, AgencesDesVendeurs agences, TracePatrimoine traces,
+                                 EntityManager em) {
         this.visibles = visibles;
         this.dates = dates;
         this.lignes = lignes;
         this.vue = vue;
-        this.utilisateur = utilisateur;
+        this.agences = agences;
+        this.traces = traces;
         this.em = em;
-        this.clock = clock;
     }
 
     @Transactional
@@ -88,7 +91,9 @@ public class GenerationCommissions {
                 ? dates.finalisations(trancheId).exiger(type) : null;
         List<ComSalesCommission> regles = type == TypeCommission.DESISTEMENT ? List.of()
                 : em.createQuery(REGLES, ComSalesCommission.class).setParameter("tranche", trancheId).getResultList();
-        Contexte ctx = new Contexte(trancheId, type, colonne, regles, utilisateur.courant().nom(), LocalDateTime.now(clock));
+        TracePatrimoine.Trace trace = traces.maintenant();
+        Contexte ctx = new Contexte(trancheId, type, colonne, regles,
+                type == TypeCommission.CONCRETISATION ? agences.carte() : Map.of(), trace.auteur(), trace.le());
         Map<UUID, List<ComCommissionLine>> existantes = lignes.findByComFolderIdIn(dossierIds).stream()
                 .collect(Collectors.groupingBy(ComCommissionLine::getComFolderId));
 
@@ -129,7 +134,7 @@ public class GenerationCommissions {
         if (existantes.stream().anyMatch(l -> TypeCommission.negatif(l.getCommissionType()))) {
             return Issue.ignore(RaisonIgnoree.DOSSIER_DESISTE);
         }
-        CfgTier personne = personne(f, ctx.type());
+        CfgTier personne = personne(f, ctx);
         if (personne == null) {
             return Issue.ignore(RaisonIgnoree.SANS_PERSONNE);
         }
@@ -148,8 +153,8 @@ public class GenerationCommissions {
         if (regle.isEmpty()) {
             return Issue.ignore(RaisonIgnoree.SANS_REGLE);
         }
-        Montant m = CalculCommission.montant(regle.get(), ctx.type(), Boolean.TRUE.equals(personne.getIsExtern()),
-                f.getPriceAfterDiscount());
+        boolean externe = Boolean.TRUE.equals(personne.getIsExtern()) || AgencesDesVendeurs.estAgence(personne);
+        Montant m = CalculCommission.montant(regle.get(), ctx.type(), externe, f.getPriceAfterDiscount());
         if (m.valeur().signum() <= 0) {
             return Issue.ignore(RaisonIgnoree.MONTANT_NUL);
         }
@@ -199,9 +204,13 @@ public class GenerationCommissions {
         }
     }
 
-    private static CfgTier personne(ComFolder f, TypeCommission type) {
-        return switch (type) {
-            case CONCRETISATION, DESISTEMENT -> f.getCfgCommercial();
+    /** Concrétisation d'un vendeur d'agence : l'agence, jamais le vendeur (R-K1, R-K2 par {@code Fait.personneId}). */
+    private CfgTier personne(ComFolder f, Contexte ctx) {
+        return switch (ctx.type()) {
+            case CONCRETISATION, DESISTEMENT -> {
+                UUID agence = AgencesDesVendeurs.de(ctx.agences(), f.getCfgCommercial()).id();
+                yield agence == null ? f.getCfgCommercial() : em.find(CfgTier.class, agence);
+            }
             case FINALISATION_1 -> f.getCfgSaleManager();
             case FINALISATION_2 -> f.getCfgSaleManager2Id();
         };

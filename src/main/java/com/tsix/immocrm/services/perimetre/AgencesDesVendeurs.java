@@ -1,9 +1,13 @@
 package com.tsix.immocrm.services.perimetre;
 
+import com.tsix.immocrm.domain.FamilleTiers;
 import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTierKind;
+import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierContactRepository;
+import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
@@ -50,6 +54,12 @@ public class AgencesDesVendeurs {
     /** Agence du commercial dans la carte ; sans commercial ou sans lien = siège. */
     public static Agence de(Map<UUID, Agence> carte, CfgTier commercial) {
         return commercial == null ? Agence.SIEGE : carte.getOrDefault(commercial.getId(), Agence.SIEGE);
+    }
+
+    /** Tiers de la famille Agences (type CNT, nature AGV) : bénéficiaire d'agence d'une commission. */
+    public static boolean estAgence(CfgTier t) {
+        return t != null && FamilleTiers.AGENCES.contient(Champs.de(t.getCfgTierType(), CfgTierType::getCode),
+                Champs.de(t.getCfgTierKind(), CfgTierKind::getCode));
     }
 
     public Agence de(CfgTier commercial) {
