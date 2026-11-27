@@ -11,11 +11,11 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
 import com.tsix.immocrm.repositories.adm.AdmUserRepository;
-import com.tsix.immocrm.repositories.adm.AdmUserRoleRepository;
 import com.tsix.immocrm.repositories.app.AppUserCredentialRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.security.AuthenticatedUser;
 import com.tsix.immocrm.security.JwtService;
+import com.tsix.immocrm.services.dossier.edition.ValidationRemise;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,6 @@ import org.springframework.util.StringUtils;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @Transactional(readOnly = true)
@@ -33,7 +32,7 @@ public class MonCompteService {
 
     private final AdmUserRepository userRepository;
     private final AppUserCredentialRepository credentialRepository;
-    private final AdmUserRoleRepository userRoleRepository;
+    private final ValidationRemise validation;
     private final CfgTierRepository tierRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -41,14 +40,14 @@ public class MonCompteService {
     private final Clock clock;
 
     public MonCompteService(AdmUserRepository userRepository, AppUserCredentialRepository credentialRepository,
-                             AdmUserRoleRepository userRoleRepository, CfgTierRepository tierRepository,
+                             ValidationRemise validation, CfgTierRepository tierRepository,
                              PasswordEncoder passwordEncoder, JwtService jwtService,
                              PerimetreCommercialService perimetreService, Clock clock) {
         this.clock = clock;
         this.perimetreService = perimetreService;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
-        this.userRoleRepository = userRoleRepository;
+        this.validation = validation;
         this.tierRepository = tierRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -138,10 +137,7 @@ public class MonCompteService {
     }
 
     private List<String> roles(AdmUser user) {
-        return userRoleRepository.findByAdmUserId(user.getId()).stream()
-                .map(ur -> ur.getAdmRole() != null ? ur.getAdmRole().getCode() : null)
-                .filter(Objects::nonNull)
-                .toList();
+        return validation.roles(user.getId());
     }
 
     /** Périmètre relu en base, jamais depuis le JWT : une réaffectation se voit sans reconnexion. */
@@ -159,7 +155,7 @@ public class MonCompteService {
                 !projets.isEmpty(),
                 projets,
                 RoleAgence.porte(roles),
-                false // TODO A3 ValidationRemise
+                validation.valideur(user.getId(), roles)
         );
     }
 }

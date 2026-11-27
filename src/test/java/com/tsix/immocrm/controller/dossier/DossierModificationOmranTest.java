@@ -73,6 +73,13 @@ class DossierModificationOmranTest {
                 .contentType(MediaType.APPLICATION_JSON).content(corps));
     }
 
+    /** {@code forcerRemise} n'est suivi que si le compte a le droit toolOverDiscount en base (Administrateur ici). */
+    private ResultActions modifierEnForcant(ComFolder d, String corps) throws Exception {
+        return mockMvc.perform(patch(MODIFIER, d.getId())
+                .with(FixtureDossierVente.connecte(fixture.compte("ADM-MOD", ADMIN), ADMIN))
+                .contentType(MediaType.APPLICATION_JSON).content(corps));
+    }
+
     private ComFolder relu(ComFolder d) {
         em.flush();
         em.clear();
@@ -132,7 +139,7 @@ class DossierModificationOmranTest {
 
     @Test
     void prixVenteHT_nominal_montantDeRemiseEtPrixAttendus() throws Exception {
-        modifier(dossier, ADMIN, "{\"prixVenteHT\":950000,\"forcerRemise\":true}")
+        modifierEnForcant(dossier, "{\"prixVenteHT\":950000,\"forcerRemise\":true}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.champsModifies", hasItem("remise")));
 
@@ -147,7 +154,7 @@ class DossierModificationOmranTest {
 
     @Test
     void prixVenteTTC_nominal_tauxDepuisLeTTC() throws Exception {
-        modifier(dossier, ADMIN, "{\"prixVenteTTC\":1140000,\"forcerRemise\":true}")
+        modifierEnForcant(dossier, "{\"prixVenteTTC\":1140000,\"forcerRemise\":true}")
                 .andExpect(status().isOk());
 
         ComFolder f = relu(dossier);

@@ -81,6 +81,13 @@ class DossierEditionTest {
                 .contentType(MediaType.APPLICATION_JSON).content(corps));
     }
 
+    /** {@code forcerRemise} n'est suivi que si le compte a le droit toolOverDiscount en base (Administrateur ici). */
+    private ResultActions modifierEnForcant(ComFolder d, String corps) throws Exception {
+        return mockMvc.perform(patch(MODIFIER, d.getId())
+                .with(FixtureDossierVente.connecte(fixture.compte("ADM-EDI", ADMIN), ADMIN))
+                .contentType(MediaType.APPLICATION_JSON).content(corps));
+    }
+
     private ComFolder relu(ComFolder d) {
         em.flush();
         em.clear();
@@ -316,7 +323,7 @@ class DossierEditionTest {
                         "Vous ne pouvez pas dépasser le deuxième niveau de remise pour cet article (7,41 %) !"));
         assertThat(relu(dossier).getDiscountAmount()).isNull();
 
-        modifier(dossier, ADMIN, "{\"remiseMontantHT\":425000,\"forcerRemise\":true}")
+        modifierEnForcant(dossier, "{\"remiseMontantHT\":425000,\"forcerRemise\":true}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(MODIFIES, hasItem("remise")))
                 .andExpect(jsonPath("$.ecartSchema").value(1200000.0));
@@ -370,7 +377,7 @@ class DossierEditionTest {
         dossier.setItemPriceHT(new BigDecimal("1000000"));
         folderRepository.save(dossier);
 
-        modifier(dossier, ADMIN, "{\"remiseMontantHT\":50000,\"forcerRemise\":true}")
+        modifierEnForcant(dossier, "{\"remiseMontantHT\":50000,\"forcerRemise\":true}")
                 .andExpect(status().isOk());
 
         ComFolder f = relu(dossier);

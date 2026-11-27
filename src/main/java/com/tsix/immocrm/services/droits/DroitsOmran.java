@@ -33,7 +33,11 @@ public class DroitsOmran {
 
     /** Codes parmi {@code codes} que porte le compte courant (tous pour l'Administrateur, aucun sans compte). */
     public Set<String> parmi(String... codes) {
-        UUID compte = PerimetreCommercialService.admUserIdCourant().orElse(null);
+        return parmiDe(PerimetreCommercialService.admUserIdCourant().orElse(null), codes);
+    }
+
+    /** Codes parmi {@code codes} que porte {@code compte} (tous pour l'Administrateur, aucun si null). */
+    public Set<String> parmiDe(UUID compte, String... codes) {
         if (compte == null) {
             return Set.of();
         }
