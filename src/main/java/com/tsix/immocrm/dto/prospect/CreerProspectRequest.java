@@ -47,6 +47,8 @@ public record CreerProspectRequest(
         String adresse3,
         PieceIdentiteRequest pieceIdentite,
         @Schema(defaultValue = "false")
-        Boolean ignorerDoublons
+        Boolean ignorerDoublons,
+        @Schema(description = "Première prospection du prospect : obligatoire (avec trancheId) pour un compte agence.")
+        ProspectionALaCreationRequest prospection
 ) {
 }

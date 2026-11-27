@@ -197,8 +197,8 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Dossier créé."),
             @ApiResponse(responseCode = "400"),
-            @ApiResponse(responseCode = "403", description = "Le projet de l'article n'est pas dans "
-                    + "le périmètre commercial de l'appelant."),
+            @ApiResponse(responseCode = "403"),
+            @ApiResponse(responseCode = "404"),
             @ApiResponse(responseCode = "409"),
             @ApiResponse(responseCode = "500")
     })
@@ -506,7 +506,9 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document généré."),
             @ApiResponse(responseCode = "400", description = "`format` autre que `pdf` ou `docx`, ou modèle devenu invalide."),
-            @ApiResponse(responseCode = "404", description = "Dossier introuvable ou hors périmètre.")
+            @ApiResponse(responseCode = "404", description = "Dossier introuvable ou hors périmètre."),
+            @ApiResponse(responseCode = "409", description = "Dossier d'un vendeur d'agence sans règlement pointé "
+                    + "(R-C1) : le contrat attend le pointage.")
     })
     public ResponseEntity<byte[]> getActeReservation(@PathVariable UUID id,
             @Parameter(description = "`pdf` (défaut) ou `docx`.") @RequestParam(defaultValue = "pdf") String format) {
@@ -655,7 +657,9 @@ public class DossierController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "PDF généré (une page ou plus par dossier)."),
             @ApiResponse(responseCode = "400", description = "`dossierIds` manquant ou vide."),
-            @ApiResponse(responseCode = "404", description = "Au moins un des `dossierIds` est introuvable.")
+            @ApiResponse(responseCode = "404", description = "Au moins un des `dossierIds` est introuvable."),
+            @ApiResponse(responseCode = "409", description = "Un dossier d'agence n'a aucun règlement pointé : "
+                    + "le `detail` nomme son code (R-C1).")
     })
     public ResponseEntity<byte[]> getActesReservationEnLot(@RequestBody GenererDocumentsLotRequest request) {
         return lotResponse("actes-reservation", documentLotService.acteReservation(request.dossierIds()));

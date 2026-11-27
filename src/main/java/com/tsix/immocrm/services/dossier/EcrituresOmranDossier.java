@@ -10,5 +10,5 @@ public record EcrituresOmranDossier(CreationDossierOmran creation, HistoriqueDos
                                     LigneEcheancierOmran ligneEcheancier, ControleSortieDossier controleSortie,
                                     MontantsDossier montants, WorkflowDossier workflow,
                                     OffreOrigineDossier offreOrigine, ArchivageProspectionsVente archivage,
-                                    AlertesImpayes alertes, ObjetsVisibles visibles) {
+                                    AlertesImpayes alertes, ObjetsVisibles visibles, CreationDossierAgence agence) {
 }

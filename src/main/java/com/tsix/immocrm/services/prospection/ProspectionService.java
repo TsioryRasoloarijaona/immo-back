@@ -2,6 +2,7 @@ package com.tsix.immocrm.services.prospection;
 
 import com.tsix.immocrm.dto.prospect.CreerProspectRequest;
 import com.tsix.immocrm.dto.prospect.HistoriqueDto;
+import com.tsix.immocrm.dto.prospect.ProspectionALaCreationRequest;
 import com.tsix.immocrm.dto.prospection.ArchiverProspectionRequest;
 import com.tsix.immocrm.dto.prospection.ChangerEtapeRequest;
 import com.tsix.immocrm.dto.prospection.CreerInteractionRequest;
@@ -696,7 +697,23 @@ public class ProspectionService {
         Requis.champ(request.typeContactId(), "typeContactId est requis (champ Type)");
         Requis.champ(request.etapeId(), "etapeId est requis (champ Nature)");
         Requis.champ(request.trancheId(), "trancheId est requis (champ Tranche)");
+        return detailEnrichi(creer(prospect, request, notes));
+    }
 
+    /**
+     * Prospection d'un prospect qu'une agence vient de créer (R-D7) : commercial = vendeur du compte, étape = premier
+     * {@code ComProspectionKind} par code (aucune sinon), les champs écran restent facultatifs.
+     */
+    @Transactional
+    public void creerPremiereProspection(CfgTier prospect, ProspectionALaCreationRequest demande, UUID vendeur) {
+        UUID etape = prospectionKindRepository.findFirstByOrderByCodeAsc().map(ComProspectionKind::getId).orElse(null);
+        CreerProspectionRequest request = new CreerProspectionRequest(prospect.getId(), vendeur, demande.trancheId(),
+                null, demande.origineId(), null, null, demande.typeContactId(), null, etape,
+                null, null, null, null, null, null, null, null, null, demande.notes());
+        creer(prospect, request, texteLibre(demande.notes()));
+    }
+
+    private ComProspection creer(CfgTier prospect, CreerProspectionRequest request, String notes) {
         ComProspection prospection = new ComProspection();
         prospection.setId(UUID.randomUUID());
         prospection.setCode(genererCodeProspection());
@@ -714,12 +731,15 @@ public class ProspectionService {
         rattacherTrancheALaCreation(prospection, prospect, request);
         appliquerMontantsDemandes(prospection, request);
         prospection.setNotes(notes);
+        // R-D5 : toute prospection créée par un compte agence porte l'agence comme intermédiaire.
+        perimetreService.agenceCourante()
+                .ifPresent(agence -> prospection.setCfgIntermediate(tierRepository.getReferenceById(agence)));
 
-        prospection = prospectionRepository.save(prospection);
-        ecrireInteractionDeCreation(prospection);
-        enregistrerHistorique(prospection.getId(), TypeActionRecente.PROSPECTION_CREEE,
+        ComProspection enregistree = prospectionRepository.save(prospection);
+        ecrireInteractionDeCreation(enregistree);
+        enregistrerHistorique(enregistree.getId(), TypeActionRecente.PROSPECTION_CREEE,
                 "prospect " + TierNomFormatter.nom(prospect));
-        return detailEnrichi(prospection);
+        return enregistree;
     }
 
     /** Agence : prospect invisible ⇒ 404 (V6), avant tout 409 qui trahirait son existence. Siège : inconnu ⇒ 400. */

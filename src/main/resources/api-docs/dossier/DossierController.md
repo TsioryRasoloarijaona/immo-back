@@ -126,6 +126,13 @@ déduit, pour ne pas les compter deux fois — un lot et ses enfants valent donc
 **Type du tiers** : le client (et chaque acquéreur) est client tant qu'il a un dossier actif dont le
 statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/dossiers/{id}/statut`).
 
+**Compte agence (`FEATURE-agences-vente.md` R-D1 à R-D5)** : prospection et articles limités aux projets
+de l'agence ; aucune remise (`remisePercent` absent ou 0) ; `prix` au moins égal au prix de référence du lot
+et de ses annexes au catalogue ; sans `prix`, le prix est ce total de référence au catalogue, jamais les prix
+d'une offre ; le commercial est le vendeur du compte et la prospection reçoit l'agence comme
+intermédiaire. Le lot et ses annexes sont réservés par une écriture conditionnelle : deux comptes qui visent le
+même lot, un seul dossier (409 « Ce lot vient d'être réservé »).
+
 ### reponse 400
 
 Champ requis manquant (`prospectionId`, `articleIds`, `modePaieId`, `cin`), prospection/article/mode
@@ -134,6 +141,18 @@ de [0 ; 100], ou — avec `remisePercent` — `prix` inférieur au prix des anne
 messages du logiciel de bureau : « Vous n'avez pas sélectionné un article ! », « Cet article n'est pas
 disponible en stock ! », « Le sous article <code> n'est pas libre ! », « Cet article n'a pas la
 vocation correspondante ! », et l'échéancier de l'offre qui ne correspond plus au prix du dossier.
+Compte agence : remise non nulle (« Une remise passe par une demande au siège ») ou `prix` sous le prix de
+référence.
+
+### reponse 403
+
+Le projet de l'article n'est pas dans le périmètre commercial de l'appelant, ou compte agence incomplet
+(utilisateur non lié à une fiche vendeur rattachée à une agence).
+
+### reponse 404
+
+Compte agence : prospection ou article hors des projets de l'agence, ou article déjà pris par un autre
+dossier.
 
 ### reponse 409
 
@@ -141,7 +160,8 @@ Avec `offreId` seulement. L'offre a déjà donné un dossier de vente : le `deta
 son id, et la propriété `dossierExistant` (`{id, code, location}`) permet de l'ouvrir. Ou la
 prospection a déjà un dossier de vente : « Un dossier de vente est déjà généré sur cette prospection ! ».
 Ou, avec ou sans offre, l'échéancier créé dépasse le délai maximal de paiement ou le crédit maximal de
-la tranche (mêmes textes OMRAN que `PATCH /api/dossiers/{id}`) ; rien n'est écrit.
+la tranche (mêmes textes OMRAN que `PATCH /api/dossiers/{id}`) ; rien n'est écrit. Compte agence : le
+lot vient d'être réservé par un autre dossier (« Ce lot vient d'être réservé »).
 
 ### reponse 500
 

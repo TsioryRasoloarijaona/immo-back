@@ -49,17 +49,37 @@ public class AgenceDuCompte {
         return Optional.of(vendeursDeLAgence(admUserId));
     }
 
-    /** Compte incomplet (pas de vendeur, vendeur sans agence) : {@code [AUCUN]}, jamais une liste vide (R-INS3). */
-    List<UUID> vendeursDeLAgence(UUID admUserId) {
+    /** Vendeur et agence d'un compte ; nuls si le compte est incomplet (R-INS3). */
+    public record Rattachement(UUID vendeur, UUID agence) {
+        public boolean complet() {
+            return vendeur != null && agence != null;
+        }
+    }
+
+    /** Rattachement du compte ; absent s'il n'a pas le rôle {@code Agence}. */
+    public Optional<Rattachement> rattachement(UUID admUserId) {
+        if (admUserId == null || !RoleAgence.porte(roles(admUserId))) {
+            return Optional.empty();
+        }
+        return Optional.of(rattachementDe(admUserId));
+    }
+
+    private Rattachement rattachementDe(UUID admUserId) {
         UUID vendeur = users.findById(admUserId).map(AdmUser::getCfgEmployee).map(CfgTier::getId).orElse(null);
         if (vendeur == null) {
-            return List.of(AUCUN);
+            return new Rattachement(null, null);
         }
         List<UUID> agences = liens.tiersDuContact(vendeur, RoleAgence.RELATION_VENDEUR);
-        if (agences.isEmpty()) {
+        return new Rattachement(vendeur, agences.isEmpty() ? null : agences.getFirst());
+    }
+
+    /** Compte incomplet (pas de vendeur, vendeur sans agence) : {@code [AUCUN]}, jamais une liste vide (R-INS3). */
+    List<UUID> vendeursDeLAgence(UUID admUserId) {
+        Rattachement r = rattachementDe(admUserId);
+        if (!r.complet()) {
             return List.of(AUCUN);
         }
-        List<UUID> vendeurs = liens.contactsDuTiers(agences.getFirst(), RoleAgence.RELATION_VENDEUR);
+        List<UUID> vendeurs = liens.contactsDuTiers(r.agence(), RoleAgence.RELATION_VENDEUR);
         return vendeurs.isEmpty() ? List.of(AUCUN) : vendeurs;
     }
 }

@@ -137,6 +137,8 @@ public class ProspectController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Prospect créé."),
             @ApiResponse(responseCode = "400"),
+            @ApiResponse(responseCode = "403"),
+            @ApiResponse(responseCode = "404"),
             @ApiResponse(responseCode = "409")
     })
     public ResponseEntity<ProspectDetailDto> create(@RequestBody CreerProspectRequest request) {

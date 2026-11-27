@@ -3,7 +3,6 @@ package com.tsix.immocrm.services.dossier;
 import com.tsix.immocrm.domain.Chemin;
 import com.tsix.immocrm.domain.ColonneDossier;
 import com.tsix.immocrm.domain.ConventionRemise;
-import com.tsix.immocrm.domain.DisponibiliteArticle;
 import com.tsix.immocrm.domain.PrixArticle;
 import com.tsix.immocrm.domain.SchemaFinancementCalculator;
 import com.tsix.immocrm.domain.StatutDossier;
@@ -55,6 +54,7 @@ import com.tsix.immocrm.services.dossier.liste.MappingListeDossier;
 import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
 import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
 import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
+import com.tsix.immocrm.services.perimetre.AgenceDuCompte;
 import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
@@ -123,6 +123,7 @@ public class DossierService {
     private final ArchivageProspectionsVente archivage;
     private final AlertesImpayes alertesImpayes;
     private final ObjetsVisibles objetsVisibles;
+    private final CreationDossierAgence creationAgence;
 
     public DossierService(ComFolderRepository folderRepository, StkItemRepository stkItemRepository,
                            ComProspectionRepository prospectionRepository, StrStatusRepository strStatusRepository,
@@ -161,6 +162,7 @@ public class DossierService {
         this.archivage = ecrituresOmran.archivage();
         this.alertesImpayes = ecrituresOmran.alertes();
         this.objetsVisibles = ecrituresOmran.visibles();
+        this.creationAgence = ecrituresOmran.agence();
     }
 
     /**
@@ -217,6 +219,7 @@ public class DossierService {
     @Transactional
     public DossierDetailDto create(CreerDossierRequest request) {
         Requis.champ(request.prospectionId(), "prospectionId est requis");
+        Optional<AgenceDuCompte.Rattachement> agence = creationAgence.verifierCompte(request);
         ComProspection prospection = prospectionRepository.findById(request.prospectionId())
                 .orElseThrow(() -> new InvalidRequestException("Prospection introuvable: " + request.prospectionId()));
         if (prospection.getCfgProspect() == null) {
@@ -233,18 +236,13 @@ public class DossierService {
         validerRemisePercent(request.remisePercent());
         ComPaymentMethod modePaie = paymentMethodRepository.findById(request.modePaieId())
                 .orElseThrow(() -> new InvalidRequestException("ComPaymentMethod introuvable: " + request.modePaieId()));
-        List<StkItem> demandes = objetsVisibles.articles(request.articleIds(), ARTICLE_IDS);
+        List<StkItem> articles = creationAgence.articles(agence, request.articleIds(), ARTICLE_IDS);
         Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
                 request.articleIds().get(0));
-        PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
-
-        List<StkItem> articles = new ArrayList<>();
-        for (StkItem item : demandes) {
-            if (DisponibiliteArticle.estOccupe(item)) {
-                throw new InvalidRequestException("Article déjà occupé (lié à un autre dossier): " + item.getId());
-            }
-            articles.add(item);
-        }
+        // Agence sans prix : le prix vient du catalogue, jamais de l'offre (décision 11).
+        PrixSousArticles prixAnnexes = agence.isPresent() && request.prix() == null ? PrixSousArticles.CATALOGUE
+                : offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
+        creationAgence.verifierLibres(agence, articles);
 
         // 403 et non 404 : l'appelant a désigné les articles lui-même, rien à cacher. TOUS sont
         // contrôlés, pas seulement le principal : chacun reçoit ComFolderId plus bas, donc devient vendu.
@@ -266,8 +264,9 @@ public class DossierService {
         folder.setStkItem(principal);
         folder.setStkVocation(principal.getStkVocation());
         folder.setCfgCustomer(client);
-        // Depuis une offre, son commercial (Quote.cs:2394), à défaut celui de la prospection.
-        folder.setCfgCommercial(offre.map(o -> o.offre().getCfgCommercial()).orElse(prospection.getCfgCommercial()));
+        // Depuis une offre, son commercial (Quote.cs:2394), à défaut celui de la prospection ; agence : son vendeur (R-D2).
+        folder.setCfgCommercial(agence.map(r -> tierRepository.getReferenceById(r.vendeur()))
+                .orElseGet(() -> offre.map(o -> o.offre().getCfgCommercial()).orElse(prospection.getCfgCommercial())));
         folder.setComProspection(prospection);
         folder.setStlQuoteId(offre.map(o -> o.offre().getId()).orElse(null));
         folder.setNotes(request.notes());
@@ -275,7 +274,11 @@ public class DossierService {
         folder.setStrStatus(statutInitial);
 
         CfgTranche tranche = principal.getStkHierarchy();
-        appliquerMontantsCreation(folder, principal, new AnnexesPrix(annexes, prixAnnexes), tranche, request);
+        AnnexesPrix annexesPrix = new AnnexesPrix(annexes, prixAnnexes);
+        // Plancher d'agence toujours sur le catalogue : une offre ne l'abaisse pas (décision 9).
+        creationAgence.verifierPlancher(agence, request.prix(),
+                prixDeReference(principal, new AnnexesPrix(annexes, PrixSousArticles.CATALOGUE)));
+        appliquerMontantsCreation(folder, principal, annexesPrix, tranche, request);
         // Dernier contrôle, sur le prix calculé : les écritures (tiers, compteur du code) ne commencent qu'après.
         BigDecimal prixApresRemise = folder.getPriceAfterDiscount();
         offre.ifPresent(o -> offreOrigine.verifierEcheancier(o, prixApresRemise));
@@ -288,10 +291,10 @@ public class DossierService {
         offre.map(o -> o.offre().getCommissionRate()).ifPresent(folder::setCommissionRate);
 
         folder = folderRepository.save(folder);
+        creationAgence.reserverAnnexes(agence, annexes, folder.getId());
         creationOmran.rattacherAnnexes(folder, principal, annexes, prixAnnexes);
         creationOmran.historiserCreation(folder, principal);
-        principal.setComFolderId(folder.getId());
-        stkItemRepository.save(principal);
+        creationAgence.reserver(principal, folder.getId());
 
         List<ComDocument> echeancier = echeancierInitial(folder, tranche, request.prix(),
                 offre.map(OffreRetenue::schema).orElse(List.of()));
@@ -302,6 +305,7 @@ public class DossierService {
         folder = folderRepository.save(folder);
         synchroniserTypeTiers(folder);
 
+        agence.ifPresent(r -> prospection.setCfgIntermediate(tierRepository.getReferenceById(r.agence())));
         cloturerLaProspection(prospection);
         // Sale.cs:AfterInsert → ManageProspectionToArchive : les autres prospections ouvertes du client.
         List<String> archivees = archivage.archiverCellesDe(List.of(client.getId()), prospection.getId());
@@ -335,10 +339,8 @@ public class DossierService {
                                            CfgTranche tranche, CreerDossierRequest request) {
         PrixArticle.PrixDeReference prixLot = prixDuLotSeul(principal);
         if (request.prix() == null) {
-            BigDecimal prixReference = annexes.articles().stream()
-                    .map(annexes.prix()::ttc)
-                    .reduce(prixLot != null ? prixLot.ttc() : BigDecimal.ZERO, BigDecimal::add);
-            appliquerMontants(folder, principal, prixLot, annexes, prixReference, request.remisePercent(), BigDecimal.ZERO);
+            appliquerMontants(folder, principal, prixLot, annexes, prixDeReference(principal, annexes),
+                    request.remisePercent(), BigDecimal.ZERO);
             return;
         }
         BigDecimal fraisSyndic = SchemaFinancementCalculator.calculer(tranche, request.prix()).stream()
@@ -346,6 +348,14 @@ public class DossierService {
                 .map(SchemaFinancementCalculator.Ligne::montant)
                 .findFirst().orElse(BigDecimal.ZERO);
         appliquerMontants(folder, principal, prixLot, annexes, request.prix(), request.remisePercent(), fraisSyndic);
+    }
+
+    /** Total de référence TTC : lot seul + annexes (0 pour ce qui n'a pas de prix) ; plancher d'une agence (R-D4). */
+    private BigDecimal prixDeReference(StkItem principal, AnnexesPrix annexes) {
+        PrixArticle.PrixDeReference prixLot = prixDuLotSeul(principal);
+        return annexes.articles().stream()
+                .map(annexes.prix()::ttc)
+                .reduce(prixLot != null ? prixLot.ttc() : BigDecimal.ZERO, BigDecimal::add);
     }
 
     /** Prix de référence du lot hors sous-articles, qui sont comptés comme annexes ; null sans prix. */

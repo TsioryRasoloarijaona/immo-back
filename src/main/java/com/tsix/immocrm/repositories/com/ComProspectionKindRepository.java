@@ -10,4 +10,6 @@ public interface ComProspectionKindRepository extends JpaRepository<ComProspecti
 
     /** Par code métier — sert les valeurs par défaut de l'import CSV des leads. */
     Optional<ComProspectionKind> findFirstByCode(String code);
+
+    Optional<ComProspectionKind> findFirstByOrderByCodeAsc();
 }

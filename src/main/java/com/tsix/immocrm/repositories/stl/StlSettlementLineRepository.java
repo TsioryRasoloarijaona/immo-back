@@ -27,6 +27,11 @@ public interface StlSettlementLineRepository extends JpaRepository<StlSettlement
             + "WHERE l.comDocument.id = :echeanceId" + COMPTE)
     BigDecimal sumAmountByComDocumentId(UUID echeanceId);
 
+    /** Au moins un règlement pointé sur une échéance du dossier (FEATURE-agences-vente.md R-C1). */
+    @Query("SELECT COUNT(l) > 0 FROM StlSettlementLine l WHERE l.comDocument.comFolder.id = :dossierId "
+            + "AND l.stlSettlement.status = 'POINTED'")
+    boolean existsReglementPointe(UUID dossierId);
+
     /** Part affectée d'un règlement, retranchée de {@code Amount} pour le « Montant brut restant ». */
     @Query("SELECT COALESCE(SUM(l.amount), 0) FROM StlSettlementLine l JOIN l.stlSettlement st "
             + "WHERE st.id = :settlementId" + COMPTE)

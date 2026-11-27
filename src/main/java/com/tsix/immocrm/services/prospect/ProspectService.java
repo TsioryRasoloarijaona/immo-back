@@ -26,6 +26,7 @@ import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.perimetre.AgenceDuCompte;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -103,6 +104,7 @@ public class ProspectService {
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
     private final PerimetreCommercialService perimetre;
+    private final PremiereProspectionAgence premiereProspection;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -122,8 +124,10 @@ public class ProspectService {
                             GenerateurCodeSequence generateurCode,
                             UtilisateurAffiche utilisateurAffiche,
                             Clock clock,
-                            PerimetreCommercialService perimetre) {
+                            PerimetreCommercialService perimetre,
+                            PremiereProspectionAgence premiereProspection) {
         this.perimetre = perimetre;
+        this.premiereProspection = premiereProspection;
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
         this.trancheRepository = trancheRepository;
@@ -223,16 +227,22 @@ public class ProspectService {
 
     @Transactional
     public ProspectDetailDto create(CreerProspectRequest request) {
-        return toDetail(creerEntite(request));
+        // Doublons (409) avant la première prospection d'agence (400 R-D7), tout avant la première écriture.
+        verifierCreation(request);
+        Optional<AgenceDuCompte.Rattachement> agence = premiereProspection.verifier(request.prospection());
+        CfgTier tier = ecrireEntite(request);
+        agence.ifPresent(r -> premiereProspection.creer(tier, request.prospection(), r));
+        return toDetail(tier);
     }
 
     /** Comme {@link #create}, mais rend l'entité — sert aussi {@code POST /api/pre-prospections/{id}/creer-prospect}. */
     @Transactional
     public CfgTier createEntity(CreerProspectRequest request) {
-        return creerEntite(request);
+        verifierCreation(request);
+        return ecrireEntite(request);
     }
 
-    private CfgTier creerEntite(CreerProspectRequest request) {
+    private void verifierCreation(CreerProspectRequest request) {
         if (!StringUtils.hasText(request.nom()) && !StringUtils.hasText(request.raisonSociale())) {
             throw new InvalidRequestException("nom ou raisonSociale est requis");
         }
@@ -245,7 +255,9 @@ public class ProspectService {
                 throw new DoublonsProspectException(doublons);
             }
         }
+    }
 
+    private CfgTier ecrireEntite(CreerProspectRequest request) {
         CfgTier tier = new CfgTier();
         tier.setId(UUID.randomUUID());
         tier.setIsProspect(true);

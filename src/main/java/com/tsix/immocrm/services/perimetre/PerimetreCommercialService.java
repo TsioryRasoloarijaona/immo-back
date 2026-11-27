@@ -132,17 +132,37 @@ public class PerimetreCommercialService {
 
     /** Rôle Agence du compte courant lu en base, vendeur et projets ignorés (FEATURE-agences-vente.md R-V9). */
     public boolean estAgenceCourant() {
-        return agenceCourante();
+        return roleAgenceCourant();
     }
 
     /** Même règle lue sur la source : les écrans d'administration n'y empruntent aucune connexion de la copie. */
     @Transactional
     public boolean estAgenceCourantSurSource() {
-        return agenceCourante();
+        return roleAgenceCourant();
     }
 
-    private boolean agenceCourante() {
+    private boolean roleAgenceCourant() {
         return admUserIdCourant().map(id -> RoleAgence.porte(agenceDuCompte.roles(id))).orElse(false);
+    }
+
+    /** Vendeur et agence du compte courant ; absent pour un compte du siège (R-D2, R-D5). */
+    public Optional<AgenceDuCompte.Rattachement> rattachementAgenceCourant() {
+        return admUserIdCourant().flatMap(agenceDuCompte::rattachement);
+    }
+
+    /** Comme {@link #rattachementAgenceCourant}, mais 403 pour un compte agence sans vendeur lié à une agence (R-INS3). */
+    public Optional<AgenceDuCompte.Rattachement> rattachementAgenceComplet() {
+        Optional<AgenceDuCompte.Rattachement> agence = rattachementAgenceCourant();
+        if (agence.filter(r -> !r.complet()).isPresent()) {
+            throw new ForbiddenException("Compte agence incomplet : lier son utilisateur à une fiche vendeur "
+                    + "rattachée à une agence");
+        }
+        return agence;
+    }
+
+    /** Agence du compte courant, si elle est connue. */
+    public Optional<UUID> agenceCourante() {
+        return rattachementAgenceCourant().map(AgenceDuCompte.Rattachement::agence);
     }
 
     /** Projets d'un compte agence ({@code [AUCUN]} s'il est incomplet) ; absent pour le siège, jamais restreint ici. */
