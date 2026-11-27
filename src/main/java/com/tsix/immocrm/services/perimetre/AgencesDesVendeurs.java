@@ -1,9 +1,13 @@
 package com.tsix.immocrm.services.perimetre;
 
+import com.tsix.immocrm.domain.FamilleTiers;
 import com.tsix.immocrm.domain.RoleAgence;
 import com.tsix.immocrm.entities.cfg.CfgTier;
+import com.tsix.immocrm.entities.cfg.CfgTierKind;
+import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.repositories.cfg.CfgTierContactRepository;
+import com.tsix.immocrm.utils.Champs;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
@@ -38,10 +42,13 @@ public class AgencesDesVendeurs {
         this.liens = liens;
     }
 
-    /** Vendeur → agence, une requête ; un vendeur lié à deux agences garde la première (id croissant). */
+    /** Vendeur → agence, une requête ; seuls les tiers {@link #estAgence} comptent ; premier lien gardé (id croissant). */
     public Map<UUID, Agence> carte() {
         Map<UUID, Agence> carte = new HashMap<>();
         for (Object[] lien : liens.liensDuType(RoleAgence.RELATION_VENDEUR)) {
+            if (!FamilleTiers.AGENCES.contient((String) lien[3], (String) lien[4])) {
+                continue;
+            }
             carte.putIfAbsent((UUID) lien[0], new Agence((UUID) lien[1], (String) lien[2]));
         }
         return carte;
@@ -50,6 +57,20 @@ public class AgencesDesVendeurs {
     /** Agence du commercial dans la carte ; sans commercial ou sans lien = siège. */
     public static Agence de(Map<UUID, Agence> carte, CfgTier commercial) {
         return commercial == null ? Agence.SIEGE : carte.getOrDefault(commercial.getId(), Agence.SIEGE);
+    }
+
+    /** Tiers de la famille Agences (type CNT, nature AGV) : bénéficiaire d'agence d'une commission. */
+    public static boolean estAgence(CfgTier t) {
+        return t != null && FamilleTiers.AGENCES.contient(Champs.de(t.getCfgTierType(), CfgTierType::getCode),
+                Champs.de(t.getCfgTierKind(), CfgTierKind::getCode));
+    }
+
+    /** Nom affiché d'un bénéficiaire : libellé d'agence (Description, comme {@link #carte()}) ou nom du tiers. */
+    public static String nomBeneficiaire(CfgTier t) {
+        if (t == null) {
+            return null;
+        }
+        return estAgence(t) ? t.getDescription() : com.tsix.immocrm.utils.TierNomFormatter.nom(t);
     }
 
     public Agence de(CfgTier commercial) {

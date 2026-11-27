@@ -24,6 +24,8 @@ public record LigneCommissionCalculeeDto(
         @Schema(description = "Statut actuel du dossier.") String statut,
         @Schema(description = "Personne commissionnée (commercial ou gestionnaire).") UUID commercialId,
         String commercial,
+        @Schema(description = "Vrai si le bénéficiaire est une agence de vente (nature AGV) ; commercial = libellé de l'agence.")
+        boolean beneficiaireAgence,
         @Schema(description = "Part réglée de la ligne : réglé du document au prorata du montant de ses lignes.")
         BigDecimal regle,
         @Schema(description = "montant − regle.") BigDecimal reste,
