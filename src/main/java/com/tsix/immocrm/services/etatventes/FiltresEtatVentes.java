@@ -26,7 +26,9 @@ public record FiltresEtatVentes(
         @Parameter(description = "Borne basse incluse, ISO.", example = "2025-03-01")
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
         @Parameter(description = "Borne haute incluse, ISO.", example = "2025-03-31")
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au) {
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
+        @Parameter(description = "Ids d'agence du commercial du dossier et/ou « siege », en OU ; exclut les libres.")
+        List<String> agence) {
 
     public enum Nature { TOUS, ARTICLES, SOUS_ARTICLES }
 
@@ -38,6 +40,6 @@ public record FiltresEtatVentes(
     public static FiltresEtatVentes synthese(List<UUID> entiteId, List<UUID> trancheId, UUID projetId,
                                              List<UUID> categorieId) {
         return new FiltresEtatVentes(entiteId, trancheId, projetId, null, categorieId, null, null, null, null, null,
-                null);
+                null, null);
     }
 }

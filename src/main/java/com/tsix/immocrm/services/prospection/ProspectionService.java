@@ -80,6 +80,7 @@ import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.equipe.RepartitionLeadsService;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospect.ProspectService;
@@ -188,6 +189,7 @@ public class ProspectionService {
     // Créateur commercial habilité, sinon répartition automatique (FEATURE-repartition-notifications.md §3.2).
     private final RepartitionLeadsService repartition;
     private final Clock clock;
+    private final AgencesDesVendeurs agences;
 
     public ProspectionService(ComProspectionRepository prospectionRepository, ProspectService prospectService,
                                CfgTierRepository tierRepository, ComProspectionKindRepository prospectionKindRepository,
@@ -213,8 +215,10 @@ public class ProspectionService {
                                AlerteRelanceService alerteRelanceService,
                                HistoriqueProspection historiqueProspection,
                                RepartitionLeadsService repartition,
-                               Clock clock) {
+                               Clock clock,
+                               AgencesDesVendeurs agences) {
         this.clock = clock;
+        this.agences = agences;
         this.repartition = repartition;
         this.historiqueProspection = historiqueProspection;
         this.alerteRelanceService = alerteRelanceService;
@@ -280,7 +284,13 @@ public class ProspectionService {
 
     private Specification<ComProspection> specProspectionsVisibles(FiltresListeProspection liste,
             FiltresAvancesProspection filtres) {
-        return specProspections(criteres(liste, filtres), filtres).and(perimetreService.filtreProspections());
+        return specProspections(criteres(liste, filtres), filtres).and(parAgence(filtres))
+                .and(perimetreService.filtreProspections());
+    }
+
+    private Specification<ComProspection> parAgence(FiltresAvancesProspection filtres) {
+        return (root, query, cb) -> filtres == null ? null
+                : agences.predicat(root.get("cfgCommercial").get("id"), cb, filtres.agence());
     }
 
     /**
@@ -320,7 +330,7 @@ public class ProspectionService {
     public ResultatGroupement grouperProspections(FiltresListeProspection liste, FiltresAvancesProspection filtres,
             ColonneProspection groupeBy, Granularite granularite, List<AgregatDemande> agregats,
             TriGroupe tri, boolean inclureSansValeur, Pageable pageable) {
-        return grouper(specProspections(criteres(liste, filtres), filtres), groupeBy, granularite, agregats, tri,
+        return grouper(specProspections(criteres(liste, filtres), filtres).and(parAgence(filtres)), groupeBy, granularite, agregats, tri,
                 inclureSansValeur, pageable);
     }
 
@@ -1488,8 +1498,9 @@ public class ProspectionService {
                         .collect(Collectors.toMap(ComSaleProspectionView::getId, v -> v));
         // Idem pour StrEntity : seulement si une colonne de type est demandée.
         Map<UUID, StrEntity> types = chargerTypes(page.getContent(), colonnes);
+        Map<UUID, AgencesDesVendeurs.Agence> carte = ids.isEmpty() ? Map.of() : agences.carte();
         return page.map(p -> toListItem(p, alertes.get(p.getId()), activite.get(p.getId()),
-                typeDe(types, p), colonnes));
+                typeDe(types, p), AgencesDesVendeurs.de(carte, p.getCfgCommercial()), colonnes));
     }
 
     private Map<UUID, StrEntity> chargerTypes(List<ComProspection> prospections,
@@ -1560,13 +1571,14 @@ public class ProspectionService {
      * Champs d'alerte nuls : seul {@link #versListe} les charge, pour toute la page.
      */
     public static ProspectionListItemDto toListItem(ComProspection p) {
-        return toListItem(p, null, null, null, Set.of());
+        return toListItem(p, null, null, null, null, Set.of());
     }
 
     /** {@code vue} et {@code type} : {@code null} si non demandés <b>ou</b> absents — même sortie. */
     private static ProspectionListItemDto toListItem(ComProspection p, DerniereAlerteProjection alerte,
                                                      ComSaleProspectionView vue,
                                                      StrEntity type,
+                                                     AgencesDesVendeurs.Agence agence,
                                                      Set<ColonneProspection> colonnes) {
         // Associations déréférencées seulement si leur colonne est demandée : chacune coûte un
         // chargement paresseux par ligne (deux pour la société).
@@ -1587,6 +1599,8 @@ public class ProspectionService {
                 TierNomFormatter.nom(prospect),
                 Champs.de(commercial, CfgTier::getId),
                 TierNomFormatter.nom(commercial),
+                Champs.de(agence, AgencesDesVendeurs.Agence::id),
+                Champs.de(agence, AgencesDesVendeurs.Agence::libelle),
                 Champs.de(p.getComProspectionOrigin(), ComProspectionOrigin::getCode),
                 Champs.de(p.getComProspectionKind(), ComProspectionKind::getCode),
                 p.getIsClosed(),

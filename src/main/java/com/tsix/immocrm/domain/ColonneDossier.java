@@ -26,6 +26,8 @@ public enum ColonneDossier implements Colonne {
             Chemin.groupable("cfgCommercial.id")),
     COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.ACTEURS, TypeColonne.TEXTE, true,
             Chemin.tier("cfgCommercial")),
+    AGENCE_ID("agenceId", "Id agence", Groupe.ACTEURS, TypeColonne.TEXTE, true, null),
+    AGENCE("agence", "Agence", Groupe.ACTEURS, TypeColonne.TEXTE, true, null),
     PRIX("prix", "Prix de vente", Groupe.FINANCIER, TypeColonne.MONTANT, true,
             Chemin.groupableEtAgregeable("price")),
     TOTAL_A_PAYER("totalAPayer", "Total à payer", Groupe.FINANCIER, TypeColonne.MONTANT, true,

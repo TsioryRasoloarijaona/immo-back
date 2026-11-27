@@ -26,6 +26,8 @@ public enum ColonneProspection implements Colonne {
             Chemin.groupable("cfgCommercial.id")),
     COMMERCIAL_NOM("commercialNom", "Commercial", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,
             Chemin.tier("cfgCommercial")),
+    AGENCE_ID("agenceId", "Id agence", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
+    AGENCE("agence", "Agence", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE),
     // `code` et non `description` : c'est ce que sert le mappeur de liste et ce qu'attendent les
     // filtres ?origine= et ?etape= ; grouper sur le libellé donnerait des valeurs que le filtre ignore.
     ORIGINE("origine", "Origine", Groupe.IDENTITE, TypeColonne.TEXTE, true, Source.ENTITE,

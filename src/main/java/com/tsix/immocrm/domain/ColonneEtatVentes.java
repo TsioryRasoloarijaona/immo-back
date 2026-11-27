@@ -33,6 +33,8 @@ public enum ColonneEtatVentes implements Colonne {
     DOSSIER_CODE("dossierCode", "Dossier", Groupe.VENTE, TypeColonne.TEXTE, Chemin.groupable("dossier.code")),
     CLIENT_NOM("clientNom", "Client", Groupe.VENTE, TypeColonne.TEXTE, null),
     COMMERCIAL("commercial", "Commercial", Groupe.VENTE, TypeColonne.TEXTE, null),
+    AGENCE_ID("agenceId", "Id agence", Groupe.VENTE, TypeColonne.TEXTE, null, null, false),
+    AGENCE("agence", "Agence", Groupe.VENTE, TypeColonne.TEXTE, null, null, false),
     DATE_RESERVATION("dateReservation", "Date réservation", Groupe.VENTE, TypeColonne.DATE,
             Chemin.date("dossier.docDate")),
     MONTANT_REGLE("montantRegle", "Réglé", ColonneDossier.PRIX_REGLE, true),

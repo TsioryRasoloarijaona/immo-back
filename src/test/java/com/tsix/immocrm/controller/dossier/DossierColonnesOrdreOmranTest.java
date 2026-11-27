@@ -49,10 +49,10 @@ class DossierColonnesOrdreOmranTest {
             "dateVisiteTechnique", "dateExpedition", "echeanceRelance1", "echeanceRelance2", "dateEnvoiMeilleurTaux",
             "delaiNotaireCredit", "delaiCreditCles");
 
-    /** §2.4 : défaut serveur d'avant le lot, inchangé (décision manager du 28/10). */
+    /** §2.4 : défaut serveur d'avant le lot, plus l'agence (FEATURE-agences-vente.md §6 R-S1). */
     private static final List<String> DEFAUTS_SERVEUR = List.of(
-            "id", "code", "dateDocument", "statut", "clientId", "clientNom", "commercialId", "commercialNom", "prix",
-            "totalAPayer", "dateConcretisation", "prospectionId", "prospectionCode");
+            "id", "code", "dateDocument", "statut", "clientId", "clientNom", "commercialId", "commercialNom",
+            "agenceId", "agence", "prix", "totalAPayer", "dateConcretisation", "prospectionId", "prospectionCode");
 
     @Autowired
     private MockMvc mockMvc;

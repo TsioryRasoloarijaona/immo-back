@@ -18,6 +18,10 @@ public record DossierDetailDto(
         String clientNom,
         UUID commercialId,
         String commercialNom,
+        @Schema(description = "« Vendu par » : agence (CfgTier.id) dont le commercial est vendeur ; null pour le siège.")
+        UUID agenceId,
+        @Schema(description = "« Vendu par » : libellé de l'agence du commercial (CfgTier.Description), « Siège » sinon.")
+        String agence,
         UUID avocatId,
         String avocatNom,
         List<ArticleSummaryDto> articles,
