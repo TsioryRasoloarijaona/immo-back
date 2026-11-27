@@ -32,4 +32,10 @@ public interface CfgTierContactRepository extends JpaRepository<CfgTierContact, 
             select l.cfgContact.id from CfgTierContact l
             where l.cfgTier.id = :tierId and l.cfgRelationType.code = :codeRelation and l.cfgContact is not null""")
     List<UUID> contactsDuTiers(@Param("tierId") UUID tierId, @Param("codeRelation") String codeRelation);
+
+    /** Tous les liens de ce type : [contact, tiers, libellé du tiers] (carte vendeur → agence). */
+    @Query("""
+            select l.cfgContact.id, l.cfgTier.id, l.cfgTier.description from CfgTierContact l
+            where l.cfgRelationType.code = :codeRelation and l.cfgContact is not null order by l.cfgTier.id""")
+    List<Object[]> liensDuType(@Param("codeRelation") String codeRelation);
 }

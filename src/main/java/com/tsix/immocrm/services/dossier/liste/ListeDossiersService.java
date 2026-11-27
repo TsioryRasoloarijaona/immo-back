@@ -15,6 +15,7 @@ import com.tsix.immocrm.repositories.com.ComFolderRepository;
 import com.tsix.immocrm.repositories.str.StrStatusRepository;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -149,6 +150,10 @@ public class ListeDossiersService {
             spec = spec.and((root, query, cb) -> GroupementService.predicatDeGroupe(
                     root, cb, depliage.colonne().chemin(), depliage.granularite(), depliage.valeur()));
         }
+        if (filtres.agence() != null && !filtres.agence().isEmpty()) {
+            spec = spec.and((root, query, cb) -> calculs.agences().predicat(
+                    root.get("cfgCommercial").get("id"), cb, filtres.agence()));
+        }
         return spec.and(perimetreService.filtreDossiers());
     }
 
@@ -214,10 +219,13 @@ public class ListeDossiersService {
         Map<UUID, Map<ColonneDossier, BigDecimal>> montants = MontantsParNatureDossier.requises(colonnes)
                 ? calculs.montants().pour(dossiers)
                 : Map.of();
+        Map<UUID, AgencesDesVendeurs.Agence> agences = dossiers.isEmpty() ? Map.of() : calculs.agences().carte();
         return dossiers.stream()
                 .map(f -> {
                     LigneDossier ligne = MappingListeDossier.depuisDossier(f, colonnes, valeurs.get(f.getId()));
                     montants.getOrDefault(f.getId(), Map.of()).forEach(ligne::met);
+                    AgencesDesVendeurs.Agence agence = AgencesDesVendeurs.de(agences, f.getCfgCommercial());
+                    ligne.met(ColonneDossier.AGENCE_ID, agence.id()).met(ColonneDossier.AGENCE, agence.libelle());
                     return ligne;
                 })
                 .toList();

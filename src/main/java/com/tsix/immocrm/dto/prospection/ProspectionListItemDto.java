@@ -22,6 +22,14 @@ public record ProspectionListItemDto(
         String prospectNom,
         UUID commercialId,
         String commercialNom,
+
+        @Schema(description = "Agence du commercial (lien vendeur) ; null si siège ou hors liste.")
+        UUID agenceId,
+
+        @Schema(description = "Libellé de l'agence du commercial, « Siège » sans agence ; null hors liste.",
+                example = "Siège")
+        String agence,
+
         String origine,
         String etape,
 

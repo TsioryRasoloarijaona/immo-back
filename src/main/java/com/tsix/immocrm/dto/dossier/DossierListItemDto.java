@@ -22,6 +22,10 @@ public record DossierListItemDto(
         String clientNom,
         UUID commercialId,
         String commercialNom,
+        @Schema(description = "Agence (CfgTier.id) dont le commercial est vendeur ; null pour le siège.")
+        UUID agenceId,
+        @Schema(description = "Libellé de l'agence du commercial (CfgTier.Description), « Siège » sinon.")
+        String agence,
         BigDecimal prix,
         BigDecimal totalAPayer,
         /** Jalon « Concrétisation » ({@code ComFolder.advanceDate}) ; {@code dateDocument} tient lieu de date de

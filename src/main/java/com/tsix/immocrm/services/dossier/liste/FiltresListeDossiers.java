@@ -43,7 +43,9 @@ public record FiltresListeDossiers(
         @Parameter(description = "Id de la société (CfgCompany.id) du projet de l'article principal ; inconnue = vide.")
         UUID societeId,
         @Parameter(description = "Ajoute les dossiers sans statut au filtre statut ; seul, ne rend que ceux-là.",
-                example = "false", schema = @Schema(type = "boolean", defaultValue = "false")) Boolean sansStatut) {
+                example = "false", schema = @Schema(type = "boolean", defaultValue = "false")) Boolean sansStatut,
+        @Parameter(description = "Ids d'agence (CfgTier.id) et/ou « siege », répétables, en OU ; rien = tout.")
+        List<String> agence) {
 
     public FiltresListeDossiers {
         inclureSortis = Boolean.TRUE.equals(inclureSortis);
@@ -54,7 +56,7 @@ public record FiltresListeDossiers(
     /** Tous les dossiers, sortis compris, sans autre filtre que la tranche si elle est donnée. */
     public static FiltresListeDossiers tousStatuts(List<UUID> trancheId) {
         return new FiltresListeDossiers(null, null, null, trancheId, null, null, null, null, null,
-                true, LignesListeDossiers.DOSSIERS, null, null, null, null);
+                true, LignesListeDossiers.DOSSIERS, null, null, null, null, null);
     }
 
     /** Assiette du tableau de bord par tranche : tous les dossiers de la tranche, sortis compris. */

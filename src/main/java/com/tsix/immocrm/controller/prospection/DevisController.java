@@ -56,6 +56,8 @@ public class DevisController {
             @RequestParam(required = false) List<UUID> trancheId,
             @Parameter(description = "Id du commercial (CfgTier.id, cfgCommercial).")
             @RequestParam(required = false) UUID commercial,
+            @Parameter(description = "Ids d'agence (CfgTier.id) et/ou « siege », répétables, en OU ; rien = tout.")
+            @RequestParam(required = false) List<String> agence,
             @Parameter(description = "Borne inférieure (incluse) sur dateDocument, format ISO-8601.",
                     example = "2026-01-01T00:00:00")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
@@ -63,7 +65,7 @@ public class DevisController {
                     example = "2026-12-31T23:59:59")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
             @PageableDefault(size = DEFAULT_PAGE_SIZE, sort = "docDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return DevisPageDto.of(devisService.findAll(search, trancheId, commercial, dateDebut, dateFin, pageable));
+        return DevisPageDto.of(devisService.findAll(search, trancheId, commercial, agence, dateDebut, dateFin, pageable));
     }
 
     @GetMapping("/{id}")

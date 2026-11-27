@@ -39,6 +39,8 @@ import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
 import com.tsix.immocrm.security.UtilisateurAffiche;
 import com.tsix.immocrm.services.dossier.ReferencesOmran;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs.Agence;
 import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
@@ -64,6 +66,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -92,6 +95,7 @@ public class DevisService {
     private final ReferencesOmran referencesOmran;
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
+    private final AgencesDesVendeurs agences;
 
     public DevisService(ComProspectionRepository prospectionRepository, DepotsDevis depots,
                          PerimetreCommercialService perimetreService, ObjetsVisibles objetsVisibles,
@@ -110,6 +114,7 @@ public class DevisService {
         this.settlementCategoryRepository = depots.categories();
         this.schemaRepository = depots.schemas();
         this.folderRepository = depots.dossiers();
+        this.agences = depots.agences();
     }
 
     /**
@@ -149,10 +154,14 @@ public class DevisService {
         return String.format(format, valeur);
     }
 
-    public Page<DevisDto> findAll(String search, List<UUID> trancheIds, UUID commercial,
+    public Page<DevisDto> findAll(String search, List<UUID> trancheIds, UUID commercial, List<String> agence,
                                    LocalDateTime dateDebut, LocalDateTime dateFin, Pageable pageable) {
         Specification<StlQuote> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            Predicate parAgence = agences.predicat(root.get("cfgCommercial").get("id"), cb, agence);
+            if (parAgence != null) {
+                predicates.add(parAgence);
+            }
             if (StringUtils.hasText(search)) {
                 predicates.add(recherche(root, cb, search));
             }
@@ -172,7 +181,12 @@ public class DevisService {
         };
         // Périmètre filtré ici : PerimetreInterceptor ne couvre pas ce préfixe d'URL
         // (FEATURE-perimetre-commercial.md §9bis.2).
-        return quoteRepository.findAll(spec.and(perimetreService.filtreDevis()), pageable).map(this::toDto);
+        return enDtos(quoteRepository.findAll(spec.and(perimetreService.filtreDevis()), pageable));
+    }
+
+    private Page<DevisDto> enDtos(Page<StlQuote> page) {
+        Map<UUID, Agence> carte = agences.carte();
+        return page.map(q -> toDto(q, AgencesDesVendeurs.de(carte, q.getCfgCommercial())));
     }
 
     /**
@@ -201,8 +215,7 @@ public class DevisService {
         if (!prospectionRepository.existsById(prospectionId)) {
             throw new ResourceNotFoundException("Prospection introuvable: " + prospectionId);
         }
-        return quoteRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId, pageable)
-                .map(this::toDto);
+        return enDtos(quoteRepository.findByComProspectionIdOrderByDocDateDesc(prospectionId, pageable));
     }
 
     public DevisDto findById(UUID prospectionId, UUID devisId) {
@@ -768,6 +781,10 @@ public class DevisService {
     }
 
     private DevisDto toDto(StlQuote q) {
+        return toDto(q, agences.de(q.getCfgCommercial()));
+    }
+
+    private DevisDto toDto(StlQuote q, Agence agence) {
         StkItem article = q.getStkItem();
         CfgTranche tranche = q.getCfgTranche();
         ComProspection prospection = q.getComProspection();
@@ -790,6 +807,8 @@ public class DevisService {
                 TierNomFormatter.nom(q.getCfgProspect()),
                 q.getCfgCommercial() != null ? q.getCfgCommercial().getId() : null,
                 TierNomFormatter.nom(q.getCfgCommercial()),
+                agence.id(),
+                agence.libelle(),
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getId() : null,
                 q.getComPaymentMethod() != null ? q.getComPaymentMethod().getDescription() : null,
                 toMontantsDto(q),

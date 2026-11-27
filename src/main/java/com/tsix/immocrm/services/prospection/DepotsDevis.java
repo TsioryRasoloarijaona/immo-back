@@ -10,6 +10,7 @@ import com.tsix.immocrm.repositories.stk.StkItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteDocumentRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteItemRepository;
 import com.tsix.immocrm.repositories.stl.StlQuoteRepository;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import org.springframework.stereotype.Component;
 
 /** Dépôts lus et écrits par les offres d'une prospection, regroupés (S107). */
@@ -18,5 +19,5 @@ public record DepotsDevis(StlQuoteRepository offres, StlQuoteItemRepository lign
                           StkItemRepository articles, CfgTierRepository tiers,
                           ComPaymentMethodRepository modesPaiement, AdmSequenceRepository sequences,
                           ComSettlementCategoryRepository categories, StlQuoteDocumentRepository schemas,
-                          ComFolderRepository dossiers) {
+                          ComFolderRepository dossiers, AgencesDesVendeurs agences) {
 }
