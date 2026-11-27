@@ -88,7 +88,7 @@ public class DemandesRemiseController {
     @Operation(summary = "Accepte une demande et applique la remise au dossier (siège valideur)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "La demande ACCEPTEE ; le prix du dossier est recalculé."),
-            @ApiResponse(responseCode = "400", description = "Taux accordé ≤ 0 ou supérieur au taux demandé.", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Taux accordé ≤ 0, > taux demandé ou ≤ remise actuelle du dossier.", content = @Content),
             @ApiResponse(responseCode = "403", description = PAS_VALIDEUR, content = @Content),
             @ApiResponse(responseCode = "404", description = DEMANDE_INTROUVABLE, content = @Content),
             @ApiResponse(responseCode = "409", description = "Demande plus en attente, ou dossier sorti.", content = @Content)

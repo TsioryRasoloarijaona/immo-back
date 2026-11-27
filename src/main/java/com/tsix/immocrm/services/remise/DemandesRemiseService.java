@@ -62,11 +62,10 @@ public class DemandesRemiseService {
     public DemandeRemiseDto demander(UUID dossierId, DemanderRemiseRequest requete) {
         ComFolder dossier = dossierVisible(dossierId);
         UUID compte = validation.exigerAgence();
-        if (requete == null || requete.taux() == null || requete.taux().signum() <= 0
-                || requete.taux().compareTo(CENT) > 0) {
+        BigDecimal taux = requete == null ? null : arrondi(requete.taux());
+        if (taux == null || taux.signum() <= 0 || taux.compareTo(CENT) > 0) {
             throw new InvalidRequestException("taux : obligatoire, supérieur à 0 et au plus 100.");
         }
-        BigDecimal taux = requete.taux();
         String motif = motifObligatoire(requete.motif());
         if (DossierSorti.estSorti(dossier)) {
             throw new ConflictException(DossierEditionService.MESSAGE_SORTI);
@@ -118,9 +117,14 @@ public class DemandesRemiseService {
     public DemandeRemiseDto accepter(UUID demandeId, AccepterRemiseRequest requete) {
         validation.exigerValideur();
         AppDemandeRemise demande = enAttente(demandeVisible(demandeId));
-        BigDecimal taux = requete == null || requete.taux() == null ? demande.getTauxDemande() : requete.taux();
+        BigDecimal taux = arrondi(requete == null || requete.taux() == null
+                ? demande.getTauxDemande() : requete.taux());
         if (taux.signum() <= 0 || taux.compareTo(demande.getTauxDemande()) > 0) {
             throw new InvalidRequestException("taux : supérieur à 0 et au plus le taux demandé.");
+        }
+        ComFolder dossier = dossierVisible(demande.getDossierId());
+        if (taux.compareTo(edition.tauxRemise(dossier)) <= 0) {
+            throw new InvalidRequestException("La remise actuelle du dossier est déjà supérieure ou égale.");
         }
         edition.accorderRemise(demande.getDossierId(), taux);
         demande.setTauxAccorde(taux);
@@ -161,6 +165,10 @@ public class DemandesRemiseService {
         perimetre.verifierAccesDossier(dossierId);
         return dossiers.findById(dossierId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable: " + dossierId));
+    }
+
+    private static BigDecimal arrondi(BigDecimal taux) {
+        return taux == null ? null : taux.setScale(4, java.math.RoundingMode.HALF_UP);
     }
 
     private static AppDemandeRemise enAttente(AppDemandeRemise demande) {
