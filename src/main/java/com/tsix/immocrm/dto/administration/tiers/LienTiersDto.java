@@ -10,5 +10,7 @@ public record LienTiersDto(
         @Schema(description = "PKey du tiers lié.") UUID contactId,
         @Schema(description = "Libellé du tiers lié.") String contact,
         @Schema(description = "Type de relation (CfgRelationType) ; null si aucun.") UUID relationTypeId,
-        @Schema(description = "Libellé du type de relation.") String relation) {
+        @Schema(description = "Libellé du type de relation.") String relation,
+        @Schema(description = "Codes des comptes utilisateur (AdmUser) du contact, séparés par des virgules ; null si aucun.")
+        String compte) {
 }

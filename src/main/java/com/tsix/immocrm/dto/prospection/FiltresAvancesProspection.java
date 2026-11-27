@@ -79,7 +79,10 @@ public record FiltresAvancesProspection(
         @Schema(description = "Date portant la période `dateDebut` / `dateFin`. Défaut : DATE.")
         PeriodeSur periodeSur,
 
-        DateRenseignee dateRenseignee
+        DateRenseignee dateRenseignee,
+
+        @Schema(description = "Id(s) d'agence du commercial, ou `siege` (commercial vendeur d'aucune agence). Répétable.")
+        List<String> agence
 ) {
 
     /** Vrai si au moins un filtre exige la sous-requête sur la vue. */

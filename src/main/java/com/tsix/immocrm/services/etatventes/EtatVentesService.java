@@ -34,6 +34,8 @@ import com.tsix.immocrm.services.dossier.liste.MontantsParNatureDossier;
 import com.tsix.immocrm.services.dossier.liste.ValeursCalculees;
 import com.tsix.immocrm.services.groupement.GroupementService;
 import com.tsix.immocrm.services.groupement.GroupementService.ResultatGroupement;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs.Agence;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.utils.Champs;
 import com.tsix.immocrm.utils.TierNomFormatter;
@@ -114,10 +116,12 @@ public class EtatVentesService {
     private final CalculsDeLaPage calculs;
     private final StrStatusRepository statusRepository;
     private final EntityManager em;
+    private final AgencesDesVendeurs agences;
 
     public EtatVentesService(StkItemEtatVentesRepository repository, PerimetreCommercialService perimetreService,
                              GroupementService groupementService, CalculsDeLaPage calculs,
                              StrStatusRepository statusRepository, EntityManager em) {
+        this.agences = calculs.agences();
         this.repository = repository;
         this.perimetreService = perimetreService;
         this.groupementService = groupementService;
@@ -243,7 +247,8 @@ public class EtatVentesService {
         Map<UUID, ValeursDossier> valeurs = valeursDuDossier(
                 page.stream().map(StkItemEtatVentes::getDossier).filter(Objects::nonNull).distinct().toList(),
                 colonnes.stream().map(ColonneEtatVentes::source).filter(Objects::nonNull).collect(Collectors.toSet()));
-        return page.map(l -> versDto(l, l.getDossier() != null ? valeurs.get(l.getDossier().getId()) : null));
+        Map<UUID, Agence> carte = agences.carte();
+        return page.map(l -> versDto(l, l.getDossier() != null ? valeurs.get(l.getDossier().getId()) : null, carte));
     }
 
     /** Montants et valeurs calculées d'un dossier, lus par les calculs de la liste des dossiers. */
@@ -329,7 +334,10 @@ public class EtatVentesService {
     private Specification<StkItemEtatVentes> specification(FiltresEtatVentes filtres) {
         Set<String> statuts = statutsDemandes(filtres.statut());
         Specification<StkItemEtatVentes> visibles = perimetreService.filtreParTranche(TRANCHE);
-        return visibles.and((root, query, cb) -> cb.and(predicats(root, cb, filtres, statuts)
+        // Jointure interne implicite sur le dossier : un article libre n'a pas d'agence, tout filtre agence l'exclut.
+        Specification<StkItemEtatVentes> parAgence = (root, query, cb) ->
+                agences.predicat(root.get(DOSSIER).get("cfgCommercial").get(ID), cb, filtres.agence());
+        return visibles.and(parAgence).and((root, query, cb) -> cb.and(predicats(root, cb, filtres, statuts)
                 .toArray(new Predicate[0])));
     }
 
@@ -439,8 +447,9 @@ public class EtatVentesService {
 
     // ---------------------------------------------------------------- restitution
 
-    private static LigneEtatVentesDto versDto(StkItemEtatVentes l, ValeursDossier valeurs) {
+    private static LigneEtatVentesDto versDto(StkItemEtatVentes l, ValeursDossier valeurs, Map<UUID, Agence> carte) {
         ComFolder d = l.getDossier();
+        Agence agence = d != null ? AgencesDesVendeurs.de(carte, d.getCfgCommercial()) : new Agence(null, null);
         Function<ColonneEtatVentes, BigDecimal> m = c -> valeurs != null ? valeurs.montants().get(c.source()) : null;
         ValeursCalculees calculees = valeurs != null ? valeurs.calculees() : null;
         return new LigneEtatVentesDto(l.getArticleId(), l.getArticleCode(), l.getArticleLibelle(),
@@ -454,6 +463,7 @@ public class EtatVentesService {
                 Champs.de(d, ComFolder::getId), Champs.de(d, ComFolder::getCode),
                 TierNomFormatter.nom(Champs.de(d, ComFolder::getCfgCustomer)),
                 TierNomFormatter.nom(Champs.de(d, ComFolder::getCfgCommercial)),
+                agence.id(), agence.libelle(),
                 Champs.de(d, ComFolder::getDocDate),
                 m.apply(MONTANT_REGLE), m.apply(RESTE_A_REGLER),
                 l.getPrixArticleHt(), l.getPrixArticleTtc(), l.getPrixSousArticlesHt(), l.getPrixSousArticlesTtc(),

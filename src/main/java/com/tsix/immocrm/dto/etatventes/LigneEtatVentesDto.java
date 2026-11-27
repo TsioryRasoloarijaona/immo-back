@@ -31,6 +31,10 @@ public record LigneEtatVentesDto(
         String dossierCode,
         @Schema(description = "Nom affiché du client du dossier.") String clientNom,
         @Schema(description = "Nom affiché du commercial du dossier.") String commercial,
+        @Schema(description = "Id de l'agence du commercial du dossier ; null pour le siège ou un article libre.")
+        UUID agenceId,
+        @Schema(description = "Agence du commercial du dossier, « Siège » sans agence ; null si l'article est libre.")
+        String agence,
         @Schema(description = "ComFolder.DocDate.") LocalDateTime dateReservation,
         @Schema(description = "Prix de vente réglé du dossier (prixRegle de la liste des dossiers) ; null si libre.")
         BigDecimal montantRegle,

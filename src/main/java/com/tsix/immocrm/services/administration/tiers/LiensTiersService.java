@@ -2,12 +2,14 @@ package com.tsix.immocrm.services.administration.tiers;
 
 import com.tsix.immocrm.dto.administration.tiers.LienTiersDto;
 import com.tsix.immocrm.dto.administration.tiers.LienTiersRequest;
+import com.tsix.immocrm.entities.adm.AdmUser;
 import com.tsix.immocrm.entities.cfg.CfgRelationType;
 import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.cfg.CfgTierContact;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.repositories.adm.AdmUserRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierContactRepository;
 import com.tsix.immocrm.repositories.cfg.CfgTierRepository;
 import com.tsix.immocrm.services.patrimoine.TracePatrimoine;
@@ -17,7 +19,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Liens de {@code CfgTierContact}, tout type de tiers : ces routes ne filtrent pas par famille. */
 @Service
@@ -28,10 +33,13 @@ public class LiensTiersService {
     private final CfgTierContactRepository liens;
     private final TracePatrimoine traces;
     private final GardeLienVendeurAgence garde;
+    private final AdmUserRepository comptesUtilisateur;
 
     public LiensTiersService(EntityManager em, CfgTierRepository tiers, CfgTierContactRepository liens,
-                             TracePatrimoine traces, GardeLienVendeurAgence garde) {
+                             TracePatrimoine traces, GardeLienVendeurAgence garde,
+                             AdmUserRepository comptesUtilisateur) {
         this.garde = garde;
+        this.comptesUtilisateur = comptesUtilisateur;
         this.em = em;
         this.tiers = tiers;
         this.liens = liens;
@@ -41,7 +49,20 @@ public class LiensTiersService {
     @Transactional(readOnly = true)
     public List<LienTiersDto> lister(UUID tiersId) {
         trouver(tiersId);
-        return liens.findByCfgTierIdOrderByUserCreateDateTimeDesc(tiersId).stream().map(LiensTiersService::dto).toList();
+        List<CfgTierContact> lignes = liens.findByCfgTierIdOrderByUserCreateDateTimeDesc(tiersId);
+        Map<UUID, String> comptes = comptes(lignes.stream().map(CfgTierContact::getCfgContact)
+                .filter(Objects::nonNull).map(CfgTier::getId).toList());
+        return lignes.stream().map(l -> dto(l, l.getCfgContact() == null ? null
+                : comptes.get(l.getCfgContact().getId()))).toList();
+    }
+
+    private Map<UUID, String> comptes(List<UUID> contactIds) {
+        if (contactIds.isEmpty()) {
+            return Map.of();
+        }
+        return comptesUtilisateur.findByCfgEmployeeIdIn(contactIds).stream()
+                .filter(u -> u.getCfgEmployee() != null && u.getCode() != null)
+                .collect(Collectors.groupingBy(u -> u.getCfgEmployee().getId(), Collectors.mapping(AdmUser::getCode, Collectors.joining(", "))));
     }
 
     @Transactional
@@ -65,7 +86,7 @@ public class LiensTiersService {
         lien.setUserCreate(trace.auteur());
         lien.setUserCreateDateTime(trace.le());
         em.persist(lien);
-        return dto(lien);
+        return dto(lien, comptes(List.of(contact.getId())).get(contact.getId()));
     }
 
     @Transactional
@@ -89,11 +110,11 @@ public class LiensTiersService {
         return relation;
     }
 
-    private static LienTiersDto dto(CfgTierContact l) {
+    private static LienTiersDto dto(CfgTierContact l, String compte) {
         CfgRelationType relation = l.getCfgRelationType();
         CfgTier contact = l.getCfgContact();
         return new LienTiersDto(l.getId(), contact == null ? null : contact.getId(),
                 contact == null ? null : contact.getDescription(), relation == null ? null : relation.getId(),
-                relation == null ? null : relation.getDescription());
+                relation == null ? null : relation.getDescription(), compte);
     }
 }

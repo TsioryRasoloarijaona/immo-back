@@ -46,6 +46,10 @@ public record DevisDto(
         UUID commercialId,
         @Schema(description = "Nom du commercial.")
         String commercial,
+        @Schema(description = "Id de l'agence du commercial (lien vendeur) ; null pour le siège.")
+        UUID agenceId,
+        @Schema(description = "Agence du commercial (CfgTier.Description), « Siège » s'il n'est vendeur d'aucune agence.")
+        String agence,
 
         UUID modePaiementId,
         @Schema(description = "Libellé du mode de paiement.")

@@ -55,6 +55,7 @@ import com.tsix.immocrm.services.dossier.liste.SpecificationsListeDossiers;
 import com.tsix.immocrm.services.dossier.workflow.TransitionDossier;
 import com.tsix.immocrm.services.dossier.workflow.WorkflowDossier;
 import com.tsix.immocrm.services.perimetre.AgenceDuCompte;
+import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.perimetre.ObjetsVisibles;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.prospection.AlerteRelanceService;
@@ -110,6 +111,7 @@ public class DossierService {
     private final AlerteRelanceService alerteRelanceService;
     private final TransformationProspectClient transformationProspectClient;
     private final Clock clock;
+    private final AgencesDesVendeurs agences;
     private final LiberationLot liberationLot;
     private final CreationDossierOmran creationOmran;
     private final HistoriqueDossier historique;
@@ -133,8 +135,9 @@ public class DossierService {
                            UtilisateurAffiche utilisateurAffiche,
                            AlerteRelanceService alerteRelanceService,
                            TransformationProspectClient transformationProspectClient,
-                           Clock clock, LiberationLot liberationLot, EcrituresOmranDossier ecrituresOmran) {
-        this.clock = clock;
+                           LecturesDossier lectures, LiberationLot liberationLot, EcrituresOmranDossier ecrituresOmran) {
+        this.clock = lectures.clock();
+        this.agences = lectures.agences();
         this.liberationLot = liberationLot;
         this.transformationProspectClient = transformationProspectClient;
         this.alerteRelanceService = alerteRelanceService;
@@ -787,6 +790,7 @@ public class DossierService {
         CfgTranche tranche = tranche(f);
         CfgCompany societe = societe(f);
         ComProspection prospection = f.getComProspection();
+        AgencesDesVendeurs.Agence agence = agences.de(f.getCfgCommercial());
         return new DossierDetailDto(
                 f.getId(),
                 f.getCode(),
@@ -797,6 +801,8 @@ public class DossierService {
                 TierNomFormatter.nom(f.getCfgCustomer()),
                 Champs.de(f.getCfgCommercial(), CfgTier::getId),
                 TierNomFormatter.nom(f.getCfgCommercial()),
+                agence.id(),
+                agence.libelle(),
                 Champs.de(f.getCfgLawyer(), CfgTier::getId),
                 TierNomFormatter.nom(f.getCfgLawyer()),
                 articles,
