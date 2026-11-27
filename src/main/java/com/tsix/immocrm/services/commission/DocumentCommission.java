@@ -13,7 +13,6 @@ import com.tsix.immocrm.services.achat.ecriture.ConfigurationPieceAchat;
 import com.tsix.immocrm.services.achat.ecriture.EcriturePieceAchat;
 import com.tsix.immocrm.services.achat.ecriture.PieceAchatACreer;
 import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
-import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -157,7 +156,7 @@ public class DocumentCommission {
                 : em.createNativeQuery(STATUT).setParameter("id", d.getBuyDocumentStatusId()).getResultList();
         String statut = statuts.isEmpty() ? null : Objects.toString(statuts.get(0), null);
         return new DocumentCommissionDto(d.getId(), d.getCode(), CalculCommission.jour(d.getDocDate()), d.getCfgTierId(),
-                tiers == null ? null : TierNomFormatter.nom(tiers), AgencesDesVendeurs.estAgence(tiers), montant, regle, montant.subtract(regle), statut,
+                AgencesDesVendeurs.nomBeneficiaire(tiers), AgencesDesVendeurs.estAgence(tiers), montant, regle, montant.subtract(regle), statut,
                 duDocument.stream().map(l -> new LigneDocumentCommissionDto(l.getId(), libelle(l, codes),
                         SoldesCommission.montant(l))).toList());
     }

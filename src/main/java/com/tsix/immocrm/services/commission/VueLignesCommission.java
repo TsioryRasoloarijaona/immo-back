@@ -5,7 +5,6 @@ import com.tsix.immocrm.entities.cfg.CfgTier;
 import com.tsix.immocrm.entities.com.ComCommissionLine;
 import com.tsix.immocrm.services.perimetre.AgencesDesVendeurs;
 import com.tsix.immocrm.services.rapport.LotsTranches;
-import com.tsix.immocrm.utils.TierNomFormatter;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 
@@ -68,6 +67,6 @@ public class VueLignesCommission {
     }
 
     static String nom(Object tiers) {
-        return tiers instanceof CfgTier t ? TierNomFormatter.nom(t) : null;
+        return tiers instanceof CfgTier t ? AgencesDesVendeurs.nomBeneficiaire(t) : null;
     }
 }

@@ -65,6 +65,14 @@ public class AgencesDesVendeurs {
                 Champs.de(t.getCfgTierKind(), CfgTierKind::getCode));
     }
 
+    /** Nom affiché d'un bénéficiaire : libellé d'agence (Description, comme {@link #carte()}) ou nom du tiers. */
+    public static String nomBeneficiaire(CfgTier t) {
+        if (t == null) {
+            return null;
+        }
+        return estAgence(t) ? t.getDescription() : com.tsix.immocrm.utils.TierNomFormatter.nom(t);
+    }
+
     public Agence de(CfgTier commercial) {
         return commercial == null ? Agence.SIEGE : de(carte(), commercial);
     }

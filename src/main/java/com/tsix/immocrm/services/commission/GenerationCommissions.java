@@ -146,7 +146,8 @@ public class GenerationCommissions {
         UUID vendeur = ctx.type() == TypeCommission.CONCRETISATION ? Champs.de(f.getCfgCommercial(), CfgTier::getId) : null;
         if (existantes.stream().anyMatch(l -> ctx.type().libelle().equals(l.getCommissionType())
                 && (personne.getId().equals(l.getCfgEmployeeId()) || l.getCfgEmployeeId() != null
-                && l.getCfgEmployeeId().equals(vendeur)))) {
+                && (l.getCfgEmployeeId().equals(vendeur) || ctx.type() == TypeCommission.CONCRETISATION
+                && AgencesDesVendeurs.estAgence(em.find(CfgTier.class, l.getCfgEmployeeId())))))) {
             return Issue.ignore(RaisonIgnoree.DEJA_GENERE);
         }
         StkItem article = f.getStkItem();
