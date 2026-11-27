@@ -73,6 +73,7 @@ final class ListeBlancheAgence {
             regle(GET, "/api/dossiers/*/documents/*"),
             regle(GET, "/api/dossiers/*/reglements/*/documents/*"),
             regle(POST, "/api/dossiers/documents/*"),
+            regle(POST, "/api/dossiers"),
             regle(GET_POST_DELETE, "/api/dossiers/*/reglements/*/pieces-jointes/**"),
             // Listes déroulantes
             regle(GET, "/api/referentiels/**"));

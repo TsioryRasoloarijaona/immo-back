@@ -26,6 +26,7 @@ import com.tsix.immocrm.entities.cfg.CfgTierType;
 import com.tsix.immocrm.exceptions.ConflictException;
 import com.tsix.immocrm.exceptions.DoublonsProspectException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
+import com.tsix.immocrm.services.perimetre.AgenceDuCompte;
 import com.tsix.immocrm.services.perimetre.PerimetreCommercialService;
 import com.tsix.immocrm.services.sequence.GenerateurCodeSequence;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
@@ -103,6 +104,7 @@ public class ProspectService {
     private final UtilisateurAffiche utilisateurAffiche;
     private final Clock clock;
     private final PerimetreCommercialService perimetre;
+    private final PremiereProspectionAgence premiereProspection;
 
     public ProspectService(CfgTierRepository tierRepository,
                             CfgTierTypeRepository tierTypeRepository,
@@ -122,8 +124,10 @@ public class ProspectService {
                             GenerateurCodeSequence generateurCode,
                             UtilisateurAffiche utilisateurAffiche,
                             Clock clock,
-                            PerimetreCommercialService perimetre) {
+                            PerimetreCommercialService perimetre,
+                            PremiereProspectionAgence premiereProspection) {
         this.perimetre = perimetre;
+        this.premiereProspection = premiereProspection;
         this.utilisateurAffiche = utilisateurAffiche;
         this.clock = clock;
         this.trancheRepository = trancheRepository;
@@ -223,7 +227,10 @@ public class ProspectService {
 
     @Transactional
     public ProspectDetailDto create(CreerProspectRequest request) {
-        return toDetail(creerEntite(request));
+        Optional<AgenceDuCompte.Rattachement> agence = premiereProspection.verifier(request.prospection());
+        CfgTier tier = creerEntite(request);
+        agence.ifPresent(r -> premiereProspection.creer(tier, request.prospection(), r));
+        return toDetail(tier);
     }
 
     /** Comme {@link #create}, mais rend l'entité — sert aussi {@code POST /api/pre-prospections/{id}/creer-prospect}. */

@@ -73,11 +73,24 @@ chiffres. La valeur relue peut donc différer de celle envoyée.
 téléphone ou email sont recherchées (règles de `GET /api/prospects/doublons`) ; s'il y en a et que
 `ignorerDoublons` n'est pas `true`, **409** avec la liste `doublons`.
 
+**Compte agence (`FEATURE-agences-vente.md` R-D7)** : `prospection.trancheId` est obligatoire ; le prospect
+naît avec une prospection sur cette tranche, commercial = vendeur du compte, intermédiaire = son agence,
+étape = premier `ComProspectionKind` par code (aucune si le référentiel est vide). `origineId`,
+`typeContactId` et `notes` sont facultatifs. Pour le siège, `prospection` est ignoré.
+
 ### reponse 400
 
 `nom`/`raisonSociale` absents ; numéro fourni sans son indicatif, ou indicatif seul sans numéro ;
 indicatif absent du référentiel ; numéro hors de 6–14 chiffres ; référence (type, pays,
-profession...) inconnue.
+profession...) inconnue. Compte agence : `prospection` ou `prospection.trancheId` absent (rien n'est créé).
+
+### reponse 403
+
+Compte agence incomplet : son utilisateur n'est pas lié à une fiche vendeur rattachée à une agence.
+
+### reponse 404
+
+Compte agence : `prospection.trancheId` inconnu ou hors des projets affectés à l'agence (rien n'est créé).
 
 ### reponse 409
 

@@ -4,6 +4,7 @@ import com.tsix.immocrm.entities.stk.StkItem;
 import com.tsix.immocrm.services.perimetre.VisibiliteEntites;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import org.springframework.data.domain.Page;
@@ -21,6 +22,11 @@ public interface StkItemRepository extends JpaRepository<StkItem, UUID>, JpaSpec
      * des articles bâtis portent une société directe inactive sous une tranche active (FEATURE-patrimoine-terrains.md).
      */
     String SOCIETE_DIRECTE = "(t.id IS NOT NULL OR socd.isActive = true OR socd.id IS NULL)";
+
+    /** Pose le dossier sur un lot encore libre ; 0 si un autre dossier l'a pris entre-temps. */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE StkItem i SET i.comFolderId = :dossier WHERE i.id = :id AND i.comFolderId IS NULL")
+    int reserverSiLibre(@Param("id") UUID id, @Param("dossier") UUID dossier);
 
     /** Article lu ou écrit par id : entité de sa tranche, sinon sa société directe, inactive → absent (R4). */
     @Query("SELECT i FROM StkItem i LEFT JOIN i.stkHierarchy t LEFT JOIN t.cfgProject pr LEFT JOIN pr.cfgCompany soc "

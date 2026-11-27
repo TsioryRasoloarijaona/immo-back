@@ -3,6 +3,7 @@ package com.tsix.immocrm.services.modele;
 import com.tsix.immocrm.domain.CategorieModele;
 import com.tsix.immocrm.dto.dossier.ActeReservationData;
 import com.tsix.immocrm.services.dossier.ActeReservationService;
+import com.tsix.immocrm.services.dossier.ContratApresPointage;
 import com.tsix.immocrm.services.dossier.document.ActeReservationDocxRenderer;
 import com.tsix.immocrm.services.dossier.document.ActeReservationPdfRenderer;
 import org.springframework.stereotype.Component;
@@ -22,13 +23,16 @@ public class ActeReservationModele {
     private final ActeReservationService acteReservationService;
     private final ActeReservationPdfRenderer pdfRenderer;
     private final ActeReservationDocxRenderer docxRenderer;
+    private final ContratApresPointage contratApresPointage;
 
     public ActeReservationModele(GenerationModeleService generation, ActeReservationService acteReservationService,
-                                 ActeReservationPdfRenderer pdfRenderer, ActeReservationDocxRenderer docxRenderer) {
+                                 ActeReservationPdfRenderer pdfRenderer, ActeReservationDocxRenderer docxRenderer,
+                                 ContratApresPointage contratApresPointage) {
         this.generation = generation;
         this.acteReservationService = acteReservationService;
         this.pdfRenderer = pdfRenderer;
         this.docxRenderer = docxRenderer;
+        this.contratApresPointage = contratApresPointage;
     }
 
     /** Document et code du dossier (pour le nom de fichier {@code acte-reservation-<code>}). */
@@ -51,6 +55,7 @@ public class ActeReservationModele {
     }
 
     public Acte rendre(UUID dossierId, FormatDocument format) {
+        contratApresPointage.verifier(dossierId);
         return generation.produireParCode(CategorieModele.DOSSIER_VENTE, CODE, dossierId, format)
                 .map(d -> new Acte(d.contenu(), d.codeFiche()))
                 .orElseGet(() -> repli(dossierId, format));
