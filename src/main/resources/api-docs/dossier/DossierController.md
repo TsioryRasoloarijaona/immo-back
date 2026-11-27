@@ -128,9 +128,10 @@ statut « transforme le prospect en client », prospect sinon (voir `PATCH /api/
 
 **Compte agence (`FEATURE-agences-vente.md` R-D1 à R-D5)** : prospection et articles limités aux projets
 de l'agence ; aucune remise (`remisePercent` absent ou 0) ; `prix` au moins égal au prix de référence du lot
-et de ses annexes ; le commercial est le vendeur du compte et la prospection reçoit l'agence comme
-intermédiaire. Le lot est réservé par une écriture conditionnelle : deux comptes qui visent le même lot,
-un seul dossier.
+et de ses annexes au catalogue ; sans `prix`, le prix est ce total de référence au catalogue, jamais les prix
+d'une offre ; le commercial est le vendeur du compte et la prospection reçoit l'agence comme
+intermédiaire. Le lot et ses annexes sont réservés par une écriture conditionnelle : deux comptes qui visent le
+même lot, un seul dossier (409 « Ce lot vient d'être réservé »).
 
 ### reponse 400
 

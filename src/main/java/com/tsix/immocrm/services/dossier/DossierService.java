@@ -236,7 +236,9 @@ public class DossierService {
         List<StkItem> articles = creationAgence.articles(agence, request.articleIds(), ARTICLE_IDS);
         Optional<OffreRetenue> offre = offreOrigine.verifier(request.offreId(), prospection,
                 request.articleIds().get(0));
-        PrixSousArticles prixAnnexes = offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
+        // Agence sans prix : le prix vient du catalogue, jamais de l'offre (décision 11).
+        PrixSousArticles prixAnnexes = agence.isPresent() && request.prix() == null ? PrixSousArticles.CATALOGUE
+                : offre.map(OffreRetenue::prixSousArticles).orElse(PrixSousArticles.CATALOGUE);
         creationAgence.verifierLibres(agence, articles);
 
         // 403 et non 404 : l'appelant a désigné les articles lui-même, rien à cacher. TOUS sont
@@ -286,6 +288,7 @@ public class DossierService {
         offre.map(o -> o.offre().getCommissionRate()).ifPresent(folder::setCommissionRate);
 
         folder = folderRepository.save(folder);
+        creationAgence.reserverAnnexes(agence, annexes, folder.getId());
         creationOmran.rattacherAnnexes(folder, principal, annexes, prixAnnexes);
         creationOmran.historiserCreation(folder, principal);
         creationAgence.reserver(principal, folder.getId());

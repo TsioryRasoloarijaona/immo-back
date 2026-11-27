@@ -231,7 +231,8 @@ public class ModeleDocumentController {
             @ApiResponse(responseCode = "200", description = "Document généré."),
             @ApiResponse(responseCode = "400", description = "`format` autre que `pdf` ou `docx`, ou `docx` d'un modèle PDF seul."),
             @ApiResponse(responseCode = "403", description = "Modèle à droits propres (FORMULAIRE_BARID) non permis à l'appelant."),
-            @ApiResponse(responseCode = "404", description = "Modèle introuvable ou inactif, fiche hors périmètre, ou aucune page.")
+            @ApiResponse(responseCode = "404", description = "Modèle introuvable ou inactif, fiche hors périmètre, ou aucune page."),
+            @ApiResponse(responseCode = "409", description = "ACTE_RESERVATION d'une vente d'agence sans règlement pointé (R-C1).")
     })
     public ResponseEntity<byte[]> generer(
             @Parameter(description = ID_MODELE) @PathVariable UUID id,

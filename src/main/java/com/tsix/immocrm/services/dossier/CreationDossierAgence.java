@@ -76,10 +76,21 @@ public record CreationDossierAgence(PerimetreCommercialService perimetre, Articl
 
     /** Pose conditionnelle (un seul gagnant), puis le setter pour que l'audit Hibernate trace le lien. */
     public void reserver(StkItem principal, UUID dossierId) {
-        if (items.reserverSiLibre(principal.getId(), dossierId) == 0) {
-            throw new ConflictException(LOT_RESERVE);
-        }
+        poser(principal, dossierId);
         principal.setComFolderId(dossierId);
         items.save(principal);
+    }
+
+    /** Agence : chaque annexe par la même pose conditionnelle que le lot, avant son rattachement (décision 13). */
+    public void reserverAnnexes(Optional<Rattachement> agence, List<StkItem> annexes, UUID dossierId) {
+        if (agence.isPresent()) {
+            annexes.forEach(annexe -> poser(annexe, dossierId));
+        }
+    }
+
+    private void poser(StkItem article, UUID dossierId) {
+        if (items.reserverSiLibre(article.getId(), dossierId) == 0) {
+            throw new ConflictException(LOT_RESERVE);
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.tsix.immocrm.entities.app.AppModeleDocumentVersion;
 import com.tsix.immocrm.exceptions.ForbiddenException;
 import com.tsix.immocrm.exceptions.InvalidRequestException;
 import com.tsix.immocrm.exceptions.ResourceNotFoundException;
+import com.tsix.immocrm.services.dossier.ContratApresPointage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +33,18 @@ public class GenerationModeleService {
     private final RenduModele rendu;
     private final ImagesModeleService images;
     private final List<ControleAccesModele> controles;
+    private final ContratApresPointage contratApresPointage;
 
     public GenerationModeleService(LectureModeles lecture, CataloguesModeles catalogues,
                                    MiseEnPageModele miseEnPageModele, RenduModele rendu, ImagesModeleService images,
-                                   List<ControleAccesModele> controles) {
+                                   List<ControleAccesModele> controles, ContratApresPointage contratApresPointage) {
         this.lecture = lecture;
         this.catalogues = catalogues;
         this.miseEnPageModele = miseEnPageModele;
         this.rendu = rendu;
         this.images = images;
         this.controles = controles;
+        this.contratApresPointage = contratApresPointage;
     }
 
     /** Document produit ; {@code nomFichier} sans extension. */
@@ -142,6 +145,10 @@ public class GenerationModeleService {
     private DocumentProduit produire(AppModeleDocument modele, UUID ficheId, FormatDocument format) {
         CatalogueFiche catalogue = catalogues.de(modele.getCategorie());
         CatalogueFiche.FicheLue fiche = catalogue.lire(ficheId);
+        if (CategorieModele.DOSSIER_VENTE.name().equals(modele.getCategorie())
+                && ActeReservationModele.CODE.equals(modele.getCode())) {
+            contratApresPointage.verifier(ficheId);
+        }
         ModelePrepare rempli = rempli(modele, catalogue.catalogue(), fiche.valeurs());
         byte[] contenu = format == FormatDocument.DOCX
                 ? rendu.docx(rempli.corps(), rempli.enTete(), rempli.pied(), rempli.miseEnPage())
